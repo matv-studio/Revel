@@ -193,7 +193,6 @@ github-copy = Copier le code
 github-waiting = En attente de votre autorisation sur github.com… Cette fenêtre se met à jour automatiquement.
 settings-accounts = Comptes
 settings-github-help = Utilisé pour publier sur GitHub Pages. Revel demande l’accès à vos dépôts ; le jeton est conservé dans le trousseau du système.
-deploy-warn-subpath = Le site utilise des adresses depuis la racine (/assets/…) : elles ne fonctionneront pas à l’adresse { $url }. Indiquez un domaine personnalisé, ou publiez dans un dépôt nommé proprietaire.github.io.
 error-github-signed-out = Aucun compte GitHub connecté, ou la connexion a expiré. Connectez-vous à GitHub, puis recommencez.
 error-github-repo = Dépôt GitHub introuvable : « { $repo } ». Vérifiez le nom (proprietaire/depot) et que le compte connecté y a accès.
 error-github-no-push = Le compte GitHub connecté ne peut pas écrire dans le dépôt { $repo }.

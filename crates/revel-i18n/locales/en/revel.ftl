@@ -190,7 +190,6 @@ github-copy = Copy code
 github-waiting = Waiting for your authorization on github.com… This updates automatically.
 settings-accounts = Accounts
 settings-github-help = Used to publish on GitHub Pages. Revel asks for access to your repositories; the token is kept in the system keychain.
-deploy-warn-subpath = The site uses root-relative addresses (/assets/…): they will not work at { $url }. Set a custom domain, or publish to a repository named owner.github.io.
 error-github-signed-out = No GitHub account connected, or the connection has expired. Connect to GitHub, then try again.
 error-github-repo = GitHub repository not found: “{ $repo }”. Check the name (owner/repository) and that the connected account can access it.
 error-github-no-push = The connected GitHub account cannot write to the repository { $repo }.

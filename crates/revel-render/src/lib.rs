@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 mod eval;
 mod html;
+pub mod rebase;
 mod typography;
 
 pub use html::escape;

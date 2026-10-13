@@ -280,6 +280,53 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Copie d'un site généré dont les adresses depuis la racine sont préfixées par `prefix`
+/// (site servi dans un sous-dossier, ex. `proprietaire.github.io/depot/`). Les pages HTML et
+/// les feuilles de style sont réécrites ; les autres fichiers sont liés (sans copie) quand le
+/// système le permet. `dest` est remplacé.
+pub fn rebase_dir(src: &Path, dest: &Path, prefix: &str) -> std::io::Result<usize> {
+    if dest.exists() {
+        std::fs::remove_dir_all(dest)?;
+    }
+    fn walk(src: &Path, dest: &Path, prefix: &str, n: &mut usize) -> std::io::Result<()> {
+        std::fs::create_dir_all(dest)?;
+        for e in std::fs::read_dir(src)? {
+            let e = e?;
+            let (from, to) = (e.path(), dest.join(e.file_name()));
+            if e.file_type()?.is_dir() {
+                walk(&from, &to, prefix, n)?;
+                continue;
+            }
+            let ext = from
+                .extension()
+                .and_then(|x| x.to_str())
+                .map(str::to_ascii_lowercase)
+                .unwrap_or_default();
+            match ext.as_str() {
+                "html" | "htm" => {
+                    let t = std::fs::read_to_string(&from)?;
+                    std::fs::write(&to, revel_render::rebase::rebase_html(&t, prefix))?;
+                    *n += 1;
+                }
+                "css" => {
+                    let t = std::fs::read_to_string(&from)?;
+                    std::fs::write(&to, revel_render::rebase::rebase_css(&t, prefix))?;
+                    *n += 1;
+                }
+                _ => {
+                    if std::fs::hard_link(&from, &to).is_err() {
+                        std::fs::copy(&from, &to)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    let mut n = 0;
+    walk(src, dest, prefix, &mut n)?;
+    Ok(n)
+}
+
 /// Extensions des fichiers dont dépend le paramètre de version (`?v=`) des CSS et JS.
 const VERSIONED: &[&str] = &["css", "js", "mjs"];
 

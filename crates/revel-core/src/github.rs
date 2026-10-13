@@ -23,21 +23,6 @@ fn valid_repo(full: &str) -> bool {
     ok(parts.next()) && ok(parts.next()) && parts.next().is_none()
 }
 
-/// Le site utilise des chemins depuis la racine (`/assets/…`) : ils ne fonctionnent pas sous une
-/// adresse de projet GitHub Pages (`proprietaire.github.io/depot/`).
-fn uses_root_paths(out: &Path) -> bool {
-    std::fs::read_to_string(out.join("index.html"))
-        .map(|html| {
-            ["href=\"/", "src=\"/", "href='/", "src='/"]
-                .iter()
-                .any(|p| {
-                    html.match_indices(p)
-                        .any(|(i, _)| !html[i + p.len()..].starts_with('/'))
-                })
-        })
-        .unwrap_or(false)
-}
-
 impl Core {
     fn github_token_raw(&self) -> Result<Option<Token>> {
         Ok(self
@@ -200,20 +185,28 @@ impl Core {
         }
         let (owner, name) = repo.split_once('/').unwrap_or((&repo, ""));
         let user_site = name.eq_ignore_ascii_case(&format!("{owner}.github.io"));
-        if domain.is_none() && !user_site && uses_root_paths(out) {
-            warnings.push(HostWarning {
-                blocking: false,
-                key: "deploy-warn-subpath".into(),
-                args: vec![("url".into(), github::default_pages_url(owner, name))],
-            });
-        }
         on_event(DeployEvent::Warnings { warnings });
+
+        // Adresse de projet (`proprietaire.github.io/depot/`) : les adresses depuis la racine du
+        // site sont préfixées par `/depot` dans une copie dédiée du site généré.
+        let out = if domain.is_none() && !user_site {
+            let dest = out.with_file_name(format!(
+                "{}@github-pages",
+                out.file_name().and_then(|n| n.to_str()).unwrap_or("site")
+            ));
+            let (src, d, prefix) = (out.to_path_buf(), dest.clone(), format!("/{name}"));
+            tokio::task::spawn_blocking(move || revel_project::rebase_dir(&src, &d, &prefix))
+                .await
+                .map_err(|e| CoreError::Other(e.to_string()))??;
+            dest
+        } else {
+            out.to_path_buf()
+        };
 
         let cache = site
             .join(revel_project::CACHE_DIR)
             .join("git")
             .join(repo.replace('/', "__"));
-        let out = out.to_path_buf();
         let url = info.clone_url.clone();
         let access = token.access_token.clone();
         let message = format!("Publication du site ({environment}) par Revel");
@@ -326,20 +319,5 @@ mod tests {
         assert!(!valid_repo("matv-studio"));
         assert!(!valid_repo("a/b/c"));
         assert!(!valid_repo("a/b c"));
-    }
-
-    #[test]
-    fn chemins_depuis_la_racine() {
-        let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("index.html"), r#"<a href="//cdn.x/y">"#).unwrap();
-        assert!(!uses_root_paths(d.path()));
-        std::fs::write(
-            d.path().join("index.html"),
-            r#"<link href="/assets/a.css">"#,
-        )
-        .unwrap();
-        assert!(uses_root_paths(d.path()));
-        std::fs::write(d.path().join("index.html"), r#"<link href="assets/a.css">"#).unwrap();
-        assert!(!uses_root_paths(d.path()));
     }
 }

@@ -69,6 +69,9 @@ texte ligne à ligne.
 - Liaison MCP prévue (D-13) : toutes les modifications passeront par des commandes communes à l'interface,
   à la ligne de commande et au futur serveur MCP.
 - Permissions Tauri minimales (`capabilities/default.json` : `core:default`, `dialog:allow-open`).
+- Site servi dans un sous-dossier (GitHub Pages sans domaine personnalisé) : `revel_render::rebase` préfixe
+  les adresses depuis la racine (attributs, `srcset`, `meta refresh`, `url()` CSS) dans une copie liée du site
+  généré (`revel_project::rebase_dir`) ; le site généré lui-même ne change pas.
 - Générations reproductibles : le paramètre `?v=` des CSS/JS est l'empreinte de leur contenu ; deux générations
   sans changement produisent des fichiers identiques, et la publication suivante n'envoie rien.
 

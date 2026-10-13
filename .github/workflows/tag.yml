@@ -1,0 +1,46 @@
+# Création d'une étiquette Git (points de retour `step-N`, versions `vX.Y.Z`).
+# Lancé à la main (onglet Actions) ou par Claude : la session de travail ne peut pas
+# envoyer d'étiquette directement.
+name: Étiquette
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Nom de l'étiquette (step-… ou v…)"
+        required: true
+      sha:
+        description: "Commit à étiqueter (identifiant complet ou abrégé)"
+        required: true
+      message:
+        description: "Message"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Créer et envoyer l'étiquette
+        env:
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.sha }}
+          MSG: ${{ inputs.message }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^(step-[0-9]+(\.[0-9]+)*|v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)$'; then
+            echo "Nom refusé : $TAG"; exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "L'étiquette $TAG existe déjà"; exit 1
+          fi
+          COMMIT=$(git rev-parse --verify "$SHA^{commit}")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$COMMIT" -m "${MSG:-$TAG}"
+          git push origin "refs/tags/$TAG"
+          echo "Étiquette $TAG -> $COMMIT" >> "$GITHUB_STEP_SUMMARY"

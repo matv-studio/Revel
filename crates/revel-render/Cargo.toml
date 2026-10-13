@@ -1,6 +1,6 @@
 [package]
 name = "revel-render"
-description = "Génération HTML/CSS du site statique"
+description = "Génération HTML du site statique (expressions Jinja via minijinja)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,14 @@ publish.workspace = true
 
 [dependencies]
 revel-model.workspace = true
+revel-markup.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+minijinja = { version = "3.0.0", features = ["serde", "json", "urlencode", "preserve_order"] }
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+regex = "1.13.1"
+url = "2.5.4"
 
 [lints]
 workspace = true

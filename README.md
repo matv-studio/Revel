@@ -38,7 +38,7 @@ Rust est figé par `rust-toolchain.toml` (installé automatiquement par rustup).
 
 ## Revenir en arrière
 
-- Chaque étape terminée reçoit une étiquette Git `etape-N` : `git checkout etape-0` restaure l'état exact.
+- Chaque étape terminée reçoit une étiquette Git `step-N` : `git checkout step-0` restaure l'état exact.
 - Chaque module est une crate indépendante : on peut revenir sur un seul module
-  (`git checkout etape-0 -- crates/revel-deploy`) tant que son interface publique (traits) n'a pas changé.
+  (`git checkout step-0 -- crates/revel-deploy`) tant que son interface publique (traits) n'a pas changé.
 - Les fonctions optionnelles se désactivent à la compilation (ex. `--no-default-features` sur `revel-deploy`).

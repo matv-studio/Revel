@@ -1,6 +1,6 @@
 [package]
 name = "revel-import"
-description = "Import d'un site existant (cobaye Alunites : Eleventy/Nunjucks)"
+description = "Import de sites existants (Eleventy) vers un projet Revel"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,13 @@ publish.workspace = true
 
 [dependencies]
 revel-model.workspace = true
+revel-markup.workspace = true
+revel-render.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+regex = "1.13.1"
+serde-saphyr = "1.3.0"
 
 [lints]
 workspace = true

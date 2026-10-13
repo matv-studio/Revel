@@ -1,29 +1,32 @@
-//! `revel-import` : import d'un site existant (cobaye Alunites : Eleventy/Nunjucks).
+//! `revel-import` : import de sites existants vers un projet Revel.
 //!
-//! Interface posée à l'étape 0 ; implémentation prévue : Étape 1.
+//! - [`eleventy`] : projet Eleventy (gabarits Nunjucks, contenus Markdown, données YAML/JSON).
+//!   Les gabarits deviennent des pages, gabarits et composants Revel ; les contenus restent
+//!   des fichiers (collections compatibles Pages CMS). La logique JavaScript du site
+//!   (filtres, collections calculées) est décrite dans un **profil d'import** JSON.
 
-use revel_model::Site;
 use std::path::Path;
 
-/// Rapport d'import : ce qui a été repris et ce qui reste à traiter à la main.
+pub mod eleventy;
+
+/// Rapport d'import : ce qui a été repris et ce qui reste à vérifier.
 #[derive(Debug, Default)]
 pub struct Report {
     pub pages: usize,
-    pub redirects: usize,
+    pub layouts: usize,
+    pub components: usize,
+    pub collections: usize,
     pub warnings: Vec<String>,
-}
-
-/// Importateur d'un type de site.
-pub trait Importer {
-    type Error: std::error::Error;
-    /// Reconnaît-il ce dossier ?
-    fn detect(&self, dir: &Path) -> bool;
-    fn import(&self, dir: &Path) -> Result<(Site, Report), Self::Error>;
 }
 
 /// Détection d'un projet Eleventy (fichier de configuration à la racine).
 pub fn is_eleventy(dir: &Path) -> bool {
-    ["eleventy.config.js", "eleventy.config.mjs", ".eleventy.js"]
-        .iter()
-        .any(|f| dir.join(f).is_file())
+    [
+        "eleventy.config.js",
+        "eleventy.config.mjs",
+        "eleventy.config.cjs",
+        ".eleventy.js",
+    ]
+    .iter()
+    .any(|f| dir.join(f).is_file())
 }

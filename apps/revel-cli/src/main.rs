@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use revel_deploy::{SiteNeeds, check, providers};
 use revel_i18n::Localizer;
 use revel_model::Site;
-use revel_render::{HtmlRenderer, Renderer};
+use revel_project::Project;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -23,17 +23,27 @@ struct Cli {
 enum Command {
     /// Affiche la version et les hébergeurs compilés.
     Info,
-    /// Crée un document de site vide.
+    /// Crée un projet vide.
     New {
+        dir: PathBuf,
+        #[arg(long, default_value = "Nouveau site")]
         name: String,
-        #[arg(long, default_value = "site.revel.json")]
-        out: PathBuf,
     },
-    /// Génère le HTML d'un document de site dans un dossier.
+    /// Importe un projet Eleventy : écrit `site.revel.json` à sa racine.
+    ImportEleventy {
+        dir: PathBuf,
+        /// Affiche le rapport sans écrire le fichier.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Génère un projet dans un dossier.
     Build {
-        site: PathBuf,
+        dir: PathBuf,
         #[arg(long, default_value = "_site")]
         out: PathBuf,
+        /// Environnement (`production`, `staging`…).
+        #[arg(long, default_value = "production")]
+        env: String,
     },
     /// Liste les avertissements d'un hébergeur pour des besoins donnés.
     CheckHost {
@@ -67,24 +77,40 @@ fn main() -> Result<()> {
                 println!("  - {}", caps.id);
             }
         }
-        Command::New { name, out } => {
-            let site = Site::new(name, cli.lang.clone());
-            std::fs::write(&out, site.to_json()?)
-                .with_context(|| format!("écriture de {}", out.display()))?;
-            println!("{}", out.display());
+        Command::New { dir, name } => {
+            Project::create(&dir, Site::new(name, cli.lang.clone()))?;
+            println!("{}", dir.join(revel_project::SITE_FILE).display());
         }
-        Command::Build { site, out } => {
-            let text = std::fs::read_to_string(&site)
-                .with_context(|| format!("lecture de {}", site.display()))?;
-            let site = Site::from_json(&text)?;
-            for file in HtmlRenderer.render(&site)? {
-                let path = out.join(&file.path);
-                if let Some(dir) = path.parent() {
-                    std::fs::create_dir_all(dir)?;
-                }
-                std::fs::write(&path, &file.bytes)?;
-                println!("{}", path.display());
+        Command::ImportEleventy { dir, dry_run } => {
+            let profile = revel_import::eleventy::load_profile(&dir)?;
+            let (site, report) = revel_import::eleventy::import(&dir, &profile)?;
+            println!(
+                "pages : {} · gabarits : {} · composants : {} · collections : {}",
+                report.pages, report.layouts, report.components, report.collections
+            );
+            for w in &report.warnings {
+                println!("! {w}");
             }
+            if !dry_run {
+                Project::create(&dir, site)?;
+                println!("{}", dir.join(revel_project::SITE_FILE).display());
+            }
+        }
+        Command::Build { dir, out, env } => {
+            let project =
+                Project::open(&dir).with_context(|| format!("ouverture de {}", dir.display()))?;
+            let started = std::time::Instant::now();
+            let report = project.build(&out, &env, None)?;
+            for w in &report.warnings {
+                println!("! {w}");
+            }
+            println!(
+                "{} fichiers générés, {} copiés, en {:.1} s -> {}",
+                report.generated,
+                report.copied,
+                started.elapsed().as_secs_f32(),
+                out.display()
+            );
         }
         Command::CheckHost {
             host,

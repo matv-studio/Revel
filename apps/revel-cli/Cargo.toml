@@ -1,0 +1,22 @@
+[package]
+name = "revel-cli"
+description = "Revel en ligne de commande (tests, diagnostic)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "revel"
+path = "src/main.rs"
+
+[dependencies]
+revel-model.workspace = true
+revel-render.workspace = true
+revel-deploy.workspace = true
+revel-i18n.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

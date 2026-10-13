@@ -1,0 +1,6 @@
+# Version de Rust figée pour des constructions reproductibles.
+# Mise à jour : changer la version ici, une seule fois pour tout le projet.
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

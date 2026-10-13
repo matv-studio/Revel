@@ -1,0 +1,12 @@
+[package]
+name = "revel-mcp"
+description = "Serveur MCP exposant l'édition à Claude (connecteur claude.ai) et tunnel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

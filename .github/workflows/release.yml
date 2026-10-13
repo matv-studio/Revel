@@ -1,0 +1,56 @@
+# Installateurs Windows (MSI/NSIS), macOS (DMG) et Linux (AppImage/deb/rpm).
+# Déclenché par une étiquette `v*` (ex. v0.1.0) ou à la main. Crée une version
+# GitHub en brouillon : rien n'est publié sans validation manuelle.
+# Référence : https://tauri.app/distribute/pipelines/github/
+name: Installateurs
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+          # Ubuntu 22.04 : glibc plus ancienne, AppImage compatible avec plus de distributions.
+          - platform: ubuntu-22.04
+            target: ''
+          - platform: windows-latest
+            target: ''
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Dépendances système (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      - name: Rust (version de rust-toolchain.toml)
+        shell: bash
+        run: |
+          rustup toolchain install
+          if [ -n "${{ matrix.target }}" ]; then rustup target add ${{ matrix.target }}; fi
+      - uses: Swatinem/rust-cache@v2
+      - name: Outil Tauri
+        run: cargo install tauri-cli --version "^2" --locked
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/revel-app
+          tauriScript: cargo tauri
+          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+          tagName: v__VERSION__
+          releaseName: Revel v__VERSION__
+          releaseBody: Installateurs de test, non signés.
+          releaseDraft: true
+          prerelease: true

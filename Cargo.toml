@@ -1,0 +1,47 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+default-members = ["crates/*", "apps/revel-cli"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.99"
+authors = ["MATV Studio"]
+publish = false
+repository = "https://github.com/matv-studio/revel"
+
+[workspace.dependencies]
+# Modules internes (une crate par module, dépendances par chemin)
+revel-model = { path = "crates/revel-model" }
+revel-render = { path = "crates/revel-render" }
+revel-assets = { path = "crates/revel-assets" }
+revel-cms = { path = "crates/revel-cms" }
+revel-deploy = { path = "crates/revel-deploy" }
+revel-dns = { path = "crates/revel-dns" }
+revel-git = { path = "crates/revel-git" }
+revel-mcp = { path = "crates/revel-mcp" }
+revel-i18n = { path = "crates/revel-i18n" }
+revel-import = { path = "crates/revel-import" }
+
+# Bibliothèques externes (versions vérifiées sur crates.io le 13/10/2026)
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+anyhow = "1.0.104"
+fluent-bundle = "0.16.0"
+unic-langid = { version = "0.9.6", features = ["macros"] }
+clap = { version = "4.6.7", features = ["derive"] }
+tauri = { version = "2.12.3", features = [] }
+tauri-build = { version = "2.7.2", features = [] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

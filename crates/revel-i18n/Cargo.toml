@@ -1,0 +1,14 @@
+[package]
+name = "revel-i18n"
+description = "Traductions de l'interface Revel (en, fr) au format Fluent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+fluent-bundle.workspace = true
+unic-langid.workspace = true
+
+[lints]
+workspace = true

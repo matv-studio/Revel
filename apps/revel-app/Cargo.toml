@@ -1,0 +1,24 @@
+[package]
+name = "revel-app"
+description = "Application de bureau Revel (coque Tauri 2)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "revel_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+revel-deploy.workspace = true
+revel-i18n.workspace = true
+revel-model.workspace = true
+serde.workspace = true
+tauri.workspace = true
+
+[lints]
+workspace = true

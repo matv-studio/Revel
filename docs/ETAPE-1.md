@@ -19,7 +19,8 @@ compare les deux sorties (texte visible, balises `<title>`/`<meta>`, liste des f
 | 1.6 | fait : `revel-deploy::sftp` (manifeste compatible `deploy-sftp.sh`, renommage atomique, reprise, clé du serveur) ; essai réel contre OpenSSH en CI ; commande `revel deploy-sftp` ; depuis l'interface : hébergements par site, mot de passe dans le trousseau, vérification sans envoi, publication incrémentale (2e publication sans changement : rien envoyé) |
 | 1.8 | fait : interface Leptos (sites, vue d'ensemble, génération, publication, réglages), système de design (`docs/DESIGN.md`), anglais et français ; échecs transmis comme clés de traduction (`Failure`) ; vérifiée de bout en bout dans l'application (Xvfb) contre un serveur SFTP local |
 | 1.0 | en partie : `revel-core` (services communs à l'interface, à la ligne de commande et au futur serveur MCP), `revel-protocol` (messages sérialisables) ; reste : commandes de modification du modèle et annuler/rétablir, à l'étape 2 avec l'éditeur |
-| 1.7, 1.9 | à faire |
+| 1.7 | fait, à valider sur le PC : `revel-git` (publication d'un dossier sur une branche sans copie de travail, envoi des seuls changements, avance rapide uniquement ; client GitHub : device flow, jetons à expiration renouvelés, activation de GitHub Pages, domaine personnalisé, `.nojekyll`) ; application OAuth « Revel » (Client ID `Ov23liuo9dnJsp95C633`, device flow vérifié le 13/10/2026) ; interface : compte GitHub (Réglages et formulaire), hébergement GitHub Pages ; avertissement si le site utilise des adresses depuis la racine sous `proprietaire.github.io/depot/` |
+| 1.9 | à faire |
 
 ## Sous-étapes
 
@@ -63,6 +64,6 @@ Chaque sous-étape = commits + étiquette `step-1.N`, pour revenir en arrière p
 
 ## Préalables côté utilisateur
 
-- Étape 1.7 : enregistrer l'application OAuth « Revel » sur matv-studio (guide fourni à ce moment-là).
+- Étape 1.7 : application OAuth « Revel » enregistrée sur matv-studio (fait le 13/10/2026).
 - Pour tester l'envoi SFTP réel : un dossier de recette distinct de `recette-v4k8/` (à créer chez OVH) et ses identifiants saisis par l'utilisateur dans Revel.
 - Pour GitHub Pages : `alunites-revel-lab` public (c'est le cas), Pages activé par l'utilisateur dans *Settings > Pages*.

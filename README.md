@@ -3,7 +3,9 @@
 Application de bureau (Windows, macOS, Linux) de création visuelle de sites web, écrite en Rust.
 *Desktop visual website builder written in Rust (English and French UI).*
 
-État : **étape 0** — squelette modulaire, CI multi-plateforme. Rien d'utilisable par un utilisateur final pour l'instant.
+État : **étape 1** en cours — ouvrir un site existant (import Eleventy), le générer (images AVIF/WebP),
+le prévisualiser et le publier par SFTP ou sur GitHub Pages, depuis l'application (français, anglais).
+L'éditeur visuel arrive à l'étape 2.
 
 ## Organisation du dépôt
 
@@ -15,13 +17,17 @@ Application de bureau (Windows, macOS, Linux) de création visuelle de sites web
 | `crates/revel-cms` | Contenus Markdown/YAML compatibles Pages CMS |
 | `crates/revel-deploy` | Publication : trait `Provider`, capacités et avertissements par hébergeur |
 | `crates/revel-dns` | Noms de domaine (OVH, Cloudflare) |
-| `crates/revel-git` | Opérations Git |
+| `crates/revel-git` | Git et GitHub : publication sur une branche, connexion (device flow), GitHub Pages |
+| `crates/revel-project` | Projet sur disque : document de site, contenus, génération |
+| `crates/revel-markup` | Lecture des gabarits (Nunjucks/Jinja) vers l'arbre de Revel |
+| `crates/revel-core` | Services de l'application (communs à l'interface, à la ligne de commande et au futur MCP) |
+| `crates/revel-protocol` | Messages entre l'interface et le cœur |
 | `crates/revel-mcp` | Serveur MCP pour le connecteur Claude |
 | `crates/revel-i18n` | Traductions anglais / français (Fluent) |
 | `crates/revel-import` | Import de sites existants |
 | `apps/revel-app` | Application de bureau (Tauri 2) |
+| `apps/revel-ui` | Interface (Leptos, WebAssembly) ; système de design : [docs/DESIGN.md](docs/DESIGN.md) |
 | `apps/revel-cli` | Ligne de commande `revel` (tests, diagnostic) |
-| `ui/` | Interface provisoire (HTML statique) |
 | `docs/` | Architecture, décisions, plans d'étape |
 
 Détails : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Décisions : [docs/DECISIONS.md](docs/DECISIONS.md) · Plan en cours : [docs/ETAPE-1.md](docs/ETAPE-1.md)
@@ -31,8 +37,11 @@ Détails : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Décisions : [docs/DE
 ```sh
 cargo test --workspace          # tous les tests
 cargo run -p revel-cli -- info  # ligne de commande
-cargo tauri dev                 # application (depuis apps/revel-app, outil tauri-cli requis)
+cargo tauri dev                 # application (depuis apps/revel-app ; tauri-cli et trunk requis)
 ```
+
+CI : Linux à chaque envoi ; Windows et macOS au lancement manuel du workflow *CI* (avant chaque étiquette
+d'étape). Installateurs : workflow *Installateurs*, lancé à la main avec le choix des systèmes.
 
 Rust est figé par `rust-toolchain.toml` (installé automatiquement par rustup).
 

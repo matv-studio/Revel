@@ -19,6 +19,9 @@ pub struct State {
     /// Chemin du site -> hébergements.
     #[serde(default)]
     pub profiles: BTreeMap<String, Vec<HostingProfile>>,
+    /// Identifiant du compte GitHub connecté (le jeton est dans le trousseau).
+    #[serde(default)]
+    pub github_login: Option<String>,
 }
 
 impl State {

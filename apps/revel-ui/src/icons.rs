@@ -80,3 +80,23 @@ pub fn trash() -> AnyView {
 pub fn check() -> AnyView {
     svg(r#"<path d="M3 8.5l3 3 7-7"/>"#)
 }
+
+/// Ouvrir dans le navigateur.
+pub fn external() -> AnyView {
+    svg(
+        r#"<path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/>"#,
+    )
+}
+
+pub fn copy() -> AnyView {
+    svg(
+        r#"<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/>"#,
+    )
+}
+
+/// Compte relié (deux maillons).
+pub fn link() -> AnyView {
+    svg(
+        r#"<path d="M6.5 9.5l3-3M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1"/>"#,
+    )
+}

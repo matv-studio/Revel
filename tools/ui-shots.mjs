@@ -29,6 +29,12 @@ const shots = [
   ["publish-edit-dark-fr", "theme=dark&lang=fr", [site, tabPublish, ".host .icon-btn >> nth=0"]],
   ["publish-delete-dark-fr", "theme=dark&lang=fr", [site, tabPublish, ".host .icon-btn >> nth=1"]],
   ["publish-fail-light-fr", "theme=light&lang=fr&fail=auth", [site, tabPublish, ".host .btn--primary", "wait"]],
+  ["publish-github-form-dark-fr", "theme=dark&lang=fr&noprofiles=1", [site, tabPublish, ".empty .btn--primary", ".segmented button >> nth=1"]],
+  ["publish-github-code-light-fr", "theme=light&lang=fr&noprofiles=1&ghwait=1", [site, tabPublish, ".empty .btn--primary", ".segmented button >> nth=1", ".subsection .btn"]],
+  ["publish-github-connected-light-en", "theme=light&lang=en&noprofiles=1", [site, tabPublish, ".empty .btn--primary", ".segmented button >> nth=1", ".subsection .btn", "wait", "wait"]],
+  ["publish-github-done-dark-fr", "theme=dark&lang=fr&ghprofile=1&github=matv-studio&warn=1", [site, tabPublish, ".host .btn--primary", "wait"]],
+  ["settings-github-error-light-fr", "theme=light&lang=fr&ghfail=1", [".sidebar-bottom .nav-item", ".account .btn", "wait"]],
+  ["settings-accounts-dark-fr", "theme=dark&lang=fr&github=matv-studio", [".sidebar-bottom .nav-item"]],
   ["settings-dark-fr-accent", "theme=dark&lang=fr&accent=3D7EFF", [".sidebar-bottom .nav-item"]],
   ["settings-light-en", "theme=light&lang=en", [".sidebar-bottom .nav-item"]],
 ];

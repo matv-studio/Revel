@@ -1,10 +1,53 @@
-//! `revel-git` : opérations Git (cloner, valider, pousser, étiqueter).
+//! `revel-git` : Git et GitHub.
 //!
-//! Interface posée à l'étape 0 ; implémentation prévue : Étape 1.
+//! - [`publish`] : publication d'un dossier (site généré) sur une branche d'un dépôt distant,
+//!   sans copie de travail, en n'envoyant que les changements (GitHub Pages, et tout dépôt Git) ;
+//! - [`github`] (fonction `github`) : connexion par autorisation sur github.com (device flow,
+//!   D-11), compte, dépôt, activation de GitHub Pages.
+//!
+//! libgit2 est compilée dans Revel (D-12) : aucune installation de Git n'est nécessaire.
 
-/// Opérations Git utilisées par Revel, indépendantes de la bibliothèque choisie.
-pub trait Repository {
-    type Error: std::error::Error;
-    fn current_commit(&self) -> Result<String, Self::Error>;
-    fn commit_all(&self, message: &str) -> Result<String, Self::Error>;
+#[cfg(feature = "github")]
+pub mod github;
+pub mod publish;
+
+#[derive(Debug, thiserror::Error)]
+pub enum GitError {
+    #[error("Git : {0}")]
+    Git(#[from] git2::Error),
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+    #[error("dossier introuvable : {0}")]
+    MissingDir(String),
+    #[error("nom de fichier non pris en charge : {0}")]
+    FileName(String),
+    #[error("envoi refusé par le dépôt : {0}")]
+    Rejected(String),
+    #[error("réseau : {0}")]
+    Http(String),
+    #[error("GitHub ({0}) : {1}")]
+    Api(u16, String),
+    #[error("code d'autorisation expiré")]
+    CodeExpired,
+    #[error("autorisation refusée sur github.com")]
+    Denied,
+    #[error("application GitHub mal configurée : {0}")]
+    AppConfig(String),
+    #[error("connexion GitHub expirée ou révoquée")]
+    SignedOut,
+}
+
+impl GitError {
+    /// Erreur d'authentification lors d'un échange Git (jeton refusé).
+    pub fn is_auth(&self) -> bool {
+        match self {
+            Self::SignedOut => true,
+            Self::Git(e) => {
+                e.class() == git2::ErrorClass::Http && e.code() == git2::ErrorCode::Auth
+                    || e.message().contains("authentification refusée")
+                    || e.message().contains("401")
+            }
+            _ => false,
+        }
+    }
 }

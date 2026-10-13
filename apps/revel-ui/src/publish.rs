@@ -9,11 +9,21 @@ use revel_protocol::{
     SiteSummary,
 };
 
+/// Type d'hébergement.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum Kind {
+    #[default]
+    Sftp,
+    Github,
+}
+
 #[derive(Clone, Default, PartialEq)]
 struct Form {
+    kind: Kind,
     id: String,
     name: String,
     environment: String,
+    // SFTP
     host: String,
     port: String,
     user: String,
@@ -21,55 +31,118 @@ struct Form {
     password: String,
     known_host_key: Option<String>,
     has_secret: bool,
+    // GitHub Pages
+    repo: String,
+    branch: String,
+    domain: String,
 }
 
 impl Form {
-    fn from_profile(p: &HostingProfile, has_secret: bool) -> Self {
-        let HostingTarget::Sftp {
-            host,
-            port,
-            user,
-            remote_dir,
-            known_host_key,
-        } = &p.target;
+    fn new(kind: Kind, name: String, environment: String) -> Self {
         Self {
+            kind,
+            name,
+            environment,
+            port: "22".into(),
+            remote_dir: "www/".into(),
+            branch: "gh-pages".into(),
+            ..Default::default()
+        }
+    }
+
+    fn from_profile(p: &HostingProfile, has_secret: bool) -> Self {
+        let base = Self {
             id: p.id.clone(),
             name: p.name.clone(),
             environment: p.environment.clone(),
-            host: host.clone(),
-            port: port.to_string(),
-            user: user.clone(),
-            remote_dir: remote_dir.clone(),
-            password: String::new(),
-            known_host_key: known_host_key.clone(),
             has_secret,
+            ..Default::default()
+        };
+        match &p.target {
+            HostingTarget::Sftp {
+                host,
+                port,
+                user,
+                remote_dir,
+                known_host_key,
+            } => Self {
+                kind: Kind::Sftp,
+                host: host.clone(),
+                port: port.to_string(),
+                user: user.clone(),
+                remote_dir: remote_dir.clone(),
+                known_host_key: known_host_key.clone(),
+                ..base
+            },
+            HostingTarget::GithubPages {
+                repo,
+                branch,
+                custom_domain,
+            } => Self {
+                kind: Kind::Github,
+                repo: repo.clone(),
+                branch: branch.clone(),
+                domain: custom_domain.clone().unwrap_or_default(),
+                ..base
+            },
         }
     }
 
     fn to_profile(&self) -> HostingProfile {
-        HostingProfile {
-            id: self.id.clone(),
-            name: self.name.trim().to_string(),
-            environment: self.environment.clone(),
-            target: HostingTarget::Sftp {
+        let target = match self.kind {
+            Kind::Sftp => HostingTarget::Sftp {
                 host: self.host.trim().to_string(),
                 port: self.port.trim().parse().unwrap_or(22),
                 user: self.user.trim().to_string(),
                 remote_dir: self.remote_dir.trim().to_string(),
                 known_host_key: self.known_host_key.clone(),
             },
+            Kind::Github => HostingTarget::GithubPages {
+                repo: normalize_repo(&self.repo),
+                branch: self.branch.trim().to_string(),
+                custom_domain: Some(self.domain.trim().to_string()).filter(|d| !d.is_empty()),
+            },
+        };
+        HostingProfile {
+            id: self.id.clone(),
+            name: self.name.trim().to_string(),
+            environment: self.environment.clone(),
+            target,
         }
     }
 
-    /// Champs indispensables remplis (le mot de passe peut déjà être dans le trousseau).
-    fn complete(&self) -> bool {
+    /// Champs indispensables remplis (le mot de passe peut déjà être dans le trousseau ;
+    /// GitHub Pages demande un compte GitHub connecté).
+    fn complete(&self, github: bool) -> bool {
         !self.name.trim().is_empty()
-            && !self.host.trim().is_empty()
-            && !self.user.trim().is_empty()
-            && !self.remote_dir.trim().is_empty()
-            && self.port.trim().parse::<u16>().is_ok_and(|p| p > 0)
-            && (self.has_secret || !self.password.is_empty())
+            && match self.kind {
+                Kind::Sftp => {
+                    !self.host.trim().is_empty()
+                        && !self.user.trim().is_empty()
+                        && !self.remote_dir.trim().is_empty()
+                        && self.port.trim().parse::<u16>().is_ok_and(|p| p > 0)
+                        && (self.has_secret || !self.password.is_empty())
+                }
+                Kind::Github => {
+                    github
+                        && normalize_repo(&self.repo)
+                            .split('/')
+                            .filter(|p| !p.is_empty())
+                            .count()
+                            == 2
+                        && !self.branch.trim().is_empty()
+                }
+            }
     }
+}
+
+/// `https://github.com/a/b(.git)` ou `a/b` -> `a/b`.
+fn normalize_repo(s: &str) -> String {
+    let s = s.trim().trim_end_matches('/').trim_end_matches(".git");
+    s.strip_prefix("https://github.com/")
+        .or_else(|| s.strip_prefix("github.com/"))
+        .unwrap_or(s)
+        .to_string()
 }
 
 #[derive(Clone, Default)]
@@ -104,15 +177,12 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
     reload.run(());
 
     let add = move |_| {
-        editing.set(Some(Form {
-            name: ui.now("publish-default-name", &[]),
-            environment: envs
-                .with_value(|e| e.first().cloned())
+        editing.set(Some(Form::new(
+            Kind::Sftp,
+            ui.now("publish-default-name", &[]),
+            envs.with_value(|e| e.first().cloned())
                 .unwrap_or_else(|| "production".into()),
-            port: "22".into(),
-            remote_dir: "www/".into(),
-            ..Default::default()
-        }))
+        )))
     };
     let save = Callback::new(move |()| {
         let Some(f) = editing.get_untracked() else {
@@ -202,6 +272,24 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
                     let t = ui.now("publish-comparing", &[]);
                     upd(&|r| r.status = Some(t.clone()))
                 }
+                DeployEvent::Fetching { done, total } => {
+                    ui.activity
+                        .set(Some(0.4 + 0.05 * done as f32 / total.max(1) as f32));
+                    let t = ui.now("publish-fetching", &[]);
+                    upd(&|r| r.status = Some(t.clone()))
+                }
+                DeployEvent::Preparing { done, total } => {
+                    ui.activity
+                        .set(Some(0.45 + 0.05 * done as f32 / total.max(1) as f32));
+                    let t = ui.now(
+                        "publish-preparing",
+                        &[
+                            ("done", crate::num(done as f64, 0)),
+                            ("total", crate::num(total as f64, 0)),
+                        ],
+                    );
+                    upd(&|r| r.status = Some(t.clone()))
+                }
                 DeployEvent::Planned {
                     upload,
                     delete,
@@ -273,7 +361,7 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
                         let pe = p.clone();
                         let id = StoredValue::new(p.id.clone());
                         let name = StoredValue::new(p.name.clone());
-                        let HostingTarget::Sftp { host, port, user, remote_dir, .. } = p.target.clone();
+                        let facts = StoredValue::new(target_facts(&p.target));
                         let is_editing = move || editing.with(|f| f.as_ref().is_some_and(|f| f.id == id.get_value()));
                         view! {
                             <article class="section host">
@@ -281,7 +369,6 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
                                     let pe = pe.clone();
                                     let pe_fix = pe.clone();
                                     let on_edit = Callback::new(move |()| editing.set(Some(Form::from_profile(&pe_fix, has_secret))));
-                                    let (host, user, remote_dir) = (host.clone(), user.clone(), remote_dir.clone());
                                     view! {
                                         <div class="host-head">
                                             <div class="host-id">
@@ -299,8 +386,9 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
                                             </div>
                                         </div>
                                         <dl class="facts facts--inline">
-                                            <div><dt>{ui.t("publish-host")}</dt><dd class="path">{format!("{user}@{host}:{port}")}</dd></div>
-                                            <div><dt>{ui.t("publish-remote-dir")}</dt><dd class="path">{remote_dir}</dd></div>
+                                            {facts.get_value().into_iter().map(|(k, v)| view! {
+                                                <div><dt>{ui.t(k)}</dt><dd class="path">{v}</dd></div>
+                                            }).collect_view()}
                                         </dl>
                                         {move || run.get().filter(|r| r.profile == id.get_value()).map(|r| view! { <RunView run=r on_edit=on_edit/> })}
                                     }
@@ -313,6 +401,36 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
                 </For>
             </div>
         </section>
+    }
+}
+
+/// Informations affichées sur la fiche d'un hébergement : (clé du libellé, valeur).
+fn target_facts(t: &HostingTarget) -> Vec<(&'static str, String)> {
+    match t {
+        HostingTarget::Sftp {
+            host,
+            port,
+            user,
+            remote_dir,
+            ..
+        } => vec![
+            ("publish-host", format!("{user}@{host}:{port}")),
+            ("publish-remote-dir", remote_dir.clone()),
+        ],
+        HostingTarget::GithubPages {
+            repo,
+            branch,
+            custom_domain,
+        } => {
+            let mut v = vec![
+                ("publish-repo", repo.clone()),
+                ("publish-branch", branch.clone()),
+            ];
+            if let Some(d) = custom_domain {
+                v.push(("publish-domain", d.clone()));
+            }
+            v
+        }
     }
 }
 
@@ -340,6 +458,9 @@ const FIXABLE: &[&str] = &[
     "error-sftp-connect",
     "error-sftp-remote-dir",
     "error-missing-secret",
+    "error-github-signed-out",
+    "error-github-repo",
+    "error-github-no-push",
 ];
 
 /// Résultat d'une vérification ou d'une publication.
@@ -375,8 +496,26 @@ fn RunView(run: Run, on_edit: Callback<()>) -> impl IntoView {
                         ])
                     };
                     let fp = s.server_fingerprint.clone();
+                    // Lien vers le site après une vraie publication.
+                    let url = s.url.clone().filter(|_| !s.dry_run);
+                    let pages_enabled = s.pages_enabled;
                     view! {
-                        <p class="status status--ok">{icons::check()}<span>{msg}</span></p>
+                        <div class="section-head">
+                            <p class="status status--ok">{icons::check()}<span>{msg}</span></p>
+                            {url.map(|u| view! {
+                                <button class="btn" on:click=move |_| {
+                                    let u = u.clone();
+                                    spawn_local(async move {
+                                        if let Err(e) = api::open_external(&u).await {
+                                            ui.fail(e);
+                                        }
+                                    });
+                                }>{icons::external()}{ui.t("publish-open-site")}</button>
+                            })}
+                        </div>
+                        <Show when=move || pages_enabled>
+                            <p class="muted help">{ui.t("publish-pages-enabled")}</p>
+                        </Show>
                         <Show when=move || s.key_recorded>
                             <p class="muted help">{ui.t("publish-key-recorded")}</p>
                             <code class="code">{fp.clone()}</code>
@@ -411,7 +550,11 @@ fn HostForm(
     let ui = expect_context::<Ui>();
     let is_new = editing.with_untracked(|f| f.as_ref().is_some_and(|f| f.id.is_empty()));
     let has_secret = editing.with_untracked(|f| f.as_ref().is_some_and(|f| f.has_secret));
-    let complete = move || editing.with(|f| f.as_ref().is_some_and(Form::complete));
+    let kind = move || editing.with(|f| f.as_ref().map(|f| f.kind).unwrap_or_default());
+    let complete = move || {
+        let github = ui.github.with(|g| g.is_some());
+        editing.with(|f| f.as_ref().is_some_and(|f| f.complete(github)))
+    };
     let field = move |key: &'static str,
                       kind: &'static str,
                       get: fn(&Form) -> String,
@@ -427,12 +570,51 @@ fn HostForm(
             </label>
         }
     };
+    let kind_btn = move |k: Kind, label: &'static str| {
+        view! {
+            <button type="button" role="radio" class:is-on=move || kind() == k
+                aria-checked=move || (kind() == k).to_string()
+                on:click=move |_| {
+                    // Nom proposé par défaut : suit le type tant qu'il n'a pas été modifié.
+                    let default_name = |k: Kind| ui.now(match k {
+                        Kind::Sftp => "publish-default-name",
+                        Kind::Github => "publish-kind-github",
+                    }, &[]);
+                    editing.update(|f| if let Some(f) = f {
+                        if f.name == default_name(f.kind) {
+                            f.name = default_name(k);
+                        }
+                        f.kind = k;
+                    })
+                }>{ui.t(label)}</button>
+        }
+    };
+    let title = move || match (is_new, kind()) {
+        (false, _) => ui.tx("publish-form-edit", &[]),
+        (true, Kind::Sftp) => ui.tx("publish-form-new", &[]),
+        (true, Kind::Github) => ui.tx("publish-form-new-github", &[]),
+    };
     view! {
         <form class="stack" on:submit=move |e| { e.prevent_default(); if complete() { save.run(()) } }>
             <div class="section-head">
-                <h2>{if is_new { ui.t("publish-form-new") } else { ui.t("publish-form-edit") }}</h2>
+                <h2>{title}</h2>
+                <Show when=move || is_new>
+                    <div class="segmented" role="radiogroup" aria-label=ui.t("publish-kind")>
+                        {kind_btn(Kind::Sftp, "publish-kind-sftp")}
+                        {kind_btn(Kind::Github, "publish-kind-github")}
+                    </div>
+                </Show>
             </div>
-            <p class="muted help">{ui.t("publish-form-help")}</p>
+            <p class="muted help">{move || match kind() {
+                Kind::Sftp => ui.tx("publish-form-help", &[]),
+                Kind::Github => ui.tx("publish-form-help-github", &[]),
+            }}</p>
+            <Show when=move || kind() == Kind::Github>
+                <div class="subsection">
+                    <span class="label">{ui.t("github-account")}</span>
+                    <crate::account::GithubAccount/>
+                </div>
+            </Show>
             <div class="form-cols">
                 {field("publish-name", "text", |f| f.name.clone(), |f, v| f.name = v, None)}
                 <label class="field">
@@ -445,13 +627,24 @@ fn HostForm(
                         </select>
                     </span>
                 </label>
-                {field("publish-host", "text", |f| f.host.clone(), |f, v| f.host = v, Some("publish-host-help"))}
-                {field("publish-port", "number", |f| f.port.clone(), |f, v| f.port = v, None)}
-                {field("publish-user", "text", |f| f.user.clone(), |f, v| f.user = v, None)}
-                {field("publish-password", "password", |f| f.password.clone(), |f, v| f.password = v,
-                    Some(if has_secret { "publish-password-saved" } else { "publish-password-help" }))}
-                {field("publish-remote-dir", "text", |f| f.remote_dir.clone(), |f, v| f.remote_dir = v, Some("publish-remote-dir-help"))}
             </div>
+            <Show when=move || kind() == Kind::Sftp>
+                <div class="form-cols">
+                    {field("publish-host", "text", |f| f.host.clone(), |f, v| f.host = v, Some("publish-host-help"))}
+                    {field("publish-port", "number", |f| f.port.clone(), |f, v| f.port = v, None)}
+                    {field("publish-user", "text", |f| f.user.clone(), |f, v| f.user = v, None)}
+                    {field("publish-password", "password", |f| f.password.clone(), |f, v| f.password = v,
+                        Some(if has_secret { "publish-password-saved" } else { "publish-password-help" }))}
+                    {field("publish-remote-dir", "text", |f| f.remote_dir.clone(), |f, v| f.remote_dir = v, Some("publish-remote-dir-help"))}
+                </div>
+            </Show>
+            <Show when=move || kind() == Kind::Github>
+                <div class="form-cols">
+                    {field("publish-repo", "text", |f| f.repo.clone(), |f, v| f.repo = v, Some("publish-repo-help"))}
+                    {field("publish-branch", "text", |f| f.branch.clone(), |f, v| f.branch = v, Some("publish-branch-help"))}
+                    {field("publish-domain", "text", |f| f.domain.clone(), |f, v| f.domain = v, Some("publish-domain-help"))}
+                </div>
+            </Show>
             <div class="toolbar toolbar--start">
                 <button type="submit" class="btn btn--primary" disabled=move || !complete()>{ui.t("action-save")}</button>
                 <button type="button" class="btn" on:click=move |_| editing.set(None)>{ui.t("action-cancel")}</button>

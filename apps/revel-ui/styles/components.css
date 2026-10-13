@@ -206,6 +206,22 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
   user-select: all; word-break: break-all; width: fit-content; max-width: 100%;
 }
 
+.code--large {
+  font-size: var(--text-xl); letter-spacing: .14em; padding: var(--s-2) var(--s-4);
+  font-weight: var(--weight-medium);
+}
+
+/* --- Comptes (GitHub) ---------------------------------------------------------- */
+.account { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.account-id { display: inline-flex; align-items: center; gap: var(--s-2); }
+.account-id svg { color: var(--success-text); }
+.device-code { display: flex; flex-direction: column; gap: var(--s-3); align-items: flex-start; }
+.subsection {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  padding: var(--s-3); border-radius: var(--radius-md);
+  background: var(--bg); border: var(--border) solid var(--line);
+}
+
 /* --- Boîte de dialogue ------------------------------------------------------ */
 .overlay {
   position: fixed; inset: 0; z-index: 10;

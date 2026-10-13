@@ -1,12 +1,29 @@
 [package]
 name = "revel-git"
-description = "Opérations Git (cloner, valider, pousser, étiqueter)"
+description = "Git et GitHub : publication d'un dossier sur une branche, connexion GitHub (device flow), API Pages"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+default = ["github"]
+# Client de l'API GitHub (connexion, Pages). Sans elle : publication Git seule.
+github = ["dep:ureq"]
+
 [dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+# libgit2 compilée dans Revel (D-12) ; HTTPS par la pile du système (WinHTTP, Secure Transport,
+# OpenSSL sous Linux). Pas de SSH : GitHub est joint en HTTPS avec un jeton.
+git2 = { version = "0.21.0", default-features = false, features = ["https", "vendored-libgit2"] }
+# Client HTTP synchrone, TLS en Rust (rustls) avec les certificats racine du système
+# (indispensable derrière un proxy d'entreprise ou un antivirus qui inspecte HTTPS).
+ureq = { version = "3.4.2", features = ["json", "platform-verifier"], optional = true }
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints]
 workspace = true

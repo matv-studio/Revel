@@ -20,7 +20,7 @@
 revel-ui (WebAssembly) ── revel-protocol, revel-i18n
 revel-app ── revel-core, revel-protocol, revel-model
 revel-cli ── revel-project, revel-import, revel-deploy, revel-i18n, revel-model
-revel-core ── revel-project, revel-import, revel-deploy, revel-protocol, revel-model
+revel-core ── revel-project, revel-import, revel-deploy, revel-git, revel-protocol, revel-model
 revel-project ── revel-render, revel-assets ── revel-markup ── revel-model
 revel-import ── revel-markup, revel-render (types), revel-model
 revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour wasm32)
@@ -29,6 +29,9 @@ revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour was
 - `revel-core` : services de l'application (sites récents, ouvrir, importer, générer, aperçu, hébergements,
   publier), état de l'application (`revel-state.json`, sans secret), mots de passe dans le trousseau.
   Appelé par l'application et, à terme, par la ligne de commande et le serveur MCP (D-13).
+- `revel-git` : publication d'un dossier sur une branche Git (dépôt cache nu dans `.revel/git/`, arbre
+  construit directement dans la base d'objets, envoi des seuls objets nouveaux, avance rapide uniquement) ;
+  client GitHub (device flow, renouvellement des jetons, API Pages) avec `ureq`.
 - `revel-protocol` : messages sérialisables entre l'interface et le cœur (résumés, événements de progression,
   échecs `Failure` = clé de traduction + paramètres, D-16). Aucune dépendance système.
 

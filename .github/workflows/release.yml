@@ -8,24 +8,41 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      plateformes:
+        description: "Systèmes à construire"
+        type: choice
+        options: [tous, windows, macos, linux]
+        default: tous
 
 jobs:
+  # Systèmes à construire (lancement manuel : seulement ceux demandés, les minutes macOS sont coûteuses).
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - id: m
+        shell: bash
+        env:
+          CHOIX: ${{ inputs.plateformes || 'tous' }}
+        run: |
+          # Ubuntu 22.04 : glibc plus ancienne, AppImage compatible avec plus de distributions.
+          all='[
+            {"platform":"macos-latest","target":"aarch64-apple-darwin","os":"macos"},
+            {"platform":"macos-latest","target":"x86_64-apple-darwin","os":"macos"},
+            {"platform":"ubuntu-22.04","target":"","os":"linux"},
+            {"platform":"windows-latest","target":"","os":"windows"}]'
+          if [ "$CHOIX" = "tous" ]; then sel="$all"; else sel=$(echo "$all" | jq -c --arg o "$CHOIX" '[.[] | select(.os == $o)]'); fi
+          echo "matrix=$(echo "$sel" | jq -c '{include: .}')" >> "$GITHUB_OUTPUT"
+
   bundle:
+    needs: plan
     permissions:
       contents: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            target: aarch64-apple-darwin
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-          # Ubuntu 22.04 : glibc plus ancienne, AppImage compatible avec plus de distributions.
-          - platform: ubuntu-22.04
-            target: ''
-          - platform: windows-latest
-            target: ''
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7

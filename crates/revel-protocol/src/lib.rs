@@ -99,6 +99,16 @@ pub enum HostingTarget {
         /// Clé du serveur enregistrée (format `known_hosts`) ; `None` avant la première connexion.
         known_host_key: Option<String>,
     },
+    /// GitHub Pages : le site généré est envoyé sur une branche du dépôt, servie par GitHub.
+    GithubPages {
+        /// Dépôt `proprietaire/nom`.
+        repo: String,
+        /// Branche publiée (`gh-pages` par défaut), réservée au site généré.
+        branch: String,
+        /// Domaine personnalisé (`www.exemple.fr`) ; `None` : adresse `*.github.io`.
+        #[serde(default)]
+        custom_domain: Option<String>,
+    },
 }
 
 impl HostingTarget {
@@ -106,8 +116,25 @@ impl HostingTarget {
     pub fn provider_id(&self) -> &'static str {
         match self {
             Self::Sftp { .. } => "sftp-apache",
+            Self::GithubPages { .. } => "github-pages",
         }
     }
+}
+
+/// Connexion d'un compte GitHub (autorisation par code sur github.com).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum GithubEvent {
+    /// Code à saisir sur `verification_uri`.
+    Code {
+        user_code: String,
+        verification_uri: String,
+        expires_in: u64,
+    },
+    Connected {
+        login: String,
+    },
+    Failed(Failure),
 }
 
 /// Échec d'une commande : clé de traduction (`error-…` dans `revel-i18n`) et paramètres.
@@ -163,6 +190,16 @@ pub enum DeployEvent {
     Connected {
         server_key: String,
     },
+    /// Récupération de la version en ligne (dépôt Git) : objets reçus / attendus.
+    Fetching {
+        done: usize,
+        total: usize,
+    },
+    /// Lecture des fichiers du site généré.
+    Preparing {
+        done: usize,
+        total: usize,
+    },
     Planned {
         upload: usize,
         delete: usize,
@@ -193,6 +230,12 @@ pub struct DeploySummary {
     pub server_fingerprint: String,
     /// La clé vient d'être enregistrée (première connexion).
     pub key_recorded: bool,
+    /// Adresse publique du site, si l'hébergeur la fournit.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// GitHub Pages vient d'être activé : la mise en ligne peut prendre quelques minutes.
+    #[serde(default)]
+    pub pages_enabled: bool,
 }
 
 /// Réglages de l'application.

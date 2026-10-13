@@ -77,6 +77,15 @@ pub fn Settings() -> impl IntoView {
                     <p class="muted help">{ui.t("settings-accent-help")}</p>
                 </div>
             </div>
+            <div class="section">
+                <h2>{ui.t("settings-accounts")}</h2>
+                <div class="form-grid">
+                    <span class="label">"GitHub"</span>
+                    <crate::account::GithubAccount/>
+                    <span></span>
+                    <p class="muted help">{ui.t("settings-github-help")}</p>
+                </div>
+            </div>
         </section>
     }
 }

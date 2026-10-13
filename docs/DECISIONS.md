@@ -63,8 +63,12 @@ par code** (« device flow »), comme l'outil officiel `gh` ; jeton personnel ac
   reste abstraite pour en ajouter une plus tard sans toucher au reste.
 - Le device flow ne demande pas de secret client ; il doit être activé dans les réglages de l'application.
 - Jetons conservés dans le trousseau du système (`keyring`), jamais dans les fichiers du site.
-- À faire par l'utilisateur (étape 1.7) : enregistrer l'application OAuth « Revel » sous le compte matv-studio
-  et activer le device flow. L'identifiant client (public) sera intégré à Revel.
+- Fait (13/10/2026) : application OAuth « Revel » sous matv-studio, device flow activé, jetons à expiration
+  (8 h, renouvelés automatiquement avec le jeton de renouvellement, valable 6 mois sans usage).
+  Client ID public intégré : `Ov23liuo9dnJsp95C633` (`revel-git::github::CLIENT_ID`).
+- Droit demandé : `repo` (dépôts publics et privés, réglages GitHub Pages ; l'API Pages l'exige).
+- Requêtes en JSON (acceptées par github.com) ; certificats racine du système (`rustls-platform-verifier`)
+  pour fonctionner derrière un proxy d'entreprise ou un antivirus qui inspecte HTTPS.
 - Sources : https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps,
   https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow
 

@@ -2,8 +2,8 @@
 
 use js_sys::{Array, Function, Object, Reflect};
 use revel_protocol::{
-    AppSettings, BuildEvent, DeployEvent, Failure, HostingProfile, ImportResult, RecentSite,
-    SiteSummary,
+    AppSettings, BuildEvent, DeployEvent, Failure, GithubEvent, HostingProfile, ImportResult,
+    RecentSite, SiteSummary,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -265,4 +265,43 @@ pub async fn deploy(
         on,
     )
     .await
+}
+
+/// Compte GitHub connecté (identifiant).
+pub async fn github_account() -> Res<Option<String>> {
+    call("github_account", &NoArgs {}).await
+}
+
+/// Connexion à GitHub (autorisation par code) ; renvoie l'identifiant du compte.
+pub async fn github_connect(on: impl Fn(GithubEvent) + 'static) -> Res<String> {
+    call_with_channel("github_connect", &NoArgs {}, on).await
+}
+
+pub async fn github_cancel() -> Res<()> {
+    call("github_cancel", &NoArgs {}).await
+}
+
+pub async fn github_disconnect() -> Res<()> {
+    call("github_disconnect", &NoArgs {}).await
+}
+
+/// Ouvre une adresse dans le navigateur.
+pub async fn open_external(url: &str) -> Res<()> {
+    #[derive(Serialize)]
+    struct A<'a> {
+        url: &'a str,
+    }
+    call("open_external", &A { url }).await
+}
+
+/// Copie un texte dans le presse-papiers (sans effet si le système le refuse).
+pub fn copy_text(text: &str) {
+    let nav = Reflect::get(&web_window(), &"navigator".into()).ok();
+    let clip = nav.and_then(|n| Reflect::get(&n, &"clipboard".into()).ok());
+    if let Some(c) = clip.filter(|c| !c.is_undefined())
+        && let Ok(f) = Reflect::get(&c, &"writeText".into())
+        && let Ok(f) = f.dyn_into::<Function>()
+    {
+        let _ = f.call1(&c, &JsValue::from_str(text));
+    }
 }

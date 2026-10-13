@@ -3,8 +3,8 @@
 
 use revel_core::{Core, CoreError, preview::Preview};
 use revel_protocol::{
-    AppSettings, BuildEvent, DeployEvent, Failure, HostingProfile, ImportResult, RecentSite,
-    SiteSummary,
+    AppSettings, BuildEvent, DeployEvent, Failure, GithubEvent, HostingProfile, ImportResult,
+    RecentSite, SiteSummary,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -184,6 +184,43 @@ async fn deploy(
         .map_err(err)
 }
 
+/// Compte GitHub connecté (identifiant), sans requête réseau.
+#[tauri::command]
+fn github_account(s: State<AppState>) -> Option<String> {
+    s.core.github_account()
+}
+
+/// Connexion à GitHub : le code à saisir sur github.com est envoyé par le canal.
+#[tauri::command]
+async fn github_connect(s: State<'_, AppState>, on_event: Channel<GithubEvent>) -> Res<String> {
+    let core = s.core.clone();
+    core.github_connect(&move |e| {
+        let _ = on_event.send(e);
+    })
+    .await
+    .map_err(err)
+}
+
+#[tauri::command]
+fn github_cancel(s: State<AppState>) {
+    s.core.github_cancel();
+}
+
+#[tauri::command]
+fn github_disconnect(s: State<AppState>) -> Res<()> {
+    s.core.github_disconnect().map_err(err)
+}
+
+/// Ouvre une adresse web dans le navigateur par défaut (HTTPS uniquement).
+#[tauri::command]
+fn open_external(app: tauri::AppHandle, url: String) -> Res<()> {
+    use tauri_plugin_opener::OpenerExt;
+    if !url.starts_with("https://") {
+        return Err(Failure::detail(format!("adresse refusée : {url}")));
+    }
+    app.opener().open_url(url, None::<&str>).map_err(sys)
+}
+
 /// Informations de version (écran « À propos »).
 #[tauri::command]
 fn app_info() -> (String, u32) {
@@ -197,6 +234,7 @@ fn app_info() -> (String, u32) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let dir = app
                 .path()
@@ -224,7 +262,12 @@ pub fn run() {
             list_profiles,
             save_profile,
             delete_profile,
-            deploy
+            deploy,
+            github_account,
+            github_connect,
+            github_cancel,
+            github_disconnect,
+            open_external
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Revel");

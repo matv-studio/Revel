@@ -1,4 +1,7 @@
-# Vérifications à chaque envoi : format, analyse, tests, sur Windows, macOS et Linux.
+# Vérifications : format, analyse, tests.
+# - À chaque envoi sur main : Linux seulement (minutes d'Actions limitées sur un dépôt privé ;
+#   macOS et Windows coûtent bien plus cher que Linux).
+# - Lancement manuel (avant chaque étiquette d'étape) et demandes de fusion : Linux, Windows et macOS.
 name: CI
 
 on:
@@ -8,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
@@ -48,7 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest, macos-latest]
+        os: ${{ fromJSON(github.event_name == 'push' && '["ubuntu-24.04"]' || '["ubuntu-24.04", "windows-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

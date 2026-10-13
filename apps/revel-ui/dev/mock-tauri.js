@@ -24,7 +24,9 @@
     environments: ["production", "staging"],
   };
   const fail = params.get("fail");
-  const profiles = params.get("noprofiles") ? [] : [[{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true]];
+  let github = params.get("github") || null;
+  const ghProfile = [{ id: "h2", name: "GitHub Pages", environment: "production", target: { kind: "github_pages", repo: "matv-studio/alunites-revel-lab", branch: "gh-pages", custom_domain: null } }, true];
+  const profiles = params.get("noprofiles") ? [] : params.get("ghprofile") ? [ghProfile] : [[{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true]];
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   class Channel { constructor() { this.onmessage = null; } }
   async function invoke(cmd, args) {
@@ -43,6 +45,20 @@
         return null;
       }
       case "open_preview": throw { key: "error-not-built", args: [] };
+      case "github_account": return github;
+      case "github_disconnect": github = null; return null;
+      case "github_cancel": return null;
+      case "open_external": return null;
+      case "github_connect": {
+        const ch = args.onEvent;
+        if (params.get("ghfail")) { const f = { key: "error-network", args: [["detail", "dns error"]] }; ch.onmessage({ event: "failed", ...f }); throw f; }
+        ch.onmessage({ event: "code", user_code: "F014-2AC6", verification_uri: "https://github.com/login/device", expires_in: 899 });
+        if (params.get("ghwait")) { await wait(60000); }
+        await wait(1200);
+        github = "matv-studio";
+        ch.onmessage({ event: "connected", login: github });
+        return github;
+      }
       case "deploy": {
         const ch = args.onEvent;
         ch.onmessage({ event: "building", build: { event: "progress", phase: "pages", done: 1, total: 1 } });
@@ -52,6 +68,11 @@
         ch.onmessage({ event: "connected", server_key: "x" });
         ch.onmessage({ event: "planned", upload: 14, delete: 2, bytes: 3_400_000, total: 4537 });
         if (args.dryRun) { ch.onmessage({ event: "finished", uploaded: 14, deleted: 2, total_files: 4537, bytes: 3_400_000, dry_run: true, server_key: "x", server_fingerprint: "SHA256:/bPN11w+yMb4D7FWpnTAuPkibmBXY17S0Uw/rDzIJv8", key_recorded: true }); return null; }
+        if (params.get("ghprofile")) {
+          for (let i = 0; i <= 4356; i += 1089) { await wait(30); ch.onmessage({ event: "preparing", done: i, total: 4356 }); }
+          ch.onmessage({ event: "finished", uploaded: 4356, deleted: 0, total_files: 4358, bytes: 751_000_000, dry_run: false, server_key: "", server_fingerprint: "", key_recorded: false, url: "https://matv-studio.github.io/alunites-revel-lab/", pages_enabled: true });
+          return null;
+        }
         for (let i = 1; i <= 14; i++) { await wait(40); ch.onmessage({ event: "uploaded", done: i, total: 14 }); }
         ch.onmessage({ event: "finished", uploaded: 14, deleted: 2, total_files: 4537, bytes: 3_400_000, dry_run: !!args.dryRun, server_key: "x ssh-ed25519 AAAA", server_fingerprint: "SHA256:/bPN11w+yMb4D7FWpnTAuPkibmBXY17S0Uw/rDzIJv8", key_recorded: true });
         return null;

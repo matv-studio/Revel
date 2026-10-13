@@ -92,7 +92,9 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Puce | `.chip` | Étiquette courte (environnement) |
 | Liste | `.list-plain` (`.is-blocking`) | Avertissements, points à vérifier |
 | Retour | `.notice--error`, `.status--ok`, `.empty` | Erreur (avec action de correction si elle existe), réussite, état vide (avec l'action qui le remplit) |
-| Valeur technique | `.code` | Empreinte, clé : chasse fixe, sélection en un clic |
+| Valeur technique | `.code`, `.code--large` | Empreinte, clé : chasse fixe, sélection en un clic ; `--large` pour un code à recopier (autorisation GitHub) |
+| Compte relié | `.account`, `account.rs` | État de connexion et action (connecter, déconnecter) ; le même composant dans Réglages et dans un formulaire |
+| Sous-bloc | `.subsection` | Groupe distinct à l'intérieur d'une section (compte requis par un formulaire) |
 | Boîte de dialogue | `.overlay` > `.dialog` (`dialog.rs`) | Confirmation ou saisie ; remplace `confirm()`/`prompt()` du système ; Échap ferme ; action destructrice : focus sur « Annuler » |
 | Navigation | `.nav-item`, `.nav-item--sub`, `.is-active` | Panneau gauche |
 

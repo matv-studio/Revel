@@ -11,7 +11,9 @@ use revel_protocol::{
 };
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
+mod github;
 pub mod preview;
 pub mod secrets;
 mod state;
@@ -43,6 +45,16 @@ pub enum CoreError {
     Blocked(String),
     #[error("site non généré : générer le site avant l'aperçu")]
     NotBuilt,
+    #[error("{0}")]
+    Git(#[from] revel_git::GitError),
+    #[error("aucun compte GitHub connecté")]
+    GithubSignedOut,
+    #[error("dépôt GitHub introuvable ou inaccessible : {0}")]
+    GithubRepoNotFound(String),
+    #[error("pas de droit d'écriture sur le dépôt {0}")]
+    GithubNoPush(String),
+    #[error("connexion GitHub annulée")]
+    GithubCancelled,
     #[error("{0}")]
     Other(String),
 }
@@ -77,8 +89,37 @@ impl CoreError {
             Self::Secret(detail) => Failure::new("error-keyring").arg("detail", detail.clone()),
             Self::Blocked(_) => Failure::new("error-blocked"),
             Self::NotBuilt => Failure::new("error-not-built"),
+            Self::Git(e) => git_failure(e),
+            Self::GithubSignedOut => Failure::new("error-github-signed-out"),
+            Self::GithubRepoNotFound(repo) => {
+                Failure::new("error-github-repo").arg("repo", repo.clone())
+            }
+            Self::GithubNoPush(repo) => {
+                Failure::new("error-github-no-push").arg("repo", repo.clone())
+            }
+            Self::GithubCancelled => Failure::new("error-github-cancelled"),
             Self::Other(detail) => Failure::detail(detail.clone()),
         }
+    }
+}
+
+fn git_failure(e: &revel_git::GitError) -> Failure {
+    use revel_git::GitError as G;
+    if e.is_auth() {
+        return Failure::new("error-github-signed-out");
+    }
+    match e {
+        G::CodeExpired => Failure::new("error-github-code-expired"),
+        G::Denied => Failure::new("error-github-denied"),
+        G::AppConfig(d) => Failure::new("error-github-app").arg("detail", d.clone()),
+        G::Rejected(d) => Failure::new("error-git-rejected").arg("detail", d.clone()),
+        G::Http(d) => Failure::new("error-network").arg("detail", d.clone()),
+        G::Api(status, d) => Failure::new("error-github-api")
+            .arg("status", status.to_string())
+            .arg("detail", d.chars().take(300).collect::<String>()),
+        G::Git(g) => Failure::new("error-git").arg("detail", g.message().to_string()),
+        G::Io(io) => Failure::new("error-io").arg("detail", io.to_string()),
+        other => Failure::detail(other.to_string()),
     }
 }
 
@@ -86,6 +127,8 @@ impl CoreError {
 pub struct Core {
     state: Mutex<State>,
     secrets: Box<dyn SecretStore>,
+    /// Demande d'interruption de la connexion GitHub en cours.
+    github_cancel: AtomicBool,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -111,12 +154,14 @@ fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-/// Identifiant du secret d'un hébergement SFTP dans le trousseau.
-pub fn secret_key(target: &HostingTarget) -> String {
+/// Identifiant du secret propre à un hébergement dans le trousseau (mot de passe SFTP).
+/// GitHub Pages utilise le jeton du compte GitHub connecté (`github:token`).
+pub fn secret_key(target: &HostingTarget) -> Option<String> {
     match target {
         HostingTarget::Sftp {
             host, port, user, ..
-        } => format!("sftp:{user}@{host}:{port}"),
+        } => Some(format!("sftp:{user}@{host}:{port}")),
+        HostingTarget::GithubPages { .. } => None,
     }
 }
 
@@ -126,6 +171,7 @@ impl Core {
         Self {
             state: Mutex::new(State::load(config_dir)),
             secrets,
+            github_cancel: AtomicBool::new(false),
         }
     }
 
@@ -277,10 +323,11 @@ impl Core {
         if profile.id.is_empty() {
             profile.id = format!("h{}", chrono::Utc::now().timestamp_millis());
         }
-        if let Some(pw) = password.filter(|p| !p.is_empty()) {
-            self.secrets
-                .set(&secret_key(&profile.target), &pw)
-                .map_err(CoreError::Secret)?;
+        if let (Some(pw), Some(key)) = (
+            password.filter(|p| !p.is_empty()),
+            secret_key(&profile.target),
+        ) {
+            self.secrets.set(&key, &pw).map_err(CoreError::Secret)?;
         }
         self.with_state(|s| {
             let list = s.profiles.entry(site.to_string()).or_default();
@@ -297,18 +344,16 @@ impl Core {
             list.retain(|p| p.id != id);
             found
         });
-        if let Some(p) = removed {
-            let _ = self.secrets.delete(&secret_key(&p.target));
+        if let Some(key) = removed.and_then(|p| secret_key(&p.target)) {
+            let _ = self.secrets.delete(&key);
         }
         Ok(())
     }
 
+    /// L'hébergement dispose de ses accès : mot de passe SFTP enregistré, ou compte GitHub connecté.
     pub fn has_secret(&self, target: &HostingTarget) -> bool {
-        self.secrets
-            .get(&secret_key(target))
-            .ok()
-            .flatten()
-            .is_some()
+        let key = secret_key(target).unwrap_or_else(|| github::TOKEN_KEY.to_string());
+        self.secrets.get(&key).ok().flatten().is_some()
     }
 
     /// Avertissements d'un hébergement pour le site généré.
@@ -357,13 +402,36 @@ impl Core {
             })
         })?;
         let warnings = self.host_warnings(&out, &profile.target)?;
-        on_event(DeployEvent::Warnings {
-            warnings: warnings.clone(),
-        });
         if let Some(b) = warnings.iter().find(|w| w.blocking) {
+            on_event(DeployEvent::Warnings {
+                warnings: warnings.clone(),
+            });
             return Err(CoreError::Blocked(b.key.clone()));
         }
         match &profile.target {
+            HostingTarget::GithubPages {
+                repo,
+                branch,
+                custom_domain,
+            } => {
+                let r = self
+                    .deploy_github_pages(
+                        site,
+                        &out,
+                        &profile.environment,
+                        repo,
+                        branch,
+                        custom_domain.as_deref(),
+                        warnings,
+                        dry_run,
+                        on_event,
+                    )
+                    .await;
+                if let Err(e) = &r {
+                    on_event(DeployEvent::Failed(e.failure()));
+                }
+                r
+            }
             HostingTarget::Sftp {
                 host,
                 port,
@@ -371,7 +439,8 @@ impl Core {
                 remote_dir,
                 known_host_key,
             } => {
-                let key = secret_key(&profile.target);
+                on_event(DeployEvent::Warnings { warnings });
+                let key = secret_key(&profile.target).unwrap_or_default();
                 let password = self
                     .secrets
                     .get(&key)
@@ -425,8 +494,6 @@ impl Core {
                 let key_recorded = known_host_key.is_none() && !report.server_key.is_empty();
                 if key_recorded {
                     let mut p = profile.clone();
-                    // D'autres hébergements (GitHub Pages…) s'ajouteront à cette énumération.
-                    #[allow(irrefutable_let_patterns)]
                     if let HostingTarget::Sftp { known_host_key, .. } = &mut p.target {
                         *known_host_key = Some(report.server_key.clone());
                     }
@@ -441,6 +508,8 @@ impl Core {
                     server_key: report.server_key,
                     server_fingerprint: report.server_fingerprint,
                     key_recorded,
+                    url: None,
+                    pages_enabled: false,
                 };
                 on_event(DeployEvent::Finished(s.clone()));
                 Ok(s)

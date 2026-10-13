@@ -1,5 +1,6 @@
 //! Interface de Revel (Leptos) : coque (barre supérieure, barre latérale) et navigation.
 
+mod account;
 mod api;
 mod dialog;
 mod home;
@@ -79,6 +80,8 @@ pub struct Ui {
     pub environment: RwSignal<Option<String>>,
     /// Boîte de dialogue ouverte (confirmation, saisie).
     pub ask: RwSignal<Option<Ask>>,
+    /// Compte GitHub connecté (identifiant).
+    pub github: RwSignal<Option<String>>,
 }
 
 impl Ui {
@@ -198,6 +201,7 @@ fn App() -> impl IntoView {
         activity: RwSignal::new(None),
         environment: RwSignal::new(None),
         ask: RwSignal::new(None),
+        github: RwSignal::new(None),
     };
     provide_context(ui);
     spawn_local(async move {
@@ -206,6 +210,11 @@ fn App() -> impl IntoView {
         }
     });
     ui.reload_recents();
+    spawn_local(async move {
+        if let Ok(a) = api::github_account().await {
+            ui.github.set(a);
+        }
+    });
     Effect::new(move |_| ui.settings.with(apply_settings));
 
     view! {

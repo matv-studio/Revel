@@ -83,9 +83,48 @@ fn bundle(code: &str) -> FluentBundle<FluentResource> {
     let mut bundle = FluentBundle::new(vec![langid]);
     // Pas de caractères d'isolation Unicode autour des variables (texte brut).
     bundle.set_use_isolating(false);
+    // Nombres mis en forme selon la langue (Fluent ne groupe pas les milliers).
+    bundle.set_formatter(Some(match code {
+        "fr" => number_fr,
+        _ => number_en,
+    }));
     let res = FluentResource::try_new(src.to_string()).unwrap_or_else(|(res, _)| res);
     let _ = bundle.add_resource(res);
     bundle
+}
+
+fn number_fr<M>(v: &FluentValue, _: &M) -> Option<String> {
+    number(v, "\u{202F}", ",")
+}
+
+fn number_en<M>(v: &FluentValue, _: &M) -> Option<String> {
+    number(v, ",", ".")
+}
+
+/// Nombre avec séparateur de milliers et marque décimale (règles CLDR : groupes de trois
+/// chiffres dès 1 000 ; espace fine insécable en français, virgule en anglais).
+fn number(v: &FluentValue, group: &str, decimal: &str) -> Option<String> {
+    let FluentValue::Number(n) = v else {
+        return None;
+    };
+    let raw = n.as_string();
+    let (sign, digits) = match raw.strip_prefix('-') {
+        Some(d) => ("-", d),
+        None => ("", raw.as_ref()),
+    };
+    let (int, frac) = digits.split_once('.').unwrap_or((digits, ""));
+    let mut out = String::from(sign);
+    for (i, c) in int.chars().enumerate() {
+        if i > 0 && (int.len() - i) % 3 == 0 {
+            out.push_str(group);
+        }
+        out.push(c);
+    }
+    if !frac.is_empty() {
+        out.push_str(decimal);
+        out.push_str(frac);
+    }
+    Some(out)
 }
 
 /// Clés de messages d'un fichier Fluent (lignes `cle = ...`).
@@ -134,6 +173,44 @@ mod tests {
         assert!(
             fr.t("deploy-warn-no-php", &[("count", "1")])
                 .contains("PHP")
+        );
+    }
+
+    #[test]
+    fn nombres_selon_la_langue() {
+        let fr = Localizer::new("fr");
+        let en = Localizer::new("en");
+        let args = [
+            ("upload", "4356"),
+            ("size", "716.5"),
+            ("delete", "0"),
+            ("total", "12"),
+        ];
+        let f = fr.t("publish-planned", &args);
+        assert!(f.starts_with("4\u{202F}356 fichiers"), "{f}");
+        assert!(f.contains("(716,5 Mo)"), "{f}");
+        let e = en.t("publish-planned", &args);
+        assert!(e.starts_with("4,356 files"), "{e}");
+        assert!(e.contains("(716.5 MB)"), "{e}");
+        assert_eq!(
+            fr.t("publish-done", &[("uploaded", "0"), ("deleted", "0")]),
+            "Rien à publier : le site en ligne est déjà à jour."
+        );
+        assert_eq!(
+            fr.t("publish-done", &[("uploaded", "1"), ("deleted", "0")]),
+            "Publication terminée : 1 fichier envoyé, 0 supprimé."
+        );
+        assert_eq!(
+            en.t("publish-done", &[("uploaded", "1200"), ("deleted", "3")]),
+            "Published: 1,200 files sent, 3 deleted."
+        );
+        assert_eq!(
+            number(&FluentValue::from(-1234567.0), ",", "."),
+            Some("-1,234,567".into())
+        );
+        assert_eq!(
+            number(&FluentValue::from(999.0), ",", "."),
+            Some("999".into())
         );
     }
 }

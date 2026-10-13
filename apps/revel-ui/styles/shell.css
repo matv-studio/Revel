@@ -1,0 +1,110 @@
+/* Revel — structure de l'application.
+
+   ┌ topbar ───────────────────────────────────────────────────────┐
+   │ logo  fil d'Ariane                          actions de page   │
+   ├ sidebar ─┬ main ───────────────────────────────┬ (inspecteur) ┤
+   │ sites     │ page centrée (largeur max)         │ étape 2      │
+   │ sections  │ ou canevas plein (éditeur)         │              │
+   │ réglages  │                                    │              │
+   └───────────┴────────────────────────────────────┴──────────────┘ */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr);
+  grid-template-areas: "top top" "side main";
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* --- Barre supérieure -------------------------------------------------- */
+.topbar {
+  grid-area: top;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0 var(--s-3) 0 var(--s-2);
+  background: var(--surface);
+  border-bottom: var(--border) solid var(--line);
+}
+.logo {
+  display: grid;
+  place-items: center;
+  width: var(--control-lg);
+  height: var(--control-lg);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text);
+}
+.logo:hover { background: var(--surface-hover); }
+.crumbs { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.crumb {
+  border: 0; background: none; padding: var(--s-1) var(--s-2);
+  border-radius: var(--radius-sm); color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+button.crumb:hover { color: var(--text); background: var(--surface-hover); }
+.crumb--current { color: var(--text); font-weight: var(--weight-medium); }
+.crumb-sep { color: var(--text-faint); }
+.topbar-actions { margin-left: auto; display: flex; gap: var(--s-2); }
+
+/* Activité (génération, publication) : fine ligne sous la barre supérieure. */
+.activity {
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  opacity: 0; transition: opacity var(--normal) var(--ease);
+  pointer-events: none;
+}
+.activity--on { opacity: 1; }
+.activity-bar {
+  height: 100%;
+  background: var(--primary);
+  transition: width var(--normal) var(--ease);
+}
+
+/* --- Barre latérale ------------------------------------------------------ */
+.sidebar {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-right: var(--border) solid var(--line);
+  padding: var(--s-2);
+  gap: var(--s-2);
+}
+.sidebar-section { display: flex; flex-direction: column; gap: 1px; }
+.sidebar-sites { flex: 1; overflow-y: auto; min-height: 0; }
+.sidebar-title {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  padding: var(--s-2) var(--s-2) var(--s-1);
+}
+.sidebar-bottom { border-top: var(--border) solid var(--line); padding-top: var(--s-2); }
+
+.nav-item {
+  display: flex; align-items: center; gap: var(--s-2);
+  height: var(--control-md);
+  padding: 0 var(--s-2);
+  border: 0; border-radius: var(--radius-md);
+  background: none; color: var(--text-muted);
+  text-align: left; white-space: nowrap;
+}
+.nav-item:hover { background: var(--surface-hover); color: var(--text); }
+.nav-item.is-active { background: var(--surface-active); color: var(--text); }
+.nav-item--sub { padding-left: calc(var(--s-2) + 16px + var(--s-2)); }
+.nav-item--sub svg.icon { display: none; }
+.nav-label { overflow: hidden; text-overflow: ellipsis; }
+
+/* --- Zone principale ------------------------------------------------------ */
+.main {
+  grid-area: main;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; grid-template-areas: "top" "main"; }
+  .sidebar { display: none; }
+}

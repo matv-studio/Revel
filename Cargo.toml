@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*"]
+# Interface WebAssembly : espace de travail séparé (cible wasm32, construite par Trunk).
+exclude = ["apps/revel-ui"]
 default-members = ["crates/*", "apps/revel-cli"]
 
 [workspace.package]
@@ -26,6 +28,7 @@ revel-import = { path = "crates/revel-import" }
 revel-markup = { path = "crates/revel-markup" }
 revel-core = { path = "crates/revel-core" }
 revel-project = { path = "crates/revel-project" }
+revel-protocol = { path = "crates/revel-protocol" }
 
 # Bibliothèques externes (versions vérifiées sur crates.io le 13/10/2026)
 serde = { version = "1.0.229", features = ["derive"] }

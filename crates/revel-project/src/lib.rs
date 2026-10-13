@@ -195,7 +195,7 @@ impl Project {
             site: &site,
             entries: self.load_entries()?,
             environment: opts.environment.clone(),
-            version: version_tag(),
+            version: self.version_tag(&site),
             hooks,
             now: chrono::Utc::now(),
         };
@@ -280,12 +280,50 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn version_tag() -> String {
-    let t = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    to_base36(t)
+/// Extensions des fichiers dont dépend le paramètre de version (`?v=`) des CSS et JS.
+const VERSIONED: &[&str] = &["css", "js", "mjs"];
+
+impl Project {
+    /// Paramètre de version des CSS/JS : empreinte de leur contenu. Deux générations sans
+    /// changement de style ou de script produisent les mêmes pages, et la publication suivante
+    /// n'envoie que ce qui a réellement changé.
+    fn version_tag(&self, site: &Site) -> String {
+        let mut files = Vec::new();
+        for p in &site.passthrough {
+            collect_files(&self.dir.join(&p.from), &mut files);
+        }
+        files.retain(|f| {
+            f.extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| VERSIONED.contains(&e.to_ascii_lowercase().as_str()))
+        });
+        files.sort();
+        let mut h = blake3::Hasher::new();
+        for f in &files {
+            let rel = f.strip_prefix(&self.dir).unwrap_or(f);
+            h.update(rel.to_string_lossy().replace('\\', "/").as_bytes());
+            h.update(&[0]);
+            if let Ok(bytes) = std::fs::read(f) {
+                h.update(&bytes);
+            }
+        }
+        let d = h.finalize();
+        let mut n = [0u8; 8];
+        n.copy_from_slice(&d.as_bytes()[..8]);
+        // 41 bits : 8 caractères en base 36, comme l'horodatage utilisé auparavant.
+        to_base36(u128::from(u64::from_le_bytes(n) >> 23))
+    }
+}
+
+/// Fichiers d'un dossier (récursif) ou fichier seul.
+fn collect_files(path: &Path, out: &mut Vec<PathBuf>) {
+    if path.is_file() {
+        out.push(path.to_path_buf());
+    } else if let Ok(rd) = std::fs::read_dir(path) {
+        for e in rd.flatten() {
+            collect_files(&e.path(), out);
+        }
+    }
 }
 
 fn to_base36(mut n: u128) -> String {
@@ -492,6 +530,37 @@ mod tests {
     fn base36() {
         assert_eq!(to_base36(35), "z");
         assert_eq!(to_base36(36), "10");
+    }
+
+    #[test]
+    fn version_selon_le_contenu() {
+        let dir = std::env::temp_dir().join(format!("revel-version-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("assets/css")).unwrap();
+        std::fs::write(dir.join("assets/css/site.css"), "a{}").unwrap();
+        std::fs::write(dir.join("assets/photo.jpg"), "x").unwrap();
+        let mut site = Site::new("Essai", "fr");
+        site.passthrough.push(revel_model::Passthrough {
+            from: "assets".into(),
+            to: "assets".into(),
+        });
+        let p = Project::create(&dir, site.clone()).unwrap();
+        let v1 = p.version_tag(&site);
+        assert_eq!(v1, p.version_tag(&site), "deux générations identiques");
+        assert_eq!(v1.len(), 8);
+        std::fs::write(dir.join("assets/photo.jpg"), "y").unwrap();
+        assert_eq!(
+            v1,
+            p.version_tag(&site),
+            "une image ne change pas la version"
+        );
+        std::fs::write(dir.join("assets/css/site.css"), "b{}").unwrap();
+        assert_ne!(
+            v1,
+            p.version_tag(&site),
+            "une feuille de style modifiée change la version"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

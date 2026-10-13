@@ -15,8 +15,11 @@ compare les deux sorties (texte visible, balises `<title>`/`<meta>`, liste des f
 | 1.2 | fait : `revel-import` (Eleventy) + `revel-markup` ; profil `revel-import.json` du cobaye |
 | 1.3 | fait : `revel-render` ; 71/71 fichiers équivalents à Eleventy |
 | 1.4 | fait : `revel-assets` (AVIF/WebP/JPEG/PNG, pas d'agrandissement, cache `.revel/img`) ; 3 843 variantes ; 1re génération 22 min sur 2 cœurs (Eleventy : 19 min), suivantes 2,5 s ; rendu visuel identique (captures comparées) |
-| 1.6 | fait côté moteur : `revel-deploy::sftp` (manifeste compatible `deploy-sftp.sh`, renommage atomique, reprise, clé du serveur) ; essai réel contre OpenSSH en CI ; commande `revel deploy-sftp` |
-| 1.0, 1.5, 1.7 à 1.9 | à faire |
+| 1.5 | fait : aperçu servi par `revel-core::preview` (axum), ouvert dans une fenêtre de Revel |
+| 1.6 | fait : `revel-deploy::sftp` (manifeste compatible `deploy-sftp.sh`, renommage atomique, reprise, clé du serveur) ; essai réel contre OpenSSH en CI ; commande `revel deploy-sftp` ; depuis l'interface : hébergements par site, mot de passe dans le trousseau, vérification sans envoi, publication incrémentale (2e publication sans changement : rien envoyé) |
+| 1.8 | fait : interface Leptos (sites, vue d'ensemble, génération, publication, réglages), système de design (`docs/DESIGN.md`), anglais et français ; échecs transmis comme clés de traduction (`Failure`) ; vérifiée de bout en bout dans l'application (Xvfb) contre un serveur SFTP local |
+| 1.0 | en partie : `revel-core` (services communs à l'interface, à la ligne de commande et au futur serveur MCP), `revel-protocol` (messages sérialisables) ; reste : commandes de modification du modèle et annuler/rétablir, à l'étape 2 avec l'éditeur |
+| 1.7, 1.9 | à faire |
 
 ## Sous-étapes
 
@@ -42,6 +45,8 @@ Chaque sous-étape = commits + étiquette `step-1.N`, pour revenir en arrière p
 - **D-12 Git** : `git2` 0.21.0 avec libgit2 intégrée.
 - **D-05 interface** : Leptos 0.8 (WebAssembly) dans Tauri 2, construit avec Trunk.
 - **D-13** : pas de discussion Claude intégrée ; toutes les modifications passent par des commandes réutilisables par le futur serveur MCP.
+- **D-15 direction artistique** : interface neutre en gris, un seul accent réglable, police Geist (voir DESIGN.md).
+- **D-16 échecs traduisibles** : le cœur renvoie des clés de traduction, jamais des phrases.
 
 ## Bibliothèques retenues pour l'étape 1 (versions crates.io du 13/10/2026)
 

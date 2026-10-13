@@ -30,7 +30,15 @@ jobs:
       - name: Rust (version de rust-toolchain.toml)
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - name: Interface Leptos (WebAssembly)
+        working-directory: apps/revel-ui
+        run: trunk build --release
       - run: cargo fmt --all --check
+      - run: cargo fmt --manifest-path apps/revel-ui/Cargo.toml --check
+      - run: cargo clippy --manifest-path apps/revel-ui/Cargo.toml --target wasm32-unknown-unknown
       - run: cargo clippy --workspace --all-targets
       # Chaque module doit compiler avec ses fonctions désactivées (retour arrière possible).
       - run: cargo clippy -p revel-deploy --no-default-features
@@ -54,6 +62,12 @@ jobs:
       - name: Rust (version de rust-toolchain.toml)
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - name: Interface Leptos (WebAssembly)
+        working-directory: apps/revel-ui
+        run: trunk build --release
       - run: cargo test --workspace
       - name: Essai de la ligne de commande
         shell: bash
@@ -89,4 +103,6 @@ jobs:
           REVEL_SFTP_PORT: "2222"
           REVEL_SFTP_USER: revel
           REVEL_SFTP_HOME: /home/revel
-        run: sudo -E env "PATH=$PATH" cargo test -p revel-deploy --test sftp_local
+        run: |
+          sudo -E env "PATH=$PATH" cargo test -p revel-deploy --test sftp_local
+          sudo -E env "PATH=$PATH" cargo test -p revel-core --no-default-features publication_par_le_coeur

@@ -14,7 +14,153 @@ deploy-warn-no-301 = This host cannot send real 301 redirects: { $count } redire
 deploy-warn-no-php = This host does not run PHP: { $count } PHP file(s) (for example the contact form) will not work.
 deploy-warn-no-headers = This host does not allow custom HTTP headers (indexing, cache and security headers).
 deploy-warn-no-htaccess = This host ignores .htaccess files: its rules (HTTPS, redirects, access) will not apply.
-deploy-warn-site-too-big = The site ({ $size } bytes) exceeds this host's limit ({ $max } bytes).
-deploy-warn-file-too-big = A file ({ $size } bytes) exceeds this host's per-file limit ({ $max } bytes).
+deploy-warn-site-too-big = The site ({ $size } MB) exceeds this host's limit ({ $max } MB).
+deploy-warn-file-too-big = A file ({ $size } MB) exceeds this host's per-file limit ({ $max } MB).
 deploy-warn-too-many-files = The site has { $count } files; this host accepts at most { $max }.
 deploy-warn-public-repo = On a free plan, this host requires the source repository to be public.
+
+home-title = Sites
+home-empty = No site yet. Open a folder containing a Revel site, or import an Eleventy project.
+action-open = Open a site
+action-import = Import an Eleventy project
+action-new = New site
+action-forget = Remove from list
+action-cancel = Cancel
+action-save = Save
+action-delete = Delete
+new-site-name = Site name
+import-overwrite = This folder already contains a Revel site. Importing again replaces its structure (pages, layouts, collections); content and images are not changed.
+import-done = Import finished
+import-warnings = Points to check
+site-back = All sites
+site-pages = Pages
+site-layouts = Layouts
+site-components = Components
+site-collections = Collections
+site-entries = { $count ->
+        [one] { $count } entry
+       *[other] { $count } entries
+    }
+build-title = Generate
+build-env = Environment
+build-images = Responsive images (AVIF, WebP)
+build-run = Generate the site
+build-running = Generating…
+build-phase-pages = Pages
+build-phase-copies = Files
+build-phase-images = Images { $done }/{ $total }
+build-done = { $generated } pages generated, { $copied } files copied, images: { $produced } new, { $cached } reused, in { $seconds } s.
+build-warnings = Warnings
+build-failed = Generation failed. { $message }
+preview-open = Preview
+publish-title = Publish
+publish-empty = No hosting for this site yet. Add the SFTP access provided by your host to publish in one click.
+publish-add = Add hosting
+publish-name = Name
+publish-env = Environment generated
+publish-host = SFTP server
+publish-port = Port
+publish-user = Login
+publish-remote-dir = Folder on the server
+publish-password = Password
+publish-password-saved = Already stored in the system keychain. Leave empty to keep it.
+publish-check = Check
+publish-run = Publish
+publish-planned = { $upload ->
+        [one] { $upload } file to send
+       *[other] { $upload } files to send
+    } ({ $size } MB), { $delete } to delete, { $total } files on the site.
+publish-progress = Sending: { $done } / { $total } { $total ->
+        [one] file
+       *[other] files
+    }
+publish-done = { $uploaded ->
+        [0] { $deleted ->
+            [0] Nothing to publish: the online site is already up to date.
+           *[other] Published: { $deleted } { $deleted ->
+                [one] file deleted
+               *[other] files deleted
+            }.
+        }
+       *[other] Published: { $uploaded } { $uploaded ->
+            [one] file sent
+           *[other] files sent
+        }, { $deleted } deleted.
+    }
+publish-dry-done = { $upload ->
+        [0] { $delete ->
+            [0] Check finished: the online site is already up to date.
+           *[other] Check finished, nothing was changed on the server. The next publication will delete { $delete } { $delete ->
+                [one] file
+               *[other] files
+            }.
+        }
+       *[other] Check finished, nothing was changed on the server. The next publication will send { $upload } { $upload ->
+            [one] file
+           *[other] files
+        } ({ $size } MB) and delete { $delete }.
+    }
+publish-key-recorded = First connection: the server key is recorded and will be required for future connections. Compare its fingerprint with the one shown by your host:
+publish-failed = Publication failed. { $message }
+publish-warnings = Before publishing
+error = Error: { $message }
+nav-sites = Sites
+nav-recent = Recent
+nav-all-sites = All sites
+nav-overview = Overview
+nav-build = Generate
+nav-publish = Publish
+nav-settings = Settings
+home-col-name = Name
+home-col-folder = Folder
+home-col-opened = Last opened
+settings-lang = Language
+settings-theme = Theme
+theme-system = System
+theme-dark = Dark
+theme-light = Light
+settings-accent = Accent colour
+settings-accent-help = Used for primary buttons, selection and focus. “None” keeps the interface neutral.
+accent-none = None
+accent-custom = Custom
+overview-content = Content
+overview-structure = Structure
+overview-environments = Environments
+action-close = Close
+action-edit = Edit
+action-replace = Replace
+new-site-title = New site
+new-site-choose = Choose folder
+import-overwrite-title = Replace the existing site?
+publish-default-name = My hosting
+publish-form-new = New SFTP hosting
+publish-form-edit = Edit hosting
+publish-form-help = SFTP access provided by your host (OVH, o2switch, Infomaniak…), usually in your customer area under FTP-SSH.
+publish-host-help = Example: ftp.cluster000.hosting.ovh.net
+publish-remote-dir-help = The site's folder on the server, relative to your home folder. Example: www/
+publish-password-help = Stored in the system keychain, never in the site files.
+publish-check-help = Connects to the server and compares files, without sending or deleting anything.
+publish-connecting = Connecting to the server…
+publish-comparing = Comparing with the files online…
+publish-check-failed = Check failed. { $message }
+publish-delete-title = Delete “{ $name }”?
+publish-delete-body = The saved access details and password will be erased. Files already online are not changed.
+error-detail = { $detail }
+error-no-desktop = This action requires the Revel desktop app.
+error-project = The site could not be read: { $detail }
+error-import = Import failed: { $detail }
+error-io = Read or write error: { $detail }
+error-already-imported = This folder already contains a Revel site.
+error-not-eleventy = This folder is not an Eleventy project (no eleventy.config.js or .eleventy.js file).
+error-unknown-profile = This hosting no longer exists. Reload the Publish page.
+error-missing-secret = Password missing from the keychain: edit the hosting to enter it again.
+error-keyring = The system keychain is not available: { $detail }
+error-blocked = Publication blocked: fix the points listed first.
+error-not-built = The site has not been generated for this environment yet. Generate it, then open the preview.
+error-sftp-connect = Cannot connect to { $host }. Check the server address, the port and your internet connection. ({ $detail })
+error-sftp-host-key = The server key has changed since the last connection. This may come from a change at your host or an interception attempt: check with your host before continuing.
+error-sftp-auth = Login or password rejected by the server.
+error-sftp = The server returned an error: { $detail }
+error-sftp-remote-dir = Invalid folder on the server: “{ $dir }”. Enter a relative path, for example www/
+error-sftp-file-name = Unsupported file name: { $name }
+publish-fix = Edit hosting

@@ -42,6 +42,9 @@ jobs:
           rustup toolchain install
           if [ -n "${{ matrix.target }}" ]; then rustup target add ${{ matrix.target }}; fi
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
       - name: Outil Tauri
         run: cargo install tauri-cli --version "^2" --locked
       - uses: tauri-apps/tauri-action@v1

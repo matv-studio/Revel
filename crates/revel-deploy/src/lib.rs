@@ -136,6 +136,47 @@ pub fn check(caps: &Capabilities, needs: &SiteNeeds) -> Vec<Warning> {
     out
 }
 
+/// Besoins d'un site déjà généré (dossier de sortie).
+pub fn needs_from_dir(dir: &std::path::Path) -> std::io::Result<SiteNeeds> {
+    let mut n = SiteNeeds::default();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d)? {
+            let e = e?;
+            let p = e.path();
+            if e.file_type()?.is_dir() {
+                stack.push(p);
+                continue;
+            }
+            let len = e.metadata()?.len();
+            n.total_bytes += len;
+            n.largest_file_bytes = n.largest_file_bytes.max(len);
+            n.file_count += 1;
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.ends_with(".php") {
+                n.php_files += 1;
+            }
+            if name == ".htaccess" {
+                n.htaccess = true;
+                let text = std::fs::read_to_string(&p).unwrap_or_default();
+                for l in text.lines().map(str::trim).filter(|l| !l.starts_with('#')) {
+                    if l.contains("R=301")
+                        || l.starts_with("Redirect 301")
+                        || l.starts_with("RedirectMatch 301")
+                        || l.starts_with("RedirectPermanent")
+                    {
+                        n.redirects_301 += 1;
+                    }
+                    if l.starts_with("Header ") {
+                        n.custom_headers = true;
+                    }
+                }
+            }
+        }
+    }
+    Ok(n)
+}
+
 /// Interface commune des hébergeurs. Les méthodes d'envoi seront ajoutées
 /// à l'étape 1 sans modifier `capabilities`.
 pub trait Provider {
@@ -169,6 +210,20 @@ mod tests {
         assert!(keys.contains(&"deploy-warn-public-repo"));
         assert!(!keys.contains(&"deploy-warn-site-too-big"));
         assert!(check(&sftp_apache(), &needs).is_empty());
+    }
+
+    #[test]
+    fn besoins_d_un_dossier() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(
+            d.path().join(".htaccess"),
+            "# commentaire R=301\nRewriteRule ^a$ /b [R=301,L]\nRedirect 301 /c /d\nHeader set X-Robots-Tag noindex\n",
+        )
+        .unwrap();
+        std::fs::write(d.path().join("contact.php"), "<?php").unwrap();
+        let n = needs_from_dir(d.path()).unwrap();
+        assert_eq!((n.redirects_301, n.php_files, n.file_count), (2, 1, 2));
+        assert!(n.htaccess && n.custom_headers);
     }
 
     #[test]

@@ -1,0 +1,16 @@
+[package]
+name = "revel-protocol"
+description = "Messages échangés entre l'interface et le cœur de Revel (compatibles WebAssembly)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

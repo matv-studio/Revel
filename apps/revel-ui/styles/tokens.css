@@ -1,0 +1,173 @@
+/* =====================================================================
+   Revel — jetons de design
+   Seule source des valeurs visuelles : aucun composant n'utilise de
+   couleur, taille ou durée en dur. Voir docs/DESIGN.md.
+   ===================================================================== */
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("/fonts/geist-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("/fonts/geist-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  /* --- Échelle de gris neutres (aucune teinte) -------------------- */
+  --gray-0: #ffffff;
+  --gray-50: #f7f7f7;
+  --gray-100: #efefef;
+  --gray-150: #e6e6e6;
+  --gray-200: #dadada;
+  --gray-300: #bdbdbd;
+  --gray-400: #8f8f8f;
+  --gray-500: #6e6e6e;
+  --gray-600: #4d4d4d;
+  --gray-700: #383838;
+  --gray-750: #2e2e2e;
+  --gray-800: #262626;
+  --gray-850: #1f1f1f;
+  --gray-900: #191919;
+
+  /* États (fonctionnels, jamais décoratifs) */
+  --red-text-dark: #ff9b92;
+  --red-bg-dark: #3b2120;
+  --red-text-light: #b3261e;
+  --red-bg-light: #fdeceb;
+  --green-text-dark: #7fd6a3;
+  --green-text-light: #1b7a4b;
+  --red-solid: #d4382c;             /* action destructrice confirmée */
+
+  /* --- Typographie ------------------------------------------------- */
+  --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Valeurs techniques à recopier ou comparer (empreintes, clés) */
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+  --text-xs: 11px;   /* libellés de champs, en-têtes de tableau */
+  --text-sm: 12px;   /* aide, métadonnées */
+  --text-md: 13px;   /* texte d'interface par défaut */
+  --text-lg: 15px;   /* titres de section */
+  --text-xl: 20px;   /* titre de page */
+  --leading: 1.45;
+  --weight-regular: 420;
+  --weight-medium: 530;
+  --weight-strong: 620;
+
+  /* --- Espacements : grille de 4 px --------------------------------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  /* --- Contrôles ---------------------------------------------------- */
+  --control-sm: 24px;
+  --control-md: 28px;
+  --control-lg: 32px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 999px;
+  --border: 1px;
+
+  /* --- Structure ---------------------------------------------------- */
+  --topbar-h: 44px;
+  --sidebar-w: 240px;
+  --inspector-w: 280px;
+  --content-max: 960px;
+
+  /* --- Mouvement ---------------------------------------------------- */
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --fast: 120ms;
+  --normal: 200ms;
+}
+
+/* --- Thème sombre (par défaut) -------------------------------------- */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: var(--gray-900);            /* fond de l'application, canevas */
+  --surface: var(--gray-850);       /* panneaux latéraux, barre supérieure */
+  --surface-raised: var(--gray-800);/* sections, champs */
+  --surface-hover: var(--gray-750);
+  --surface-active: var(--gray-700);
+  --line: var(--gray-750);
+  --line-strong: var(--gray-700);
+  --text: #ededed;
+  --text-muted: #9d9d9d;
+  --text-faint: #6f6f6f;
+  --inverse: #f2f2f2;               /* bouton principal sans accent */
+  --inverse-ink: var(--gray-900);
+  --danger-text: var(--red-text-dark);
+  --danger-bg: var(--red-bg-dark);
+  --success-text: var(--green-text-dark);
+  --overlay: rgb(0 0 0 / .55);      /* fond derrière une boîte de dialogue */
+  --shadow-dialog: 0 16px 40px rgb(0 0 0 / .45), 0 0 0 1px var(--line-strong);
+}
+
+/* --- Thème clair ------------------------------------------------------ */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: var(--gray-100);
+  --surface: var(--gray-0);
+  --surface-raised: var(--gray-0);
+  --surface-hover: var(--gray-50);
+  --surface-active: var(--gray-150);
+  --line: var(--gray-150);
+  --line-strong: var(--gray-200);
+  --text: #1a1a1a;
+  --text-muted: #626262;
+  --text-faint: #9a9a9a;
+  --inverse: #1a1a1a;
+  --inverse-ink: var(--gray-0);
+  --danger-text: var(--red-text-light);
+  --danger-bg: var(--red-bg-light);
+  --success-text: var(--green-text-light);
+  --overlay: rgb(0 0 0 / .28);
+  --shadow-dialog: 0 16px 40px rgb(0 0 0 / .18), 0 0 0 1px var(--line);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: var(--gray-100);
+    --surface: var(--gray-0);
+    --surface-raised: var(--gray-0);
+    --surface-hover: var(--gray-50);
+    --surface-active: var(--gray-150);
+    --line: var(--gray-150);
+    --line-strong: var(--gray-200);
+    --text: #1a1a1a;
+    --text-muted: #626262;
+    --text-faint: #9a9a9a;
+    --inverse: #1a1a1a;
+    --inverse-ink: var(--gray-0);
+    --danger-text: var(--red-text-light);
+    --danger-bg: var(--red-bg-light);
+    --success-text: var(--green-text-light);
+    --overlay: rgb(0 0 0 / .28);
+    --shadow-dialog: 0 16px 40px rgb(0 0 0 / .18), 0 0 0 1px var(--line);
+  }
+}
+
+/* --- Accent : une seule couleur, réglable (Réglages > Couleur d'accent).
+   Sans accent, l'action principale et le focus utilisent le contraste neutre.
+   L'application définit --accent et --accent-ink sur :root. -------------- */
+:root {
+  --primary: var(--accent, var(--inverse));
+  --danger-solid: var(--red-solid);
+  --danger-solid-ink: #ffffff;
+  --primary-ink: var(--accent-ink, var(--inverse-ink));
+  --focus: var(--accent, var(--text-muted));
+  --selection: color-mix(in srgb, var(--accent, var(--text)) 14%, transparent);
+}

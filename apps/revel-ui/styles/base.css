@@ -1,0 +1,46 @@
+/* Revel — base : remise à zéro, typographie, accessibilité. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--text-md);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
+  user-select: none;          /* application : seul le contenu éditable se sélectionne */
+}
+
+h1, h2, h3, p, dl, dd, ul { margin: 0; }
+h1 { font-size: var(--text-xl); font-weight: var(--weight-strong); letter-spacing: -0.015em; line-height: 1.2; }
+h2 { font-size: var(--text-lg); font-weight: var(--weight-medium); letter-spacing: -0.005em; }
+h3 { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-muted); }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: default; }
+input, textarea, .path, .selectable { user-select: text; }
+
+::selection { background: var(--selection); }
+
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
+.strong { font-weight: var(--weight-medium); }
+.path { font-variant-numeric: tabular-nums; word-break: break-all; }
+.num { font-variant-numeric: tabular-nums; text-align: right; }
+.help { font-size: var(--text-sm); max-width: 62ch; }
+
+svg.icon { flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

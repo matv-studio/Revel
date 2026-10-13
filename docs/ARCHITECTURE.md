@@ -17,12 +17,20 @@
 ## Dépendances entre modules
 
 ```
-revel-app ──┬─ revel-deploy, revel-i18n, revel-model
-revel-cli ──┬─ revel-project, revel-import, revel-deploy, revel-i18n, revel-model
-revel-project ── revel-render ── revel-markup ── revel-model
-revel-import ──┬─ revel-markup, revel-render (types), revel-model
-(autres crates : sans dépendance interne)
+revel-ui (WebAssembly) ── revel-protocol, revel-i18n
+revel-app ── revel-core, revel-protocol, revel-model
+revel-cli ── revel-project, revel-import, revel-deploy, revel-i18n, revel-model
+revel-core ── revel-project, revel-import, revel-deploy, revel-protocol, revel-model
+revel-project ── revel-render, revel-assets ── revel-markup ── revel-model
+revel-import ── revel-markup, revel-render (types), revel-model
+revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour wasm32)
 ```
+
+- `revel-core` : services de l'application (sites récents, ouvrir, importer, générer, aperçu, hébergements,
+  publier), état de l'application (`revel-state.json`, sans secret), mots de passe dans le trousseau.
+  Appelé par l'application et, à terme, par la ligne de commande et le serveur MCP (D-13).
+- `revel-protocol` : messages sérialisables entre l'interface et le cœur (résumés, événements de progression,
+  échecs `Failure` = clé de traduction + paramètres, D-16). Aucune dépendance système.
 
 ## Modèle de site (schéma v1)
 
@@ -50,11 +58,16 @@ texte ligne à ligne.
 ## Coque et interface
 
 - **Tauri 2** (2.12.3 au 13/10/2026) : WebView2 sous Windows, WKWebView sous macOS, WebKitGTK 4.1 sous Linux.
-- Interface : **Leptos 0.8** en WebAssembly, construite avec Trunk (D-05). L'interface provisoire en HTML
-  statique (`ui/`) sera remplacée à l'étape 1.8.
+- Interface : **Leptos 0.8** en WebAssembly (`apps/revel-ui`, espace de travail séparé), construite avec Trunk
+  (D-05) ; système de design dans `docs/DESIGN.md` (D-15). Les commandes Tauri (`apps/revel-app/src/lib.rs`) ne
+  font que relayer `revel-core` ; la progression passe par des canaux Tauri (`Channel`).
+- Les messages d'un canal peuvent arriver après la réponse de la commande : l'interface fixe l'état final au
+  premier signal de fin et ignore la progression qui suit.
 - Liaison MCP prévue (D-13) : toutes les modifications passeront par des commandes communes à l'interface,
   à la ligne de commande et au futur serveur MCP.
-- Permissions Tauri minimales (`capabilities/default.json` : `core:default`).
+- Permissions Tauri minimales (`capabilities/default.json` : `core:default`, `dialog:allow-open`).
+- Générations reproductibles : le paramètre `?v=` des CSS/JS est l'empreinte de leur contenu ; deux générations
+  sans changement produisent des fichiers identiques, et la publication suivante n'envoie rien.
 
 ## Versions de référence (vérifiées sur crates.io le 13/10/2026)
 

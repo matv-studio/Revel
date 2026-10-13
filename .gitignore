@@ -6,3 +6,4 @@ apps/revel-app/gen/
 Thumbs.db
 # Données de travail locales (sites ouverts, brouillons) : jamais dans le dépôt
 /workspace-local/
+apps/revel-ui/dist/

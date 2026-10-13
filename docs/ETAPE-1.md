@@ -13,8 +13,10 @@ compare les deux sorties (texte visible, balises `<title>`/`<meta>`, liste des f
 |---|---|
 | 1.1 | fait : `revel-project` (ouverture, enregistrement, contenus, données, génération) |
 | 1.2 | fait : `revel-import` (Eleventy) + `revel-markup` ; profil `revel-import.json` du cobaye |
-| 1.3 | fait (hors images) : `revel-render` ; 71/71 fichiers équivalents à Eleventy |
-| 1.0, 1.4 à 1.9 | à faire |
+| 1.3 | fait : `revel-render` ; 71/71 fichiers équivalents à Eleventy |
+| 1.4 | fait : `revel-assets` (AVIF/WebP/JPEG/PNG, pas d'agrandissement, cache `.revel/img`) ; 3 843 variantes ; 1re génération 22 min sur 2 cœurs (Eleventy : 19 min), suivantes 2,5 s ; rendu visuel identique (captures comparées) |
+| 1.6 | fait côté moteur : `revel-deploy::sftp` (manifeste compatible `deploy-sftp.sh`, renommage atomique, reprise, clé du serveur) ; essai réel contre OpenSSH en CI ; commande `revel deploy-sftp` |
+| 1.0, 1.5, 1.7 à 1.9 | à faire |
 
 ## Sous-étapes
 

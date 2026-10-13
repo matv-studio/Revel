@@ -8,7 +8,10 @@
 
 use serde::Serialize;
 
+pub mod manifest;
 pub mod providers;
+#[cfg(feature = "sftp")]
+pub mod sftp;
 
 /// Ce qu'un hébergeur sait faire. Sources des valeurs : voir `providers.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

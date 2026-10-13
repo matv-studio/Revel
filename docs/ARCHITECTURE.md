@@ -71,6 +71,10 @@ texte ligne à ligne.
 | htmlize | 1.1.0 | entités HTML |
 | regex | 1.13.1 | filtres et import |
 | chrono | 0.4.45 | dates |
+| image / fast_image_resize | 0.25.10 / 6.1.0 | décodage, redimensionnement |
+| ravif / webp / jpeg-encoder | 0.13.0 / 0.3.1 / 0.7.1 | encodage AVIF, WebP, JPEG |
+| russh / russh-sftp | 0.64.1 / 3.0.1 | SFTP (cryptographie `ring`) |
+| sha1 | 0.11.0 | manifeste de publication |
 | thiserror / anyhow | 2.0.21 / 1.0.104 | erreurs |
 
 Bibliothèques envisagées pour l'étape 1 : voir `ETAPE-1.md`.

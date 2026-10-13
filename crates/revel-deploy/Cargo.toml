@@ -10,11 +10,21 @@ publish.workspace = true
 # Chaque hébergeur peut être retiré de la compilation sans toucher au reste.
 default = ["github-pages", "sftp", "cloudflare"]
 github-pages = []
-sftp = []
+sftp = ["dep:russh", "dep:russh-sftp", "dep:tokio"]
 cloudflare = []
 
 [dependencies]
 serde.workspace = true
+thiserror.workspace = true
+sha1 = "0.11.0"
+# Pile SSH en Rust ; « ring » pour la cryptographie (pas de dépendance à CMake).
+russh = { version = "0.64.1", default-features = false, features = ["ring", "rsa", "flate2"], optional = true }
+russh-sftp = { version = "3.0.1", optional = true }
+tokio = { version = "1.53.2", features = ["rt", "fs", "sync", "macros"], optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "process", "time"] }
 
 [lints]
 workspace = true

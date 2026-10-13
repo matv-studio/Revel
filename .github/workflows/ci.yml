@@ -25,6 +25,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      # NASM : encodeur AVIF (rav1e) optimisé.
+      - uses: ilammy/setup-nasm@v1
       - name: Rust (version de rust-toolchain.toml)
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -47,6 +49,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      # NASM : encodeur AVIF (rav1e) optimisé.
+      - uses: ilammy/setup-nasm@v1
       - name: Rust (version de rust-toolchain.toml)
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -56,3 +60,33 @@ jobs:
         run: |
           cargo run -q -p revel-cli -- info
           cargo run -q -p revel-cli -- check-host github-pages --redirects 3 --php 1
+
+  sftp:
+    name: Publication SFTP (serveur OpenSSH local)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Serveur SFTP d'essai
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+          sudo useradd -m revel
+          PASS=$(openssl rand -hex 12)
+          echo "revel:$PASS" | sudo chpasswd
+          echo "REVEL_SFTP_PASSWORD=$PASS" >> "$GITHUB_ENV"
+          mkdir -p /tmp/sshd && ssh-keygen -q -t ed25519 -N "" -f /tmp/sshd/host
+          printf 'Port 2222\nListenAddress 127.0.0.1\nHostKey /tmp/sshd/host\nPasswordAuthentication yes\nUsePAM yes\nPidFile /tmp/sshd/pid\nSubsystem sftp /usr/lib/openssh/sftp-server\n' > /tmp/sshd/config
+          sudo mkdir -p /run/sshd && sudo /usr/sbin/sshd -f /tmp/sshd/config
+          sudo chmod o+rx /home/revel
+      # NASM : encodeur AVIF (rav1e) optimisé.
+      - uses: ilammy/setup-nasm@v1
+      - name: Rust (version de rust-toolchain.toml)
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Essai de publication
+        env:
+          REVEL_SFTP_HOST: 127.0.0.1
+          REVEL_SFTP_PORT: "2222"
+          REVEL_SFTP_USER: revel
+          REVEL_SFTP_HOME: /home/revel
+        run: sudo -E env "PATH=$PATH" cargo test -p revel-deploy --test sftp_local

@@ -18,6 +18,7 @@ revel-deploy.workspace = true
 revel-i18n.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+tokio = { version = "1.53.2", features = ["rt-multi-thread"] }
 
 [lints]
 workspace = true

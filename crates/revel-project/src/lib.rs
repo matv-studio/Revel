@@ -56,7 +56,36 @@ pub struct BuildReport {
     pub files: Vec<String>,
     pub generated: usize,
     pub copied: usize,
+    pub images: revel_assets::Stats,
     pub warnings: Vec<String>,
+}
+
+/// Étape signalée pendant une génération.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Phase {
+    Pages,
+    Copies,
+    Images,
+}
+
+/// Options de génération.
+pub struct BuildOptions<'a> {
+    /// Environnement (`production`, `staging`…).
+    pub environment: String,
+    /// Produire les variantes d'images (sinon `<img>` simple).
+    pub images: bool,
+    /// Progression : étape, fait, total.
+    pub progress: Option<&'a (dyn Fn(Phase, usize, usize) + Sync)>,
+}
+
+impl Default for BuildOptions<'_> {
+    fn default() -> Self {
+        Self {
+            environment: "production".into(),
+            images: true,
+            progress: None,
+        }
+    }
 }
 
 impl Project {
@@ -140,26 +169,38 @@ impl Project {
     }
 
     /// Génère le site dans `out_dir` (vidé au préalable).
-    pub fn build(
-        &self,
-        out_dir: &Path,
-        environment: &str,
-        hooks: Option<Arc<dyn AssetHooks>>,
-    ) -> Result<BuildReport, ProjectError> {
+    pub fn build(&self, out_dir: &Path, opts: &BuildOptions) -> Result<BuildReport, ProjectError> {
         let mut site = self.site.clone();
         for (k, v) in self.load_data()? {
             site.data.entry(k).or_insert(v);
         }
-        let hooks = hooks.unwrap_or_else(|| Arc::new(ProjectAssets::new(self)));
+        let pipeline = opts.images.then(|| {
+            Arc::new(revel_assets::Pipeline::new(
+                &self.dir,
+                &site.passthrough,
+                &site.settings.image_widths,
+            ))
+        });
+        let hooks: Arc<dyn AssetHooks> = match &pipeline {
+            Some(p) => p.clone(),
+            None => Arc::new(ProjectAssets::new(self)),
+        };
+        let progress = |phase, done, total| {
+            if let Some(p) = opts.progress {
+                p(phase, done, total);
+            }
+        };
+        progress(Phase::Pages, 0, 1);
         let input = BuildInput {
             site: &site,
             entries: self.load_entries()?,
-            environment: environment.to_string(),
+            environment: opts.environment.clone(),
             version: version_tag(),
             hooks,
             now: chrono::Utc::now(),
         };
         let out = revel_render::build(&input)?;
+        progress(Phase::Pages, 1, 1);
         if out_dir.exists() {
             std::fs::remove_dir_all(out_dir).map_err(io(out_dir))?;
         }
@@ -168,7 +209,8 @@ impl Project {
             warnings: out.warnings,
             ..Default::default()
         };
-        for p in &site.passthrough {
+        for (i, p) in site.passthrough.iter().enumerate() {
+            progress(Phase::Copies, i, site.passthrough.len());
             let from = self.dir.join(&p.from);
             let to = out_dir.join(p.to.trim_start_matches('/'));
             report.copied += copy_tree(&from, &to, out_dir, &mut report.files)?;
@@ -181,6 +223,16 @@ impl Project {
             std::fs::write(&dest, bytes).map_err(io(&dest))?;
             report.files.push(path);
             report.generated += 1;
+        }
+        if let Some(p) = &pipeline {
+            let names: Vec<String> = p
+                .pending()
+                .iter()
+                .map(|v| format!("img/{}", v.name))
+                .collect();
+            report.images = p.process(out_dir, &|d, t| progress(Phase::Images, d, t));
+            report.warnings.extend(p.take_errors());
+            report.files.extend(names);
         }
         report.files.sort();
         report.files.dedup();

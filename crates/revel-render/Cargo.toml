@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 revel-model.workspace = true
 revel-markup.workspace = true
+revel-edit.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 minijinja = { version = "3.0.0", features = ["serde", "json", "urlencode", "preserve_order"] }

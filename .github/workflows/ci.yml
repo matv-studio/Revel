@@ -200,6 +200,27 @@ jobs:
             --save captures-ecarts \
             --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
             | tee -a "$GITHUB_STEP_SUMMARY"
+      # Canevas de l'éditeur (étape 2.2) : chaque page, repères retirés, identique à la page
+      # générée ; servi comme par l'application, il donne les mêmes styles et captures que le site,
+      # et répond à la souris et aux messages de l'interface.
+      - name: Canevas de l'éditeur
+        shell: bash
+        run: |
+          REVEL=target/release/revel
+          echo "## Canevas" >> "$GITHUB_STEP_SUMMARY"
+          $REVEL canvas-check cobaye | tee -a "$GITHUB_STEP_SUMMARY"
+          $REVEL canvas-serve cobaye --port 8160 --scripts --no-images > canvas-serve.log 2>&1 &
+          $REVEL canvas-serve cobaye --port 8161 > canvas-serve-sans-scripts.log 2>&1 &
+          sleep 2
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          node tools/compare-styles.mjs revel-production http://127.0.0.1:8160 --jobs 4 --shots \
+            --widths 1280,860,375 --save captures-ecarts \
+            --pages /,/agence/,/projets/,/contact/,/faire-un-film-ia/,/project/wattr/ \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          for page in / /agence/ /project/wattr/; do
+            node tools/canvas-e2e.mjs http://127.0.0.1:8160 "$page" | tee -a "$GITHUB_STEP_SUMMARY"
+            node tools/canvas-e2e.mjs http://127.0.0.1:8161 "$page" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
       - name: Captures en écart
         if: failure()
         uses: actions/upload-artifact@v7

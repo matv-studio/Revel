@@ -255,6 +255,40 @@ fn open_external(app: tauri::AppHandle, url: String) -> Res<()> {
     app.opener().open_url(url, None::<&str>).map_err(sys)
 }
 
+/// Affiche un site ouvert pour l'édition dans le canevas ; renvoie l'adresse de base du protocole.
+#[tauri::command]
+fn canvas_open(s: State<AppState>, path: String, scripts: bool) -> Res<String> {
+    s.core
+        .canvas_open(
+            std::path::Path::new(&path),
+            revel_core::canvas::CanvasOptions {
+                scripts,
+                ..Default::default()
+            },
+        )
+        .map_err(err)
+}
+
+/// Réponse du protocole `revel-canvas` (canevas de l'éditeur, sans port réseau).
+fn canvas_protocol(
+    app: &tauri::AppHandle,
+    request: tauri::http::Request<Vec<u8>>,
+    responder: tauri::UriSchemeResponder,
+) {
+    let core = app.state::<AppState>().core.clone();
+    let path = request.uri().path().to_string();
+    std::thread::spawn(move || {
+        let r = core.canvas_respond(&path);
+        let response = tauri::http::Response::builder()
+            .status(r.status)
+            .header(tauri::http::header::CONTENT_TYPE, r.content_type)
+            .header(tauri::http::header::CACHE_CONTROL, "no-store")
+            .body(r.body)
+            .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()));
+        responder.respond(response);
+    });
+}
+
 /// Informations de version (écran « À propos »).
 #[tauri::command]
 fn app_info() -> (String, u32) {
@@ -269,6 +303,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .register_asynchronous_uri_scheme_protocol("revel-canvas", |ctx, request, responder| {
+            canvas_protocol(ctx.app_handle(), request, responder);
+        })
         .setup(|app| {
             let dir = app
                 .path()
@@ -306,7 +343,8 @@ pub fn run() {
             edit_apply,
             edit_seal,
             edit_undo,
-            edit_redo
+            edit_redo,
+            canvas_open
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Revel");

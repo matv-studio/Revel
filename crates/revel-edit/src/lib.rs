@@ -9,6 +9,7 @@
 //! Ne dépend que de `revel-model` et `revel-style` (compilable pour l'interface en WebAssembly).
 
 pub mod address;
+pub mod canvas;
 pub mod command;
 pub mod history;
 pub mod make;

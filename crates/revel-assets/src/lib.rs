@@ -152,6 +152,9 @@ impl Pipeline {
     pub fn source_of(&self, url: &str) -> Option<PathBuf> {
         let url = url.split(['?', '#']).next().unwrap_or(url);
         let url = percent_decode(url);
+        if url.split(['/', '\\']).any(|s| s == "..") {
+            return None;
+        }
         for p in &self.passthrough {
             let to = p.to.trim_matches('/');
             let prefix = if to.is_empty() {
@@ -261,6 +264,24 @@ impl Pipeline {
         if let Ok(mut set) = self.variants.lock() {
             set.extend(vs.iter().cloned());
         }
+    }
+
+    /// Fichier à servir pour une variante (canevas de l'éditeur) : la variante si elle a déjà été
+    /// produite (cache), sinon l'image d'origine, que le navigateur met à l'échelle.
+    pub fn variant_or_source(&self, name: &str) -> Option<PathBuf> {
+        if name.is_empty() || name.contains(['/', '\\']) || name.contains("..") {
+            return None;
+        }
+        let cached = self.cache.join(name);
+        if cached.is_file() {
+            return Some(cached);
+        }
+        self.variants
+            .lock()
+            .ok()?
+            .iter()
+            .find(|v| v.name == name)
+            .map(|v| v.source.clone())
     }
 
     /// Variantes en attente.

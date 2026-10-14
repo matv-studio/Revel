@@ -19,10 +19,11 @@
 ```
 revel-ui (WebAssembly) ── revel-protocol, revel-i18n
 revel-app ── revel-core, revel-protocol, revel-model
-revel-cli ── revel-project, revel-import, revel-deploy, revel-i18n, revel-model
-revel-core ── revel-project, revel-import, revel-deploy, revel-git, revel-edit, revel-protocol, revel-model
+revel-cli ── revel-core (sans trousseau), revel-project, revel-import, revel-deploy, revel-i18n, revel-model
+revel-core ── revel-project, revel-import, revel-deploy, revel-git, revel-edit, revel-render, revel-assets, revel-protocol, revel-model
 revel-edit ── revel-style, revel-model (compilées aussi pour wasm32)
 revel-project ── revel-render, revel-assets, revel-style ── revel-markup ── revel-model
+revel-render ── revel-edit (types des repères du canevas), revel-markup, revel-model
 revel-import ── revel-markup, revel-render (types), revel-style, revel-model
 revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour wasm32)
 ```
@@ -108,6 +109,33 @@ l'exécution CI en cas d'échec).
   généré (`revel_project::rebase_dir`) ; le site généré lui-même ne change pas.
 - Générations reproductibles : le paramètre `?v=` des CSS/JS est l'empreinte de leur contenu ; deux générations
   sans changement produisent des fichiers identiques, et la publication suivante n'envoie rien.
+
+## Canevas de l'éditeur (étape 2.2)
+
+- Page rendue à la demande depuis le document en cours d'édition (`revel_render::render_editor`), même code que
+  la génération, avec des repères : `data-rv="<identifiant>"` sur chaque élément ; commentaires `<!--rv:N-->` …
+  `<!--/rv:N-->` autour des textes, des expressions affichées, des composants utilisés et des images remplacées.
+  La liste des repères (`revel_edit::canvas::Slot`) donne l'adresse de chaque texte (`SetText`) et l'origine de
+  chaque valeur affichée (D-19) : données globales (chemin dans le dossier de données), variable de page ou de
+  gabarit, en-tête d'un contenu de collection. L'origine suit les `set`, les boucles (indice ou clé) et les
+  éléments retrouvés par un filtre (élément de collection reconnu, objet présent une seule fois dans les
+  données) ; une valeur transformée par des filtres est reliée à sa source avec `transformed`.
+- Pas de repère dans un attribut, dans `<title>`, `<textarea>`, `<script>`, `<style>`, ni dans un bloc capturé
+  (`{% set %}…{% endset %}`). La typographie française ignore les repères. Repères retirés, chaque page est
+  identique octet pour octet à la page générée (`revel canvas-check`, essais de `revel-render`, CI).
+- Scripts du site neutralisés par défaut (`type="text/plain"`, sauf données JSON) ; option pour les exécuter.
+- Servi par le protocole `revel-canvas` de l'application (`revel-canvas://localhost/…`, sous Windows
+  `http://revel-canvas.localhost/…`), sans port réseau : page, feuille de style générée depuis le document
+  (modifications visibles aussitôt), variante d'image produite ou image d'origine, copies du projet ; chemins
+  hors du site refusés. `revel canvas-serve` sert les mêmes réponses en HTTP local (diagnostic, essais).
+- Script du canevas (`crates/revel-core/src/canvas.js`) : lit la liste des repères puis la retire de la page avec
+  son propre `<script>`, remplace les commentaires par des plages (`Range`) vivantes et refusionne les textes, si
+  bien que la page a la même structure que le site (styles calculés et captures identiques, vérifié en CI) ;
+  calque de survol et de sélection dans un shadow DOM fermé ; les clics sélectionnent sans déclencher le site ;
+  échanges avec l'interface par `postMessage` (`ready`, `hover`, `select`, `key` ; demandes `select`, `hover`,
+  `stylesheet`, `scroll`). Un composant utilisé plusieurs fois a les mêmes identifiants dans chaque occurrence :
+  l'élément cliqué est celui qui est sélectionné, une sélection demandée par identifiant prend la première.
+- Le cadre du canevas est d'une autre origine que l'interface (`frame-src` dans la CSP de l'application).
 
 ## Versions de référence (vérifiées sur crates.io le 13/10/2026)
 

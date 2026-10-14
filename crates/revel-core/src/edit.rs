@@ -46,6 +46,15 @@ fn key(path: &Path) -> String {
 }
 
 impl Core {
+    /// Projet d'un site ouvert pour l'édition (lecture).
+    pub(crate) fn with_project<T>(
+        &self,
+        path: &Path,
+        f: impl FnOnce(&Project) -> Result<T>,
+    ) -> Result<T> {
+        self.with_session(path, |s| f(&s.project))
+    }
+
     fn with_session<T>(&self, path: &Path, f: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get_mut(&key(path)).ok_or(CoreError::NotOpen)?;

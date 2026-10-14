@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 
+pub mod canvas;
 mod edit;
 mod github;
 pub mod preview;
@@ -138,6 +139,7 @@ pub struct Core {
     github_cancel: AtomicBool,
     /// Sites ouverts dans l'éditeur (clé : chemin du site).
     sessions: Mutex<std::collections::HashMap<String, edit::Session>>,
+    canvas: Mutex<Option<canvas::Canvas>>,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -182,6 +184,7 @@ impl Core {
             secrets,
             github_cancel: AtomicBool::new(false),
             sessions: Mutex::new(std::collections::HashMap::new()),
+            canvas: Mutex::new(None),
         }
     }
 

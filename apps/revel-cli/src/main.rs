@@ -44,6 +44,35 @@ enum Command {
     },
     /// Forme canonique d'un fichier CSS (comparaison d'équivalence).
     CssCanon { file: PathBuf },
+    /// Page rendue pour l'éditeur (HTML avec repères ; `--slots` : liste des repères en JSON).
+    Canvas {
+        dir: PathBuf,
+        url: String,
+        #[arg(long)]
+        slots: bool,
+        /// Exécuter les scripts du site.
+        #[arg(long)]
+        scripts: bool,
+    },
+    /// Sert le canevas de l'éditeur en HTTP local (127.0.0.1), comme le protocole de l'application :
+    /// diagnostic et essais de bout en bout.
+    CanvasServe {
+        dir: PathBuf,
+        #[arg(long, default_value_t = 0)]
+        port: u16,
+        /// Exécuter les scripts du site.
+        #[arg(long)]
+        scripts: bool,
+        /// Images en `<img>` simple (comme `build --no-images`).
+        #[arg(long)]
+        no_images: bool,
+    },
+    /// Vérifie que chaque page du canevas, repères retirés, est identique à la page générée.
+    CanvasCheck {
+        dir: PathBuf,
+        #[arg(long, default_value = "production")]
+        env: String,
+    },
     /// Génère un projet dans un dossier.
     Build {
         dir: PathBuf,
@@ -167,6 +196,102 @@ fn main() -> Result<()> {
                 revel_style::canonical(&css)
                     .map_err(|e| anyhow::anyhow!("{}: {e}", file.display()))?
             );
+        }
+        Command::Canvas {
+            dir,
+            url,
+            slots,
+            scripts,
+        } => {
+            let project =
+                Project::open(&dir).with_context(|| format!("ouverture de {}", dir.display()))?;
+            let hooks = std::sync::Arc::new(revel_project::ProjectAssets::new(&project));
+            let page = project
+                .render_editor(
+                    &url,
+                    hooks,
+                    "production",
+                    &revel_render::EditorOptions { scripts },
+                )?
+                .with_context(|| format!("aucune page HTML à l'adresse {url}"))?;
+            if slots {
+                println!("{}", serde_json::to_string_pretty(&page.slots)?);
+            } else {
+                print!("{}", page.html);
+            }
+        }
+        Command::CanvasServe {
+            dir,
+            port,
+            scripts,
+            no_images,
+        } => {
+            let config = std::env::temp_dir().join(format!("revel-canvas-{}", std::process::id()));
+            let core = std::sync::Arc::new(revel_core::Core::new(
+                &config,
+                Box::new(revel_core::secrets::Memory::default()),
+            ));
+            core.edit_open(&dir)
+                .map_err(|e| anyhow::anyhow!("{e}"))
+                .with_context(|| format!("ouverture de {}", dir.display()))?;
+            core.canvas_open(
+                &dir,
+                revel_core::canvas::CanvasOptions {
+                    scripts,
+                    responsive_images: !no_images,
+                },
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(async move {
+                let app = axum::Router::new().fallback(move |uri: axum::http::Uri| {
+                    let core = core.clone();
+                    async move {
+                        let r =
+                            tokio::task::spawn_blocking(move || core.canvas_respond(uri.path()))
+                                .await
+                                .unwrap_or_else(|e| revel_core::canvas::CanvasResponse {
+                                    status: 500,
+                                    content_type: "text/plain".into(),
+                                    body: e.to_string().into_bytes(),
+                                });
+                        axum::http::Response::builder()
+                            .status(r.status)
+                            .header("content-type", r.content_type)
+                            .header("cache-control", "no-store")
+                            .body(axum::body::Body::from(r.body))
+                            .unwrap_or_default()
+                    }
+                });
+                let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from((
+                    [127, 0, 0, 1],
+                    port,
+                )))
+                .await?;
+                println!("canevas : http://{}/", listener.local_addr()?);
+                axum::serve(listener, app)
+                    .with_graceful_shutdown(async {
+                        let _ = tokio::signal::ctrl_c().await;
+                    })
+                    .await?;
+                anyhow::Ok(())
+            })?;
+        }
+        Command::CanvasCheck { dir, env } => {
+            let project =
+                Project::open(&dir).with_context(|| format!("ouverture de {}", dir.display()))?;
+            let (pages, diffs) = project.check_canvas(&env)?;
+            for d in &diffs {
+                eprintln!("{d}");
+            }
+            println!(
+                "{pages} pages : {} identique(s) à la génération une fois les repères retirés, {} écart(s)",
+                pages - diffs.len(),
+                diffs.len()
+            );
+            if !diffs.is_empty() {
+                std::process::exit(1);
+            }
         }
         Command::Build {
             dir,

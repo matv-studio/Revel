@@ -13,7 +13,9 @@
 //! peut accueillir `site.revel.json` à sa racine sans déplacer ses fichiers.
 
 use revel_model::Site;
-use revel_render::{AssetHooks, BuildInput, Entry, ImageArgs, OutputFile};
+use revel_render::{
+    AssetHooks, BuildInput, DocKind, EditorOptions, EditorPage, Entry, ImageArgs, OutputFile,
+};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -261,10 +263,99 @@ impl Project {
         Ok(report)
     }
 
+    /// Site complété des données du dossier de données (comme pour la génération).
+    fn site_with_data(&self) -> Result<Site, ProjectError> {
+        let mut site = self.site.clone();
+        for (k, v) in self.load_data()? {
+            site.data.entry(k).or_insert(v);
+        }
+        Ok(site)
+    }
+
+    /// Page rendue pour l'éditeur (canevas, étape 2.2) à partir du document en mémoire.
+    pub fn render_editor(
+        &self,
+        url: &str,
+        hooks: Arc<dyn AssetHooks>,
+        environment: &str,
+        opts: &EditorOptions,
+    ) -> Result<Option<EditorPage>, ProjectError> {
+        let site = self.site_with_data()?;
+        let input = BuildInput {
+            site: &site,
+            entries: self.load_entries()?,
+            environment: environment.to_string(),
+            version: self.version_tag(&site),
+            hooks,
+            now: chrono::Utc::now(),
+        };
+        Ok(revel_render::render_editor(&input, url, opts)?)
+    }
+
+    /// Vérifie le canevas : chaque page HTML rendue pour l'éditeur, repères retirés, est identique
+    /// à la page générée. Renvoie le nombre de pages et les écarts (adresse, extrait).
+    pub fn check_canvas(&self, environment: &str) -> Result<(usize, Vec<String>), ProjectError> {
+        let site = self.site_with_data()?;
+        let input = BuildInput {
+            site: &site,
+            entries: self.load_entries()?,
+            environment: environment.to_string(),
+            version: self.version_tag(&site),
+            hooks: Arc::new(ProjectAssets::new(self)),
+            now: chrono::Utc::now(),
+        };
+        let out = revel_render::build(&input)?;
+        let opts = EditorOptions { scripts: true };
+        let mut pages = 0;
+        let mut diffs = Vec::new();
+        for f in &out.files {
+            let url = format!("/{}", f.path.strip_suffix("index.html").unwrap_or(&f.path));
+            if DocKind::of_path(&url) != DocKind::Html {
+                continue;
+            }
+            pages += 1;
+            let built = String::from_utf8_lossy(&f.bytes);
+            match revel_render::render_editor(&input, &url, &opts)? {
+                None => diffs.push(format!("{url} : page absente du canevas")),
+                Some(p) => {
+                    let stripped = revel_render::strip_editor_marks(&p.html);
+                    if stripped != built {
+                        let at = stripped
+                            .bytes()
+                            .zip(built.bytes())
+                            .position(|(a, b)| a != b)
+                            .unwrap_or(stripped.len().min(built.len()));
+                        let from = at.saturating_sub(60);
+                        let excerpt = |s: &str| {
+                            let a = (from..=at)
+                                .rev()
+                                .find(|i| s.is_char_boundary(*i))
+                                .unwrap_or(0);
+                            let e = (at + 60).min(s.len());
+                            let b = (e..=s.len())
+                                .find(|i| s.is_char_boundary(*i))
+                                .unwrap_or(s.len());
+                            s[a..b].to_string()
+                        };
+                        diffs.push(format!(
+                            "{url} : octet {at}\n  généré : {}\n  canevas : {}",
+                            excerpt(&built),
+                            excerpt(&stripped)
+                        ));
+                    }
+                }
+            }
+        }
+        Ok((pages, diffs))
+    }
+
     /// Fichier source correspondant à une URL publique copiée telle quelle (`/media/a.jpg`).
     pub fn source_of_url(&self, url: &str) -> Option<PathBuf> {
         let url = url.split(['?', '#']).next().unwrap_or(url);
         let url = percent_decode(url);
+        if url.split(['/', '\\']).any(|s| s == "..") {
+            return None;
+        }
         for p in &self.site.passthrough {
             let prefix = format!("/{}", p.to.trim_matches('/'));
             let prefix = if prefix == "/" {

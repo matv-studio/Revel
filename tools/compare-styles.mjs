@@ -22,6 +22,9 @@
 // Usage : node tools/compare-styles.mjs DOSSIER_A DOSSIER_B [--pages /,/agence/] [--widths 1280,375]
 //         [--jobs 4] [--shots] [--tolerance 48] [--max-pixels 50] [--save DOSSIER]
 // --save : captures des paires en écart enregistrées dans DOSSIER (a-… et b-…).
+// DOSSIER_B peut être une adresse (http://…) : pages déjà servies, par exemple le canevas de
+// l'éditeur (`revel canvas-serve`) ; les éléments propres au canevas (calque de sélection, script,
+// liste des repères) sont alors ignorés.
 // Sans --pages : toutes les pages HTML du dossier A. Code de sortie 1 en cas d'écart.
 
 import { createServer } from 'node:http';
@@ -146,7 +149,11 @@ async function pixelDiff(cmp, a, b) {
 function computedStyles(detail) {
   const out = [];
   let n = 0;
+  // Éléments propres au canevas de l'éditeur : ignorés.
+  const own = (el) => el.tagName === 'REVEL-OVERLAY' || el.id === 'rv-slots'
+    || (el.tagName === 'SCRIPT' && el.getAttribute('src') === '/__revel/canvas.js');
   for (const el of document.querySelectorAll('*')) {
+    if (own(el)) continue;
     const pseudos = [null, '::before', '::after'];
     if (el.tagName === 'LI' || el.tagName === 'SUMMARY') pseudos.push('::marker');
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') pseudos.push('::placeholder');
@@ -172,7 +179,8 @@ function computedStyles(detail) {
 }
 
 const [srvA, urlA] = await serve(dirA);
-const [srvB, urlB] = await serve(dirB);
+const remoteB = /^https?:\/\//.test(dirB);
+const [srvB, urlB] = remoteB ? [null, dirB.replace(/\/$/, '')] : await serve(dirB);
 pages ??= await htmlPages(dirA);
 for (const p of pages) {
   const f = join(dirA, p.endsWith('/') ? p + 'index.html' : p);
@@ -275,7 +283,7 @@ async function worker() {
 await Promise.all(Array.from({ length: jobsN }, worker));
 await browser.close();
 srvA.close();
-srvB.close();
+srvB?.close();
 
 console.log(`${total} combinaisons (${pages.length} pages × ${widths.length} largeurs × 2 préférences de mouvement), ` +
   `${compared} styles calculés comparés (éléments et pseudo-éléments)` +

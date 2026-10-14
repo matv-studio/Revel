@@ -201,3 +201,164 @@ fn chemins_de_sortie() {
     assert_eq!(DocKind::of_path("/feed.xml"), DocKind::Xml);
     assert_eq!(DocKind::of_path("/robots.txt"), DocKind::Text);
 }
+
+#[test]
+fn rendu_pour_l_editeur() {
+    use revel_edit::canvas::{Binding, Seg, Slot, Source};
+    use revel_edit::{Branch, Owner, Parent};
+    let mut s = site();
+    s.data.insert(
+        "pages".into(),
+        json!({"accueil": {"hero": {"title": "Bienvenue"}, "items": [{"t": "Un"}, {"t": "Deux"}]}}),
+    );
+    s.pages[0].body.extend(parse(
+        r#"{% set home = pages.accueil %}<h2 class="hero">{{ home.hero.title }}</h2><ol>{% for it in home.items %}<li>{{ it.t }} {{ it.t | upper }}</li>{% endfor %}</ol><p>{{ bodyClass }}</p><script src="/a.js"></script><script type="application/ld+json">{"a":1}</script><title>Pas de repère {{ site.title }}</title>"#,
+    ));
+    s.ensure_ids();
+    let entries = vec![
+        entry(
+            "a",
+            json!({"slug": "a", "title": "Projet <A>", "date": "2026-01-02"}),
+        ),
+        entry(
+            "b",
+            json!({"slug": "b", "title": "Projet B", "date": "2026-03-01"}),
+        ),
+    ];
+    let inp = input(&s, entries.clone());
+    let built = build(&inp).unwrap();
+    let ed = render_editor(&inp, "/", &EditorOptions { scripts: true })
+        .unwrap()
+        .unwrap();
+    // Sans les repères : la page générée, octet pour octet.
+    assert_eq!(strip_editor_marks(&ed.html), file(&built, "index.html"));
+    assert!(
+        ed.html.contains(">Accueil | Alunites</title>"),
+        "pas de repère dans <title>"
+    );
+    assert!(ed.html.contains(">Pas de repère Alunites</title>"));
+
+    let page = Owner::Page("index".into());
+    let data = |path: &[Seg]| Binding {
+        source: Source::Data,
+        path: path.to_vec(),
+    };
+    let k = |x: &str| Seg::Key(x.into());
+    let exprs: Vec<(&str, Option<&Binding>)> = ed
+        .slots
+        .iter()
+        .filter_map(|sl| match sl {
+            Slot::Expr { expr, binding, .. } => Some((expr.as_str(), binding.as_ref())),
+            _ => None,
+        })
+        .collect();
+    // Données globales suivies à travers `set` et les boucles.
+    assert!(exprs.contains(&(
+        "home.hero.title",
+        Some(&data(&[k("pages"), k("accueil"), k("hero"), k("title")]))
+    )));
+    assert!(exprs.contains(&(
+        "it.t",
+        Some(&data(&[
+            k("pages"),
+            k("accueil"),
+            k("items"),
+            Seg::Index(1),
+            k("t")
+        ]))
+    )));
+    let upper = ed
+        .slots
+        .iter()
+        .find(|sl| matches!(sl, Slot::Expr { expr, .. } if expr == "it.t | upper"))
+        .unwrap();
+    assert!(
+        matches!(
+            upper,
+            Slot::Expr {
+                transformed: true,
+                binding: Some(_),
+                ..
+            }
+        ),
+        "valeur transformée : reliée à sa source, modifiable dans un champ"
+    );
+    // Élément de collection (liste construite par filtres) : relié au contenu.
+    assert!(exprs.contains(&(
+        "p.data.title",
+        Some(&Binding {
+            source: Source::Entry {
+                folder: "content/projets".into(),
+                file: "b".into()
+            },
+            path: vec![k("title")]
+        })
+    )));
+    // Variable de page.
+    assert!(exprs.contains(&(
+        "bodyClass",
+        Some(&Binding {
+            source: Source::Page {
+                page: "index".into()
+            },
+            path: vec![k("bodyClass")]
+        })
+    )));
+    // Texte écrit dans la page : adresse pour SetText.
+    let p_id = revel_model::ids::node_id(
+        s.pages[0]
+            .body
+            .iter()
+            .find(|n| matches!(n, Node::Element { tag, .. } if tag == "p"))
+            .unwrap(),
+    )
+    .unwrap()
+    .to_string();
+    assert!(ed.slots.contains(&Slot::Text {
+        parent: Parent {
+            owner: page.clone(),
+            node: Some(p_id.clone()),
+            branch: Branch::Children
+        },
+        index: 0
+    }));
+    assert!(ed.html.contains(&format!("<p data-rv=\"{p_id}\">")));
+    // Composant utilisé : bloc repéré ; ses éléments appartiennent au composant.
+    assert!(
+        ed.slots
+            .iter()
+            .any(|sl| matches!(sl, Slot::Block { owner: Owner::Layout(l), .. } if l == "base"))
+    );
+    // Contenu d'une entrée : la page de projet a ses variables reliées à l'en-tête.
+    let pa = render_editor(&inp, "/project/a", &EditorOptions::default())
+        .unwrap()
+        .unwrap();
+    assert!(pa.slots.iter().any(|sl| matches!(sl,
+        Slot::Expr { expr, binding: Some(Binding { source: Source::Entry { file, .. }, path }), .. }
+            if expr == "title" && file == "a" && path == &vec![k("title")])));
+    // Scripts du site neutralisés par défaut, données JSON gardées.
+    let off = render_editor(&inp, "/", &EditorOptions::default())
+        .unwrap()
+        .unwrap();
+    assert!(off.html.contains(r#"<script data-rv="#));
+    assert!(
+        off.html
+            .contains(r#" type="text/plain" data-rv-script src="/a.js"></script>"#),
+        "{}",
+        off.html
+    );
+    assert!(
+        off.html
+            .contains(r#"type="application/ld+json">{"a":1}</script>"#)
+    );
+    assert!(
+        render_editor(&inp, "/sitemap.xml", &EditorOptions::default())
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        render_editor(&inp, "/absente/", &EditorOptions::default())
+            .unwrap()
+            .is_none()
+    );
+}

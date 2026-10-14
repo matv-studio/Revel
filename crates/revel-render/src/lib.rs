@@ -8,6 +8,7 @@
 
 use chrono::{DateTime, Utc};
 use minijinja::Value;
+use revel_edit::canvas::{Binding, Seg, Slot, Source};
 use revel_model::{CollectionSource, Node, Site, SortKind};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -173,10 +174,37 @@ struct Job<'s> {
     url: String,
     layout: Option<String>,
     data: BTreeMap<String, Value>,
+    /// Origine des variables de `data` (éditeur, D-19).
+    origins: BTreeMap<String, Binding>,
     body: Option<&'s [Node]>,
     /// HTML du corps Markdown (entrées de collection).
     content: Option<String>,
     file_slug: String,
+    /// Page fixe : son identifiant (propriétaire des nœuds de `body`).
+    page_id: Option<String>,
+}
+
+/// Collections, pages à produire et données globales, prêtes pour le rendu.
+struct Prepared<'s> {
+    jobs: Vec<Job<'s>>,
+    globals: eval::FrameRef,
+    /// Éléments de collection : `fileSlug` -> (dossier, fichier, adresse).
+    entries: std::collections::HashMap<String, Vec<(String, String, Value)>>,
+}
+
+/// Options du rendu pour l'éditeur.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EditorOptions {
+    /// Exécuter les scripts du site dans le canevas (sinon `type="text/plain"`).
+    pub scripts: bool,
+}
+
+/// Page rendue pour l'éditeur : HTML avec repères (`data-rv`, `<!--rv:N-->`) et liste des repères.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EditorPage {
+    pub html: String,
+    pub slots: Vec<Slot>,
+    pub warnings: Vec<String>,
 }
 
 /// Génère tout le site.
@@ -184,7 +212,92 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let site = input.site;
     let b = eval::Builder::new(input);
     let mut warnings = Vec::new();
+    let prepared = prepare(&b, input)?;
+    let mut files = Vec::new();
+    for j in &prepared.jobs {
+        let kind = DocKind::of_path(&j.url);
+        let html = b.render_job(&prepared.globals, j, kind, &mut warnings)?;
+        let html = if kind == DocKind::Html && site.settings.typography.as_deref() == Some("fr") {
+            typography::french(&html)
+        } else {
+            html
+        };
+        files.push(OutputFile {
+            path: output_path(&j.url)?,
+            bytes: html.into_bytes(),
+        });
+    }
+    warnings.extend(b.take_warnings());
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(BuildOutput { files, warnings })
+}
 
+/// Rend une page HTML pour l'éditeur (étape 2.2) : même HTML que la génération, avec les repères
+/// des nœuds. `url` : adresse de la page (`/agence/`). `None` si aucune page n'a cette adresse.
+pub fn render_editor(
+    input: &BuildInput,
+    url: &str,
+    opts: &EditorOptions,
+) -> Result<Option<EditorPage>, RenderError> {
+    let site = input.site;
+    let mut b = eval::Builder::new(input);
+    let prepared = prepare(&b, input)?;
+    let wanted = normalize_url(url);
+    let Some(job) = prepared
+        .jobs
+        .iter()
+        .find(|j| normalize_url(&j.url) == wanted && DocKind::of_path(&j.url) == DocKind::Html)
+    else {
+        return Ok(None);
+    };
+    b.editor = Some(eval::Editor {
+        slots: Default::default(),
+        scripts: opts.scripts,
+        entries: prepared.entries.clone(),
+    });
+    let mut warnings = Vec::new();
+    let html = b.render_job(&prepared.globals, job, DocKind::Html, &mut warnings)?;
+    let html = if site.settings.typography.as_deref() == Some("fr") {
+        typography::french(&html)
+    } else {
+        html
+    };
+    warnings.extend(b.take_warnings());
+    let slots = b
+        .editor
+        .take()
+        .map(|e| e.slots.into_inner())
+        .unwrap_or_default();
+    Ok(Some(EditorPage {
+        html,
+        slots,
+        warnings,
+    }))
+}
+
+/// HTML du canevas sans les repères de l'éditeur (`data-rv="…"`, `<!--rv:N-->`, `<!--/rv:N-->`) :
+/// identique à la page générée quand les scripts du site sont gardés (vérification).
+pub fn strip_editor_marks(html: &str) -> String {
+    let re = regex::Regex::new(r#"<!--/?rv:\d+-->| data-rv="[0-9a-z]+""#).expect("regex");
+    re.replace_all(html, "").into_owned()
+}
+
+/// `/agence` et `/agence/index.html` -> `/agence/`.
+fn normalize_url(u: &str) -> String {
+    let u = u.split(['?', '#']).next().unwrap_or(u);
+    let u = u.strip_suffix("index.html").unwrap_or(u);
+    if u.ends_with('/') || u.rsplit('/').next().is_some_and(|l| l.contains('.')) {
+        u.to_string()
+    } else {
+        format!("{u}/")
+    }
+}
+
+/// Collections et pages à produire.
+fn prepare<'s>(b: &eval::Builder<'s>, input: &'s BuildInput) -> Result<Prepared<'s>, RenderError> {
+    let site = input.site;
+    let mut entries_index: std::collections::HashMap<String, Vec<(String, String, Value)>> =
+        std::collections::HashMap::new();
     // 1. Collections issues de dossiers.
     let mut collections: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     let mut jobs: Vec<Job> = Vec::new();
@@ -229,6 +342,30 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
             item_map.insert("content".into(), Value::from_safe_string(content.clone()));
             item_map.insert("fileSlug".into(), Value::from(e.file_stem.clone()));
             item_map.insert("date".into(), date);
+            entries_index.entry(e.file_stem.clone()).or_default().push((
+                e.folder.clone(),
+                e.file_stem.clone(),
+                url.clone().map(Value::from).unwrap_or(Value::from(false)),
+            ));
+            // Variables de l'en-tête du contenu : reliées au fichier (D-19).
+            let origins: BTreeMap<String, Binding> = match &e.data {
+                serde_json::Value::Object(m) => m
+                    .keys()
+                    .map(|k| {
+                        (
+                            k.clone(),
+                            Binding {
+                                source: Source::Entry {
+                                    folder: e.folder.clone(),
+                                    file: e.file_stem.clone(),
+                                },
+                                path: vec![Seg::Key(k.clone())],
+                            },
+                        )
+                    })
+                    .collect(),
+                _ => BTreeMap::new(),
+            };
             let job = url.map(|url| Job {
                 url,
                 layout: data
@@ -236,9 +373,11 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
                     .and_then(|v| v.as_str().map(str::to_string))
                     .or_else(|| col.layout.clone()),
                 data: data.clone(),
+                origins,
                 body: None,
                 content: Some(content),
                 file_slug: e.file_stem.clone(),
+                page_id: None,
             });
             items.push((data, Value::from(item_map), job, e.file_stem.clone()));
         }
@@ -279,26 +418,44 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let partial_globals = b.globals(collections.clone());
     for p in site.pages.iter().filter(|p| !p.draft) {
         let mut data: BTreeMap<String, Value> = BTreeMap::new();
+        let mut origins: BTreeMap<String, Binding> = BTreeMap::new();
+        let key = |source: Source, k: &str| Binding {
+            source,
+            path: vec![Seg::Key(k.to_string())],
+        };
         for l in b.layout_chain(p.layout.as_deref())?.iter().rev() {
             for (k, v) in &l.props {
                 data.insert(k.clone(), crate::eval::from_json(v));
+                origins.insert(
+                    k.clone(),
+                    key(
+                        Source::Layout {
+                            layout: l.id.clone(),
+                        },
+                        k,
+                    ),
+                );
             }
         }
         for (k, v) in &p.props {
             data.insert(k.clone(), crate::eval::from_json(v));
+            origins.insert(k.clone(), key(Source::Page { page: p.id.clone() }, k));
         }
         for (k, e) in &p.computed {
             let scope = eval::Scope::new(partial_globals.clone(), data.clone());
             let v = b.eval(&scope, e, &format!("variable calculée {k} de {}", p.path))?;
             data.insert(k.clone(), v);
+            origins.remove(k);
         }
         jobs.push(Job {
             url: p.path.clone(),
             layout: p.layout.clone(),
             data,
+            origins,
             body: Some(&p.body),
             content: None,
             file_slug: p.id.rsplit('/').next().unwrap_or(&p.id).to_string(),
+            page_id: Some(p.id.clone()),
         });
     }
 
@@ -334,25 +491,12 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
         collections.insert(col.id.clone(), list);
     }
 
-    // 4. Rendu.
     let globals = b.globals(collections);
-    let mut files = Vec::new();
-    for j in &jobs {
-        let kind = DocKind::of_path(&j.url);
-        let html = b.render_job(&globals, j, kind, &mut warnings)?;
-        let html = if kind == DocKind::Html && site.settings.typography.as_deref() == Some("fr") {
-            typography::french(&html)
-        } else {
-            html
-        };
-        files.push(OutputFile {
-            path: output_path(&j.url)?,
-            bytes: html.into_bytes(),
-        });
-    }
-    warnings.extend(b.take_warnings());
-    files.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(BuildOutput { files, warnings })
+    Ok(Prepared {
+        jobs,
+        globals,
+        entries: entries_index,
+    })
 }
 
 fn compare(a: Option<&Value>, b: Option<&Value>, kind: SortKind) -> std::cmp::Ordering {

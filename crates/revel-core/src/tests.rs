@@ -267,3 +267,115 @@ fn session_edition_enregistre_et_annule() {
     assert_eq!(again.site.name, "Renommé");
     assert!(!again.state.can_undo);
 }
+
+#[test]
+fn canevas_par_le_protocole() {
+    use revel_edit::canvas::{Binding, Seg, Slot, Source};
+    use revel_edit::{Command, Owner, Target};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    // Feuille de style du modèle et fichier copié.
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.stylesheet = Some(revel_model::Stylesheet {
+            url: "/assets/site.css".into(),
+            source: None,
+            items: revel_style::parse("h1 { color: red }").unwrap(),
+        });
+        p.site.passthrough.push(revel_model::Passthrough {
+            from: "public".into(),
+            to: "/".into(),
+        });
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("public/média")).unwrap();
+        std::fs::write(site.join("public/média/a.txt"), "fichier").unwrap();
+    }
+    let opts = canvas::CanvasOptions::default();
+    assert!(matches!(
+        c.canvas_open(&site, opts),
+        Err(CoreError::NotOpen)
+    ));
+    let opened = c.edit_open(&site).unwrap();
+    let base = c.canvas_open(&site, opts).unwrap();
+    assert!(base == "revel-canvas://localhost/" || base == "http://revel-canvas.localhost/");
+
+    let page = c.canvas_respond("/");
+    assert_eq!(page.status, 200);
+    assert_eq!(page.content_type, "text/html; charset=utf-8");
+    let html = String::from_utf8(page.body).unwrap();
+    let h1 = revel_model::ids::node_id(&opened.site.pages[0].body[1])
+        .unwrap()
+        .to_string();
+    assert!(
+        html.contains(&format!(
+            "<h1 data-rv=\"{h1}\"><!--rv:0-->Accueil<!--/rv:0--></h1>"
+        )),
+        "{html}"
+    );
+    assert!(html.contains("<script src=\"/__revel/canvas.js\"></script>"));
+    // Repères : la valeur affichée vient de la variable « title » de la page.
+    let start = html.find("id=\"rv-slots\">").unwrap() + "id=\"rv-slots\">".len();
+    let end = start + html[start..].find("</script>").unwrap();
+    let slots: Vec<Slot> = serde_json::from_str(&html[start..end]).unwrap();
+    assert!(
+        matches!(&slots[0], Slot::Expr { binding: Some(Binding { source: Source::Page { page }, path }), .. }
+        if page == "index" && path == &vec![Seg::Key("title".into())])
+    );
+
+    let js = c.canvas_respond("/__revel/canvas.js");
+    assert_eq!(js.content_type, "text/javascript; charset=utf-8");
+    assert!(String::from_utf8(js.body).unwrap().contains("rv-slots"));
+    assert_eq!(
+        c.canvas_respond("/m%C3%A9dia/a.txt").body,
+        b"fichier".to_vec(),
+        "chemin décodé, fichier copié"
+    );
+    assert_eq!(c.canvas_respond("/absent/").status, 404);
+    assert_eq!(c.canvas_respond("/../site.revel.json").status, 404);
+
+    // La feuille de style suit le document en cours d'édition.
+    let css = c.canvas_respond("/assets/site.css?rv=1");
+    assert_eq!(String::from_utf8(css.body).unwrap(), "h1 { color: red; }\n");
+    let rule = opened
+        .site
+        .style_rules()
+        .next()
+        .unwrap()
+        .id
+        .clone()
+        .unwrap();
+    c.edit_apply(
+        &site,
+        Command::SetDecl {
+            rule,
+            prop: "color".into(),
+            value: Some("blue".into()),
+            important: false,
+        },
+        false,
+    )
+    .unwrap();
+    let css = c.canvas_respond("/assets/site.css");
+    assert_eq!(
+        String::from_utf8(css.body).unwrap(),
+        "h1 { color: blue; }\n"
+    );
+    // Un texte modifié apparaît au rendu suivant.
+    c.edit_apply(
+        &site,
+        Command::SetPageProp {
+            page: "index".into(),
+            key: "title".into(),
+            value: Some(serde_json::json!("Bonjour")),
+        },
+        false,
+    )
+    .unwrap();
+    let html = String::from_utf8(c.canvas_respond("/").body).unwrap();
+    assert!(html.contains("<!--rv:0-->Bonjour<!--/rv:0-->"));
+    let _ = Target {
+        owner: Owner::Page("index".into()),
+        node: h1,
+    };
+}

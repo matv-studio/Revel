@@ -5,17 +5,25 @@ use crate::{BuildInput, DocKind, ImageArgs, Job, RenderError};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use minijinja::value::{Object, Rest};
 use minijinja::{Environment, Error, ErrorKind, State, UndefinedBehavior, Value};
+use revel_edit::canvas::{Binding, Seg, Slot, Source, path_expr, source_path};
+use revel_edit::{Branch, Owner, Parent};
 use revel_model::{Layout, Node, Site};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 type Frame = Arc<BTreeMap<String, Value>>;
+pub(crate) type FrameRef = Frame;
 
-/// Pile de portées. La première est celle des données globales.
+/// Origines des variables d'une portée (éditeur seulement).
+type Origins = Option<Arc<BTreeMap<String, Binding>>>;
+
+/// Pile de portées. La première est celle des données globales. En mode éditeur, chaque portée
+/// garde aussi l'origine de ses variables (D-19).
 #[derive(Clone)]
 pub(crate) struct Scope {
     frames: Vec<Frame>,
+    origins: Vec<Origins>,
 }
 
 #[derive(Debug)]
@@ -32,38 +40,141 @@ impl Scope {
     pub(crate) fn new(globals: Frame, data: BTreeMap<String, Value>) -> Self {
         Self {
             frames: vec![globals, Arc::new(data)],
+            origins: vec![None, None],
         }
+    }
+
+    /// Origines des données globales et de la page.
+    fn with_origins(
+        mut self,
+        globals: BTreeMap<String, Binding>,
+        data: BTreeMap<String, Binding>,
+    ) -> Self {
+        self.origins = vec![Some(Arc::new(globals)), Some(Arc::new(data))];
+        self
     }
 
     fn push(&mut self, m: BTreeMap<String, Value>) {
         self.frames.push(Arc::new(m));
+        self.origins.push(None);
+    }
+
+    fn push_with(&mut self, m: BTreeMap<String, Value>, o: BTreeMap<String, Binding>) {
+        self.frames.push(Arc::new(m));
+        self.origins.push((!o.is_empty()).then(|| Arc::new(o)));
     }
 
     fn pop(&mut self) {
         self.frames.pop();
+        self.origins.pop();
     }
 
     fn get(&self, k: &str) -> Option<Value> {
         self.frames.iter().rev().find_map(|f| f.get(k).cloned())
     }
 
+    /// Origine de la variable `k` (portée la plus proche qui la définit).
+    fn origin(&self, k: &str) -> Option<&Binding> {
+        let i = self.frames.iter().rposition(|f| f.contains_key(k))?;
+        self.origins.get(i)?.as_ref()?.get(k)
+    }
+
     /// Met à jour la variable existante la plus proche, sinon la crée dans la portée courante.
-    fn set(&mut self, k: &str, v: Value) {
+    fn set(&mut self, k: &str, v: Value, origin: Option<Binding>) {
         let n = self.frames.len();
-        for i in (1..n).rev() {
-            if self.frames[i].contains_key(k) {
-                Arc::make_mut(&mut self.frames[i]).insert(k.to_string(), v);
-                return;
+        let i = (1..n)
+            .rev()
+            .find(|&i| self.frames[i].contains_key(k))
+            .unwrap_or(n - 1);
+        Arc::make_mut(&mut self.frames[i]).insert(k.to_string(), v);
+        let slot = &mut self.origins[i];
+        match (origin, slot.as_mut()) {
+            (Some(o), Some(m)) => {
+                Arc::make_mut(m).insert(k.to_string(), o);
             }
-        }
-        if let Some(last) = self.frames.last_mut() {
-            Arc::make_mut(last).insert(k.to_string(), v);
+            (Some(o), None) => *slot = Some(Arc::new(BTreeMap::from([(k.to_string(), o)]))),
+            (None, Some(m)) => {
+                Arc::make_mut(m).remove(k);
+            }
+            (None, None) => {}
         }
     }
 
     fn view(&self) -> Value {
         Value::from_object(ScopeView(self.frames.clone()))
     }
+}
+
+/// Emplacement de la liste de nœuds rendue (repères de l'éditeur).
+#[derive(Clone)]
+pub(crate) struct At {
+    owner: Option<Owner>,
+    parent: Option<String>,
+    branch: Branch,
+    /// Repères écrits (faux dans un attribut, un bloc capturé `{% set %}`, `<title>`…).
+    mark: bool,
+}
+
+impl At {
+    pub(crate) const NONE: At = At {
+        owner: None,
+        parent: None,
+        branch: Branch::Children,
+        mark: false,
+    };
+
+    pub(crate) fn root(owner: Owner) -> At {
+        At {
+            owner: Some(owner),
+            parent: None,
+            branch: Branch::Children,
+            mark: true,
+        }
+    }
+
+    /// Branche d'un nœud : sans identifiant, ses textes ne sont pas adressables.
+    fn child(&self, id: Option<&str>, branch: Branch, mark: bool) -> At {
+        At {
+            owner: self.owner.clone(),
+            parent: id.map(str::to_string),
+            branch,
+            mark: self.mark && mark && id.is_some(),
+        }
+    }
+
+    fn parent(&self) -> Option<Parent> {
+        Some(Parent {
+            owner: self.owner.clone()?,
+            node: self.parent.clone(),
+            branch: self.branch,
+        })
+    }
+}
+
+/// Éléments dont le contenu est du texte brut (un commentaire y serait affiché).
+const RAW_TEXT: &[&str] = &[
+    "title",
+    "textarea",
+    "script",
+    "style",
+    "noscript",
+    "xmp",
+    "iframe",
+    "noembed",
+    "noframes",
+    "plaintext",
+];
+
+/// Types de `<script>` qui ne s'exécutent pas (gardés dans le canevas).
+const DATA_SCRIPTS: &[&str] = &["application/ld+json", "application/json", "text/plain"];
+
+/// État du rendu pour l'éditeur.
+pub(crate) struct Editor {
+    pub(crate) slots: RefCell<Vec<Slot>>,
+    /// Scripts du site exécutés dans le canevas.
+    pub(crate) scripts: bool,
+    /// Éléments de collection : `fileSlug` -> (dossier, fichier, adresse).
+    pub(crate) entries: HashMap<String, Vec<(String, String, Value)>>,
 }
 
 /// Mode de sortie : règles d'échappement.
@@ -82,6 +193,7 @@ pub(crate) struct Builder<'a> {
     input: &'a BuildInput<'a>,
     warnings: RefCell<Vec<String>>,
     attr_cache: RefCell<HashMap<String, Vec<Node>>>,
+    pub(crate) editor: Option<Editor>,
 }
 
 impl<'a> Builder<'a> {
@@ -114,7 +226,116 @@ impl<'a> Builder<'a> {
             input,
             warnings: RefCell::new(Vec::new()),
             attr_cache: RefCell::new(HashMap::new()),
+            editor: None,
         }
+    }
+
+    fn marking(&self, at: &At) -> bool {
+        at.mark && self.editor.is_some()
+    }
+
+    /// Ajoute un repère ; renvoie son numéro.
+    fn slot(&self, s: Slot) -> usize {
+        let e = self.editor.as_ref().expect("mode éditeur");
+        let mut v = e.slots.borrow_mut();
+        v.push(s);
+        v.len() - 1
+    }
+
+    /// Origine d'une expression qui se réduit à un chemin.
+    fn origin_of(&self, scope: &Scope, expr: &str) -> Option<Binding> {
+        self.editor.as_ref()?;
+        let (head, segs) = path_expr(expr)?;
+        scope.origin(&head)?.extend(&segs)
+    }
+
+    /// Origine d'un élément de collection, retrouvé par son `fileSlug` et son adresse.
+    fn entry_item(&self, item: &Value) -> Option<Binding> {
+        let e = self.editor.as_ref()?;
+        let slug = item.get_attr("fileSlug").ok()?;
+        let cands = e.entries.get(slug.as_str()?)?;
+        let url = item.get_attr("url").unwrap_or(Value::UNDEFINED);
+        let (folder, file, _) = match cands.as_slice() {
+            [one] => one,
+            many => many.iter().find(|(_, _, u)| *u == url)?,
+        };
+        Some(Binding::new(Source::EntryItem {
+            folder: folder.clone(),
+            file: file.clone(),
+        }))
+    }
+
+    /// Origine d'une valeur obtenue autrement que par un chemin (filtre, recherche) : élément de
+    /// collection reconnu, ou objet présent une seule fois dans les données globales.
+    fn origin_of_value(&self, v: &Value) -> Option<Binding> {
+        self.editor.as_ref()?;
+        if v.kind() != minijinja::value::ValueKind::Map {
+            return None;
+        }
+        if let Some(b) = self.entry_item(v) {
+            return Some(b);
+        }
+        let target = serde_json::to_value(v).ok()?;
+        let mut found: Vec<Vec<Seg>> = Vec::new();
+        fn search(
+            j: &serde_json::Value,
+            target: &serde_json::Value,
+            path: &mut Vec<Seg>,
+            found: &mut Vec<Vec<Seg>>,
+        ) {
+            if found.len() > 1 {
+                return;
+            }
+            if j == target {
+                found.push(path.clone());
+                return;
+            }
+            match j {
+                serde_json::Value::Object(m) => {
+                    for (k, x) in m {
+                        path.push(Seg::Key(k.clone()));
+                        search(x, target, path, found);
+                        path.pop();
+                    }
+                }
+                serde_json::Value::Array(a) => {
+                    for (i, x) in a.iter().enumerate() {
+                        path.push(Seg::Index(i));
+                        search(x, target, path, found);
+                        path.pop();
+                    }
+                }
+                _ => {}
+            }
+        }
+        for (k, j) in &self.site.data {
+            let mut path = vec![Seg::Key(k.clone())];
+            search(j, &target, &mut path, &mut found);
+        }
+        match found.as_slice() {
+            [one] => Some(Binding {
+                source: Source::Data,
+                path: one.clone(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// Origines des données globales (fichiers du dossier de données).
+    pub(crate) fn global_origins(&self) -> BTreeMap<String, Binding> {
+        self.site
+            .data
+            .keys()
+            .map(|k| {
+                (
+                    k.clone(),
+                    Binding {
+                        source: Source::Data,
+                        path: vec![Seg::Key(k.clone())],
+                    },
+                )
+            })
+            .collect()
     }
 
     pub(crate) fn take_warnings(&self) -> Vec<String> {
@@ -189,7 +410,7 @@ impl<'a> Builder<'a> {
         let nodes = self.template_nodes(src)?;
         let mut out = String::new();
         let mut s = scope.clone();
-        self.nodes(&nodes, &mut s, &mut out, Mode::Text, ctx)?;
+        self.nodes(&nodes, &mut s, &mut out, Mode::Text, ctx, &At::NONE)?;
         Ok(out)
     }
 
@@ -242,11 +463,22 @@ impl<'a> Builder<'a> {
         };
         let chain = self.layout_chain(j.layout.as_deref())?;
         let mut data = j.data.clone();
+        let mut origins = j.origins.clone();
         // Variables des gabarits : priorité la plus faible (le plus proche de la page l'emporte).
         for l in &chain {
             for (k, v) in &l.props {
-                data.entry(k.clone())
-                    .or_insert_with(|| crate::eval::from_json(v));
+                if !data.contains_key(k) {
+                    data.insert(k.clone(), crate::eval::from_json(v));
+                    origins.insert(
+                        k.clone(),
+                        Binding {
+                            source: Source::Layout {
+                                layout: l.id.clone(),
+                            },
+                            path: vec![Seg::Key(k.clone())],
+                        },
+                    );
+                }
             }
         }
         let mut page: BTreeMap<String, Value> = BTreeMap::new();
@@ -261,21 +493,40 @@ impl<'a> Builder<'a> {
             Value::from(crate::output_path(&j.url).unwrap_or_default()),
         );
         data.insert("page".into(), Value::from(page));
+        origins.remove("page");
+        let global_origins = if self.editor.is_some() {
+            self.global_origins()
+        } else {
+            BTreeMap::new()
+        };
+        let scope_for = |d: BTreeMap<String, Value>, o: &BTreeMap<String, Binding>| {
+            let s = Scope::new(globals.clone(), d);
+            if self.editor.is_some() {
+                s.with_origins(global_origins.clone(), o.clone())
+            } else {
+                s
+            }
+        };
         let ctx = format!("page {}", j.url);
         let mut content = match (j.body, &j.content) {
             (Some(body), _) => {
-                let mut scope = Scope::new(globals.clone(), data.clone());
+                let mut scope = scope_for(data.clone(), &origins);
                 let mut out = String::new();
-                self.nodes(body, &mut scope, &mut out, mode, &ctx)?;
+                let at = match &j.page_id {
+                    Some(id) => At::root(Owner::Page(id.clone())),
+                    None => At::NONE,
+                };
+                self.nodes(body, &mut scope, &mut out, mode, &ctx, &at)?;
                 out
             }
             (None, Some(c)) => c.clone(),
             (None, None) => String::new(),
         };
+        origins.remove("content");
         for l in chain {
             let mut d = data.clone();
             d.insert("content".into(), Value::from_safe_string(content));
-            let mut scope = Scope::new(globals.clone(), d);
+            let mut scope = scope_for(d, &origins);
             let mut out = String::new();
             self.nodes(
                 &l.body,
@@ -283,6 +534,7 @@ impl<'a> Builder<'a> {
                 &mut out,
                 mode,
                 &format!("{ctx} (gabarit {})", l.id),
+                &At::root(Owner::Layout(l.id.clone())),
             )?;
             content = out;
         }
@@ -296,30 +548,67 @@ impl<'a> Builder<'a> {
         out: &mut String,
         mode: Mode,
         ctx: &str,
+        at: &At,
     ) -> Result<(), RenderError> {
-        for n in nodes {
-            self.node(n, scope, out, mode, ctx)?;
+        for (i, n) in nodes.iter().enumerate() {
+            self.node(n, i, scope, out, mode, ctx, at)?;
         }
         Ok(())
     }
 
+    /// Écrit `body` entouré des repères d'un [`Slot`].
+    fn wrapped(
+        &self,
+        out: &mut String,
+        slot: Slot,
+        body: impl FnOnce(&mut String) -> Result<(), RenderError>,
+    ) -> Result<(), RenderError> {
+        let n = self.slot(slot);
+        out.push_str(&format!("<!--rv:{n}-->"));
+        body(out)?;
+        out.push_str(&format!("<!--/rv:{n}-->"));
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn node(
         &self,
         n: &Node,
+        index: usize,
         scope: &mut Scope,
         out: &mut String,
         mode: Mode,
         ctx: &str,
+        at: &At,
     ) -> Result<(), RenderError> {
+        let marking = self.marking(at) && mode == Mode::Html;
         match n {
             Node::Element {
+                id,
                 tag,
                 attrs,
                 children,
-                ..
             } => {
                 out.push('<');
                 out.push_str(tag);
+                if marking && let Some(id) = id {
+                    out.push_str(" data-rv=\"");
+                    out.push_str(&escape_attr(id));
+                    out.push('"');
+                }
+                // Canevas : scripts du site neutralisés (sauf données JSON).
+                let lower = tag.to_ascii_lowercase();
+                let neutralize = lower == "script"
+                    && self.editor.as_ref().is_some_and(|e| !e.scripts)
+                    && !attrs.iter().any(|a| {
+                        a.name.eq_ignore_ascii_case("type")
+                            && a.value.as_deref().is_some_and(|v| {
+                                DATA_SCRIPTS.contains(&v.trim().to_ascii_lowercase().as_str())
+                            })
+                    });
+                if neutralize {
+                    out.push_str(" type=\"text/plain\" data-rv-script");
+                }
                 for a in attrs {
                     if let Some(w) = &a.when
                         && !self.eval(scope, w, ctx)?.is_true()
@@ -327,12 +616,16 @@ impl<'a> Builder<'a> {
                         continue;
                     }
                     out.push(' ');
-                    out.push_str(&a.name);
+                    if neutralize && a.name.eq_ignore_ascii_case("type") {
+                        out.push_str("data-rv-type");
+                    } else {
+                        out.push_str(&a.name);
+                    }
                     if let Some(v) = &a.value {
                         out.push_str("=\"");
                         if v.contains("{{") || v.contains("{%") {
                             let nodes = self.template_nodes(v)?;
-                            self.nodes(&nodes, scope, out, Mode::Attr, ctx)?;
+                            self.nodes(&nodes, scope, out, Mode::Attr, ctx, &At::NONE)?;
                         } else {
                             out.push_str(&escape_attr(v));
                         }
@@ -345,45 +638,92 @@ impl<'a> Builder<'a> {
                     return Ok(());
                 }
                 out.push('>');
-                let void = mode == Mode::Html && VOID.contains(&tag.to_ascii_lowercase().as_str());
+                let void = mode == Mode::Html && VOID.contains(&lower.as_str());
                 if !void {
-                    self.nodes(children, scope, out, mode, ctx)?;
+                    let inner = at.child(
+                        id.as_deref(),
+                        Branch::Children,
+                        !RAW_TEXT.contains(&lower.as_str()),
+                    );
+                    self.nodes(children, scope, out, mode, ctx, &inner)?;
                     out.push_str("</");
                     out.push_str(tag);
                     out.push('>');
                 }
             }
-            Node::Text { text } => match mode {
-                Mode::Html | Mode::Xml => out.push_str(&escape_text(text)),
-                Mode::Attr => out.push_str(&escape_attr(text)),
-                Mode::Text => out.push_str(text),
-            },
+            Node::Text { text } => {
+                let write = |out: &mut String| {
+                    match mode {
+                        Mode::Html | Mode::Xml => out.push_str(&escape_text(text)),
+                        Mode::Attr => out.push_str(&escape_attr(text)),
+                        Mode::Text => out.push_str(text),
+                    }
+                    Ok(())
+                };
+                match at.parent().filter(|_| marking && !text.trim().is_empty()) {
+                    Some(parent) => self.wrapped(out, Slot::Text { parent, index }, write)?,
+                    None => write(out)?,
+                }
+            }
             Node::Html { html } => match mode {
                 Mode::Attr => out.push_str(&escape_attr(html)),
                 _ => out.push_str(html),
             },
             Node::Out { expr } => {
                 let v = self.eval(scope, expr, ctx)?;
-                out.push_str(&display(&v, true));
+                let shown = display(&v, true);
+                match at.parent().filter(|_| marking && !shown.is_empty()) {
+                    Some(parent) => {
+                        // Seule une valeur simple (texte, nombre) lue telle quelle est reliée
+                        // à sa source.
+                        let simple = matches!(
+                            v.kind(),
+                            minijinja::value::ValueKind::String
+                                | minijinja::value::ValueKind::Number
+                        );
+                        let (binding, transformed) = match source_path(expr) {
+                            Some((head, segs, transformed)) if simple => (
+                                scope.origin(&head).and_then(|o| o.extend(&segs)),
+                                transformed,
+                            ),
+                            _ => (None, false),
+                        };
+                        let slot = Slot::Expr {
+                            parent,
+                            index,
+                            expr: expr.clone(),
+                            transformed: transformed && binding.is_some(),
+                            binding,
+                            html: v.is_safe(),
+                        };
+                        self.wrapped(out, slot, |o| {
+                            o.push_str(&shown);
+                            Ok(())
+                        })?;
+                    }
+                    None => out.push_str(&shown),
+                }
             }
             Node::If {
+                id,
                 cond,
                 then,
                 otherwise,
-                ..
             } => {
                 if self.eval(scope, cond, ctx)?.is_true() {
-                    self.nodes(then, scope, out, mode, ctx)?;
+                    let inner = at.child(id.as_deref(), Branch::Then, true);
+                    self.nodes(then, scope, out, mode, ctx, &inner)?;
                 } else {
-                    self.nodes(otherwise, scope, out, mode, ctx)?;
+                    let inner = at.child(id.as_deref(), Branch::Otherwise, true);
+                    self.nodes(otherwise, scope, out, mode, ctx, &inner)?;
                 }
             }
             Node::Each {
+                id,
                 expr,
                 item,
                 children,
                 empty,
-                ..
             } => {
                 let v = self.eval(scope, expr, ctx)?;
                 let names: Vec<&str> = item.split(',').map(str::trim).collect();
@@ -402,17 +742,40 @@ impl<'a> Builder<'a> {
                     }
                 };
                 if items.is_empty() {
-                    return self.nodes(empty, scope, out, mode, ctx);
+                    let inner = at.child(id.as_deref(), Branch::Empty, true);
+                    return self.nodes(empty, scope, out, mode, ctx, &inner);
                 }
+                let base = self.origin_of(scope, expr);
+                let is_map = v.kind() == minijinja::value::ValueKind::Map;
+                let inner = at.child(id.as_deref(), Branch::Children, true);
                 let len = items.len();
                 for (i, it) in items.into_iter().enumerate() {
                     let mut f: BTreeMap<String, Value> = BTreeMap::new();
+                    let mut o: BTreeMap<String, Binding> = BTreeMap::new();
                     if names.len() >= 2 {
                         // Dictionnaire : clé, valeur.
                         let val = v.get_item(&it).unwrap_or(Value::UNDEFINED);
+                        if let Some(b) = it
+                            .as_str()
+                            .and_then(|k| base.as_ref()?.extend(&[Seg::Key(k.to_string())]))
+                        {
+                            o.insert(names[1].to_string(), b);
+                        }
                         f.insert(names[0].to_string(), it);
                         f.insert(names[1].to_string(), val);
                     } else {
+                        if self.editor.is_some() {
+                            let b = match &base {
+                                Some(b) if !is_map => b.extend(&[Seg::Index(i)]),
+                                Some(b) => it
+                                    .as_str()
+                                    .and_then(|k| b.extend(&[Seg::Key(k.to_string())])),
+                                None => self.origin_of_value(&it),
+                            };
+                            if let Some(b) = b {
+                                o.insert(names[0].to_string(), b);
+                            }
+                        }
                         f.insert(names[0].to_string(), it);
                     }
                     let mut lp: BTreeMap<&str, Value> = BTreeMap::new();
@@ -423,38 +786,55 @@ impl<'a> Builder<'a> {
                     lp.insert("length", Value::from(len));
                     lp.insert("revindex", Value::from(len - i));
                     f.insert("loop".into(), Value::from(lp));
-                    scope.push(f);
-                    let r = self.nodes(children, scope, out, mode, ctx);
+                    scope.push_with(f, o);
+                    let r = self.nodes(children, scope, out, mode, ctx, &inner);
                     scope.pop();
                     r?;
                 }
             }
             Node::Set { name, expr } => {
                 let v = self.eval(scope, expr, ctx)?;
-                scope.set(name, v);
+                let origin = match path_expr(expr) {
+                    Some(_) => self.origin_of(scope, expr),
+                    None => self.origin_of_value(&v),
+                };
+                scope.set(name, v, origin);
             }
             Node::SetBlock { name, children, .. } => {
+                // Contenu capturé dans une variable : sans repères.
                 let mut s = String::new();
-                self.nodes(children, scope, &mut s, mode, ctx)?;
-                scope.set(name, Value::from_safe_string(s));
+                self.nodes(children, scope, &mut s, mode, ctx, &At::NONE)?;
+                scope.set(name, Value::from_safe_string(s), None);
             }
             Node::Slot => {
                 if let Some(c) = scope.get("content") {
                     out.push_str(&display(&c, false));
                 }
             }
-            Node::Use { component, .. } => match self.site.component(component) {
+            Node::Use { id, component } => match self.site.component(component) {
                 Some(c) => {
-                    scope.push(BTreeMap::new());
-                    let r = self.nodes(
-                        &c.body,
-                        scope,
-                        out,
-                        mode,
-                        &format!("{ctx} (composant {component})"),
-                    );
-                    scope.pop();
-                    r?;
+                    let ctx = format!("{ctx} (composant {component})");
+                    let mut body = |out: &mut String| {
+                        scope.push(BTreeMap::new());
+                        let inner = At {
+                            mark: at.mark,
+                            ..At::root(Owner::Component(c.id.clone()))
+                        };
+                        let r = self.nodes(&c.body, scope, out, mode, &ctx, &inner);
+                        scope.pop();
+                        r
+                    };
+                    match (marking, &at.owner, id) {
+                        (true, Some(owner), Some(id)) => self.wrapped(
+                            out,
+                            Slot::Block {
+                                owner: owner.clone(),
+                                node: id.clone(),
+                            },
+                            body,
+                        )?,
+                        _ => body(out)?,
+                    }
                 }
                 None => self.warn(format!("{ctx} : composant introuvable « {component} »")),
             },
@@ -481,7 +861,10 @@ impl<'a> Builder<'a> {
                     return Ok(());
                 }
                 match self.input.hooks.image(&args) {
-                    Some(html) => out.push_str(&html),
+                    Some(html) => match (marking, &img.id) {
+                        (true, Some(id)) => out.push_str(&with_marker(&html, id)),
+                        _ => out.push_str(&html),
+                    },
                     None => {
                         if let Some(c) = self.site.component("image-placeholder") {
                             let mut f: BTreeMap<String, Value> = BTreeMap::new();
@@ -489,16 +872,52 @@ impl<'a> Builder<'a> {
                             f.insert("alt".into(), Value::from(args.alt.clone()));
                             f.insert("ratio".into(), Value::from(args.ratio.clone()));
                             f.insert("class".into(), Value::from(args.class.clone()));
-                            scope.push(f);
-                            let r = self.nodes(&c.body, scope, out, mode, ctx);
-                            scope.pop();
-                            r?;
+                            let body = |out: &mut String| {
+                                scope.push(f);
+                                let inner = At {
+                                    mark: at.mark,
+                                    ..At::root(Owner::Component(c.id.clone()))
+                                };
+                                let r = self.nodes(&c.body, scope, out, mode, ctx, &inner);
+                                scope.pop();
+                                r
+                            };
+                            match (marking, &at.owner, &img.id) {
+                                (true, Some(owner), Some(id)) => self.wrapped(
+                                    out,
+                                    Slot::Block {
+                                        owner: owner.clone(),
+                                        node: id.clone(),
+                                    },
+                                    body,
+                                )?,
+                                _ => body(out)?,
+                            }
                         }
                     }
                 }
             }
         }
         Ok(())
+    }
+}
+
+/// Ajoute `data-rv` à la première balise d'un fragment HTML (`<picture …>`, `<img …>`).
+fn with_marker(html: &str, id: &str) -> String {
+    let Some(start) = html.find('<') else {
+        return html.to_string();
+    };
+    let name_end = html[start + 1..]
+        .find(|c: char| c.is_whitespace() || c == '>' || c == '/')
+        .map(|i| start + 1 + i);
+    match name_end {
+        Some(e) if e > start + 1 => format!(
+            "{} data-rv=\"{}\"{}",
+            &html[..e],
+            escape_attr(id),
+            &html[e..]
+        ),
+        _ => html.to_string(),
     }
 }
 

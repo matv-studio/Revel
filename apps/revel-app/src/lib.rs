@@ -184,6 +184,40 @@ async fn deploy(
         .map_err(err)
 }
 
+/// Ouvre un site dans l'éditeur : document complet et état de l'historique.
+#[tauri::command]
+fn edit_open(s: State<AppState>, path: String) -> Res<revel_edit::Opened> {
+    s.core.edit_open(&PathBuf::from(path)).map_err(err)
+}
+
+/// Applique une commande d'édition (enregistrée aussitôt).
+#[tauri::command]
+fn edit_apply(
+    s: State<AppState>,
+    path: String,
+    command: revel_edit::Command,
+    coalesce: bool,
+) -> Res<revel_edit::EditState> {
+    s.core
+        .edit_apply(&PathBuf::from(path), command, coalesce)
+        .map_err(err)
+}
+
+#[tauri::command]
+fn edit_seal(s: State<AppState>, path: String) -> Res<()> {
+    s.core.edit_seal(&PathBuf::from(path)).map_err(err)
+}
+
+#[tauri::command]
+fn edit_undo(s: State<AppState>, path: String) -> Res<revel_edit::EditState> {
+    s.core.edit_undo(&PathBuf::from(path)).map_err(err)
+}
+
+#[tauri::command]
+fn edit_redo(s: State<AppState>, path: String) -> Res<revel_edit::EditState> {
+    s.core.edit_redo(&PathBuf::from(path)).map_err(err)
+}
+
 /// Compte GitHub connecté (identifiant), sans requête réseau.
 #[tauri::command]
 fn github_account(s: State<AppState>) -> Option<String> {
@@ -267,7 +301,12 @@ pub fn run() {
             github_connect,
             github_cancel,
             github_disconnect,
-            open_external
+            open_external,
+            edit_open,
+            edit_apply,
+            edit_seal,
+            edit_undo,
+            edit_redo
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Revel");

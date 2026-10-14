@@ -20,7 +20,8 @@
 revel-ui (WebAssembly) ── revel-protocol, revel-i18n
 revel-app ── revel-core, revel-protocol, revel-model
 revel-cli ── revel-project, revel-import, revel-deploy, revel-i18n, revel-model
-revel-core ── revel-project, revel-import, revel-deploy, revel-git, revel-protocol, revel-model
+revel-core ── revel-project, revel-import, revel-deploy, revel-git, revel-edit, revel-protocol, revel-model
+revel-edit ── revel-model (compilée aussi pour wasm32)
 revel-project ── revel-render, revel-assets ── revel-markup ── revel-model
 revel-import ── revel-markup, revel-render (types), revel-model
 revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour wasm32)
@@ -29,6 +30,13 @@ revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour was
 - `revel-core` : services de l'application (sites récents, ouvrir, importer, générer, aperçu, hébergements,
   publier), état de l'application (`revel-state.json`, sans secret), mots de passe dans le trousseau.
   Appelé par l'application et, à terme, par la ligne de commande et le serveur MCP (D-13).
+- `revel-edit` : commandes d'édition sérialisables et réversibles (attributs, balise, texte, insertion,
+  suppression, déplacement, image, logique, variables de page, suites atomiques ; intentions « dupliquer »,
+  « envelopper », « ajouter » développées en commandes concrètes avant l'historique), historique annuler/rétablir
+  avec fusion des saisies continues. Sessions d'édition dans `revel-core` (`edit_open`, `edit_apply`, `edit_undo`,
+  `edit_redo`) : enregistrement de `site.revel.json` à chaque modification ; ligne de commande `revel apply`.
+- Identifiants des nœuds (schéma 2) : chaque nœud structurel (élément, image, condition, boucle, composant
+  utilisé, bloc) a un identifiant unique dans le site, déterministe à l'import (`revel_model::ids`).
 - `revel-git` : publication d'un dossier sur une branche Git (dépôt cache nu dans `.revel/git/`, arbre
   construit directement dans la base d'objets, envoi des seuls objets nouveaux, avance rapide uniquement) ;
   client GitHub (device flow, renouvellement des jetons, API Pages) avec `ureq`.

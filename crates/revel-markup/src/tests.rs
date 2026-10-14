@@ -122,6 +122,7 @@ fn set_include_image() {
     assert_eq!(
         n[1],
         Node::Use {
+            id: None,
             component: "partials/header".into()
         }
     );

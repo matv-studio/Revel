@@ -1,0 +1,16 @@
+[package]
+name = "revel-edit"
+description = "Commandes d'édition réversibles du document de site, historique annuler/rétablir"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+revel-model.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

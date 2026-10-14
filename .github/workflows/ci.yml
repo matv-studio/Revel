@@ -125,7 +125,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       # Version du cobaye comparée ; à mettre à jour volontairement (dépôt matv-studio/alunites-revel-lab).
-      COBAYE_REF: f4b6bd9927542a52941e943c7254d583d5fb4c94
+      COBAYE_REF: af1ac84e066cff5f04768aa449ee3732bd58c782
     steps:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7

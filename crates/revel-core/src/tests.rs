@@ -196,3 +196,74 @@ async fn publication_par_le_coeur() {
             .any(|e| matches!(e, DeployEvent::Warnings { .. }))
     );
 }
+
+#[test]
+fn session_edition_enregistre_et_annule() {
+    use revel_edit::{Branch, Command, Owner, Parent, Target};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let file = site.join(revel_project::SITE_FILE);
+    assert!(matches!(
+        c.edit_apply(&site, Command::Batch { commands: vec![] }, false),
+        Err(CoreError::NotOpen)
+    ));
+    let opened = c.edit_open(&site).unwrap();
+    assert_eq!(opened.state.revision, 0);
+    // Les identifiants attribués à la lecture ne sont écrits qu'à la première modification.
+    let h1 = revel_model::ids::node_id(&opened.site.pages[0].body[1])
+        .unwrap()
+        .to_string();
+    let target = Target {
+        owner: Owner::Page("index".into()),
+        node: h1,
+    };
+    let st = c
+        .edit_apply(
+            &site,
+            Command::SetAttr {
+                at: target.clone(),
+                name: "class".into(),
+                value: Some("titre".into()),
+            },
+            false,
+        )
+        .unwrap();
+    assert_eq!((st.revision, st.can_undo, st.can_redo), (1, true, false));
+    let saved = std::fs::read_to_string(&file).unwrap();
+    assert!(saved.contains("\"titre\""));
+    let ids_written = saved.clone();
+    // Insertion d'un texte, puis annulation complète : fichier identique à l'état d'après la 1re commande.
+    c.edit_apply(
+        &site,
+        Command::Insert {
+            parent: Parent::of(&target, Branch::Children),
+            index: 0,
+            node: revel_model::Node::Text {
+                text: "Préfixe ".into(),
+            },
+        },
+        false,
+    )
+    .unwrap();
+    let st = c.edit_undo(&site).unwrap();
+    assert!(matches!(st.applied, Some(Command::RemoveAt { .. })));
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), ids_written);
+    let st = c.edit_redo(&site).unwrap();
+    assert!(st.applied.is_some() && !st.can_redo);
+    // La génération lit le fichier enregistré.
+    c.build(&site, "production", false, &|_| {}).unwrap();
+    let html = std::fs::read_to_string(out_dir(&site, "production").join("index.html")).unwrap();
+    assert!(
+        html.contains(r#"<h1 class="titre">Préfixe Accueil</h1>"#),
+        "{html}"
+    );
+    // Modification hors de Revel : la session relit le fichier.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let mut p = revel_project::Project::open(&site).unwrap();
+    p.site.name = "Renommé".into();
+    p.save().unwrap();
+    let again = c.edit_open(&site).unwrap();
+    assert_eq!(again.site.name, "Renommé");
+    assert!(!again.state.can_undo);
+}

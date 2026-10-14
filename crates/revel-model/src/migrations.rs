@@ -10,7 +10,7 @@ type Step = fn(Value) -> Result<Value, ModelError>;
 
 /// `STEPS[i]` fait passer un document de la version `i` à la version `i + 1`.
 /// La version 0 correspond aux documents expérimentaux sans `schema_version`.
-const STEPS: &[Step] = &[v0_to_v1];
+const STEPS: &[Step] = &[v0_to_v1, v1_to_v2];
 
 /// Migre un document JSON brut jusqu'à la version courante.
 pub fn migrate(mut doc: Value) -> Result<Value, ModelError> {
@@ -37,6 +37,13 @@ pub fn migrate(mut doc: Value) -> Result<Value, ModelError> {
 
 /// v0 -> v1 : ajout du champ `schema_version` (aucune autre modification).
 fn v0_to_v1(doc: Value) -> Result<Value, ModelError> {
+    Ok(doc)
+}
+
+/// v1 -> v2 : identifiants des nœuds structurels (`id` sur les conditions, boucles, composants
+/// utilisés, blocs et images). Champs facultatifs : le document v1 reste valide tel quel ; les
+/// identifiants manquants sont attribués à la lecture (`Site::ensure_ids`).
+fn v1_to_v2(doc: Value) -> Result<Value, ModelError> {
     Ok(doc)
 }
 

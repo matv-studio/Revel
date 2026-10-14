@@ -36,6 +36,12 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Applique des commandes d'édition (fichier JSON : une commande ou une liste) et enregistre.
+    Apply {
+        dir: PathBuf,
+        /// Fichier de commandes (`-` : entrée standard).
+        commands: PathBuf,
+    },
     /// Génère un projet dans un dossier.
     Build {
         dir: PathBuf,
@@ -121,6 +127,31 @@ fn main() -> Result<()> {
                 Project::create(&dir, site)?;
                 println!("{}", dir.join(revel_project::SITE_FILE).display());
             }
+        }
+        Command::Apply { dir, commands } => {
+            let text = if commands.as_os_str() == "-" {
+                let mut t = String::new();
+                std::io::Read::read_to_string(&mut std::io::stdin(), &mut t)?;
+                t
+            } else {
+                std::fs::read_to_string(&commands)
+                    .with_context(|| format!("lecture de {}", commands.display()))?
+            };
+            let value: serde_json::Value = serde_json::from_str(&text).context("JSON invalide")?;
+            let list: Vec<revel_edit::Command> = match value {
+                serde_json::Value::Array(_) => serde_json::from_value(value)?,
+                v => vec![serde_json::from_value(v)?],
+            };
+            let mut project =
+                Project::open(&dir).with_context(|| format!("ouverture de {}", dir.display()))?;
+            let n = list.len();
+            revel_edit::apply(
+                &mut project.site,
+                &revel_edit::Command::Batch { commands: list },
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+            project.save()?;
+            println!("{n} commande(s) appliquée(s)");
         }
         Command::Build {
             dir,

@@ -354,6 +354,8 @@ pub fn import(root: &Path, profile: &Profile) -> Result<(Site, Report), ImportEr
             ));
         }
     }
+    // Identifiants stables des nœuds (déterministes : un même import donne les mêmes).
+    site.ensure_ids();
     Ok((site, report))
 }
 
@@ -417,6 +419,7 @@ pub fn map_exprs(nodes: &mut [Node], f: &dyn Fn(&str) -> String) {
                 cond,
                 then,
                 otherwise,
+                ..
             } => {
                 *cond = f(cond);
                 map_exprs(then, f);

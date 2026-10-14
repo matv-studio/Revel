@@ -19,6 +19,7 @@ tauri-build.workspace = true
 revel-core.workspace = true
 revel-model.workspace = true
 revel-protocol.workspace = true
+revel-edit.workspace = true
 serde.workspace = true
 tauri.workspace = true
 tauri-plugin-dialog = "2.8.2"

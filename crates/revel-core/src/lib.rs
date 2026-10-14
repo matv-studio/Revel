@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 
+mod edit;
 mod github;
 pub mod preview;
 pub mod secrets;
@@ -56,6 +57,10 @@ pub enum CoreError {
     #[error("connexion GitHub annulée")]
     GithubCancelled,
     #[error("{0}")]
+    Edit(revel_edit::EditError),
+    #[error("site non ouvert dans l'éditeur")]
+    NotOpen,
+    #[error("{0}")]
     Other(String),
 }
 
@@ -98,6 +103,8 @@ impl CoreError {
                 Failure::new("error-github-no-push").arg("repo", repo.clone())
             }
             Self::GithubCancelled => Failure::new("error-github-cancelled"),
+            Self::Edit(e) => Failure::new(e.key()).arg("detail", e.to_string()),
+            Self::NotOpen => Failure::new("error-edit-not-open"),
             Self::Other(detail) => Failure::detail(detail.clone()),
         }
     }
@@ -129,6 +136,8 @@ pub struct Core {
     secrets: Box<dyn SecretStore>,
     /// Demande d'interruption de la connexion GitHub en cours.
     github_cancel: AtomicBool,
+    /// Sites ouverts dans l'éditeur (clé : chemin du site).
+    sessions: Mutex<std::collections::HashMap<String, edit::Session>>,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -172,6 +181,7 @@ impl Core {
             state: Mutex::new(State::load(config_dir)),
             secrets,
             github_cancel: AtomicBool::new(false),
+            sessions: Mutex::new(std::collections::HashMap::new()),
         }
     }
 

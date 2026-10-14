@@ -12,6 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 revel-model.workspace = true
+revel-edit.workspace = true
+serde_json.workspace = true
 revel-project.workspace = true
 revel-import.workspace = true
 revel-deploy.workspace = true

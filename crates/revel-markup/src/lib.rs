@@ -300,6 +300,7 @@ impl<'a> Parser<'a> {
                     empty = e;
                 }
                 Node::Each {
+                    id: None,
                     expr: self.ex(expr),
                     item: item.trim().to_string(),
                     children: merge_text(children),
@@ -314,6 +315,7 @@ impl<'a> Parser<'a> {
                 _ => {
                     let (children, _) = self.nodes(&["endset"])?;
                     Node::SetBlock {
+                        id: None,
                         name: args.to_string(),
                         children: merge_text(children),
                     }
@@ -322,6 +324,7 @@ impl<'a> Parser<'a> {
             "include" => {
                 let name = args.trim_matches(|c| c == '"' || c == '\'');
                 Node::Use {
+                    id: None,
                     component: component_id(name),
                 }
             }
@@ -336,6 +339,7 @@ impl<'a> Parser<'a> {
                 let parts = expr::split_args(args);
                 let get = |i: usize| parts.get(i).map(|e| self.ex(e));
                 Node::Image(ImageNode {
+                    id: None,
                     src: get(0).unwrap_or_default(),
                     alt: get(1),
                     sizes: get(2),
@@ -366,6 +370,7 @@ impl<'a> Parser<'a> {
             _ => Vec::new(),
         };
         Ok(Node::If {
+            id: None,
             cond: self.ex(cond),
             then: merge_text(then),
             otherwise: merge_text(otherwise),

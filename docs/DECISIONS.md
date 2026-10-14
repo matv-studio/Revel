@@ -107,6 +107,21 @@ l'adresse du serveur SFTP et l'identifiant OVH d'Alunites présents dans une don
 Sources : https://docs.github.com/en/billing/concepts/product-billing/github-actions,
 https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository
 
+**D-18 — 14/10/2026 — prise (choix de l'utilisateur).** **Styles détenus par Revel** (modèle Webflow) : la feuille
+de style d'un site importé devient des styles du modèle (sélecteur, état, point de rupture, déclarations), dans
+l'ordre d'origine ; Revel génère le CSS. Tout se modifie dans le panneau de styles ; le fichier d'origine n'est plus
+écrit à la main.
+- Options écartées : modifier directement le fichier CSS (comme les outils de développement d'un navigateur) ;
+  garder le fichier tel quel et ajouter les styles de Revel par-dessus.
+- Cascade des points de rupture comme Webflow : base sur ordinateur, modifications vers les largeurs plus étroites
+  (https://help.webflow.com/hc/en-us/articles/33961300305811).
+
+**D-19 — 14/10/2026 — prise (choix de l'utilisateur).** **Textes liés modifiables sur la page et par le CMS** : un
+texte issu d'un fichier de données ou d'un contenu (YAML, front matter) se modifie en cliquant dessus dans
+l'éditeur ; Revel n'écrit que cette valeur dans le fichier, qui reste compatible avec Pages CMS. Les deux outils
+éditent les mêmes fichiers ; Revel relit les fichiers modifiés hors de l'application. Synchronisation avec GitHub
+(enregistrements de Pages CMS) : étape 3.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

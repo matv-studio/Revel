@@ -4734,6 +4734,7 @@ name = "revel-app"
 version = "0.1.0"
 dependencies = [
  "revel-core",
+ "revel-edit",
  "revel-model",
  "revel-protocol",
  "serde",
@@ -4770,10 +4771,12 @@ dependencies = [
  "anyhow",
  "clap",
  "revel-deploy",
+ "revel-edit",
  "revel-i18n",
  "revel-import",
  "revel-model",
  "revel-project",
+ "serde_json",
  "tokio",
 ]
 
@@ -4789,6 +4792,7 @@ dependencies = [
  "chrono",
  "keyring",
  "revel-deploy",
+ "revel-edit",
  "revel-git",
  "revel-import",
  "revel-model",
@@ -4818,6 +4822,16 @@ dependencies = [
 [[package]]
 name = "revel-dns"
 version = "0.1.0"
+
+[[package]]
+name = "revel-edit"
+version = "0.1.0"
+dependencies = [
+ "revel-model",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "revel-git"

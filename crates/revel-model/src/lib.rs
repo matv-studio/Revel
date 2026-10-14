@@ -19,10 +19,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+pub mod ids;
 pub mod migrations;
 
 /// Version courante du schéma du document de site.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Document racine d'un site Revel.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -89,10 +90,13 @@ impl Site {
     }
 
     /// Lit un document JSON, quelle que soit sa version de schéma, et le migre.
+    /// Chaque nœud structurel reçoit un identifiant s'il n'en a pas (voir [`ids`]).
     pub fn from_json(text: &str) -> Result<Self, ModelError> {
         let value: Value = serde_json::from_str(text)?;
         let migrated = migrations::migrate(value)?;
-        Ok(serde_json::from_value(migrated)?)
+        let mut site: Self = serde_json::from_value(migrated)?;
+        site.ensure_ids();
+        Ok(site)
     }
 
     /// Écrit le document en JSON lisible (diffs Git lisibles).
@@ -323,6 +327,8 @@ pub enum Node {
     Out { expr: String },
     /// Affichage conditionnel.
     If {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
         cond: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         then: Vec<Node>,
@@ -331,6 +337,8 @@ pub enum Node {
     },
     /// Répétition sur une liste. `loop.index`, `loop.first`, `loop.last` sont disponibles.
     Each {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
         expr: String,
         /// Nom de la variable d'élément (ou `cle, valeur` pour un dictionnaire).
         item: String,
@@ -343,11 +351,20 @@ pub enum Node {
     /// Affectation d'une variable (visible dans la suite du bloc courant).
     Set { name: String, expr: String },
     /// Affectation par bloc : la variable reçoit le rendu des enfants.
-    SetBlock { name: String, children: Vec<Node> },
+    SetBlock {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+        name: String,
+        children: Vec<Node>,
+    },
     /// Emplacement du contenu de la page dans un gabarit.
     Slot,
     /// Utilisation d'un composant.
-    Use { component: String },
+    Use {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+        component: String,
+    },
     /// Image responsive (variantes AVIF/WebP/JPEG générées).
     Image(ImageNode),
 }
@@ -367,6 +384,9 @@ pub struct Attr {
 /// Paramètres d'une image ; chaque champ est une expression.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ImageNode {
+    /// Identifiant stable pour l'éditeur et les commandes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub src: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alt: Option<String>,
@@ -477,6 +497,7 @@ mod tests {
             body: vec![
                 el("h1", &[("class", "titre")], vec![out("title")]),
                 Node::Each {
+                    id: None,
                     expr: "collections.projets | limit(3)".into(),
                     item: "item".into(),
                     children: vec![el("a", &[("href", "{{ item.url }}")], vec![text("Voir")])],
@@ -492,6 +513,7 @@ mod tests {
             props: BTreeMap::new(),
             body: vec![el("main", &[], vec![Node::Slot])],
         });
+        site.ensure_ids();
         let json = site.to_json().unwrap();
         assert_eq!(Site::from_json(&json).unwrap(), site);
         assert!(site.layout("base").is_some());

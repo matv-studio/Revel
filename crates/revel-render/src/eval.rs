@@ -370,6 +370,7 @@ impl<'a> Builder<'a> {
                 cond,
                 then,
                 otherwise,
+                ..
             } => {
                 if self.eval(scope, cond, ctx)?.is_true() {
                     self.nodes(then, scope, out, mode, ctx)?;
@@ -382,6 +383,7 @@ impl<'a> Builder<'a> {
                 item,
                 children,
                 empty,
+                ..
             } => {
                 let v = self.eval(scope, expr, ctx)?;
                 let names: Vec<&str> = item.split(',').map(str::trim).collect();
@@ -431,7 +433,7 @@ impl<'a> Builder<'a> {
                 let v = self.eval(scope, expr, ctx)?;
                 scope.set(name, v);
             }
-            Node::SetBlock { name, children } => {
+            Node::SetBlock { name, children, .. } => {
                 let mut s = String::new();
                 self.nodes(children, scope, &mut s, mode, ctx)?;
                 scope.set(name, Value::from_safe_string(s));
@@ -441,7 +443,7 @@ impl<'a> Builder<'a> {
                     out.push_str(&display(&c, false));
                 }
             }
-            Node::Use { component } => match self.site.component(component) {
+            Node::Use { component, .. } => match self.site.component(component) {
                 Some(c) => {
                     scope.push(BTreeMap::new());
                     let r = self.nodes(

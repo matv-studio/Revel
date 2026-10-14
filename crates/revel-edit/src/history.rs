@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::EditError;
 use crate::command::{Command, apply, expand};
 
+/// Exécutant d'une commande : l'applique et renvoie son inverse.
+pub type Exec<'a> = dyn FnMut(&mut Site, &Command) -> Result<Command, EditError> + 'a;
+
 /// Étape de l'historique : commande appliquée et commande qui l'annule.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Step {
@@ -56,8 +59,20 @@ impl History {
         cmd: Command,
         coalesce: bool,
     ) -> Result<Command, EditError> {
+        self.apply_with(site, cmd, coalesce, &mut |s, c| apply(s, c))
+    }
+
+    /// Comme [`History::apply`], avec l'exécutant des commandes fourni par l'appelant (le cœur y
+    /// traite les commandes qui écrivent des fichiers, comme `SetBound`).
+    pub fn apply_with(
+        &mut self,
+        site: &mut Site,
+        cmd: Command,
+        coalesce: bool,
+        exec: &mut Exec<'_>,
+    ) -> Result<Command, EditError> {
         let cmd = expand(site, &cmd)?;
-        let inverse = apply(site, &cmd)?;
+        let inverse = exec(site, &cmd)?;
         let applied = cmd.clone();
         self.undone.clear();
         if coalesce
@@ -87,11 +102,19 @@ impl History {
 
     /// Annule la dernière étape ; renvoie la commande appliquée pour l'annuler.
     pub fn undo(&mut self, site: &mut Site) -> Result<Option<Command>, EditError> {
+        self.undo_with(site, &mut |s, c| apply(s, c))
+    }
+
+    pub fn undo_with(
+        &mut self,
+        site: &mut Site,
+        exec: &mut Exec<'_>,
+    ) -> Result<Option<Command>, EditError> {
         self.open_field = false;
         let Some(step) = self.done.pop() else {
             return Ok(None);
         };
-        match apply(site, &step.inverse) {
+        match exec(site, &step.inverse) {
             Ok(_) => {
                 let applied = step.inverse.clone();
                 self.undone.push(step);
@@ -106,11 +129,19 @@ impl History {
 
     /// Rétablit la dernière étape annulée ; renvoie la commande appliquée.
     pub fn redo(&mut self, site: &mut Site) -> Result<Option<Command>, EditError> {
+        self.redo_with(site, &mut |s, c| apply(s, c))
+    }
+
+    pub fn redo_with(
+        &mut self,
+        site: &mut Site,
+        exec: &mut Exec<'_>,
+    ) -> Result<Option<Command>, EditError> {
         self.open_field = false;
         let Some(step) = self.undone.pop() else {
             return Ok(None);
         };
-        match apply(site, &step.forward) {
+        match exec(site, &step.forward) {
             Ok(inverse) => {
                 let applied = step.forward.clone();
                 self.done.push(Step {

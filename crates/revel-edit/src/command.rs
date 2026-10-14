@@ -119,6 +119,12 @@ pub enum Command {
     RemoveStyleAt { index: usize },
     /// Supprime une règle de style.
     RemoveRule { rule: String },
+    /// Texte d'une valeur liée (D-19) : fichier de données, en-tête d'un contenu, variable de page
+    /// ou de gabarit. Appliquée par le cœur, qui écrit le fichier (`apply` la refuse).
+    SetBound {
+        binding: crate::canvas::Binding,
+        value: String,
+    },
     /// Remplace la liste des points de rupture du site (la base `desktop` reste la première).
     SetBreakpoints { breakpoints: Vec<Breakpoint> },
     /// Nouvelle règle pour `selector` et `media`, placée dans la cascade (après les règles du même
@@ -541,6 +547,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             let index = crate::style::rule_index(site, rule)?;
             apply(site, &Command::RemoveStyleAt { index })
         }
+        Command::SetBound { .. } => Err(EditError::External),
         Command::SetBreakpoints { breakpoints } => {
             check_breakpoints(breakpoints)?;
             Ok(Command::SetBreakpoints {
@@ -667,6 +674,7 @@ impl Command {
                 },
             ) => a == b && p == q,
             (Self::SetSelector { rule: a, .. }, Self::SetSelector { rule: b, .. }) => a == b,
+            (Self::SetBound { binding: a, .. }, Self::SetBound { binding: b, .. }) => a == b,
             _ => false,
         }
     }

@@ -53,6 +53,11 @@ enum FromCanvas {
     Computed {
         values: std::collections::HashMap<String, String>,
     },
+    /// Texte modifié sur place (étape 2.7).
+    Text {
+        slot: revel_edit::canvas::Slot,
+        text: String,
+    },
     #[serde(other)]
     Other,
 }
@@ -83,6 +88,9 @@ pub struct Ed {
     pub scroll: RwSignal<(f64, f64)>,
     /// Valeurs effectives des propriétés de style de l'élément sélectionné (canevas).
     pub computed: RwSignal<std::collections::HashMap<String, String>>,
+    /// Heure de la dernière modification faite dans Revel (ms) : les fichiers changés juste après
+    /// ne sont pas pris pour une modification extérieure.
+    pub own_change: RwSignal<f64>,
     frame: NodeRef<html::Iframe>,
 }
 
@@ -135,6 +143,21 @@ impl Ed {
     /// Après une modification, une annulation ou un rétablissement : copie locale et canevas.
     pub fn after(self, ui: Ui, st: EditState) {
         if let Some(cmd) = &st.applied {
+            self.own_change.set(js_sys::Date::now());
+            // Valeur liée : écrite dans un fichier par le cœur ; variable de page ou de gabarit :
+            // document relu.
+            if let Command::SetBound { binding, .. } = cmd {
+                if matches!(
+                    binding.source,
+                    revel_edit::canvas::Source::Page { .. }
+                        | revel_edit::canvas::Source::Layout { .. }
+                ) {
+                    self.reopen(ui);
+                }
+                self.load.update(|n| *n += 1);
+                self.state.set(Some(st));
+                return;
+            }
             // Élément ajouté (copie, enveloppe, insertion) : sélectionné.
             if let Some(n) = inserted(cmd)
                 && let Some(id) = revel_model::ids::node_id(n)
@@ -241,6 +264,42 @@ impl Ed {
         });
     }
 
+    /// Commande d'un texte modifié dans le canevas : texte de la page (`SetText`, sans la
+    /// typographie de la page si la source ne l'utilisait pas) ou valeur liée à sa source
+    /// (`SetBound`, même traitement par le cœur).
+    fn text_command(self, slot: &revel_edit::canvas::Slot, text: String) -> Option<Command> {
+        use revel_edit::canvas::Slot;
+        match slot {
+            Slot::Text { parent, index } => self.doc.with_untracked(|d| {
+                let d = d.as_ref()?;
+                let old = match revel_edit::address::list(d, parent).ok()?.get(*index)? {
+                    revel_model::Node::Text { text } => text.clone(),
+                    _ => return None,
+                };
+                let new = if d.settings.typography.as_deref() == Some("fr") {
+                    revel_edit::canvas::untypo(&text, &old)
+                } else {
+                    text
+                };
+                (new != old).then(|| Command::SetText {
+                    parent: parent.clone(),
+                    index: *index,
+                    text: new,
+                })
+            }),
+            Slot::Expr {
+                binding: Some(binding),
+                transformed: false,
+                html: false,
+                ..
+            } => Some(Command::SetBound {
+                binding: binding.clone(),
+                value: text,
+            }),
+            _ => None,
+        }
+    }
+
     /// Adresse du nœud sélectionné (son propriétaire est retrouvé dans le document).
     pub fn selected_target(self) -> Option<revel_edit::Target> {
         let sel = self.selected.get()?;
@@ -331,6 +390,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         load: RwSignal::new(0),
         scroll: RwSignal::new((0.0, 0.0)),
         computed: RwSignal::new(Default::default()),
+        own_change: RwSignal::new(0.0),
         frame: NodeRef::new(),
     };
     provide_context(ed);
@@ -409,6 +469,11 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             },
             FromCanvas::Scroll { x, y } => ed.scroll.set((x, y)),
             FromCanvas::Computed { values } => ed.computed.set(values),
+            FromCanvas::Text { slot, text } => {
+                if let Some(cmd) = ed.text_command(&slot, text) {
+                    ed.apply(ui, cmd, false);
+                }
+            }
             FromCanvas::Other => {}
         }
     });
@@ -445,6 +510,30 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         on_key.remove();
     });
     install_test_hook(ed, ui);
+
+    // Fichiers modifiés hors de Revel (Pages CMS, éditeur de texte…) : page et document relus.
+    let stamp = StoredValue::new(None::<String>);
+    let path_poll = site.path.clone();
+    if let Ok(h) = set_interval_with_handle(
+        move || {
+            let path = path_poll.clone();
+            spawn_local(async move {
+                let Ok(now) = api::edit_stamp(&path).await else {
+                    return;
+                };
+                let before = stamp.get_value();
+                stamp.set_value(Some(now.clone()));
+                let recent = js_sys::Date::now() - ed.own_change.get_untracked() < 2500.0;
+                if before.is_some_and(|b| b != now) && !recent {
+                    ed.reopen(ui);
+                    ed.load.update(|n| *n += 1);
+                }
+            });
+        },
+        std::time::Duration::from_millis(2000),
+    ) {
+        on_cleanup(move || h.clear());
+    }
 
     // Place disponible pour le cadre (zoom ajusté).
     let area = NodeRef::<html::Div>::new();

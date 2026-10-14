@@ -32,7 +32,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "canvas_open"];
+  const bridged = ["edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open"];
   async function invoke(cmd, args) {
     if (bridge && bridged.includes(cmd)) {
       // Corps en texte brut : requête simple, sans demande préalable (CORS).

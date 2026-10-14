@@ -17,7 +17,7 @@ pub mod style;
 
 pub use address::{Branch, Owner, Parent, Target};
 pub use command::{Command, apply, expand};
-pub use history::{History, Step};
+pub use history::{Exec, History, Step};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EditError {
@@ -45,6 +45,10 @@ pub enum EditError {
     NoStylesheet,
     #[error("points de rupture invalides : {0}")]
     InvalidBreakpoints(String),
+    #[error("commande appliquée par le cœur (fichiers du projet)")]
+    External,
+    #[error("valeur liée non modifiable : {0}")]
+    Bound(String),
 }
 
 impl EditError {
@@ -63,6 +67,7 @@ impl EditError {
             Self::InvalidCss(_) => "error-edit-css",
             Self::NoStylesheet => "error-edit-no-stylesheet",
             Self::InvalidBreakpoints(_) => "error-edit-breakpoints",
+            Self::External | Self::Bound(_) => "error-edit-bound",
         }
     }
 }

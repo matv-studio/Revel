@@ -8,11 +8,12 @@
 
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
+import path from 'node:path';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
-const [ui, bridge, shots] = process.argv.slice(2);
+const [ui, bridge, shots, siteDir] = process.argv.slice(2);
 if (!ui || !bridge) {
-  console.error('usage : editor-e2e.mjs ADRESSE_INTERFACE ADRESSE_PONT [DOSSIER_CAPTURES]');
+  console.error('usage : editor-e2e.mjs ADRESSE_INTERFACE ADRESSE_PONT [DOSSIER_CAPTURES] [DOSSIER_DU_SITE]');
   process.exit(2);
 }
 const mock = fs.readFileSync(new URL('../apps/revel-ui/dev/mock-tauri.js', import.meta.url), 'utf8');
@@ -305,6 +306,97 @@ try {
     await page.waitForTimeout(400);
   }
   check('styles : tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base26.site));
+
+
+  // ------------------------------------------------------------------ textes (étape 2.7)
+  const base27 = await invoke('edit_open');
+  // Position (dans la page de l'interface) du repère n du canevas, cadre mis à l'échelle compris.
+  const slotPoint = async (pred) => {
+    await page.waitForTimeout(300);
+    f = await waitFrame(() => typeof window.__revelSlot === 'function' && document.readyState === 'complete', 'canevas prêt');
+    const r = await f.evaluate((src) => {
+      const test = new Function('s', 'return ' + src);
+      for (let n = 0; n < 5000; n++) {
+        const x = window.__revelSlot(n);
+        if (!x.slot) return null;
+        if (!x.range || !test(x.slot)) continue;
+        const b = [...x.range.getClientRects()].find((q) => q.width > 4 && q.height > 4 && q.top > 0 && q.bottom < innerHeight);
+        if (b) return { n, x: b.left + Math.min(b.width / 2, 20), y: b.top + b.height / 2, text: x.range.toString(), slot: x.slot };
+      }
+      return null;
+    }, pred);
+    if (!r) return null;
+    const box = await page.locator('iframe.canvas-frame').boundingBox();
+    const w = parseFloat(await page.$eval('iframe.canvas-frame', (e) => e.style.width));
+    const k = box.width / w;
+    return { ...r, px: box.x + r.x * k, py: box.y + r.y * k };
+  };
+  // Texte écrit dans la page.
+  const t1 = await slotPoint("s.slot === 'text' && s.parent.owner.kind === 'page'");
+  check('textes : texte de la page repéré', !!t1, t1 && t1.text.trim());
+  if (t1) {
+    await page.mouse.dblclick(t1.px, t1.py);
+    f = await waitFrame(() => !!document.querySelector('[data-rv-edit]'), 'mode édition');
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('Texte essai');
+    await page.keyboard.press('Enter');
+    let saved = false;
+    for (let i = 0; i < 50 && !saved; i++) {
+      saved = JSON.stringify((await invoke('edit_open')).site).includes('Texte essai');
+      if (!saved) await page.waitForTimeout(100);
+    }
+    f = await waitFrame(() => document.body.textContent.includes('Texte essai') && !document.querySelector('[data-rv-edit]'), 'texte enregistré');
+    check('textes : texte de la page modifié sur place (SetText)', saved);
+    await page.click('.editor-toolbar .btn-undo');
+    f = await waitFrame(() => !document.body.textContent.includes('Texte essai'), 'annulation du texte');
+  }
+  // Texte lié à l'en-tête d'un contenu (fichier Markdown).
+  const t2 = await slotPoint("s.slot === 'expr' && s.binding && s.binding.source.kind === 'entry' && !s.transformed && !s.html");
+  check('textes : texte lié à un contenu repéré', !!t2, t2 && `${t2.text.trim()} (${t2.slot.binding.source.folder}/${t2.slot.binding.source.file})`);
+  if (t2 && siteDir) {
+    const file = path.join(siteDir, t2.slot.binding.source.folder, t2.slot.binding.source.file + '.md');
+    const before = fs.readFileSync(file, 'utf8');
+    await page.mouse.dblclick(t2.px, t2.py);
+    f = await waitFrame(() => !!document.querySelector('[data-rv-edit]'), 'mode édition (lié)');
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('Titre essai');
+    await page.keyboard.press('Enter');
+    let after = before;
+    for (let i = 0; i < 50 && after === before; i++) {
+      await page.waitForTimeout(100);
+      after = fs.readFileSync(file, 'utf8');
+    }
+    f = await waitFrame(() => document.body.textContent.includes('Titre essai'), 'texte lié enregistré');
+    const changed = after.split('\n').filter((l, i) => l !== before.split('\n')[i]);
+    check('textes : seule la ligne du titre change dans le fichier du contenu', changed.length === 1 && changed[0].includes('Titre essai'), changed.join(' | '));
+    await page.click('.editor-toolbar .btn-undo');
+    f = await waitFrame(() => !document.body.textContent.includes('Titre essai'), 'annulation du texte lié');
+    let restored = false;
+    for (let i = 0; i < 50 && !restored; i++) {
+      restored = fs.readFileSync(file, 'utf8') === before;
+      if (!restored) await page.waitForTimeout(100);
+    }
+    check('textes : annulé, fichier identique octet pour octet', restored);
+
+    // Modification hors de Revel (comme un enregistrement de Pages CMS) : page rechargée.
+    await page.waitForTimeout(2600);
+    fs.writeFileSync(file, before.replace(t2.text.trim(), 'Modifié dehors'));
+    f = await waitFrame(() => document.body.textContent.includes('Modifié dehors'), 'relecture du fichier');
+    check('textes : fichier modifié hors de Revel, page relue', true);
+    fs.writeFileSync(file, before);
+    f = await waitFrame(() => !document.body.textContent.includes('Modifié dehors'), 'relecture après remise en état');
+  }
+  // Échap : abandon sans modification.
+  const t3 = await slotPoint("s.slot === 'text'");
+  if (t3) {
+    await page.mouse.dblclick(t3.px, t3.py);
+    f = await waitFrame(() => !!document.querySelector('[data-rv-edit]'), 'mode édition (Échap)');
+    await page.keyboard.type('xyz');
+    await page.keyboard.press('Escape');
+    f = await waitFrame(() => !document.querySelector('[data-rv-edit]'), 'abandon');
+    check('textes : Échap abandonne la saisie', !(await f.evaluate(() => document.body.textContent.includes('xyz'))));
+  }
+  check('textes : document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base27.site));
 
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {

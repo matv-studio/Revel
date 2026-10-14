@@ -163,19 +163,94 @@
     post({ type: "hover", id: null });
   });
 
+  // ---------------------------------------------------------------- textes modifiés sur place
+  // Double-clic sur un texte de la page ou un texte lié à sa source (D-19) : le texte devient
+  // modifiable ; Entrée ou un clic ailleurs valide, Échap annule. L'interface reçoit le texte et
+  // envoie la commande (SetText ou SetBound), puis la page est rechargée.
+  let editing = null;
+  const editable = (s) => !!s && (s.slot === "text" || (s.slot === "expr" && !!s.binding && !s.transformed && !s.html));
+  const slotAt = (x, y) => {
+    let best = null;
+    let bestArea = Infinity;
+    for (let n = 0; n < ranges.length; n++) {
+      const r = ranges[n];
+      if (!r || !editable(slots[n])) continue;
+      for (const b of r.getClientRects()) {
+        if (x >= b.left - 1 && x <= b.right + 1 && y >= b.top - 1 && y <= b.bottom + 1) {
+          const area = b.width * b.height;
+          if (area < bestArea) { best = n; bestArea = area; }
+        }
+      }
+    }
+    return best;
+  };
+  const inEdit = (t) => !!editing && !!t && editing.span.contains(t);
+  const startEdit = (n) => {
+    const r = ranges[n];
+    const span = document.createElement("span");
+    span.setAttribute("data-rv-edit", "");
+    span.setAttribute("contenteditable", "plaintext-only");
+    span.style.outline = "2px solid #6d8cff";
+    span.style.outlineOffset = "2px";
+    try { r.surroundContents(span); } catch (_) { return false; }
+    editing = { n, span, before: span.textContent };
+    span.addEventListener("blur", () => finishEdit(true), { once: true });
+    span.focus();
+    const sel = window.getSelection();
+    if (sel) sel.selectAllChildren(span);
+    post({ type: "editing", slot: slots[n] });
+    return true;
+  };
+  const finishEdit = (commit) => {
+    if (!editing) return;
+    const { n, span, before } = editing;
+    editing = null;
+    const text = span.textContent;
+    const parent = span.parentNode;
+    if (!parent) return;
+    const node = document.createTextNode(commit ? text : before);
+    parent.replaceChild(node, span);
+    const r = document.createRange();
+    r.selectNode(node);
+    ranges[n] = r;
+    parent.normalize();
+    if (commit && text !== before) post({ type: "text", slot: slots[n], text, before });
+    else post({ type: "editing", slot: null });
+  };
+
   // Les clics sélectionnent : liens, boutons et formulaires du site ne réagissent pas.
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
-  document.addEventListener("click", (e) => { block(e); select(targetOf(e.target), true); }, true);
-  for (const type of ["dblclick", "auxclick", "submit", "mouseup", "pointerup"]) {
-    document.addEventListener(type, block, true);
+  document.addEventListener("click", (e) => {
+    if (inEdit(e.target)) return;
+    if (editing) finishEdit(true);
+    block(e);
+    select(targetOf(e.target), true);
+  }, true);
+  document.addEventListener("dblclick", (e) => {
+    if (inEdit(e.target)) return;
+    block(e);
+    const n = slotAt(e.clientX, e.clientY);
+    if (n !== null) startEdit(n);
+  }, true);
+  for (const type of ["auxclick", "submit", "mouseup", "pointerup"]) {
+    document.addEventListener(type, (e) => { if (!inEdit(e.target)) block(e); }, true);
   }
   // Appui : pas de sélection de texte ni de focus d'un champ du site, mais le canevas reçoit le
   // clavier (Échap, raccourcis).
   for (const type of ["mousedown", "pointerdown"]) {
-    document.addEventListener(type, (e) => { block(e); window.focus(); }, true);
+    document.addEventListener(type, (e) => {
+      if (inEdit(e.target)) return;
+      block(e);
+      window.focus();
+    }, true);
   }
 
   document.addEventListener("keydown", (e) => {
+    if (editing) {
+      if (e.key === "Escape") { e.preventDefault(); finishEdit(false); }
+      else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finishEdit(true); }
+      return;
+    }
     if (e.key === "Escape") { select(null, true); return; }
     // Raccourcis de l'éditeur (annuler, rétablir…) transmis à l'interface.
     if (e.ctrlKey || e.metaKey) {

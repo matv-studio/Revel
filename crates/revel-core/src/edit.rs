@@ -41,6 +41,71 @@ impl Session {
     }
 }
 
+/// Exécutant des commandes d'une session : `SetBound` écrit la source de la valeur (fichier de
+/// données, en-tête d'un contenu) ou la variable de page ; le reste passe par `revel_edit::apply`.
+fn exec(
+    project: &Project,
+    site: &mut revel_model::Site,
+    c: &Command,
+) -> std::result::Result<Command, revel_edit::EditError> {
+    match c {
+        Command::SetBound { binding, value } => {
+            let old = project
+                .set_bound(site, binding, value)
+                .map_err(revel_edit::EditError::Bound)?;
+            Ok(Command::SetBound {
+                binding: binding.clone(),
+                value: old,
+            })
+        }
+        other => revel_edit::apply(site, other),
+    }
+}
+
+/// Empreinte des fichiers lus par le canevas (document, données, contenus) : change quand l'un
+/// d'eux est modifié, ajouté ou retiré.
+fn files_stamp(project: &Project) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(d) = &project.site.data_dir {
+        dirs.push(project.dir.join(d));
+    }
+    for c in &project.site.collections {
+        if !c.folder.is_empty() {
+            dirs.push(project.dir.join(&c.folder));
+        }
+    }
+    dirs.sort();
+    dirs.dedup();
+    let mut files = vec![project.dir.join(revel_project::SITE_FILE)];
+    fn walk(d: &Path, out: &mut Vec<std::path::PathBuf>, depth: usize) {
+        let Ok(rd) = std::fs::read_dir(d) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() && depth < 4 {
+                walk(&p, out, depth + 1);
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    for d in &dirs {
+        walk(d, &mut files, 0);
+    }
+    files.sort();
+    for f in files {
+        f.hash(&mut h);
+        if let Ok(m) = std::fs::metadata(&f) {
+            m.len().hash(&mut h);
+            if let Ok(t) = m.modified() {
+                t.hash(&mut h);
+            }
+        }
+    }
+    format!("{:016x}", h.finish())
+}
+
 fn key(path: &Path) -> String {
     path.display().to_string()
 }
@@ -92,14 +157,39 @@ impl Core {
     /// `coalesce` : saisie continue dans un même champ (une seule étape d'annulation).
     pub fn edit_apply(&self, path: &Path, cmd: Command, coalesce: bool) -> Result<EditState> {
         self.with_session(path, |s| {
+            // Texte lié saisi dans le canevas : sans la typographie de la page si la source ne
+            // l'utilisait pas.
+            let cmd = match cmd {
+                Command::SetBound { binding, value }
+                    if s.project.site.settings.typography.as_deref() == Some("fr") =>
+                {
+                    let old = s.project.bound_value(&binding).unwrap_or_default();
+                    Command::SetBound {
+                        value: revel_edit::canvas::untypo(&value, &old),
+                        binding,
+                    }
+                }
+                other => other,
+            };
+            let project = &s.project;
+            let mut site = project.site.clone();
             let applied = s
                 .history
-                .apply(&mut s.project.site, cmd, coalesce)
+                .apply_with(&mut site, cmd, coalesce, &mut |site, c| {
+                    exec(project, site, c)
+                })
                 .map_err(CoreError::Edit)?;
+            s.project.site = site;
             s.revision += 1;
             s.save()?;
             Ok(s.state(Some(applied)))
         })
+    }
+
+    /// Empreinte des fichiers du site lus par le canevas : l'interface la compare régulièrement
+    /// pour recharger la page quand un fichier a été modifié hors de Revel (Pages CMS…).
+    pub fn edit_stamp(&self, path: &Path) -> Result<String> {
+        self.with_project(path, |p| Ok(files_stamp(p)))
     }
 
     /// Termine une saisie continue (la prochaine commande ouvre une nouvelle étape).
@@ -112,10 +202,13 @@ impl Core {
 
     pub fn edit_undo(&self, path: &Path) -> Result<EditState> {
         self.with_session(path, |s| {
+            let project = &s.project;
+            let mut site = project.site.clone();
             let applied = s
                 .history
-                .undo(&mut s.project.site)
+                .undo_with(&mut site, &mut |site, c| exec(project, site, c))
                 .map_err(CoreError::Edit)?;
+            s.project.site = site;
             if applied.is_some() {
                 s.revision += 1;
                 s.save()?;
@@ -126,10 +219,13 @@ impl Core {
 
     pub fn edit_redo(&self, path: &Path) -> Result<EditState> {
         self.with_session(path, |s| {
+            let project = &s.project;
+            let mut site = project.site.clone();
             let applied = s
                 .history
-                .redo(&mut s.project.site)
+                .redo_with(&mut site, &mut |site, c| exec(project, site, c))
                 .map_err(CoreError::Edit)?;
+            s.project.site = site;
             if applied.is_some() {
                 s.revision += 1;
                 s.save()?;

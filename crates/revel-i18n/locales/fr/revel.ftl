@@ -364,3 +364,4 @@ error-edit-not-open = Ce site n'est pas ouvert dans l'éditeur.
 error-edit-css = CSS refusé : une seule déclaration, sans point-virgule ni accolade en dehors des guillemets, et sans « !important » dans la valeur (case à cocher séparée). ({ $detail })
 error-edit-no-stylesheet = Ce site n'a pas encore de feuille de style.
 error-edit-breakpoints = Points de rupture invalides : chaque largeur ne peut servir qu'une fois et doit être un nombre de pixels positif. ({ $detail })
+error-edit-bound = Ce texte vient d'un fichier qui ne peut pas être modifié ici. ({ $detail })

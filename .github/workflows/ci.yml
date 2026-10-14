@@ -241,7 +241,10 @@ jobs:
           sleep 2
           export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
           echo "## Éditeur" >> "$GITHUB_STEP_SUMMARY"
-          node tools/editor-e2e.mjs http://127.0.0.1:8170 http://127.0.0.1:8162 captures-ecarts/editeur | tee -a "$GITHUB_STEP_SUMMARY"
+          node tools/editor-e2e.mjs http://127.0.0.1:8170 http://127.0.0.1:8162 captures-ecarts/editeur cobaye-essai | tee -a "$GITHUB_STEP_SUMMARY"
+          # Les essais annulent tout : copie identique au cobaye (document, données, contenus).
+          cmp cobaye/site.revel.json cobaye-essai/site.revel.json
+          diff -r cobaye/src cobaye-essai/src
       - name: Captures en écart
         if: failure()
         uses: actions/upload-artifact@v7

@@ -12,6 +12,8 @@
 //! Les chemins du document sont relatifs au projet : un dépôt existant (Eleventy, Hugo…)
 //! peut accueillir `site.revel.json` à sa racine sans déplacer ses fichiers.
 
+pub mod bound;
+
 use revel_model::Site;
 use revel_render::{
     AssetHooks, BuildInput, DocKind, EditorOptions, EditorPage, Entry, ImageArgs, OutputFile,

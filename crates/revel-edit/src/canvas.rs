@@ -199,6 +199,23 @@ pub fn source_path(expr: &str) -> Option<(String, Vec<Seg>, bool)> {
     Some((head, segs, !only_safe))
 }
 
+/// Texte saisi dans le canevas ramené à l'écriture de la source : la typographie française de la
+/// page (espaces insécables, apostrophe typographique) n'est pas recopiée dans la source si celle-ci
+/// ne l'utilisait pas (`old` : texte source avant modification).
+pub fn untypo(new: &str, old: &str) -> String {
+    let mut s = new.to_string();
+    if !old.contains('\u{a0}') {
+        s = s.replace('\u{a0}', " ");
+    }
+    if !old.contains('\u{202f}') {
+        s = s.replace('\u{202f}', " ");
+    }
+    if !old.contains('’') {
+        s = s.replace('’', "'");
+    }
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,6 +263,24 @@ mod tests {
         );
         assert_eq!(source_path("(a or b) | date_fr"), None);
         assert_eq!(source_path("'' | year"), None);
+    }
+
+    #[test]
+    fn typographie_retiree() {
+        assert_eq!(
+            untypo("L’agence\u{a0}: oui", "L'agence : non"),
+            "L'agence : oui"
+        );
+        assert_eq!(
+            untypo("L’agence\u{a0}!", "L’agence !"),
+            "L’agence !",
+            "apostrophe gardée"
+        );
+        assert_eq!(
+            untypo("a\u{a0}b", "a\u{a0}c"),
+            "a\u{a0}b",
+            "insécable voulue"
+        );
     }
 
     #[test]

@@ -275,6 +275,12 @@ fn edit_pages(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::Edito
     s.core.edit_pages(std::path::Path::new(&path)).map_err(err)
 }
 
+/// Empreinte des fichiers du site (rechargement après une modification hors de Revel).
+#[tauri::command]
+fn edit_stamp(s: State<AppState>, path: String) -> Res<String> {
+    s.core.edit_stamp(std::path::Path::new(&path)).map_err(err)
+}
+
 /// Réponse du protocole `revel-canvas` (canevas de l'éditeur, sans port réseau).
 fn canvas_protocol(
     app: &tauri::AppHandle,
@@ -351,6 +357,7 @@ pub fn run() {
             edit_undo,
             edit_redo,
             edit_pages,
+            edit_stamp,
             canvas_open
         ])
         .run(tauri::generate_context!())

@@ -361,3 +361,4 @@ error-edit-not-open = This site is not open in the editor.
 error-edit-css = CSS refused: a single declaration, with no semicolon or brace outside quotes, and no “!important” in the value (separate checkbox). ({ $detail })
 error-edit-no-stylesheet = This site does not have a stylesheet yet.
 error-edit-breakpoints = Invalid breakpoints: each width can be used only once and must be a positive number of pixels. ({ $detail })
+error-edit-bound = This text comes from a file that cannot be modified here. ({ $detail })

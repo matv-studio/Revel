@@ -379,3 +379,144 @@ fn canevas_par_le_protocole() {
         node: h1,
     };
 }
+
+#[test]
+fn textes_lies_ecrits_dans_leur_source() {
+    use revel_edit::Command;
+    use revel_edit::canvas::{Binding, Seg, Source};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let data = "# Données de l'accueil\nhero:\n  title: L'agence   # titre\n  year: 2026\n";
+    let entry = "---\ntitle: 'Wattr'\ndate: 2026-01-02\n---\n\nCorps\n";
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.data_dir = Some("donnees".into());
+        p.site.settings.typography = Some("fr".into());
+        p.site.collections.push(revel_model::Collection {
+            id: "projets".into(),
+            source: revel_model::CollectionSource::Folder,
+            folder: "contenus/projets".into(),
+            path: None,
+            layout: None,
+            props: Default::default(),
+            filter: None,
+            sort: None,
+            fields: vec![],
+        });
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("donnees/pages")).unwrap();
+        std::fs::write(site.join("donnees/pages/accueil.yml"), data).unwrap();
+        std::fs::create_dir_all(site.join("contenus/projets")).unwrap();
+        std::fs::write(site.join("contenus/projets/wattr.md"), entry).unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    let stamp = c.edit_stamp(&site).unwrap();
+    let k = |s: &str| Seg::Key(s.into());
+    let title = Binding {
+        source: Source::Data,
+        path: vec![k("pages"), k("accueil"), k("hero"), k("title")],
+    };
+    // Typographie de la page retirée (apostrophe droite et espace dans la source).
+    let st = c
+        .edit_apply(
+            &site,
+            Command::SetBound {
+                binding: title.clone(),
+                value: "L’atelier\u{a0}!".into(),
+            },
+            false,
+        )
+        .unwrap();
+    assert!(matches!(&st.applied, Some(Command::SetBound { value, .. }) if value == "L'atelier !"));
+    let written = std::fs::read_to_string(site.join("donnees/pages/accueil.yml")).unwrap();
+    assert_eq!(
+        written,
+        data.replace("title: L'agence", "title: L'atelier !")
+    );
+    assert_ne!(
+        c.edit_stamp(&site).unwrap(),
+        stamp,
+        "fichier modifié : empreinte changée"
+    );
+    // En-tête d'un contenu (style entre guillemets simples gardé).
+    c.edit_apply(
+        &site,
+        Command::SetBound {
+            binding: Binding {
+                source: Source::Entry {
+                    folder: "contenus/projets".into(),
+                    file: "wattr".into(),
+                },
+                path: vec![k("title")],
+            },
+            value: "Wattr, l'eau".into(),
+        },
+        false,
+    )
+    .unwrap();
+    let md = std::fs::read_to_string(site.join("contenus/projets/wattr.md")).unwrap();
+    assert_eq!(
+        md,
+        entry.replace("title: 'Wattr'", "title: 'Wattr, l''eau'")
+    );
+    // Variable de page (document du site).
+    c.edit_apply(
+        &site,
+        Command::SetBound {
+            binding: Binding {
+                source: Source::Page {
+                    page: "index".into(),
+                },
+                path: vec![k("title")],
+            },
+            value: "Bonjour".into(),
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        revel_project::Project::open(&site).unwrap().site.pages[0].props["title"],
+        "Bonjour"
+    );
+    // Tout annuler : fichiers identiques octet pour octet.
+    for _ in 0..3 {
+        c.edit_undo(&site).unwrap();
+    }
+    assert_eq!(
+        std::fs::read_to_string(site.join("donnees/pages/accueil.yml")).unwrap(),
+        data
+    );
+    assert_eq!(
+        std::fs::read_to_string(site.join("contenus/projets/wattr.md")).unwrap(),
+        entry
+    );
+    assert_eq!(
+        revel_project::Project::open(&site).unwrap().site.pages[0].props["title"],
+        "Accueil"
+    );
+    // Rétablir puis annuler encore : même résultat.
+    c.edit_redo(&site).unwrap();
+    assert!(
+        std::fs::read_to_string(site.join("donnees/pages/accueil.yml"))
+            .unwrap()
+            .contains("L'atelier !")
+    );
+    c.edit_undo(&site).unwrap();
+    // Valeur calculée ou fichier absent : refusé, rien n'est écrit.
+    let e = c.edit_apply(
+        &site,
+        Command::SetBound {
+            binding: Binding {
+                source: Source::Data,
+                path: vec![k("absent"), k("x")],
+            },
+            value: "x".into(),
+        },
+        false,
+    );
+    assert!(matches!(
+        e,
+        Err(CoreError::Edit(revel_edit::EditError::Bound(_)))
+    ));
+}

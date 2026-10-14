@@ -144,6 +144,14 @@ l'exécution CI en cas d'échec).
   remplacé par le gabarit intérieur puis la page, composants dépliés sous leur utilisation) ; chaque ligne
   connaît sa liste (`Parent`) et sa position, d'où les commandes `Move`, `Duplicate`, `Wrap`, `Remove`. Un
   déplacement reste dans le même propriétaire (page, gabarit ou composant).
+- Textes (étape 2.7) : le script du canevas rend un repère texte modifiable (`contenteditable`) au
+  double-clic et renvoie le texte ; l'interface en fait `SetText` ou `SetBound`. `SetBound` est appliquée
+  par le cœur (`History::apply_with` et son exécutant) : `revel_project::bound` retrouve le fichier (dossier
+  de données : `pages.accueil.hero.title` = `pages/accueil.yml`, clé `hero.title` ; contenu : en-tête du
+  fichier Markdown) et remplace la seule valeur visée à l'aide des positions des événements YAML
+  (`granit-parser`, utilisé aussi par `serde-saphyr`). L'inverse remet l'ancienne valeur, d'où une annulation
+  à l'octet près. `edit_stamp` donne une empreinte des fichiers lus par le canevas, comparée par
+  l'interface toutes les 2 s.
 - Essais de l'interface dans un navigateur : `revel canvas-serve --bridge` expose aussi les commandes d'édition
   (`POST /__revel/invoke/<commande>`, adresse locale seulement) ; l'API Tauri simulée
   (`apps/revel-ui/dev/mock-tauri.js`, paramètre `bridge=`) les y transmet. `tools/editor-e2e.mjs` pilote

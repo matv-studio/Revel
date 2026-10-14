@@ -365,9 +365,11 @@ pub fn Styles() -> impl IntoView {
         }
     };
     let spacing = move |props: &'static [&'static str; 4], key: &'static str| {
+        // Nom de la propriété CSS en info-bulle, comme pour les autres lignes (« margin », « padding »).
+        let prop_name = props[0].split('-').next().unwrap_or_default();
         view! {
             <div class="style-row style-row--box">
-                <span class="style-label">{ui.t(key)}</span>
+                <span class="style-label" title=prop_name>{ui.t(key)}</span>
                 <div class="box-sides">
                     {props.iter().map(|prop| {
                         let prop: &'static str = prop;

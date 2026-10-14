@@ -331,6 +331,11 @@ try {
   await page.click('.notice--error .icon-btn');
   await page.click('.bp-menu > summary');
   if (shots) await page.screenshot({ path: `${shots}/editeur-styles.png` });
+  // Aucun libellé tronqué dans l'inspecteur (sections dépliées).
+  for (const d of await page.$$('.inspector details:not([open]) > summary')) await d.click().catch(() => {});
+  const cut = await page.$$eval('.inspector .style-label, .inspector .label', (els) =>
+    els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent.trim()));
+  check('styles : aucun libellé tronqué', cut.length === 0, cut.join(', '));
 
   // Tout annuler.
   for (let i = 0; i < 8; i++) {

@@ -74,7 +74,10 @@ par code** (« device flow »), comme l'outil officiel `gh` ; jeton personnel ac
 
 **D-12 — 13/10/2026 — prise.** Opérations Git avec **`git2` 0.21.0** (libgit2 compilée dans Revel, `vendored-libgit2`) :
 clone, commit, push sans installation de Git. `gix` ne sait pas encore pousser (`crate-status.md` de gitoxide, 13/10/2026).
-TLS : OpenSSL sous Linux uniquement ; Windows et macOS utilisent la pile du système (dépendance `openssl-sys` limitée aux Unix hors macOS).
+TLS : libgit2 utilise OpenSSL sous Linux, la pile du système sous Windows (WinHTTP) et macOS (Secure Transport).
+Correction du 14/10/2026 : `libgit2-sys` dépend d'`openssl-sys` sur tous les Unix, macOS compris ; OpenSSL y est donc
+compilé dans Revel (`vendored`, inutilisé par libgit2) pour que l'application ne dépende pas de Homebrew
+(contrôle `otool -L` dans le workflow des installateurs).
 
 **D-13 — 13/10/2026 — prise.** Pas de panneau de discussion Claude intégré pour l'instant.
 La **liaison MCP est prévue dès maintenant** :

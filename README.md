@@ -40,8 +40,14 @@ cargo run -p revel-cli -- info  # ligne de commande
 cargo tauri dev                 # application (depuis apps/revel-app ; tauri-cli et trunk requis)
 ```
 
-CI : Linux à chaque envoi ; Windows et macOS au lancement manuel du workflow *CI* (avant chaque étiquette
-d'étape). Installateurs : workflow *Installateurs*, lancé à la main avec le choix des systèmes.
+CI : Linux, Windows et macOS à chaque envoi (dépôt public : minutes gratuites). Installateurs : workflow
+*Installateurs*, lancé à la main avec le choix des systèmes. Étiquettes, branches, exécutions : workflows
+*Étiquette* et *Maintenance* (la session de Claude ne peut pas les modifier directement).
+
+## Licence
+
+Aucune licence pour l'instant (décision D-08 ouverte) : le code est visible, mais tous les droits sont
+réservés ; il ne peut être ni copié, ni redistribué, ni modifié sans autorisation.
 
 Rust est figé par `rust-toolchain.toml` (installé automatiquement par rustup).
 

@@ -1,0 +1,91 @@
+# Maintenance des références GitHub, lancée à la main (onglet Actions) ou par Claude :
+# la session de travail ne peut ni supprimer une branche, ni déplacer une étiquette, ni
+# supprimer une exécution d'Actions ou une version.
+#
+# - tags           : étiquettes à reposer, « nom=commit » séparés par des espaces
+#                    (après une réécriture de l'historique ; le message d'origine est conservé) ;
+# - delete_refs    : branches à supprimer, séparées par des espaces (jamais la branche par défaut) ;
+# - delete_releases: identifiants de versions (brouillons compris) à supprimer ;
+# - purge_runs     : supprime les exécutions d'Actions dont le commit ne fait plus partie de
+#                    l'historique de la branche par défaut (elles en exposeraient le contenu).
+name: Maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Étiquettes à reposer (nom=commit, séparées par des espaces)"
+        required: false
+      delete_refs:
+        description: "Branches à supprimer (séparées par des espaces)"
+        required: false
+      delete_releases:
+        description: "Identifiants de versions à supprimer (séparés par des espaces)"
+        required: false
+      purge_runs:
+        description: "Supprimer les exécutions d'Actions hors de l'historique"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEFAULT: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Étiquettes
+        if: inputs.tags != ''
+        env:
+          TAGS: ${{ inputs.tags }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for pair in $TAGS; do
+            name=${pair%%=*}; sha=${pair#*=}
+            if ! printf '%s' "$name" | grep -Eq '^(step-[0-9]+(\.[0-9]+)*|v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)$'; then
+              echo "Nom refusé : $name"; exit 1
+            fi
+            commit=$(git rev-parse --verify "$sha^{commit}")
+            git merge-base --is-ancestor "$commit" "origin/$DEFAULT" || { echo "$sha n'est pas dans $DEFAULT"; exit 1; }
+            msg=$(git for-each-ref "refs/tags/$name" --format='%(contents)')
+            git tag -f -a "$name" "$commit" -m "${msg:-$name}"
+            git push -f origin "refs/tags/$name"
+            echo "Étiquette $name -> $commit" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Branches
+        if: inputs.delete_refs != ''
+        env:
+          REFS: ${{ inputs.delete_refs }}
+        run: |
+          for b in $REFS; do
+            [ "$b" = "$DEFAULT" ] && { echo "Branche par défaut refusée"; exit 1; }
+            git push origin --delete "refs/heads/$b"
+            echo "Branche supprimée : $b" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Versions
+        if: inputs.delete_releases != ''
+        env:
+          IDS: ${{ inputs.delete_releases }}
+        run: |
+          for id in $IDS; do
+            printf '%s' "$id" | grep -Eq '^[0-9]+$' || { echo "Identifiant refusé : $id"; exit 1; }
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+            echo "Version supprimée : $id" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Exécutions hors de l'historique
+        if: inputs.purge_runs
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' | while read -r id sha; do
+            if git merge-base --is-ancestor "$sha" "origin/$DEFAULT" 2>/dev/null; then continue; fi
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id"
+            echo "Exécution supprimée : $id ($sha)" >> "$GITHUB_STEP_SUMMARY"
+          done

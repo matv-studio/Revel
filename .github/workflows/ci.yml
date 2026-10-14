@@ -1,7 +1,7 @@
-# Vérifications : format, analyse, tests.
-# - À chaque envoi sur main : Linux seulement (minutes d'Actions limitées sur un dépôt privé ;
-#   macOS et Windows coûtent bien plus cher que Linux).
-# - Lancement manuel (avant chaque étiquette d'étape) et demandes de fusion : Linux, Windows et macOS.
+# Vérifications : format, analyse, tests, sous Linux, Windows et macOS.
+# Dépôt public : minutes d'Actions gratuites sur les machines standard de GitHub.
+# Si le dépôt redevient privé, les envois sur main ne testent plus que Linux (minutes limitées,
+# macOS et Windows décomptés plus vite) ; le lancement manuel teste toujours les trois systèmes.
 name: CI
 
 on:
@@ -51,7 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.event_name == 'push' && '["ubuntu-24.04"]' || '["ubuntu-24.04", "windows-latest", "macos-latest"]') }}
+        os: ${{ fromJSON((github.event_name == 'push' && github.event.repository.private) && '["ubuntu-24.04"]' || '["ubuntu-24.04", "windows-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

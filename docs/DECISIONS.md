@@ -94,12 +94,24 @@ avertissements sont des **clés de traduction avec paramètres** (`revel_protoco
 en forme par `revel-i18n` dans la langue de l'interface (nombres, pluriels). Le futur serveur MCP renverra les
 mêmes clés. Le message technique d'origine (système, serveur distant) reste joint en paramètre `detail`.
 
+**D-17 — 14/10/2026 — prise (demande de l'utilisateur).** Dépôt `matv-studio/Revel` **public** : les minutes
+d'Actions sont gratuites sur les machines standard de GitHub pour un dépôt public, alors qu'un dépôt privé dispose
+de 2 000 minutes par mois (offre gratuite), macOS et Windows étant décomptés plus vite. Avant le passage en public,
+l'historique a été réécrit (`git filter-repo`, seuls les commits concernés, signatures refaites) pour remplacer
+l'adresse du serveur SFTP et l'identifiant OVH d'Alunites présents dans une donnée d'essai de l'interface ; les
+étiquettes ont été reposées et les exécutions d'Actions qui renvoyaient aux anciens commits supprimées (workflow
+*Maintenance*). Aucune licence pour l'instant : tous droits réservés (D-08 reste ouverte).
+Sources : https://docs.github.com/en/billing/concepts/product-billing/github-actions,
+https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.
 
-**D-08 — ouverte.** Licence du code (diffusion publique prévue) : propriétaire, MIT/Apache-2.0, GPL… À décider avant de rendre le dépôt public.
+**D-08 — ouverte.** Licence du code : propriétaire, MIT/Apache-2.0, GPL… Le dépôt est public depuis le 14/10/2026
+(D-17) sans licence : tous droits réservés jusqu'à la décision. Une licence ouverte ne peut pas être retirée des
+versions déjà publiées sous cette licence.
 
 **D-09 — ouverte (étape 6).** Signature de code : certificat Windows (sinon avertissement SmartScreen), compte Apple Developer (sinon blocage Gatekeeper).

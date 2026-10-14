@@ -451,13 +451,15 @@ pub fn Layers() -> impl IntoView {
                 }
             });
         }
-        // Ligne sélectionnée rendue visible dans l'arbre.
+        // Ligne sélectionnée rendue visible dans l'arbre (après l'affichage des lignes ouvertes).
         request_animation_frame(|| {
-            if let Ok(Some(el)) = document().query_selector(".layers .layer.is-selected") {
-                let opts = web_sys::ScrollIntoViewOptions::new();
-                opts.set_block(web_sys::ScrollLogicalPosition::Nearest);
-                el.scroll_into_view_with_scroll_into_view_options(&opts);
-            }
+            request_animation_frame(|| {
+                if let Ok(Some(el)) = document().query_selector(".layers .layer.is-selected") {
+                    let opts = web_sys::ScrollIntoViewOptions::new();
+                    opts.set_block(web_sys::ScrollLogicalPosition::Center);
+                    el.scroll_into_view_with_scroll_into_view_options(&opts);
+                }
+            });
         });
     });
 
@@ -511,7 +513,6 @@ pub fn Layers() -> impl IntoView {
     view! {
         <aside class="layers" tabindex="0" on:keydown=on_key aria-label=ui.t("layers-title")>
             <div class="panel-head">
-                <span class="panel-title">{ui.t("layers-title")}</span>
                 <span class="toolbar-spacer"></span>
                 <button class="icon-btn" title=ui.t("layers-up") aria-label=ui.t("layers-up")
                     prop:disabled=move || selected_row().is_none()

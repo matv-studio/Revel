@@ -33,14 +33,15 @@ sans écrire de code, et sans perdre l'équivalence de la sortie avec le site d'
 | 2.2 | fait : rendu pour l'éditeur (repères `data-rv` et `<!--rv:N-->`, adresses des textes, origine des valeurs affichées à travers `set`, boucles et filtres), scripts du site neutralisés, protocole `revel-canvas` (page, CSS du document, images, copies), script du canevas (survol, sélection, messages, rechargement de la feuille de style), `revel canvas`, `canvas-check`, `canvas-serve`. Cobaye : 66 pages identiques à la génération une fois les repères retirés ; canevas servi = site généré (styles calculés et captures, 0 écart) ; essais de bout en bout 9/9 sur 3 pages, scripts du site actifs ou non |
 | 2.3 | fait : onglet « Éditeur » (plein écran) : choix de la page (pages fixes et contenus par collection), points de rupture du site (largeur du cadre), zoom ajusté ou fixe, scripts du site activables, sélection et survol transmis par le canevas (élément, propriétaire dans la barre d'état), annuler/rétablir (boutons, Ctrl+Z, Ctrl+Maj+Z, Ctrl+Y, depuis l'interface ou le canevas) ; copie locale du document tenue à jour par les commandes appliquées ; style modifié : feuille rechargée sans recharger la page, autre modification : page rechargée au même défilement. Essais de bout en bout de l'interface dans Chromium (API Tauri simulée reliée à un vrai cœur par `canvas-serve --bridge`) : 11/11 |
 | 2.4 | fait : panneau « Calques » : arbre de la page affichée (gabarits emboîtés, contenu de la page à l'emplacement du gabarit, composants utilisés, conditions, boucles, variables, textes), `head` et composants repliés par défaut ; sélection synchronisée dans les deux sens (ligne rendue visible) ; survol ; monter, descendre, envelopper, dupliquer (Ctrl+D), supprimer (Suppr) ; glisser-déposer avant, après ou dans un élément, à l'intérieur d'une même page, d'un même gabarit ou d'un même composant ; élément ajouté sélectionné. Essais de bout en bout : 18/18 |
-| 2.5 à 2.9 | à faire |
+| 2.5 | fait : panneau « Réglages » de l'élément sélectionné : balise (liste des balises courantes), identifiant, classes (ajout, retrait ; texte brut si elles sont calculées), lien (adresse, nouvel onglet avec `rel="noopener"`), image (source et texte alternatif, littéraux ou expressions), condition, boucle, autres attributs (modifier, retirer, ajouter `nom=valeur`) ; panneau « Ajouter » (section, conteneur, titre, paragraphe, lien, bouton, image, liste) dans l'élément sélectionné ou juste après, textes par défaut traduits ; un dessin SVG se sélectionne en entier ; cadre « ordinateur » au moins aussi large que le plus grand point de rupture. Essais de bout en bout : 26/26 |
+| 2.6 à 2.9 | à faire |
 
 ## Sous-étapes
 
 Chaque sous-étape = commits + étiquette `step-2.N`, posée par le workflow `tag.yml` sur le dernier commit de `main`
 dès la sous-étape terminée : GitHub refuse au jeton des workflows une étiquette sur un commit plus ancien dont les
 fichiers `.github/workflows/` diffèrent de `main` (droit `workflows` réservé). C'est pourquoi `step-2.0` n'existe
-pas : la sous-étape 2.0 est incluse dans `step-2.1`.
+pas : la sous-étape 2.0 est incluse dans `step-2.1`, la 2.2 dans `step-2.3`.
 
 | N | Contenu | Modules |
 |---|---|---|

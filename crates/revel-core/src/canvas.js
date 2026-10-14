@@ -113,7 +113,14 @@
     return { x: r.left, y: r.top, width: r.width, height: r.height };
   };
 
-  const targetOf = (node) => (node && node.closest ? node.closest("[data-rv]") : null);
+  // Élément sélectionnable sous le pointeur : le plus proche repéré ; un dessin SVG est
+  // sélectionné en entier (pas ses tracés).
+  const targetOf = (node) => {
+    if (!node || !node.closest) return null;
+    let svg = node.closest("svg");
+    while (svg && svg.parentElement && svg.parentElement.closest("svg")) svg = svg.parentElement.closest("svg");
+    return (svg || node).closest("[data-rv]");
+  };
 
   const select = (el, notify) => {
     selected = el;

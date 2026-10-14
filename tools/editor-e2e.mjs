@@ -124,11 +124,12 @@ try {
   f = frameOf();
   await page.frameLocator('iframe.canvas-frame').locator('h1').first().click();
   await page.waitForSelector('.layers .layer.is-selected');
+  await page.waitForTimeout(300);
   const selLabel = (await page.textContent('.layers .layer.is-selected')).trim();
   const inView = await page.$eval('.layers .layer.is-selected', (el) => {
     const r = el.getBoundingClientRect();
     const t = el.closest('.layers-tree').getBoundingClientRect();
-    return r.top >= t.top && r.bottom <= t.bottom;
+    return r.top >= t.top - 1 && r.bottom <= t.bottom + 1;
   });
   check('calques : élément cliqué sélectionné et visible dans l\'arbre', inView, selLabel);
 
@@ -163,6 +164,8 @@ try {
   const di = info.findIndex(([t, pad], i) => i > si && t.startsWith('section') && pad === info[si][1]);
   if (si >= 0 && di >= 0) {
     const rowsL = page.locator('.layers .layer');
+    // Source et cible visibles ensemble (sinon le défilement pendant le glisser change la source).
+    await rowsL.nth(si).evaluate((e) => e.scrollIntoView({ block: 'start' }));
     const box = await rowsL.nth(di).boundingBox();
     await rowsL.nth(si).dragTo(rowsL.nth(di), { targetPosition: { x: 40, y: box.height - 3 } });
     f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') !== ob, 'glisser-déposer', orderBefore);
@@ -183,6 +186,65 @@ try {
   const docAfter = await invoke('edit_open');
   check('calques : tout annulé, document identique', JSON.stringify(docAfter.site) === JSON.stringify(docBefore.site));
   if (shots) await page.screenshot({ path: `${shots}/editeur-calques.png` });
+
+
+  // ------------------------------------------------------------------ réglages et ajout (étape 2.5)
+  const base25 = await invoke('edit_open');
+  const nodeById = (site, id) => {
+    let found = null;
+    const walk = (nodes) => { for (const n of nodes || []) { if (found) return; if ((n.id || (n.image && n.image.id)) === id) { found = n; return; } walk(n.children); walk(n.then); walk(n.otherwise); walk(n.empty); } };
+    for (const o of [...site.pages, ...site.layouts, ...site.components]) walk(o.body);
+    return found;
+  };
+  await page.click('.layers .layer:has-text("section.hero")');
+  await page.waitForFunction(() => document.querySelector('.inspector input')?.value === 'section');
+  check('réglages : balise de l\'élément sélectionné', true);
+  const secId = await f.evaluate(() => document.querySelector('section.hero').getAttribute('data-rv'));
+  // Identifiant (Entrée).
+  const idInput = page.locator('.inspector .field >> nth=1').locator('input');
+  await idInput.fill('essai-id');
+  await idInput.press('Enter');
+  f = await waitFrame(() => !!document.querySelector('section#essai-id'), 'identifiant');
+  check('réglages : identifiant écrit dans la page', true);
+  // Classe ajoutée puis retirée.
+  await page.fill('.inspector .classes-add', 'essai-classe');
+  await page.press('.inspector .classes-add', 'Tab');
+  f = await waitFrame(() => document.querySelector('section.hero')?.classList.contains('essai-classe'), 'classe ajoutée');
+  const cls = nodeById((await invoke('edit_open')).site, secId).attrs.find((a) => a.name === 'class').value;
+  check('réglages : classe ajoutée', cls.split(' ').includes('essai-classe') && cls.split(' ')[0] === 'hero', cls);
+  await page.click('.inspector .chip--class:has-text("essai-classe") .chip-x');
+  f = await waitFrame(() => !document.querySelector('section.hero')?.classList.contains('essai-classe'), 'classe retirée');
+  check('réglages : classe retirée', true);
+
+  // Ajouter un titre dans la section sélectionnée.
+  await page.click('.left-panel .panel-tabs button >> nth=1');
+  await page.click('.insert-item:has-text("Titre")');
+  f = await waitFrame(() => [...document.querySelectorAll('section.hero h2')].some((h) => h.textContent === 'Nouveau titre'), 'titre ajouté');
+  await page.waitForFunction(() => document.querySelector('.editor-status .strong')?.textContent === 'h2');
+  check('ajouter : titre inséré dans la section, sélectionné', true);
+  await page.click('.left-panel .panel-tabs button >> nth=0');
+
+  // Lien : nouvel onglet (target + rel).
+  await page.frameLocator('iframe.canvas-frame').locator('header nav a', { hasText: 'Agence' }).first().click();
+  await page.waitForSelector('.inspector .row-switch');
+  await page.click('.inspector .row-switch .switch');
+  f = await waitFrame(() => [...document.querySelectorAll('header nav a')].some((a) => a.textContent.trim() === 'Agence' && a.target === '_blank' && a.rel === 'noopener'), 'nouvel onglet');
+  check('lien : ouverture dans un nouvel onglet', true);
+
+  // Image : champs de l'image.
+  await page.locator('.layers .layer-label', { hasText: /^image / }).first().click();
+  await page.waitForFunction(() => /Texte alternatif|Image \(/.test(document.querySelector('.inspector')?.textContent || ''));
+  check('image : source et texte alternatif proposés', true);
+
+  // Tout annuler.
+  for (let i = 0; i < 6; i++) {
+    const st = await invoke('edit_open');
+    if (JSON.stringify(st.site) === JSON.stringify(base25.site)) break;
+    await page.click('.editor-toolbar .icon-btn >> nth=0');
+    await page.waitForTimeout(400);
+  }
+  check('réglages et ajout : tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base25.site));
+  if (shots) await page.screenshot({ path: `${shots}/editeur-reglages.png` });
 
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {

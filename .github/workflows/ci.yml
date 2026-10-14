@@ -42,6 +42,8 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo fmt --manifest-path apps/revel-ui/Cargo.toml --check
       - run: cargo clippy --manifest-path apps/revel-ui/Cargo.toml --target wasm32-unknown-unknown
+      # Fonctions pures de l'interface (expressions littérales…), essayées sur la machine hôte.
+      - run: cargo test --manifest-path apps/revel-ui/Cargo.toml
       - run: cargo clippy --workspace --all-targets
       # Chaque module doit compiler avec ses fonctions désactivées (retour arrière possible).
       - run: cargo clippy -p revel-deploy --no-default-features

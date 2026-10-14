@@ -234,6 +234,23 @@ impl Ed {
         });
     }
 
+    /// Adresse du nœud sélectionné (son propriétaire est retrouvé dans le document).
+    pub fn selected_target(self) -> Option<revel_edit::Target> {
+        let sel = self.selected.get()?;
+        self.doc.with(|d| {
+            let (kind, id) = owner_of(d.as_ref()?, &sel.id)?;
+            let owner = match kind {
+                revel_model::ids::OwnerKind::Page => revel_edit::Owner::Page(id),
+                revel_model::ids::OwnerKind::Layout => revel_edit::Owner::Layout(id),
+                revel_model::ids::OwnerKind::Component => revel_edit::Owner::Component(id),
+            };
+            Some(revel_edit::Target {
+                owner,
+                node: sel.id.clone(),
+            })
+        })
+    }
+
     /// Largeur du cadre pour le point de rupture affiché ; `None` : toute la place.
     fn frame_width(self) -> Option<f64> {
         let id = self.breakpoint.get();
@@ -436,9 +453,19 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
 
     // Largeur du cadre et échelle.
     let gutter = 48.0;
+    // Base (ordinateur) : toute la place, mais au moins la largeur qui dépasse le plus grand point de
+    // rupture « jusqu'à » (sinon la page s'afficherait déjà dans sa version étroite).
+    let desktop_min = move || {
+        ed.doc.with(|d| {
+            d.as_ref()
+                .and_then(|d| d.breakpoints.iter().filter_map(|b| b.max_width).max())
+                .map(|w| f64::from(w) + 1.0)
+                .unwrap_or(320.0)
+        })
+    };
     let width = move || {
         ed.frame_width()
-            .unwrap_or((area_w.get() - gutter).max(320.0))
+            .unwrap_or_else(|| (area_w.get() - gutter).max(desktop_min()))
     };
     let scale = move || match ed.zoom.get() {
         Some(z) => z,
@@ -457,7 +484,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     view! {
         <section class="editor">
             <Toolbar/>
-            <crate::layers::Layers/>
+            <LeftPanel/>
+            <crate::inspector::Inspector/>
             <div class="canvas-area" node_ref=area>
                 <Show when=move || ed.base.get().is_some() fallback=move || view! {
                     <div class="canvas-wait muted">{move || if failed.get() { String::new() } else { ui.tx("editor-loading", &[]) }}</div>
@@ -468,6 +496,26 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             </div>
             <StatusBar/>
         </section>
+    }
+}
+
+/// Panneau de gauche : calques ou éléments à ajouter.
+#[component]
+fn LeftPanel() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let insert = RwSignal::new(false);
+    view! {
+        <div class="left-panel">
+            <div class="panel-tabs" role="tablist">
+                <button role="tab" class:is-on=move || !insert.get() aria-selected=move || (!insert.get()).to_string()
+                    on:click=move |_| insert.set(false)>{ui.t("layers-title")}</button>
+                <button role="tab" class:is-on=move || insert.get() aria-selected=move || insert.get().to_string()
+                    on:click=move |_| insert.set(true)>{ui.t("insert-title")}</button>
+            </div>
+            <Show when=move || insert.get() fallback=|| view! { <crate::layers::Layers/> }>
+                <crate::insert::Insert/>
+            </Show>
+        </div>
     }
 }
 

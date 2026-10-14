@@ -23,7 +23,7 @@ web-sys = { version = "0.3", features = [
     "Element", "HtmlElement", "CssStyleDeclaration", "HtmlIFrameElement", "MessageEvent",
     "Window", "KeyboardEvent", "DomRect", "EventTarget", "HtmlSelectElement", "DragEvent",
     "DataTransfer", "ScrollIntoViewOptions", "ScrollLogicalPosition", "PointerEvent", "MouseEvent",
-    "HtmlInputElement",
+    "HtmlInputElement", "ResizeObserver", "Storage", "NodeList", "WheelEvent",
 ] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1"

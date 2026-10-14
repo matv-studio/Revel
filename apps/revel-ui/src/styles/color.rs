@@ -134,7 +134,7 @@ fn Channel(
 ) -> impl IntoView {
     view! {
         <label class="cp-channel" class:cp-channel--wide=wide>
-            <input class="num-input" type="text" spellcheck="false" prop:value=value
+            <input class="nbox-input" type="text" spellcheck="false" prop:value=value
                 on:change=move |e| on.run(event_target_value(&e))
                 on:keydown=move |e: ev::KeyboardEvent| { if e.key() == "Enter" { on.run(event_target_value(&e)) } }/>
             <span class="cp-channel-label">{label}</span>
@@ -464,7 +464,7 @@ pub fn ColorInput(
             <button class="color-swatch pop-trigger" style=move || swatch_style(color())
                 title=ui.t("color-open") aria-label=ui.t("color-open")
                 on:click=move |_| sx.toggle_menu(id)></button>
-            <input class="num-input" type="text" spellcheck="false"
+            <input class="nbox-input" type="text" spellcheck="false"
                 aria-label=move || if label.is_empty() { String::new() } else { ui.now(label, &[]) }
                 prop:value=move || value.get().map(|v| display(&v)).unwrap_or_default()
                 placeholder=move || {

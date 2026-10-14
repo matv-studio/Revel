@@ -170,9 +170,9 @@ pub struct LabelScrub {
     pub zero: &'static str,
 }
 
-/// Libellé d'une propriété (ou d'un groupe) : pastille « réglé ici » ou anneau « hérité », nom CSS
-/// en info-bulle. Clic : origine et « Réinitialiser » ; Alt+clic : réinitialise ; glisser
-/// (si `scrub`) : change le nombre.
+/// Libellé d'une propriété (ou d'un groupe), coloré comme dans Webflow : bleu = réglé ici,
+/// orange = hérité. Nom CSS et aide en info-bulle. Clic : origine et bouton « réinitialiser » ;
+/// Alt+clic : réinitialise ; glisser (si `scrub`) : change le nombre.
 #[component]
 pub fn Label(
     sx: Sx,
@@ -193,7 +193,19 @@ pub fn Label(
             sx.toggle_menu(id);
         }
     };
-    let title = props.join(", ");
+    let title = move || {
+        let mut t = props.join(", ");
+        t.push_str(" — ");
+        t.push_str(&ui.tx(
+            if scrub.is_some() {
+                "styles-label-help"
+            } else {
+                "styles-label-help-reset"
+            },
+            &[],
+        ));
+        t
+    };
     view! {
         <span class="style-label pop-trigger" class:is-here=move || origin.get().0 == Origin::Here
             class:is-inherited=move || matches!(origin.get().0, Origin::Inherited(_))
@@ -227,17 +239,18 @@ pub fn Label(
                 }
             }
             on:click=move |e: ev::MouseEvent| { if scrub.is_none() { click(e.alt_key()) } }>
-            <i class="dot" aria-hidden="true"></i>
             <span class="style-label-text">{ui.t(key)}</span>
         </span>
         <Pop sx id>
-            <p class="pop-text">{move || sx.origin_text(&origin.get().0)}</p>
-            {move || (origin.get().0 == Origin::Here && origin.get().1).then(|| view! {
-                <button class="btn btn--small" on:click=move |_| { reset(sx, props); sx.menu.set(None); }>
-                    {ui.t("styles-reset")}
-                </button>
-            })}
-            <p class="pop-help">{ui.t("styles-label-help")}</p>
+            <div class="pop-origin">
+                <p class="pop-text">{move || sx.origin_text(&origin.get().0)}</p>
+                {move || (origin.get().0 == Origin::Here && origin.get().1).then(|| view! {
+                    <button class="icon-btn icon-btn--small" title=ui.t("styles-reset") aria-label=ui.t("styles-reset")
+                        on:click=move |_| { reset(sx, props); sx.menu.set(None); }>
+                        {crate::icons::reset()}
+                    </button>
+                })}
+            </div>
         </Pop>
     }
 }
@@ -304,10 +317,27 @@ pub fn Section(
 
 /// Panneau flottant ouvert par un déclencheur (`.pop-trigger`) ; fermé par un clic ailleurs ou Échap.
 #[component]
-pub fn Pop(sx: Sx, id: u32, #[prop(optional)] wide: bool, children: ChildrenFn) -> impl IntoView {
+pub fn Pop(
+    sx: Sx,
+    id: u32,
+    #[prop(optional)] wide: bool,
+    #[prop(optional)] narrow: bool,
+    children: ChildrenFn,
+) -> impl IntoView {
+    // Ouvert : rendu entièrement visible dans le panneau (défilement si besoin).
+    let el = NodeRef::<leptos::html::Div>::new();
+    Effect::new(move |_| {
+        if let Some(e) = el.get() {
+            request_animation_frame(move || {
+                let opts = web_sys::ScrollIntoViewOptions::new();
+                opts.set_block(web_sys::ScrollLogicalPosition::Nearest);
+                e.scroll_into_view_with_scroll_into_view_options(&opts);
+            });
+        }
+    });
     view! {
         <Show when=move || sx.menu.get() == Some(id)>
-            <div class="pop" class:pop--wide=wide role="dialog">{children()}</div>
+            <div class="pop" class:pop--wide=wide class:pop--narrow=narrow role="dialog" node_ref=el>{children()}</div>
         </Show>
     }
 }
@@ -424,7 +454,11 @@ pub fn NumBox(
         match parse_num(&h) {
             Some(n) if with_units => fmt_num((n.value * 10.0).round() / 10.0),
             Some(n) => format!("{}{}", fmt_num((n.value * 10.0).round() / 10.0), n.unit),
-            None => h,
+            // Mot-clé (« none », « auto ») : son nom court traduit.
+            None => match units.iter().find(|o| o.kw && o.v == h) {
+                Some(o) => ui.tx(&format!("{}-s", o.key), &[]),
+                None => h,
+            },
         }
     };
     // Unité affichée : celle de la valeur réglée, sinon de l'indication si elle est déclarée.
@@ -483,9 +517,9 @@ pub fn NumBox(
         on_commit.run((Some(format!("{}{}", fmt_num(cur), o.v)), false));
     };
     view! {
-        <div class="num" class:has-units=with_units class:is-here=move || value.get().is_some()>
+        <div class="nbox" class:has-units=with_units class:is-here=move || value.get().is_some()>
             {prefix.map(|p| view! {
-                <span class="num-prefix" aria-hidden="true"
+                <span class="nbox-prefix" aria-hidden="true"
                     on:pointerdown=move |e: ev::PointerEvent| drag.down(&e, value.get_untracked().unwrap_or_else(|| start.get_untracked()))
                     on:pointermove=move |e: ev::PointerEvent| {
                         if let Some((s, px)) = drag.moved(&e, false)
@@ -501,7 +535,7 @@ pub fn NumBox(
                         }
                     }>{p}</span>
             })}
-            <input class="num-input" type="text" inputmode="decimal" spellcheck="false"
+            <input class="nbox-input" type="text" inputmode="decimal" spellcheck="false"
                 aria-label=move || if label.is_empty() { String::new() } else { ui.now(label, &[]) }
                 prop:value=shown placeholder=placeholder
                 on:change=move |e| commit_text(event_target_value(&e), false)
@@ -524,9 +558,9 @@ pub fn NumBox(
                         _ => {}
                     }
                 }/>
-            {suffix.map(|t| view! { <span class="num-suffix" aria-hidden="true">{t}</span> })}
+            {suffix.map(|t| view! { <span class="nbox-suffix" aria-hidden="true">{t}</span> })}
             {with_units.then(|| view! {
-                <button class="num-unit pop-trigger" class:is-faint=move || !shown_unit().1
+                <button class="nbox-unit pop-trigger" class:is-faint=move || !shown_unit().1
                     title=ui.t("unit-menu") aria-label=ui.t("unit-menu")
                     on:click=move |_| sx.toggle_menu(id)>
                     {move || {
@@ -535,14 +569,13 @@ pub fn NumBox(
                         if !u.is_empty() { u } else if units.iter().any(|o| o.v.is_empty()) { "×".into() } else { "–".into() }
                     }}
                 </button>
-                <Pop sx id>
+                <Pop sx id narrow=true>
                     <ul class="menu-list" role="menu">
                         {units.iter().map(|o| {
                             let o = *o;
                             view! {
-                                <li><button role="menuitem" class="menu-item" on:click=move |_| choose(o)>
-                                    <span class="menu-key">{if o.v.is_empty() { "×" } else { o.v }}</span>
-                                    <span class="menu-desc">{ui.t(o.key)}</span>
+                                <li><button role="menuitem" class="menu-item" title=ui.t(o.key) on:click=move |_| choose(o)>
+                                    {if o.v.is_empty() { "×".to_string() } else if o.kw { ui.tx(&format!("{}-s", o.key), &[]) } else { o.v.to_string() }}
                                 </button></li>
                             }
                         }).collect_view()}

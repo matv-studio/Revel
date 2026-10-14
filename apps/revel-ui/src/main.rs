@@ -3,12 +3,14 @@
 mod account;
 mod api;
 mod dialog;
+mod dock;
 mod editor;
 mod home;
 mod icons;
 mod insert;
 mod inspector;
 mod layers;
+mod panels;
 mod publish;
 mod settings;
 mod site;

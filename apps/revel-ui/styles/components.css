@@ -253,3 +253,39 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
   .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-grid, .form-cols { grid-template-columns: 1fr; }
 }
+
+/* --- Sites (accueil) : grille de cartes ou liste --------------------------- */
+.page--wide { max-width: 1120px; }
+.home-tools { display: flex; align-items: center; gap: var(--s-2); }
+.home-tools .home-search { flex: 1; max-width: 320px; margin: 0; height: var(--control-md); background: var(--surface-raised); border-color: var(--line-strong); }
+.home-tools .segmented button { display: inline-grid; place-items: center; padding: 0 var(--s-2); }
+.site-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-4); }
+.site-card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: var(--radius-lg); background: var(--surface-raised);
+  border: var(--border) solid var(--line); cursor: default; outline: none;
+  transition: border-color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.site-card:hover, .site-card:focus-visible { border-color: var(--line-strong); }
+.site-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.site-thumb {
+  aspect-ratio: 16 / 10; display: grid; place-items: center;
+  background: var(--bg); border-bottom: var(--border) solid var(--line);
+}
+.site-mono {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 14px;
+  background: var(--surface-active); color: var(--text);
+  font-size: var(--text-xl); font-weight: var(--weight-strong); letter-spacing: .02em;
+}
+.site-info { display: flex; flex-direction: column; gap: 2px; padding: var(--s-3) var(--s-3) var(--s-3); min-width: 0; }
+.site-name { font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-meta { font-size: var(--text-xs); color: var(--text-muted); }
+.site-actions {
+  position: absolute; top: var(--s-2); right: var(--s-2); display: flex; gap: 2px; padding: 2px;
+  border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 0 0 1px var(--line);
+  opacity: 0; transition: opacity var(--fast) var(--ease);
+}
+.site-card:hover .site-actions, .site-card:focus-within .site-actions { opacity: 1; }
+.row-actions { display: inline-flex; gap: 2px; opacity: 0; transition: opacity var(--fast) var(--ease); }
+.row-link:hover .row-actions { opacity: 1; }
+.col-count { white-space: nowrap; width: 1%; text-align: right; }

@@ -57,6 +57,10 @@ enum FromCanvas {
     Computed {
         values: std::collections::HashMap<String, String>,
     },
+    /// Molette avec Ctrl (zoom), déplacement vertical.
+    Zoom {
+        dy: f64,
+    },
     /// Nombre d'éléments de la page qui portent un sélecteur.
     Count {
         selector: String,
@@ -87,6 +91,8 @@ pub struct Ed {
     pub breakpoint: RwSignal<String>,
     /// Zoom ; `None` : ajusté à la place disponible.
     pub zoom: RwSignal<Option<f64>>,
+    /// Échelle du zoom ajusté (affichée dans la liste des zooms).
+    pub fit: RwSignal<f64>,
     pub selected: RwSignal<Option<Selection>>,
     pub hovered: RwSignal<Option<String>>,
     /// Exécuter les scripts du site dans le canevas.
@@ -108,6 +114,9 @@ pub struct Ed {
     pub own_change: RwSignal<f64>,
     frame: NodeRef<html::Iframe>,
 }
+
+/// Paliers de zoom.
+pub const ZOOMS: [f64; 9] = [0.25, 0.33, 0.5, 0.67, 0.75, 1.0, 1.25, 1.5, 2.0];
 
 /// Commande qui ne touche que la feuille de style (le canevas recharge alors la feuille seule).
 pub fn style_only(c: &Command) -> bool {
@@ -255,9 +264,40 @@ impl Ed {
                 self.selected.set(None);
                 self.post(serde_json::json!({ "type": "select", "id": null }));
             }
+            // Zoom (comme Figma) : Ctrl+0 ajusté, Ctrl+1 100 %, Ctrl+plus et Ctrl+moins.
+            ("0", true) => self.zoom.set(None),
+            ("1", true) => self.zoom.set(Some(1.0)),
+            ("=" | "+", true) => self.zoom_step(1),
+            ("-", true) => self.zoom_step(-1),
             _ => return false,
         }
         true
+    }
+
+    /// Zoom en vigueur (ajusté compris).
+    pub fn scale(self) -> f64 {
+        self.zoom
+            .get_untracked()
+            .unwrap_or_else(|| self.fit.get_untracked())
+    }
+
+    /// Zoom multiplié (molette avec Ctrl), borné à 10-400 %.
+    pub fn zoom_by(self, f: f64) {
+        let z = (self.scale() * f).clamp(0.1, 4.0);
+        self.zoom.set(Some((z * 100.0).round() / 100.0));
+    }
+
+    /// Palier de zoom suivant ou précédent.
+    pub fn zoom_step(self, dir: i32) {
+        let cur = self.scale();
+        let next = if dir > 0 {
+            ZOOMS.iter().copied().find(|z| *z > cur + 0.001)
+        } else {
+            ZOOMS.iter().rev().copied().find(|z| *z < cur - 0.001)
+        };
+        if let Some(z) = next {
+            self.zoom.set(Some(z));
+        }
     }
 
     pub fn undo(self, ui: Ui) {
@@ -417,6 +457,32 @@ pub fn node_label(n: &revel_model::Node) -> String {
     }
 }
 
+/// Chemin jusqu'au nœud `id` : éléments (identifiant, libellé) de la racine au nœud.
+fn path_to(nodes: &[revel_model::Node], id: &str, stack: &mut Vec<(String, String)>) -> bool {
+    for n in nodes {
+        let nid = revel_model::ids::node_id(n);
+        let pushed = match (nid, n) {
+            (Some(i), revel_model::Node::Element { .. } | revel_model::Node::Image(_)) => {
+                stack.push((i.to_string(), node_label(n)));
+                true
+            }
+            _ => false,
+        };
+        if nid == Some(id) {
+            return true;
+        }
+        for list in revel_model::ids::child_lists(n) {
+            if path_to(list, id, stack) {
+                return true;
+            }
+        }
+        if pushed {
+            stack.pop();
+        }
+    }
+    false
+}
+
 /// Propriétaire d'un nœud (page, gabarit, composant) : libellé pour la barre d'état.
 fn owner_of(doc: &Site, id: &str) -> Option<(revel_model::ids::OwnerKind, String)> {
     for (kind, owner, body) in doc.owners() {
@@ -445,6 +511,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         page: RwSignal::new("/".into()),
         breakpoint: RwSignal::new("desktop".into()),
         zoom: RwSignal::new(None),
+        fit: RwSignal::new(1.0),
         selected: RwSignal::new(None),
         hovered: RwSignal::new(None),
         scripts: RwSignal::new(false),
@@ -458,6 +525,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         frame: NodeRef::new(),
     };
     provide_context(ed);
+    let dock = crate::dock::Dock::provide();
     let failed = RwSignal::new(false);
 
     // Ouverture : document, pages, canevas.
@@ -531,11 +599,17 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 ctrl,
                 meta,
             } => {
-                ed.shortcut(ui, &key, ctrl || meta, shift);
+                // Ctrl+\ dans le canevas : panneaux masqués ou affichés.
+                if key == "\\" && (ctrl || meta) {
+                    dock.layout.update(|l| l.hidden = !l.hidden);
+                } else {
+                    ed.shortcut(ui, &key, ctrl || meta, shift);
+                }
             }
             FromCanvas::Scroll { x, y } => ed.scroll.set((x, y)),
             FromCanvas::Computed { values } => ed.computed.set(values),
             FromCanvas::Count { selector, n } => ed.count.set(Some((selector, n))),
+            FromCanvas::Zoom { dy } => ed.zoom_by((-dy * 0.002).exp()),
             FromCanvas::Text { slot, text } => {
                 if let Some(cmd) = ed.text_command(&slot, text) {
                     ed.apply(ui, cmd, false);
@@ -605,6 +679,17 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     };
     let on_resize = window_event_listener(ev::resize, move |_| measure());
     on_cleanup(move || on_resize.remove());
+    // Zone du canevas redimensionnée par l'espace de travail (colonnes, panneaux masqués).
+    Effect::new(move |_| {
+        if let Some(a) = area.get() {
+            use wasm_bindgen::JsCast;
+            let cb = wasm_bindgen::closure::Closure::<dyn Fn()>::new(measure);
+            if let Ok(ro) = web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref()) {
+                ro.observe(&a);
+            }
+            cb.forget();
+        }
+    });
     Effect::new(move |_| {
         if area.get().is_some() {
             measure();
@@ -627,9 +712,11 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         ed.frame_width()
             .unwrap_or_else(|| (area_w.get() - gutter).max(desktop_min()))
     };
+    let fit = move || ((area_w.get() - gutter) / width()).clamp(0.1, 1.0);
+    Effect::new(move |_| ed.fit.set(fit()));
     let scale = move || match ed.zoom.get() {
         Some(z) => z,
-        None => ((area_w.get() - gutter) / width()).clamp(0.1, 1.0),
+        None => fit(),
     };
     let frame_style = move || {
         let s = scale();
@@ -644,38 +731,45 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     view! {
         <section class="editor">
             <Toolbar/>
-            <LeftPanel/>
-            <crate::inspector::Inspector/>
-            <div class="canvas-area" node_ref=area>
-                <Show when=move || ed.base.get().is_some() fallback=move || view! {
-                    <div class="canvas-wait muted">{move || if failed.get() { String::new() } else { ui.tx("editor-loading", &[]) }}</div>
-                }>
-                    <iframe class="canvas-frame" node_ref=ed.frame title=ui.t("editor-canvas")
-                        style=frame_style src=move || ed.src().unwrap_or_default()></iframe>
-                </Show>
-            </div>
+            <crate::dock::Workspace panel=panel_view>
+                <div class="canvas-area" node_ref=area
+                    on:wheel=move |e: leptos::ev::WheelEvent| {
+                        if e.ctrl_key() || e.meta_key() {
+                            e.prevent_default();
+                            ed.zoom_by((-e.delta_y() * 0.002).exp());
+                        }
+                    }>
+                    <Show when=move || ed.base.get().is_some() fallback=move || view! {
+                        <div class="canvas-wait muted">{move || if failed.get() { String::new() } else { ui.tx("editor-loading", &[]) }}</div>
+                    }>
+                        <iframe class="canvas-frame" node_ref=ed.frame title=ui.t("editor-canvas")
+                            style=frame_style src=move || ed.src().unwrap_or_default()></iframe>
+                    </Show>
+                </div>
+            </crate::dock::Workspace>
             <StatusBar/>
         </section>
     }
 }
 
-/// Panneau de gauche : calques ou éléments à ajouter.
-#[component]
-fn LeftPanel() -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let insert = RwSignal::new(false);
-    view! {
-        <div class="left-panel">
-            <div class="panel-tabs" role="tablist">
-                <button role="tab" class:is-on=move || !insert.get() aria-selected=move || (!insert.get()).to_string()
-                    on:click=move |_| insert.set(false)>{ui.t("layers-title")}</button>
-                <button role="tab" class:is-on=move || insert.get() aria-selected=move || insert.get().to_string()
-                    on:click=move |_| insert.set(true)>{ui.t("insert-title")}</button>
-            </div>
-            <Show when=move || insert.get() fallback=|| view! { <crate::layers::Layers/> }>
-                <crate::insert::Insert/>
-            </Show>
-        </div>
+/// Contenu d'un panneau de l'espace de travail.
+fn panel_view(p: crate::dock::PanelId) -> AnyView {
+    use crate::dock::PanelId;
+    match p {
+        PanelId::Pages => view! { <crate::panels::Pages/> }.into_any(),
+        PanelId::Layers => view! { <crate::layers::Layers/> }.into_any(),
+        PanelId::Cms => view! { <crate::panels::Cms/> }.into_any(),
+        PanelId::Insert => view! { <crate::insert::Insert/> }.into_any(),
+        PanelId::Components => view! { <crate::panels::Components/> }.into_any(),
+        PanelId::Assets => view! { <crate::panels::Assets/> }.into_any(),
+        PanelId::Styles => {
+            view! { <div class="panel-pad"><crate::styles::Styles/></div> }.into_any()
+        }
+        PanelId::Settings => view! { <crate::inspector::ElementSettings/> }.into_any(),
+        PanelId::Interactions => view! {
+            <crate::panels::Planned key="panel-interactions-planned" step=6 icon=icons::bolt/>
+        }
+        .into_any(),
     }
 }
 
@@ -702,13 +796,7 @@ fn Toolbar() -> impl IntoView {
     };
     let can_undo = move || ed.state.with(|s| s.as_ref().is_some_and(|s| s.can_undo));
     let can_redo = move || ed.state.with(|s| s.as_ref().is_some_and(|s| s.can_redo));
-    let zooms: [(Option<f64>, &'static str); 5] = [
-        (None, "editor-zoom-fit"),
-        (Some(0.5), "50 %"),
-        (Some(0.75), "75 %"),
-        (Some(1.0), "100 %"),
-        (Some(1.25), "125 %"),
-    ];
+    let pct = |z: f64| format!("{} %", (z * 100.0).round());
     let set_scripts = move |on: bool| {
         ed.scripts.set(on);
         let path = ed.path.get_value();
@@ -771,27 +859,28 @@ fn Toolbar() -> impl IntoView {
                 }).collect_view()}
             </div>
             <BreakpointMenu/>
-            <div class="select editor-zoom">
+            <div class="select editor-zoom" title=ui.t("editor-zoom-help")>
                 <select class="input" aria-label=ui.t("editor-zoom")
                     on:change=move |e| {
                         let v = event_target_value(&e);
                         ed.zoom.set(v.parse::<f64>().ok());
                     }>
-                    {zooms.into_iter().map(|(z, key)| {
-                        let label = if key.starts_with("editor-") { ui.tx(key, &[]) } else { key.to_string() };
-                        view! { <option value=z.map(|z| z.to_string()).unwrap_or_default() selected=move || ed.zoom.get() == z>{label}</option> }
+                    <option value="" selected=move || ed.zoom.get().is_none()>
+                        {move || ui.tx("editor-zoom-fit-pct", &[("pct", pct(ed.fit.get()))])}
+                    </option>
+                    {ZOOMS.into_iter().map(|z| view! {
+                        <option value=z.to_string() selected=move || ed.zoom.get() == Some(z)>{pct(z)}</option>
                     }).collect_view()}
+                    {move || ed.zoom.get().filter(|z| !ZOOMS.contains(z)).map(|z| view! {
+                        <option value=z.to_string() selected=true>{pct(z)}</option>
+                    })}
                 </select>
             </div>
-            <label class="editor-scripts" title=ui.t("editor-scripts-help")>
-                <span class="switch">
-                    <input type="checkbox" prop:checked=move || ed.scripts.get()
-                        on:change=move |e| set_scripts(event_target_checked(&e))/>
-                    <span class="switch-track"></span>
-                </span>
-                <span class="muted">{ui.t("editor-scripts")}</span>
-            </label>
+            <button class="tool-toggle" class:is-on=move || ed.scripts.get() aria-pressed=move || ed.scripts.get().to_string()
+                title=ui.t("editor-scripts-help") aria-label=ui.t("editor-scripts")
+                on:click=move |_| set_scripts(!ed.scripts.get_untracked())>{icons::code()}</button>
             <div class="toolbar-spacer"></div>
+            <crate::dock::PanelsMenu/>
             <details class="bp-menu shortcuts">
                 <summary class="icon-btn" title=ui.t("editor-shortcuts") aria-label=ui.t("editor-shortcuts")>"?"</summary>
                 <div class="bp-pop bp-pop--right">
@@ -804,6 +893,12 @@ fn Toolbar() -> impl IntoView {
                         ("key-escape", "editor-deselect"),
                         ("key-dblclick", "editor-edit-text"),
                         ("key-enter", "editor-edit-validate"),
+                        ("key-zoom-fit", "editor-zoom-fit-short"),
+                        ("key-zoom-100", "editor-zoom-100"),
+                        ("key-zoom-wheel", "editor-zoom"),
+                        ("key-panels", "dock-hide-all"),
+                        ("key-alt-click", "styles-reset"),
+                        ("key-drag-label", "editor-scrub"),
                     ].into_iter().map(|(k, label)| view! {
                         <div class="bp-line"><span>{ui.t(label)}</span><kbd>{ui.t(k)}</kbd></div>
                     }).collect_view()}
@@ -948,9 +1043,48 @@ fn StatusBar() -> impl IntoView {
             .map(|w| format!("{w} px"))
             .unwrap_or_default()
     };
+    // Fil d'Ariane (comme Webflow) : éléments parents de la sélection, cliquables.
+    let crumbs = move || {
+        let sel = ed.selected.get()?;
+        ed.doc.with(|d| {
+            let d = d.as_ref()?;
+            d.owners().into_iter().find_map(|(_, _, body)| {
+                let mut stack = Vec::new();
+                path_to(body, &sel.id, &mut stack).then_some(stack)
+            })
+        })
+    };
+    let pick = move |id: String, label: String| {
+        ed.selected.set(Some(Selection {
+            id: id.clone(),
+            tag: label.split('.').next().unwrap_or_default().to_string(),
+            label,
+        }));
+        ed.post(serde_json::json!({ "type": "select", "id": id, "reveal": true }));
+    };
     view! {
         <footer class="editor-status">
-            <span class="strong">{move || ed.selected.get().map(|s| s.label).unwrap_or_else(|| ui.tx("editor-no-selection", &[]))}</span>
+            <nav class="node-path" aria-label=ui.t("editor-path")>
+                {move || match crumbs() {
+                    None => view! { <span class="muted">{ui.t("editor-no-selection")}</span> }.into_any(),
+                    Some(list) => {
+                        let n = list.len();
+                        let skip = n.saturating_sub(6);
+                        view! {
+                            {(skip > 0).then(|| view! { <span class="node-sep">"…"</span> })}
+                            {list.into_iter().enumerate().skip(skip).map(|(i, (id, label))| {
+                                let last = i + 1 == n;
+                                let l2 = label.clone();
+                                view! {
+                                    {(i > skip || skip > 0).then(|| view! { <span class="node-sep">"›"</span> })}
+                                    <button class="node-crumb" class:is-on=last title=label.clone()
+                                        on:click=move |_| pick(id.clone(), l2.clone())>{label.clone()}</button>
+                                }
+                            }).collect_view()}
+                        }.into_any()
+                    }
+                }}
+            </nav>
             <span class="muted">{owner}</span>
             <span class="toolbar-spacer"></span>
             <span class="muted save-state" aria-live="polite">{move || {

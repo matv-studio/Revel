@@ -11,14 +11,15 @@ Revel n'en reprend ni les couleurs ni les marques.
 ## Principes
 
 1. **Le contenu de l'utilisateur est la seule couleur.** L'interface est en gris neutres.
-   Aucune couleur décorative ; les couleurs fonctionnelles (erreur, réussite) restent discrètes.
+   Aucune couleur décorative ; les couleurs fonctionnelles restent discrètes : erreur, réussite, et dans le
+   panneau de styles l'origine des valeurs (bleu réglé ici, orange hérité, comme Webflow — D-21).
 2. **Un seul accent, choisi par l'utilisateur.** *Réglages > Couleur d'accent* : « Aucune » par défaut.
    Sans accent, l'action principale est en contraste inversé (blanc sur sombre, noir sur clair).
    L'accent ne sert qu'à trois choses : action principale, sélection, focus.
 3. **Une action principale par zone.** Une seule `.btn--primary` visible par section ou barre.
 4. **Densité d'outil.** Texte 13 px, contrôles 28 px, grille de 4 px : beaucoup d'information sans
    surcharge, comme Figma. Les pages de réglages restent aérées.
-5. **Mots simples, verbes d'action.** Un bouton dit ce qu'il fait (« Générer le site », « Publier ») ;
+5. **Peu de texte, mots simples, verbes d'action.** Les explications vont en info-bulle (D-21). Un bouton dit ce qu'il fait (« Générer le site », « Publier ») ;
    le message de fin reprend le même verbe (« Publication terminée »). Phrases en casse normale,
    jamais de libellés en capitales. Une erreur dit ce qui s'est passé et comment y remédier.
 6. **Rien ne bouge sans raison.** Seuls les retours à une action sont animés (progression, bascule) ;
@@ -87,6 +88,7 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Choix exclusif | `.segmented` (`role="radiogroup"`, boutons `role="radio"`) | 2 à 4 options courtes |
 | Interrupteur | `.switch` | Option activable immédiatement |
 | Couleurs | `.swatches`, `.swatch` | Réglage de l'accent |
+| Sites | `.site-grid` > `.site-card` (vignette à monogramme, nom, date ; actions au survol) ou `.table` | Accueil : grille ou liste, recherche ; « Ouvrir l'éditeur » direct |
 | Tableau | `.table`, `.row-link`, `.table--compact` | Listes de sites, de collections ; ligne entière cliquable |
 | Faits | `.facts`, `.facts--inline` | Chiffres clés ; paires libellé / valeur |
 | Puce | `.chip` | Étiquette courte (environnement) |
@@ -109,6 +111,29 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 
 Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arrondies, dessinées pour Revel.
 
+## Espace de travail de l'éditeur (D-21)
+
+```
+┌ barre d'outils : page · points de rupture · zoom · scripts ········· panneaux ? annuler rétablir ┐
+├ colonne gauche ────────┬ canevas (fixe) ────────────────────────────┬ colonne droite ───────────┤
+│ Pages Composants Médias │                                            │ Styles Réglages Interactions│
+│ ─────────────────────── │        page à la largeur du point          │                            │
+│ Calques CMS Ajouter     │        de rupture, zoom                    │                            │
+│   (recherche, arbre,    │                                            │                            │
+│    actions en bas)      │   [fenêtre flottante possible]             │                            │
+└ fil d'Ariane de l'élément sélectionné · propriétaire ········· enregistrement · largeur ──────────┘
+```
+
+| Élément | Règles |
+|---|---|
+| Onglet (`.dock-tab`) | Texte seul ; actif en relief (fond, contour) ; glisser pour déplacer, clic pour afficher |
+| Dépôt | Bande d'onglets : rejoint le groupe ; haut ou bas d'un panneau : nouveau groupe au-dessus ou au-dessous ; colonne vide : nouveau groupe ; canevas : fenêtre flottante. Zone de dépôt en bleu |
+| Groupe | Menu ⋯ : liste des onglets, détacher, fermer ; poignée de hauteur entre deux groupes |
+| Colonne | Poignée de largeur côté canevas (200 à 520 px) ; se vide sans disparaître pendant un déplacement |
+| Panneaux | Tous montés (l'état de chaque onglet est gardé) ; pied de panneau (`.panel-foot`) pour les actions et le compte ; recherche en tête (`.panel-search`) |
+| Fonction prévue | Bouton désactivé (`.is-planned`), étape en info-bulle ; panneau prévu : `Planned` |
+| Raccourcis | Ctrl+\ panneaux ; Ctrl+0 zoom ajusté, Ctrl+1 100 %, Ctrl+molette ; ↑ ↓ ← → dans les calques ; clic droit : menu contextuel |
+
 ## Panneau de styles (D-20)
 
 Public visé : une personne qui ne connaît pas CSS. Chaque contrôle porte un **nom simple** ; le nom CSS est
@@ -119,11 +144,11 @@ couleur) ; la saisie au clavier reste possible partout pour qui la préfère.
 
 | Fonction | Retenu | Repris de | Pourquoi |
 |---|---|---|---|
-| Cible | Classe (liste), état (Aucun, Survol, Appui, Focus clavier), point de rupture affiché ; nombre d'éléments de la page qui portent la classe | Webflow [W1][W16] | seul modèle fidèle à une vraie cascade CSS |
-| Origine d'une valeur | Pastille pleine « Réglé ici », anneau « Hérité de … » (point de rupture plus large ou état de base), rien sinon (valeur effective en gris). Clic sur le libellé : origine et *Réinitialiser* ; Alt+clic : réinitialise | Webflow [W1][W18], Framer [F5] | les couleurs de Webflow ne fonctionnent pas sans accent : forme + texte |
-| Nombres | Glisser le libellé (Maj ×10, Alt ×0,1) ; ↑/↓ ±1, Maj ±10, Alt ±0,1 ; calculs `12+4`, `*2` ; unité tapée ou choisie dans un menu expliqué (« % — du parent ») ; champ vide = valeur retirée | Figma [G5], Webflow [W15], Framer [F1] | glisser sans touche spéciale se découvre seul |
+| Cible | Classes en pastilles dans un champ (clic : classe réglée, × : retirée, saisie : ajoutée ; classes combinées en italique), état (Normal, Survol, Appui, Focus clavier), point de rupture et nombre d'éléments qui portent la classe | Webflow [W1][W16] | seul modèle fidèle à une vraie cascade CSS |
+| Origine d'une valeur | Libellé sur fond bleu : réglé ici ; orange : hérité d'un écran plus large ou de l'état de base (D-21) ; sinon gris (valeur effective en indication). Clic sur le libellé : origine et bouton de réinitialisation (flèche) ; Alt+clic : réinitialise | Webflow [W1][W18], Framer [F5] | code connu des utilisateurs de Webflow |
+| Nombres | Glisser le libellé (Maj ×10, Alt ×0,1) ; ↑/↓ ±1, Maj ±10, Alt ±0,1 ; calculs `12+4`, `*2` ; unité tapée ou choisie dans un menu court (`px`, `%`… ; explication en info-bulle) ; champ vide = valeur retirée | Figma [G5], Webflow [W15], Framer [F1] | glisser sans touche spéciale se découvre seul |
 | Couleur | Pastille + valeur ; panneau : plan saturation-luminosité, curseur de teinte, curseur d'opacité, pipette (si le système la permet), modèle Hex / RVB / TSL / TSV, couleurs du site (variables d'abord, puis couleurs utilisées), contraste du texte (AA/AAA) | Figma [G7][G8], Webflow [W11][W19] | aucune valeur à taper |
-| Espacement | Boîte : marge extérieure autour de la marge intérieure ; chaque côté se glisse ou se tape ; Alt = côté opposé aussi, Maj = les quatre côtés | Webflow [W2], Figma [G2] | seul outil avec la marge extérieure ; modificateurs communs aux deux |
+| Espacement | Boîte symétrique (rangées de même hauteur) : « Extérieur » autour d'« Intérieur », légendes dans l'angle ; chaque côté se glisse ou se tape ; Alt = côté opposé aussi, Maj = les quatre côtés ; aide en info-bulle | Webflow [W2], Figma [G2] | seul outil avec la marge extérieure ; modificateurs communs aux deux |
 | Disposition | Bloc / Pile / Grille / Masqué (+ variantes « en ligne ») ; pile : direction à icônes, inverser, boîte d'alignement 3 × 3 et deux listes en mots (Horizontal, Vertical) selon la direction, écart, retour à la ligne ; grille : nombre de colonnes | Framer (« Stack ») [F2], Figma [G3], Webflow [W4][W5] | mots et icônes au lieu de `justify-content` |
 | Élément dans une pile | Rétrécir si nécessaire / Grandir si possible / Ni grandir ni rétrécir, écrits `flex: 0 1 auto`, `1 1 auto`, `0 0 auto` (valeurs `initial`, `auto`, `none` de CSS, dont les descriptions sont celles de Webflow, qui ne publie pas ses valeurs [M1]) | Webflow [W4] | phrases plutôt que `flex: 1 1 auto` |
 | Taille | Largeur, hauteur, minimum, maximum ; menu d'unités expliqué (px fixe, % du parent, vw/vh de l'écran, Auto, Ajusté au contenu) ; débordement en mots ; ajustement des images (Remplir, Ajuster, Étirer…) ; proportions nommées | Framer [F1], Figma [G2][G11], Webflow [W7] | modes nommés par leur effet |
@@ -149,7 +174,7 @@ dans « Code CSS » d'ici là.
 | `justify-content`, `align-items` | Horizontal / Vertical : Gauche, Centre, Droite, Haut, Bas, Étirés, Ligne de base, Espacés (entre, autour, égaux) | Horizontal / Vertical: Left, Center, Right, Top, Bottom, Stretch, Baseline, Space between / around / evenly |
 | `gap` | Écart | Gap |
 | `flex-wrap` | Retour à la ligne | Wrap |
-| `margin`, `padding` | Marge extérieure, Marge intérieure | Margin, Padding |
+| `margin`, `padding` | Extérieur, Intérieur (« Marge extérieure / intérieure » en info-bulle) | Margin, Padding |
 | `width`, `min-width`… | Largeur, Largeur min., Largeur max. | Width, Min width, Max width |
 | `overflow` | Débordement : Visible, Masqué, Défiler, Auto | Overflow: Visible, Hidden, Scroll, Auto |
 | `object-fit` | Ajustement : Remplir, Ajuster, Étirer, Aucun | Fit: Fill, Fit, Stretch, None |
@@ -164,6 +189,7 @@ dans « Code CSS » d'ici là.
 | `cursor` | Curseur | Cursor |
 
 Les libellés tiennent dans leur colonne en français et en anglais (contrôlé par `tools/editor-e2e.mjs`).
+Pas de texte explicatif affiché dans les panneaux : les aides sont en info-bulles (D-21).
 
 Sources (lues le 14/10/2026) :
 [W1] https://help.webflow.com/hc/en-us/articles/33961362040723 ·

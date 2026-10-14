@@ -13,6 +13,7 @@ use revel_style::values::{
     Shadow, first_family, format_shadows, grid_columns, grid_count, length::parse_num,
     parse_shadows, split_top,
 };
+use wasm_bindgen::JsCast;
 
 // ------------------------------------------------------------------------------------------------
 // Disposition
@@ -380,7 +381,7 @@ fn SidesBox(
     #[prop(optional)] inner: Option<(&'static [&'static str; 4], &'static str)>,
 ) -> impl IntoView {
     view! {
-        <div class="bm-box" class:bm-box--outer=inner.is_some()>
+        <div class="bm-box" class:bm-box--outer=inner.is_some() title=sx.ui.t("styles-spacing-help")>
             <div class="bm-caption"><Label sx props=group.as_slice() key/></div>
             <Side sx group side=0/>
             <Side sx group side=3/>
@@ -410,8 +411,7 @@ pub fn SpacingSection(sx: Sx) -> impl IntoView {
             "margin-top", "margin-right", "margin-bottom", "margin-left",
             "padding-top", "padding-right", "padding-bottom", "padding-left",
         ]>
-            <SidesBox sx group=&MARGIN key="styles-margin" inner=(&PADDING, "styles-padding")/>
-            <p class="style-help">{sx.ui.t("styles-spacing-help")}</p>
+            <SidesBox sx group=&MARGIN key="styles-margin-short" inner=(&PADDING, "styles-padding-short")/>
         </Section>
     }
 }
@@ -514,9 +514,8 @@ pub fn PositionSection(sx: Sx) -> impl IntoView {
     view! {
         <Section sx key="styles-position" props=&["position", "top", "right", "bottom", "left", "z-index"]>
             <Row sx props=&["position"] key="styles-position-type">
-                <Choice sx prop="position" options=opts(sx, POSITION)/>
+                <div title=help><Choice sx prop="position" options=opts(sx, POSITION)/></div>
             </Row>
-            <p class="style-help">{help}</p>
             <Show when=placed>
                 <SidesBox sx group=&INSET key="styles-offsets"/>
                 <Row sx props=&["top", "right", "bottom", "left"] key="styles-preset">
@@ -965,8 +964,16 @@ fn Opacity(sx: Sx) -> impl IntoView {
     view! {
         <div class="ctl-line">
             <input type="range" class="range" min="0" max="100" step="1" prop:value=move || pct().round().to_string()
+                style=move || format!("--fill: {}%", pct().round())
                 aria-label=sx.ui.t("styles-opacity")
-                on:input=move |e| { if let Ok(v) = event_target_value(&e).parse::<f64>() { sx.preview(&[("opacity".into(), to_css(v))]) } }
+                on:input=move |e| {
+                    if let Ok(v) = event_target_value(&e).parse::<f64>() {
+                        sx.preview(&[("opacity".into(), to_css(v))]);
+                        if let Some(t) = e.target().and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok()) {
+                            let _ = t.style().set_property("--fill", &format!("{v}%"));
+                        }
+                    }
+                }
                 on:change=move |e| { if let Ok(v) = event_target_value(&e).parse::<f64>() { sx.set("opacity", Some(to_css(v))) } }/>
             <NumBox sx
                 value=Signal::derive(move || pv.get().here.map(|_| revel_style::values::fmt_num(pct().round())))
@@ -1117,7 +1124,6 @@ pub fn CodeSection(sx: Sx) -> impl IntoView {
         <details class="style-section">
             <summary><span>{ui.t("styles-declarations")}</span></summary>
             <div class="style-section-body">
-                <p class="style-help">{ui.t("styles-code-help")}</p>
                 {move || rule.get().map(|r| r.decls).unwrap_or_default().into_iter().map(|d| {
                     let prop = d.prop.clone();
                     let prop_rm = d.prop.clone();

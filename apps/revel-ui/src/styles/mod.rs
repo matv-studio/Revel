@@ -90,7 +90,19 @@ pub fn Styles() -> impl IntoView {
         ed.doc
             .with(|d| d.as_ref().is_some_and(|d| d.stylesheet.is_some()))
     });
+    // Nom court du point de rupture (« Ordinateur », « ≤ 900 px »), le nom complet en info-bulle.
     let bp_label = move || {
+        let id = ed.breakpoint.get();
+        ed.doc.with(|d| {
+            let b = d.as_ref()?.breakpoints.iter().find(|b| b.id == id)?.clone();
+            Some(match (b.max_width, b.min_width) {
+                (Some(w), _) => format!("≤ {w} px"),
+                (_, Some(w)) => format!("≥ {w} px"),
+                _ => ui.tx("editor-bp-desktop-short", &[]),
+            })
+        })
+    };
+    let bp_full = move || {
         let id = ed.breakpoint.get();
         ed.doc.with(|d| {
             let b = d.as_ref()?.breakpoints.iter().find(|b| b.id == id)?.clone();
@@ -126,9 +138,11 @@ pub fn Styles() -> impl IntoView {
             sx.menu.set(None);
         }
     });
+    let on_blur = window_event_listener(ev::blur, move |_| sx.menu.set(None));
     on_cleanup(move || {
         on_down.remove();
         on_key.remove();
+        on_blur.remove();
         sx.clear_preview();
     });
 
@@ -157,6 +171,27 @@ pub fn Styles() -> impl IntoView {
         );
     };
 
+    // Retrait d'une classe de l'élément.
+    let remove_class = move |name: String| {
+        let Some(at) = ed.selected_target() else {
+            return;
+        };
+        let list: Vec<String> = classes
+            .get_untracked()
+            .into_iter()
+            .filter(|c| *c != name)
+            .collect();
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at,
+                name: "class".into(),
+                value: (!list.is_empty()).then(|| list.join(" ")),
+            },
+            false,
+        );
+    };
+
     view! {
         <div class="styles">
             {move || match kind.get() {
@@ -165,32 +200,36 @@ pub fn Styles() -> impl IntoView {
                 2 => view! { <p class="muted inspector-empty">{ui.t("error-edit-no-stylesheet")}</p> }.into_any(),
                 _ => view! {
                     <div class="style-target">
-                        <div class="target-line">
-                            <span class="label">{ui.t("styles-selector")}</span>
-                            <div class="select">
-                                <select class="input input--mono" aria-label=ui.t("styles-selector")
-                                    on:change=move |e| selector.set(event_target_value(&e))>
-                                    {move || candidates(&classes.get()).into_iter().map(|c| {
-                                        let (c2, v) = (c.clone(), c.clone());
-                                        view! { <option value=v selected=move || selector.get() == c2>{c}</option> }
-                                    }).collect_view()}
-                                    {move || classes.get().is_empty().then(|| view! { <option value="" selected=true>{ui.t("styles-no-class-short")}</option> })}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="target-line">
-                            <span class="label">{ui.t("styles-state")}</span>
-                            <div class="select">
-                                <select class="input" aria-label=ui.t("styles-state") on:change=move |e| state.set(event_target_value(&e))>
-                                    {STATES.iter().map(|(s, k)| view! {
-                                        <option value=*s selected=move || state.get() == *s>{ui.t(k)}</option>
-                                    }).collect_view()}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="target-line">
-                            <span class="label">{icons::plus()}</span>
-                            <input class="input" placeholder=ui.t("styles-class-new") aria-label=ui.t("styles-class-new")
+                        // Classes de l'élément (pastilles, comme le champ de sélecteur de Webflow) :
+                        // clic = classe réglée ; × = retirée de l'élément ; champ = nouvelle classe.
+                        <div class="selector-box" role="listbox" aria-label=ui.t("styles-selector")>
+                            {move || {
+                                let list = classes.get();
+                                let mut chips: Vec<(String, String, Option<String>)> = list.iter()
+                                    .map(|c| (format!(".{c}"), c.clone(), Some(c.clone()))).collect();
+                                if list.len() > 1 {
+                                    chips.push((candidates(&list).pop().unwrap_or_default(), list.join(" + "), None));
+                                }
+                                chips.into_iter().map(|(sel, label, class)| {
+                                    let s2 = sel.clone();
+                                    let s3 = sel.clone();
+                                    let combo = class.is_none();
+                                    let title = if combo { ui.tx("styles-combo", &[]) } else { sel.clone() };
+                                    view! {
+                                        <span class="sel-chip" class:is-on=move || selector.get() == s2 class:is-combo=combo
+                                            role="option" aria-selected=move || (selector.get() == s3).to_string()
+                                            title=title>
+                                            <button class="sel-chip-name" on:click=move |_| selector.set(sel.clone())>{label}</button>
+                                            {class.map(|c| view! {
+                                                <button class="sel-chip-x" title=ui.t("styles-class-remove") aria-label=ui.t("styles-class-remove")
+                                                    on:click=move |_| remove_class(c.clone())>{icons::close()}</button>
+                                            })}
+                                        </span>
+                                    }
+                                }).collect_view()
+                            }}
+                            <input class="selector-add" placeholder=move || if classes.get().is_empty() { ui.tx("styles-class-first", &[]) } else { ui.tx("styles-class-new", &[]) }
+                                aria-label=ui.t("styles-class-new")
                                 on:change=move |e| {
                                     add_class(event_target_value(&e));
                                     if let Some(t) = e.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
@@ -198,28 +237,22 @@ pub fn Styles() -> impl IntoView {
                                     }
                                 }/>
                         </div>
-                        <p class="style-where muted">
-                            {move || {
-                                let sel = sx.full_selector();
-                                if sel.is_empty() {
-                                    ui.tx("styles-no-class", &[])
-                                } else {
-                                    let mut t = ui.tx("styles-where", &[("selector", sel), ("breakpoint", bp_label().unwrap_or_default())]);
-                                    if let Some((s, n)) = ed.count.get() && s == selector.get() {
-                                        t.push_str(" · ");
-                                        t.push_str(&ui.tx("styles-count", &[("count", n.to_string())]));
-                                    }
-                                    t
-                                }
-                            }}
-                        </p>
-                        <p class="style-legend muted">
-                            <span><i class="dot dot--here"></i>{ui.t("styles-legend-here")}</span>
-                            <span><i class="dot dot--inherited"></i>{ui.t("styles-legend-inherited")}</span>
-                        </p>
-                        {move || (sx.rule.get().is_none() && !selector.get().is_empty()).then(|| view! {
-                            <p class="style-where muted">{ui.t("styles-new-rule")}</p>
-                        })}
+                        <div class="target-meta">
+                            <div class="select select--state" class:is-active=move || !state.get().is_empty() title=ui.t("styles-state")>
+                                <select class="input" aria-label=ui.t("styles-state") on:change=move |e| state.set(event_target_value(&e))>
+                                    {STATES.iter().map(|(s, k)| view! {
+                                        <option value=*s selected=move || state.get() == *s>{ui.t(k)}</option>
+                                    }).collect_view()}
+                                </select>
+                            </div>
+                            <span class="target-where muted" title=move || format!("{} — {}", sx.full_selector(), bp_full().unwrap_or_default())>
+                                {move || bp_label().unwrap_or_default()}
+                                {move || ed.count.get().filter(|(s, _)| *s == selector.get()).map(|(_, n)| format!(" · {}", ui.tx("styles-count", &[("count", n.to_string())])))}
+                            </span>
+                            {move || (sx.rule.get().is_none() && !selector.get().is_empty()).then(|| view! {
+                                <span class="chip chip--new" title=ui.t("styles-new-rule")>{ui.t("styles-new")}</span>
+                            })}
+                        </div>
                     </div>
                     <Show when=move || !selector.get().is_empty()>
                         <LayoutSection sx/>

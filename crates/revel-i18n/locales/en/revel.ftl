@@ -123,7 +123,7 @@ editor-bp-min = From { $width } px
 editor-zoom = Zoom
 editor-zoom-fit = Fit
 editor-scripts = Site scripts
-editor-scripts-help = Run the site's JavaScript in the canvas (off by default: clicks select elements)
+editor-scripts-help = Run the site's scripts in the canvas (off: clicks select elements)
 editor-undo = Undo (Ctrl+Z)
 editor-redo = Redo (Ctrl+Shift+Z)
 editor-no-selection = No element selected
@@ -215,13 +215,12 @@ editor-bp-in-use = This breakpoint has styles: remove them first in the styles p
 styles-title = Styles
 styles-selector = Class
 styles-state = State
-styles-state-none = None
+styles-state-none = Default
 styles-state-hover = Hover
 styles-state-focus = Keyboard focus
 styles-state-active = Pressed
 styles-class-new = Add a class…
 styles-no-class = This element has no class: add one to style it.
-styles-where = Editing { $selector } — { $breakpoint }
 styles-new-rule = Nothing is set here yet: the first value creates the style, applied on top of wider screens.
 styles-elements-only = Styles apply to HTML elements.
 styles-reset = Reset
@@ -373,20 +372,16 @@ error-edit-breakpoints = Invalid breakpoints: each width can be used only once a
 error-edit-bound = This text comes from a file that cannot be modified here. ({ $detail })
 
 ## Panneau de styles (D-20)
-styles-no-class-short = No class
 styles-count = { $count ->
-        [one] { $count } element on this page
-       *[other] { $count } elements on this page
+        [one] { $count } element
+       *[other] { $count } elements
     }
-styles-legend-here = Set here
-styles-legend-inherited = Inherited
 styles-origin-here = Set here: { $source }
 styles-origin-inherited = Inherited from { $source }
 styles-origin-none = Value coming from elsewhere (another class, a parent element or the browser).
-styles-label-help = Alt+click a label to reset. Drag a label or a value to change the number (Shift ×10, Alt ×0.1).
+styles-label-help = Drag: change the value (Shift ×10, Alt ×0.1). Alt+click: reset
 styles-unset = —
 styles-unset-value = — ({ $value })
-styles-code-help = Every declaration of this style, as written in the site's CSS.
 display-block = Block
 display-flex = Stack
 display-grid = Grid
@@ -554,3 +549,76 @@ styles-contrast-aaa = AAA
 styles-contrast-aa = AA
 styles-contrast-large = AA for large text only
 styles-contrast-low = too low
+unit-auto-s = Auto
+unit-fit-s = Fit
+unit-none-s = None
+unit-normal-s = Normal
+styles-label-help-reset = Alt+click: reset
+styles-margin-short = Margin
+styles-padding-short = Padding
+styles-combo = Combined classes: the style only applies to elements that have all of them
+styles-class-remove = Remove this class from the element
+styles-class-first = Add a class to style this element…
+styles-new = New
+editor-bp-desktop-short = Desktop
+
+## Espace de travail (D-21)
+panel-pages = Pages
+panel-cms = CMS
+panel-components = Components
+panel-assets = Assets
+panel-interactions = Interactions
+panel-interactions-planned = Animations and interactions
+planned-step = planned for step { $step }
+planned-edit = Editing: step { $step }
+pages-search = Search pages
+pages-count = { $count ->
+        [one] { $count } page
+       *[other] { $count } pages
+    }
+pages-new = New page
+pages-folder-new = New folder
+cms-none = No collection in this site.
+cms-entry-new = New entry
+cms-collection-new = New collection
+components-search = Search components
+components-uses = { $count ->
+        [one] Used once
+       *[other] Used { $count } times
+    }
+components-new = New component
+assets-search = Search assets
+assets-count = { $count ->
+        [one] { $count } image
+       *[other] { $count } images
+    }
+assets-import = Import assets
+dock-menu = Panel options
+dock-float = Detach into a window
+dock-close = Close “{ $panel }”
+dock-move = Move the window
+dock-panels = Panels
+dock-show-all = Show panels
+dock-hide-all = Hide panels
+dock-reset = Default layout
+layers-search = Search layers
+layers-collapse = Collapse all
+layers-parent = Select parent
+editor-zoom-help = Zoom (Ctrl+wheel, Ctrl+0 fit, Ctrl+1 100%)
+editor-zoom-fit-pct = Fit ({ $pct })
+editor-zoom-fit-short = Zoom to fit
+editor-zoom-100 = Zoom to 100%
+editor-path = Element path
+editor-scrub = Change a number
+key-zoom-fit = Ctrl+0
+key-zoom-100 = Ctrl+1
+key-zoom-wheel = Ctrl+wheel
+key-panels = Ctrl+\
+key-alt-click = Alt+click
+key-drag-label = Drag the label
+home-search = Search sites
+home-view = View
+home-view-grid = Grid
+home-view-list = List
+action-edit-site = Open the editor
+assets-none = No image with a fixed path in this site.

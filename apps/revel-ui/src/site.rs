@@ -25,12 +25,22 @@ pub fn Overview(site: SiteSummary) -> impl IntoView {
         .cloned()
         .collect();
     let n_cols = cols.len();
+    let s_edit = site.clone();
+    let s_build = site.clone();
     view! {
         <section class="page">
             <header class="page-head">
                 <div>
                     <h1>{site.name.clone()}</h1>
                     <p class="muted path">{site.path.clone()}</p>
+                </div>
+                <div class="toolbar">
+                    <button class="btn" on:click=move |_| ui.route.set(crate::Route::Site { site: s_build.clone(), tab: crate::Tab::Build })>
+                        {icons::build()}{ui.t("nav-build")}
+                    </button>
+                    <button class="btn btn--primary" on:click=move |_| ui.route.set(crate::Route::Site { site: s_edit.clone(), tab: crate::Tab::Editor })>
+                        {icons::edit()}{ui.t("action-edit-site")}
+                    </button>
                 </div>
             </header>
             <div class="section">
@@ -52,7 +62,7 @@ pub fn Overview(site: SiteSummary) -> impl IntoView {
                                 <tr>
                                     <td class="strong">{capitalize(&c.id)}</td>
                                     <td class="muted path">{c.folder.clone()}</td>
-                                    <td class="num">{move || ui.tx("site-entries", &[("count", crate::num(n as f64, 0))])}</td>
+                                    <td class="muted col-count">{move || ui.tx("site-entries", &[("count", crate::num(n as f64, 0))])}</td>
                                 </tr>
                             }
                         }).collect_view()}

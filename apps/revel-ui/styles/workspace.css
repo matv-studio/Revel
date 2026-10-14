@@ -1,0 +1,170 @@
+/* Revel — espace de travail modulable (D-21) : colonnes de panneaux autour du canevas, groupes
+   d'onglets, fenêtres flottantes. Voir docs/DESIGN.md, section Espace de travail. */
+
+.workspace { position: relative; display: flex; min-height: 0; overflow: hidden; }
+.workspace.is-dragging iframe { pointer-events: none; }
+:root[data-dock-drag="grabbing"] * { cursor: grabbing !important; }
+:root[data-dock-drag="col-resize"] * { cursor: col-resize !important; }
+:root[data-dock-drag="row-resize"] * { cursor: row-resize !important; }
+:root[data-dock-drag="move"] * { cursor: move !important; }
+:root[data-dock-drag="nwse-resize"] * { cursor: nwse-resize !important; }
+:root[data-dock-drag] * { user-select: none !important; }
+
+/* --- Colonnes ----------------------------------------------------------------- */
+.dock-col {
+  position: relative; flex: none; display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface);
+}
+.dock-col--left { order: 0; border-right: var(--border) solid var(--line); }
+.canvas-area { order: 1; }
+.dock-col--right { order: 2; border-left: var(--border) solid var(--line); }
+.dock-col.is-empty { border: 0; overflow: hidden; }
+/* Pendant un déplacement, une colonne vide reste une cible de dépôt. */
+.workspace.is-dragging .dock-col.is-empty { width: 32px !important; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.dock-resize { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 6; cursor: col-resize; }
+.dock-col--left .dock-resize { right: -4px; }
+.dock-col--right .dock-resize { left: -4px; }
+.dock-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; transition: background var(--fast) var(--ease); }
+.dock-resize:hover::after { background: var(--text-faint); }
+.dock-col.is-empty .dock-resize { display: none; }
+
+/* --- Groupes ------------------------------------------------------------------- */
+.dock-group {
+  position: relative; display: flex; flex-direction: column;
+  flex: 1 1 0; min-height: 72px;
+}
+.dock-group + .dock-group { border-top: var(--border) solid var(--line); }
+.dock-split { position: absolute; top: -4px; left: 0; right: 0; height: 7px; z-index: 5; cursor: row-resize; }
+.dock-split::after { content: ""; position: absolute; left: 0; right: 0; top: 3px; height: 1px; transition: background var(--fast) var(--ease); }
+.dock-split:hover::after { background: var(--text-faint); }
+
+.dock-head {
+  flex: none; display: flex; align-items: center; gap: 2px;
+  height: 38px; padding: 0 4px 0 0;
+  border-bottom: var(--border) solid var(--line);
+}
+/* Onglets qui ne tiennent pas : bande défilante (molette), fondu à droite, liste complète dans
+   le menu du groupe. */
+.dock-tabs {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; padding: 0 14px 0 6px;
+  overflow-x: auto; scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, #000 6px, #000 calc(100% - 14px), transparent);
+}
+.dock-tabs::-webkit-scrollbar { display: none; }
+/* Onglets : pastilles de texte ; l'onglet actif est en relief. */
+.dock-tab {
+  flex: none; display: inline-flex; align-items: center;
+  height: 28px; padding: 0 9px;
+  border: 0; border-radius: var(--radius-md); background: none;
+  color: var(--text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium);
+  white-space: nowrap; cursor: default; touch-action: none;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.dock-tab:hover { color: var(--text); background: var(--surface-hover); }
+.dock-tab.is-on {
+  color: var(--text); background: var(--surface-active);
+  box-shadow: inset 0 0 0 1px var(--line-strong), 0 1px 2px rgb(0 0 0 / .12);
+}
+
+.dock-menu-wrap { position: relative; flex: none; }
+.dock-menu-btn { opacity: .7; }
+.dock-head:hover .dock-menu-btn { opacity: 1; }
+.dock-menu { top: calc(100% + 4px); right: 0; left: auto; width: auto; min-width: 200px; padding: 4px; gap: 0; }
+
+.dock-body { flex: 1; min-height: 0; display: flex; position: relative; }
+.dock-panel { display: none; flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+.dock-panel.is-on { display: flex; flex-direction: column; }
+.dock-panel > .panel-pad { flex: none; }
+
+/* --- Fenêtres flottantes ----------------------------------------------------------- */
+.dock-float {
+  position: absolute; z-index: 40; display: flex; flex-direction: column;
+  background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-lg);
+  box-shadow: var(--shadow-dialog); overflow: hidden;
+}
+.dock-float.is-hidden { display: none; }
+.dock-float .dock-group { flex: 1 1 auto; }
+.dock-float-grip { flex: none; height: 12px; cursor: move; display: grid; place-items: center; touch-action: none; }
+.dock-float-grip::before { content: ""; width: 32px; height: 3px; border-radius: 2px; background: var(--line-strong); }
+.dock-float-grip:hover::before { background: var(--text-faint); }
+.dock-float-size {
+  position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 55%, var(--line-strong) 55% 62%, transparent 62% 75%, var(--line-strong) 75% 82%, transparent 82%);
+}
+
+/* --- Déplacement d'un onglet ------------------------------------------------------- */
+.dock-hint {
+  position: absolute; z-index: 60; pointer-events: none; border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--set-text) 14%, transparent);
+  box-shadow: inset 0 0 0 2px var(--set-text);
+  transition: all 80ms var(--ease);
+}
+.dock-ghost {
+  position: absolute; z-index: 61; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+  border-radius: var(--radius-md); background: var(--surface-raised); color: var(--text);
+  font-size: var(--text-sm); font-weight: var(--weight-medium); box-shadow: var(--shadow-dialog);
+}
+
+/* --- Menu « Panneaux » ------------------------------------------------------------------ */
+.panels-pop { width: 240px; padding: 4px; gap: 0; }
+.menu-item--check, .panels-pop .menu-item { display: flex; align-items: center; gap: 8px; height: 28px; font-weight: var(--weight-regular); font-size: var(--text-sm); }
+.panels-pop .menu-item kbd { margin-left: auto; }
+.menu-check, .menu-icon { flex: none; display: grid; place-items: center; width: 16px; height: 16px; color: var(--text-muted); }
+.menu-check svg.icon { width: 13px; height: 13px; color: var(--text); }
+.menu-icon svg.icon { width: 15px; height: 15px; }
+.menu-sep { border: 0; border-top: var(--border) solid var(--line); margin: 4px 0; }
+
+/* --- Listes des panneaux (pages, CMS, composants, médias) ---------------------------------- */
+.panel-list { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.panel-search {
+  flex: none; display: flex; align-items: center; gap: 6px; margin: 8px 8px 4px; padding: 0 8px; height: var(--control-sm);
+  border-radius: var(--radius-md); background: var(--bg); border: var(--border) solid transparent; color: var(--text-faint);
+}
+.panel-search:focus-within { border-color: var(--line-strong); }
+.panel-search svg.icon { width: 13px; height: 13px; flex: none; }
+.panel-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--text); font-size: var(--text-sm); }
+.panel-search input::-webkit-search-cancel-button { filter: grayscale(1); }
+.list-scroll { flex: 1; min-height: 0; overflow: auto; padding: 4px 0; }
+.list-row {
+  display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 10px 0 12px;
+  border: 0; background: none; color: var(--text); font-size: var(--text-sm); text-align: left; cursor: default;
+}
+.list-row:hover { background: var(--surface-hover); }
+.list-row.is-on { background: var(--surface-active); }
+.list-row.is-nested { padding-left: 34px; }
+.list-folder { color: var(--text); font-weight: var(--weight-medium); padding-left: 4px; }
+.list-chevron { display: grid; place-items: center; width: 16px; color: var(--text-faint); }
+.list-chevron svg.icon { width: 12px; height: 12px; }
+.list-icon { display: grid; place-items: center; color: var(--text-faint); flex: none; }
+.list-icon svg.icon { width: 14px; height: 14px; }
+.list-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-meta { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--text-faint); opacity: 0; }
+.list-row:hover .list-meta, .list-row.is-on .list-meta { opacity: 1; }
+.list-count { flex: none; font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.panel-empty { padding: var(--s-4); font-size: var(--text-sm); text-align: center; }
+
+.panel-foot {
+  flex: none; display: flex; align-items: center; gap: 2px; height: 34px; padding: 0 4px 0 12px;
+  border-top: var(--border) solid var(--line);
+}
+.panel-foot-text { flex: 1; min-width: 0; font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-btn.is-planned:disabled { opacity: .35; cursor: help; pointer-events: auto; }
+
+.planned {
+  margin: auto; padding: var(--s-6) var(--s-4); max-width: 240px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2); text-align: center;
+  color: var(--text-muted); font-size: var(--text-sm);
+}
+.planned-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--surface-active); color: var(--text); }
+.planned-icon svg.icon { width: 20px; height: 20px; }
+
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; padding: 4px 10px 10px; }
+.asset { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.asset-thumb {
+  aspect-ratio: 1; border-radius: var(--radius-md); overflow: hidden;
+  background: conic-gradient(var(--surface-active) 25%, var(--surface-hover) 0 50%, var(--surface-active) 0 75%, var(--surface-hover) 0) 0 0 / 12px 12px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.asset-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.asset figcaption { font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

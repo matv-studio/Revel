@@ -265,9 +265,14 @@
     // Raccourcis de l'éditeur (annuler, rétablir, dupliquer, supprimer…) transmis à l'interface.
     if (e.ctrlKey || e.metaKey || e.key === "Delete" || e.key === "Backspace") {
       post({ type: "key", key: e.key, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey });
-      if (["z", "y", "s", "d", "delete", "backspace"].includes(e.key.toLowerCase())) e.preventDefault();
+      if (["z", "y", "s", "d", "delete", "backspace", "0", "1", "=", "+", "-", "\\"].includes(e.key.toLowerCase())) e.preventDefault();
     }
   }, true);
+
+  // Molette avec Ctrl : zoom de l'éditeur (pas celui de la page).
+  window.addEventListener("wheel", (e) => {
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); post({ type: "zoom", dy: e.deltaY }); }
+  }, { passive: false });
 
   window.addEventListener("scroll", redraw, true);
   // Position de défilement transmise à l'interface (rétablie après un rechargement).

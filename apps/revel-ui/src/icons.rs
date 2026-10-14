@@ -284,3 +284,64 @@ pub fn side_bottom() -> AnyView {
 pub fn side_left() -> AnyView {
     side("M2.5 2.5v11")
 }
+
+/// Réinitialiser (flèche qui revient en arrière).
+pub fn reset() -> AnyView {
+    svg(r#"<path d="M3 8a5 5 0 1 0 1.5-3.6"/><path d="M3.5 2.5v2.5H6"/>"#)
+}
+
+/// Une page.
+pub fn page() -> AnyView {
+    svg(
+        r#"<path d="M4.5 2h4.5l2.5 2.5V13a.5.5 0 0 1-.5.5h-6.5A.5.5 0 0 1 4 13V2.5A.5.5 0 0 1 4.5 2z"/>"#,
+    )
+}
+
+/// Collections du CMS.
+pub fn database() -> AnyView {
+    svg(
+        r#"<ellipse cx="8" cy="3.8" rx="5" ry="1.8"/><path d="M3 3.8v8.4c0 1 2.2 1.8 5 1.8s5-.8 5-1.8V3.8M3 8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8"/>"#,
+    )
+}
+
+/// Interactions (éclair).
+pub fn bolt() -> AnyView {
+    svg(r#"<path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/>"#)
+}
+
+/// Plus d'actions.
+pub fn more() -> AnyView {
+    view! {
+        <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor">
+            <circle cx="3.5" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.5" cy="8" r="1.2"/>
+        </svg>
+    }
+    .into_any()
+}
+
+/// Disposition des panneaux.
+pub fn layout() -> AnyView {
+    svg(
+        r#"<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M5.5 2.5v11M10.5 2.5v11"/>"#,
+    )
+}
+
+/// Recherche.
+pub fn search() -> AnyView {
+    svg(r#"<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/>"#)
+}
+
+/// Sélectionner l'élément parent.
+pub fn parent() -> AnyView {
+    svg(r#"<path d="M5 6.5 8 3.5l3 3M8 3.5v9"/>"#)
+}
+
+/// Tout replier.
+pub fn collapse() -> AnyView {
+    svg(r#"<path d="m4.5 6 3.5-3 3.5 3M4.5 10l3.5 3 3.5-3"/>"#)
+}
+
+/// Vue en liste.
+pub fn list() -> AnyView {
+    svg(r#"<path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/>"#)
+}

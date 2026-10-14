@@ -126,7 +126,7 @@ editor-bp-min = À partir de { $width } px
 editor-zoom = Zoom
 editor-zoom-fit = Ajusté
 editor-scripts = Scripts du site
-editor-scripts-help = Exécuter le JavaScript du site dans le canevas (désactivé par défaut : les clics y sélectionnent les éléments)
+editor-scripts-help = Exécuter les scripts du site dans le canevas (désactivé : les clics sélectionnent les éléments)
 editor-undo = Annuler (Ctrl+Z)
 editor-redo = Rétablir (Ctrl+Maj+Z)
 editor-no-selection = Aucun élément sélectionné
@@ -218,13 +218,12 @@ editor-bp-in-use = Ce point de rupture a des styles : retirez-les d'abord dans l
 styles-title = Styles
 styles-selector = Classe
 styles-state = État
-styles-state-none = Aucun
+styles-state-none = Normal
 styles-state-hover = Survol
 styles-state-focus = Focus clavier
 styles-state-active = Appui
 styles-class-new = Ajouter une classe…
 styles-no-class = Cet élément n'a pas de classe : ajoutez-en une pour lui donner un style.
-styles-where = Modifie { $selector } — { $breakpoint }
 styles-new-rule = Rien n'est encore réglé ici : la première valeur crée le style, appliqué par-dessus les écrans plus larges.
 styles-elements-only = Les styles se règlent sur les éléments HTML.
 styles-reset = Réinitialiser
@@ -376,20 +375,16 @@ error-edit-breakpoints = Points de rupture invalides : chaque largeur ne peut se
 error-edit-bound = Ce texte vient d'un fichier qui ne peut pas être modifié ici. ({ $detail })
 
 ## Panneau de styles (D-20)
-styles-no-class-short = Aucune classe
 styles-count = { $count ->
-        [one] { $count } élément sur cette page
-       *[other] { $count } éléments sur cette page
+        [one] { $count } élément
+       *[other] { $count } éléments
     }
-styles-legend-here = Réglé ici
-styles-legend-inherited = Hérité
 styles-origin-here = Réglé ici : { $source }
 styles-origin-inherited = Hérité de { $source }
 styles-origin-none = Valeur venant d'ailleurs (autre classe, élément parent ou navigateur).
-styles-label-help = Alt+clic sur un libellé : réinitialiser. Glisser un libellé ou une valeur : changer le nombre (Maj ×10, Alt ×0,1).
+styles-label-help = Glisser : changer la valeur (Maj ×10, Alt ×0,1). Alt+clic : réinitialiser
 styles-unset = —
 styles-unset-value = — ({ $value })
-styles-code-help = Toutes les déclarations de ce style, telles qu'écrites dans le CSS du site.
 display-block = Bloc
 display-flex = Pile
 display-grid = Grille
@@ -557,3 +552,76 @@ styles-contrast-aaa = AAA
 styles-contrast-aa = AA
 styles-contrast-large = AA pour les grands textes seulement
 styles-contrast-low = insuffisant
+unit-auto-s = Auto
+unit-fit-s = Contenu
+unit-none-s = Aucune
+unit-normal-s = Normal
+styles-label-help-reset = Alt+clic : réinitialiser
+styles-margin-short = Extérieur
+styles-padding-short = Intérieur
+styles-combo = Classes combinées : le style ne s'applique qu'aux éléments qui ont toutes ces classes
+styles-class-remove = Retirer cette classe de l'élément
+styles-class-first = Ajouter une classe pour donner un style…
+styles-new = Nouveau
+editor-bp-desktop-short = Ordinateur
+
+## Espace de travail (D-21)
+panel-pages = Pages
+panel-cms = CMS
+panel-components = Composants
+panel-assets = Médias
+panel-interactions = Interactions
+panel-interactions-planned = Animations et interactions
+planned-step = prévu à l'étape { $step }
+planned-edit = Modification : étape { $step }
+pages-search = Rechercher une page
+pages-count = { $count ->
+        [one] { $count } page
+       *[other] { $count } pages
+    }
+pages-new = Nouvelle page
+pages-folder-new = Nouveau dossier
+cms-none = Aucune collection dans ce site.
+cms-entry-new = Nouvelle entrée
+cms-collection-new = Nouvelle collection
+components-search = Rechercher un composant
+components-uses = { $count ->
+        [one] Utilisé { $count } fois
+       *[other] Utilisé { $count } fois
+    }
+components-new = Nouveau composant
+assets-search = Rechercher un média
+assets-count = { $count ->
+        [one] { $count } image
+       *[other] { $count } images
+    }
+assets-import = Importer des médias
+dock-menu = Options du panneau
+dock-float = Détacher dans une fenêtre
+dock-close = Fermer « { $panel } »
+dock-move = Déplacer la fenêtre
+dock-panels = Panneaux
+dock-show-all = Afficher les panneaux
+dock-hide-all = Masquer les panneaux
+dock-reset = Disposition par défaut
+layers-search = Rechercher un calque
+layers-collapse = Tout replier
+layers-parent = Sélectionner le parent
+editor-zoom-help = Zoom (Ctrl+molette, Ctrl+0 ajusté, Ctrl+1 100 %)
+editor-zoom-fit-pct = Ajusté ({ $pct })
+editor-zoom-fit-short = Zoom ajusté
+editor-zoom-100 = Zoom à 100 %
+editor-path = Chemin de l'élément
+editor-scrub = Changer un nombre
+key-zoom-fit = Ctrl+0
+key-zoom-100 = Ctrl+1
+key-zoom-wheel = Ctrl+molette
+key-panels = Ctrl+\
+key-alt-click = Alt+clic
+key-drag-label = Glisser le libellé
+home-search = Rechercher un site
+home-view = Affichage
+home-view-grid = Grille
+home-view-list = Liste
+action-edit-site = Ouvrir l'éditeur
+assets-none = Aucune image à chemin fixe dans ce site.

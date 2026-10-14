@@ -8,7 +8,7 @@ fs.mkdirSync(out, { recursive: true });
 const mock = fs.readFileSync(new URL("../apps/revel-ui/dev/mock-tauri.js", import.meta.url), "utf8");
 const b = await chromium.launch();
 // [nom, paramètres de la simulation, clics successifs ("wait" : attendre la fin d'une action)]
-const site = "tr.row-link";
+const site = ".site-open";
 const tabBuild = ".nav-item--sub >> nth=1";
 const tabPublish = ".nav-item--sub >> nth=2";
 const shots = [

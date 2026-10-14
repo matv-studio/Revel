@@ -46,6 +46,11 @@
   --green-text-dark: #7fd6a3;
   --green-text-light: #1b7a4b;
   --red-solid: #d4382c;             /* action destructrice confirmée */
+  /* Origine d'une valeur de style, code de Webflow (D-21) : bleu = réglée ici, orange = héritée */
+  --blue-text-dark: #7fb0ff;
+  --blue-text-light: #1f5fd1;
+  --orange-text-dark: #f3aa55;
+  --orange-text-light: #b25b00;
 
   /* --- Typographie ------------------------------------------------- */
   --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -112,6 +117,10 @@
   --danger-text: var(--red-text-dark);
   --danger-bg: var(--red-bg-dark);
   --success-text: var(--green-text-dark);
+  --set-text: var(--blue-text-dark);
+  --set-bg: rgb(64 132 255 / .2);
+  --inherit-text: var(--orange-text-dark);
+  --inherit-bg: rgb(243 160 64 / .14);
   --overlay: rgb(0 0 0 / .55);      /* fond derrière une boîte de dialogue */
   --shadow-dialog: 0 16px 40px rgb(0 0 0 / .45), 0 0 0 1px var(--line-strong);
 }
@@ -134,6 +143,10 @@
   --danger-text: var(--red-text-light);
   --danger-bg: var(--red-bg-light);
   --success-text: var(--green-text-light);
+  --set-text: var(--blue-text-light);
+  --set-bg: rgb(64 132 255 / .14);
+  --inherit-text: var(--orange-text-light);
+  --inherit-bg: rgb(243 160 64 / .16);
   --overlay: rgb(0 0 0 / .28);
   --shadow-dialog: 0 16px 40px rgb(0 0 0 / .18), 0 0 0 1px var(--line);
 }
@@ -155,6 +168,10 @@
     --danger-text: var(--red-text-light);
     --danger-bg: var(--red-bg-light);
     --success-text: var(--green-text-light);
+    --set-text: var(--blue-text-light);
+    --set-bg: rgb(64 132 255 / .14);
+    --inherit-text: var(--orange-text-light);
+    --inherit-bg: rgb(243 160 64 / .16);
     --overlay: rgb(0 0 0 / .28);
     --shadow-dialog: 0 16px 40px rgb(0 0 0 / .18), 0 0 0 1px var(--line);
   }

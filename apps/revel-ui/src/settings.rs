@@ -54,7 +54,7 @@ pub fn Settings() -> impl IntoView {
                         {theme_btn("dark", "theme-dark")}
                         {theme_btn("light", "theme-light")}
                     </div>
-                    <span class="label">{ui.t("settings-accent")}</span>
+                    <span class="label" title=ui.t("settings-accent-help")>{ui.t("settings-accent")}</span>
                     <div class="swatches" role="radiogroup">
                         <button role="radio" class="swatch swatch--none" class:is-on=move || accent().is_none()
                             title=ui.t("accent-none") aria-label=ui.t("accent-none")
@@ -74,7 +74,7 @@ pub fn Settings() -> impl IntoView {
                         </label>
                     </div>
                     <span></span>
-                    <p class="muted help">{ui.t("settings-accent-help")}</p>
+
                 </div>
             </div>
             <div class="section">

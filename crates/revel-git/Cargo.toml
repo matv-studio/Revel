@@ -22,6 +22,13 @@ git2 = { version = "0.21.0", default-features = false, features = ["https", "ven
 # (indispensable derrière un proxy d'entreprise ou un antivirus qui inspecte HTTPS).
 ureq = { version = "3.4.2", features = ["json", "platform-verifier"], optional = true }
 
+# macOS : libgit2 utilise la pile TLS d'Apple (Secure Transport), mais libgit2-sys dépend quand même
+# d'openssl-sys sur tous les Unix. Compilée dans Revel (« vendored ») plutôt que liée à l'OpenSSL de
+# Homebrew : sans cela, l'application exigeait /opt/homebrew/opt/openssl@3 au lancement, et la
+# compilation pour les Mac Intel depuis un Mac Apple Silicon échouait.
+[target.'cfg(target_os = "macos")'.dependencies]
+openssl-sys = { version = "0.9.117", features = ["vendored"] }
+
 [dev-dependencies]
 tempfile = "3"
 

@@ -76,3 +76,20 @@ jobs:
           releaseBody: Installateurs de test, non signés.
           releaseDraft: true
           prerelease: true
+      # L'application ne doit dépendre que de bibliothèques présentes sur tout système
+      # (pas de Homebrew sous macOS : rien n'y est installé chez l'utilisateur).
+      - name: Bibliothèques liées (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          bin=$(ls target/${{ matrix.target }}/release/revel-app 2>/dev/null || ls target/release/revel-app)
+          otool -L "$bin" | tee -a "$GITHUB_STEP_SUMMARY"
+          if otool -L "$bin" | grep -E '/opt/homebrew|/usr/local/(opt|Cellar|lib)'; then
+            echo "::error::L'application dépend d'une bibliothèque Homebrew"; exit 1
+          fi
+      - name: Bibliothèques liées (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          ldd target/release/revel-app | tee -a "$GITHUB_STEP_SUMMARY"
+          if ldd target/release/revel-app | grep 'not found'; then exit 1; fi

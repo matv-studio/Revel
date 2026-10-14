@@ -499,19 +499,9 @@ pub fn Layers() -> impl IntoView {
             ed.apply(ui, c, false);
         }
     };
-    let on_key = move |e: leptos::ev::KeyboardEvent| {
-        let key = e.key();
-        if key == "Delete" || key == "Backspace" {
-            e.prevent_default();
-            act(target().map(|at| Command::Remove { at }));
-        } else if (e.ctrl_key() || e.meta_key()) && key.eq_ignore_ascii_case("d") {
-            e.prevent_default();
-            act(target().map(|at| Command::Duplicate { at }));
-        }
-    };
 
     view! {
-        <aside class="layers" tabindex="0" on:keydown=on_key aria-label=ui.t("layers-title")>
+        <aside class="layers" tabindex="0" aria-label=ui.t("layers-title")>
             <div class="panel-head">
                 <span class="toolbar-spacer"></span>
                 <button class="icon-btn" title=ui.t("layers-up") aria-label=ui.t("layers-up")

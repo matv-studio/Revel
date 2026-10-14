@@ -3,17 +3,20 @@
 Application de bureau (Windows, macOS, Linux) de création visuelle de sites web, écrite en Rust.
 *Desktop visual website builder written in Rust (English and French UI).*
 
-État : **étape 1** terminée (version 0.1.0) — ouvrir un site existant (import Eleventy), le générer (images
-AVIF/WebP), le prévisualiser et le publier par SFTP ou sur GitHub Pages, depuis l'application (français,
-anglais) ; sortie vérifiée équivalente à celle d'Eleventy à chaque envoi (CI).
-L'éditeur visuel arrive à l'étape 2.
+État : **étape 2** terminée (version 0.2.0) — ouvrir un site existant (import Eleventy), le modifier dans
+l'éditeur visuel (canevas, calques, réglages, panneau de styles, points de rupture, textes modifiés sur place
+et écrits dans leur source, annuler/rétablir), le générer (images AVIF/WebP), le prévisualiser et le publier
+par SFTP ou sur GitHub Pages, depuis l'application (français, anglais) ; sortie vérifiée équivalente à celle
+d'Eleventy à chaque envoi (CI). Prochaine étape : composants, modèles, plusieurs sites, collections.
 
 ## Organisation du dépôt
 
 | Dossier | Rôle |
 |---|---|
 | `crates/revel-model` | Document de site (schéma versionné, migrations) |
-| `crates/revel-render` | Génération HTML/CSS |
+| `crates/revel-render` | Génération HTML/CSS, rendu des pages pour l'éditeur |
+| `crates/revel-style` | Feuille de style du site : lecture, génération, points de rupture |
+| `crates/revel-edit` | Commandes d'édition réversibles, historique annuler/rétablir |
 | `crates/revel-assets` | Images (AVIF/WebP/JPEG), polices |
 | `crates/revel-cms` | Contenus Markdown/YAML compatibles Pages CMS |
 | `crates/revel-deploy` | Publication : trait `Provider`, capacités et avertissements par hébergeur |
@@ -31,7 +34,7 @@ L'éditeur visuel arrive à l'étape 2.
 | `apps/revel-cli` | Ligne de commande `revel` (tests, diagnostic) |
 | `docs/` | Architecture, décisions, plans d'étape |
 
-Détails : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Décisions : [docs/DECISIONS.md](docs/DECISIONS.md) · Plan en cours : [docs/ETAPE-1.md](docs/ETAPE-1.md)
+Détails : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Décisions : [docs/DECISIONS.md](docs/DECISIONS.md) · Plans d'étape : [docs/ETAPE-1.md](docs/ETAPE-1.md), [docs/ETAPE-2.md](docs/ETAPE-2.md)
 
 ## Commandes (développement)
 
@@ -40,6 +43,10 @@ cargo test --workspace          # tous les tests
 cargo run -p revel-cli -- info  # ligne de commande
 cargo tauri dev                 # application (depuis apps/revel-app ; tauri-cli et trunk requis)
 ```
+
+Essais de bout en bout (Linux) : `tools/editor-e2e.mjs` (interface dans Chromium reliée à un vrai cœur par
+`revel canvas-serve --bridge`) et `tools/app-e2e.mjs` (application elle-même, par `tauri-driver`) ; les
+commandes exactes sont dans `.github/workflows/ci.yml`.
 
 CI : Linux, Windows et macOS à chaque envoi (dépôt public : minutes gratuites). Installateurs : workflow
 *Installateurs*, lancé à la main avec le choix des systèmes. Étiquettes, branches, exécutions : workflows

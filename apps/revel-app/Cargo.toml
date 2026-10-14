@@ -26,5 +26,10 @@ tauri-plugin-dialog = "2.8.2"
 # Ouverture d'adresses dans le navigateur (github.com/login/device, site publié).
 tauri-plugin-opener = "2.7.1"
 
+[features]
+# Interface intégrée à l'exécutable (au lieu du serveur de développement `devUrl`) : activée par
+# `cargo tauri build` ; à demander pour un exécutable de débogage (essais de l'application).
+custom-protocol = ["tauri/custom-protocol"]
+
 [lints]
 workspace = true

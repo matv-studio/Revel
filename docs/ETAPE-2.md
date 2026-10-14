@@ -37,14 +37,15 @@ sans écrire de code, et sans perdre l'équivalence de la sortie avec le site d'
 | 2.6 | fait : panneau « Styles » (onglet par défaut de l'inspecteur) : sélecteur choisi parmi les classes de l'élément ou leur combinaison, état (survol, focus clavier, appui), ajout d'une classe ; sections Espacement (marges extérieures et intérieures côté par côté), Mise en page, Taille, Position, Typographie, Arrière-plans, Bordures, Effets, et toutes les déclarations de la règle (raccourcis, propriétés personnalisées, `!important`) ; valeur de la règle mise en évidence, valeur effective de l'élément (calculée dans le canevas) en indication ; première valeur à un point de rupture : règle créée à sa place dans la cascade ; mise à jour en direct sans recharger la page |
 | 2.7 | fait : double-clic sur un texte du canevas : modifiable sur place (Entrée ou clic ailleurs valide, Échap annule). Texte écrit dans la page, un gabarit ou un composant : `SetText` ; texte lié (D-19) : `SetBound`, écrit par le cœur dans sa source — fichier de données YAML ou en-tête d'un contenu (écriture ciblée : seule la valeur change, style de guillemets gardé, fichier relu avant écriture), ou variable de page ou de gabarit ; annulable comme les autres commandes, fichier rendu identique octet pour octet. Typographie française de la page non recopiée dans la source (espaces insécables, apostrophe) si la source ne l'utilisait pas. Fichiers modifiés hors de Revel (Pages CMS, éditeur de texte) : détectés (empreinte toutes les 2 s), document et page relus. Essais de bout en bout : 42/42 |
 | 2.8 | fait : points de rupture du site modifiables (ajout « jusqu'à » ou « à partir de » une largeur, retrait d'un point sans styles), commande `SetBreakpoints` vérifiée (base en premier, largeurs uniques) ; styles réglés au point de rupture affiché, cascade du plus large au plus étroit. Essais de bout en bout : 34/34 |
-| 2.9 | à faire |
+| 2.9 | fait : raccourcis réunis dans une seule table, valables dans l'interface, les calques et le canevas (Ctrl+Z, Ctrl+Maj+Z, Ctrl+Y, Ctrl+D, Suppr, Échap) et rappelés dans un aide-mémoire (bouton « ? ») ; état d'enregistrement dans la barre d'état (« Enregistrement… », « Enregistré à HH:MM ») ; essais de l'application elle-même pilotée par WebDriver (`tools/app-e2e.mjs`, job CI « Application de bureau » sous Linux dans Xvfb et sous Windows) : protocole du canevas, feuille de style, sélection, calques, suppression et annulation au clavier dans le canevas, fichiers du site intacts ; essais de l'interface dans Chromium : 48/48 ; version 0.2.0 et installateurs de test (workflow *Installateurs*) ; étiquette `step-2` |
 
 ## Sous-étapes
 
 Chaque sous-étape = commits + étiquette `step-2.N`, posée par le workflow `tag.yml` sur le dernier commit de `main`
 dès la sous-étape terminée : GitHub refuse au jeton des workflows une étiquette sur un commit plus ancien dont les
 fichiers `.github/workflows/` diffèrent de `main` (droit `workflows` réservé). C'est pourquoi `step-2.0` n'existe
-pas : la sous-étape 2.0 est incluse dans `step-2.1`, la 2.2 dans `step-2.3`.
+pas : la sous-étape 2.0 est incluse dans `step-2.1`, la 2.2 dans `step-2.3`, la 2.4 dans `step-2.5`, les 2.6 et 2.8
+dans `step-2.7`.
 
 | N | Contenu | Modules |
 |---|---|---|

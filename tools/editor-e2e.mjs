@@ -188,6 +188,39 @@ try {
   check('calques : tout annulé, document identique', JSON.stringify(docAfter.site) === JSON.stringify(docBefore.site));
   if (shots) await page.screenshot({ path: `${shots}/editeur-calques.png` });
 
+  // ------------------------------------------------------------------ raccourcis dans le canevas (étape 2.9)
+  {
+    const canvas = page.frameLocator('iframe.canvas-frame');
+    const baseK = await invoke('edit_open');
+    // Le clic atteint l'élément le plus profond : on compte les éléments repérés.
+    const marked = () => document.readyState === 'complete' && window.__revelSlot ? document.querySelectorAll('[data-rv]').length : -1;
+    const count = await frameOf().evaluate(marked);
+    await canvas.locator('h1').first().click();
+    await page.waitForSelector('.layers .layer.is-selected');
+    await page.keyboard.press('Delete');
+    f = await waitFrame((n) => document.readyState === 'complete' && window.__revelSlot && document.querySelectorAll('[data-rv]').length < n, 'Suppr dans le canevas', count);
+    check('Suppr dans le canevas : élément retiré', true);
+    await page.waitForFunction(() => /Enregistré à \d\d:\d\d/.test(document.querySelector('.save-state')?.textContent || ''));
+    check('état d\'enregistrement affiché', true, (await page.textContent('.save-state')).trim());
+    await canvas.locator('main').first().click();
+    await page.keyboard.press('Control+z');
+    f = await waitFrame((n) => document.readyState === 'complete' && window.__revelSlot && document.querySelectorAll('[data-rv]').length === n, 'Ctrl+Z dans le canevas', count);
+    check('Ctrl+Z dans le canevas : élément rétabli', true);
+    await canvas.locator('h1').first().click();
+    await page.keyboard.press('Control+d');
+    f = await waitFrame((n) => document.readyState === 'complete' && window.__revelSlot && document.querySelectorAll('[data-rv]').length > n, 'Ctrl+D dans le canevas', count);
+    check('Ctrl+D dans le canevas : élément dupliqué', true);
+    await page.click('.editor-toolbar .btn-undo');
+    f = await waitFrame((n) => document.readyState === 'complete' && window.__revelSlot && document.querySelectorAll('[data-rv]').length === n, 'annulation de Ctrl+D', count);
+    await canvas.locator('h1').first().click();
+    await page.waitForSelector('.layers .layer.is-selected');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.layers .layer.is-selected'));
+    check('Échap dans le canevas : sélection retirée', true);
+    const docK = await invoke('edit_open');
+    check('raccourcis : tout annulé, document identique', JSON.stringify(docK.site) === JSON.stringify(baseK.site));
+  }
+
 
   // ------------------------------------------------------------------ réglages et ajout (étape 2.5)
   const base25 = await invoke('edit_open');

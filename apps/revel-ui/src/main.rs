@@ -216,6 +216,21 @@ fn App() -> impl IntoView {
         }
     });
     ui.reload_recents();
+    // Ouverture directe dans l'éditeur (`--open` ou `REVEL_OPEN` : essais de l'application).
+    spawn_local(async move {
+        if let Ok(Some(path)) = api::startup_site().await {
+            match api::open_site(&path).await {
+                Ok(site) => {
+                    ui.route.set(Route::Site {
+                        site,
+                        tab: Tab::Editor,
+                    });
+                    ui.reload_recents();
+                }
+                Err(e) => ui.fail(e),
+            }
+        }
+    });
     spawn_local(async move {
         if let Ok(a) = api::github_account().await {
             ui.github.set(a);

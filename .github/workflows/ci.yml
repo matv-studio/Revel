@@ -17,6 +17,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # Version du site cobaye utilisée par les essais ; à mettre à jour volontairement (dépôt
+  # matv-studio/alunites-revel-lab).
+  COBAYE_REF: 0dd004c165bae249ff9af6e2779a00eabc313015
 
 jobs:
   lint:
@@ -125,9 +128,6 @@ jobs:
   equivalence:
     name: Équivalence avec Eleventy (site cobaye)
     runs-on: ubuntu-24.04
-    env:
-      # Version du cobaye comparée ; à mettre à jour volontairement (dépôt matv-studio/alunites-revel-lab).
-      COBAYE_REF: 0dd004c165bae249ff9af6e2779a00eabc313015
     steps:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7
@@ -251,5 +251,96 @@ jobs:
         with:
           name: captures-ecarts
           path: captures-ecarts
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Application de bureau (étape 2.9) : la vraie application Tauri (interface intégrée, commandes et
+  # protocole du canevas réels) pilotée par WebDriver avec tauri-driver, ouverte sur une copie du
+  # cobaye ; modifications annulées, copie comparée à l'original. Linux : WebKitWebDriver dans un
+  # écran virtuel (Xvfb) ; Windows : Edge WebDriver de la version de WebView2 installée. macOS : pas
+  # de pilote WebDriver pour WKWebView.
+  app:
+    name: Application de bureau (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: matv-studio/alunites-revel-lab
+          ref: ${{ env.COBAYE_REF }}
+          path: cobaye
+      - name: Espace disque (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Dépendances système de Tauri et WebKitWebDriver (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev webkit2gtk-driver xvfb
+      # NASM : encodeur AVIF (rav1e) optimisé.
+      - uses: ilammy/setup-nasm@v1
+      - name: Rust (version de rust-toolchain.toml)
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - name: Interface Leptos (WebAssembly)
+        working-directory: apps/revel-ui
+        run: trunk build --release
+      - name: Application (débogage, interface intégrée)
+        run: cargo build -p revel-app --features custom-protocol
+      # Outils d'essai : avertissements de compilation tolérés (code tiers).
+      - name: tauri-driver
+        env:
+          RUSTFLAGS: ""
+        run: cargo install tauri-driver --version 2.1.0 --locked
+      - name: Edge WebDriver (Windows)
+        if: runner.os == 'Windows'
+        env:
+          RUSTFLAGS: ""
+        run: |
+          cargo install --git https://github.com/chippers/msedgedriver-tool --rev 8c4b34f51b45f5cf08013366d703de464ab871d1 --locked
+          & "$HOME/.cargo/bin/msedgedriver-tool.exe"
+          $PWD.Path >> $env:GITHUB_PATH
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Essai de bout en bout
+        shell: bash
+        run: |
+          mkdir site-essai
+          tar --exclude=./.git -C cobaye -cf - . | tar -C site-essai -xf -
+          mkdir captures-application
+          run() {
+            tauri-driver > tauri-driver.log 2>&1 &
+            local driver=$! code=0
+            sleep 3
+            node tools/app-e2e.mjs target/debug/revel-app --open site-essai --shot captures-application/application.png || code=$?
+            kill "$driver" 2>/dev/null || true
+            return "$code"
+          }
+          if [ "$RUNNER_OS" = Linux ]; then
+            export -f run
+            xvfb-run -a -s "-screen 0 1440x900x24" bash -c run | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            run | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          # Les essais annulent tout : copie identique au cobaye.
+          diff -r --exclude=.git cobaye site-essai
+      - name: Captures et journal
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: application-${{ matrix.os }}
+          path: |
+            captures-application
+            tauri-driver.log
           if-no-files-found: ignore
           retention-days: 7

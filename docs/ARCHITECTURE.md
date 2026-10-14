@@ -156,6 +156,14 @@ l'exécution CI en cas d'échec).
   (`POST /__revel/invoke/<commande>`, adresse locale seulement) ; l'API Tauri simulée
   (`apps/revel-ui/dev/mock-tauri.js`, paramètre `bridge=`) les y transmet. `tools/editor-e2e.mjs` pilote
   l'interface ainsi reliée à un vrai cœur (CI). Le crochet `window.__revelTest` n'existe qu'avec la simulation.
+- Raccourcis (étape 2.9) : une seule table, `Ed::shortcut` (annuler, rétablir, dupliquer, supprimer, Échap),
+  appelée par l'écouteur clavier de l'interface (hors champs de saisie) et par les touches que le script du
+  canevas transmet (`key`, avec l'état de Ctrl/Cmd et Maj). État d'enregistrement dans la barre d'état
+  (commandes en attente de confirmation du cœur, heure du dernier enregistrement).
+- Essais de l'application elle-même : `tools/app-e2e.mjs` pilote l'exécutable Tauri par WebDriver
+  (`tauri-driver` : WebKitWebDriver sous Linux dans Xvfb, Edge WebDriver sous Windows ; pas de pilote pour
+  macOS). L'exécutable de débogage doit intégrer l'interface (`--features custom-protocol`) ; l'argument
+  `--open DOSSIER` (ou la variable `REVEL_OPEN`) ouvre directement le site dans l'éditeur.
 
 ## Versions de référence (vérifiées sur crates.io le 13/10/2026)
 

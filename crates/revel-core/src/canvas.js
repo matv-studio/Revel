@@ -252,10 +252,10 @@
       return;
     }
     if (e.key === "Escape") { select(null, true); return; }
-    // Raccourcis de l'éditeur (annuler, rétablir…) transmis à l'interface.
-    if (e.ctrlKey || e.metaKey) {
+    // Raccourcis de l'éditeur (annuler, rétablir, dupliquer, supprimer…) transmis à l'interface.
+    if (e.ctrlKey || e.metaKey || e.key === "Delete" || e.key === "Backspace") {
       post({ type: "key", key: e.key, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey });
-      if (["z", "y", "s"].includes(e.key.toLowerCase())) e.preventDefault();
+      if (["z", "y", "s", "d", "delete", "backspace"].includes(e.key.toLowerCase())) e.preventDefault();
     }
   }, true);
 

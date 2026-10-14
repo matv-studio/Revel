@@ -45,6 +45,10 @@ enum FromCanvas {
         key: String,
         #[serde(default)]
         shift: bool,
+        #[serde(default)]
+        ctrl: bool,
+        #[serde(default)]
+        meta: bool,
     },
     Scroll {
         x: f64,
@@ -88,6 +92,10 @@ pub struct Ed {
     pub scroll: RwSignal<(f64, f64)>,
     /// Valeurs effectives des propriétés de style de l'élément sélectionné (canevas).
     pub computed: RwSignal<std::collections::HashMap<String, String>>,
+    /// Modifications envoyées au cœur et pas encore confirmées.
+    pub pending: RwSignal<u32>,
+    /// Heure (ms) du dernier enregistrement confirmé.
+    pub saved_at: RwSignal<Option<f64>>,
     /// Heure de la dernière modification faite dans Revel (ms) : les fichiers changés juste après
     /// ne sont pas pris pour une modification extérieure.
     pub own_change: RwSignal<f64>,
@@ -221,6 +229,30 @@ impl Ed {
         });
     }
 
+    /// Raccourci clavier de l'éditeur (interface ou canevas) ; `true` s'il a été traité.
+    pub fn shortcut(self, ui: Ui, key: &str, ctrl: bool, shift: bool) -> bool {
+        let target = || self.selected_target();
+        match (key.to_lowercase().as_str(), ctrl) {
+            ("z", true) if shift => self.redo(ui),
+            ("z", true) => self.undo(ui),
+            ("y", true) => self.redo(ui),
+            ("d", true) => match target() {
+                Some(at) => self.apply(ui, Command::Duplicate { at }, false),
+                None => return false,
+            },
+            ("delete" | "backspace", false) => match target() {
+                Some(at) => self.apply(ui, Command::Remove { at }, false),
+                None => return false,
+            },
+            ("escape", false) => {
+                self.selected.set(None);
+                self.post(serde_json::json!({ "type": "select", "id": null }));
+            }
+            _ => return false,
+        }
+        true
+    }
+
     pub fn undo(self, ui: Ui) {
         if !self
             .state
@@ -229,9 +261,15 @@ impl Ed {
             return;
         }
         let path = self.path.get_value();
+        self.pending.update(|n| *n += 1);
         spawn_local(async move {
-            match api::edit_undo(&path).await {
-                Ok(st) => self.after(ui, st),
+            let r = api::edit_undo(&path).await;
+            self.pending.update(|n| *n = n.saturating_sub(1));
+            match r {
+                Ok(st) => {
+                    self.saved_at.set(Some(js_sys::Date::now()));
+                    self.after(ui, st)
+                }
                 Err(e) => ui.fail(e),
             }
         });
@@ -245,9 +283,15 @@ impl Ed {
             return;
         }
         let path = self.path.get_value();
+        self.pending.update(|n| *n += 1);
         spawn_local(async move {
-            match api::edit_redo(&path).await {
-                Ok(st) => self.after(ui, st),
+            let r = api::edit_redo(&path).await;
+            self.pending.update(|n| *n = n.saturating_sub(1));
+            match r {
+                Ok(st) => {
+                    self.saved_at.set(Some(js_sys::Date::now()));
+                    self.after(ui, st)
+                }
                 Err(e) => ui.fail(e),
             }
         });
@@ -256,9 +300,15 @@ impl Ed {
     /// Applique une commande d'édition.
     pub fn apply(self, ui: Ui, cmd: Command, coalesce: bool) {
         let path = self.path.get_value();
+        self.pending.update(|n| *n += 1);
         spawn_local(async move {
-            match api::edit_apply(&path, &cmd, coalesce).await {
-                Ok(st) => self.after(ui, st),
+            let r = api::edit_apply(&path, &cmd, coalesce).await;
+            self.pending.update(|n| *n = n.saturating_sub(1));
+            match r {
+                Ok(st) => {
+                    self.saved_at.set(Some(js_sys::Date::now()));
+                    self.after(ui, st)
+                }
                 Err(e) => ui.fail(e),
             }
         });
@@ -391,6 +441,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         scroll: RwSignal::new((0.0, 0.0)),
         computed: RwSignal::new(Default::default()),
         own_change: RwSignal::new(0.0),
+        pending: RwSignal::new(0),
+        saved_at: RwSignal::new(None),
         frame: NodeRef::new(),
     };
     provide_context(ed);
@@ -461,12 +513,14 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 }
                 ed.selected.set(id.map(|id| Selection { id, tag, label }));
             }
-            FromCanvas::Key { key, shift } => match key.to_lowercase().as_str() {
-                "z" if shift => ed.redo(ui),
-                "z" => ed.undo(ui),
-                "y" => ed.redo(ui),
-                _ => {}
-            },
+            FromCanvas::Key {
+                key,
+                shift,
+                ctrl,
+                meta,
+            } => {
+                ed.shortcut(ui, &key, ctrl || meta, shift);
+            }
             FromCanvas::Scroll { x, y } => ed.scroll.set((x, y)),
             FromCanvas::Computed { values } => ed.computed.set(values),
             FromCanvas::Text { slot, text } => {
@@ -477,32 +531,21 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             FromCanvas::Other => {}
         }
     });
-    // Raccourcis dans l'interface (hors champs de saisie).
+    // Raccourcis dans l'interface, calques compris (hors champs de saisie).
     let on_key = window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
-        if !(e.ctrl_key() || e.meta_key()) {
-            return;
-        }
         let in_field = document()
             .active_element()
-            .map(|el| matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT"))
+            .map(|el| {
+                matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
+                    || el.has_attribute("contenteditable")
+            })
             .unwrap_or(false);
         if in_field {
             return;
         }
-        match e.key().to_lowercase().as_str() {
-            "z" if e.shift_key() => {
-                e.prevent_default();
-                ed.redo(ui);
-            }
-            "z" => {
-                e.prevent_default();
-                ed.undo(ui);
-            }
-            "y" => {
-                e.prevent_default();
-                ed.redo(ui);
-            }
-            _ => {}
+        let ctrl = e.ctrl_key() || e.meta_key();
+        if ed.shortcut(ui, &e.key(), ctrl, e.shift_key()) {
+            e.prevent_default();
         }
     });
     on_cleanup(move || {
@@ -734,6 +777,23 @@ fn Toolbar() -> impl IntoView {
                 <span class="muted">{ui.t("editor-scripts")}</span>
             </label>
             <div class="toolbar-spacer"></div>
+            <details class="bp-menu shortcuts">
+                <summary class="icon-btn" title=ui.t("editor-shortcuts") aria-label=ui.t("editor-shortcuts")>"?"</summary>
+                <div class="bp-pop bp-pop--right">
+                    <p class="panel-title">{ui.t("editor-shortcuts")}</p>
+                    {[
+                        ("key-undo", "editor-undo-short"),
+                        ("key-redo", "editor-redo-short"),
+                        ("key-duplicate", "layers-duplicate-short"),
+                        ("key-delete", "layers-delete-short"),
+                        ("key-escape", "editor-deselect"),
+                        ("key-dblclick", "editor-edit-text"),
+                        ("key-enter", "editor-edit-validate"),
+                    ].into_iter().map(|(k, label)| view! {
+                        <div class="bp-line"><span>{ui.t(label)}</span><kbd>{ui.t(k)}</kbd></div>
+                    }).collect_view()}
+                </div>
+            </details>
             <button class="icon-btn btn-undo" title=ui.t("editor-undo") aria-label=ui.t("editor-undo")
                 prop:disabled=move || !can_undo() on:click=move |_| ed.undo(ui)>{icons::undo()}</button>
             <button class="icon-btn btn-redo" title=ui.t("editor-redo") aria-label=ui.t("editor-redo")
@@ -878,6 +938,17 @@ fn StatusBar() -> impl IntoView {
             <span class="strong">{move || ed.selected.get().map(|s| s.label).unwrap_or_else(|| ui.tx("editor-no-selection", &[]))}</span>
             <span class="muted">{owner}</span>
             <span class="toolbar-spacer"></span>
+            <span class="muted save-state" aria-live="polite">{move || {
+                if ed.pending.get() > 0 {
+                    ui.tx("editor-saving", &[])
+                } else if let Some(t) = ed.saved_at.get() {
+                    let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(t));
+                    let time = format!("{:02}:{:02}", d.get_hours(), d.get_minutes());
+                    ui.tx("editor-saved", &[("time", time)])
+                } else {
+                    ui.tx("editor-saved-auto", &[])
+                }
+            }}</span>
             <span class="muted">{width}</span>
         </footer>
     }

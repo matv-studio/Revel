@@ -369,3 +369,8 @@ pub async fn canvas_open(path: &str, scripts: bool) -> Res<String> {
 pub async fn edit_stamp(path: &str) -> Res<String> {
     call("edit_stamp", &PathArg { path }).await
 }
+
+/// Site à ouvrir dans l'éditeur au démarrage (argument `--open` ou variable `REVEL_OPEN`).
+pub async fn startup_site() -> Res<Option<String>> {
+    call("startup_site", &NoArgs {}).await
+}

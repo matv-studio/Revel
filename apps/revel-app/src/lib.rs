@@ -301,6 +301,28 @@ fn canvas_protocol(
     });
 }
 
+/// Site à ouvrir dans l'éditeur au démarrage : argument `--open DOSSIER` (ou `--open=DOSSIER`),
+/// sinon variable d'environnement `REVEL_OPEN` (essais de l'application, diagnostic).
+#[tauri::command]
+fn startup_site() -> Option<String> {
+    open_arg(std::env::args().skip(1))
+        .or_else(|| std::env::var("REVEL_OPEN").ok())
+        .filter(|p| !p.is_empty())
+}
+
+/// Valeur de l'argument `--open` dans une ligne de commande.
+fn open_arg(mut args: impl Iterator<Item = String>) -> Option<String> {
+    while let Some(a) = args.next() {
+        if a == "--open" {
+            return args.next();
+        }
+        if let Some(p) = a.strip_prefix("--open=") {
+            return Some(p.to_string());
+        }
+    }
+    None
+}
+
 /// Informations de version (écran « À propos »).
 #[tauri::command]
 fn app_info() -> (String, u32) {
@@ -358,8 +380,32 @@ pub fn run() {
             edit_redo,
             edit_pages,
             edit_stamp,
-            canvas_open
+            canvas_open,
+            startup_site
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Revel");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::open_arg;
+
+    fn args(list: &[&str]) -> impl Iterator<Item = String> {
+        list.iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    #[test]
+    fn argument_open() {
+        assert_eq!(open_arg(args(&["--open", "/site"])), Some("/site".into()));
+        assert_eq!(
+            open_arg(args(&["-x", "--open=C:\\site"])),
+            Some("C:\\site".into())
+        );
+        assert_eq!(open_arg(args(&["--open"])), None);
+        assert_eq!(open_arg(args(&[])), None);
+    }
 }

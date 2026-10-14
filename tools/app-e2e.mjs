@@ -113,8 +113,12 @@ try {
   check('page du site rendue avec ses repères', inside[1] > 50, `${inside[1]} éléments repérés, « ${inside[3]} »`);
   const css = await exec('const l = document.querySelector("link[rel~=stylesheet]"); return l && l.sheet ? l.sheet.cssRules.length : -1');
   check('feuille de style générée chargée par le protocole', css > 100, `${css} règles`);
-  const h1 = await find('h1');
-  await wd('POST', `${S}/element/${h1[0][ELEMENT]}/click`, {});
+  // Zoom 100 % : Edge WebDriver calcule mal le point de clic dans un cadre réduit par `transform`
+  // (« element click intercepted »).
+  await top();
+  await exec('const s = document.querySelector(".editor-zoom select"); s.value = "1"; s.dispatchEvent(new Event("change", { bubbles: true }));');
+  await waitFor('zoom 100 %', async () => /^(|none|scale\(1\))$/.test(await exec('return document.querySelector("iframe.canvas-frame").style.transform')));
+  await clickInCanvas('h1');
   await top();
   const status = await waitFor('sélection dans la barre d\'état', async () => {
     const t = await exec('return document.querySelector(".editor-status") && document.querySelector(".editor-status").textContent');

@@ -197,5 +197,14 @@ jobs:
           widths=$(jq -r '[1280] + [.breakpoints[] | .max_width // empty] + [375] | join(",")' cobaye/site.revel.json)
           echo "## Styles calculés et captures ($widths px)" >> "$GITHUB_STEP_SUMMARY"
           node tools/compare-styles.mjs styles-origine revel-production --jobs 4 --shots --widths "$widths" \
+            --save captures-ecarts \
             --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
             | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Captures en écart
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: captures-ecarts
+          path: captures-ecarts
+          if-no-files-found: ignore
+          retention-days: 7

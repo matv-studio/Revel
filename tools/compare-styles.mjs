@@ -12,18 +12,20 @@
 // varient d'une fois à l'autre (images différées, bandeau défilant, apparitions au défilement),
 // alors que les styles calculés reflètent exactement la cascade appliquée.
 //
-// Avec --shots, des captures pleine page (sans préférence de mouvement) sont aussi comparées : le dessin
-// des images mises à l'échelle varie légèrement d'une capture à l'autre d'un même site (quelques unités
-// sur 255, rarement plus sur quelques pixels isolés). Un écart compte au-delà de --tolerance (8 sur 255
-// par canal) sur plus de --max-pixels pixels (50) ; un vrai écart de mise en page ou de couleur touche
-// des milliers de pixels.
+// Avec --shots, des captures pleine page (sans préférence de mouvement) sont aussi comparées. Le dessin
+// des images mises à l'échelle et du texte tourné varie d'une capture à l'autre d'un même site (jusqu'à
+// 27 sur 255 par canal observé, sur des milliers de pixels) : un pixel compte comme différent au-delà de
+// --tolerance (32 par canal) et une paire est en écart au-delà de --max-pixels pixels différents (50).
+// Une paire en écart est capturée une seconde fois avant d'être signalée. Les écarts de valeurs plus
+// fins sont couverts par la comparaison des styles calculés.
 //
 // Usage : node tools/compare-styles.mjs DOSSIER_A DOSSIER_B [--pages /,/agence/] [--widths 1280,375]
-//         [--jobs 4] [--shots] [--tolerance 8] [--max-pixels 50]
+//         [--jobs 4] [--shots] [--tolerance 32] [--max-pixels 50] [--save DOSSIER]
+// --save : captures des paires en écart enregistrées dans DOSSIER (a-… et b-…).
 // Sans --pages : toutes les pages HTML du dossier A. Code de sortie 1 en cas d'écart.
 
 import { createServer } from 'node:http';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { extname, join, normalize, relative, sep } from 'node:path';
 
@@ -37,8 +39,9 @@ const opt = (name, def) => {
 };
 const widths = opt('--widths', '1280,860,375').split(',').map(Number);
 const jobsN = Number(opt('--jobs', '4'));
-const tolerance = Number(opt('--tolerance', '8'));
+const tolerance = Number(opt('--tolerance', '32'));
 const maxPixels = Number(opt('--max-pixels', '50'));
+const saveDir = opt('--save', null);
 const shots = args.includes('--shots');
 if (shots) args.splice(args.indexOf('--shots'), 1);
 let pages = opt('--pages', null)?.split(',');
@@ -92,6 +95,9 @@ async function settle(page) {
     await Promise.all([...document.images].map((i) => Promise.race([
       i.decode().catch(() => null), new Promise((r) => setTimeout(r, 8000)),
     ])));
+    // Toutes les polices déclarées, pas seulement celles déjà demandées (sinon une graisse chargée
+    // tardivement change la mise en page d'une capture à l'autre).
+    await Promise.all([...document.fonts].map((f) => f.load().catch(() => null)));
     await document.fonts.ready;
     for (const v of document.querySelectorAll('video')) { v.pause(); v.currentTime = 0; }
   });
@@ -132,20 +138,34 @@ async function pixelDiff(cmp, a, b) {
   }, [a.toString('base64'), b.toString('base64'), tolerance]);
 }
 
-function computedStyles() {
+/**
+ * Styles calculés de chaque élément et pseudo-élément, calculés dans la page. Renvoie une empreinte
+ * par élément (propriétés triées : l'ordre des propriétés personnalisées varie d'une ouverture à
+ * l'autre) ; `detail` : propriétés complètes de l'élément n° `detail` (en cas d'écart).
+ */
+function computedStyles(detail) {
   const out = [];
   let n = 0;
   for (const el of document.querySelectorAll('*')) {
-    n++;
     const pseudos = [null, '::before', '::after'];
     if (el.tagName === 'LI' || el.tagName === 'SUMMARY') pseudos.push('::marker');
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') pseudos.push('::placeholder');
     for (const ps of pseudos) {
+      const k = n++;
+      if (detail !== undefined && k !== detail) continue;
       const cs = getComputedStyle(el, ps);
       const v = [];
       for (let i = 0; i < cs.length; i++) v.push(`${cs[i]}: ${cs.getPropertyValue(cs[i])}`);
-      const cls = typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).join('.') : '';
-      out.push([`${el.tagName.toLowerCase()}${cls}${ps ?? ''} (n° ${n})`, v]);
+      v.sort();
+      if (detail !== undefined) {
+        const cls = typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).join('.') : '';
+        return [`${el.tagName.toLowerCase()}${cls}${ps ?? ''}`, v];
+      }
+      // FNV-1a 32 bits de la liste triée.
+      let h = 0x811c9dc5;
+      const str = v.join(';');
+      for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193);
+      out.push(h >>> 0);
     }
   }
   return out;
@@ -170,48 +190,82 @@ let compared = 0;
 const diffs = [];
 let shotsCompared = 0, noiseMax = 0, noisePixels = 0;
 
-async function load(base, { motion, w, p }) {
+// Propriétés qui découlent des dimensions (changent dès qu'un descendant change de taille).
+const SIZE = new Set(['height', 'block-size', 'width', 'inline-size', 'perspective-origin', 'transform-origin',
+  'grid-template-rows', 'grid-template-columns']);
+
+async function open(base, { motion, w, p }) {
   const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: motion });
-  try {
-    const page = await ctx.newPage();
-    await page.goto(base + p, { waitUntil: 'load' });
-    await settle(page);
-    const styles = await page.evaluate(computedStyles);
-    const shot = shots && motion === 'no-preference'
-      ? await page.screenshot({ fullPage: true, animations: 'disabled' })
-      : null;
-    return [styles, shot];
-  } finally {
-    await ctx.close();
-  }
+  const page = await ctx.newPage();
+  await page.goto(base + p, { waitUntil: 'load' });
+  await settle(page);
+  const hashes = await page.evaluate(computedStyles);
+  const shot = shots && motion === 'no-preference'
+    ? await page.screenshot({ fullPage: true, animations: 'disabled' })
+    : null;
+  return { ctx, page, hashes, shot };
 }
 
 async function worker() {
   const cmpCtx = await browser.newContext();
   const cmp = await cmpCtx.newPage();
+  const shotDiff = async (a, b) => {
+    if (a.equals(b)) return { over: 0, max: 0 };
+    return pixelDiff(cmp, a, b);
+  };
+  const failed = (d) => d.size || d.over > maxPixels;
   for (let job = queue.shift(); job; job = queue.shift()) {
-    const [[a, shotA], [b, shotB]] = [await load(urlA, job), await load(urlB, job)];
-    if (shotA && shotB) {
-      const d = await pixelDiff(cmp, shotA, shotB);
-      shotsCompared++;
-      if (d.size) diffs.push({ ...job, what: `capture : dimensions ${d.size}` });
-      else if (d.over > maxPixels) diffs.push({ ...job, what: `capture : ${d.over} pixels au-delà de la tolérance (écart max ${d.max}, à partir de y = ${d.top})` });
-      else { noiseMax = Math.max(noiseMax, d.max); noisePixels = Math.max(noisePixels, d.over); }
-    }
-    compared += a.length;
-    if (a.length !== b.length) {
-      diffs.push({ ...job, what: `nombre d'éléments : ${a.length} / ${b.length}` });
-      continue;
-    }
-    for (let i = 0; i < a.length; i++) {
-      const [name, va] = a[i];
-      const vb = b[i][1];
-      const da = va.filter((x) => !vb.includes(x));
-      if (da.length) {
-        const db = vb.filter((x) => !va.includes(x));
-        diffs.push({ ...job, what: `${name} : ${da.slice(0, 3).join(' ; ')} → ${db.slice(0, 3).join(' ; ')}` });
-        break;
+    const A = await open(urlA, job);
+    const B = await open(urlB, job);
+    try {
+      if (A.shot && B.shot) {
+        shotsCompared++;
+        let [sa, sb] = [A.shot, B.shot];
+        let d = await shotDiff(sa, sb);
+        if (failed(d)) {
+          // Seconde capture des deux côtés : un écart passager (chargement tardif) n'est pas signalé.
+          const [A2, B2] = [await open(urlA, job), await open(urlB, job)];
+          await A2.ctx.close();
+          await B2.ctx.close();
+          [sa, sb] = [A2.shot, B2.shot];
+          d = await shotDiff(sa, sb);
+        }
+        if (failed(d)) {
+          diffs.push({ ...job, what: d.size ? `capture : dimensions ${d.size}` : `capture : ${d.over} pixels au-delà de la tolérance (écart max ${d.max}, à partir de y = ${d.top})` });
+          if (saveDir) {
+            await mkdir(saveDir, { recursive: true });
+            const name = `${job.w}${job.p.replace(/[^a-z0-9]+/gi, '_')}.png`;
+            await writeFile(join(saveDir, 'a-' + name), sa);
+            await writeFile(join(saveDir, 'b-' + name), sb);
+          }
+        } else { noiseMax = Math.max(noiseMax, d.max); noisePixels = Math.max(noisePixels, d.over); }
       }
+      compared += A.hashes.length;
+      if (A.hashes.length !== B.hashes.length) {
+        diffs.push({ ...job, what: `nombre d'éléments : ${A.hashes.length} / ${B.hashes.length}` });
+        continue;
+      }
+      const bad = A.hashes.map((h, k) => (h !== B.hashes[k] ? k : -1)).filter((k) => k >= 0);
+      if (bad.length) {
+        // Élément le plus parlant : le premier dont l'écart ne se limite pas aux dimensions
+        // (conséquence d'un écart plus bas dans la page, comme la hauteur de <html>).
+        let shown = null;
+        for (const i of bad.slice(0, 60)) {
+          const [name, va] = await A.page.evaluate(computedStyles, i);
+          const [, vb] = await B.page.evaluate(computedStyles, i);
+          const [sa, sb] = [new Set(va), new Set(vb)];
+          const da = va.filter((x) => !sb.has(x));
+          const db = vb.filter((x) => !sa.has(x));
+          const d = { i, name, da, db };
+          shown ??= d;
+          if (da.some((x) => !SIZE.has(x.split(':')[0]))) { shown = d; break; }
+        }
+        const { i, name, da, db } = shown;
+        diffs.push({ ...job, what: `${bad.length} élément(s) ; ${name} (n° ${i}) : ${da.slice(0, 3).join(' ; ')} → ${db.slice(0, 3).join(' ; ')}` });
+      }
+    } finally {
+      await A.ctx.close();
+      await B.ctx.close();
     }
   }
   await cmpCtx.close();

@@ -4769,7 +4769,6 @@ name = "revel-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "axum",
  "clap",
  "revel-core",
  "revel-deploy",

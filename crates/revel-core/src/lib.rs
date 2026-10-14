@@ -14,6 +14,7 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 
 pub mod canvas;
+pub mod devserver;
 mod edit;
 mod github;
 pub mod preview;

@@ -1,0 +1,65 @@
+/* Revel — éditeur visuel (étape 2).
+
+   ┌ editor-toolbar : page · points de rupture · zoom · scripts ······ annuler rétablir ┐
+   │ canvas-area : cadre du canevas centré, à la largeur du point de rupture          │
+   └ editor-status : élément sélectionné · propriétaire ··················· largeur ┘ */
+
+/* Plein écran : la barre latérale des sites laisse la place au canevas. */
+.shell--editor { grid-template-columns: 0 minmax(0, 1fr); }
+.shell--editor .sidebar { display: none; }
+.shell--editor .main { overflow: hidden; }
+
+.editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface);
+  border-bottom: var(--border) solid var(--line);
+  min-width: 0;
+}
+.editor-toolbar .select select.input { height: var(--control-md); }
+.editor-page { width: 280px; max-width: 32vw; }
+.editor-zoom { width: 104px; }
+.editor-toolbar .segmented button { display: inline-flex; align-items: center; gap: var(--s-1); }
+.bp-width { font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.bp-width:empty { display: none; }
+.editor-scripts { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--text-sm); white-space: nowrap; }
+.toolbar-spacer { flex: 1; }
+
+.canvas-area {
+  position: relative;
+  overflow: auto;
+  background: var(--bg);
+  min-height: 0;
+}
+.canvas-frame {
+  display: block;
+  margin-top: var(--s-6);
+  border: 0;
+  transform-origin: 0 0;
+  background: #ffffff;              /* fond d'une page web sans style */
+  box-shadow: 0 0 0 1px var(--line-strong), 0 8px 24px rgb(0 0 0 / .18);
+}
+.canvas-wait { display: grid; place-items: center; height: 100%; }
+
+.editor-status {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: var(--control-md);
+  padding: 0 var(--s-3);
+  font-size: var(--text-sm);
+  background: var(--surface);
+  border-top: var(--border) solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.editor-status .strong { font-family: var(--font-mono); font-weight: var(--weight-regular); }

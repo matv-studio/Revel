@@ -269,6 +269,12 @@ fn canvas_open(s: State<AppState>, path: String, scripts: bool) -> Res<String> {
         .map_err(err)
 }
 
+/// Pages HTML d'un site ouvert pour l'édition.
+#[tauri::command]
+fn edit_pages(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::EditorPageInfo>> {
+    s.core.edit_pages(std::path::Path::new(&path)).map_err(err)
+}
+
 /// Réponse du protocole `revel-canvas` (canevas de l'éditeur, sans port réseau).
 fn canvas_protocol(
     app: &tauri::AppHandle,
@@ -344,6 +350,7 @@ pub fn run() {
             edit_seal,
             edit_undo,
             edit_redo,
+            edit_pages,
             canvas_open
         ])
         .run(tauri::generate_context!())

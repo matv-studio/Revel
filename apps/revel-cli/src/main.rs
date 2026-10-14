@@ -66,6 +66,10 @@ enum Command {
         /// Images en `<img>` simple (comme `build --no-images`).
         #[arg(long)]
         no_images: bool,
+        /// Expose aussi les commandes d'édition (`POST /__revel/invoke/…`) pour l'interface
+        /// ouverte dans un navigateur (essais) : modifie le site.
+        #[arg(long)]
+        bridge: bool,
     },
     /// Vérifie que chaque page du canevas, repères retirés, est identique à la page générée.
     CanvasCheck {
@@ -225,6 +229,7 @@ fn main() -> Result<()> {
             port,
             scripts,
             no_images,
+            bridge,
         } => {
             let config = std::env::temp_dir().join(format!("revel-canvas-{}", std::process::id()));
             let core = std::sync::Arc::new(revel_core::Core::new(
@@ -243,39 +248,16 @@ fn main() -> Result<()> {
             )
             .map_err(|e| anyhow::anyhow!("{e}"))?;
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(async move {
-                let app = axum::Router::new().fallback(move |uri: axum::http::Uri| {
-                    let core = core.clone();
-                    async move {
-                        let r =
-                            tokio::task::spawn_blocking(move || core.canvas_respond(uri.path()))
-                                .await
-                                .unwrap_or_else(|e| revel_core::canvas::CanvasResponse {
-                                    status: 500,
-                                    content_type: "text/plain".into(),
-                                    body: e.to_string().into_bytes(),
-                                });
-                        axum::http::Response::builder()
-                            .status(r.status)
-                            .header("content-type", r.content_type)
-                            .header("cache-control", "no-store")
-                            .body(axum::body::Body::from(r.body))
-                            .unwrap_or_default()
-                    }
-                });
-                let listener = tokio::net::TcpListener::bind(std::net::SocketAddr::from((
-                    [127, 0, 0, 1],
-                    port,
-                )))
-                .await?;
-                println!("canevas : http://{}/", listener.local_addr()?);
-                axum::serve(listener, app)
-                    .with_graceful_shutdown(async {
-                        let _ = tokio::signal::ctrl_c().await;
-                    })
-                    .await?;
-                anyhow::Ok(())
-            })?;
+            rt.block_on(revel_core::devserver::serve(
+                core,
+                dir,
+                port,
+                bridge,
+                |base| println!("canevas : {base}"),
+                async {
+                    let _ = tokio::signal::ctrl_c().await;
+                },
+            ))?;
         }
         Command::CanvasCheck { dir, env } => {
             let project =

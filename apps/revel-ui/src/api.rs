@@ -305,3 +305,62 @@ pub fn copy_text(text: &str) {
         let _ = f.call1(&c, &JsValue::from_str(text));
     }
 }
+
+// ------------------------------------------------------------------ éditeur (étape 2)
+
+/// Ouvre un site pour l'édition : document et état de l'historique.
+pub async fn edit_open(path: &str) -> Res<revel_edit::Opened> {
+    call("edit_open", &PathArg { path }).await
+}
+
+/// Applique une commande ; `coalesce` : saisie continue fusionnée dans l'historique.
+pub async fn edit_apply(
+    path: &str,
+    command: &revel_edit::Command,
+    coalesce: bool,
+) -> Res<revel_edit::EditState> {
+    #[derive(Serialize)]
+    struct A<'a> {
+        path: &'a str,
+        command: &'a revel_edit::Command,
+        coalesce: bool,
+    }
+    call(
+        "edit_apply",
+        &A {
+            path,
+            command,
+            coalesce,
+        },
+    )
+    .await
+}
+
+/// Termine une saisie continue (la commande suivante ouvre une nouvelle étape).
+#[allow(dead_code)] // panneaux des étapes 2.4 à 2.7
+pub async fn edit_seal(path: &str) -> Res<()> {
+    call("edit_seal", &PathArg { path }).await
+}
+
+pub async fn edit_undo(path: &str) -> Res<revel_edit::EditState> {
+    call("edit_undo", &PathArg { path }).await
+}
+
+pub async fn edit_redo(path: &str) -> Res<revel_edit::EditState> {
+    call("edit_redo", &PathArg { path }).await
+}
+
+/// Pages HTML du site (pages fixes et contenus).
+pub async fn edit_pages(path: &str) -> Res<Vec<revel_protocol::EditorPageInfo>> {
+    call("edit_pages", &PathArg { path }).await
+}
+
+/// Affiche le site dans le canevas ; renvoie l'adresse de base du protocole.
+pub async fn canvas_open(path: &str, scripts: bool) -> Res<String> {
+    #[derive(Serialize)]
+    struct A<'a> {
+        path: &'a str,
+        scripts: bool,
+    }
+    call("canvas_open", &A { path, scripts }).await
+}

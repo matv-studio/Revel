@@ -9,8 +9,8 @@ const mock = fs.readFileSync(new URL("../apps/revel-ui/dev/mock-tauri.js", impor
 const b = await chromium.launch();
 // [nom, paramètres de la simulation, clics successifs ("wait" : attendre la fin d'une action)]
 const site = "tr.row-link";
-const tabBuild = ".nav-item--sub >> nth=0";
-const tabPublish = ".nav-item--sub >> nth=1";
+const tabBuild = ".nav-item--sub >> nth=1";
+const tabPublish = ".nav-item--sub >> nth=2";
 const shots = [
   ["home-dark-fr", "theme=dark&lang=fr", []],
   ["home-light-en", "theme=light&lang=en", []],

@@ -292,6 +292,20 @@ impl Project {
         Ok(revel_render::render_editor(&input, url, opts)?)
     }
 
+    /// Pages HTML du site (pages fixes et contenus de collection), pour l'éditeur.
+    pub fn list_pages(&self) -> Result<Vec<revel_render::PageRef>, ProjectError> {
+        let site = self.site_with_data()?;
+        let input = BuildInput {
+            site: &site,
+            entries: self.load_entries()?,
+            environment: "production".into(),
+            version: String::new(),
+            hooks: Arc::new(ProjectAssets::new(self)),
+            now: chrono::Utc::now(),
+        };
+        Ok(revel_render::list_pages(&input)?)
+    }
+
     /// Vérifie le canevas : chaque page HTML rendue pour l'éditeur, repères retirés, est identique
     /// à la page générée. Renvoie le nombre de pages et les écarts (adresse, extrait).
     pub fn check_canvas(&self, environment: &str) -> Result<(usize, Vec<String>), ProjectError> {

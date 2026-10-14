@@ -29,7 +29,20 @@
   const profiles = params.get("noprofiles") ? [] : params.get("ghprofile") ? [ghProfile] : [[{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true]];
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   class Channel { constructor() { this.onmessage = null; } }
+  // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
+  // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
+  const bridge = params.get("bridge");
+  const bridged = ["edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "canvas_open"];
   async function invoke(cmd, args) {
+    if (bridge && bridged.includes(cmd)) {
+      // Corps en texte brut : requête simple, sans demande préalable (CORS).
+      const r = await fetch(bridge.replace(/\/$/, "") + "/__revel/invoke/" + cmd, {
+        method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify(args || {}),
+      });
+      const v = await r.json();
+      if (!r.ok) throw v;
+      return v;
+    }
     switch (cmd) {
       case "get_settings": return state.settings;
       case "set_settings": state.settings = args.settings; return null;
@@ -80,5 +93,5 @@
       default: return null;
     }
   }
-  window.__TAURI__ = { core: { invoke, Channel } };
+  window.__TAURI__ = { core: { invoke, Channel }, __mock: true };
 })();

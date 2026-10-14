@@ -136,6 +136,14 @@ l'exécution CI en cas d'échec).
   `stylesheet`, `scroll`). Un composant utilisé plusieurs fois a les mêmes identifiants dans chaque occurrence :
   l'élément cliqué est celui qui est sélectionné, une sélection demandée par identifiant prend la première.
 - Le cadre du canevas est d'une autre origine que l'interface (`frame-src` dans la CSP de l'application).
+- Interface de l'éditeur (`apps/revel-ui/src/editor.rs`, étape 2.3) : copie locale du document (`revel-model`,
+  `revel-edit` compilés en WebAssembly) ; chaque modification est une commande envoyée au cœur, la commande
+  appliquée renvoyée (`EditState::applied`) est rejouée sur la copie. Une commande de style ne recharge que la
+  feuille de style du canevas ; les autres rechargent la page au même défilement, sélection conservée.
+- Essais de l'interface dans un navigateur : `revel canvas-serve --bridge` expose aussi les commandes d'édition
+  (`POST /__revel/invoke/<commande>`, adresse locale seulement) ; l'API Tauri simulée
+  (`apps/revel-ui/dev/mock-tauri.js`, paramètre `bridge=`) les y transmet. `tools/editor-e2e.mjs` pilote
+  l'interface ainsi reliée à un vrai cœur (CI). Le crochet `window.__revelTest` n'existe qu'avec la simulation.
 
 ## Versions de référence (vérifiées sur crates.io le 13/10/2026)
 

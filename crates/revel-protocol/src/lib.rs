@@ -28,6 +28,25 @@ pub struct SiteSummary {
     pub environments: Vec<String>,
 }
 
+/// Page HTML du site, proposée dans l'éditeur.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorPageInfo {
+    /// Adresse (`/agence/`).
+    pub url: String,
+    /// Titre de la page s'il est connu.
+    #[serde(default)]
+    pub title: String,
+    /// Page fixe : identifiant ; `None` pour un contenu de collection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
+    /// Contenu : identifiant de sa collection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection: Option<String>,
+    /// Gabarit de la page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CollectionSummary {
     pub id: String,

@@ -221,6 +221,25 @@ jobs:
             node tools/canvas-e2e.mjs http://127.0.0.1:8160 "$page" | tee -a "$GITHUB_STEP_SUMMARY"
             node tools/canvas-e2e.mjs http://127.0.0.1:8161 "$page" | tee -a "$GITHUB_STEP_SUMMARY"
           done
+      # Éditeur (étape 2.3) : interface servie dans Chromium avec l'API Tauri simulée, reliée à un
+      # vrai cœur (`canvas-serve --bridge`) sur une copie du cobaye.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - name: Interface (pour les essais dans un navigateur)
+        working-directory: apps/revel-ui
+        run: trunk build --release
+      - name: Éditeur de bout en bout
+        shell: bash
+        run: |
+          mkdir cobaye-essai
+          tar --exclude=./node_modules --exclude=./_site --exclude=./.git -C cobaye -cf - . | tar -C cobaye-essai -xf -
+          target/release/revel canvas-serve cobaye-essai --port 8162 --bridge > pont.log 2>&1 &
+          python3 -m http.server 8170 --bind 127.0.0.1 --directory apps/revel-ui/dist > /dev/null 2>&1 &
+          sleep 2
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          echo "## Éditeur" >> "$GITHUB_STEP_SUMMARY"
+          node tools/editor-e2e.mjs http://127.0.0.1:8170 http://127.0.0.1:8162 captures-ecarts/editeur | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Captures en écart
         if: failure()
         uses: actions/upload-artifact@v7

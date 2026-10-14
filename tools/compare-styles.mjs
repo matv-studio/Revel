@@ -106,6 +106,9 @@ async function settle(page) {
   });
   await page.waitForTimeout(200);
   await page.evaluate(async () => {
+    // Calque de sélection du canevas (survol déclenché par un déplacement simulé du pointeur) :
+    // il ne fait pas partie du site.
+    document.querySelector('revel-overlay')?.style.setProperty('display', 'none', 'important');
     for (const a of document.getAnimations()) {
       try { a.finish(); } catch { a.pause(); a.currentTime = 0; } // animation infinie
     }

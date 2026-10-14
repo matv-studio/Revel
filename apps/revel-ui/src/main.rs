@@ -3,6 +3,7 @@
 mod account;
 mod api;
 mod dialog;
+mod editor;
 mod home;
 mod icons;
 mod publish;
@@ -136,6 +137,7 @@ impl Ui {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
     Overview,
+    Editor,
     Build,
     Publish,
 }
@@ -217,8 +219,17 @@ fn App() -> impl IntoView {
     });
     Effect::new(move |_| ui.settings.with(apply_settings));
 
+    let editing = move || {
+        matches!(
+            ui.route.get(),
+            Route::Site {
+                tab: Tab::Editor,
+                ..
+            }
+        )
+    };
     view! {
-        <div class="shell">
+        <div class="shell" class:shell--editor=editing>
             <TopBar/>
             <SideBar/>
             <main class="main">
@@ -233,6 +244,7 @@ fn App() -> impl IntoView {
                     Route::Settings => view! { <settings::Settings/> }.into_any(),
                     Route::Site { site, tab } => match tab {
                         Tab::Overview => view! { <site::Overview site=site/> }.into_any(),
+                        Tab::Editor => view! { <editor::Editor site=site/> }.into_any(),
                         Tab::Build => view! { <site::Build site=site/> }.into_any(),
                         Tab::Publish => view! { <publish::Publish site=site/> }.into_any(),
                     },
@@ -278,7 +290,17 @@ fn TopBar() -> impl IntoView {
                     <button class="crumb" on:click=move |_| ui.route.set(Route::Home)>{ui.t("nav-sites")}</button>
                     <span class="crumb-sep" aria-hidden="true">"/"</span>
                 </Show>
-                <span class="crumb crumb--current">{crumb}</span>
+                // Dans l'éditeur (plein écran, sans barre latérale) : retour à la vue du site.
+                <Show when=move || matches!(ui.route.get(), Route::Site { tab: Tab::Editor, .. })
+                    fallback=move || view! { <span class="crumb crumb--current">{crumb}</span> }>
+                    <button class="crumb crumb--current" on:click=move |_| {
+                        if let Route::Site { site, .. } = ui.route.get_untracked() {
+                            ui.route.set(Route::Site { site, tab: Tab::Overview });
+                        }
+                    }>{crumb}</button>
+                    <span class="crumb-sep" aria-hidden="true">"/"</span>
+                    <span class="crumb crumb--current">{ui.t("nav-editor")}</span>
+                </Show>
             </nav>
             <div class="topbar-actions">
                 <Show when=site_open>
@@ -347,6 +369,7 @@ fn SideBar() -> impl IntoView {
                                 {icons::site()}<span class="nav-label">{r.name.clone()}</span>
                             </button>
                             <Show when=move || current_path().as_deref() == Some(p_show.as_str())>
+                                {tab_item(Tab::Editor, "nav-editor", icons::edit)}
                                 {tab_item(Tab::Build, "nav-build", icons::build)}
                                 {tab_item(Tab::Publish, "nav-publish", icons::upload)}
                             </Show>

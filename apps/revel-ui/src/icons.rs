@@ -100,3 +100,26 @@ pub fn link() -> AnyView {
         r#"<path d="M6.5 9.5l3-3M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1"/>"#,
     )
 }
+
+/// Ordinateur (point de rupture de base).
+pub fn desktop() -> AnyView {
+    svg(r#"<rect x="1.5" y="2.5" width="13" height="8.5" rx="1"/><path d="M5.5 13.5h5M8 11v2.5"/>"#)
+}
+
+/// Tablette (point de rupture intermédiaire).
+pub fn tablet() -> AnyView {
+    svg(r#"<rect x="3" y="1.5" width="10" height="13" rx="1.5"/><path d="M7 12.5h2"/>"#)
+}
+
+/// Téléphone (petit point de rupture).
+pub fn mobile() -> AnyView {
+    svg(r#"<rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7.25 12.5h1.5"/>"#)
+}
+
+pub fn undo() -> AnyView {
+    svg(r#"<path d="M5.5 3.5 2.5 6.5l3 3"/><path d="M2.5 6.5h7a4 4 0 0 1 0 8H7"/>"#)
+}
+
+pub fn redo() -> AnyView {
+    svg(r#"<path d="m10.5 3.5 3 3-3 3"/><path d="M13.5 6.5h-7a4 4 0 0 0 0 8H9"/>"#)
+}

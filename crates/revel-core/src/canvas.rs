@@ -168,6 +168,27 @@ impl Core {
         Ok(base_url().to_string())
     }
 
+    /// Pages HTML d'un site ouvert pour l'édition (document en mémoire).
+    pub fn edit_pages(&self, path: &Path) -> Result<Vec<revel_protocol::EditorPageInfo>> {
+        let pages = self.with_project(path, |p| Ok(p.list_pages()?))?;
+        Ok(pages
+            .into_iter()
+            .map(|p| revel_protocol::EditorPageInfo {
+                url: p.url,
+                title: p.title,
+                page: p.page,
+                collection: p.collection,
+                layout: p.layout,
+            })
+            .collect())
+    }
+
+    /// Réglages du canevas ouvert.
+    pub fn canvas_options(&self) -> Option<CanvasOptions> {
+        let c = self.canvas.lock().unwrap_or_else(|e| e.into_inner());
+        c.as_ref().map(|c| c.opts)
+    }
+
     /// Réponse du protocole du canevas pour le chemin demandé (`/agence/`, `/assets/css/site.css`).
     pub fn canvas_respond(&self, uri_path: &str) -> CanvasResponse {
         match self.canvas_response(uri_path) {

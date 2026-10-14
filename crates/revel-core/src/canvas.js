@@ -163,6 +163,12 @@
   }, true);
 
   window.addEventListener("scroll", redraw, true);
+  // Position de défilement transmise à l'interface (rétablie après un rechargement).
+  let scrollTimer = 0;
+  window.addEventListener("scroll", () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => post({ type: "scroll", x: window.scrollX, y: window.scrollY }), 120);
+  }, { passive: true });
   window.addEventListener("resize", redraw);
   new ResizeObserver(redraw).observe(document.documentElement);
 

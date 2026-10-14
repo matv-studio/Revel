@@ -22,7 +22,6 @@ revel-deploy.workspace = true
 revel-i18n.workspace = true
 # Canevas de l'éditeur servi en HTTP local (diagnostic, essais de bout en bout) ; sans trousseau.
 revel-core = { workspace = true, default-features = false }
-axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
 anyhow.workspace = true
 clap.workspace = true
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "macros", "signal"] }

@@ -182,6 +182,8 @@ struct Job<'s> {
     file_slug: String,
     /// Page fixe : son identifiant (propriétaire des nœuds de `body`).
     page_id: Option<String>,
+    /// Contenu de collection : identifiant de la collection.
+    collection: Option<String>,
 }
 
 /// Collections, pages à produire et données globales, prêtes pour le rendu.
@@ -273,6 +275,43 @@ pub fn render_editor(
         slots,
         warnings,
     }))
+}
+
+/// Page HTML du site, pour la liste des pages de l'éditeur.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageRef {
+    pub url: String,
+    /// Titre (variable `title` ou `seo.title` de la page, sinon vide).
+    pub title: String,
+    /// Page fixe du site : son identifiant ; sinon contenu de collection.
+    pub page: Option<String>,
+    /// Contenu de collection : identifiant de la collection.
+    pub collection: Option<String>,
+    pub layout: Option<String>,
+}
+
+/// Pages HTML du site (pages fixes puis contenus de collection), dans l'ordre de génération.
+pub fn list_pages(input: &BuildInput) -> Result<Vec<PageRef>, RenderError> {
+    let b = eval::Builder::new(input);
+    let prepared = prepare(&b, input)?;
+    let title = |d: &BTreeMap<String, Value>| -> String {
+        let text = |v: Option<Value>| v.filter(|v| v.as_str().is_some()).map(|v| v.to_string());
+        text(d.get("title").cloned())
+            .or_else(|| text(d.get("seo").and_then(|x| x.get_attr("title").ok())))
+            .unwrap_or_default()
+    };
+    Ok(prepared
+        .jobs
+        .iter()
+        .filter(|j| DocKind::of_path(&j.url) == DocKind::Html)
+        .map(|j| PageRef {
+            url: j.url.clone(),
+            title: title(&j.data),
+            page: j.page_id.clone(),
+            collection: j.collection.clone(),
+            layout: j.layout.clone(),
+        })
+        .collect())
 }
 
 /// HTML du canevas sans les repères de l'éditeur (`data-rv="…"`, `<!--rv:N-->`, `<!--/rv:N-->`) :
@@ -378,6 +417,7 @@ fn prepare<'s>(b: &eval::Builder<'s>, input: &'s BuildInput) -> Result<Prepared<
                 content: Some(content),
                 file_slug: e.file_stem.clone(),
                 page_id: None,
+                collection: Some(col.id.clone()),
             });
             items.push((data, Value::from(item_map), job, e.file_stem.clone()));
         }
@@ -456,6 +496,7 @@ fn prepare<'s>(b: &eval::Builder<'s>, input: &'s BuildInput) -> Result<Prepared<
             content: None,
             file_slug: p.id.rsplit('/').next().unwrap_or(&p.id).to_string(),
             page_id: Some(p.id.clone()),
+            collection: None,
         });
     }
 

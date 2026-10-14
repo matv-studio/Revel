@@ -327,9 +327,21 @@ jobs:
             return "$code"
           }
           if [ "$RUNNER_OS" = Linux ]; then
-            export -f run
-            xvfb-run -a -s "-screen 0 1440x900x24" bash -c run | tee -a "$GITHUB_STEP_SUMMARY"
+            # xvfb-run est un script sh : la fonction lui est passée comme texte.
+            xvfb-run -a -s "-screen 0 1440x900x24" bash -c "$(declare -f run); run" | tee -a "$GITHUB_STEP_SUMMARY"
           else
+            # Diagnostic : l'application démarre-t-elle seule (sans pilote) ?
+            RUST_BACKTRACE=1 target/debug/revel-app.exe --open site-essai > captures-application/application-seule.log 2>&1 &
+            app=$!
+            sleep 20
+            if kill -0 "$app" 2>/dev/null; then
+              echo "Application seule : démarrée"
+              kill "$app" || true
+            else
+              wait "$app" || echo "Application seule : arrêtée, code $?"
+              cat captures-application/application-seule.log
+            fi
+            sleep 2
             run | tee -a "$GITHUB_STEP_SUMMARY"
           fi
           # Les essais annulent tout : copie identique au cobaye.

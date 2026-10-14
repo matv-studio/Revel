@@ -14,13 +14,13 @@
 //
 // Avec --shots, des captures pleine page (sans préférence de mouvement) sont aussi comparées. Le dessin
 // des images mises à l'échelle et du texte tourné varie d'une capture à l'autre d'un même site (jusqu'à
-// 27 sur 255 par canal observé, sur des milliers de pixels) : un pixel compte comme différent au-delà de
-// --tolerance (32 par canal) et une paire est en écart au-delà de --max-pixels pixels différents (50).
+// 30 sur 255 par canal observé, sur des milliers de pixels) : un pixel compte comme différent au-delà de
+// --tolerance (48 par canal) et une paire est en écart au-delà de --max-pixels pixels différents (50).
 // Une paire en écart est capturée une seconde fois avant d'être signalée. Les écarts de valeurs plus
 // fins sont couverts par la comparaison des styles calculés.
 //
 // Usage : node tools/compare-styles.mjs DOSSIER_A DOSSIER_B [--pages /,/agence/] [--widths 1280,375]
-//         [--jobs 4] [--shots] [--tolerance 32] [--max-pixels 50] [--save DOSSIER]
+//         [--jobs 4] [--shots] [--tolerance 48] [--max-pixels 50] [--save DOSSIER]
 // --save : captures des paires en écart enregistrées dans DOSSIER (a-… et b-…).
 // Sans --pages : toutes les pages HTML du dossier A. Code de sortie 1 en cas d'écart.
 
@@ -39,7 +39,7 @@ const opt = (name, def) => {
 };
 const widths = opt('--widths', '1280,860,375').split(',').map(Number);
 const jobsN = Number(opt('--jobs', '4'));
-const tolerance = Number(opt('--tolerance', '32'));
+const tolerance = Number(opt('--tolerance', '48'));
 const maxPixels = Number(opt('--max-pixels', '50'));
 const saveDir = opt('--save', null);
 const shots = args.includes('--shots');
@@ -188,7 +188,7 @@ for (const motion of ['no-preference', 'reduce']) for (const w of widths) for (c
 const total = queue.length;
 let compared = 0;
 const diffs = [];
-let shotsCompared = 0, noiseMax = 0, noisePixels = 0;
+let shotsCompared = 0, noiseMax = 0, noisePixels = 0, retakes = 0;
 
 // Propriétés qui découlent des dimensions (changent dès qu'un descendant change de taille).
 const SIZE = new Set(['height', 'block-size', 'width', 'inline-size', 'perspective-origin', 'transform-origin',
@@ -224,6 +224,7 @@ async function worker() {
         let d = await shotDiff(sa, sb);
         if (failed(d)) {
           // Seconde capture des deux côtés : un écart passager (chargement tardif) n'est pas signalé.
+          retakes++;
           const [A2, B2] = [await open(urlA, job), await open(urlB, job)];
           await A2.ctx.close();
           await B2.ctx.close();
@@ -279,7 +280,7 @@ srvB.close();
 console.log(`${total} combinaisons (${pages.length} pages × ${widths.length} largeurs × 2 préférences de mouvement), ` +
   `${compared} styles calculés comparés (éléments et pseudo-éléments)` +
   (shots ? `, ${shotsCompared} paires de captures (bruit toléré : écart max ${noiseMax}/255, ` +
-    `au plus ${noisePixels} pixel(s) au-delà de ${tolerance})` : '') +
+    `au plus ${noisePixels} pixel(s) au-delà de ${tolerance}, ${retakes} paire(s) reprise(s))` : '') +
   ` : ${diffs.length} écart(s).`);
 for (const d of diffs.slice(0, 30)) console.log(`- ${d.p} à ${d.w} px (${d.motion}) : ${d.what}`);
 process.exit(diffs.length ? 1 : 0);

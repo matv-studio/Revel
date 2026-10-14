@@ -87,8 +87,10 @@ servi avec le CSS d'origine et avec le CSS généré, ouvert dans Chromium (Play
 de rupture et à 375 px, avec et sans préférence « mouvement réduit » ; après chargement et décodage des images,
 arrêt des vidéos et fin des animations, les styles calculés de chaque élément et de ses pseudo-éléments sont
 comparés (ensemble des propriétés : l'ordre des propriétés personnalisées varie d'une ouverture à l'autre).
-Avec `--shots`, les captures pleine page sont aussi comparées, avec une tolérance pour le bruit de dessin des
-images mises à l'échelle (quelques unités sur 255, sur quelques pixels isolés).
+Avec `--shots`, les captures pleine page sont aussi comparées : le dessin des images mises à l'échelle et du texte
+tourné varie d'une capture à l'autre d'un même site (jusqu'à 30 sur 255 par canal mesuré), d'où une tolérance de
+48 par canal ; une paire en écart est reprise une fois avant d'être signalée (`--save` garde les captures, jointes à
+l'exécution CI en cas d'échec).
 
 ## Coque et interface
 

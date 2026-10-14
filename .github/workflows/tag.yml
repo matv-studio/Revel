@@ -1,6 +1,8 @@
 # Création d'une étiquette Git (points de retour `step-N`, versions `vX.Y.Z`).
 # Lancé à la main (onglet Actions) ou par Claude : la session de travail ne peut pas
-# envoyer d'étiquette directement.
+# envoyer d'étiquette directement. Limite : le jeton du workflow ne peut pas étiqueter un commit
+# dont les fichiers .github/workflows/ diffèrent de ceux de main (droit « workflows » réservé) ;
+# étiqueter au fil de l'eau, ou créer l'étiquette depuis le site de GitHub.
 name: Étiquette
 
 on:

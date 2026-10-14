@@ -29,12 +29,15 @@ sans écrire de code, et sans perdre l'équivalence de la sortie avec le site d'
 | N | État au 14/10/2026 |
 |---|---|
 | 2.0 | fait : schéma 2 (identifiants stables, déterministes à l'import), `revel-edit` (commandes réversibles, suites atomiques, intentions développées, historique avec fusion des saisies), sessions d'édition dans `revel-core` avec enregistrement immédiat, commandes Tauri, `revel apply` ; 40 suites aléatoires de 30 commandes annulées puis rétablies à l'octet près ; cobaye réimporté (`af1ac84`), toujours équivalent à Eleventy |
-| 2.1 | fait : schéma 3 (feuille de style du modèle : règles avec identifiant, requêtes média, commentaires, blocs bruts ; points de rupture), `revel-style` (lecture sans réécriture des valeurs, génération, forme canonique, points de rupture, place d'une nouvelle règle dans la cascade), import de la feuille du cobaye (395 règles ; 900, 860 et 600 px), CSS publié généré par Revel, commandes de style réversibles dans `revel-edit` (valeurs vérifiées) ; CI : CSS comparé sous forme canonique et styles calculés + captures comparés dans Chromium (`tools/compare-styles.mjs`) ; cobaye `0dd004c` |
+| 2.1 | fait : schéma 3 (feuille de style du modèle : règles avec identifiant, requêtes média, commentaires, blocs bruts ; points de rupture), `revel-style` (lecture sans réécriture des valeurs, génération, forme canonique, points de rupture, place d'une nouvelle règle dans la cascade comme Webflow), import de la feuille du cobaye (395 règles ; 900, 860 et 600 px), CSS publié généré par Revel, commandes de style réversibles dans `revel-edit` (valeurs vérifiées). Équivalence : CSS identique sous forme canonique ; styles calculés identiques sur les 66 pages du cobaye à 1280, 900, 860, 600 et 375 px, avec et sans « mouvement réduit » (750 570 éléments et pseudo-éléments comparés) ; en CI, 11 pages représentatives à chaque largeur, styles calculés et captures (bruit de dessin ≤ 30/255). Cobaye `0dd004c` |
 | 2.2 à 2.9 | à faire |
 
 ## Sous-étapes
 
-Chaque sous-étape = commits + étiquette `step-2.N`.
+Chaque sous-étape = commits + étiquette `step-2.N`, posée par le workflow `tag.yml` sur le dernier commit de `main`
+dès la sous-étape terminée : GitHub refuse au jeton des workflows une étiquette sur un commit plus ancien dont les
+fichiers `.github/workflows/` diffèrent de `main` (droit `workflows` réservé). C'est pourquoi `step-2.0` n'existe
+pas : la sous-étape 2.0 est incluse dans `step-2.1`.
 
 | N | Contenu | Modules |
 |---|---|---|

@@ -56,7 +56,9 @@ ce fichier sans déplacer ses dossiers : pendant la transition, Eleventy et Reve
 
 `tools/compare-sites.py <référence> <revel>` compare deux sorties : titres, balises meta/link, données
 structurées, texte visible, liens, images (nom d'origine, texte alternatif), structure, attributs ; fichiers
-texte ligne à ligne.
+texte ligne à ligne ; autres fichiers (médias, CSS, JS, polices) : même liste et contenu identique, hors variantes
+d'images (`img/`). Le job CI *Équivalence avec Eleventy* l'applique au cobaye (`matv-studio/alunites-revel-lab`,
+version fixée par `COBAYE_REF`) en production et en recette.
 
 ## Coque et interface
 

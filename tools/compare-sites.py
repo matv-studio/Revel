@@ -6,6 +6,9 @@ Usage : compare-sites.py <référence> <revel> [--details]
 Pour chaque page HTML : titre, balises meta/link, texte visible, liens, images (nom
 d'origine et texte alternatif), structure des balises. Les fichiers texte (XML,
 robots.txt, .htaccess) sont comparés ligne à ligne, espaces normalisés.
+Les autres fichiers (médias, CSS, JS, polices…) doivent exister des deux côtés et être
+identiques octet pour octet, sauf les variantes d'images générées (dossier `img/`), dont
+les noms dépendent de l'outil.
 Les différences attendues sont neutralisées : paramètre de version `?v=…`,
 variantes d'images (`<picture>`, `srcset`, noms `nom-abc123-800.webp`).
 Code de sortie 0 si aucune différence.
@@ -112,6 +115,7 @@ def main() -> int:
         problems += 1
     for f in sorted(files_rev - files_ref):
         print(f"EN PLUS dans Revel : {f}")
+        problems += 1
     ok = 0
     for f in sorted(files_ref & files_rev):
         a = (ref / f).read_text(encoding="utf-8", errors="replace")
@@ -138,7 +142,28 @@ def main() -> int:
                     print(f"    {first_diff(ta, tb)}")
             else:
                 ok += 1
-    print(f"\n{ok} fichiers identiques, {problems} différences, {len(files_ref)} fichiers de référence")
+    # Fichiers copiés tels quels : même liste, même contenu.
+    other = lambda root: {
+        p.relative_to(root).as_posix()
+        for p in root.rglob("*")
+        if p.is_file() and not pattern(p) and not p.relative_to(root).as_posix().startswith("img/")
+    }
+    copies_ref, copies_rev = other(ref), other(rev)
+    for f in sorted(copies_ref - copies_rev):
+        print(f"ABSENT de Revel : {f}")
+        problems += 1
+    for f in sorted(copies_rev - copies_ref):
+        print(f"EN PLUS dans Revel : {f}")
+        problems += 1
+    same = 0
+    for f in sorted(copies_ref & copies_rev):
+        if (ref / f).read_bytes() != (rev / f).read_bytes():
+            problems += 1
+            print(f"DIFFÉRENT (contenu) {f}")
+        else:
+            same += 1
+    print(f"\n{ok} fichiers identiques, {problems} différences, {len(files_ref)} fichiers de référence ; "
+          f"{same}/{len(copies_ref)} fichiers copiés identiques")
     return 1 if problems else 0
 
 

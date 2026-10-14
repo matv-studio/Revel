@@ -20,7 +20,7 @@ compare les deux sorties (texte visible, balises `<title>`/`<meta>`, liste des f
 | 1.8 | fait : interface Leptos (sites, vue d'ensemble, génération, publication, réglages), système de design (`docs/DESIGN.md`), anglais et français ; échecs transmis comme clés de traduction (`Failure`) ; vérifiée de bout en bout dans l'application (Xvfb) contre un serveur SFTP local |
 | 1.0 | en partie : `revel-core` (services communs à l'interface, à la ligne de commande et au futur serveur MCP), `revel-protocol` (messages sérialisables) ; reste : commandes de modification du modèle et annuler/rétablir, à l'étape 2 avec l'éditeur |
 | 1.7 | fait, à valider sur le PC : `revel-git` (publication d'un dossier sur une branche sans copie de travail, envoi des seuls changements, avance rapide uniquement ; client GitHub : device flow, jetons à expiration renouvelés, activation de GitHub Pages, domaine personnalisé, `.nojekyll`) ; application OAuth « Revel » (Client ID `Ov23liuo9dnJsp95C633`, device flow vérifié le 13/10/2026) ; interface : compte GitHub (Réglages et formulaire), hébergement GitHub Pages ; à une adresse de projet (`proprietaire.github.io/depot/`, sans domaine personnalisé), les adresses depuis la racine des pages et des CSS sont préfixées par `/depot` dans une copie du site généré (vérifié sur le cobaye : aucune ressource manquante) |
-| 1.9 | à faire |
+| 1.9 | fait : job CI « Équivalence avec Eleventy » (cobaye construit par Eleventy puis importé et généré par Revel, production et recette : 72/72 fichiers HTML/XML/texte équivalents, 441/441 fichiers copiés identiques) ; installateurs de test des trois systèmes (workflow *Installateurs*, version 0.1.0) ; étiquette `step-1` |
 
 ## Sous-étapes
 

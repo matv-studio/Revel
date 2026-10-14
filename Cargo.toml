@@ -6,7 +6,7 @@ exclude = ["apps/revel-ui"]
 default-members = ["crates/*", "apps/revel-cli"]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
 authors = ["MATV Studio"]

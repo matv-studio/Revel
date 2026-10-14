@@ -115,3 +115,65 @@ jobs:
         run: |
           sudo -E env "PATH=$PATH" cargo test -p revel-deploy --test sftp_local
           sudo -E env "PATH=$PATH" cargo test -p revel-core --no-default-features publication_par_le_coeur
+
+  # Critère d'acceptation de l'étape 1 : le site cobaye généré par Revel est équivalent à celui
+  # d'Eleventy (pages, titres et balises SEO, texte visible, liens, redirections, fichiers copiés),
+  # en production et en recette. Variantes d'images exclues (noms propres à chaque outil ; rendu
+  # vérifié par captures à l'étape 1.4).
+  equivalence:
+    name: Équivalence avec Eleventy (site cobaye)
+    runs-on: ubuntu-24.04
+    env:
+      # Version du cobaye comparée ; à mettre à jour volontairement (dépôt matv-studio/alunites-revel-lab).
+      COBAYE_REF: f4b6bd9927542a52941e943c7254d583d5fb4c94
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: matv-studio/alunites-revel-lab
+          ref: ${{ env.COBAYE_REF }}
+          path: cobaye
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cobaye/package-lock.json
+      - name: Dépendances Eleventy
+        working-directory: cobaye
+        run: npm ci --no-audit --no-fund
+      # Images responsives d'Eleventy : longues à produire la première fois, réutilisées ensuite.
+      - name: Cache des images d'Eleventy
+        uses: actions/cache@v5
+        with:
+          path: cobaye/_site/img
+          key: eleventy-img-${{ hashFiles('cobaye/src/media/**', 'cobaye/eleventy.config.js') }}
+          restore-keys: eleventy-img-
+      - name: Référence Eleventy (production et recette)
+        working-directory: cobaye
+        run: |
+          npx @11ty/eleventy --quiet
+          SITE_ENV=staging npx @11ty/eleventy --quiet --output=../eleventy-staging
+      # NASM : encodeur AVIF (rav1e) optimisé.
+      - uses: ilammy/setup-nasm@v1
+      - name: Rust (version de rust-toolchain.toml)
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Import et génération par Revel
+        run: |
+          cargo build -q --release -p revel-cli
+          REVEL=target/release/revel
+          $REVEL import-eleventy cobaye
+          # Le fichier du cobaye doit correspondre à ce que produit l'importeur actuel.
+          if ! git -C cobaye diff --quiet -- site.revel.json; then
+            echo "::warning::site.revel.json du cobaye diffère de l'import actuel : mettre à jour le dépôt cobaye et COBAYE_REF."
+          fi
+          $REVEL build cobaye --out revel-production --no-images
+          $REVEL build cobaye --out revel-staging --env staging --no-images
+      - name: Comparaison
+        shell: bash  # avec « pipefail » : un écart fait échouer l'étape malgré « tee »
+        run: |
+          python3 -m pip install -q --break-system-packages beautifulsoup4 lxml
+          echo "## Production" >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/compare-sites.py cobaye/_site revel-production --details | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "## Recette" >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/compare-sites.py eleventy-staging revel-staging --details | tee -a "$GITHUB_STEP_SUMMARY"

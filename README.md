@@ -3,8 +3,9 @@
 Application de bureau (Windows, macOS, Linux) de création visuelle de sites web, écrite en Rust.
 *Desktop visual website builder written in Rust (English and French UI).*
 
-État : **étape 1** en cours — ouvrir un site existant (import Eleventy), le générer (images AVIF/WebP),
-le prévisualiser et le publier par SFTP ou sur GitHub Pages, depuis l'application (français, anglais).
+État : **étape 1** terminée (version 0.1.0) — ouvrir un site existant (import Eleventy), le générer (images
+AVIF/WebP), le prévisualiser et le publier par SFTP ou sur GitHub Pages, depuis l'application (français,
+anglais) ; sortie vérifiée équivalente à celle d'Eleventy à chaque envoi (CI).
 L'éditeur visuel arrive à l'étape 2.
 
 ## Organisation du dépôt

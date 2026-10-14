@@ -107,12 +107,17 @@ pub fn Inspector() -> impl IntoView {
     });
     let apply = move |cmd: Command| ed.apply(ui, cmd, false);
 
+    let styles = RwSignal::new(true);
     view! {
         <aside class="inspector" aria-label=ui.t("inspector-title")>
-            <div class="panel-head">
-                <span class="panel-title">{ui.t("inspector-settings")}</span>
+            <div class="panel-tabs" role="tablist">
+                <button role="tab" class:is-on=move || styles.get() aria-selected=move || styles.get().to_string()
+                    on:click=move |_| styles.set(true)>{ui.t("styles-title")}</button>
+                <button role="tab" class:is-on=move || !styles.get() aria-selected=move || (!styles.get()).to_string()
+                    on:click=move |_| styles.set(false)>{ui.t("inspector-settings")}</button>
             </div>
             <div class="inspector-body">
+                <Show when=move || !styles.get() fallback=|| view! { <crate::styles::Styles/> }>
                 {move || match current.get() {
                     None => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
                     Some((at, node)) => match node {
@@ -144,6 +149,7 @@ pub fn Inspector() -> impl IntoView {
                         _ => view! { <p class="muted">{ui.t("inspector-none")}</p> }.into_any(),
                     },
                 }}
+                </Show>
             </div>
         </aside>
     }

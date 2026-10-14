@@ -43,6 +43,8 @@ pub enum EditError {
     InvalidCss(String),
     #[error("le site n'a pas de feuille de style")]
     NoStylesheet,
+    #[error("points de rupture invalides : {0}")]
+    InvalidBreakpoints(String),
 }
 
 impl EditError {
@@ -60,6 +62,7 @@ impl EditError {
             Self::InvalidTag(_) => "error-edit-tag",
             Self::InvalidCss(_) => "error-edit-css",
             Self::NoStylesheet => "error-edit-no-stylesheet",
+            Self::InvalidBreakpoints(_) => "error-edit-breakpoints",
         }
     }
 }

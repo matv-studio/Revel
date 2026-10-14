@@ -122,8 +122,23 @@
     return (svg || node).closest("[data-rv]");
   };
 
+  // Valeurs calculées des propriétés suivies par le panneau de styles, pour l'élément sélectionné.
+  let watched = [];
+  let computedTimer = 0;
+  const sendComputed = () => {
+    clearTimeout(computedTimer);
+    computedTimer = setTimeout(() => {
+      if (!selected || !selected.isConnected || !watched.length) return;
+      const cs = getComputedStyle(selected);
+      const values = {};
+      for (const p of watched) values[p] = cs.getPropertyValue(p).trim();
+      post({ type: "computed", id: selected.getAttribute("data-rv"), values });
+    }, 30);
+  };
+
   const select = (el, notify) => {
     selected = el;
+    sendComputed();
     redraw();
     if (notify) {
       post(el
@@ -176,7 +191,7 @@
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => post({ type: "scroll", x: window.scrollX, y: window.scrollY }), 120);
   }, { passive: true });
-  window.addEventListener("resize", redraw);
+  window.addEventListener("resize", () => { redraw(); sendComputed(); });
   new ResizeObserver(redraw).observe(document.documentElement);
 
   // ---------------------------------------------------------------- messages de l'interface
@@ -196,6 +211,10 @@
         hovered = byId(m.id);
         redraw();
         break;
+      case "watch":
+        watched = Array.isArray(m.props) ? m.props : [];
+        sendComputed();
+        break;
       case "stylesheet": {
         // Feuille de style régénérée : rechargée sans recharger la page.
         for (const l of document.querySelectorAll('link[rel~="stylesheet"]')) {
@@ -204,7 +223,7 @@
             u.searchParams.set("rv", String(Date.now()));
             const next = l.cloneNode();
             next.href = u.pathname + u.search;
-            next.addEventListener("load", () => { l.remove(); redraw(); }, { once: true });
+            next.addEventListener("load", () => { l.remove(); redraw(); sendComputed(); }, { once: true });
             l.after(next);
           }
         }

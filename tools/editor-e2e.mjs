@@ -91,7 +91,7 @@ try {
     { cmd: 'set_decl', rule: rule.id, prop: 'color', value: 'rgb(255, 0, 0)' });
   f = await waitFrame(() => getComputedStyle(document.querySelector('h1')).color === 'rgb(255, 0, 0)', 'couleur modifiée');
   check('style modifié : appliqué en direct, sans rechargement', await f.evaluate(() => window.__mark === 1), before + ' → rgb(255, 0, 0)');
-  const canUndo = await page.$eval('.editor-toolbar .icon-btn >> nth=0', (b) => !b.disabled);
+  const canUndo = await page.$eval('.editor-toolbar .btn-undo', (b) => !b.disabled);
   check('« Annuler » disponible', canUndo);
 
   // Annuler au clavier (focus dans l'interface).
@@ -114,7 +114,7 @@ try {
     { cmd: 'set_attr', at: { owner, node: h1id }, name: 'data-essai', value: 'oui' });
   f = await waitFrame(() => document.querySelector('h1')?.getAttribute('data-essai') === 'oui' && window.__mark === undefined, 'rechargement');
   check('attribut modifié : page rechargée avec la modification', true);
-  await page.click('.editor-toolbar .icon-btn >> nth=0');
+  await page.click('.editor-toolbar .btn-undo');
   f = await waitFrame(() => document.readyState === 'complete' && document.querySelector('h1') && !document.querySelector('h1').hasAttribute('data-essai'), 'annulation');
   const disk = await invoke('edit_open');
   check('annulé : document identique à l\'ouverture', JSON.stringify(disk.site) === JSON.stringify(doc.site));
@@ -146,7 +146,7 @@ try {
   const dup = await invoke('edit_open');
   check('dupliquer : section copiée (nouveaux identifiants), sélectionnée', bodyOf(dup.site).length > bodyOf(docBefore.site).length
     && (await page.textContent('.editor-status')).includes('section.hero'));
-  await page.click('.editor-toolbar .icon-btn >> nth=0');
+  await page.click('.editor-toolbar .btn-undo');
   f = await waitFrame(() => document.querySelectorAll('section.hero').length === 1, 'annulation de la copie');
 
   // Descendre (bouton) : la section passe après sa voisine.
@@ -155,7 +155,7 @@ try {
   await page.click('.layers .panel-head .icon-btn >> nth=1');
   f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') !== ob, 'déplacement', orderBefore);
   check('descendre : ordre modifié dans le canevas', true);
-  await page.click('.editor-toolbar .icon-btn >> nth=0');
+  await page.click('.editor-toolbar .btn-undo');
   f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') === ob, 'annulation du déplacement', orderBefore);
 
   // Glisser-déposer : section.hero déposée après la section suivante.
@@ -170,7 +170,7 @@ try {
     await rowsL.nth(si).dragTo(rowsL.nth(di), { targetPosition: { x: 40, y: box.height - 3 } });
     f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') !== ob, 'glisser-déposer', orderBefore);
     check('glisser-déposer : section déplacée', true);
-    await page.click('.editor-toolbar .icon-btn >> nth=0');
+    await page.click('.editor-toolbar .btn-undo');
     f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') === ob, 'annulation du glisser-déposer', orderBefore);
   } else {
     check('glisser-déposer : lignes trouvées', false);
@@ -197,6 +197,7 @@ try {
     return found;
   };
   await page.click('.layers .layer:has-text("section.hero")');
+  await page.click('.inspector .panel-tabs button >> nth=1');
   await page.waitForFunction(() => document.querySelector('.inspector input')?.value === 'section');
   check('réglages : balise de l\'élément sélectionné', true);
   const secId = await f.evaluate(() => document.querySelector('section.hero').getAttribute('data-rv'));
@@ -240,11 +241,70 @@ try {
   for (let i = 0; i < 6; i++) {
     const st = await invoke('edit_open');
     if (JSON.stringify(st.site) === JSON.stringify(base25.site)) break;
-    await page.click('.editor-toolbar .icon-btn >> nth=0');
+    await page.click('.editor-toolbar .btn-undo');
     await page.waitForTimeout(400);
   }
   check('réglages et ajout : tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base25.site));
   if (shots) await page.screenshot({ path: `${shots}/editeur-reglages.png` });
+
+
+  // ------------------------------------------------------------------ styles et points de rupture (2.6, 2.8)
+  const base26 = await invoke('edit_open');
+  const rulesOf = (site, sel) => site.stylesheet.items.map((it, i) => [it, i]).filter(([it]) => it.item === 'rule' && it.selector === sel);
+  await page.click('.layers .layer:has-text("h1.hero__title")');
+  await page.click('.inspector .panel-tabs button >> nth=0');
+  await page.waitForFunction(() => document.querySelector('.styles select')?.value === '.hero__title');
+  check('styles : sélecteur de la classe de l\'élément', true);
+  const styleInput = (label) => page.locator('.style-row', { has: page.locator(`.style-label[title="${label}"]`) }).locator('input, select').first();
+  f = frameOf();
+  await f.evaluate(() => { window.__mark2 = 1; });
+  await styleInput('color').fill('rgb(10, 20, 30)');
+  await styleInput('color').press('Enter');
+  f = await waitFrame(() => getComputedStyle(document.querySelector('h1.hero__title')).color === 'rgb(10, 20, 30)', 'couleur du titre');
+  check('styles : couleur appliquée en direct (sans rechargement)', await f.evaluate(() => window.__mark2 === 1));
+  const r1 = rulesOf((await invoke('edit_open')).site, '.hero__title').find(([it]) => !it.media);
+  check('styles : déclaration écrite dans la règle de base', r1 && r1[0].decls.some((d) => d.prop === 'color' && d.value === 'rgb(10, 20, 30)'));
+
+  // Point de rupture 600 : nouvelle règle placée dans la cascade.
+  const bps2 = await page.$$('.editor-toolbar .segmented button');
+  await bps2[bps2.length - 1].click();
+  await page.waitForTimeout(400);
+  await styleInput('font-size').fill('40px');
+  await styleInput('font-size').press('Enter');
+  f = await waitFrame(() => getComputedStyle(document.querySelector('h1.hero__title')).fontSize === '40px', 'taille à 600 px');
+  const after600 = (await invoke('edit_open')).site;
+  const rs = rulesOf(after600, '.hero__title');
+  const r600 = rs.find(([it]) => it.media === '(max-width: 600px)');
+  const wider = rs.filter(([it]) => !it.media || /max-width: (9|8)\d\dpx/.test(it.media)).map(([, i]) => i);
+  check('styles : règle créée pour 600 px, après les règles plus larges du même sélecteur', !!r600 && wider.every((i) => i < r600[1]), `position ${r600 && r600[1]} > ${wider.join(',')}`);
+  await bps2[0].click();
+  await page.waitForTimeout(400);
+  f = frameOf();
+  const desktopSize = await f.evaluate(() => getComputedStyle(document.querySelector('h1.hero__title')).fontSize);
+  check('styles : la base n\'est pas touchée par la règle 600 px', desktopSize !== '40px', desktopSize);
+
+  // Points de rupture : ajout, retrait ; retrait refusé s'il a des styles.
+  await page.click('.bp-menu > summary');
+  await page.fill('.bp-add input', '480');
+  await page.click('.bp-add .btn');
+  await page.waitForFunction(() => [...document.querySelectorAll('.editor-toolbar .segmented .bp-width')].some((e) => e.textContent === '480'));
+  check('points de rupture : 480 px ajouté', JSON.stringify((await invoke('edit_open')).site.breakpoints).includes('max-480'));
+  await page.click('.bp-line:has-text("480") .icon-btn');
+  await page.waitForFunction(() => ![...document.querySelectorAll('.editor-toolbar .segmented .bp-width')].some((e) => e.textContent === '480'));
+  await page.click('.bp-line:has-text("600") .icon-btn');
+  await page.waitForSelector('.notice--error');
+  check('points de rupture : retrait refusé quand des styles l\'utilisent', JSON.stringify((await invoke('edit_open')).site.breakpoints).includes('max-600'));
+  await page.click('.notice--error .icon-btn');
+  await page.click('.bp-menu > summary');
+  if (shots) await page.screenshot({ path: `${shots}/editeur-styles.png` });
+
+  // Tout annuler.
+  for (let i = 0; i < 8; i++) {
+    if (JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base26.site)) break;
+    await page.click('.editor-toolbar .btn-undo');
+    await page.waitForTimeout(400);
+  }
+  check('styles : tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base26.site));
 
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {

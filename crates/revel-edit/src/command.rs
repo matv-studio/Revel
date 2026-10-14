@@ -1,7 +1,7 @@
 //! Commandes d'édition. Chaque commande appliquée renvoie la commande inverse.
 
 use revel_model::ids::{node_id, walk};
-use revel_model::{Attr, Decl, ImageNode, Node, Site, StyleItem};
+use revel_model::{Attr, Breakpoint, Decl, ImageNode, Node, Site, StyleItem};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -119,6 +119,8 @@ pub enum Command {
     RemoveStyleAt { index: usize },
     /// Supprime une règle de style.
     RemoveRule { rule: String },
+    /// Remplace la liste des points de rupture du site (la base `desktop` reste la première).
+    SetBreakpoints { breakpoints: Vec<Breakpoint> },
     /// Nouvelle règle pour `selector` et `media`, placée dans la cascade (après les règles du même
     /// sélecteur pour des écrans plus larges).
     AddRule {
@@ -539,6 +541,12 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             let index = crate::style::rule_index(site, rule)?;
             apply(site, &Command::RemoveStyleAt { index })
         }
+        Command::SetBreakpoints { breakpoints } => {
+            check_breakpoints(breakpoints)?;
+            Ok(Command::SetBreakpoints {
+                breakpoints: std::mem::replace(&mut site.breakpoints, breakpoints.clone()),
+            })
+        }
         Command::Duplicate { .. }
         | Command::Wrap { .. }
         | Command::InsertPreset { .. }
@@ -564,6 +572,35 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             Ok(Command::Batch { commands: inverses })
         }
     }
+}
+
+/// Points de rupture valides : la base `desktop` (sans largeur) en premier, identifiants uniques,
+/// une seule largeur par point, largeurs strictement positives et toutes différentes.
+fn check_breakpoints(bps: &[Breakpoint]) -> Result<(), EditError> {
+    let bad = |m: &str| EditError::InvalidBreakpoints(m.to_string());
+    match bps.first() {
+        Some(b) if b.id == "desktop" && b.max_width.is_none() && b.min_width.is_none() => {}
+        _ => return Err(bad("desktop")),
+    }
+    let mut ids = std::collections::HashSet::new();
+    let mut widths = std::collections::HashSet::new();
+    for b in bps {
+        if b.id.is_empty() || !ids.insert(b.id.as_str()) {
+            return Err(bad(&b.id));
+        }
+        if b.id == "desktop" {
+            continue;
+        }
+        match (b.max_width, b.min_width) {
+            (Some(w), None) | (None, Some(w)) if w > 0 && w < 100_000 => {
+                if !widths.insert((b.max_width.is_some(), w)) {
+                    return Err(bad(&b.id));
+                }
+            }
+            _ => return Err(bad(&b.id)),
+        }
+    }
+    Ok(())
 }
 
 /// Nom de balise HTML acceptable (lettres, chiffres, tirets ; commence par une lettre).

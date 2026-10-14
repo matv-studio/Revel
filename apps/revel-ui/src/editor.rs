@@ -50,6 +50,9 @@ enum FromCanvas {
         x: f64,
         y: f64,
     },
+    Computed {
+        values: std::collections::HashMap<String, String>,
+    },
     #[serde(other)]
     Other,
 }
@@ -78,6 +81,8 @@ pub struct Ed {
     pub load: RwSignal<u64>,
     /// Défilement du canevas, rétabli après un rechargement.
     pub scroll: RwSignal<(f64, f64)>,
+    /// Valeurs effectives des propriétés de style de l'élément sélectionné (canevas).
+    pub computed: RwSignal<std::collections::HashMap<String, String>>,
     frame: NodeRef<html::Iframe>,
 }
 
@@ -164,7 +169,9 @@ impl Ed {
             if gone {
                 self.selected.set(None);
             }
-            if style_only(cmd) {
+            if matches!(cmd, Command::SetBreakpoints { .. }) {
+                // Points de rupture : réglage de l'éditeur, la page ne change pas.
+            } else if style_only(cmd) {
                 if let Some(url) = self
                     .doc
                     .with_untracked(|d| d.as_ref()?.stylesheet.as_ref().map(|s| s.url.clone()))
@@ -323,6 +330,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         scripts: RwSignal::new(false),
         load: RwSignal::new(0),
         scroll: RwSignal::new((0.0, 0.0)),
+        computed: RwSignal::new(Default::default()),
         frame: NodeRef::new(),
     };
     provide_context(ed);
@@ -377,6 +385,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             FromCanvas::Ready { path } => {
                 // Navigation impossible dans le canevas : la page est celle demandée.
                 let _ = path;
+                ed.post(serde_json::json!({ "type": "watch", "props": crate::styles::watched() }));
                 let (x, y) = ed.scroll.get_untracked();
                 if x != 0.0 || y != 0.0 {
                     ed.post(serde_json::json!({ "type": "scroll", "x": x, "y": y }));
@@ -387,6 +396,9 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             }
             FromCanvas::Hover { id } => ed.hovered.set(id),
             FromCanvas::Select { id, tag, label } => {
+                if id.is_none() {
+                    ed.computed.set(Default::default());
+                }
                 ed.selected.set(id.map(|id| Selection { id, tag, label }));
             }
             FromCanvas::Key { key, shift } => match key.to_lowercase().as_str() {
@@ -396,6 +408,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 _ => {}
             },
             FromCanvas::Scroll { x, y } => ed.scroll.set((x, y)),
+            FromCanvas::Computed { values } => ed.computed.set(values),
             FromCanvas::Other => {}
         }
     });
@@ -610,6 +623,7 @@ fn Toolbar() -> impl IntoView {
                     }
                 }).collect_view()}
             </div>
+            <BreakpointMenu/>
             <div class="select editor-zoom">
                 <select class="input" aria-label=ui.t("editor-zoom")
                     on:change=move |e| {
@@ -631,11 +645,121 @@ fn Toolbar() -> impl IntoView {
                 <span class="muted">{ui.t("editor-scripts")}</span>
             </label>
             <div class="toolbar-spacer"></div>
-            <button class="icon-btn" title=ui.t("editor-undo") aria-label=ui.t("editor-undo")
+            <button class="icon-btn btn-undo" title=ui.t("editor-undo") aria-label=ui.t("editor-undo")
                 prop:disabled=move || !can_undo() on:click=move |_| ed.undo(ui)>{icons::undo()}</button>
-            <button class="icon-btn" title=ui.t("editor-redo") aria-label=ui.t("editor-redo")
+            <button class="icon-btn btn-redo" title=ui.t("editor-redo") aria-label=ui.t("editor-redo")
                 prop:disabled=move || !can_redo() on:click=move |_| ed.redo(ui)>{icons::redo()}</button>
         </div>
+    }
+}
+
+/// Points de rupture du site (étape 2.8) : ajout d'une largeur, retrait d'un point inutilisé.
+#[component]
+fn BreakpointMenu() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let kind_max = RwSignal::new(true);
+    let width = RwSignal::new(String::new());
+    let list = move || {
+        ed.doc.with(|d| {
+            d.as_ref()
+                .map(|d| d.breakpoints.clone())
+                .unwrap_or_default()
+        })
+    };
+    // Ordre : base, largeurs maximales décroissantes, largeurs minimales croissantes.
+    let sorted = |mut v: Vec<revel_model::Breakpoint>| {
+        v.sort_by_key(|b| match (b.max_width, b.min_width) {
+            (None, None) => (0, 0i64),
+            (Some(w), _) => (1, -i64::from(w)),
+            (_, Some(w)) => (2, i64::from(w)),
+        });
+        v
+    };
+    let add = move || {
+        let Ok(w) = width.get_untracked().trim().parse::<u32>() else {
+            return;
+        };
+        let max = kind_max.get_untracked();
+        let mut v = list();
+        v.push(revel_model::Breakpoint {
+            id: format!("{}-{w}", if max { "max" } else { "min" }),
+            max_width: max.then_some(w),
+            min_width: (!max).then_some(w),
+        });
+        width.set(String::new());
+        ed.apply(
+            ui,
+            Command::SetBreakpoints {
+                breakpoints: sorted(v),
+            },
+            false,
+        );
+    };
+    let remove = move |id: String| {
+        let (used, v) = ed.doc.with_untracked(|d| {
+            let Some(d) = d.as_ref() else {
+                return (false, Vec::new());
+            };
+            let media = d
+                .breakpoints
+                .iter()
+                .find(|b| b.id == id)
+                .and_then(|b| b.media());
+            let used = media.is_some()
+                && d.style_rules()
+                    .any(|r| r.media.as_deref() == media.as_deref());
+            let v = d
+                .breakpoints
+                .iter()
+                .filter(|b| b.id != id)
+                .cloned()
+                .collect();
+            (used, v)
+        });
+        if used {
+            ui.fail(revel_protocol::Failure::new("editor-bp-in-use"));
+            return;
+        }
+        if ed.breakpoint.get_untracked() == id {
+            ed.breakpoint.set("desktop".into());
+        }
+        ed.apply(ui, Command::SetBreakpoints { breakpoints: v }, false);
+    };
+    view! {
+        <details class="bp-menu">
+            <summary class="icon-btn" title=ui.t("editor-bp-manage") aria-label=ui.t("editor-bp-manage")>{icons::plus()}</summary>
+            <div class="bp-pop">
+                <p class="panel-title">{ui.t("editor-breakpoints")}</p>
+                {move || list().into_iter().filter(|b| b.id != "desktop").map(|b| {
+                    let id = b.id.clone();
+                    let label = match (b.max_width, b.min_width) {
+                        (Some(w), _) => ui.tx("editor-bp-max", &[("width", w.to_string())]),
+                        (_, Some(w)) => ui.tx("editor-bp-min", &[("width", w.to_string())]),
+                        _ => String::new(),
+                    };
+                    view! {
+                        <div class="bp-line">
+                            <span>{label}</span>
+                            <button class="icon-btn" title=ui.t("editor-bp-remove") aria-label=ui.t("editor-bp-remove")
+                                on:click=move |_| remove(id.clone())>{icons::trash()}</button>
+                        </div>
+                    }
+                }).collect_view()}
+                <div class="bp-add">
+                    <div class="select">
+                        <select class="input" on:change=move |e| kind_max.set(event_target_value(&e) == "max")>
+                            <option value="max" selected=move || kind_max.get()>{ui.t("editor-bp-kind-max")}</option>
+                            <option value="min" selected=move || !kind_max.get()>{ui.t("editor-bp-kind-min")}</option>
+                        </select>
+                    </div>
+                    <input class="input input--mono" inputmode="numeric" placeholder="px" prop:value=move || width.get()
+                        on:input=move |e| width.set(event_target_value(&e))
+                        on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { add() }/>
+                    <button class="btn" on:click=move |_| add()>{ui.t("editor-bp-add")}</button>
+                </div>
+            </div>
+        </details>
     }
 }
 

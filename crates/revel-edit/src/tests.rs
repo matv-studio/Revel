@@ -717,6 +717,45 @@ fn styles_saisie_continue_fusionnee() {
     assert!(css(&s).contains("margin: 0; font-size: 12px; }"));
 }
 
+#[test]
+fn points_de_rupture() {
+    use revel_model::Breakpoint;
+    let bp = |id: &str, max: Option<u32>, min: Option<u32>| Breakpoint {
+        id: id.into(),
+        max_width: max,
+        min_width: min,
+    };
+    let list = vec![
+        bp("desktop", None, None),
+        bp("max-991", Some(991), None),
+        bp("max-478", Some(478), None),
+        bp("min-1440", None, Some(1440)),
+    ];
+    round_trip(
+        Command::SetBreakpoints {
+            breakpoints: list.clone(),
+        },
+        |s| assert_eq!(s.breakpoints, list),
+    );
+    let mut s = sample();
+    for bad in [
+        vec![bp("max-1", Some(1), None)],
+        vec![
+            bp("desktop", None, None),
+            bp("a", Some(600), None),
+            bp("b", Some(600), None),
+        ],
+        vec![bp("desktop", None, None), bp("a", Some(600), Some(300))],
+        vec![bp("desktop", None, None), bp("a", None, None)],
+        vec![bp("desktop", None, None), bp("desktop", Some(5), None)],
+    ] {
+        assert!(matches!(
+            apply(&mut s, &Command::SetBreakpoints { breakpoints: bad }),
+            Err(EditError::InvalidBreakpoints(_))
+        ));
+    }
+}
+
 /// Générateur pseudo-aléatoire reproductible (xorshift).
 struct Rng(u64);
 impl Rng {

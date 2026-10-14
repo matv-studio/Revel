@@ -12,6 +12,7 @@ mod layers;
 mod publish;
 mod settings;
 mod site;
+mod styles;
 
 use dialog::Ask;
 use leptos::prelude::*;

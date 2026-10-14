@@ -321,11 +321,15 @@ jobs:
           mkdir site-essai
           tar --exclude=./.git -C cobaye -cf - . | tar -C site-essai -xf -
           mkdir captures-application
+          # Site ouvert au démarrage : variable héritée par l'application à travers tauri-driver et le
+          # pilote natif (Edge WebDriver passe les arguments à WebView2, pas à l'application).
+          if [ "$RUNNER_OS" = Windows ]; then REVEL_OPEN=$(cygpath -w "$PWD/site-essai"); else REVEL_OPEN="$PWD/site-essai"; fi
+          export REVEL_OPEN
           run() {
             tauri-driver > tauri-driver.log 2>&1 &
             local driver=$! code=0
             sleep 3
-            node tools/app-e2e.mjs target/debug/revel-app --open site-essai --shot captures-application/application.png || code=$?
+            node tools/app-e2e.mjs target/debug/revel-app --shot captures-application/application.png || code=$?
             kill "$driver" 2>/dev/null || true
             return "$code"
           }
@@ -334,7 +338,7 @@ jobs:
             xvfb-run -a -s "-screen 0 1440x900x24" bash -c "$(declare -f run); run" | tee -a "$GITHUB_STEP_SUMMARY"
           else
             # Diagnostic : l'application démarre-t-elle seule (sans pilote) ?
-            RUST_BACKTRACE=1 target/debug/revel-app.exe --open site-essai > captures-application/application-seule.log 2>&1 &
+            RUST_BACKTRACE=1 target/debug/revel-app.exe > captures-application/application-seule.log 2>&1 &
             app=$!
             sleep 20
             if kill -0 "$app" 2>/dev/null; then

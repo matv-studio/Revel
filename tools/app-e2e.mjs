@@ -4,10 +4,12 @@
 // Xvfb). Vérifie ce que les essais dans un navigateur ne couvrent pas : commandes Tauri réelles,
 // protocole `revel-canvas` de l'application, cadre du canevas dans la vue web du système.
 //
-// L'application ouvre directement le site dans l'éditeur : argument `--open DOSSIER` transmis par
-// tauri-driver (ou variable REVEL_OPEN dans l'environnement de tauri-driver). Les essais modifient
-// le site puis annulent : utiliser une copie, comparée ensuite à l'original.
-// Usage : tauri-driver &
+// L'application ouvre directement le site dans l'éditeur : variable REVEL_OPEN dans l'environnement
+// de tauri-driver (héritée par l'application), ou option `--open DOSSIER` de ce script, transmise
+// comme argument de l'application (Linux seulement : sous Windows, Edge WebDriver remet les
+// arguments à WebView2, pas à l'application). Les essais modifient le site puis annulent : utiliser
+// une copie, comparée ensuite à l'original.
+// Usage : REVEL_OPEN=DOSSIER_DU_SITE tauri-driver &
 //         node tools/app-e2e.mjs CHEMIN_DE_L_APPLICATION [--open DOSSIER_DU_SITE] [--shot CAPTURE.png]
 
 import fs from 'node:fs';

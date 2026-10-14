@@ -163,7 +163,9 @@ l'exécution CI en cas d'échec).
 - Essais de l'application elle-même : `tools/app-e2e.mjs` pilote l'exécutable Tauri par WebDriver
   (`tauri-driver` : WebKitWebDriver sous Linux dans Xvfb, Edge WebDriver sous Windows ; pas de pilote pour
   macOS). L'exécutable de débogage doit intégrer l'interface (`--features custom-protocol`) ; l'argument
-  `--open DOSSIER` (ou la variable `REVEL_OPEN`) ouvre directement le site dans l'éditeur.
+  `--open DOSSIER` ou la variable `REVEL_OPEN` ouvre directement le site dans l'éditeur (sous Windows, Edge
+  WebDriver remet les arguments à WebView2 et non à l'application : variable seulement). Windows Server 2022
+  en CI : sur l'image 2025, Edge WebDriver n'obtient pas le port de débogage de WebView2.
 
 ## Versions de référence (vérifiées sur crates.io le 13/10/2026)
 

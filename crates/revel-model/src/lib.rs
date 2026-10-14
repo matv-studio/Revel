@@ -23,7 +23,7 @@ pub mod ids;
 pub mod migrations;
 
 /// Version courante du schéma du document de site.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Document racine d'un site Revel.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -60,9 +60,10 @@ pub struct Site {
     /// Points de rupture, du plus large au plus étroit.
     #[serde(default = "Breakpoint::defaults")]
     pub breakpoints: Vec<Breakpoint>,
-    /// Classes de styles partagées, indexées par nom (éditeur visuel, étape 2).
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub styles: BTreeMap<String, StyleClass>,
+    /// Feuille de style du site, détenue par Revel (D-18) ; `None` : aucune (les CSS éventuels
+    /// sont copiés tels quels).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stylesheet: Option<Stylesheet>,
     /// Redirections permanentes (301) déclarées dans Revel.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub redirects: Vec<Redirect>,
@@ -84,7 +85,7 @@ impl Site {
             collections: Vec::new(),
             passthrough: Vec::new(),
             breakpoints: Breakpoint::defaults(),
-            styles: BTreeMap::new(),
+            stylesheet: None,
             redirects: Vec::new(),
         }
     }
@@ -406,11 +407,18 @@ pub struct ImageNode {
     pub optional: bool,
 }
 
+/// Point de rupture : largeur d'écran à partir de laquelle des styles différents s'appliquent.
+/// Cascade comme Webflow : la base (sans largeur) s'applique partout ; un point `max_width`
+/// modifie les écrans plus étroits ; un point `min_width` les écrans plus larges.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Breakpoint {
     pub id: String,
-    /// Largeur maximale en pixels (`None` = base, sans media query).
+    /// Largeur maximale en pixels (`@media (max-width: …)`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_width: Option<u32>,
+    /// Largeur minimale en pixels (`@media (min-width: …)`), pour les grands écrans.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_width: Option<u32>,
 }
 
 impl Breakpoint {
@@ -424,16 +432,71 @@ impl Breakpoint {
         .map(|(id, max_width)| Self {
             id: id.into(),
             max_width,
+            min_width: None,
         })
         .collect()
     }
+
+    /// Requête média de ce point de rupture (`None` pour la base).
+    pub fn media(&self) -> Option<String> {
+        match (self.max_width, self.min_width) {
+            (Some(w), _) => Some(format!("(max-width: {w}px)")),
+            (None, Some(w)) => Some(format!("(min-width: {w}px)")),
+            (None, None) => None,
+        }
+    }
 }
 
-/// Classe de styles : déclarations CSS par point de rupture.
+/// Feuille de style du site (D-18). Les éléments sont dans l'ordre de la cascade CSS.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct StyleClass {
-    /// Point de rupture -> (propriété CSS -> valeur).
-    pub rules: BTreeMap<String, BTreeMap<String, String>>,
+pub struct Stylesheet {
+    /// Adresse publiée du CSS généré (ex. `/assets/css/site.css`).
+    pub url: String,
+    /// Fichier d'origine importé, relatif au projet : il n'est plus copié tel quel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub items: Vec<StyleItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "item", rename_all = "snake_case")]
+pub enum StyleItem {
+    Rule(StyleRule),
+    /// Commentaire, sans délimiteurs ; `media` : à l'intérieur d'un bloc `@media`.
+    Comment {
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        media: Option<String>,
+    },
+    /// Bloc conservé tel quel : `@font-face`, `@keyframes`, `@import`, `@supports`…
+    Raw {
+        css: String,
+    },
+}
+
+/// Règle : sélecteur, requête média facultative, déclarations dans l'ordre.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct StyleRule {
+    /// Identifiant stable pour l'éditeur et les commandes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Sélecteur tel qu'écrit (espaces normalisés), ex. `.button:hover`.
+    pub selector: String,
+    /// Requête média sans `@media`, ex. `(max-width: 860px)`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media: Option<String>,
+    #[serde(default)]
+    pub decls: Vec<Decl>,
+}
+
+/// Déclaration CSS ; la valeur est conservée telle qu'écrite.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Decl {
+    pub prop: String,
+    pub value: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub important: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

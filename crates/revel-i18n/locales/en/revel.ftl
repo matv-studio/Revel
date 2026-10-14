@@ -207,3 +207,5 @@ error-edit-duplicate = Change refused: an element identifier would be duplicated
 error-edit-move = An element cannot be placed inside itself.
 error-edit-tag = Invalid tag name: letters, digits and hyphens only. ({ $detail })
 error-edit-not-open = This site is not open in the editor.
+error-edit-css = CSS refused: a single declaration, with no semicolon or brace outside quotes, and no “!important” in the value (separate checkbox). ({ $detail })
+error-edit-no-stylesheet = This site does not have a stylesheet yet.

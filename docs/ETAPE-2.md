@@ -29,7 +29,8 @@ sans écrire de code, et sans perdre l'équivalence de la sortie avec le site d'
 | N | État au 14/10/2026 |
 |---|---|
 | 2.0 | fait : schéma 2 (identifiants stables, déterministes à l'import), `revel-edit` (commandes réversibles, suites atomiques, intentions développées, historique avec fusion des saisies), sessions d'édition dans `revel-core` avec enregistrement immédiat, commandes Tauri, `revel apply` ; 40 suites aléatoires de 30 commandes annulées puis rétablies à l'octet près ; cobaye réimporté (`af1ac84`), toujours équivalent à Eleventy |
-| 2.1 à 2.9 | à faire |
+| 2.1 | fait : schéma 3 (feuille de style du modèle : règles avec identifiant, requêtes média, commentaires, blocs bruts ; points de rupture), `revel-style` (lecture sans réécriture des valeurs, génération, forme canonique, points de rupture, place d'une nouvelle règle dans la cascade), import de la feuille du cobaye (395 règles ; 900, 860 et 600 px), CSS publié généré par Revel, commandes de style réversibles dans `revel-edit` (valeurs vérifiées) ; CI : CSS comparé sous forme canonique et styles calculés + captures comparés dans Chromium (`tools/compare-styles.mjs`) ; cobaye `0dd004c` |
+| 2.2 à 2.9 | à faire |
 
 ## Sous-étapes
 
@@ -38,7 +39,7 @@ Chaque sous-étape = commits + étiquette `step-2.N`.
 | N | Contenu | Modules |
 |---|---|---|
 | 2.0 | **Commandes et historique** : identifiants stables des nœuds (schéma v2, migration), commandes sérialisables et réversibles (texte, attributs, insertion, déplacement, suppression, duplication, styles), historique annuler/rétablir, enregistrement automatique | nouveau `revel-edit`, `revel-model`, `revel-core` |
-| 2.1 | **Styles dans le modèle** : feuille de style ordonnée (règles, médias, états, blocs bruts `@font-face`, `@keyframes`) ; import d'un CSS existant (lightningcss) ; points de rupture déduits des `@media` ; génération du CSS ; équivalence vérifiée en CI (CSS comparé après normalisation, captures aux trois largeurs) | nouveau `revel-style`, `revel-render`, `revel-import` |
+| 2.1 | **Styles dans le modèle** : feuille de style ordonnée (règles, médias, états, blocs bruts `@font-face`, `@keyframes`) ; import d'un CSS existant (lecteur propre, valeurs conservées telles qu'écrites) ; points de rupture déduits des `@media` ; génération du CSS ; commandes de style réversibles ; équivalence vérifiée en CI (CSS comparé après normalisation, styles calculés de chaque élément comparés dans Chromium à plusieurs largeurs) | nouveau `revel-style`, `revel-edit`, `revel-project`, `revel-import` |
 | 2.2 | **Rendu pour l'éditeur** : une page rendue à la demande avec repères des nœuds (`data-rv`), liaisons des textes vers leur source, script de l'éditeur ; servie par un protocole propre à l'application (sans port réseau) ; scripts du site désactivés par défaut | `revel-render`, `revel-core`, `revel-app` |
 | 2.3 | **Canevas** : page dans un cadre, survol et sélection, étiquette de l'élément, largeur par point de rupture, zoom ; mise à jour en direct des styles sans recharger | `revel-ui` |
 | 2.4 | **Calques** : arbre de la page, du gabarit et des composants ; blocs logiques visibles (condition, boucle, composant) ; glisser-déposer, dupliquer, supprimer, envelopper | `revel-ui`, `revel-edit` |

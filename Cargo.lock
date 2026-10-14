@@ -4776,6 +4776,7 @@ dependencies = [
  "revel-import",
  "revel-model",
  "revel-project",
+ "revel-style",
  "serde_json",
  "tokio",
 ]
@@ -4828,6 +4829,7 @@ name = "revel-edit"
 version = "0.1.0"
 dependencies = [
  "revel-model",
+ "revel-style",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -4862,6 +4864,7 @@ dependencies = [
  "revel-markup",
  "revel-model",
  "revel-render",
+ "revel-style",
  "serde",
  "serde-saphyr",
  "serde_json",
@@ -4899,6 +4902,7 @@ dependencies = [
  "revel-assets",
  "revel-model",
  "revel-render",
+ "revel-style",
  "serde-saphyr",
  "serde_json",
  "thiserror 2.0.21",
@@ -4925,6 +4929,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "url",
+]
+
+[[package]]
+name = "revel-style"
+version = "0.1.0"
+dependencies = [
+ "revel-model",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

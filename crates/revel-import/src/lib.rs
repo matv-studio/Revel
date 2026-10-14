@@ -16,6 +16,8 @@ pub struct Report {
     pub layouts: usize,
     pub components: usize,
     pub collections: usize,
+    /// Règles de style importées dans le modèle (D-18).
+    pub style_rules: usize,
     pub warnings: Vec<String>,
 }
 

@@ -30,6 +30,7 @@ revel-core = { path = "crates/revel-core" }
 revel-project = { path = "crates/revel-project" }
 revel-protocol = { path = "crates/revel-protocol" }
 revel-edit = { path = "crates/revel-edit" }
+revel-style = { path = "crates/revel-style" }
 
 # Bibliothèques externes (versions vérifiées sur crates.io le 13/10/2026)
 serde = { version = "1.0.229", features = ["derive"] }

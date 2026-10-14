@@ -209,11 +209,33 @@ impl Project {
             warnings: out.warnings,
             ..Default::default()
         };
+        let skip: Option<PathBuf> = site
+            .stylesheet
+            .as_ref()
+            .and_then(|s| s.source.as_ref())
+            .map(|src| self.dir.join(src));
         for (i, p) in site.passthrough.iter().enumerate() {
             progress(Phase::Copies, i, site.passthrough.len());
             let from = self.dir.join(&p.from);
             let to = out_dir.join(p.to.trim_start_matches('/'));
-            report.copied += copy_tree(&from, &to, out_dir, &mut report.files)?;
+            report.copied += copy_tree(&from, &to, out_dir, &mut report.files, skip.as_deref())?;
+        }
+        // Feuille de style du modèle (D-18), écrite après les copies.
+        if let Some(sheet) = &site.stylesheet {
+            let rel_url = sheet.url.trim_start_matches('/');
+            if rel_url.is_empty() || rel_url.split('/').any(|c| c == "..") {
+                return Err(ProjectError::Parse {
+                    path: SITE_FILE.into(),
+                    msg: format!("adresse de feuille de style invalide : {}", sheet.url),
+                });
+            }
+            let dest = out_dir.join(rel_url);
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent).map_err(io(parent))?;
+            }
+            std::fs::write(&dest, revel_style::render(sheet)).map_err(io(&dest))?;
+            report.files.push(rel_url.to_string());
+            report.generated += 1;
         }
         for OutputFile { path, bytes } in out.files {
             let dest = out_dir.join(&path);
@@ -344,8 +366,20 @@ impl Project {
                 .and_then(|e| e.to_str())
                 .is_some_and(|e| VERSIONED.contains(&e.to_ascii_lowercase().as_str()))
         });
+        // La feuille importée n'est plus copiée : c'est le CSS généré qui compte.
+        let skip = site
+            .stylesheet
+            .as_ref()
+            .and_then(|s| s.source.as_ref())
+            .map(|src| self.dir.join(src));
+        files.retain(|f| Some(f) != skip.as_ref());
         files.sort();
         let mut h = blake3::Hasher::new();
+        if let Some(sheet) = &site.stylesheet {
+            h.update(sheet.url.as_bytes());
+            h.update(&[0]);
+            h.update(revel_style::render(sheet).as_bytes());
+        }
         for f in &files {
             let rel = f.strip_prefix(&self.dir).unwrap_or(f);
             h.update(rel.to_string_lossy().replace('\\', "/").as_bytes());
@@ -388,12 +422,18 @@ fn to_base36(mut n: u128) -> String {
 }
 
 /// Copie récursive ; renvoie le nombre de fichiers copiés.
+/// Copie un fichier ou un dossier ; `skip` : fichier à ne pas copier (feuille de style importée,
+/// générée par Revel).
 fn copy_tree(
     from: &Path,
     to: &Path,
     root: &Path,
     list: &mut Vec<String>,
+    skip: Option<&Path>,
 ) -> Result<usize, ProjectError> {
+    if skip == Some(from) {
+        return Ok(0);
+    }
     if from.is_file() {
         if let Some(parent) = to.parent() {
             std::fs::create_dir_all(parent).map_err(io(parent))?;
@@ -413,7 +453,7 @@ fn copy_tree(
         if name.to_string_lossy().starts_with(".DS_Store") {
             continue;
         }
-        n += copy_tree(&p, &to.join(&name), root, list)?;
+        n += copy_tree(&p, &to.join(&name), root, list, skip)?;
     }
     Ok(n)
 }

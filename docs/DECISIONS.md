@@ -115,6 +115,9 @@ l'ordre d'origine ; Revel génère le CSS. Tout se modifie dans le panneau de st
   garder le fichier tel quel et ajouter les styles de Revel par-dessus.
 - Cascade des points de rupture comme Webflow : base sur ordinateur, modifications vers les largeurs plus étroites
   (https://help.webflow.com/hc/en-us/articles/33961300305811).
+- Mise en œuvre (étape 2.1) : le CSS d'origine est lu sans réécrire les valeurs ; une règle ajoutée pour un point
+  de rupture se place après les règles de base et des écrans plus larges (elle l'emporte sur elles, comme dans
+  Webflow) et avant les règles du même sélecteur pour des écrans plus étroits.
 
 **D-19 — 14/10/2026 — prise (choix de l'utilisateur).** **Textes liés modifiables sur la page et par le CMS** : un
 texte issu d'un fichier de données ou d'un contenu (YAML, front matter) se modifie en cliquant dessus dans

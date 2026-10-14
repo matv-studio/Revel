@@ -210,3 +210,5 @@ error-edit-duplicate = Modification refusée : un identifiant d'élément serait
 error-edit-move = Un élément ne peut pas être placé à l'intérieur de lui-même.
 error-edit-tag = Nom de balise invalide : lettres, chiffres et tirets uniquement. ({ $detail })
 error-edit-not-open = Ce site n'est pas ouvert dans l'éditeur.
+error-edit-css = CSS refusé : une seule déclaration, sans point-virgule ni accolade en dehors des guillemets, et sans « !important » dans la valeur (case à cocher séparée). ({ $detail })
+error-edit-no-stylesheet = Ce site n'a pas encore de feuille de style.

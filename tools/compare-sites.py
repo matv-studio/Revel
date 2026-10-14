@@ -8,12 +8,16 @@ d'origine et texte alternatif), structure des balises. Les fichiers texte (XML,
 robots.txt, .htaccess) sont comparés ligne à ligne, espaces normalisés.
 Les autres fichiers (médias, CSS, JS, polices…) doivent exister des deux côtés et être
 identiques octet pour octet, sauf les variantes d'images générées (dossier `img/`), dont
-les noms dépendent de l'outil.
+les noms dépendent de l'outil. Les fichiers CSS sont comparés sous forme canonique (même
+suite de règles et de valeurs, mise en forme et commentaires ignorés) si la variable
+d'environnement REVEL_BIN désigne la commande `revel` (feuilles générées par Revel, D-18).
 Les différences attendues sont neutralisées : paramètre de version `?v=…`,
 variantes d'images (`<picture>`, `srcset`, noms `nom-abc123-800.webp`).
 Code de sortie 0 si aucune différence.
 """
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -156,7 +160,22 @@ def main() -> int:
         print(f"EN PLUS dans Revel : {f}")
         problems += 1
     same = 0
+    revel_bin = os.environ.get("REVEL_BIN")
+
+    def canon(p: Path) -> str:
+        return subprocess.run([revel_bin, "css-canon", str(p)], check=True, capture_output=True, text=True).stdout
+
     for f in sorted(copies_ref & copies_rev):
+        if f.endswith(".css") and revel_bin:
+            a, b = canon(ref / f), canon(rev / f)
+            if a != b:
+                problems += 1
+                print(f"DIFFÉRENT (CSS) {f}")
+                if details:
+                    print(f"    {first_diff(a.splitlines(), b.splitlines())}")
+            else:
+                same += 1
+            continue
         if (ref / f).read_bytes() != (rev / f).read_bytes():
             problems += 1
             print(f"DIFFÉRENT (contenu) {f}")

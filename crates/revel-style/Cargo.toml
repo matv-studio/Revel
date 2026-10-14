@@ -1,0 +1,14 @@
+[package]
+name = "revel-style"
+description = "Feuille de style du modèle : import d'un CSS existant, génération du CSS, points de rupture"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+revel-model.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

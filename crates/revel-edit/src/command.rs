@@ -1,7 +1,7 @@
 //! Commandes d'édition. Chaque commande appliquée renvoie la commande inverse.
 
 use revel_model::ids::{node_id, walk};
-use revel_model::{Attr, ImageNode, Node, Site};
+use revel_model::{Attr, Decl, ImageNode, Node, Site, StyleItem};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -93,9 +93,44 @@ pub enum Command {
         #[serde(default)]
         text: String,
     },
+    /// Déclaration d'une règle de style (dernière occurrence de la propriété) : valeur changée sur
+    /// place, ajoutée à la fin si absente, retirée si `value` vaut `None`.
+    SetDecl {
+        rule: String,
+        prop: String,
+        #[serde(default)]
+        value: Option<String>,
+        #[serde(default)]
+        important: bool,
+    },
+    /// Insère une déclaration à une position (inverse d'un retrait).
+    InsertDecl {
+        rule: String,
+        index: usize,
+        decl: Decl,
+    },
+    /// Retire la déclaration d'une position (inverse d'un ajout).
+    RemoveDeclAt { rule: String, index: usize },
+    /// Change le sélecteur d'une règle.
+    SetSelector { rule: String, selector: String },
+    /// Insère un élément de la feuille de style (règle, commentaire, bloc brut) à une position.
+    InsertStyle { index: usize, item: StyleItem },
+    /// Retire l'élément de la feuille de style d'une position.
+    RemoveStyleAt { index: usize },
+    /// Supprime une règle de style.
+    RemoveRule { rule: String },
+    /// Nouvelle règle pour `selector` et `media`, placée dans la cascade (après les règles du même
+    /// sélecteur pour des écrans plus larges).
+    AddRule {
+        selector: String,
+        #[serde(default)]
+        media: Option<String>,
+        #[serde(default)]
+        decls: Vec<Decl>,
+    },
 }
 
-/// Remplace une commande « d'intention » (dupliquer, envelopper, ajouter) par les commandes
+/// Remplace une commande « d'intention » (dupliquer, envelopper, ajouter un élément ou une règle) par les commandes
 /// concrètes équivalentes, avec leurs nouveaux identifiants. C'est la forme concrète qui est
 /// enregistrée dans l'historique : rétablir redonne exactement les mêmes identifiants.
 pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
@@ -117,6 +152,28 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
             index: *index,
             node: preset.node(site, text),
         },
+        Command::AddRule {
+            selector,
+            media,
+            decls,
+        } => {
+            let selector = crate::style::checked_selector(selector)?;
+            let media = media
+                .as_deref()
+                .map(crate::style::checked_media)
+                .transpose()?;
+            let items = crate::style::items(site)?;
+            let index = revel_style::insertion_index(items, &selector, media.as_deref());
+            Command::InsertStyle {
+                index,
+                item: StyleItem::Rule(revel_model::StyleRule {
+                    id: Some(revel_model::ids::fresh(&site.node_ids())),
+                    selector,
+                    media,
+                    decls: decls.clone(),
+                }),
+            }
+        }
         Command::Batch { commands } => {
             // Les intentions d'une suite sont développées au fur et à mesure (identifiants libres
             // compte tenu des commandes précédentes) : développement sur une copie.
@@ -398,7 +455,94 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 value: old,
             })
         }
-        Command::Duplicate { .. } | Command::Wrap { .. } | Command::InsertPreset { .. } => {
+        Command::SetDecl {
+            rule,
+            prop,
+            value,
+            important,
+        } => {
+            let new = match value.as_deref() {
+                Some(v) if v.trim().is_empty() => {
+                    return Err(EditError::InvalidCss(format!("{prop}:")));
+                }
+                Some(v) => Some(crate::style::checked_decl(prop, v, *important)?),
+                None => None,
+            };
+            let r = crate::style::rule_mut(site, rule)?;
+            let pos = r.decls.iter().rposition(|d| &d.prop == prop);
+            match (pos, new) {
+                (Some(i), Some(d)) => {
+                    let old = std::mem::replace(&mut r.decls[i], d);
+                    Ok(Command::SetDecl {
+                        rule: rule.clone(),
+                        prop: prop.clone(),
+                        value: Some(old.value),
+                        important: old.important,
+                    })
+                }
+                (Some(i), None) => Ok(Command::InsertDecl {
+                    rule: rule.clone(),
+                    index: i,
+                    decl: r.decls.remove(i),
+                }),
+                (None, Some(d)) => {
+                    r.decls.push(d);
+                    Ok(Command::RemoveDeclAt {
+                        rule: rule.clone(),
+                        index: r.decls.len() - 1,
+                    })
+                }
+                (None, None) => Err(EditError::NotFound(format!("propriété {prop}"))),
+            }
+        }
+        Command::InsertDecl { rule, index, decl } => {
+            let d = crate::style::checked_decl(&decl.prop, &decl.value, decl.important)?;
+            let r = crate::style::rule_mut(site, rule)?;
+            if *index > r.decls.len() {
+                return Err(EditError::Index(*index));
+            }
+            r.decls.insert(*index, d);
+            Ok(Command::RemoveDeclAt {
+                rule: rule.clone(),
+                index: *index,
+            })
+        }
+        Command::RemoveDeclAt { rule, index } => {
+            let r = crate::style::rule_mut(site, rule)?;
+            if *index >= r.decls.len() {
+                return Err(EditError::Index(*index));
+            }
+            Ok(Command::InsertDecl {
+                rule: rule.clone(),
+                index: *index,
+                decl: r.decls.remove(*index),
+            })
+        }
+        Command::SetSelector { rule, selector } => {
+            let selector = crate::style::checked_selector(selector)?;
+            let r = crate::style::rule_mut(site, rule)?;
+            Ok(Command::SetSelector {
+                rule: rule.clone(),
+                selector: std::mem::replace(&mut r.selector, selector),
+            })
+        }
+        Command::InsertStyle { index, item } => {
+            let item = crate::style::checked_item(site, item)?;
+            crate::style::insert_item(site, *index, item)?;
+            Ok(Command::RemoveStyleAt { index: *index })
+        }
+        Command::RemoveStyleAt { index } => Ok(Command::InsertStyle {
+            index: *index,
+            item: crate::style::remove_item(site, *index)?,
+        }),
+        Command::RemoveRule { rule } => {
+            let index = crate::style::rule_index(site, rule)?;
+            apply(site, &Command::RemoveStyleAt { index })
+        }
+        Command::Duplicate { .. }
+        | Command::Wrap { .. }
+        | Command::InsertPreset { .. }
+        | Command::AddRule { .. } => {
             let concrete = expand(site, cmd)?;
             apply(site, &concrete)
         }
@@ -477,6 +621,15 @@ impl Command {
                 },
             ) => a == b && k == l,
             (Self::SetLogic { at: a, .. }, Self::SetLogic { at: b, .. }) => a == b,
+            (
+                Self::SetDecl {
+                    rule: a, prop: p, ..
+                },
+                Self::SetDecl {
+                    rule: b, prop: q, ..
+                },
+            ) => a == b && p == q,
+            (Self::SetSelector { rule: a, .. }, Self::SetSelector { rule: b, .. }) => a == b,
             _ => false,
         }
     }

@@ -41,8 +41,31 @@ fn sample() -> Site {
         id: "carte".into(),
         body: vec![el("article", &[], vec![el("h3", &[], vec![text("Carte")])])],
     });
+    s.stylesheet = Some(revel_model::Stylesheet {
+        url: "/assets/site.css".into(),
+        source: None,
+        items: revel_style::parse(
+            ".titre { color: red; margin: 0 }
+             .page { display: grid }
+             @media (max-width: 860px) { /* Mobile */ .titre { color: blue } }
+             @keyframes k { from { opacity: 0 } }",
+        )
+        .unwrap(),
+    });
     s.ensure_ids();
     s
+}
+
+/// Identifiant de la règle `selector` (requête `media`).
+fn rule_id(s: &Site, selector: &str, media: Option<&str>) -> String {
+    s.style_rules()
+        .find(|r| r.selector == selector && r.media.as_deref() == media)
+        .and_then(|r| r.id.clone())
+        .unwrap_or_else(|| panic!("{selector}"))
+}
+
+fn css(s: &Site) -> String {
+    revel_style::render(s.stylesheet.as_ref().unwrap())
 }
 
 fn page() -> Owner {
@@ -470,6 +493,230 @@ fn historique() {
     assert!(!h.can_redo());
 }
 
+#[test]
+fn styles_regles_et_declarations() {
+    let s0 = sample();
+    let titre = rule_id(&s0, ".titre", None);
+    // Valeur changée sur place (l'ordre des déclarations est conservé).
+    round_trip(
+        Command::SetDecl {
+            rule: titre.clone(),
+            prop: "color".into(),
+            value: Some("rgb(1,  2, 3)".into()),
+            important: false,
+        },
+        |s| {
+            assert!(
+                css(s).contains(".titre { color: rgb(1, 2, 3); margin: 0; }"),
+                "{}",
+                css(s)
+            )
+        },
+    );
+    // Propriété ajoutée à la fin, avec !important.
+    round_trip(
+        Command::SetDecl {
+            rule: titre.clone(),
+            prop: "padding".into(),
+            value: Some("1rem".into()),
+            important: true,
+        },
+        |s| assert!(css(s).contains("margin: 0; padding: 1rem !important; }")),
+    );
+    // Propriété retirée.
+    round_trip(
+        Command::SetDecl {
+            rule: titre.clone(),
+            prop: "color".into(),
+            value: None,
+            important: false,
+        },
+        |s| assert!(css(s).contains(".titre { margin: 0; }")),
+    );
+    round_trip(
+        Command::SetSelector {
+            rule: titre.clone(),
+            selector: ".titre,  .sous-titre".into(),
+        },
+        |s| assert!(css(s).starts_with(".titre, .sous-titre {")),
+    );
+    round_trip(
+        Command::RemoveRule {
+            rule: titre.clone(),
+        },
+        |s| {
+            assert!(!css(s).starts_with(".titre"));
+        },
+    );
+    // Le commentaire et le bloc brut peuvent aussi être retirés et remis.
+    round_trip(Command::RemoveStyleAt { index: 2 }, |s| {
+        assert!(!css(s).contains("Mobile"))
+    });
+    round_trip(Command::RemoveStyleAt { index: 4 }, |s| {
+        assert!(!css(s).contains("@keyframes"));
+    });
+
+    // Nouvelle règle de point de rupture : placée dans la cascade, entre la base et 860.
+    let mut s = sample();
+    let mut h = History::default();
+    let applied = h
+        .apply(
+            &mut s,
+            Command::AddRule {
+                selector: ".titre".into(),
+                media: Some("(max-width: 1200px)".into()),
+                decls: vec![revel_model::Decl {
+                    prop: "color".into(),
+                    value: "green".into(),
+                    important: false,
+                }],
+            },
+            false,
+        )
+        .unwrap();
+    let Command::InsertStyle { index, item } = &applied else {
+        panic!("{applied:?}")
+    };
+    assert_eq!(
+        *index, 2,
+        "après les règles de base, avant le bloc 860 et son commentaire"
+    );
+    let revel_model::StyleItem::Rule(r) = item else {
+        panic!()
+    };
+    assert!(r.id.is_some());
+    assert!(
+        css(&s).contains(
+            ".page { display: grid; }\n@media (max-width: 1200px) {\n  .titre { color: green; }\n}\n@media (max-width: 860px) {\n  /* Mobile */"
+        ),
+        "{}",
+        css(&s)
+    );
+    let after = json(&s);
+    h.undo(&mut s).unwrap();
+    assert_eq!(json(&s), json(&s0));
+    h.redo(&mut s).unwrap();
+    assert_eq!(json(&s), after, "même identifiant au rétablissement");
+
+    // Valeurs refusées : site inchangé.
+    let mut s = sample();
+    let before = json(&s);
+    for bad in [
+        "red; display: none",
+        "red }",
+        "red !important",
+        "",
+        "red /* x",
+        "a{b}",
+    ] {
+        let e = apply(
+            &mut s,
+            &Command::SetDecl {
+                rule: titre.clone(),
+                prop: "color".into(),
+                value: Some(bad.into()),
+                important: false,
+            },
+        );
+        assert!(
+            matches!(e, Err(EditError::InvalidCss(_))),
+            "{bad:?} : {e:?}"
+        );
+    }
+    for bad in ["co lor", "color:", "a;b", ""] {
+        let e = apply(
+            &mut s,
+            &Command::SetDecl {
+                rule: titre.clone(),
+                prop: bad.into(),
+                value: Some("red".into()),
+                important: false,
+            },
+        );
+        assert!(matches!(e, Err(EditError::InvalidCss(_))), "{bad:?}");
+    }
+    for bad in [".a { x: 1 } .b", "@media x", ".a {", ""] {
+        let e = apply(
+            &mut s,
+            &Command::SetSelector {
+                rule: titre.clone(),
+                selector: bad.into(),
+            },
+        );
+        assert!(e.is_err(), "{bad:?}");
+    }
+    assert!(matches!(
+        apply(
+            &mut s,
+            &Command::AddRule {
+                selector: ".a".into(),
+                media: Some("screen { .x".into()),
+                decls: vec![],
+            }
+        ),
+        Err(EditError::InvalidCss(_))
+    ));
+    // Identifiant de règle déjà pris par un nœud.
+    let h1 = id_of(&s, "h1");
+    let e = apply(
+        &mut s,
+        &Command::InsertStyle {
+            index: 0,
+            item: revel_model::StyleItem::Rule(revel_model::StyleRule {
+                id: Some(h1),
+                selector: ".x".into(),
+                media: None,
+                decls: vec![],
+            }),
+        },
+    );
+    assert!(matches!(e, Err(EditError::DuplicateId(_))));
+    assert_eq!(json(&s), before);
+
+    // Sans feuille de style.
+    let mut s = sample();
+    s.stylesheet = None;
+    assert_eq!(
+        apply(
+            &mut s,
+            &Command::AddRule {
+                selector: ".a".into(),
+                media: None,
+                decls: vec![]
+            }
+        ),
+        Err(EditError::NoStylesheet)
+    );
+}
+
+#[test]
+fn styles_saisie_continue_fusionnee() {
+    let mut s = sample();
+    let before = json(&s);
+    let titre = rule_id(&s, ".titre", None);
+    let mut h = History::default();
+    for v in ["1", "12", "12p", "12px"] {
+        h.apply(
+            &mut s,
+            Command::SetDecl {
+                rule: titre.clone(),
+                prop: "font-size".into(),
+                value: Some(v.into()),
+                important: false,
+            },
+            true,
+        )
+        .unwrap();
+    }
+    h.seal();
+    assert!(css(&s).contains("font-size: 12px"));
+    h.undo(&mut s).unwrap();
+    assert_eq!(json(&s), before, "une seule étape pour la saisie");
+    assert!(!h.can_undo());
+    h.redo(&mut s).unwrap();
+    assert!(css(&s).contains("margin: 0; font-size: 12px; }"));
+}
+
 /// Générateur pseudo-aléatoire reproductible (xorshift).
 struct Rng(u64);
 impl Rng {
@@ -485,6 +732,7 @@ impl Rng {
 /// le document modifié.
 #[test]
 fn suites_aleatoires_reversibles() {
+    let mut styled = 0;
     for seed in 1..=40u64 {
         let mut s = sample();
         let origin = json(&s);
@@ -508,7 +756,32 @@ fn suites_aleatoires_reversibles() {
                 owner: page(),
                 node: ids[r.next(ids.len())].clone(),
             };
-            let cmd = match rng.next(6) {
+            let rules: Vec<String> = s.style_rules().filter_map(|r| r.id.clone()).collect();
+            let rule = |r: &mut Rng| rules.get(r.next(rules.len())).cloned().unwrap_or_default();
+            let cmd = match rng.next(10) {
+                6 => Command::SetDecl {
+                    rule: rule(&mut rng),
+                    prop: ["color", "margin", "padding"][rng.next(3)].into(),
+                    value: (rng.next(4) > 0).then(|| format!("{}px", rng.next(50))),
+                    important: rng.next(5) == 0,
+                },
+                7 => Command::AddRule {
+                    selector: [".titre", ".page", ".neuve"][rng.next(3)].into(),
+                    media: [
+                        None,
+                        Some("(max-width: 600px)"),
+                        Some("(max-width: 1200px)"),
+                    ][rng.next(3)]
+                    .map(str::to_string),
+                    decls: vec![],
+                },
+                8 => Command::RemoveRule {
+                    rule: rule(&mut rng),
+                },
+                9 => Command::SetSelector {
+                    rule: rule(&mut rng),
+                    selector: format!(".s{}", rng.next(9)),
+                },
                 0 => Command::SetAttr {
                     at: pick(&mut rng),
                     name: ["class", "id", "title"][rng.next(3)].into(),
@@ -534,8 +807,16 @@ fn suites_aleatoires_reversibles() {
                 4 => make::duplicate(&s, &pick(&mut rng)).unwrap().0,
                 _ => make::wrap(&s, &pick(&mut rng), "div").unwrap().0,
             };
+            let is_style = matches!(
+                cmd,
+                Command::SetDecl { .. }
+                    | Command::AddRule { .. }
+                    | Command::RemoveRule { .. }
+                    | Command::SetSelector { .. }
+            );
             if h.apply(&mut s, cmd, false).is_ok() {
                 applied += 1;
+                styled += usize::from(is_style);
             }
         }
         let modified = json(&s);
@@ -548,4 +829,5 @@ fn suites_aleatoires_reversibles() {
         while h.redo(&mut s).unwrap().is_some() {}
         assert_eq!(json(&s), modified, "graine {seed} : rétablissement");
     }
+    assert!(styled > 200, "commandes de style appliquées : {styled}");
 }

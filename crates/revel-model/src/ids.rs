@@ -136,9 +136,14 @@ pub fn fresh(taken: &HashSet<String>) -> String {
 }
 
 impl Site {
-    /// Identifiants de tous les nœuds du site.
+    /// Identifiants de tous les nœuds et règles de style du site.
     pub fn node_ids(&self) -> HashSet<String> {
         let mut set = HashSet::new();
+        for r in self.style_rules() {
+            if let Some(id) = &r.id {
+                set.insert(id.clone());
+            }
+        }
         for (_, _, body) in self.owners() {
             walk(body, &mut |n| {
                 if let Some(id) = node_id(n) {
@@ -222,6 +227,42 @@ impl Site {
             let prefix = format!("{}:{}", OwnerKind::Component.tag(), c.id);
             rec(&mut c.body, &prefix, &explicit, &mut claimed);
         }
+        if let Some(sheet) = &mut self.stylesheet {
+            for (i, item) in sheet.items.iter_mut().enumerate() {
+                let crate::StyleItem::Rule(r) = item else {
+                    continue;
+                };
+                let keep =
+                    r.id.as_ref()
+                        .is_some_and(|id| !id.is_empty() && !claimed.contains(id));
+                if keep {
+                    if let Some(id) = &r.id {
+                        claimed.insert(id.clone());
+                    }
+                    continue;
+                }
+                let mut salt = 0u32;
+                let id = loop {
+                    let id = encode(fnv(&format!("s:{i}#{salt}")));
+                    if !claimed.contains(&id) && !explicit.contains(&id) {
+                        break id;
+                    }
+                    salt += 1;
+                };
+                claimed.insert(id.clone());
+                r.id = Some(id);
+            }
+        }
+    }
+
+    /// Règles de la feuille de style, dans l'ordre.
+    pub fn style_rules(&self) -> impl Iterator<Item = &crate::StyleRule> {
+        self.stylesheet.iter().flat_map(|s| {
+            s.items.iter().filter_map(|i| match i {
+                crate::StyleItem::Rule(r) => Some(r),
+                _ => None,
+            })
+        })
     }
 }
 

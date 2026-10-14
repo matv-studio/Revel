@@ -62,6 +62,13 @@ pub struct Profile {
     /// Composants supplémentaires écrits en HTML/Jinja (ex. `image-placeholder`).
     #[serde(default)]
     pub components: BTreeMap<String, String>,
+    /// Feuille de style importée dans le modèle (D-18), relative au projet ; par défaut, la
+    /// première feuille locale liée par les gabarits (`<link rel="stylesheet">`).
+    #[serde(default)]
+    pub stylesheet: Option<String>,
+    /// `false` : les feuilles de style restent des fichiers copiés tels quels.
+    #[serde(default)]
+    pub import_styles: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -354,9 +361,131 @@ pub fn import(root: &Path, profile: &Profile) -> Result<(Site, Report), ImportEr
             ));
         }
     }
-    // Identifiants stables des nœuds (déterministes : un même import donne les mêmes).
+    // Feuille de style (D-18) : importée dans le modèle, générée par Revel.
+    if profile.import_styles != Some(false) {
+        import_stylesheet(root, profile, &mut site, &mut report);
+    }
+    // Identifiants stables des nœuds et des règles (déterministes : un même import donne les mêmes).
     site.ensure_ids();
     Ok((site, report))
+}
+
+/// Adresses des feuilles de style liées par les gabarits, composants et pages
+/// (`<link rel="stylesheet" href="/…">`), sans paramètre de version.
+fn linked_stylesheets(site: &Site) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (_, _, body) in site.owners() {
+        revel_model::ids::walk(body, &mut |n| {
+            if let Node::Element { tag, attrs, .. } = n
+                && tag.eq_ignore_ascii_case("link")
+            {
+                let get = |name: &str| {
+                    attrs
+                        .iter()
+                        .find(|a| a.name.eq_ignore_ascii_case(name))
+                        .and_then(|a| a.value.clone())
+                };
+                if get("rel").is_some_and(|r| {
+                    r.split_whitespace()
+                        .any(|t| t.eq_ignore_ascii_case("stylesheet"))
+                }) && let Some(href) = get("href")
+                {
+                    let url = href.split(['?', '#', '{']).next().unwrap_or("").to_string();
+                    if url.starts_with('/') && !url.starts_with("//") && !out.contains(&url) {
+                        out.push(url);
+                    }
+                }
+            }
+        });
+    }
+    out
+}
+
+/// Fichier source d'une adresse publiée, d'après les copies (`passthrough`).
+fn source_for_url(site: &Site, root: &Path, url: &str) -> Option<String> {
+    let path = url.trim_start_matches('/');
+    for p in &site.passthrough {
+        let to = p.to.trim_matches('/');
+        let rest = if to.is_empty() {
+            Some(path)
+        } else {
+            path.strip_prefix(to).and_then(|r| r.strip_prefix('/'))
+        };
+        if let Some(rest) = rest {
+            let candidate = format!("{}/{}", p.from.trim_end_matches('/'), rest);
+            if root.join(&candidate).is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn import_stylesheet(root: &Path, profile: &Profile, site: &mut Site, report: &mut Report) {
+    let links = linked_stylesheets(site);
+    let (url, source) = match &profile.stylesheet {
+        Some(src) => {
+            // Adresse publiée : celle du lien qui correspond à ce fichier, sinon dérivée des copies.
+            let url = links
+                .iter()
+                .find(|u| source_for_url(site, root, u).as_deref() == Some(src.as_str()))
+                .cloned()
+                .unwrap_or_else(|| {
+                    site.passthrough
+                        .iter()
+                        .find_map(|p| {
+                            src.strip_prefix(p.from.trim_end_matches('/')).map(|r| {
+                                format!("/{}{}", p.to.trim_matches('/'), r).replace("//", "/")
+                            })
+                        })
+                        .unwrap_or_else(|| "/styles.css".into())
+                });
+            (url, src.clone())
+        }
+        None => {
+            let Some((url, src)) = links
+                .iter()
+                .find_map(|u| source_for_url(site, root, u).map(|s| (u.clone(), s)))
+            else {
+                return;
+            };
+            (url, src)
+        }
+    };
+    let path = root.join(&source);
+    let css = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(e) => {
+            report
+                .warnings
+                .push(format!("feuille de style « {source} » illisible : {e}"));
+            return;
+        }
+    };
+    let items = match revel_style::parse(&css) {
+        Ok(i) => i,
+        Err(e) => {
+            report.warnings.push(format!(
+                "feuille de style « {source} » non importée ({e}) : elle reste copiée telle quelle"
+            ));
+            return;
+        }
+    };
+    for other in links.iter().filter(|u| **u != url) {
+        report.warnings.push(format!(
+            "feuille de style « {other} » : copiée telle quelle (une seule feuille est importée dans le modèle)"
+        ));
+    }
+    site.breakpoints = revel_style::breakpoints_from(&items);
+    report.style_rules = items
+        .iter()
+        .filter(|i| matches!(i, revel_model::StyleItem::Rule(_)))
+        .count();
+    site.stylesheet = Some(revel_model::Stylesheet {
+        url,
+        source: Some(source),
+        items,
+    });
 }
 
 struct Converter {

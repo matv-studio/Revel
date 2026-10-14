@@ -42,6 +42,8 @@ enum Command {
         /// Fichier de commandes (`-` : entrée standard).
         commands: PathBuf,
     },
+    /// Forme canonique d'un fichier CSS (comparaison d'équivalence).
+    CssCanon { file: PathBuf },
     /// Génère un projet dans un dossier.
     Build {
         dir: PathBuf,
@@ -117,8 +119,12 @@ fn main() -> Result<()> {
             let profile = revel_import::eleventy::load_profile(&dir)?;
             let (site, report) = revel_import::eleventy::import(&dir, &profile)?;
             println!(
-                "pages : {} · gabarits : {} · composants : {} · collections : {}",
-                report.pages, report.layouts, report.components, report.collections
+                "pages : {} · gabarits : {} · composants : {} · collections : {} · règles de style : {}",
+                report.pages,
+                report.layouts,
+                report.components,
+                report.collections,
+                report.style_rules
             );
             for w in &report.warnings {
                 println!("! {w}");
@@ -152,6 +158,15 @@ fn main() -> Result<()> {
             .map_err(|e| anyhow::anyhow!("{e}"))?;
             project.save()?;
             println!("{n} commande(s) appliquée(s)");
+        }
+        Command::CssCanon { file } => {
+            let css = std::fs::read_to_string(&file)
+                .with_context(|| format!("lecture de {}", file.display()))?;
+            print!(
+                "{}",
+                revel_style::canonical(&css)
+                    .map_err(|e| anyhow::anyhow!("{}: {e}", file.display()))?
+            );
         }
         Command::Build {
             dir,

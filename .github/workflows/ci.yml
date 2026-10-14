@@ -125,7 +125,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       # Version du cobaye comparée ; à mettre à jour volontairement (dépôt matv-studio/alunites-revel-lab).
-      COBAYE_REF: af1ac84e066cff5f04768aa449ee3732bd58c782
+      COBAYE_REF: 0dd004c165bae249ff9af6e2779a00eabc313015
     steps:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7
@@ -171,9 +171,31 @@ jobs:
           $REVEL build cobaye --out revel-staging --env staging --no-images
       - name: Comparaison
         shell: bash  # avec « pipefail » : un écart fait échouer l'étape malgré « tee »
+        env:
+          # Feuilles de style comparées après normalisation (`revel css-canon`) : le CSS publié est
+          # généré par Revel (D-18), sa mise en forme diffère de l'original.
+          REVEL_BIN: target/release/revel
         run: |
           python3 -m pip install -q --break-system-packages beautifulsoup4 lxml
           echo "## Production" >> "$GITHUB_STEP_SUMMARY"
           python3 tools/compare-sites.py cobaye/_site revel-production --details | tee -a "$GITHUB_STEP_SUMMARY"
           echo "## Recette" >> "$GITHUB_STEP_SUMMARY"
           python3 tools/compare-sites.py eleventy-staging revel-staging --details | tee -a "$GITHUB_STEP_SUMMARY"
+      # Le CSS généré par Revel doit produire exactement les mêmes styles que le CSS d'origine :
+      # styles calculés de chaque élément comparés dans Chromium (tools/compare-styles.mjs).
+      - name: Styles (CSS d'origine contre CSS généré)
+        shell: bash
+        run: |
+          url=$(jq -r '.stylesheet.url' cobaye/site.revel.json)
+          source=$(jq -r '.stylesheet.source' cobaye/site.revel.json)
+          cp -r revel-production styles-origine
+          cp "cobaye/$source" "styles-origine$url"
+          npm install --prefix "$RUNNER_TEMP/pw" --no-save --no-audit --no-fund playwright@1.63.0
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+          # Largeurs : ordinateur, chaque point de rupture (limite incluse), mobile.
+          widths=$(jq -r '[1280] + [.breakpoints[] | .max_width // empty] + [375] | join(",")' cobaye/site.revel.json)
+          echo "## Styles calculés et captures ($widths px)" >> "$GITHUB_STEP_SUMMARY"
+          node tools/compare-styles.mjs styles-origine revel-production --jobs 4 --shots --widths "$widths" \
+            --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
+            | tee -a "$GITHUB_STEP_SUMMARY"

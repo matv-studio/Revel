@@ -21,9 +21,9 @@ revel-ui (WebAssembly) ── revel-protocol, revel-i18n
 revel-app ── revel-core, revel-protocol, revel-model
 revel-cli ── revel-project, revel-import, revel-deploy, revel-i18n, revel-model
 revel-core ── revel-project, revel-import, revel-deploy, revel-git, revel-edit, revel-protocol, revel-model
-revel-edit ── revel-model (compilée aussi pour wasm32)
-revel-project ── revel-render, revel-assets ── revel-markup ── revel-model
-revel-import ── revel-markup, revel-render (types), revel-model
+revel-edit ── revel-style, revel-model (compilées aussi pour wasm32)
+revel-project ── revel-render, revel-assets, revel-style ── revel-markup ── revel-model
+revel-import ── revel-markup, revel-render (types), revel-style, revel-model
 revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour wasm32)
 ```
 
@@ -35,6 +35,15 @@ revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour was
   « envelopper », « ajouter » développées en commandes concrètes avant l'historique), historique annuler/rétablir
   avec fusion des saisies continues. Sessions d'édition dans `revel-core` (`edit_open`, `edit_apply`, `edit_undo`,
   `edit_redo`) : enregistrement de `site.revel.json` à chaque modification ; ligne de commande `revel apply`.
+  Commandes de style : déclaration (`SetDecl`, valeur changée sur place, ajoutée ou retirée), sélecteur,
+  insertion et retrait de règles ; intention « nouvelle règle » placée dans la cascade (`AddRule`). Les valeurs
+  sont relues par `revel-style` avant d'être acceptées (une seule déclaration, pas de `}` ni de `;` hors chaîne).
+- `revel-style` (D-18) : lecture d'un CSS existant en éléments du modèle (règles, règles dans `@media`,
+  commentaires, blocs bruts pour `@font-face`, `@keyframes`, `@supports`, CSS imbriqué), sans réécriture des
+  valeurs ; génération du CSS publié (une ligne par règle, règles consécutives d'une même requête regroupées) ;
+  forme canonique pour les comparaisons (`revel css-canon`) ; points de rupture déduits des `(max-width)` et
+  `(min-width)` ; position d'une nouvelle règle dans la cascade. Lecteur propre plutôt que lightningcss : ce
+  dernier réécrit les valeurs (couleurs, raccourcis), ce qui changerait le CSS de l'utilisateur.
 - Identifiants des nœuds (schéma 2) : chaque nœud structurel (élément, image, condition, boucle, composant
   utilisé, bloc) a un identifiant unique dans le site, déterministe à l'import (`revel_model::ids`).
 - `revel-git` : publication d'un dossier sur une branche Git (dépôt cache nu dans `.revel/git/`, arbre
@@ -43,7 +52,7 @@ revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour was
 - `revel-protocol` : messages sérialisables entre l'interface et le cœur (résumés, événements de progression,
   échecs `Failure` = clé de traduction + paramètres, D-16). Aucune dépendance système.
 
-## Modèle de site (schéma v1)
+## Modèle de site (schéma 3)
 
 - `Site` : pages, gabarits (`Layout`, emboîtables), composants, collections, données globales,
   dossier de données (`data_dir`, fichiers YAML/JSON modifiables par Pages CMS), copies (`passthrough`),
@@ -54,6 +63,10 @@ revel-protocol, revel-i18n : sans dépendance interne (compilées aussi pour was
   (`set` met à jour la variable existante la plus proche).
 - Les contenus de collections restent des fichiers Markdown + front matter (compatibles Pages CMS) :
   ils ne sont pas copiés dans `site.revel.json`.
+- `Stylesheet` (schéma 3) : adresse publiée (`url`), fichier d'origine importé (`source`, non copié à la
+  génération) et liste ordonnée d'éléments (`Rule` avec identifiant, sélecteur, requête média, déclarations ;
+  `Comment` ; `Raw`). `breakpoints` : points de rupture du site. Migration 2 → 3 : les anciennes classes
+  (`styles`) deviennent des règles.
 
 ## Projet sur disque
 
@@ -65,8 +78,17 @@ ce fichier sans déplacer ses dossiers : pendant la transition, Eleventy et Reve
 `tools/compare-sites.py <référence> <revel>` compare deux sorties : titres, balises meta/link, données
 structurées, texte visible, liens, images (nom d'origine, texte alternatif), structure, attributs ; fichiers
 texte ligne à ligne ; autres fichiers (médias, CSS, JS, polices) : même liste et contenu identique, hors variantes
-d'images (`img/`). Le job CI *Équivalence avec Eleventy* l'applique au cobaye (`matv-studio/alunites-revel-lab`,
-version fixée par `COBAYE_REF`) en production et en recette.
+d'images (`img/`) ; feuilles de style comparées sous forme canonique (`REVEL_BIN` = binaire `revel`). Le job CI
+*Équivalence avec Eleventy* l'applique au cobaye (`matv-studio/alunites-revel-lab`, version fixée par
+`COBAYE_REF`) en production et en recette.
+
+`tools/compare-styles.mjs <a> <b>` vérifie que deux feuilles de style donnent les mêmes styles : le même site
+servi avec le CSS d'origine et avec le CSS généré, ouvert dans Chromium (Playwright) à 1280 px, à chaque point
+de rupture et à 375 px, avec et sans préférence « mouvement réduit » ; après chargement et décodage des images,
+arrêt des vidéos et fin des animations, les styles calculés de chaque élément et de ses pseudo-éléments sont
+comparés (ensemble des propriétés : l'ordre des propriétés personnalisées varie d'une ouverture à l'autre).
+Avec `--shots`, les captures pleine page sont aussi comparées, avec une tolérance pour le bruit de dessin des
+images mises à l'échelle (quelques unités sur 255, sur quelques pixels isolés).
 
 ## Coque et interface
 

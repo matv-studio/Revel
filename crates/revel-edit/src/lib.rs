@@ -6,12 +6,13 @@
 //!   rien (les suites de commandes sont atomiques).
 //! - [`History`] conserve les paires (commande, inverse) pour annuler et rétablir.
 //!
-//! Ne dépend que de `revel-model` (compilable pour l'interface en WebAssembly).
+//! Ne dépend que de `revel-model` et `revel-style` (compilable pour l'interface en WebAssembly).
 
 pub mod address;
 pub mod command;
 pub mod history;
 pub mod make;
+pub mod style;
 
 pub use address::{Branch, Owner, Parent, Target};
 pub use command::{Command, apply, expand};
@@ -37,6 +38,10 @@ pub enum EditError {
     InvalidMove,
     #[error("nom de balise invalide : {0}")]
     InvalidTag(String),
+    #[error("CSS refusé : {0}")]
+    InvalidCss(String),
+    #[error("le site n'a pas de feuille de style")]
+    NoStylesheet,
 }
 
 impl EditError {
@@ -52,6 +57,8 @@ impl EditError {
             Self::DuplicateId(_) => "error-edit-duplicate",
             Self::InvalidMove => "error-edit-move",
             Self::InvalidTag(_) => "error-edit-tag",
+            Self::InvalidCss(_) => "error-edit-css",
+            Self::NoStylesheet => "error-edit-no-stylesheet",
         }
     }
 }

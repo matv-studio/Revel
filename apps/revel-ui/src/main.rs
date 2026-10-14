@@ -6,6 +6,7 @@ mod dialog;
 mod editor;
 mod home;
 mod icons;
+mod layers;
 mod publish;
 mod settings;
 mod site;

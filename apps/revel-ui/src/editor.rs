@@ -130,6 +130,19 @@ impl Ed {
     /// Après une modification, une annulation ou un rétablissement : copie locale et canevas.
     pub fn after(self, ui: Ui, st: EditState) {
         if let Some(cmd) = &st.applied {
+            // Élément ajouté (copie, enveloppe, insertion) : sélectionné.
+            if let Some(n) = inserted(cmd)
+                && let Some(id) = revel_model::ids::node_id(n)
+            {
+                self.selected.set(Some(Selection {
+                    id: id.to_string(),
+                    tag: match n {
+                        revel_model::Node::Element { tag, .. } => tag.clone(),
+                        _ => String::new(),
+                    },
+                    label: node_label(n),
+                }));
+            }
             let mut ok = true;
             self.doc.update(|d| {
                 if let Some(d) = d {
@@ -139,6 +152,17 @@ impl Ed {
             if !ok {
                 // Copie locale désynchronisée : relue depuis le cœur.
                 self.reopen(ui);
+            }
+            // Élément supprimé : plus de sélection.
+            let gone = self.selected.with_untracked(|s| {
+                s.as_ref().is_some_and(|s| {
+                    self.doc.with_untracked(|d| {
+                        d.as_ref().is_some_and(|d| !d.node_ids().contains(&s.id))
+                    })
+                })
+            });
+            if gone {
+                self.selected.set(None);
             }
             if style_only(cmd) {
                 if let Some(url) = self
@@ -217,6 +241,35 @@ impl Ed {
             let bp = d.as_ref()?.breakpoints.iter().find(|b| b.id == id)?;
             bp.max_width.or(bp.min_width).map(f64::from)
         })
+    }
+}
+
+/// Nœud inséré par une commande (première insertion d'une suite).
+fn inserted(c: &Command) -> Option<&revel_model::Node> {
+    match c {
+        Command::Insert { node, .. } => Some(node),
+        Command::Batch { commands } => commands.iter().find_map(inserted),
+        _ => None,
+    }
+}
+
+/// Libellé d'un nœud (`div.hero`).
+pub fn node_label(n: &revel_model::Node) -> String {
+    match n {
+        revel_model::Node::Element { tag, attrs, .. } => {
+            let class = attrs
+                .iter()
+                .find(|a| a.name == "class")
+                .and_then(|a| a.value.as_deref())
+                .and_then(|v| v.split_whitespace().next())
+                .filter(|c| !c.contains("{{"));
+            match class {
+                Some(c) => format!("{tag}.{c}"),
+                None => tag.clone(),
+            }
+        }
+        revel_model::Node::Image(_) => "img".into(),
+        _ => String::new(),
     }
 }
 
@@ -404,6 +457,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     view! {
         <section class="editor">
             <Toolbar/>
+            <crate::layers::Layers/>
             <div class="canvas-area" node_ref=area>
                 <Show when=move || ed.base.get().is_some() fallback=move || view! {
                     <div class="canvas-wait muted">{move || if failed.get() { String::new() } else { ui.tx("editor-loading", &[]) }}</div>

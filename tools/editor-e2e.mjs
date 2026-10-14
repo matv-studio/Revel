@@ -39,11 +39,11 @@ try {
   await page.click('.nav-item--sub >> nth=0');
   await page.waitForSelector('iframe.canvas-frame');
   const frameOf = () => page.frames().find((f) => f.url().includes('rv='));
-  const waitFrame = async (pred, what) => {
+  const waitFrame = async (pred, what, arg) => {
     for (let i = 0; i < 150; i++) {
       const f = frameOf();
       if (f) {
-        try { if (await f.evaluate(pred)) return f; } catch { /* rechargement en cours */ }
+        try { if (await f.evaluate(pred, arg)) return f; } catch { /* rechargement en cours */ }
       }
       await page.waitForTimeout(100);
     }
@@ -118,6 +118,72 @@ try {
   f = await waitFrame(() => document.readyState === 'complete' && document.querySelector('h1') && !document.querySelector('h1').hasAttribute('data-essai'), 'annulation');
   const disk = await invoke('edit_open');
   check('annulé : document identique à l\'ouverture', JSON.stringify(disk.site) === JSON.stringify(doc.site));
+
+  // ------------------------------------------------------------------ calques (étape 2.4)
+  // Sélection dans le canevas -> ligne des calques sélectionnée et visible.
+  f = frameOf();
+  await page.frameLocator('iframe.canvas-frame').locator('h1').first().click();
+  await page.waitForSelector('.layers .layer.is-selected');
+  const selLabel = (await page.textContent('.layers .layer.is-selected')).trim();
+  const inView = await page.$eval('.layers .layer.is-selected', (el) => {
+    const r = el.getBoundingClientRect();
+    const t = el.closest('.layers-tree').getBoundingClientRect();
+    return r.top >= t.top && r.bottom <= t.bottom;
+  });
+  check('calques : élément cliqué sélectionné et visible dans l\'arbre', inView, selLabel);
+
+  // Ligne cliquée -> sélection dans le canevas (barre d'état).
+  await page.click('.layers .layer:has-text("section.hero")');
+  await page.waitForFunction(() => document.querySelector('.editor-status')?.textContent.includes('section.hero'));
+  check('calques : ligne cliquée sélectionnée dans le canevas', true);
+
+  const docBefore = await invoke('edit_open');
+  const bodyOf = (site) => JSON.stringify(site.pages.find((p) => p.id === 'index').body);
+  // Dupliquer (bouton), puis annuler.
+  await page.click('.layers .panel-head .icon-btn >> nth=3');
+  f = await waitFrame(() => document.querySelectorAll('section.hero').length === 2, 'section dupliquée');
+  const dup = await invoke('edit_open');
+  check('dupliquer : section copiée (nouveaux identifiants), sélectionnée', bodyOf(dup.site).length > bodyOf(docBefore.site).length
+    && (await page.textContent('.editor-status')).includes('section.hero'));
+  await page.click('.editor-toolbar .icon-btn >> nth=0');
+  f = await waitFrame(() => document.querySelectorAll('section.hero').length === 1, 'annulation de la copie');
+
+  // Descendre (bouton) : la section passe après sa voisine.
+  await page.click('.layers .layer:has-text("section.hero")');
+  const orderBefore = await f.evaluate(() => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(','));
+  await page.click('.layers .panel-head .icon-btn >> nth=1');
+  f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') !== ob, 'déplacement', orderBefore);
+  check('descendre : ordre modifié dans le canevas', true);
+  await page.click('.editor-toolbar .icon-btn >> nth=0');
+  f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') === ob, 'annulation du déplacement', orderBefore);
+
+  // Glisser-déposer : section.hero déposée après la section suivante.
+  const info = await page.$$eval('.layers .layer', (rs) => rs.map((e) => [e.textContent.trim(), parseInt(e.style.paddingLeft, 10)]));
+  const si = info.findIndex(([t]) => t === 'section.hero');
+  const di = info.findIndex(([t, pad], i) => i > si && t.startsWith('section') && pad === info[si][1]);
+  if (si >= 0 && di >= 0) {
+    const rowsL = page.locator('.layers .layer');
+    const box = await rowsL.nth(di).boundingBox();
+    await rowsL.nth(si).dragTo(rowsL.nth(di), { targetPosition: { x: 40, y: box.height - 3 } });
+    f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') !== ob, 'glisser-déposer', orderBefore);
+    check('glisser-déposer : section déplacée', true);
+    await page.click('.editor-toolbar .icon-btn >> nth=0');
+    f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') === ob, 'annulation du glisser-déposer', orderBefore);
+  } else {
+    check('glisser-déposer : lignes trouvées', false);
+  }
+
+  // Supprimer (touche Suppr dans les calques), puis annuler.
+  await page.click('.layers .layer:has-text("section.hero")');
+  await page.keyboard.press('Delete');
+  f = await waitFrame(() => document.querySelectorAll('section.hero').length === 0, 'suppression');
+  check('Suppr : section retirée, plus de sélection', !(await page.$('.layers .layer.is-selected')));
+  await page.keyboard.press('Control+z');
+  f = await waitFrame(() => document.querySelectorAll('section.hero').length === 1, 'annulation de la suppression');
+  const docAfter = await invoke('edit_open');
+  check('calques : tout annulé, document identique', JSON.stringify(docAfter.site) === JSON.stringify(docBefore.site));
+  if (shots) await page.screenshot({ path: `${shots}/editeur-calques.png` });
+
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {
   check('déroulement', false, e.message);

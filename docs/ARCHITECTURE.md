@@ -140,6 +140,10 @@ l'exécution CI en cas d'échec).
   `revel-edit` compilés en WebAssembly) ; chaque modification est une commande envoyée au cœur, la commande
   appliquée renvoyée (`EditState::applied`) est rejouée sur la copie. Une commande de style ne recharge que la
   feuille de style du canevas ; les autres rechargent la page au même défilement, sélection conservée.
+- Calques (`apps/revel-ui/src/layers.rs`) : arbre calculé depuis la copie locale (gabarit extérieur, `Slot`
+  remplacé par le gabarit intérieur puis la page, composants dépliés sous leur utilisation) ; chaque ligne
+  connaît sa liste (`Parent`) et sa position, d'où les commandes `Move`, `Duplicate`, `Wrap`, `Remove`. Un
+  déplacement reste dans le même propriétaire (page, gabarit ou composant).
 - Essais de l'interface dans un navigateur : `revel canvas-serve --bridge` expose aussi les commandes d'édition
   (`POST /__revel/invoke/<commande>`, adresse locale seulement) ; l'API Tauri simulée
   (`apps/revel-ui/dev/mock-tauri.js`, paramètre `bridge=`) les y transmet. `tools/editor-e2e.mjs` pilote

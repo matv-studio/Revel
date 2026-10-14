@@ -123,3 +123,79 @@ pub fn undo() -> AnyView {
 pub fn redo() -> AnyView {
     svg(r#"<path d="m10.5 3.5 3 3-3 3"/><path d="M13.5 6.5h-7a4 4 0 0 0 0 8H9"/>"#)
 }
+
+/// Élément HTML (calques).
+pub fn box_() -> AnyView {
+    svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/>"#)
+}
+
+/// Texte (calques).
+pub fn text() -> AnyView {
+    svg(r#"<path d="M3 3.5h10M8 3.5v9"/>"#)
+}
+
+/// Expression `{{ … }}` (calques).
+pub fn braces() -> AnyView {
+    svg(
+        r#"<path d="M5.5 2.5C4 2.5 4 3.5 4 5s-.5 3-1.5 3c1 0 1.5 1.5 1.5 3s0 2.5 1.5 2.5M10.5 2.5c1.5 0 1.5 1 1.5 2.5s.5 3 1.5 3c-1 0-1.5 1.5-1.5 3s0 2.5-1.5 2.5"/>"#,
+    )
+}
+
+/// Condition (calques).
+pub fn branch() -> AnyView {
+    svg(
+        r#"<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 2.5-2 3.5-5.5 4"/>"#,
+    )
+}
+
+/// Boucle (calques).
+pub fn repeat() -> AnyView {
+    svg(
+        r#"<path d="M3 7V6a2.5 2.5 0 0 1 2.5-2.5h7M10.5 1.5l2 2-2 2M13 9v1a2.5 2.5 0 0 1-2.5 2.5h-7M5.5 14.5l-2-2 2-2"/>"#,
+    )
+}
+
+/// Composant (calques).
+pub fn component() -> AnyView {
+    svg(r#"<path d="M8 1.5 14.5 8 8 14.5 1.5 8z"/><path d="M8 5 11 8 8 11 5 8z"/>"#)
+}
+
+/// Image (calques).
+pub fn image() -> AnyView {
+    svg(
+        r#"<rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="6.5" r="1.2"/><path d="m2.5 12 4-3.5 3 2.5 2-1.5 2 2"/>"#,
+    )
+}
+
+/// Code (HTML brut, variable).
+pub fn code() -> AnyView {
+    svg(r#"<path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5"/>"#)
+}
+
+/// Emplacement du contenu dans un gabarit.
+pub fn slot() -> AnyView {
+    svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke-dasharray="2 2"/>"#)
+}
+
+pub fn arrow_up() -> AnyView {
+    svg(r#"<path d="M8 13V3M4 7l4-4 4 4"/>"#)
+}
+
+pub fn arrow_down() -> AnyView {
+    svg(r#"<path d="M8 3v10M4 9l4 4 4-4"/>"#)
+}
+
+/// Envelopper dans un nouvel élément.
+pub fn wrap() -> AnyView {
+    svg(
+        r#"<rect x="1.5" y="1.5" width="13" height="13" rx="2"/><rect x="5" y="5" width="6" height="6" rx="1"/>"#,
+    )
+}
+
+pub fn chevron_down() -> AnyView {
+    svg(r#"<path d="m4.5 6.5 3.5 3.5 3.5-3.5"/>"#)
+}
+
+pub fn chevron_right() -> AnyView {
+    svg(r#"<path d="m6.5 4.5 3.5 3.5-3.5 3.5"/>"#)
+}

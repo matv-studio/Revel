@@ -97,8 +97,86 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Sous-bloc | `.subsection` | Groupe distinct à l'intérieur d'une section (compte requis par un formulaire) |
 | Boîte de dialogue | `.overlay` > `.dialog` (`dialog.rs`) | Confirmation ou saisie ; remplace `confirm()`/`prompt()` du système ; Échap ferme ; action destructrice : focus sur « Annuler » |
 | Navigation | `.nav-item`, `.nav-item--sub`, `.is-active` | Panneau gauche |
+| Panneau de styles | `styles/inspector.css`, `src/styles/` | Voir la section *Panneau de styles* |
+| Libellé de propriété | `.style-label` (`.is-here`, `.is-inherited`) + `.dot` | Pastille dans la marge (texte aligné) ; clic : origine et *Réinitialiser* ; Alt+clic : réinitialise ; glisser : change le nombre |
+| Champ numérique | `.num` (`NumBox`) | Calculs, flèches (Maj ×10, Alt ×0,1), menu d'unités expliqué (`.num-unit`), préfixe à glisser |
+| Choix à boutons | `.seg` (`.is-on` réglé ici, `.is-implied` en vigueur sans être réglé) | Texte ou icônes ; 2 à 5 options |
+| Bascule | `.tool-toggle` | Italique, souligné, angles indépendants |
+| Boîte d'alignement | `.align-box` | 3 × 3 ; positions d'une pile ou d'une image de fond |
+| Boîte des marges | `.bm-box` | Marge extérieure autour de la marge intérieure ; décalages d'une position |
+| Couleur | `.color-input` + `.cp` | Pastille, valeur, sélecteur (plan, teinte, opacité, pipette, modèles, couleurs du site, contraste) |
+| Menu flottant | `.pop` (`Pop`) | Ouvert par un `.pop-trigger` ; fermé par un clic ailleurs ou Échap (avant tout raccourci de l'éditeur) |
 
 Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arrondies, dessinées pour Revel.
+
+## Panneau de styles (D-20)
+
+Public visé : une personne qui ne connaît pas CSS. Chaque contrôle porte un **nom simple** ; le nom CSS est
+en info-bulle (et dans la section « Code CSS »). On règle par **gestes** (glisser, cliquer une icône, choisir une
+couleur) ; la saisie au clavier reste possible partout pour qui la préfère.
+
+### Choix retenus, fonction par fonction
+
+| Fonction | Retenu | Repris de | Pourquoi |
+|---|---|---|---|
+| Cible | Classe (liste), état (Aucun, Survol, Appui, Focus clavier), point de rupture affiché ; nombre d'éléments de la page qui portent la classe | Webflow [W1][W16] | seul modèle fidèle à une vraie cascade CSS |
+| Origine d'une valeur | Pastille pleine « Réglé ici », anneau « Hérité de … » (point de rupture plus large ou état de base), rien sinon (valeur effective en gris). Clic sur le libellé : origine et *Réinitialiser* ; Alt+clic : réinitialise | Webflow [W1][W18], Framer [F5] | les couleurs de Webflow ne fonctionnent pas sans accent : forme + texte |
+| Nombres | Glisser le libellé (Maj ×10, Alt ×0,1) ; ↑/↓ ±1, Maj ±10, Alt ±0,1 ; calculs `12+4`, `*2` ; unité tapée ou choisie dans un menu expliqué (« % — du parent ») ; champ vide = valeur retirée | Figma [G5], Webflow [W15], Framer [F1] | glisser sans touche spéciale se découvre seul |
+| Couleur | Pastille + valeur ; panneau : plan saturation-luminosité, curseur de teinte, curseur d'opacité, pipette (si le système la permet), modèle Hex / RVB / TSL / TSV, couleurs du site (variables d'abord, puis couleurs utilisées), contraste du texte (AA/AAA) | Figma [G7][G8], Webflow [W11][W19] | aucune valeur à taper |
+| Espacement | Boîte : marge extérieure autour de la marge intérieure ; chaque côté se glisse ou se tape ; Alt = côté opposé aussi, Maj = les quatre côtés | Webflow [W2], Figma [G2] | seul outil avec la marge extérieure ; modificateurs communs aux deux |
+| Disposition | Bloc / Pile / Grille / Masqué (+ variantes « en ligne ») ; pile : direction à icônes, inverser, boîte d'alignement 3 × 3 et deux listes en mots (Horizontal, Vertical) selon la direction, écart, retour à la ligne ; grille : nombre de colonnes | Framer (« Stack ») [F2], Figma [G3], Webflow [W4][W5] | mots et icônes au lieu de `justify-content` |
+| Élément dans une pile | Rétrécir si nécessaire / Grandir si possible / Ni grandir ni rétrécir, écrits `flex: 0 1 auto`, `1 1 auto`, `0 0 auto` (valeurs `initial`, `auto`, `none` de CSS, dont les descriptions sont celles de Webflow, qui ne publie pas ses valeurs [M1]) | Webflow [W4] | phrases plutôt que `flex: 1 1 auto` |
+| Taille | Largeur, hauteur, minimum, maximum ; menu d'unités expliqué (px fixe, % du parent, vw/vh de l'écran, Auto, Ajusté au contenu) ; débordement en mots ; ajustement des images (Remplir, Ajuster, Étirer…) ; proportions nommées | Framer [F1], Figma [G2][G11], Webflow [W7] | modes nommés par leur effet |
+| Position | Normale / Relative / Absolue / Fixe / Collante avec une phrase « par rapport à quoi » ; décalages dans une boîte ; préréglages (Tout le parent, coins, bords) ; ordre de superposition | Framer [F3], Webflow [W8] | l'effet est dit en clair |
+| Texte | Police (polices du site), graisse nommée (Fin … Noir), taille, interligne, espacement des lettres, couleur, alignement et casse à icônes, italique / souligné / barré | Figma [G12], Webflow [W9] | noms de graisse plutôt que 100…900 |
+| Fond | Couleur ; image : Remplir (cover) / Ajuster (contain) / Auto, position 3 × 3, répétition | Figma [G11], Webflow [W10] | |
+| Bordure | Arrondi en un champ, « Angles indépendants » pour quatre ; côtés (tous, haut, droite, bas, gauche), épaisseur, style à icônes, couleur | Figma [G15], Webflow [W12] | |
+| Effets | Opacité (curseur), ombres en liste (portée / intérieure, X, Y, flou, étendue, couleur), curseur de la souris | Figma [G13], Webflow [W13] | |
+| Code CSS | Toutes les déclarations de la règle, `!important`, ajout libre ; section repliée | — | rien n'est perdu pour les utilisateurs avancés |
+
+Pendant un geste (glisser, couleur), la page montre le résultat en direct sans écrire le fichier ; relâcher
+enregistre **une seule** modification (une seule étape d'annulation).
+
+Différé : éditeur de dégradés (Figma [G10]), filtres et flou, transitions et transformations (étape 6) — modifiables
+dans « Code CSS » d'ici là.
+
+### Noms affichés
+
+| CSS | Français | Anglais |
+|---|---|---|
+| `display` | Affichage : Bloc, Pile, Grille, Masqué | Display: Block, Stack, Grid, Hidden |
+| `flex-direction` | Direction : Horizontale, Verticale, Inverser | Direction: Horizontal, Vertical, Reverse |
+| `justify-content`, `align-items` | Horizontal / Vertical : Gauche, Centre, Droite, Haut, Bas, Étirés, Ligne de base, Espacés (entre, autour, égaux) | Horizontal / Vertical: Left, Center, Right, Top, Bottom, Stretch, Baseline, Space between / around / evenly |
+| `gap` | Écart | Gap |
+| `flex-wrap` | Retour à la ligne | Wrap |
+| `margin`, `padding` | Marge extérieure, Marge intérieure | Margin, Padding |
+| `width`, `min-width`… | Largeur, Largeur min., Largeur max. | Width, Min width, Max width |
+| `overflow` | Débordement : Visible, Masqué, Défiler, Auto | Overflow: Visible, Hidden, Scroll, Auto |
+| `object-fit` | Ajustement : Remplir, Ajuster, Étirer, Aucun | Fit: Fill, Fit, Stretch, None |
+| `position` | Position : Normale, Relative, Absolue, Fixe, Collante | Position: Static, Relative, Absolute, Fixed, Sticky |
+| `z-index` | Superposition | Layer order |
+| `font-weight` | Graisse : Fin, Très léger, Léger, Normal, Moyen, Demi-gras, Gras, Très gras, Noir | Weight: Thin … Black |
+| `line-height`, `letter-spacing` | Interligne, Espacement | Line height, Letter spacing |
+| `text-transform` | Casse | Case |
+| `background-*` | Fond | Background |
+| `border-radius` | Arrondi | Corner radius |
+| `box-shadow` | Ombres : portée, intérieure ; Flou, Étendue | Shadows: drop, inner; Blur, Spread |
+| `cursor` | Curseur | Cursor |
+
+Les libellés tiennent dans leur colonne en français et en anglais (contrôlé par `tools/editor-e2e.mjs`).
+
+Sources (lues le 14/10/2026) :
+[W1] https://help.webflow.com/hc/en-us/articles/33961362040723 ·
+[W2] …/33961243177875 · [W4] …/33961260795155 · [W5] …/33961238138643 · [W7] …/33961381659411 ·
+[W8] …/33961228002963 · [W9] …/33961334261779 · [W10] …/33961278898323 · [W11] …/33961288849171 ·
+[W12] …/33961270594067 · [W13] …/33961245810451 · [W15] …/33961290465043 · [W16] …/33961301727251 ·
+[W18] …/33961332425875 · [W19] …/33961268146323 ·
+[F1] https://www.framer.com/academy/lessons/sizing-modes · [F2] …/frames-vs-stacks ·
+[F3] …/layer-positioning-modes-in-framer · [F5] …/component-variants-in-framer ·
+[G2] https://help.figma.com/hc/en-us/articles/360040451373 · [G3] …/31289464393751 · [G5] …/360039956914 ·
+[G7] …/360041003774 · [G8] …/360043042113 · [G10] …/34208860210199 · [G11] …/360041098433 ·
+[G12] …/360039956634 · [G13] …/360041488473 · [G15] …/360050986854 ·
+[M1] https://developer.mozilla.org/en-US/docs/Web/CSS/flex (copie lue : https://docs.w3cub.com/css/flex)
 
 ## Textes
 

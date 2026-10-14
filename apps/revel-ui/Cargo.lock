@@ -1229,6 +1229,7 @@ dependencies = [
  "revel-i18n",
  "revel-model",
  "revel-protocol",
+ "revel-style",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

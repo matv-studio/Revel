@@ -132,6 +132,16 @@
       const cs = getComputedStyle(selected);
       const values = {};
       for (const p of watched) values[p] = cs.getPropertyValue(p).trim();
+      // Affichage du parent (réglages d'un élément dans une pile) et fond effectif sous l'élément
+      // (contraste du texte) : premier fond non transparent en remontant, blanc à défaut.
+      const parent = selected.parentElement;
+      values["--rv-parent-display"] = parent ? getComputedStyle(parent).display : "";
+      let bg = "";
+      for (let el = selected; el && !bg; el = el.parentElement) {
+        const c = getComputedStyle(el).backgroundColor;
+        if (c && c !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(c)) bg = c;
+      }
+      values["--rv-background"] = bg || "rgb(255, 255, 255)";
       post({ type: "computed", id: selected.getAttribute("data-rv"), values });
     }, 30);
   };
@@ -269,6 +279,28 @@
   window.addEventListener("resize", () => { redraw(); sendComputed(); });
   new ResizeObserver(redraw).observe(document.documentElement);
 
+  // ---------------------------------------------------------------- aperçu des styles
+  let previewSheet = null;
+  let previewEl = null;
+  const setPreview = (css) => {
+    if ("adoptedStyleSheets" in document && typeof CSSStyleSheet === "function" && "replaceSync" in CSSStyleSheet.prototype) {
+      if (!previewSheet) {
+        previewSheet = new CSSStyleSheet();
+        document.adoptedStyleSheets = [...document.adoptedStyleSheets, previewSheet];
+      }
+      try { previewSheet.replaceSync(css); } catch (_) { /* valeur en cours de saisie */ }
+    } else if (css) {
+      // Moteurs sans feuilles construites : élément `<style>` présent seulement pendant le geste.
+      if (!previewEl) previewEl = document.createElement("style");
+      previewEl.textContent = css;
+      if (!previewEl.isConnected) document.head.appendChild(previewEl);
+    } else if (previewEl) {
+      previewEl.remove();
+    }
+    redraw();
+    sendComputed();
+  };
+
   // ---------------------------------------------------------------- messages de l'interface
   const byId = (id) => (id ? document.querySelector('[data-rv="' + CSS.escape(id) + '"]') : null);
 
@@ -290,6 +322,18 @@
         watched = Array.isArray(m.props) ? m.props : [];
         sendComputed();
         break;
+      case "count": {
+        // Nombre d'éléments de la page qui portent un sélecteur (sans les états).
+        let n = 0;
+        try { n = document.querySelectorAll(m.selector).length; } catch (_) { n = 0; }
+        post({ type: "count", selector: m.selector, n });
+        break;
+      }
+      case "preview":
+        // Aperçu pendant un geste (glisser, couleur) : feuille ajoutée, retirée quand la feuille du
+        // site est rechargée. Feuille construite (adoptedStyleSheets) : la page ne change pas.
+        setPreview(m.css || "");
+        break;
       case "stylesheet": {
         // Feuille de style régénérée : rechargée sans recharger la page.
         for (const l of document.querySelectorAll('link[rel~="stylesheet"]')) {
@@ -298,7 +342,7 @@
             u.searchParams.set("rv", String(Date.now()));
             const next = l.cloneNode();
             next.href = u.pathname + u.search;
-            next.addEventListener("load", () => { l.remove(); redraw(); sendComputed(); }, { once: true });
+            next.addEventListener("load", () => { l.remove(); setPreview(""); redraw(); sendComputed(); }, { once: true });
             l.after(next);
           }
         }

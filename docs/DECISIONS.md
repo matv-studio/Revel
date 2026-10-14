@@ -125,6 +125,14 @@ l'éditeur ; Revel n'écrit que cette valeur dans le fichier, qui reste compatib
 éditent les mêmes fichiers ; Revel relit les fichiers modifiés hors de l'application. Synchronisation avec GitHub
 (enregistrements de Pages CMS) : étape 3.
 
+**D-20 — 14/10/2026 — prise (demande de l'utilisateur).** **Panneau de styles au niveau de Webflow, Framer et
+Figma, pour un public non technique** : noms simples (le nom CSS reste en info-bulle), contrôles visuels plutôt que
+saisie de valeurs (sélecteur de couleur à plan saturation-luminosité, curseurs de teinte et d'opacité, pipette ;
+glisser sur un libellé pour changer un nombre ; boîte des marges ; boîte d'alignement 3 × 3 ; boutons à icônes),
+CSS brut seulement dans une section « Code CSS » repliée. Pour chaque fonction, la version la plus claire des
+trois outils (tableau et sources dans `docs/DESIGN.md`, section *Panneau de styles*). Les raccourcis CSS écrits
+dans le site (`margin: 0 auto`, `border: 1px solid`, `background: #fff`) sont lus et modifiés sur place.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

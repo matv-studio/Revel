@@ -199,3 +199,88 @@ pub fn chevron_down() -> AnyView {
 pub fn chevron_right() -> AnyView {
     svg(r#"<path d="m6.5 4.5 3.5 3.5-3.5 3.5"/>"#)
 }
+
+pub fn arrow_right() -> AnyView {
+    svg(r#"<path d="M3 8h10M9 4l4 4-4 4"/>"#)
+}
+
+/// Inverser l'ordre.
+pub fn reverse() -> AnyView {
+    svg(r#"<path d="M4.5 2.5 2 5l2.5 2.5M2 5h9.5M11.5 8.5 14 11l-2.5 2.5M14 11H4.5"/>"#)
+}
+
+/// Pipette.
+pub fn eyedropper() -> AnyView {
+    svg(
+        r#"<path d="M10.5 2.5a1.8 1.8 0 0 1 2.5 0l.5.5a1.8 1.8 0 0 1 0 2.5L12 7l-3-3z"/><path d="M9 4 3.5 9.5 3 12l-1 1.5.5.5L4 13l2.5-.5L12 7"/>"#,
+    )
+}
+
+pub fn text_left() -> AnyView {
+    svg(r#"<path d="M2.5 4h11M2.5 8h7M2.5 12h9"/>"#)
+}
+
+pub fn text_center() -> AnyView {
+    svg(r#"<path d="M2.5 4h11M4.5 8h7M3.5 12h9"/>"#)
+}
+
+pub fn text_right() -> AnyView {
+    svg(r#"<path d="M2.5 4h11M6.5 8h7M4.5 12h9"/>"#)
+}
+
+pub fn text_justify() -> AnyView {
+    svg(r#"<path d="M2.5 4h11M2.5 8h11M2.5 12h11"/>"#)
+}
+
+pub fn italic() -> AnyView {
+    svg(r#"<path d="M6.5 3h6M3.5 13h6M9.5 3l-3 10"/>"#)
+}
+
+pub fn underline() -> AnyView {
+    svg(r#"<path d="M4.5 2.5v5a3.5 3.5 0 0 0 7 0v-5M3.5 13.5h9"/>"#)
+}
+
+pub fn strike() -> AnyView {
+    svg(
+        r#"<path d="M2.5 8h11M11 4.5C10.5 3.3 9.4 2.5 8 2.5 6 2.5 4.8 3.6 4.8 5c0 1 .6 1.7 1.7 2.2M5 11.3c.5 1.3 1.6 2.2 3.1 2.2 2 0 3.3-1.1 3.3-2.6 0-.6-.2-1.1-.5-1.5"/>"#,
+    )
+}
+
+/// Angles indépendants.
+pub fn corners() -> AnyView {
+    svg(
+        r#"<path d="M2.5 6V4.5a2 2 0 0 1 2-2H6M10 2.5h1.5a2 2 0 0 1 2 2V6M13.5 10v1.5a2 2 0 0 1-2 2H10M6 13.5H4.5a2 2 0 0 1-2-2V10"/>"#,
+    )
+}
+
+/// Bordure : tous les côtés.
+pub fn side_all() -> AnyView {
+    svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1"/>"#)
+}
+
+fn side(active: &'static str) -> AnyView {
+    view! {
+        <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"
+            fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke-dasharray="1.5 2" opacity=".55"/>
+            <path d=active/>
+        </svg>
+    }
+    .into_any()
+}
+
+pub fn side_top() -> AnyView {
+    side("M2.5 2.5h11")
+}
+
+pub fn side_right() -> AnyView {
+    side("M13.5 2.5v11")
+}
+
+pub fn side_bottom() -> AnyView {
+    side("M2.5 13.5h11")
+}
+
+pub fn side_left() -> AnyView {
+    side("M2.5 2.5v11")
+}

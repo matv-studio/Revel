@@ -10,6 +10,7 @@
 use revel_model::{Breakpoint, StyleItem, StyleRule, Stylesheet};
 
 mod parse;
+pub mod values;
 
 pub use parse::{ParseError, collapse_ws, parse};
 

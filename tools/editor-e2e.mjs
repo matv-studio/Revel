@@ -299,6 +299,76 @@ try {
   const r1 = rulesOf((await invoke('edit_open')).site, '.hero__title').find(([it]) => !it.media);
   check('styles : déclaration écrite dans la règle de base', r1 && r1[0].decls.some((d) => d.prop === 'color' && d.value === 'rgb(10, 20, 30)'));
 
+  // Panneau de styles (D-20) : contrôles visuels, une seule étape d'annulation par geste.
+  const titleRule = async () => rulesOf((await invoke('edit_open')).site, '.hero__title').find(([it]) => !it.media)[0];
+  const decl = (rule, prop) => (rule.decls.filter((d) => d.prop === prop).pop() || {}).value;
+  const cs = async (prop) => (await frameOf().evaluate((p) => getComputedStyle(document.querySelector('h1.hero__title')).getPropertyValue(p), prop));
+  const dragBy = async (sel, dx, dy) => {
+    await page.locator(sel).first().scrollIntoViewIfNeeded();
+    const b = await page.locator(sel).first().boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + dx / 2, b.y + b.height / 2 + dy / 2, { steps: 4 });
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2 + dy, { steps: 4 });
+    return async () => page.mouse.up();
+  };
+  // Boîte des marges : glisser la marge du haut de 20 px vers le haut.
+  {
+    const before = await titleRule();
+    const mt0 = parseFloat(await cs('margin-top'));
+    const release = await dragBy('.bm-side[data-prop="margin-top"] .bm-value', 0, -20);
+    await page.waitForTimeout(250);
+    const during = parseFloat(await cs('margin-top'));
+    const unchanged = JSON.stringify(await titleRule()) === JSON.stringify(before);
+    await release();
+    await page.waitForFunction(() => document.querySelector('.save-state')?.textContent?.length > 0);
+    await page.waitForTimeout(600);
+    const after = await titleRule();
+    const mt = decl(after, 'margin-top') || decl(after, 'margin');
+    check('styles : marge glissée, aperçu sans écriture puis une valeur écrite', during === mt0 + 20 && unchanged && !!mt && parseFloat(await cs('margin-top')) === mt0 + 20,
+      `${mt0} → ${during} (aperçu), règle : ${mt}`);
+    await page.click('.editor-toolbar .btn-undo');
+    await page.waitForTimeout(600);
+    check('styles : un seul Ctrl+Z annule le glisser', JSON.stringify(await titleRule()) === JSON.stringify(before));
+  }
+  // Sélecteur de couleur : glisser dans le plan saturation-luminosité.
+  {
+    const before = await titleRule();
+    await page.locator('.style-row[data-prop="color"] .color-swatch').click();
+    await page.waitForSelector('.cp-plane');
+    const c0 = await cs('color');
+    const release = await dragBy('.cp-plane', -40, 30);
+    await page.waitForTimeout(250);
+    const during = await cs('color');
+    await release();
+    await page.waitForTimeout(800);
+    const after = decl(await titleRule(), 'color');
+    check('styles : couleur choisie au glisser, aperçu en direct puis écrite', during !== c0 && /^#[0-9a-f]{6}$/.test(after || ''), `${c0} → ${during}, règle : ${after}`);
+    if (shots) await page.screenshot({ path: `${shots}/editeur-couleur.png` });
+    await page.keyboard.press('Escape');
+    check('styles : Échap ferme le sélecteur sans désélectionner', !(await page.$('.cp')) && !!(await page.$('.style-row[data-prop="color"]')));
+    // Alt+clic sur le libellé : valeur retirée.
+    await page.locator('.style-row[data-prop="color"] .style-label').click({ modifiers: ['Alt'] });
+    await page.waitForTimeout(600);
+    check('styles : Alt+clic sur le libellé réinitialise', decl(await titleRule(), 'color') === undefined);
+    for (let i = 0; i < 2; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(500); }
+    check('styles : couleur annulée', JSON.stringify(await titleRule()) === JSON.stringify(before));
+  }
+  // Menu d'unités et boutons à icônes.
+  {
+    const before = await titleRule();
+    await page.locator('.style-row[data-prop="font-size"] .num-unit').click();
+    await page.locator('.pop .menu-item:has(.menu-key:text-is("rem"))').click();
+    await page.waitForTimeout(600);
+    const fs1 = decl(await titleRule(), 'font-size') || '';
+    check('styles : unité choisie dans le menu', /rem$/.test(fs1), fs1);
+    await page.locator('.style-row[data-prop="text-align"] button[role="radio"]').nth(1).click();
+    await page.waitForTimeout(600);
+    check('styles : alignement du texte par bouton', decl(await titleRule(), 'text-align') === 'center' && (await cs('text-align')) === 'center');
+    for (let i = 0; i < 2; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(500); }
+    check('styles : unité et alignement annulés', JSON.stringify(await titleRule()) === JSON.stringify(before));
+  }
+
   // Point de rupture 600 : nouvelle règle placée dans la cascade.
   const bps2 = await page.$$('.editor-toolbar .segmented button');
   await bps2[bps2.length - 1].click();
@@ -333,12 +403,20 @@ try {
   if (shots) await page.screenshot({ path: `${shots}/editeur-styles.png` });
   // Aucun libellé tronqué dans l'inspecteur (sections dépliées).
   for (const d of await page.$$('.inspector details:not([open]) > summary')) await d.click().catch(() => {});
-  const cut = await page.$$eval('.inspector .style-label, .inspector .label', (els) =>
+  const truncated = () => page.$$eval('.inspector .style-label, .inspector .style-label-text, .inspector .label, .inspector .seg button span, .inspector .mini-label', (els) =>
     els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent.trim()));
-  check('styles : aucun libellé tronqué', cut.length === 0, cut.join(', '));
+  const cut = await truncated();
+  check('styles : aucun libellé tronqué (français)', cut.length === 0, cut.join(', '));
+  if (shots) await page.locator('.inspector').screenshot({ path: `${shots}/editeur-styles-panneau-fr.png` });
+  await page.evaluate(() => window.__revelTest.lang('en'));
+  await page.waitForFunction(() => document.querySelector('.inspector .panel-tabs')?.textContent.includes('Settings'));
+  const cutEn = await truncated();
+  check('styles : aucun libellé tronqué (anglais)', cutEn.length === 0, cutEn.join(', '));
+  if (shots) await page.locator('.inspector').screenshot({ path: `${shots}/editeur-styles-panneau-en.png` });
+  await page.evaluate(() => window.__revelTest.lang('fr'));
 
   // Tout annuler.
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 20; i++) {
     if (JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base26.site)) break;
     await page.click('.editor-toolbar .btn-undo');
     await page.waitForTimeout(400);

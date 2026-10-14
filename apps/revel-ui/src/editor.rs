@@ -57,6 +57,11 @@ enum FromCanvas {
     Computed {
         values: std::collections::HashMap<String, String>,
     },
+    /// Nombre d'éléments de la page qui portent un sélecteur.
+    Count {
+        selector: String,
+        n: u32,
+    },
     /// Texte modifié sur place (étape 2.7).
     Text {
         slot: revel_edit::canvas::Slot,
@@ -92,6 +97,8 @@ pub struct Ed {
     pub scroll: RwSignal<(f64, f64)>,
     /// Valeurs effectives des propriétés de style de l'élément sélectionné (canevas).
     pub computed: RwSignal<std::collections::HashMap<String, String>>,
+    /// Nombre d'éléments de la page qui portent la classe réglée (sélecteur, nombre).
+    pub count: RwSignal<Option<(String, u32)>>,
     /// Modifications envoyées au cœur et pas encore confirmées.
     pub pending: RwSignal<u32>,
     /// Heure (ms) du dernier enregistrement confirmé.
@@ -309,7 +316,11 @@ impl Ed {
                     self.saved_at.set(Some(js_sys::Date::now()));
                     self.after(ui, st)
                 }
-                Err(e) => ui.fail(e),
+                Err(e) => {
+                    // Aperçu d'un geste refusé : retiré du canevas.
+                    self.post(serde_json::json!({ "type": "preview", "css": "" }));
+                    ui.fail(e)
+                }
             }
         });
     }
@@ -440,6 +451,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         load: RwSignal::new(0),
         scroll: RwSignal::new((0.0, 0.0)),
         computed: RwSignal::new(Default::default()),
+        count: RwSignal::new(None),
         own_change: RwSignal::new(0.0),
         pending: RwSignal::new(0),
         saved_at: RwSignal::new(None),
@@ -523,6 +535,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             }
             FromCanvas::Scroll { x, y } => ed.scroll.set((x, y)),
             FromCanvas::Computed { values } => ed.computed.set(values),
+            FromCanvas::Count { selector, n } => ed.count.set(Some((selector, n))),
             FromCanvas::Text { slot, text } => {
                 if let Some(cmd) = ed.text_command(&slot, text) {
                     ed.apply(ui, cmd, false);
@@ -540,7 +553,9 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                     || el.has_attribute("contenteditable")
             })
             .unwrap_or(false);
-        if in_field {
+        // Un menu ouvert (panneau de styles) se ferme d'abord avec Échap.
+        let menu_open = document().query_selector(".pop").ok().flatten().is_some();
+        if in_field || (menu_open && e.key() == "Escape") {
             return;
         }
         let ctrl = e.ctrl_key() || e.meta_key();
@@ -974,8 +989,12 @@ fn install_test_hook(ed: Ed, ui: Ui) {
             Err(e) => ui.fail(revel_protocol::Failure::detail(e.to_string())),
         }
     });
+    // Langue de l'interface (captures et contrôle des libellés en anglais).
+    let lang = Closure::<dyn Fn(String)>::new(move |l: String| ui.settings.update(|s| s.lang = l));
     let hook = js_sys::Object::new();
     let _ = js_sys::Reflect::set(&hook, &JsValue::from_str("apply"), apply.as_ref());
+    let _ = js_sys::Reflect::set(&hook, &JsValue::from_str("lang"), lang.as_ref());
     apply.forget();
+    lang.forget();
     let _ = js_sys::Reflect::set(&win, &JsValue::from_str("__revelTest"), &hook);
 }

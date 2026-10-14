@@ -264,7 +264,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        # Windows Server 2022 : sur l'image 2025 (WebView2 153), Edge WebDriver n'obtient pas le port de
+        # débogage de WebView2 (« DevToolsActivePort file doesn't exist », alors que l'application
+        # démarre) ; même constat dans actions/runner-images#14738, où l'image 2022 fonctionne.
+        os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

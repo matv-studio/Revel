@@ -44,11 +44,19 @@ enum FromCanvas {
     Key {
         key: String,
         #[serde(default)]
+        code: String,
+        #[serde(default)]
         shift: bool,
+        #[serde(default)]
+        alt: bool,
         #[serde(default)]
         ctrl: bool,
         #[serde(default)]
         meta: bool,
+    },
+    /// Touche relâchée (espace : fin du déplacement de la vue).
+    Keyup {
+        key: String,
     },
     Scroll {
         x: f64,
@@ -57,9 +65,38 @@ enum FromCanvas {
     Computed {
         values: std::collections::HashMap<String, String>,
     },
-    /// Molette avec Ctrl (zoom), déplacement vertical.
+    /// Molette avec Ctrl (zoom) : déplacement vertical, position du pointeur dans le cadre.
     Zoom {
         dy: f64,
+        #[serde(default)]
+        x: Option<f64>,
+        #[serde(default)]
+        y: Option<f64>,
+    },
+    /// Déplacement de la vue (bouton du milieu dans le canevas), en pixels de l'écran.
+    Pan {
+        dx: f64,
+        dy: f64,
+    },
+    /// Emplacement de dépôt sous le pointeur pendant un glisser (`None` : aucun).
+    Drop {
+        target: Option<DropTarget>,
+    },
+    /// Élément de la page glissé à un autre endroit (`copy` : Alt, copie).
+    Moved {
+        id: String,
+        target: DropTarget,
+        #[serde(default)]
+        copy: bool,
+    },
+    /// Clic droit dans la page : position dans le cadre.
+    Context {
+        x: f64,
+        y: f64,
+    },
+    /// Position de la sélection dans le cadre (zoom sur la sélection).
+    Measure {
+        rect: Option<Rect>,
     },
     /// Nombre d'éléments de la page qui portent un sélecteur.
     Count {
@@ -74,6 +111,90 @@ enum FromCanvas {
     #[serde(other)]
     Other,
 }
+
+/// Emplacement de dépôt : avant ou après l'élément `at`, ou dedans (à la fin).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct DropTarget {
+    #[serde(rename = "ref")]
+    pub at: String,
+    #[serde(rename = "where")]
+    pub place: Place,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Place {
+    Before,
+    After,
+    Inside,
+}
+
+/// Rectangle dans le cadre du canevas (pixels CSS de la page).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+pub struct Rect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// Élément glissé depuis le panneau « Ajouter ».
+#[derive(Clone, Debug, PartialEq)]
+pub struct DragItem {
+    pub preset: revel_edit::make::Preset,
+    /// Texte par défaut (clé de traduction, vide si aucun).
+    pub text_key: &'static str,
+    pub label: String,
+    /// Balise produite et nature (bloc ou en ligne) : règles de dépôt du canevas.
+    pub tag: &'static str,
+    pub block: bool,
+}
+
+/// Touche (interface ou canevas).
+#[derive(Clone, Debug, Default)]
+pub struct Key {
+    pub key: String,
+    /// Touche physique (`Digit1`) : raccourcis à chiffres indépendants de la disposition du clavier.
+    pub code: String,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+}
+
+impl Key {
+    pub fn of(e: &web_sys::KeyboardEvent) -> Self {
+        Self {
+            key: e.key(),
+            code: e.code(),
+            ctrl: e.ctrl_key() || e.meta_key(),
+            shift: e.shift_key(),
+            alt: e.alt_key(),
+        }
+    }
+    /// Chiffre de la rangée supérieure ou du pavé numérique (`Digit0`, `Numpad0`).
+    fn digit(&self) -> Option<u8> {
+        let c = self
+            .code
+            .strip_prefix("Digit")
+            .or_else(|| self.code.strip_prefix("Numpad"))?;
+        c.parse().ok()
+    }
+}
+
+/// Géométrie du canevas : cadre (largeur, hauteur en pixels CSS), zoom ajusté, échelle et position
+/// du cadre dans la zone (pixels de l'écran).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Geo {
+    pub w: f64,
+    pub h: f64,
+    pub fit: f64,
+    pub s: f64,
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Marge autour du cadre (zoom ajusté).
+pub const GUTTER: f64 = 48.0;
 
 /// État de l'éditeur, partagé par ses panneaux.
 #[derive(Clone, Copy)]
@@ -91,6 +212,21 @@ pub struct Ed {
     pub breakpoint: RwSignal<String>,
     /// Zoom ; `None` : ajusté à la place disponible.
     pub zoom: RwSignal<Option<f64>>,
+    /// Position du cadre dans la zone du canevas (zoom libre).
+    pub pan: RwSignal<(f64, f64)>,
+    /// Taille de la zone du canevas.
+    pub area: RwSignal<(f64, f64)>,
+    /// Espace maintenue : la vue se déplace à la souris.
+    pub space: RwSignal<bool>,
+    /// Déplacement de la vue en cours (espace ou bouton du milieu).
+    pub panning: RwSignal<bool>,
+    /// Glisser depuis le panneau « Ajouter » : élément et position du pointeur.
+    pub drag: RwSignal<Option<DragItem>>,
+    pub drag_pos: RwSignal<(f64, f64)>,
+    /// Emplacement de dépôt proposé par le canevas.
+    pub drop: RwSignal<Option<DropTarget>>,
+    /// Menu contextuel du canevas ouvert (position dans la fenêtre).
+    pub menu: RwSignal<Option<(f64, f64)>>,
     /// Échelle du zoom ajusté (affichée dans la liste des zooms).
     pub fit: RwSignal<f64>,
     pub selected: RwSignal<Option<Selection>>,
@@ -112,7 +248,7 @@ pub struct Ed {
     /// Heure de la dernière modification faite dans Revel (ms) : les fichiers changés juste après
     /// ne sont pas pris pour une modification extérieure.
     pub own_change: RwSignal<f64>,
-    frame: NodeRef<html::Iframe>,
+    pub frame: NodeRef<html::Iframe>,
 }
 
 /// Paliers de zoom.
@@ -153,7 +289,7 @@ impl Ed {
     }
 
     /// Adresse du canevas pour la page affichée.
-    fn src(self) -> Option<String> {
+    pub fn src(self) -> Option<String> {
         let base = self.base.get()?;
         let page = self.page.get();
         Some(format!(
@@ -246,16 +382,29 @@ impl Ed {
     }
 
     /// Raccourci clavier de l'éditeur (interface ou canevas) ; `true` s'il a été traité.
-    pub fn shortcut(self, ui: Ui, key: &str, ctrl: bool, shift: bool) -> bool {
+    pub fn shortcut(self, ui: Ui, k: &Key) -> bool {
         let target = || self.selected_target();
-        match (key.to_lowercase().as_str(), ctrl) {
-            ("z", true) if shift => self.redo(ui),
+        let key = k.key.to_lowercase();
+        let digit = k.digit();
+        match (key.as_str(), k.ctrl) {
+            ("z", true) if k.shift => self.redo(ui),
             ("z", true) => self.undo(ui),
             ("y", true) => self.redo(ui),
             ("d", true) => match target() {
                 Some(at) => self.apply(ui, Command::Duplicate { at }, false),
                 None => return false,
             },
+            // Envelopper dans un conteneur (Ctrl+G, comme Figma et Framer) ; Ctrl+Maj+G : retirer
+            // l'enveloppe (les enfants prennent sa place).
+            ("g", true) if !k.shift => match target() {
+                Some(at) => self.wrap(ui, at),
+                None => return false,
+            },
+            ("g", true) => return self.unwrap(ui),
+            // Copier, couper, coller des éléments.
+            ("c", true) if !k.shift => return self.copy(ui, false),
+            ("x", true) if !k.shift => return self.copy(ui, true),
+            ("v", true) if !k.shift => return self.paste(ui),
             ("delete" | "backspace", false) => match target() {
                 Some(at) => self.apply(ui, Command::Remove { at }, false),
                 None => return false,
@@ -264,27 +413,291 @@ impl Ed {
                 self.selected.set(None);
                 self.post(serde_json::json!({ "type": "select", "id": null }));
             }
-            // Zoom (comme Figma) : Ctrl+0 ajusté, Ctrl+1 100 %, Ctrl+plus et Ctrl+moins.
-            ("0", true) => self.zoom.set(None),
-            ("1", true) => self.zoom.set(Some(1.0)),
+            // Parcours de la sélection (comme Figma) : Entrée enfant, Maj+Entrée parent, Tab frères.
+            ("enter", false) if self.selected.get_untracked().is_some() => {
+                let dir = if k.shift { "parent" } else { "child" };
+                self.post(serde_json::json!({ "type": "nav", "dir": dir }));
+            }
+            ("tab", false) if self.selected.get_untracked().is_some() => {
+                let dir = if k.shift { "prev" } else { "next" };
+                self.post(serde_json::json!({ "type": "nav", "dir": dir }));
+            }
+            // Ordre parmi les frères : Alt+flèches.
+            ("arrowup" | "arrowdown", false) if k.alt => {
+                return self.step(ui, if key == "arrowup" { -1 } else { 1 });
+            }
+            // Zoom (comme Figma) : Maj+0 100 %, Maj+1 ajusté, Maj+2 sélection ; aussi avec Ctrl.
+            _ if (k.ctrl || k.shift) && digit == Some(0) => self.zoom_to(Some(1.0)),
+            _ if (k.ctrl || k.shift) && digit == Some(1) => self.zoom_to(None),
+            _ if (k.ctrl || k.shift) && digit == Some(2) => self.zoom_selection(),
             ("=" | "+", true) => self.zoom_step(1),
             ("-", true) => self.zoom_step(-1),
+            _ if k.ctrl && matches!(k.code.as_str(), "NumpadAdd" | "Equal") => self.zoom_step(1),
+            _ if k.ctrl && matches!(k.code.as_str(), "NumpadSubtract" | "Minus") => {
+                self.zoom_step(-1)
+            }
             _ => return false,
         }
         true
     }
 
-    /// Zoom en vigueur (ajusté compris).
-    pub fn scale(self) -> f64 {
-        self.zoom
-            .get_untracked()
-            .unwrap_or_else(|| self.fit.get_untracked())
+    /// Enveloppe un élément dans un conteneur : `span` dans un texte (paragraphe, titre, lien…,
+    /// où un `div` casserait la page), `div` ailleurs.
+    pub fn wrap(self, ui: Ui, at: revel_edit::Target) {
+        const PHRASING: &[&str] = &[
+            "p",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "span",
+            "a",
+            "button",
+            "label",
+            "strong",
+            "em",
+            "b",
+            "i",
+            "u",
+            "small",
+            "code",
+            "figcaption",
+            "summary",
+            "legend",
+            "dt",
+            "q",
+            "cite",
+        ];
+        let inline = self.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let (p, _) = revel_edit::address::locate(d, &at).ok()?;
+            let parent = revel_edit::Target {
+                owner: p.owner,
+                node: p.node?,
+            };
+            match revel_edit::address::node(d, &parent).ok()? {
+                revel_model::Node::Element { tag, .. } => {
+                    Some(PHRASING.contains(&tag.to_ascii_lowercase().as_str()))
+                }
+                _ => None,
+            }
+        });
+        let tag = if inline == Some(true) { "span" } else { "div" };
+        self.apply(
+            ui,
+            Command::Wrap {
+                at,
+                tag: tag.into(),
+            },
+            false,
+        );
     }
 
-    /// Zoom multiplié (molette avec Ctrl), borné à 10-400 %.
-    pub fn zoom_by(self, f: f64) {
-        let z = (self.scale() * f).clamp(0.1, 4.0);
-        self.zoom.set(Some((z * 100.0).round() / 100.0));
+    /// Nœud sélectionné (copie).
+    fn selected_node(self) -> Option<(revel_edit::Target, revel_model::Node)> {
+        let at = self.selected_target()?;
+        let n = self
+            .doc
+            .with_untracked(|d| revel_edit::address::node(d.as_ref()?, &at).ok().cloned())?;
+        Some((at, n))
+    }
+
+    /// Copie l'élément sélectionné (et le retire avec `cut`).
+    pub fn copy(self, ui: Ui, cut: bool) -> bool {
+        let Some((at, n)) = self.selected_node() else {
+            return false;
+        };
+        ui.clipboard.set(Some(n));
+        if cut {
+            self.apply(ui, Command::Remove { at }, false);
+        }
+        true
+    }
+
+    /// Colle l'élément copié (nouveaux identifiants) : à côté d'un élément de même balise
+    /// sélectionné, sinon dans l'élément sélectionné (ou après lui), sinon à la fin de la page.
+    pub fn paste(self, ui: Ui) -> bool {
+        let Some(mut node) = ui.clipboard.get_untracked() else {
+            return false;
+        };
+        let tag = |n: &revel_model::Node| match n {
+            revel_model::Node::Element { tag, .. } => Some(tag.clone()),
+            revel_model::Node::Image(_) => Some("img".into()),
+            _ => None,
+        };
+        let sibling = self
+            .selected_node()
+            .filter(|(_, sel)| tag(sel).is_some() && tag(sel) == tag(&node))
+            .and_then(|(at, _)| {
+                self.doc.with_untracked(|d| {
+                    let (p, i) = revel_edit::address::locate(d.as_ref()?, &at).ok()?;
+                    Some((p, i + 1))
+                })
+            });
+        let Some((parent, index)) = sibling.or_else(|| crate::insert::insertion_point(self)) else {
+            return false;
+        };
+        self.doc.with_untracked(|d| {
+            if let Some(d) = d {
+                let mut taken = d.node_ids();
+                revel_edit::make::refresh_ids(&mut node, &mut taken);
+            }
+        });
+        self.apply(
+            ui,
+            Command::Insert {
+                parent,
+                index,
+                node,
+            },
+            false,
+        );
+        true
+    }
+
+    /// Retire l'enveloppe de l'élément sélectionné : ses enfants prennent sa place.
+    pub fn unwrap(self, ui: Ui) -> bool {
+        let Some((at, node)) = self.selected_node() else {
+            return false;
+        };
+        let revel_model::Node::Element { children, .. } = node else {
+            return false;
+        };
+        let Some((parent, index)) = self
+            .doc
+            .with_untracked(|d| revel_edit::address::locate(d.as_ref()?, &at).ok())
+        else {
+            return false;
+        };
+        let mut commands = vec![Command::Remove { at }];
+        for (i, child) in children.into_iter().enumerate() {
+            commands.push(Command::Insert {
+                parent: parent.clone(),
+                index: index + i,
+                node: child,
+            });
+        }
+        self.apply(ui, Command::Batch { commands }, false);
+        true
+    }
+
+    /// Monte (`-1`) ou descend (`+1`) l'élément sélectionné parmi ses frères.
+    pub fn step(self, ui: Ui, dir: i32) -> bool {
+        let Some(sel) = self.selected.get_untracked() else {
+            return false;
+        };
+        let cmd = self.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let url = self.page.get_untracked();
+            let page = self
+                .pages
+                .with_untracked(|ps| ps.iter().find(|p| p.url == url).cloned())?;
+            let rows = crate::layers::rows(d, &page);
+            let row = rows
+                .iter()
+                .find(|r| r.id.as_deref() == Some(sel.id.as_str()))?;
+            crate::layers::step_command(&rows, row, dir)
+        });
+        match cmd {
+            Some(c) => {
+                self.apply(ui, c, false);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Géométrie du canevas (lecture suivie : à appeler hors réaction avec `untrack`).
+    pub fn geo(self) -> Geo {
+        let (aw, ah) = self.area.get();
+        let desktop_min = self.doc.with(|d| {
+            d.as_ref()
+                .and_then(|d| d.breakpoints.iter().filter_map(|b| b.max_width).max())
+                .map(|w| f64::from(w) + 1.0)
+                .unwrap_or(320.0)
+        });
+        let w = self
+            .frame_width()
+            .unwrap_or_else(|| (aw - GUTTER).max(desktop_min));
+        let fit = ((aw - GUTTER) / w).clamp(0.1, 1.0);
+        let h = ((ah - GUTTER) / fit).max(200.0);
+        match self.zoom.get() {
+            None => Geo {
+                w,
+                h,
+                fit,
+                s: fit,
+                x: ((aw - w * fit) / 2.0).max(GUTTER / 2.0),
+                y: GUTTER / 2.0,
+            },
+            Some(z) => {
+                let (x, y) = self.pan.get();
+                Geo {
+                    w,
+                    h,
+                    fit,
+                    s: z,
+                    x,
+                    y,
+                }
+            }
+        }
+    }
+
+    /// Position du cadre gardée en partie visible.
+    fn clamp_pan(self, g: &Geo, x: f64, y: f64) -> (f64, f64) {
+        let (aw, ah) = self.area.get_untracked();
+        let keep = 80.0;
+        (
+            x.clamp(keep - g.w * g.s, (aw - keep).max(keep - g.w * g.s)),
+            y.clamp(keep - g.h * g.s, (ah - keep).max(keep - g.h * g.s)),
+        )
+    }
+
+    /// Zoom en vigueur (ajusté compris).
+    pub fn scale(self) -> f64 {
+        untrack(|| self.geo().s)
+    }
+
+    /// Zoom `z` autour du point (`cx`, `cy`) de la zone du canevas.
+    pub fn zoom_at(self, z: f64, cx: f64, cy: f64) {
+        let g = untrack(|| self.geo());
+        let z = ((z * 100.0).round() / 100.0).clamp(0.1, 4.0);
+        let k = z / g.s;
+        let ng = Geo { s: z, ..g };
+        let (x, y) = self.clamp_pan(&ng, cx - (cx - g.x) * k, cy - (cy - g.y) * k);
+        self.pan.set((x, y));
+        self.zoom.set(Some(z));
+    }
+
+    /// Zoom choisi (liste, raccourci) : cadre centré s'il tient dans la largeur, sinon calé à
+    /// gauche ; le haut visible du cadre reste en place.
+    pub fn zoom_to(self, z: Option<f64>) {
+        let Some(z) = z else {
+            self.zoom.set(None);
+            return;
+        };
+        let g = untrack(|| self.geo());
+        let (aw, _) = self.area.get_untracked();
+        let z = ((z * 100.0).round() / 100.0).clamp(0.1, 4.0);
+        let x = if g.w * z <= aw - GUTTER {
+            (aw - g.w * z) / 2.0
+        } else {
+            GUTTER / 2.0
+        };
+        let y = if g.y >= 0.0 { g.y } else { g.y * z / g.s };
+        let (x, y) = self.clamp_pan(&Geo { s: z, ..g }, x, y);
+        self.pan.set((x, y));
+        self.zoom.set(Some(z));
+    }
+
+    /// Zoom multiplié (molette avec Ctrl) autour d'un point de la zone (centre à défaut).
+    pub fn zoom_by(self, f: f64, at: Option<(f64, f64)>) {
+        let (aw, ah) = self.area.get_untracked();
+        let (cx, cy) = at.unwrap_or((aw / 2.0, ah / 2.0));
+        self.zoom_at(self.scale() * f, cx, cy);
     }
 
     /// Palier de zoom suivant ou précédent.
@@ -296,7 +709,55 @@ impl Ed {
             ZOOMS.iter().rev().copied().find(|z| *z < cur - 0.001)
         };
         if let Some(z) = next {
-            self.zoom.set(Some(z));
+            self.zoom_to(Some(z));
+        }
+    }
+
+    /// Zoom sur la sélection : le canevas la montre puis donne sa position (message `measure`).
+    pub fn zoom_selection(self) {
+        if let Some(s) = self.selected.get_untracked() {
+            self.post(serde_json::json!({ "type": "measure", "id": s.id }));
+        }
+    }
+
+    /// Cadre sur la sélection mesurée.
+    fn fit_rect(self, r: Rect) {
+        let (aw, ah) = self.area.get_untracked();
+        if r.width <= 0.0 || r.height <= 0.0 {
+            return;
+        }
+        let z = ((aw - 2.0 * GUTTER) / r.width)
+            .min((ah - 2.0 * GUTTER) / r.height)
+            .clamp(0.1, 4.0);
+        let z = (z * 100.0).round() / 100.0;
+        let g = Geo {
+            s: z,
+            ..untrack(|| self.geo())
+        };
+        let x = aw / 2.0 - (r.x + r.width / 2.0) * z;
+        let y = ah / 2.0 - (r.y + r.height / 2.0) * z;
+        let (x, y) = self.clamp_pan(&g, x, y);
+        self.pan.set((x, y));
+        self.zoom.set(Some(z));
+    }
+
+    /// Zoom libre : cadre recentré horizontalement (changement de point de rupture).
+    pub fn recenter(self) {
+        if self.zoom.get_untracked().is_some() {
+            let g = untrack(|| self.geo());
+            let (aw, _) = self.area.get_untracked();
+            self.pan
+                .set((((aw - g.w * g.s) / 2.0).max(GUTTER / 2.0), g.y));
+        }
+    }
+
+    /// Déplacement de la vue (pixels de l'écran).
+    pub fn pan_by(self, dx: f64, dy: f64) {
+        let g = untrack(|| self.geo());
+        let (x, y) = self.clamp_pan(&g, g.x + dx, g.y + dy);
+        self.pan.set((x, y));
+        if self.zoom.get_untracked().is_none() {
+            self.zoom.set(Some(g.s));
         }
     }
 
@@ -419,7 +880,7 @@ impl Ed {
     }
 
     /// Largeur du cadre pour le point de rupture affiché ; `None` : toute la place.
-    fn frame_width(self) -> Option<f64> {
+    pub fn frame_width(self) -> Option<f64> {
         let id = self.breakpoint.get();
         self.doc.with(|d| {
             let bp = d.as_ref()?.breakpoints.iter().find(|b| b.id == id)?;
@@ -484,7 +945,7 @@ fn path_to(nodes: &[revel_model::Node], id: &str, stack: &mut Vec<(String, Strin
 }
 
 /// Propriétaire d'un nœud (page, gabarit, composant) : libellé pour la barre d'état.
-fn owner_of(doc: &Site, id: &str) -> Option<(revel_model::ids::OwnerKind, String)> {
+pub fn owner_of(doc: &Site, id: &str) -> Option<(revel_model::ids::OwnerKind, String)> {
     for (kind, owner, body) in doc.owners() {
         let mut found = false;
         revel_model::ids::walk(body, &mut |n| {
@@ -511,6 +972,14 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         page: RwSignal::new("/".into()),
         breakpoint: RwSignal::new("desktop".into()),
         zoom: RwSignal::new(None),
+        pan: RwSignal::new((0.0, 0.0)),
+        area: RwSignal::new((0.0, 0.0)),
+        space: RwSignal::new(false),
+        panning: RwSignal::new(false),
+        drag: RwSignal::new(None),
+        drag_pos: RwSignal::new((0.0, 0.0)),
+        drop: RwSignal::new(None),
+        menu: RwSignal::new(None),
         fit: RwSignal::new(1.0),
         selected: RwSignal::new(None),
         hovered: RwSignal::new(None),
@@ -553,6 +1022,21 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         }
     });
 
+    // Page demandée par une autre vue (vue CMS) : affichée dès que la liste des pages est connue.
+    Effect::new(move |_| {
+        let Some(url) = ui.goto_page.get() else {
+            return;
+        };
+        if ed.pages.with(|p| p.iter().any(|x| x.url == url)) {
+            ui.goto_page.set(None);
+            if ed.page.get_untracked() != url {
+                ed.page.set(url);
+                ed.scroll.set((0.0, 0.0));
+                ed.selected.set(None);
+            }
+        }
+    });
+
     // Messages du canevas.
     let on_message = window_event_listener(ev::message, move |e: web_sys::MessageEvent| {
         let Some(frame) = ed.frame.get_untracked() else {
@@ -587,6 +1071,32 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 }
             }
             FromCanvas::Hover { id } => ed.hovered.set(id),
+            FromCanvas::Keyup { key } => {
+                if key == " " {
+                    ed.space.set(false);
+                }
+            }
+            FromCanvas::Pan { dx, dy } => ed.pan_by(dx, dy),
+            FromCanvas::Drop { target } => ed.drop.set(target),
+            FromCanvas::Moved { id, target, copy } => {
+                ed.drop.set(None);
+                if let Some(cmd) = crate::insert::move_command(ed, &id, &target, copy) {
+                    ed.apply(ui, cmd, false);
+                }
+            }
+            FromCanvas::Context { x, y } => {
+                // Position dans le cadre -> dans la fenêtre.
+                if let Some(f) = ed.frame.get_untracked() {
+                    let r = f.get_bounding_client_rect();
+                    let s = ed.scale();
+                    ed.menu.set(Some((r.left() + x * s, r.top() + y * s)));
+                }
+            }
+            FromCanvas::Measure { rect } => {
+                if let Some(r) = rect {
+                    ed.fit_rect(r);
+                }
+            }
             FromCanvas::Select { id, tag, label } => {
                 if id.is_none() {
                     ed.computed.set(Default::default());
@@ -595,21 +1105,39 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             }
             FromCanvas::Key {
                 key,
+                code,
                 shift,
+                alt,
                 ctrl,
                 meta,
             } => {
+                let k = Key {
+                    key,
+                    code,
+                    ctrl: ctrl || meta,
+                    shift,
+                    alt,
+                };
                 // Ctrl+\ dans le canevas : panneaux masqués ou affichés.
-                if key == "\\" && (ctrl || meta) {
+                if k.key == "\\" && k.ctrl {
                     dock.layout.update(|l| l.hidden = !l.hidden);
+                } else if k.key == " " {
+                    ed.space.set(true);
                 } else {
-                    ed.shortcut(ui, &key, ctrl || meta, shift);
+                    ed.shortcut(ui, &k);
                 }
             }
             FromCanvas::Scroll { x, y } => ed.scroll.set((x, y)),
             FromCanvas::Computed { values } => ed.computed.set(values),
             FromCanvas::Count { selector, n } => ed.count.set(Some((selector, n))),
-            FromCanvas::Zoom { dy } => ed.zoom_by((-dy * 0.002).exp()),
+            FromCanvas::Zoom { dy, x, y } => {
+                // Position du pointeur dans le cadre -> dans la zone du canevas.
+                let at = x.zip(y).map(|(x, y)| {
+                    let g = untrack(|| ed.geo());
+                    (g.x + x * g.s, g.y + y * g.s)
+                });
+                ed.zoom_by((-dy * 0.002).exp(), at);
+            }
             FromCanvas::Text { slot, text } => {
                 if let Some(cmd) = ed.text_command(&slot, text) {
                     ed.apply(ui, cmd, false);
@@ -632,14 +1160,47 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         if in_field || (menu_open && e.key() == "Escape") {
             return;
         }
-        let ctrl = e.ctrl_key() || e.meta_key();
-        if ed.shortcut(ui, &e.key(), ctrl, e.shift_key()) {
+        // Espace maintenue : déplacement de la vue.
+        if e.key() == " " && !e.ctrl_key() && !e.meta_key() {
+            let on_control = document()
+                .active_element()
+                .is_some_and(|el| matches!(el.tag_name().as_str(), "BUTTON" | "SUMMARY"));
+            if !on_control {
+                e.prevent_default();
+                ed.space.set(true);
+                return;
+            }
+        }
+        // Tab et Entrée gardent leur rôle dans l'interface (navigation au clavier) hors du canevas.
+        let focus_in_ui = document()
+            .active_element()
+            .is_some_and(|el| el.tag_name() != "BODY" && el.tag_name() != "IFRAME");
+        if focus_in_ui && matches!(e.key().as_str(), "Tab" | "Enter") {
+            return;
+        }
+        if ed.shortcut(ui, &Key::of(&e)) {
             e.prevent_default();
+        }
+    });
+    let on_keyup = window_event_listener(ev::keyup, move |e: web_sys::KeyboardEvent| {
+        if e.key() == " " {
+            ed.space.set(false);
+        }
+    });
+    let on_blur = window_event_listener(ev::blur, move |_| {
+        // Fenêtre quittée pendant que l'espace était maintenue (sauf vers le canevas).
+        let to_canvas = document()
+            .active_element()
+            .is_some_and(|el| el.tag_name() == "IFRAME");
+        if !to_canvas {
+            ed.space.set(false);
         }
     });
     on_cleanup(move || {
         on_message.remove();
         on_key.remove();
+        on_keyup.remove();
+        on_blur.remove();
     });
     install_test_hook(ed, ui);
 
@@ -667,85 +1228,14 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         on_cleanup(move || h.clear());
     }
 
-    // Place disponible pour le cadre (zoom ajusté).
-    let area = NodeRef::<html::Div>::new();
-    let area_w = RwSignal::new(0.0f64);
-    let area_h = RwSignal::new(0.0f64);
-    let measure = move || {
-        if let Some(a) = area.get_untracked() {
-            area_w.set(f64::from(a.client_width()));
-            area_h.set(f64::from(a.client_height()));
-        }
-    };
-    let on_resize = window_event_listener(ev::resize, move |_| measure());
-    on_cleanup(move || on_resize.remove());
-    // Zone du canevas redimensionnée par l'espace de travail (colonnes, panneaux masqués).
-    Effect::new(move |_| {
-        if let Some(a) = area.get() {
-            use wasm_bindgen::JsCast;
-            let cb = wasm_bindgen::closure::Closure::<dyn Fn()>::new(measure);
-            if let Ok(ro) = web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref()) {
-                ro.observe(&a);
-            }
-            cb.forget();
-        }
-    });
-    Effect::new(move |_| {
-        if area.get().is_some() {
-            measure();
-        }
-    });
-
-    // Largeur du cadre et échelle.
-    let gutter = 48.0;
-    // Base (ordinateur) : toute la place, mais au moins la largeur qui dépasse le plus grand point de
-    // rupture « jusqu'à » (sinon la page s'afficherait déjà dans sa version étroite).
-    let desktop_min = move || {
-        ed.doc.with(|d| {
-            d.as_ref()
-                .and_then(|d| d.breakpoints.iter().filter_map(|b| b.max_width).max())
-                .map(|w| f64::from(w) + 1.0)
-                .unwrap_or(320.0)
-        })
-    };
-    let width = move || {
-        ed.frame_width()
-            .unwrap_or_else(|| (area_w.get() - gutter).max(desktop_min()))
-    };
-    let fit = move || ((area_w.get() - gutter) / width()).clamp(0.1, 1.0);
-    Effect::new(move |_| ed.fit.set(fit()));
-    let scale = move || match ed.zoom.get() {
-        Some(z) => z,
-        None => fit(),
-    };
-    let frame_style = move || {
-        let s = scale();
-        let w = width();
-        let h = ((area_h.get() - gutter) / s).max(200.0);
-        format!(
-            "width:{w}px;height:{h}px;transform:scale({s});margin-left:{}px",
-            ((area_w.get() - w * s) / 2.0).max(gutter / 2.0)
-        )
-    };
+    // Échelle du zoom ajusté (affichée dans la liste des zooms).
+    Effect::new(move |_| ed.fit.set(ed.geo().fit));
 
     view! {
         <section class="editor">
             <Toolbar/>
             <crate::dock::Workspace panel=panel_view>
-                <div class="canvas-area" node_ref=area
-                    on:wheel=move |e: leptos::ev::WheelEvent| {
-                        if e.ctrl_key() || e.meta_key() {
-                            e.prevent_default();
-                            ed.zoom_by((-e.delta_y() * 0.002).exp());
-                        }
-                    }>
-                    <Show when=move || ed.base.get().is_some() fallback=move || view! {
-                        <div class="canvas-wait muted">{move || if failed.get() { String::new() } else { ui.tx("editor-loading", &[]) }}</div>
-                    }>
-                        <iframe class="canvas-frame" node_ref=ed.frame title=ui.t("editor-canvas")
-                            style=frame_style src=move || ed.src().unwrap_or_default()></iframe>
-                    </Show>
-                </div>
+                <crate::canvas::CanvasArea failed=failed/>
             </crate::dock::Workspace>
             <StatusBar/>
         </section>
@@ -851,7 +1341,7 @@ fn Toolbar() -> impl IntoView {
                     let title = bp_label(&b);
                     view! {
                         <button class:is-on=move || ed.breakpoint.get() == on title=title.clone() aria-label=title.clone()
-                            on:click=move |_| ed.breakpoint.set(id.clone())>
+                            on:click=move |_| { ed.breakpoint.set(id.clone()); ed.recenter(); }>
                             {bp_icon(&b)}
                             <span class="bp-width">{b.max_width.or(b.min_width).map(|w| w.to_string()).unwrap_or_default()}</span>
                         </button>
@@ -863,7 +1353,7 @@ fn Toolbar() -> impl IntoView {
                 <select class="input" aria-label=ui.t("editor-zoom")
                     on:change=move |e| {
                         let v = event_target_value(&e);
-                        ed.zoom.set(v.parse::<f64>().ok());
+                        ed.zoom_to(v.parse::<f64>().ok());
                     }>
                     <option value="" selected=move || ed.zoom.get().is_none()>
                         {move || ui.tx("editor-zoom-fit-pct", &[("pct", pct(ed.fit.get()))])}
@@ -893,9 +1383,21 @@ fn Toolbar() -> impl IntoView {
                         ("key-escape", "editor-deselect"),
                         ("key-dblclick", "editor-edit-text"),
                         ("key-enter", "editor-edit-validate"),
+                        ("key-child", "editor-select-child"),
+                        ("key-parent", "editor-select-parent"),
+                        ("key-siblings", "editor-select-sibling"),
+                        ("key-move-drag", "editor-move"),
+                        ("key-copy-drag", "editor-move-copy"),
+                        ("key-order", "editor-order"),
+                        ("key-wrap", "layers-wrap"),
+                        ("key-unwrap", "editor-unwrap"),
+                        ("key-copy", "editor-copy"),
+                        ("key-paste", "editor-paste"),
                         ("key-zoom-fit", "editor-zoom-fit-short"),
                         ("key-zoom-100", "editor-zoom-100"),
+                        ("key-zoom-sel", "editor-zoom-selection"),
                         ("key-zoom-wheel", "editor-zoom"),
+                        ("key-pan", "editor-pan"),
                         ("key-panels", "dock-hide-all"),
                         ("key-alt-click", "styles-reset"),
                         ("key-drag-label", "editor-scrub"),

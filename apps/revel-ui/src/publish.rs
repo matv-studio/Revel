@@ -332,9 +332,9 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
     });
 
     view! {
-        <section class="page">
+        <section class="page settings-page">
             <header class="page-head">
-                <h1>{ui.t("publish-title")}</h1>
+                <h1>{ui.t("settings-publish")}</h1>
                 <Show when=move || !empty()>
                     <div class="toolbar">
                         <button class="btn" on:click=add disabled=move || editing.get().is_some()>{icons::plus()}{ui.t("publish-add")}</button>

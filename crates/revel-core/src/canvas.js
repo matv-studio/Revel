@@ -62,11 +62,18 @@
     ".box{position:fixed;box-sizing:border-box;pointer-events:none;display:none;z-index:2147483646}" +
     ".hover{outline:1px solid #6d8cff}" +
     ".sel{outline:2px solid #6d8cff}" +
-    ".tag{position:fixed;pointer-events:none;display:none;z-index:2147483647;" +
+    ".tag,.ghost,.into{position:fixed;pointer-events:none;display:none;z-index:2147483647;" +
     "font:600 11px/18px system-ui,-apple-system,'Segoe UI',sans-serif;background:#6d8cff;color:#fff;" +
     "padding:0 6px;border-radius:3px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis}" +
-    "</style><div class='box hover'></div><div class='box sel'></div><div class='tag'></div>";
-  const [hoverBox, selBox, tagBox] = root.querySelectorAll(".hover, .sel, .tag");
+    // Glisser-déposer : conteneur d'arrivée (pointillés), ligne d'insertion, étiquette qui suit le pointeur.
+    ".drop{outline:1px dashed #6d8cff;outline-offset:-1px;background:rgba(109,140,255,.06)}" +
+    ".line{background:#3d7eff;border-radius:2px;box-shadow:0 0 0 1px #fff}" +
+    ".into{background:#1f1f1f;color:#fff}" +
+    ".ghost{background:#3d7eff;box-shadow:0 4px 12px rgba(0,0,0,.25)}" +
+    "</style><div class='box hover'></div><div class='box sel'></div><div class='box drop'></div>" +
+    "<div class='box line'></div><div class='tag'></div><div class='into'></div><div class='ghost'></div>";
+  const [hoverBox, selBox, dropBox, lineBox, tagBox, intoBox, ghostBox] =
+    root.querySelectorAll(".hover, .sel, .drop, .line, .tag, .into, .ghost");
   document.documentElement.appendChild(host);
 
   let hovered = null;
@@ -228,13 +235,229 @@
     else post({ type: "editing", slot: null });
   };
 
+  // ---------------------------------------------------------------- glisser-déposer
+  // Emplacement de dépôt sous le pointeur, selon le modèle de Webflow : sur le bord d'un élément
+  // (dans le sens où ses frères se suivent), avant ou après lui ; au milieu d'un élément qui peut
+  // contenir des enfants, dedans, à côté de l'enfant le plus proche. Les règles du HTML sont
+  // respectées (pas de bloc dans un paragraphe, pas de lien dans un lien, `li` dans une liste).
+  const NO_KIDS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source",
+    "track", "wbr", "svg", "picture", "video", "audio", "iframe", "canvas", "select", "textarea", "object"]);
+  const PHRASING = new Set(["p", "h1", "h2", "h3", "h4", "h5", "h6", "span", "a", "button", "label", "strong",
+    "em", "b", "i", "u", "small", "code", "figcaption", "summary", "legend", "dt", "q", "cite", "abbr", "time",
+    "mark", "sub", "sup"]);
+  const BLOCK = new Set(["section", "div", "header", "footer", "main", "nav", "article", "aside", "h1", "h2", "h3",
+    "h4", "h5", "h6", "p", "ul", "ol", "li", "figure", "form", "blockquote", "table", "hr", "details", "dl"]);
+  const rvOf = (el) => (el && el.getAttribute ? el.getAttribute("data-rv") : null);
+  const parentRv = (el) => (el && el.parentElement ? el.parentElement.closest("[data-rv]") : null);
+  const inDrag = (el, d) => !!d.el && (el === d.el || d.el.contains(el));
+  const accepts = (c, d) => {
+    if (!c || !rvOf(c) || inDrag(c, d)) return false;
+    const t = c.tagName.toLowerCase();
+    if (NO_KIDS.has(t)) return false;
+    if (t === "ul" || t === "ol") return d.tag === "li";
+    if (d.tag === "li") return false;
+    if ((d.tag === "a" || d.tag === "button") && c.closest("a, button")) return false;
+    if (PHRASING.has(t)) return !d.block;
+    return true;
+  };
+  const visible = (el) => el.getClientRects().length > 0;
+  // Éléments repérés dont `c` est le plus proche ancêtre repéré (sans l'élément déplacé).
+  const kidsOf = (c, d) => {
+    const out = [];
+    const walk = (n) => {
+      for (const k of n.children) {
+        if (rvOf(k)) { if (!inDrag(k, d) && visible(k)) out.push(k); } else walk(k);
+      }
+    };
+    walk(c);
+    return out;
+  };
+  const dist = (r, x, y) => Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+  // Sens dans lequel se suivent les frères : horizontal si un autre frère (élément déplacé compris)
+  // est sur la même ligne ; seul sur sa ligne, d'après la mise en page du parent (pile ou grille
+  // en ligne) ou de l'élément (en ligne).
+  const axisAmong = (kids, k) => {
+    const r = k.getBoundingClientRect();
+    const sameLine = kids.some((o) => {
+      if (o === k) return false;
+      const q = o.getBoundingClientRect();
+      return q.top < r.bottom - 2 && q.bottom > r.top + 2;
+    });
+    if (sameLine) return "x";
+    if (kids.length > 1) return "y";
+    const p = k.parentElement ? getComputedStyle(k.parentElement) : null;
+    if (p && /flex/.test(p.display) && p.flexDirection.startsWith("row")) return "x";
+    if (p && /grid/.test(p.display) && p.gridTemplateColumns.trim().split(/\s+/).length > 1) return "x";
+    return /^inline/.test(getComputedStyle(k).display) ? "x" : "y";
+  };
+  const NONE = {};
+  const findDrop = (x, y, d) => {
+    let hit = null;
+    for (const e of document.elementsFromPoint(x, y)) {
+      if (e === host || inDrag(e, d)) continue;
+      hit = e;
+      break;
+    }
+    let t = targetOf(hit);
+    while (t && inDrag(t, d)) t = parentRv(t);
+    for (; t; t = parentRv(t)) {
+      const r = t.getBoundingClientRect();
+      const parent = parentRv(t);
+      const canIn = accepts(t, d);
+      const canSib = !!parent && accepts(parent, d);
+      let axis = "y";
+      if (canSib) axis = axisAmong(kidsOf(parent, NONE), t);
+      const pos = axis === "x" ? x - r.left : y - r.top;
+      const size = axis === "x" ? r.width : r.height;
+      const band = canIn ? Math.min(12, size * 0.25) : size / 2;
+      if (canSib && (!canIn || pos < band || pos > size - band)) {
+        return { ref: rvOf(t), where: pos < size / 2 ? "before" : "after", axis, container: parent, el: t };
+      }
+      if (canIn) {
+        const kids = kidsOf(t, d);
+        if (!kids.length) return { ref: rvOf(t), where: "inside", axis: "y", container: t, el: t };
+        let k = kids[0];
+        let best = Infinity;
+        for (const o of kids) {
+          const dd = dist(o.getBoundingClientRect(), x, y);
+          if (dd < best) { best = dd; k = o; }
+        }
+        const ax = axisAmong(kidsOf(t, NONE), k);
+        const kr = k.getBoundingClientRect();
+        const before = ax === "x" ? x < kr.left + kr.width / 2 : y < kr.top + kr.height / 2;
+        return { ref: rvOf(k), where: before ? "before" : "after", axis: ax, container: t, el: k };
+      }
+    }
+    return null;
+  };
+  const hide = (...boxes) => { for (const b of boxes) b.style.display = "none"; };
+  const showDrop = (t) => {
+    if (!t) { hide(dropBox, lineBox, intoBox); return; }
+    const c = t.container.getBoundingClientRect();
+    place(dropBox, t.container);
+    const r = t.el.getBoundingClientRect();
+    const L = lineBox.style;
+    lineBox.style.display = "block";
+    if (t.where === "inside") {
+      L.left = (c.left + 4) + "px"; L.width = Math.max(0, c.width - 8) + "px";
+      L.top = (c.bottom - 6) + "px"; L.height = "2px";
+    } else if (t.axis === "x") {
+      L.left = ((t.where === "before" ? r.left : r.right) - 1) + "px"; L.width = "2px";
+      L.top = r.top + "px"; L.height = r.height + "px";
+    } else {
+      L.left = r.left + "px"; L.width = r.width + "px";
+      L.top = ((t.where === "before" ? r.top : r.bottom) - 1) + "px"; L.height = "2px";
+    }
+    intoBox.textContent = label(t.container);
+    intoBox.style.display = "block";
+    intoBox.style.left = Math.max(0, c.left) + "px";
+    intoBox.style.top = (c.top >= 20 ? c.top - 20 : c.top + 2) + "px";
+  };
+
+  // Séance de glisser-déposer : élément du panneau « Ajouter » (piloté par l'interface) ou
+  // élément de la page déplacé à la souris (Alt : copie).
+  let drag = null;
+  let lastDrop = null;
+  let scrollTick = 0;
+  const dropMsg = (t) => (t ? { ref: t.ref, where: t.where } : null);
+  const probe = (x, y) => {
+    if (!drag) return;
+    drag.x = x; drag.y = y; drag.out = false;
+    const t = findDrop(x, y, drag);
+    showDrop(t);
+    const m = dropMsg(t);
+    if (JSON.stringify(m) !== JSON.stringify(lastDrop)) {
+      lastDrop = m;
+      post({ type: "drop", target: m });
+    }
+  };
+  // Défilement près des bords haut et bas pendant le glisser.
+  const edgeScroll = () => {
+    if (!drag) { scrollTick = 0; return; }
+    if (drag.out || drag.y === undefined) { scrollTick = requestAnimationFrame(edgeScroll); return; }
+    const m = 28;
+    const v = drag.y < m ? -(m - drag.y) / 2 : drag.y > innerHeight - m ? (drag.y - (innerHeight - m)) / 2 : 0;
+    if (v) { window.scrollBy(0, v); probe(drag.x, drag.y); }
+    scrollTick = requestAnimationFrame(edgeScroll);
+  };
+  const startDrag = (d) => {
+    drag = d;
+    lastDrop = undefined;
+    hoverBox.style.display = "none";
+    if (!scrollTick) scrollTick = requestAnimationFrame(edgeScroll);
+  };
+  const endDrag = () => {
+    if (drag && drag.el) {
+      if (drag.opacity) drag.el.style.setProperty("opacity", drag.opacity, drag.prio);
+      else drag.el.style.removeProperty("opacity");
+      if (!drag.el.getAttribute("style")) drag.el.removeAttribute("style");
+    }
+    drag = null;
+    lastDrop = null;
+    hide(dropBox, lineBox, intoBox, ghostBox);
+    redraw();
+  };
+  const blockTag = (t) => BLOCK.has(t);
+
+  // Déplacement d'un élément de la page : appui puis déplacement de plus de 4 px.
+  let press = null;
+  let dragged = false;
+  document.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || editing || inEdit(e.target)) return;
+    const t = targetOf(e.target);
+    if (t) press = { el: t, x: e.clientX, y: e.clientY, id: e.pointerId };
+  }, true);
+  document.addEventListener("pointermove", (e) => {
+    if (press && !drag && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) {
+      const el = press.el;
+      try { document.documentElement.setPointerCapture(press.id); } catch (_) { /* pointeur relâché */ }
+      select(el, true);
+      const tag = el.tagName.toLowerCase();
+      startDrag({ el, tag, block: blockTag(tag), move: true,
+        opacity: el.style.getPropertyValue("opacity"), prio: el.style.getPropertyPriority("opacity") });
+      // Élément déplacé estompé (prioritaire sur les animations du site).
+      el.style.setProperty("opacity", "0.35", "important");
+      ghostBox.textContent = label(el);
+    }
+    if (drag && drag.move) {
+      ghostBox.textContent = (e.altKey ? "+ " : "") + label(drag.el);
+      ghostBox.style.display = "block";
+      ghostBox.style.left = (e.clientX + 12) + "px";
+      ghostBox.style.top = (e.clientY + 14) + "px";
+      probe(e.clientX, e.clientY);
+    }
+  }, true);
+  const release = (e, cancel) => {
+    if (drag && drag.move) {
+      const t = cancel ? null : findDrop(e.clientX, e.clientY, drag);
+      const id = rvOf(drag.el);
+      endDrag();
+      dragged = true;
+      setTimeout(() => { dragged = false; }, 0);
+      if (t) post({ type: "moved", id, target: dropMsg(t), copy: !!e.altKey });
+      else post({ type: "drop", target: null });
+    }
+    press = null;
+  };
+  document.addEventListener("pointerup", (e) => release(e, false), true);
+  document.addEventListener("pointercancel", (e) => release(e, true), true);
+
   // Les clics sélectionnent : liens, boutons et formulaires du site ne réagissent pas.
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
   document.addEventListener("click", (e) => {
     if (inEdit(e.target)) return;
     if (editing) finishEdit(true);
     block(e);
+    if (dragged) return;
     select(targetOf(e.target), true);
+  }, true);
+  // Clic droit : élément sélectionné, menu de l'éditeur (pas celui du navigateur).
+  document.addEventListener("contextmenu", (e) => {
+    if (inEdit(e.target)) return;
+    block(e);
+    const t = targetOf(e.target);
+    if (t && t !== selected) select(t, true);
+    post({ type: "context", x: e.clientX, y: e.clientY });
   }, true);
   document.addEventListener("dblclick", (e) => {
     if (inEdit(e.target)) return;
@@ -261,18 +484,50 @@
       else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finishEdit(true); }
       return;
     }
-    if (e.key === "Escape") { select(null, true); return; }
-    // Raccourcis de l'éditeur (annuler, rétablir, dupliquer, supprimer…) transmis à l'interface.
-    if (e.ctrlKey || e.metaKey || e.key === "Delete" || e.key === "Backspace") {
-      post({ type: "key", key: e.key, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey });
-      if (["z", "y", "s", "d", "delete", "backspace", "0", "1", "=", "+", "-", "\\"].includes(e.key.toLowerCase())) e.preventDefault();
+    if (e.key === "Escape") {
+      if (drag && drag.move) { release(e, true); return; }
+      select(null, true);
+      return;
+    }
+    // Espace maintenue : déplacement de la vue (comme Figma), géré par l'interface.
+    if (e.key === " " || e.code === "Space") {
+      e.preventDefault();
+      if (!e.repeat) post({ type: "key", key: " ", code: "Space", shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey });
+      return;
+    }
+    // Raccourcis de l'éditeur transmis à l'interface : avec Ctrl/Cmd, suppression, navigation dans
+    // la sélection (Entrée, Maj+Entrée, Tab), zoom (Maj+0/1/2), ordre (Alt+flèches).
+    const nav = e.key === "Enter" || e.key === "Tab";
+    const zoom = e.shiftKey && /^Digit[012]$/.test(e.code);
+    const order = e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown");
+    if (e.ctrlKey || e.metaKey || e.key === "Delete" || e.key === "Backspace" || nav || zoom || order) {
+      post({ type: "key", key: e.key, code: e.code, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey });
+      // Raccourcis du navigateur neutralisés (zoom de la page, enregistrer…), sauf copier/coller.
+      if (!((e.ctrlKey || e.metaKey) && ["c", "x", "v", "a"].includes(e.key.toLowerCase()) && !e.shiftKey)) e.preventDefault();
     }
   }, true);
+  document.addEventListener("keyup", (e) => {
+    if (e.key === " " || e.code === "Space") post({ type: "keyup", key: " ", code: "Space" });
+  }, true);
 
-  // Molette avec Ctrl : zoom de l'éditeur (pas celui de la page).
+  // Molette avec Ctrl (ou pincement du pavé tactile) : zoom de l'éditeur autour du pointeur.
   window.addEventListener("wheel", (e) => {
-    if (e.ctrlKey || e.metaKey) { e.preventDefault(); post({ type: "zoom", dy: e.deltaY }); }
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); post({ type: "zoom", dy: e.deltaY, x: e.clientX, y: e.clientY }); }
   }, { passive: false });
+  // Bouton du milieu : déplacement de la vue (écarts en pixels de l'écran).
+  let panFrom = null;
+  window.addEventListener("pointerdown", (e) => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    panFrom = { x: e.screenX, y: e.screenY };
+    try { document.documentElement.setPointerCapture(e.pointerId); } catch (_) { /* relâché */ }
+  }, true);
+  window.addEventListener("pointermove", (e) => {
+    if (!panFrom) return;
+    post({ type: "pan", dx: e.screenX - panFrom.x, dy: e.screenY - panFrom.y });
+    panFrom = { x: e.screenX, y: e.screenY };
+  }, true);
+  window.addEventListener("pointerup", (e) => { if (e.button === 1) panFrom = null; }, true);
 
   window.addEventListener("scroll", redraw, true);
   // Position de défilement transmise à l'interface (rétablie après un rechargement).
@@ -356,6 +611,38 @@
       case "scroll":
         window.scrollTo(m.x || 0, m.y || 0);
         break;
+      case "drag":
+        // Glisser depuis l'interface (panneau « Ajouter ») : début, position, fin.
+        if (m.phase === "start") startDrag({ el: null, tag: m.tag || "div", block: !!m.block, move: false });
+        else if (m.phase === "move") probe(m.x, m.y);
+        else if (m.phase === "out") { if (drag) { drag.out = true; showDrop(null); lastDrop = null; } }
+        else endDrag();
+        break;
+      case "nav": {
+        // Parcours de la sélection : parent, premier enfant, frère suivant ou précédent.
+        if (!selected) break;
+        let next = null;
+        if (m.dir === "parent") next = parentRv(selected);
+        else if (m.dir === "child") next = kidsOf(selected, {})[0] || null;
+        else {
+          const p = parentRv(selected);
+          const sibs = p ? kidsOf(p, {}) : [];
+          const i = sibs.indexOf(selected);
+          next = i < 0 ? null : sibs[i + (m.dir === "next" ? 1 : -1)] || null;
+        }
+        if (next) {
+          select(next, true);
+          next.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+        break;
+      }
+      case "measure": {
+        // Position de la sélection (zoom sur la sélection), après l'avoir montrée.
+        const el = byId(m.id) || selected;
+        if (el) el.scrollIntoView({ block: "nearest", inline: "nearest" });
+        post({ type: "measure", rect: el ? rectOf(el) : null });
+        break;
+      }
       default:
         break;
     }

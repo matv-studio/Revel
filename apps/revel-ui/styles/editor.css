@@ -4,15 +4,10 @@
    │ canvas-area : cadre du canevas centré, à la largeur du point de rupture          │
    └ editor-status : élément sélectionné · propriétaire ··················· largeur ┘ */
 
-/* Plein écran : la barre latérale des sites laisse la place au canevas. */
-.shell--editor { grid-template-columns: 0 minmax(0, 1fr); }
-.shell--editor .sidebar { display: none; }
-.shell--editor .main { overflow: hidden; }
-
 .editor {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  height: 100%;
+  flex: 1;
   min-height: 0;
 }
 
@@ -35,21 +30,39 @@
 .editor-scripts { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--text-sm); white-space: nowrap; }
 .toolbar-spacer { flex: 1; }
 
+/* Zone du canevas : la vue se déplace et se zoome (transform du cadre), sans barres de défilement. */
 .canvas-area {
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   background: var(--bg);
   min-height: 0;
+  touch-action: none;
 }
+.canvas-area.is-space { cursor: grab; }
+.canvas-area.is-panning { cursor: grabbing; }
+.canvas-world { position: absolute; inset: 0; }
 .canvas-frame {
+  position: absolute; left: 0; top: 0;
   display: block;
-  margin-top: var(--s-6);
   border: 0;
   transform-origin: 0 0;
   background: #ffffff;              /* fond d'une page web sans style */
   box-shadow: 0 0 0 1px var(--line-strong), 0 8px 24px rgb(0 0 0 / .18);
 }
 .canvas-wait { display: grid; place-items: center; height: 100%; }
+/* Écran transparent au-dessus du cadre (déplacement de la vue, glisser depuis « Ajouter »). */
+.canvas-shield { position: absolute; inset: 0; z-index: 2; }
+.canvas-area.is-space .canvas-shield { cursor: grab; }
+.canvas-area.is-panning .canvas-shield { cursor: grabbing; }
+/* Étiquette de l'élément glissé depuis le panneau « Ajouter ». */
+.drag-ghost {
+  position: fixed; z-index: 90; pointer-events: none;
+  height: 20px; padding: 0 8px; display: flex; align-items: center;
+  border-radius: var(--radius-sm); background: var(--focus); color: #fff;
+  font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap;
+  box-shadow: 0 4px 12px rgb(0 0 0 / .3);
+}
+.drag-ghost.is-off { background: var(--surface-active); color: var(--text-muted); }
 
 .editor-status {
   display: flex;
@@ -151,18 +164,22 @@
 .layer.drop-inside { box-shadow: inset 0 0 0 1.5px var(--focus); }
 
 /* --- Ajouter ------------------------------------------------------------------ */
-.insert { padding: var(--s-3); overflow: auto; }
-.insert-help { font-size: var(--text-sm); margin-bottom: var(--s-3); }
-.insert-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+.insert { padding: var(--s-2) var(--s-3) var(--s-3); overflow: auto; display: flex; flex-direction: column; gap: var(--s-3); }
+.insert-group { display: flex; flex-direction: column; gap: var(--s-2); }
+.insert-group-title { font-size: var(--text-xs); color: var(--text-faint); font-weight: var(--weight-medium); }
+.insert-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
 .insert-item {
-  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
-  padding: var(--s-3) var(--s-2);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-width: 0; height: 64px; padding: var(--s-2) 4px;
   border: var(--border) solid var(--line); border-radius: var(--radius-md);
   background: var(--surface-raised); color: var(--text);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs); cursor: grab; touch-action: none; user-select: none;
 }
-.insert-item:hover { background: var(--surface-hover); border-color: var(--line-strong); }
-.insert-item svg.icon { color: var(--text-muted); }
+.insert-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insert-item:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--line-strong); }
+.insert-item:active:not(:disabled) { cursor: grabbing; }
+.insert-item svg.icon { color: var(--text-muted); width: 18px; height: 18px; }
+.insert-item.is-planned { opacity: .4; cursor: default; background: none; border-style: dashed; }
 
 /* --- Réglages ----------------------------------------------------------------- */
 .panel-pad { padding: var(--s-3); }

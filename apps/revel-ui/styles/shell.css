@@ -1,34 +1,42 @@
 /* Revel — structure de l'application.
 
-   ┌ topbar ───────────────────────────────────────────────────────┐
-   │ logo  fil d'Ariane                          actions de page   │
-   ├ sidebar ─┬ main ───────────────────────────────┬ (inspecteur) ┤
-   │ sites     │ page centrée (largeur max)         │ étape 2      │
-   │ sections  │ ou canevas plein (éditeur)         │              │
-   │ réglages  │                                    │              │
-   └───────────┴────────────────────────────────────┴──────────────┘ */
+     logo  site ▾      ╭Éditeur╮ CMS  Localisation  Paramètres      Aperçu  Publier
+   ╭──────────────────╯       ╰─────────────────────────────────────────────────╮
+   │ plateau : vue du site ouvert (ou accueil, réglages de Revel)                 │
+   ╰──────────────────────────────────────────────────────────────────────────────╯
+
+   Le cadre de la fenêtre (--chrome) entoure le plateau ; l'onglet actif prend la teinte du
+   plateau et s'y raccorde (coins incurvés) : onglet et vue forment un seul espace. */
 
 .shell {
   display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--topbar-h) minmax(0, 1fr);
-  grid-template-areas: "top top" "side main";
+  grid-template-areas: "top" "main";
   height: 100vh;
   overflow: hidden;
+  background: var(--chrome);
+  --tab-bg: var(--bg);
 }
+.shell[data-stage="tool"] { --tab-bg: var(--surface); }
 
 /* --- Barre supérieure -------------------------------------------------- */
+/* Trois zones : début (logo, site), vues du site (centrées), actions. */
 .topbar {
   grid-area: top;
   position: relative;
-  display: flex;
+  z-index: 3;                       /* l'onglet actif recouvre le contour du plateau */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--s-3);
   padding: 0 var(--s-3) 0 var(--s-2);
-  background: var(--surface);
-  border-bottom: var(--border) solid var(--line);
+  background: var(--chrome);
 }
+.topbar-start { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.topbar-title { font-weight: var(--weight-medium); padding: 0 var(--s-2); white-space: nowrap; }
 .logo {
+  flex: none;
   display: grid;
   place-items: center;
   width: var(--control-lg);
@@ -39,20 +47,73 @@
   color: var(--text);
 }
 .logo:hover { background: var(--surface-hover); }
-.crumbs { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
-.crumb {
-  border: 0; background: none; padding: var(--s-1) var(--s-2);
-  border-radius: var(--radius-sm); color: var(--text-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-button.crumb:hover { color: var(--text); background: var(--surface-hover); }
-.crumb--current { color: var(--text); font-weight: var(--weight-medium); }
-.crumb-sep { color: var(--text-faint); }
-.topbar-actions { margin-left: auto; display: flex; gap: var(--s-2); }
+.topbar-actions { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: var(--s-2); }
+.topbar-actions .icon-btn.is-on { background: var(--surface-active); color: var(--text); }
 
-/* Activité (génération, publication) : fine ligne sous la barre supérieure. */
+/* Onglets en texte, en bas de la barre ; l'onglet actif, de la teinte du plateau, s'y raccorde. */
+.views { align-self: end; display: flex; align-items: flex-end; gap: 2px; height: 100%; }
+.view-tab {
+  position: relative;
+  height: 32px; margin-bottom: 0; padding: 0 var(--s-4);
+  border: var(--border) solid transparent; border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: none; color: var(--text-muted); font-weight: var(--weight-medium); white-space: nowrap;
+  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.view-tab:not(.is-on):hover { color: var(--text); background: color-mix(in srgb, var(--surface) 45%, transparent); }
+.view-tab.is-on {
+  z-index: 1;
+  height: 33px; margin-bottom: -1px;    /* recouvre le contour du plateau */
+  background: var(--tab-bg); color: var(--text);
+  border-color: var(--stage-line);
+}
+/* Coins incurvés à la base de l'onglet actif (raccord avec le contour du plateau). */
+.view-tab.is-on::before, .view-tab.is-on::after {
+  content: ""; position: absolute; bottom: 0; width: 8px; height: 8px; pointer-events: none;
+}
+.view-tab.is-on::before {
+  left: -8px;
+  background: radial-gradient(circle at 0 0, transparent 7px, var(--stage-line) 7px, var(--stage-line) 8px, var(--tab-bg) 8.5px);
+}
+.view-tab.is-on::after {
+  right: -8px;
+  background: radial-gradient(circle at 100% 0, transparent 7px, var(--stage-line) 7px, var(--stage-line) 8px, var(--tab-bg) 8.5px);
+}
+.view-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+
+/* Nom du site ouvert, avec son menu (autres sites, tous les sites, réglages de Revel). */
+.site-menu { position: relative; min-width: 0; }
+.site-menu-btn {
+  display: flex; align-items: center; gap: var(--s-1); min-width: 0; max-width: 240px;
+  height: var(--control-lg); padding: 0 var(--s-2);
+  border: 0; border-radius: var(--radius-md); background: none; color: var(--text);
+  font-weight: var(--weight-medium);
+}
+.site-menu-btn:hover, .site-menu-btn[aria-expanded="true"] { background: var(--surface-hover); }
+.site-menu-btn svg.icon { flex: none; width: 12px; height: 12px; color: var(--text-muted); }
+.site-menu-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Menu flottant (commun) */
+.menu {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;
+  min-width: 220px; max-width: 320px; padding: 4px;
+  display: flex; flex-direction: column;
+  background: var(--surface-raised); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-dialog);
+  animation: dialog-in var(--fast) var(--ease);
+}
+.menu .menu-item {
+  display: flex; align-items: center; gap: var(--s-2); height: 30px;
+  font-size: var(--text-sm); font-weight: var(--weight-regular);
+}
+.menu .menu-item svg.icon { flex: none; color: var(--text-muted); }
+.menu-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-title { font-size: var(--text-xs); color: var(--text-faint); padding: 6px 10px 2px; }
+.menu .menu-sep { height: 0; }
+
+/* Activité (génération, publication) : fine ligne en haut de la fenêtre. */
 .activity {
-  position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  position: absolute; left: 0; right: 0; top: 0; height: 2px;
   opacity: 0; transition: opacity var(--normal) var(--ease);
   pointer-events: none;
 }
@@ -63,48 +124,32 @@ button.crumb:hover { color: var(--text); background: var(--surface-hover); }
   transition: width var(--normal) var(--ease);
 }
 
-/* --- Barre latérale ------------------------------------------------------ */
-.sidebar {
-  grid-area: side;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--surface);
-  border-right: var(--border) solid var(--line);
-  padding: var(--s-2);
-  gap: var(--s-2);
-}
-.sidebar-section { display: flex; flex-direction: column; gap: 1px; }
-.sidebar-sites { flex: 1; overflow-y: auto; min-height: 0; }
-.sidebar-title {
-  font-size: var(--text-xs);
-  color: var(--text-faint);
-  padding: var(--s-2) var(--s-2) var(--s-1);
-}
-.sidebar-bottom { border-top: var(--border) solid var(--line); padding-top: var(--s-2); }
-
-.nav-item {
-  display: flex; align-items: center; gap: var(--s-2);
-  height: var(--control-md);
-  padding: 0 var(--s-2);
-  border: 0; border-radius: var(--radius-md);
-  background: none; color: var(--text-muted);
-  text-align: left; white-space: nowrap;
-}
-.nav-item:hover { background: var(--surface-hover); color: var(--text); }
-.nav-item.is-active { background: var(--surface-active); color: var(--text); }
-.nav-item--sub { padding-left: calc(var(--s-2) + 16px + var(--s-2)); }
-.nav-item--sub svg.icon { display: none; }
-.nav-label { overflow: hidden; text-overflow: ellipsis; }
-
 /* --- Zone principale ------------------------------------------------------ */
+/* Plateau : contour fin, coins arrondis, un peu en retrait du bord de la fenêtre. */
 .main {
   grid-area: main;
+  position: relative;
   overflow-y: auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 6px 6px;
+  border: var(--border) solid var(--stage-line);
+  border-radius: 10px;
+  background: var(--bg);
 }
+.main > .page { width: 100%; }
 
-@media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; grid-template-areas: "top" "main"; }
-  .sidebar { display: none; }
+/* Site ouvert : une vue occupe toute la place ; l'éditeur reste en place quand il est caché. */
+.site-view { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view-pane.is-hidden { display: none; }
+.view-pane--scroll { overflow-y: auto; }
+.main:has(.site-view) { overflow: hidden; }
+
+@media (max-width: 900px) {
+  .topbar { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .site-menu-btn { max-width: 140px; }
+  .view-tab { padding: 0 var(--s-2); }
+  .main { margin: 0 4px 4px; }
 }

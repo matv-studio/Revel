@@ -33,6 +33,7 @@ Revel n'en reprend ni les couleurs ni les marques.
 |---|---|---|
 | Gris | `--gray-0` … `--gray-900` | Valeurs brutes, jamais utilisées directement par un composant |
 | Surfaces | `--bg`, `--surface`, `--surface-raised`, `--surface-hover`, `--surface-active` | Fond (canevas), panneaux, blocs, survol, élément actif |
+| Cadre | `--chrome`, `--stage-line` | Cadre de la fenêtre et barre supérieure autour du plateau ; contour du plateau et de l'onglet actif |
 | Traits | `--line`, `--line-strong` | Séparateurs, bordures de contrôles |
 | Texte | `--text`, `--text-muted`, `--text-faint` | Principal, secondaire, indications |
 | Action | `--primary`, `--primary-ink`, `--focus`, `--selection` | Dérivés de l'accent (ou du contraste neutre) |
@@ -43,7 +44,7 @@ Revel n'en reprend ni les couleurs ni les marques.
 | Espaces | `--s-1` 4 … `--s-10` 40 | Grille de 4 px |
 | Contrôles | `--control-sm` 24, `--control-md` 28, `--control-lg` 32 | Hauteurs |
 | Rayons | `--radius-sm` 4, `--radius-md` 6, `--radius-lg` 8 | Puces, contrôles, sections |
-| Structure | `--topbar-h` 44, `--sidebar-w` 240, `--inspector-w` 280 | Coque de l'application |
+| Structure | `--topbar-h` 44 | Barre supérieure (onglets compris) |
 | Mouvement | `--ease`, `--fast` 120 ms, `--normal` 200 ms | Transitions de retour d'action |
 
 Thèmes : sombre (défaut), clair, ou système (`data-theme` absent sur `<html>`).
@@ -57,21 +58,27 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 ## Structure (`styles/shell.css`)
 
 ```
-┌ barre supérieure 44 px : logo · fil d'Ariane ·················· actions de la page ┐
-├ panneau gauche 240 px ─┬ zone principale ──────────────────────┬ inspecteur 280 px ┤
-│ Tous les sites          │ page centrée (960 px max)             │ (étape 2 :        │
-│ Récents                 │   ou                                  │  propriétés de    │
-│   Site ouvert           │ canevas plein (étape 2 : éditeur)     │  l'élément        │
-│     Générer · Publier   │                                       │  sélectionné)     │
-│ ─────────               │                                       │                   │
-│ Réglages                │                                       │                   │
-└─────────────────────────┴───────────────────────────────────────┴───────────────────┘
+  logo  Alunites ▾          ╭ Éditeur ╮  CMS   Localisation   Paramètres          Aperçu  Publier
+╭──────────────────────────╯         ╰──────────────────────────────────────────────────────────╮
+│ plateau : la vue choisie (éditeur, CMS, localisation, paramètres du site)                      │
+│ accueil : onglets « Sites » et « Réglages » (réglages de Revel)                                 │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-- La **barre supérieure** porte l'activité en cours : une ligne de 2 px sous la barre (génération,
-  publication), visible depuis n'importe quel écran.
-- À l'étape 2, le panneau gauche affichera pages et calques du site ouvert ; l'inspecteur apparaît à droite.
-- Sous 760 px de large, le panneau gauche est masqué (fenêtres étroites).
+- **Plateau** (`.main`) : un seul espace de travail, à coins arrondis, entouré d'un contour fin et un peu en
+  retrait du bord de la fenêtre. Le cadre de la fenêtre (`--chrome`) est d'une autre teinte que le plateau.
+- **Onglets de vue** (`.view-tab`) : en texte, en bas de la barre supérieure. L'onglet actif prend la teinte du
+  haut du plateau (`--tab-bg` : barre d'outils pour l'éditeur et le CMS, fond de page ailleurs) et s'y raccorde
+  par des coins incurvés, comme un intercalaire : onglet et vue se lisent comme un seul espace (demande du
+  15/10/2026). Pas de fil d'Ariane dans la barre supérieure.
+- **Site ouvert** : son nom à gauche, avec un menu (autres sites récents, tous les sites, réglages de Revel) ;
+  « Aperçu » et « Publier » à droite. Un clic sur un site de l'accueil l'ouvre dans l'éditeur ; ses paramètres
+  restent à un clic (bouton de la carte).
+- **Changer de vue ne recharge rien** : l'éditeur reste monté, caché, pendant que les autres vues sont affichées.
+- **Activité** (génération, publication) : ligne de 2 px en haut de la fenêtre, visible depuis n'importe quelle vue.
+- **Paramètres du site** : rubriques à gauche (comme les réglages d'un site Webflow) — Général, Publication,
+  Génération, Référencement, Redirections, Polices, Code personnalisé, Formulaires, Sauvegardes ; les rubriques
+  prévues sont affichées en gris avec leur étape.
 
 ## Composants (`styles/components.css`)
 
@@ -88,7 +95,12 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Choix exclusif | `.segmented` (`role="radiogroup"`, boutons `role="radio"`) | 2 à 4 options courtes |
 | Interrupteur | `.switch` | Option activable immédiatement |
 | Couleurs | `.swatches`, `.swatch` | Réglage de l'accent |
-| Sites | `.site-grid` > `.site-card` (vignette à monogramme, nom, date ; actions au survol) ou `.table` | Accueil : grille ou liste, recherche ; « Ouvrir l'éditeur » direct |
+| Sites | `.site-grid` > `.site-card` (vignette à monogramme teintée d'après le nom, nom, date ; paramètres et retrait au survol) ou `.table` | Accueil : grille ou liste, recherche, tri (récents, nom) ; clic : éditeur |
+| Nouveau site | `.dialog--form` + `.path-field` | Nom, langue, emplacement proposé (`Documents/Revel/nom-du-site`) ; la fenêtre du système ne s'ouvre que sur « Changer… » |
+| Onglets de vue | `.views` > `.view-tab` | Voir *Structure* |
+| Menu | `.menu` > `.menu-item` (`.menu-title`, `.menu-sep`) | Menu du site, menu contextuel du canevas |
+| Rubriques | `.settings-nav` > `.settings-nav-item` (`.is-planned` + numéro d'étape) | Paramètres du site |
+| Vue CMS | `.cms` : `.cms-cols` (collections), `.cms-main` (tableau triable, recherche), `.cms-item` (fiche du contenu) | Lecture ; création et modification prévues à l'étape 3 |
 | Tableau | `.table`, `.row-link`, `.table--compact` | Listes de sites, de collections ; ligne entière cliquable |
 | Faits | `.facts`, `.facts--inline` | Chiffres clés ; paires libellé / valeur |
 | Puce | `.chip` | Étiquette courte (environnement) |
@@ -98,7 +110,6 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Compte relié | `.account`, `account.rs` | État de connexion et action (connecter, déconnecter) ; le même composant dans Réglages et dans un formulaire |
 | Sous-bloc | `.subsection` | Groupe distinct à l'intérieur d'une section (compte requis par un formulaire) |
 | Boîte de dialogue | `.overlay` > `.dialog` (`dialog.rs`) | Confirmation ou saisie ; remplace `confirm()`/`prompt()` du système ; Échap ferme ; action destructrice : focus sur « Annuler » |
-| Navigation | `.nav-item`, `.nav-item--sub`, `.is-active` | Panneau gauche |
 | Panneau de styles | `styles/inspector.css`, `src/styles/` | Voir la section *Panneau de styles* |
 | Libellé de propriété | `.style-label` (`.is-here`, `.is-inherited`) + `.dot` | Pastille dans la marge (texte aligné) ; clic : origine et *Réinitialiser* ; Alt+clic : réinitialise ; glisser : change le nombre |
 | Champ numérique | `.num` (`NumBox`) | Calculs, flèches (Maj ×10, Alt ×0,1), menu d'unités expliqué (`.num-unit`), préfixe à glisser |
@@ -132,7 +143,39 @@ Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arr
 | Colonne | Poignée de largeur côté canevas (200 à 520 px) ; se vide sans disparaître pendant un déplacement |
 | Panneaux | Tous montés (l'état de chaque onglet est gardé) ; pied de panneau (`.panel-foot`) pour les actions et le compte ; recherche en tête (`.panel-search`) |
 | Fonction prévue | Bouton désactivé (`.is-planned`), étape en info-bulle ; panneau prévu : `Planned` |
-| Raccourcis | Ctrl+\ panneaux ; Ctrl+0 zoom ajusté, Ctrl+1 100 %, Ctrl+molette ; ↑ ↓ ← → dans les calques ; clic droit : menu contextuel |
+| Raccourcis | Ctrl+\ panneaux ; ↑ ↓ ← → dans les calques ; clic droit : menu contextuel ; voir aussi *Canevas* |
+| Ajouter | Familles (Structure, Texte, Médias, CMS, Formulaires, Code) ; tuiles icône + nom, aide en info-bulle ; glisser sur la page ou cliquer ; éléments prévus en pointillés, désactivés |
+
+### Canevas (D-22)
+
+Navigation et glisser-déposer repris de Figma, Framer et Webflow (sources : aide de Figma sur le zoom
+https://help.figma.com/hc/en-us/articles/360041065034, raccourcis de sélection de Figma
+https://thoughtbot.com/blog/figma-shortcuts-speed-up-your-design-workflow, aide de Framer sur le canevas
+https://www.framer.com/help/articles/how-to-use-the-canvas).
+
+| Geste | Effet |
+|---|---|
+| Molette sur la page | La page défile (comme Webflow) |
+| Molette autour du cadre, Maj+molette | La vue se déplace |
+| Espace maintenue + glisser, bouton du milieu | La vue se déplace (curseur main) |
+| Ctrl+molette, pincement | Zoom autour du pointeur (10 à 400 %) ; la hauteur du cadre ne change pas, la page n'est pas remise en page |
+| Maj+1 / Ctrl+1 | Zoom ajusté ; Maj+0 / Ctrl+0 : 100 % ; Maj+2 / Ctrl+2 : zoom sur la sélection ; Ctrl+plus, Ctrl+moins : paliers. Chiffres lus par touche physique (claviers AZERTY) |
+| Clic dans le vide autour du cadre | Plus de sélection |
+| Glisser un élément de la page | Déplacement ; Alt : copie. Élément estompé, étiquette qui suit le pointeur |
+| Glisser une tuile d'« Ajouter » | Insertion à l'endroit montré |
+| Entrée, Maj+Entrée, Tab, Maj+Tab | Premier enfant, parent, frère suivant, précédent (Figma) |
+| Alt+↑, Alt+↓ | Monter, descendre parmi les frères |
+| Ctrl+C, Ctrl+X, Ctrl+V | Copier, couper, coller un élément (à côté d'un élément de même balise, sinon dedans ou après) ; d'un site à l'autre |
+| Ctrl+G, Ctrl+Maj+G | Envelopper (`span` dans un texte, `div` ailleurs), retirer l'enveloppe |
+| Clic droit | Menu : parent, zoom, copier, couper, coller, dupliquer, envelopper, monter, descendre, supprimer |
+
+**Emplacement de dépôt** (modèle de Webflow) : sur le bord d'un élément, dans le sens où ses frères se suivent
+(horizontal s'ils sont sur la même ligne, ou si le parent est une pile ou une grille en ligne), avant ou après
+lui ; au milieu d'un élément qui peut contenir des enfants, dedans, à côté de l'enfant le plus proche. Le
+conteneur d'arrivée est entouré en pointillés avec son nom, la ligne d'insertion est bleue. Règles du HTML
+respectées : pas de bloc dans un paragraphe ou un titre, pas de lien dans un lien, `li` seulement dans une liste.
+Autour de l'emplacement du contenu d'un gabarit, l'élément va dans la page affichée (pas dans le gabarit partagé).
+Défilement automatique près des bords haut et bas du cadre ; Échap annule.
 
 ## Panneau de styles (D-20)
 

@@ -29,10 +29,6 @@ pub fn grid() -> AnyView {
     )
 }
 
-pub fn site() -> AnyView {
-    svg(r#"<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6h12"/>"#)
-}
-
 pub fn build() -> AnyView {
     svg(r#"<path d="M3 13l4-4M9.5 2.5l4 4-5 5-4-4z"/>"#)
 }
@@ -344,4 +340,11 @@ pub fn collapse() -> AnyView {
 /// Vue en liste.
 pub fn list() -> AnyView {
     svg(r#"<path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/>"#)
+}
+
+/// Globe (langues).
+pub fn globe() -> AnyView {
+    svg(
+        r#"<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.8 1.7 2.6 3.7 2.6 6S9.8 12.3 8 14M8 2C6.2 3.7 5.4 5.7 5.4 8s.8 4.3 2.6 6"/>"#,
+    )
 }

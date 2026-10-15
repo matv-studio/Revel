@@ -1,82 +1,264 @@
-//! Site ouvert : vue d'ensemble et génération.
+//! Site ouvert : vues (éditeur, CMS, localisation, paramètres) et rubriques des paramètres.
 
-use crate::{Ui, api, icons};
+use crate::panels::Planned;
+use crate::{Route, Section, Tab, Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_protocol::{BuildEvent, BuildPhase, BuildSummary, Failure, SiteSummary};
 
+/// Vues d'un site. L'éditeur, une fois ouvert, reste en place (caché) pendant que les autres
+/// vues sont affichées : on y revient sans recharger le canevas.
+#[component]
+pub fn SiteView(site: SiteSummary) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let tab = Memo::new(move |_| match ui.route.get() {
+        Route::Site { tab, .. } => tab,
+        _ => Tab::Editor,
+    });
+    let editor_seen = RwSignal::new(false);
+    Effect::new(move |_| {
+        if tab.get() == Tab::Editor {
+            editor_seen.set(true);
+        }
+    });
+    let s_editor = site.clone();
+    let site = StoredValue::new(site);
+    view! {
+        <div class="site-view">
+            <Show when=move || editor_seen.get()>
+                <div class="view-pane view-pane--editor" class:is-hidden=move || tab.get() != Tab::Editor>
+                    <crate::editor::Editor site=s_editor.clone()/>
+                </div>
+            </Show>
+            {move || match tab.get() {
+                Tab::Editor => ().into_any(),
+                Tab::Cms => view! { <div class="view-pane"><crate::cms::CmsView site=site.get_value()/></div> }.into_any(),
+                Tab::Locales => view! { <div class="view-pane view-pane--scroll"><Locales site=site.get_value()/></div> }.into_any(),
+                Tab::Settings(sec) => view! { <div class="view-pane"><SiteSettings site=site.get_value() section=sec/></div> }.into_any(),
+            }}
+        </div>
+    }
+}
+
+/// Rubriques des paramètres : (rubrique, libellé, étape prévue si pas encore disponible).
+const SECTIONS: &[(Section, &str, Option<u8>)] = &[
+    (Section::General, "settings-general", None),
+    (Section::Publish, "settings-publish", None),
+    (Section::Export, "settings-export", None),
+    (Section::Seo, "settings-seo", Some(3)),
+    (Section::Redirects, "settings-redirects", None),
+    (Section::Fonts, "settings-fonts", Some(3)),
+    (Section::Code, "settings-code", Some(3)),
+    (Section::Forms, "settings-forms", Some(5)),
+    (Section::Backups, "settings-backups", Some(3)),
+];
+
+/// Paramètres du site : rubriques à gauche (comme les réglages d'un site Webflow), contenu à droite.
+#[component]
+fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let body = match section {
+        Section::General => view! { <General site=site.clone()/> }.into_any(),
+        Section::Publish => view! { <crate::publish::Publish site=site.clone()/> }.into_any(),
+        Section::Export => view! { <Build site=site.clone()/> }.into_any(),
+        Section::Redirects => view! { <Redirects site=site.clone()/> }.into_any(),
+        other => {
+            let (key, step) = SECTIONS
+                .iter()
+                .find(|(s, ..)| *s == other)
+                .map(|(_, k, st)| (*k, st.unwrap_or(3)))
+                .unwrap_or(("settings-general", 3));
+            view! {
+                <section class="page settings-page">
+                    <header class="page-head"><h1>{ui.t(key)}</h1></header>
+                    <Planned key=planned_key(other) step=step icon=icons::settings/>
+                </section>
+            }
+            .into_any()
+        }
+    };
+    view! {
+        <div class="settings-layout">
+            <nav class="settings-nav" aria-label=ui.t("view-settings")>
+                {SECTIONS.iter().map(|(sec, key, step)| {
+                    let sec = *sec;
+                    let title = step.map(|n| ui.tx("planned-step", &[("step", n.to_string())]));
+                    view! {
+                        <button class="settings-nav-item" class:is-on=section == sec class:is-planned=step.is_some()
+                            data-section=*key title=title
+                            on:click=move |_| ui.tab(Tab::Settings(sec))>
+                            <span>{ui.t(key)}</span>
+                            {step.map(|n| view! { <span class="settings-nav-step">{n}</span> })}
+                        </button>
+                    }
+                }).collect_view()}
+            </nav>
+            <div class="settings-content">{body}</div>
+        </div>
+    }
+}
+
+/// Texte d'une rubrique prévue.
+fn planned_key(s: Section) -> &'static str {
+    match s {
+        Section::Seo => "settings-seo-planned",
+        Section::Fonts => "settings-fonts-planned",
+        Section::Code => "settings-code-planned",
+        Section::Forms => "settings-forms-planned",
+        Section::Backups => "settings-backups-planned",
+        _ => "settings-general",
+    }
+}
+
 /// Première lettre en capitale (identifiants de collection affichés comme noms).
-fn capitalize(s: &str) -> String {
+pub fn capitalize(s: &str) -> String {
     let mut c = s.chars();
     c.next()
         .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
         .unwrap_or_default()
 }
 
+/// Nom d'une langue dans la langue de l'interface (`fr` -> « Français »).
+pub fn language_name(ui: Ui, code: &str) -> String {
+    let base = code.split(['-', '_']).next().unwrap_or(code).to_lowercase();
+    let key = format!("lang-{base}");
+    let name = ui.tx(&key, &[]);
+    if name == key { code.to_string() } else { name }
+}
+
+/// Paramètres généraux : identité, structure, environnements.
 #[component]
-pub fn Overview(site: SiteSummary) -> impl IntoView {
+fn General(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
-    // Collections de contenus (dossiers d'entrées) ; les collections calculées (plan du site…)
-    // ne sont pas des contenus à éditer.
-    let cols: Vec<_> = site
-        .collections
-        .iter()
-        .filter(|c| !c.folder.is_empty())
-        .cloned()
-        .collect();
-    let n_cols = cols.len();
-    let s_edit = site.clone();
-    let s_build = site.clone();
+    // Résumé relu (le site a pu changer dans l'éditeur).
+    let fresh = RwSignal::new(site.clone());
+    let path = site.path.clone();
+    spawn_local(async move {
+        if let Ok(s) = api::open_site(&path).await {
+            fresh.set(s);
+        }
+    });
+    let n_cols = move || {
+        fresh.with(|s| {
+            s.collections
+                .iter()
+                .filter(|c| !c.folder.is_empty())
+                .count()
+        })
+    };
     view! {
-        <section class="page">
-            <header class="page-head">
-                <div>
-                    <h1>{site.name.clone()}</h1>
-                    <p class="muted path">{site.path.clone()}</p>
+        <section class="page settings-page">
+            <header class="page-head"><h1>{ui.t("settings-general")}</h1></header>
+            <div class="section">
+                <h2>{ui.t("settings-identity")}</h2>
+                <div class="form-grid">
+                    <span class="label">{ui.t("settings-site-name")}</span>
+                    <span class="strong">{move || fresh.with(|s| s.name.clone())}</span>
+                    <span class="label">{ui.t("settings-site-url")}</span>
+                    <span class="path">{move || fresh.with(|s| s.base_url.clone()).unwrap_or_else(|| "—".into())}</span>
+                    <span class="label">{ui.t("settings-site-lang")}</span>
+                    <span>{move || language_name(ui, &fresh.with(|s| s.locale.clone()))}</span>
+                    <span class="label">{ui.t("settings-site-folder")}</span>
+                    <span class="muted path">{move || fresh.with(|s| s.path.clone())}</span>
                 </div>
-                <div class="toolbar">
-                    <button class="btn" on:click=move |_| ui.route.set(crate::Route::Site { site: s_build.clone(), tab: crate::Tab::Build })>
-                        {icons::build()}{ui.t("nav-build")}
-                    </button>
-                    <button class="btn btn--primary" on:click=move |_| ui.route.set(crate::Route::Site { site: s_edit.clone(), tab: crate::Tab::Editor })>
-                        {icons::edit()}{ui.t("action-edit-site")}
-                    </button>
-                </div>
-            </header>
+            </div>
             <div class="section">
                 <h2>{ui.t("overview-structure")}</h2>
                 <dl class="facts">
-                    <div><dt>{ui.t("site-pages")}</dt><dd>{site.pages}</dd></div>
-                    <div><dt>{ui.t("site-layouts")}</dt><dd>{site.layouts}</dd></div>
-                    <div><dt>{ui.t("site-components")}</dt><dd>{site.components}</dd></div>
-                    <div><dt>{ui.t("site-collections")}</dt><dd>{n_cols}</dd></div>
+                    <div><dt>{ui.t("site-pages")}</dt><dd>{move || fresh.with(|s| s.pages)}</dd></div>
+                    <div><dt>{ui.t("site-layouts")}</dt><dd>{move || fresh.with(|s| s.layouts)}</dd></div>
+                    <div><dt>{ui.t("site-components")}</dt><dd>{move || fresh.with(|s| s.components)}</dd></div>
+                    <div>
+                        <dt>{ui.t("site-collections")}</dt>
+                        <dd><button class="link-btn" title=ui.t("view-cms") on:click=move |_| ui.tab(Tab::Cms)>{n_cols}</button></dd>
+                    </div>
                 </dl>
             </div>
             <div class="section">
-                <h2>{ui.t("overview-content")}</h2>
-                <table class="table table--compact">
-                    <tbody>
-                        {cols.into_iter().map(|c| {
-                            let n = c.entries;
-                            view! {
-                                <tr>
-                                    <td class="strong">{capitalize(&c.id)}</td>
-                                    <td class="muted path">{c.folder.clone()}</td>
-                                    <td class="muted col-count">{move || ui.tx("site-entries", &[("count", crate::num(n as f64, 0))])}</td>
-                                </tr>
-                            }
-                        }).collect_view()}
-                    </tbody>
-                </table>
-            </div>
-            <div class="section">
                 <h2>{ui.t("overview-environments")}</h2>
-                <div class="chips">{site.environments.iter().map(|e| view! { <span class="chip">{e.clone()}</span> }).collect_view()}</div>
+                <div class="chips">{move || fresh.with(|s| s.environments.clone()).into_iter().map(|e| view! { <span class="chip">{e}</span> }).collect_view()}</div>
             </div>
+            <p class="muted help">{move || ui.tx("planned-edit", &[("step", "3".to_string())])}</p>
         </section>
     }
 }
 
+/// Redirections du site (lecture ; modification prévue à l'étape 5 avec les hébergeurs).
+#[component]
+fn Redirects(site: SiteSummary) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let list = site.redirects.clone();
+    let empty = list.is_empty();
+    view! {
+        <section class="page settings-page">
+            <header class="page-head">
+                <h1>{ui.t("settings-redirects")}</h1>
+                <div class="toolbar">
+                    <button class="btn" disabled=true title=move || ui.tx("planned-step", &[("step", "5".to_string())])>
+                        {icons::plus()}{ui.t("redirects-add")}
+                    </button>
+                </div>
+            </header>
+            {if empty {
+                view! { <div class="empty"><p>{ui.t("redirects-none")}</p></div> }.into_any()
+            } else {
+                view! {
+                    <div class="section section--flush">
+                        <table class="table table--compact">
+                            <thead><tr><th>{ui.t("redirects-from")}</th><th></th><th>{ui.t("redirects-to")}</th></tr></thead>
+                            <tbody>
+                                {list.into_iter().map(|(from, to)| view! {
+                                    <tr><td class="path">{from}</td><td class="muted col-arrow">{icons::arrow_right()}</td><td class="path">{to}</td></tr>
+                                }).collect_view()}
+                            </tbody>
+                        </table>
+                    </div>
+                }.into_any()
+            }}
+        </section>
+    }
+}
+
+/// Localisation : langues du site (traduction prévue à l'étape 3).
+#[component]
+fn Locales(site: SiteSummary) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let code = site.locale.clone();
+    let code2 = code.clone();
+    view! {
+        <section class="page">
+            <header class="page-head">
+                <h1>{ui.t("view-locales")}</h1>
+                <div class="toolbar">
+                    <button class="btn" disabled=true title=move || ui.tx("planned-step", &[("step", "3".to_string())])>
+                        {icons::plus()}{ui.t("locales-add")}
+                    </button>
+                </div>
+            </header>
+            <div class="section section--flush">
+                <table class="table">
+                    <thead><tr>
+                        <th>{ui.t("locales-lang")}</th>
+                        <th>{ui.t("locales-code")}</th>
+                        <th>{ui.t("locales-prefix")}</th>
+                        <th>{ui.t("locales-status")}</th>
+                    </tr></thead>
+                    <tbody>
+                        <tr>
+                            <td class="strong">{move || language_name(ui, &code)}</td>
+                            <td class="muted path">{code2.clone()}</td>
+                            <td class="muted path">"/"</td>
+                            <td><span class="chip chip--ok">{ui.t("locales-primary")}</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <Planned key="locales-planned" step=3 icon=icons::globe/>
+        </section>
+    }
+}
+
+/// Génération du site dans un dossier (export), pour un environnement.
 #[component]
 pub fn Build(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -155,9 +337,9 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
         })
     };
     view! {
-        <section class="page">
+        <section class="page settings-page">
             <header class="page-head">
-                <h1>{ui.t("build-title")}</h1>
+                <h1>{ui.t("settings-export")}</h1>
             </header>
             <div class="section">
                 <div class="form-grid">

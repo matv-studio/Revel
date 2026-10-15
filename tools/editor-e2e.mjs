@@ -36,8 +36,16 @@ try {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(mock);
   await page.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&bridge=${encodeURIComponent(bridge)}`);
+  // Nouveau site : dossier proposé d'après le nom, sans fenêtre du système.
+  await page.click('.page-head .btn--primary');
+  await page.waitForSelector('.dialog--form input');
+  await page.keyboard.type('Atelier Lumière');
+  await page.waitForFunction(() => /atelier-lumiere$/.test(document.querySelector('.path-value')?.textContent || ''));
+  check('nouveau site : dossier proposé d\'après le nom', true, await page.textContent('.path-value'));
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.dialog--form'));
+  // Un clic sur un site l'ouvre dans l'éditeur.
   await page.click('.site-open');
-  await page.click('.nav-item--sub >> nth=0');
   await page.waitForSelector('iframe.canvas-frame');
   const frameOf = () => page.frames().find((f) => f.url().includes('rv='));
   const waitFrame = async (pred, what, arg) => {
@@ -378,11 +386,164 @@ try {
     await page.click('.node-path .node-crumb:has-text("section.hero")');
     await page.waitForTimeout(200);
     check('fil d\'Ariane : parent sélectionné', (await page.textContent('.layers .layer.is-selected')).trim() === 'section.hero');
-    await page.keyboard.press('Control+1');
-    await page.waitForFunction(() => /scale\(1\)/.test(document.querySelector('iframe.canvas-frame').style.transform));
     await page.keyboard.press('Control+0');
+    await page.waitForFunction(() => document.querySelector('iframe.canvas-frame').style.transform === 'scale(1)');
+    await page.keyboard.press('Control+1');
     await page.waitForTimeout(150);
-    check('zoom : Ctrl+1 à 100 %, Ctrl+0 ajusté', await page.$eval('.editor-zoom select', (s) => s.value === ''));
+    check('zoom : Ctrl+0 à 100 %, Ctrl+1 ajusté', await page.$eval('.editor-zoom select', (s) => s.value === ''));
+  }
+
+  // ------------------------------------------------------------------ canevas : glisser-déposer, parcours, vue (2.12)
+  {
+    const base212 = await invoke('edit_open');
+    const canvas = page.frameLocator('iframe.canvas-frame');
+    // Élément montré dans le cadre, puis sa position dans la fenêtre.
+    const boxOf = async (sel) => {
+      await frameOf().evaluate((s) => document.querySelector(s).scrollIntoView({ block: 'center', behavior: 'instant' }), sel);
+      await page.waitForTimeout(200);
+      return canvas.locator(sel).first().boundingBox();
+    };
+    const links = () => [...document.querySelectorAll('.intro-agency__links a')].map((a) => a.textContent.trim()).join(' | ');
+    const links0 = await frameOf().evaluate(links);
+
+    // Glisser « Paragraphe » du panneau « Ajouter » au-dessus des liens de la présentation.
+    await page.click('.dock-tab[data-panel="insert"]');
+    const tile = await page.locator('.insert-item[data-item="insert-paragraph"]').boundingBox();
+    const lp = await boxOf('.intro-agency__links');
+    await page.mouse.move(tile.x + tile.width / 2, tile.y + tile.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(tile.x + tile.width / 2 + 30, tile.y + 10, { steps: 3 });
+    await page.mouse.move(lp.x + lp.width / 2, lp.y + 3, { steps: 10 });
+    await page.waitForFunction(() => !document.querySelector('.drag-ghost.is-off'));
+    check('glisser depuis « Ajouter » : emplacement montré dans la page', !!(await page.$('.drag-ghost')));
+    if (shots) await page.screenshot({ path: `${shots}/editeur-glisser-ajouter.png` });
+    await page.mouse.up();
+    f = await waitFrame(() => { const p = document.querySelector('.intro-agency__links'); const prev = p && p.previousElementSibling; return !!prev && prev.tagName === 'P' && prev.textContent === 'Nouveau paragraphe.'; }, 'paragraphe déposé');
+    check('glisser depuis « Ajouter » : paragraphe déposé à l\'endroit montré', true);
+    await page.click('.editor-toolbar .btn-undo');
+    f = await waitFrame(() => ![...document.querySelectorAll('p')].some((p) => p.textContent === 'Nouveau paragraphe.'), 'annulation du dépôt');
+
+    // Déplacer un lien avant l'autre (glisser dans le canevas).
+    await page.click('.dock-tab[data-panel="layers"]');
+    const a2 = await boxOf('.intro-agency__links a:nth-of-type(2)');
+    const a1 = await canvas.locator('.intro-agency__links a').first().boundingBox();
+    await page.mouse.move(a2.x + a2.width / 2, a2.y + a2.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(a2.x + a2.width / 2 - 10, a2.y + a2.height / 2, { steps: 3 });
+    await page.mouse.move(a1.x + 6, a1.y + a1.height / 2, { steps: 10 });
+    await page.waitForTimeout(150);
+    if (shots) await page.screenshot({ path: `${shots}/editeur-deplacer.png` });
+    await page.mouse.up();
+    f = await waitFrame((l0) => document.readyState === 'complete' && !!window.__revelSlot && (() => { const l = [...document.querySelectorAll('.intro-agency__links a')].map((a) => a.textContent.trim()); return l.length === 2 && l.join(' | ') === l0.split(' | ').reverse().join(' | '); })(), 'lien déplacé', links0);
+    check('glisser dans le canevas : élément déplacé', true, await f.evaluate(links));
+    await page.click('.editor-toolbar .btn-undo');
+    f = await waitFrame((l0) => document.readyState === 'complete' && !!window.__revelSlot && [...document.querySelectorAll('.intro-agency__links a')].map((a) => a.textContent.trim()).join(' | ') === l0, 'annulation du déplacement', links0);
+
+    // Alt+glisser : copie.
+    const b1 = await boxOf('.intro-agency__links a');
+    const b2 = await canvas.locator('.intro-agency__links a').nth(1).boundingBox();
+    await page.mouse.move(b1.x + b1.width / 2, b1.y + b1.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b1.x + b1.width / 2 + 10, b1.y + b1.height / 2, { steps: 3 });
+    await page.keyboard.down('Alt');
+    await page.mouse.move(b2.x + b2.width - 6, b2.y + b2.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await page.keyboard.up('Alt');
+    f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && document.querySelectorAll('.intro-agency__links a').length === 3, 'copie par Alt+glisser');
+    check('Alt+glisser : copie déposée', true, await f.evaluate(links));
+    await page.click('.editor-toolbar .btn-undo');
+    f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && document.querySelectorAll('.intro-agency__links a').length === 2, 'annulation de la copie');
+
+    // Parcours de la sélection au clavier (comme Figma).
+    const crumb = () => page.$eval('.editor-status .node-crumb.is-on', (e) => e.textContent);
+    await canvas.locator('.intro-agency__links a').first().click();
+    await page.waitForFunction(() => /^a\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.textContent || ''));
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(() => /button--ghost|a\.button$/.test(document.querySelector('.editor-status .node-crumb.is-on')?.textContent || '') && document.querySelectorAll('.editor-status .node-crumb').length > 0);
+    const sib = await crumb();
+    await page.keyboard.press('Shift+Enter');
+    await page.waitForFunction(() => /^p\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.textContent || ''));
+    const par = await crumb();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => /^a\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.textContent || ''));
+    check('clavier : Tab frère suivant, Maj+Entrée parent, Entrée enfant', true, `${sib} → ${par} → ${await crumb()}`);
+
+    // Menu contextuel du canevas : copier, puis coller à côté (Ctrl+V).
+    await canvas.locator('.intro-agency__links a').first().click({ button: 'right' });
+    await page.waitForSelector('.canvas-menu');
+    check('clic droit dans le canevas : menu de l\'éditeur', true);
+    if (shots) await page.screenshot({ path: `${shots}/editeur-menu-canevas.png` });
+    await page.click('.canvas-menu .menu-item:has-text("Copier")');
+    await page.waitForFunction(() => !document.querySelector('.canvas-menu'));
+    await canvas.locator('.intro-agency__links a').nth(1).click();
+    await page.keyboard.press('Control+v');
+    f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && document.querySelectorAll('.intro-agency__links a').length === 3, 'collage');
+    check('copier / coller : élément collé à côté de la sélection', true, await f.evaluate(links));
+    await page.click('.editor-toolbar .btn-undo');
+    f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && document.querySelectorAll('.intro-agency__links a').length === 2, 'annulation du collage');
+    // Envelopper (Ctrl+G) puis retirer l'enveloppe (Ctrl+Maj+G).
+    const wrapBase = JSON.stringify((await invoke('edit_open')).site);
+    await canvas.locator('.intro-agency__links a').first().click();
+    await page.keyboard.press('Control+g');
+    f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && !!document.querySelector('.intro-agency__links > span > a'), 'enveloppe');
+    await page.waitForFunction(() => document.querySelector('.editor-status .node-crumb.is-on')?.textContent === 'span');
+    await page.keyboard.press('Control+Shift+g');
+    f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && !document.querySelector('.intro-agency__links > span') && document.querySelectorAll('.intro-agency__links > a').length === 2, 'enveloppe retirée');
+    check('Ctrl+G puis Ctrl+Maj+G : enveloppe (span dans un paragraphe) ajoutée puis retirée, document identique', JSON.stringify((await invoke('edit_open')).site) === wrapBase);
+    for (let i = 0; i < 2; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(400); }
+    await canvas.locator('.intro-agency__links a').first().click();
+
+    // Vue : zoom sur la sélection, ajusté, déplacement à l'espace, molette autour du cadre.
+    await page.keyboard.press('Shift+Digit2');
+    await page.waitForFunction(() => document.querySelector('.editor-zoom select').value !== '');
+    const zSel = await page.$eval('iframe.canvas-frame', (e) => e.style.transform);
+    check('Maj+2 : zoom sur la sélection', /scale\((?!1\))/.test(zSel), zSel);
+    await page.keyboard.press('Shift+Digit1');
+    await page.waitForFunction(() => document.querySelector('.editor-zoom select').value === '');
+    check('Maj+1 : zoom ajusté', true);
+    const pos = () => page.$eval('iframe.canvas-frame', (e) => [parseFloat(e.style.left), parseFloat(e.style.top)]);
+    const area = await page.locator('.canvas-area').boundingBox();
+    const p0 = await pos();
+    await page.mouse.move(area.x + area.width / 2, area.y + area.height / 2);
+    await page.keyboard.down('Space');
+    await page.waitForSelector('.canvas-area.is-space');
+    await page.mouse.down();
+    await page.mouse.move(area.x + area.width / 2 - 120, area.y + area.height / 2 - 80, { steps: 6 });
+    await page.mouse.up();
+    await page.keyboard.up('Space');
+    const p1 = await pos();
+    check('espace+glisser : la vue se déplace', Math.abs(p1[0] - p0[0] + 120) < 2 && Math.abs(p1[1] - p0[1] + 80) < 2, `${p0} → ${p1}`);
+    // Bord droit de la zone, hors du cadre (déplacé vers la gauche).
+    await page.mouse.move(area.x + area.width - 6, area.y + area.height / 2);
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(150);
+    const p2 = await pos();
+    check('molette autour du cadre : la vue se déplace', Math.abs(p2[1] - p1[1] + 100) < 2, `${p1} → ${p2}`);
+    await page.keyboard.press('Shift+Digit1');
+    await page.waitForFunction(() => document.querySelector('.editor-zoom select').value === '');
+
+    // Vues du site : CMS puis retour à l'éditeur sans recharger le canevas.
+    await frameOf().evaluate(() => { window.__keep = 1; });
+    await page.click('.view-tab[data-view="view-cms"]');
+    await page.waitForSelector('.cms-table tbody tr[data-entry]');
+    check('vue CMS : collections et contenus du site', (await page.$$('.cms-col')).length > 0, `${(await page.$$('.cms-col')).length} collections`);
+    if (shots) await page.screenshot({ path: `${shots}/vue-cms.png` });
+    await page.click('.view-tab[data-view="view-settings"]');
+    await page.waitForSelector('.settings-nav');
+    await page.click('.view-tab[data-view="view-editor"]');
+    await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
+    check('retour à l\'éditeur : canevas gardé (pas rechargé)', await frameOf().evaluate(() => window.__keep === 1));
+    // Contenu ouvert depuis la vue CMS : sa page s'affiche dans l'éditeur.
+    await page.click('.view-tab[data-view="view-cms"]');
+    await page.click('.cms-table tbody tr[data-entry] .icon-btn');
+    await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
+    const entryUrl = await page.$eval('.editor-page select', (s) => s.value);
+    f = await waitFrame((u) => location.pathname === u && !!window.__revelSlot, 'page du contenu', entryUrl);
+    check('vue CMS : « Ouvrir la page » affiche le contenu dans l\'éditeur', entryUrl !== '/', entryUrl);
+    await page.selectOption('.editor-page select', '/');
+    f = await waitFrame(() => location.pathname === '/' && !!window.__revelSlot, 'retour à l\'accueil');
+
+    check('canevas : tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base212.site));
   }
 
   // ------------------------------------------------------------------ styles et points de rupture (2.6, 2.8)

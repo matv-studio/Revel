@@ -32,7 +32,6 @@ new-site-name = Nom du site
 import-overwrite = Ce dossier contient déjà un site Revel. L’importer de nouveau remplace sa structure (pages, gabarits, collections) ; les contenus et images ne sont pas modifiés.
 import-done = Import terminé
 import-warnings = Points à vérifier
-site-back = Tous les sites
 site-pages = Pages
 site-layouts = Gabarits
 site-components = Composants
@@ -41,7 +40,6 @@ site-entries = { $count ->
         [one] { $count } entrée
        *[other] { $count } entrées
     }
-build-title = Générer
 build-env = Environnement
 build-images = Images responsives (AVIF, WebP)
 build-run = Générer le site
@@ -53,7 +51,6 @@ build-done = { $generated } pages générées, { $copied } fichiers copiés, ima
 build-warnings = Avertissements
 build-failed = Échec de la génération. { $message }
 preview-open = Aperçu
-publish-title = Publier
 publish-empty = Aucun hébergement pour ce site. Ajoutez un serveur SFTP (OVH, o2switch…) ou GitHub Pages pour publier en un clic.
 publish-add = Ajouter un hébergement
 publish-name = Nom
@@ -107,13 +104,9 @@ publish-key-recorded = Première connexion : la clé du serveur est enregistrée
 publish-failed = Échec de la publication. { $message }
 publish-warnings = Avant de publier
 error = Erreur : { $message }
-nav-sites = Sites
 nav-recent = Récents
 nav-all-sites = Tous les sites
-nav-overview = Vue d’ensemble
-nav-build = Générer
 nav-publish = Publier
-nav-editor = Éditeur
 # Éditeur visuel (étape 2)
 editor-loading = Ouverture du site dans l'éditeur…
 editor-canvas = Canevas de la page
@@ -124,7 +117,6 @@ editor-bp-desktop = Ordinateur (base)
 editor-bp-max = Jusqu'à { $width } px
 editor-bp-min = À partir de { $width } px
 editor-zoom = Zoom
-editor-zoom-fit = Ajusté
 editor-scripts = Scripts du site
 editor-scripts-help = Exécuter les scripts du site dans le canevas (désactivé : les clics sélectionnent les éléments)
 editor-undo = Annuler (Ctrl+Z)
@@ -168,8 +160,6 @@ layers-slot = contenu de la page
 layers-markdown = contenu (Markdown)
 layers-badge-component = composant
 insert-title = Ajouter
-insert-where-selection = Ajouté dans l'élément sélectionné, ou juste après lui.
-insert-where-page = Ajouté à la fin de la page. Sélectionnez un élément pour choisir l'endroit.
 insert-no-place = Sélectionnez un élément de la page où ajouter le nouvel élément.
 insert-section = Section
 insert-container = Conteneur
@@ -285,14 +275,12 @@ settings-accent = Couleur d’accent
 settings-accent-help = Utilisée pour les boutons principaux, la sélection et le focus. « Aucune » garde l’interface neutre.
 accent-none = Aucune
 accent-custom = Personnalisée
-overview-content = Contenus
 overview-structure = Structure
 overview-environments = Environnements
 action-close = Fermer
 action-edit = Modifier
 action-replace = Remplacer
 new-site-title = Nouveau site
-new-site-choose = Choisir le dossier
 import-overwrite-title = Remplacer le site existant ?
 publish-default-name = Mon hébergement
 publish-form-new = Nouvel hébergement SFTP
@@ -607,14 +595,14 @@ dock-reset = Disposition par défaut
 layers-search = Rechercher un calque
 layers-collapse = Tout replier
 layers-parent = Sélectionner le parent
-editor-zoom-help = Zoom (Ctrl+molette, Ctrl+0 ajusté, Ctrl+1 100 %)
+editor-zoom-help = Zoom (Ctrl+molette ; Maj+1 ajusté, Maj+0 100 %, Maj+2 sélection)
 editor-zoom-fit-pct = Ajusté ({ $pct })
 editor-zoom-fit-short = Zoom ajusté
 editor-zoom-100 = Zoom à 100 %
 editor-path = Chemin de l'élément
 editor-scrub = Changer un nombre
-key-zoom-fit = Ctrl+0
-key-zoom-100 = Ctrl+1
+key-zoom-fit = Maj+1
+key-zoom-100 = Maj+0
 key-zoom-wheel = Ctrl+molette
 key-panels = Ctrl+\
 key-alt-click = Alt+clic
@@ -625,3 +613,141 @@ home-view-grid = Grille
 home-view-list = Liste
 action-edit-site = Ouvrir l'éditeur
 assets-none = Aucune image à chemin fixe dans ce site.
+
+# Vues d'un site (barre supérieure)
+views = Vues du site
+view-editor = Éditeur
+view-cms = CMS
+view-locales = Localisation
+view-settings = Paramètres
+nav-app-settings = Réglages de Revel
+preview-help = Ouvre le site généré dans le navigateur
+site-settings = Paramètres du site
+action-open-help = Ouvre un dossier qui contient un site Revel
+action-import-help = Crée un site Revel à partir d’un projet Eleventy
+home-sort = Tri
+home-sort-recent = Récents
+home-sort-name = Nom
+new-site-placeholder = Mon site
+new-site-lang = Langue du site
+new-site-location = Emplacement
+new-site-change = Changer…
+new-site-create = Créer le site
+
+# Paramètres d'un site
+settings-general = Général
+settings-publish = Publication
+settings-export = Génération
+settings-seo = Référencement
+settings-redirects = Redirections
+settings-fonts = Polices
+settings-code = Code personnalisé
+settings-forms = Formulaires
+settings-backups = Sauvegardes
+settings-seo-planned = Titre, description et image de partage de chaque page, plan du site et robots.txt.
+settings-fonts-planned = Polices du site : ajout, import de fichiers, Google Fonts.
+settings-code-planned = Code ajouté dans l’en-tête ou en fin de page, pour tout le site ou une page.
+settings-forms-planned = Réception des formulaires du site (courriel, tableau, service externe).
+settings-backups-planned = Versions enregistrées du site, comparées et restaurées.
+settings-identity = Identité
+settings-site-name = Nom
+settings-site-url = Adresse publique
+settings-site-lang = Langue
+settings-site-folder = Dossier
+redirects-add = Ajouter une redirection
+redirects-none = Aucune redirection.
+redirects-from = Ancienne adresse
+redirects-to = Nouvelle adresse
+lang-fr = Français
+lang-en = Anglais
+lang-de = Allemand
+lang-es = Espagnol
+lang-it = Italien
+lang-pt = Portugais
+lang-nl = Néerlandais
+
+# Localisation
+locales-add = Ajouter une langue
+locales-lang = Langue
+locales-code = Code
+locales-prefix = Adresse
+locales-status = Statut
+locales-primary = Langue principale
+locales-planned = Traduire le site : chaque page et chaque contenu dans plusieurs langues, adresses par langue (/en/…) et balises hreflang.
+
+# Vue CMS
+cms-collections = Collections
+cms-search = Rechercher un contenu
+cms-fields-edit = Champs
+cms-file = Fichier
+cms-no-entries = Aucun contenu.
+cms-draft = Brouillon
+cms-open-page = Ouvrir la page dans l’éditeur
+cms-shown = { $shown } sur { $total }
+cms-entry = Contenu
+cms-body = Texte
+cms-body-len = { $count ->
+    [0] vide
+    [one] { $count } caractère
+   *[other] { $count } caractères
+}
+cms-items = { $count ->
+    [one] { $count } élément
+   *[other] { $count } éléments
+}
+cms-fields = { $count ->
+    [one] { $count } champ
+   *[other] { $count } champs
+}
+
+# Panneau « Ajouter » (familles, aides en info-bulle, éléments prévus)
+insert-group-structure = Structure
+insert-group-text = Texte
+insert-group-media = Médias
+insert-group-cms = CMS
+insert-group-forms = Formulaires
+insert-group-code = Code
+insert-help-section = Grande partie de la page (bandeau, présentation…). Glisser sur la page pour la placer, ou cliquer pour l’ajouter dans la sélection.
+insert-help-container = Boîte qui regroupe et aligne d’autres éléments. Glisser sur la page, ou cliquer.
+insert-help-heading = Titre de partie (h2). Glisser sur la page, ou cliquer.
+insert-help-paragraph = Bloc de texte. Glisser sur la page, ou cliquer.
+insert-help-link = Texte cliquable vers une page ou une adresse. Glisser sur la page, ou cliquer.
+insert-help-button = Lien en forme de bouton. Glisser sur la page, ou cliquer.
+insert-help-image = Image optimisée (AVIF, WebP) à plusieurs tailles. Glisser sur la page, ou cliquer.
+insert-help-list = Liste à puces. Glisser sur la page, ou cliquer.
+insert-grid = Grille
+insert-columns = Colonnes
+insert-rich-text = Texte riche
+insert-video = Vidéo
+insert-icon = Icône
+insert-lottie = Animation Lottie
+insert-collection-list = Liste de collection
+insert-form = Formulaire
+insert-embed = Code HTML
+
+# Canevas : parcours de la sélection, déplacements, vue
+editor-select-child = Sélectionner le premier enfant
+editor-select-parent = Sélectionner le parent
+editor-select-sibling = Élément suivant, précédent
+editor-move = Déplacer un élément
+editor-move-copy = Copier en déplaçant
+editor-order = Monter, descendre
+editor-zoom-selection = Zoom sur la sélection
+editor-pan = Déplacer la vue
+key-child = Entrée
+key-parent = Maj+Entrée
+key-siblings = Tab · Maj+Tab
+key-move-drag = Glisser
+key-copy-drag = Alt+glisser
+key-order = Alt+↑ · Alt+↓
+key-wrap = Ctrl+G
+key-zoom-sel = Maj+2
+key-pan = Espace+glisser
+editor-copy = Copier
+editor-cut = Couper
+editor-paste = Coller
+editor-unwrap = Retirer l’enveloppe
+key-copy = Ctrl+C
+key-cut = Ctrl+X
+key-paste = Ctrl+V
+key-unwrap = Ctrl+Maj+G

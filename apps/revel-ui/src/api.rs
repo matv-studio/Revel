@@ -122,14 +122,22 @@ pub async fn forget_site(path: &str) -> Res<()> {
 
 /// Sélection d'un dossier (fenêtre du système). `None` si annulé.
 pub async fn pick_folder() -> Res<Option<String>> {
+    pick_folder_at(None).await
+}
+
+/// Sélection d'un dossier, en partant de `start` s'il est donné.
+pub async fn pick_folder_at(start: Option<&str>) -> Res<Option<String>> {
     #[derive(Serialize)]
-    struct Opts {
+    #[serde(rename_all = "camelCase")]
+    struct Opts<'a> {
         directory: bool,
         multiple: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default_path: Option<&'a str>,
     }
     #[derive(Serialize)]
-    struct A {
-        options: Opts,
+    struct A<'a> {
+        options: Opts<'a>,
     }
     call(
         "plugin:dialog|open",
@@ -137,24 +145,46 @@ pub async fn pick_folder() -> Res<Option<String>> {
             options: Opts {
                 directory: true,
                 multiple: false,
+                default_path: start,
             },
         },
     )
     .await
 }
 
-pub async fn open_site(path: &str) -> Res<SiteSummary> {
-    call("open_site", &PathArg { path }).await
+/// Dossier proposé pour les nouveaux sites (`Documents/Revel`).
+pub async fn default_sites_dir() -> Res<String> {
+    call("default_sites_dir", &NoArgs {}).await
 }
 
-pub async fn new_site(path: &str, name: &str, lang: &str) -> Res<SiteSummary> {
+/// Dossier qui sera créé pour un nouveau site.
+pub async fn site_folder(parent: &str, name: &str) -> Res<String> {
     #[derive(Serialize)]
     struct A<'a> {
-        path: &'a str,
+        parent: &'a str,
+        name: &'a str,
+    }
+    call("site_folder", &A { parent, name }).await
+}
+
+/// Crée un site dans un nouveau dossier de `parent`.
+pub async fn create_site(parent: &str, name: &str, lang: &str) -> Res<SiteSummary> {
+    #[derive(Serialize)]
+    struct A<'a> {
+        parent: &'a str,
         name: &'a str,
         lang: &'a str,
     }
-    call("new_site", &A { path, name, lang }).await
+    call("create_site", &A { parent, name, lang }).await
+}
+
+/// Collections de contenus du site et leurs entrées.
+pub async fn cms_collections(path: &str) -> Res<Vec<revel_protocol::CmsCollection>> {
+    call("cms_collections", &PathArg { path }).await
+}
+
+pub async fn open_site(path: &str) -> Res<SiteSummary> {
+    call("open_site", &PathArg { path }).await
 }
 
 pub async fn import_eleventy(path: &str, overwrite: bool) -> Res<ImportResult> {

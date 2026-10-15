@@ -2,6 +2,8 @@
 
 mod account;
 mod api;
+mod canvas;
+mod cms;
 mod dialog;
 mod dock;
 mod editor;
@@ -89,6 +91,10 @@ pub struct Ui {
     pub ask: RwSignal<Option<Ask>>,
     /// Compte GitHub connecté (identifiant).
     pub github: RwSignal<Option<String>>,
+    /// Page à afficher dans l'éditeur (demandée par une autre vue, la vue CMS par exemple).
+    pub goto_page: RwSignal<Option<String>>,
+    /// Élément copié (Ctrl+C), collé avec de nouveaux identifiants (Ctrl+V), d'un site à l'autre.
+    pub clipboard: RwSignal<Option<revel_model::Node>>,
 }
 
 impl Ui {
@@ -131,21 +137,53 @@ impl Ui {
             }
         });
     }
+    /// Ouvre un site dans l'éditeur.
     pub fn open(self, site: SiteSummary) {
-        self.route.set(Route::Site {
-            site,
-            tab: Tab::Overview,
-        });
+        self.open_at(site, Tab::Editor);
+    }
+    pub fn open_at(self, site: SiteSummary, tab: Tab) {
+        self.route.set(Route::Site { site, tab });
         self.reload_recents();
+    }
+    /// Change de vue dans le site ouvert.
+    pub fn tab(self, tab: Tab) {
+        if let Route::Site { site, .. } = self.route.get_untracked() {
+            self.route.set(Route::Site { site, tab });
+        }
+    }
+    /// Ouvre un site par son dossier (vue donnée).
+    pub fn open_path(self, path: String, tab: Tab) {
+        spawn_local(async move {
+            match api::open_site(&path).await {
+                Ok(s) => self.open_at(s, tab),
+                Err(e) => self.fail(e),
+            }
+        })
     }
 }
 
+/// Vue d'un site ouvert (barre supérieure).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
-    Overview,
     Editor,
-    Build,
+    Cms,
+    Locales,
+    Settings(Section),
+}
+
+/// Rubrique des paramètres d'un site.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Section {
+    #[default]
+    General,
     Publish,
+    Export,
+    Seo,
+    Redirects,
+    Forms,
+    Fonts,
+    Code,
+    Backups,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -210,6 +248,8 @@ fn App() -> impl IntoView {
         environment: RwSignal::new(None),
         ask: RwSignal::new(None),
         github: RwSignal::new(None),
+        goto_page: RwSignal::new(None),
+        clipboard: RwSignal::new(None),
     };
     provide_context(ui);
     spawn_local(async move {
@@ -240,19 +280,24 @@ fn App() -> impl IntoView {
     });
     Effect::new(move |_| ui.settings.with(apply_settings));
 
-    let editing = move || {
-        matches!(
-            ui.route.get(),
-            Route::Site {
-                tab: Tab::Editor,
-                ..
-            }
-        )
+    // Page affichée : accueil, réglages, ou site ouvert (identifié par son dossier : changer de
+    // vue dans le site ne recrée pas l'éditeur).
+    let page = Memo::new(move |_| match ui.route.get() {
+        Route::Home => Page::Home,
+        Route::Settings => Page::Settings,
+        Route::Site { site, .. } => Page::Site(site.path),
+    });
+    // Teinte du haut du plateau (raccord de l'onglet actif) : barre d'outils ou page.
+    let stage = move || match ui.route.get() {
+        Route::Site {
+            tab: Tab::Editor | Tab::Cms,
+            ..
+        } => "tool",
+        _ => "page",
     };
     view! {
-        <div class="shell" class:shell--editor=editing>
+        <div class="shell" data-stage=stage>
             <TopBar/>
-            <SideBar/>
             <main class="main">
                 <Show when=move || ui.error.get().is_some()>
                     <div class="notice notice--error" role="alert">
@@ -260,14 +305,12 @@ fn App() -> impl IntoView {
                         <button class="icon-btn" title=ui.t("action-close") aria-label=ui.t("action-close") on:click=move |_| ui.error.set(None)>{icons::close()}</button>
                     </div>
                 </Show>
-                {move || match ui.route.get() {
-                    Route::Home => view! { <home::Home/> }.into_any(),
-                    Route::Settings => view! { <settings::Settings/> }.into_any(),
-                    Route::Site { site, tab } => match tab {
-                        Tab::Overview => view! { <site::Overview site=site/> }.into_any(),
-                        Tab::Editor => view! { <editor::Editor site=site/> }.into_any(),
-                        Tab::Build => view! { <site::Build site=site/> }.into_any(),
-                        Tab::Publish => view! { <publish::Publish site=site/> }.into_any(),
+                {move || match page.get() {
+                    Page::Home => view! { <home::Home/> }.into_any(),
+                    Page::Settings => view! { <settings::Settings/> }.into_any(),
+                    Page::Site(_) => match ui.route.get_untracked() {
+                        Route::Site { site, .. } => view! { <site::SiteView site=site/> }.into_any(),
+                        _ => ().into_any(),
                     },
                 }}
             </main>
@@ -276,23 +319,29 @@ fn App() -> impl IntoView {
     }
 }
 
+#[derive(Clone, PartialEq)]
+enum Page {
+    Home,
+    Settings,
+    Site(String),
+}
+
+/// Vues d'un site, dans l'ordre de la barre supérieure.
+const VIEWS: &[(Tab, &str)] = &[
+    (Tab::Editor, "view-editor"),
+    (Tab::Cms, "view-cms"),
+    (Tab::Locales, "view-locales"),
+    (Tab::Settings(Section::General), "view-settings"),
+];
+
 #[component]
 fn TopBar() -> impl IntoView {
     let ui = expect_context::<Ui>();
-    let crumb = move || match ui.route.get() {
-        Route::Home => String::new(),
-        Route::Settings => ui.tx("nav-settings", &[]),
-        Route::Site { site, .. } => site.name,
+    let tab = move || match ui.route.get() {
+        Route::Site { tab, .. } => Some(tab),
+        _ => None,
     };
-    let site_open = move || matches!(ui.route.get(), Route::Site { .. });
-    let go_publish = move |_| {
-        if let Route::Site { site, .. } = ui.route.get_untracked() {
-            ui.route.set(Route::Site {
-                site,
-                tab: Tab::Publish,
-            });
-        }
-    };
+    let site_open = move || tab().is_some();
     let preview = move |_| {
         if let Route::Site { site, .. } = ui.route.get_untracked() {
             let env = ui.preview_environment(&site);
@@ -305,28 +354,43 @@ fn TopBar() -> impl IntoView {
     };
     view! {
         <header class="topbar">
-            <button class="logo" aria-label="Revel" on:click=move |_| ui.route.set(Route::Home)>{icons::logo()}</button>
-            <nav class="crumbs">
-                <Show when=site_open>
-                    <button class="crumb" on:click=move |_| ui.route.set(Route::Home)>{ui.t("nav-sites")}</button>
-                    <span class="crumb-sep" aria-hidden="true">"/"</span>
+            <div class="topbar-start">
+                <button class="logo" title=ui.t("nav-all-sites") aria-label=ui.t("nav-all-sites")
+                    on:click=move |_| ui.route.set(Route::Home)>{icons::logo()}</button>
+                <Show when=site_open fallback=|| view! { <span class="topbar-title">"Revel"</span> }>
+                    <SiteMenu/>
                 </Show>
-                // Dans l'éditeur (plein écran, sans barre latérale) : retour à la vue du site.
-                <Show when=move || matches!(ui.route.get(), Route::Site { tab: Tab::Editor, .. })
-                    fallback=move || view! { <span class="crumb crumb--current">{crumb}</span> }>
-                    <button class="crumb crumb--current" on:click=move |_| {
-                        if let Route::Site { site, .. } = ui.route.get_untracked() {
-                            ui.route.set(Route::Site { site, tab: Tab::Overview });
+            </div>
+            // Onglets raccordés au plateau : vues du site ouvert, ou accueil et réglages de Revel.
+            <nav class="views" role="tablist" aria-label=ui.t("views")>
+                {move || if site_open() {
+                    VIEWS.iter().map(|(t, key)| {
+                        let t = *t;
+                        let on = move || match (tab(), t) {
+                            (Some(Tab::Settings(_)), Tab::Settings(_)) => true,
+                            (Some(a), b) => a == b,
+                            _ => false,
+                        };
+                        view! {
+                            <button class="view-tab" role="tab" class:is-on=on aria-selected=move || on().to_string()
+                                data-view=*key on:click=move |_| if !on() { ui.tab(t) }>{ui.t(key)}</button>
                         }
-                    }>{crumb}</button>
-                    <span class="crumb-sep" aria-hidden="true">"/"</span>
-                    <span class="crumb crumb--current">{ui.t("nav-editor")}</span>
-                </Show>
+                    }).collect_view().into_any()
+                } else {
+                    [(Route::Home, "home-title"), (Route::Settings, "nav-settings")].into_iter().map(|(r, key)| {
+                        let r2 = r.clone();
+                        let on = move || ui.route.get() == r2;
+                        view! {
+                            <button class="view-tab" role="tab" class:is-on=on.clone() aria-selected=move || on().to_string()
+                                data-view=key on:click=move |_| ui.route.set(r.clone())>{ui.t(key)}</button>
+                        }
+                    }).collect_view().into_any()
+                }}
             </nav>
             <div class="topbar-actions">
                 <Show when=site_open>
-                    <button class="btn" on:click=preview>{icons::play()}{ui.t("preview-open")}</button>
-                    <button class="btn btn--primary" on:click=go_publish>{ui.t("nav-publish")}</button>
+                    <button class="btn" title=ui.t("preview-help") on:click=preview>{icons::play()}{ui.t("preview-open")}</button>
+                    <button class="btn btn--primary" on:click=move |_| ui.tab(Tab::Settings(Section::Publish))>{ui.t("nav-publish")}</button>
                 </Show>
             </div>
             <div class="activity" class:activity--on=move || ui.activity.get().is_some()>
@@ -336,74 +400,72 @@ fn TopBar() -> impl IntoView {
     }
 }
 
+/// Nom du site ouvert ; menu : autres sites récents, tous les sites, réglages de Revel.
 #[component]
-fn SideBar() -> impl IntoView {
+fn SiteMenu() -> impl IntoView {
     let ui = expect_context::<Ui>();
-    let current_path = move || match ui.route.get() {
-        Route::Site { site, .. } => Some(site.path),
+    let open = RwSignal::new(false);
+    let current = move || match ui.route.get() {
+        Route::Site { site, .. } => Some(site),
         _ => None,
     };
-    let current_tab = move || match ui.route.get() {
-        Route::Site { tab, .. } => Some(tab),
-        _ => None,
-    };
-    let open_path = move |path: String| {
-        spawn_local(async move {
-            match api::open_site(&path).await {
-                Ok(s) => ui.open(s),
-                Err(e) => ui.fail(e),
+    let on_down =
+        window_event_listener(leptos::ev::pointerdown, move |e: web_sys::PointerEvent| {
+            let inside = e
+                .target()
+                .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                .and_then(|el| el.closest(".site-menu").ok().flatten())
+                .is_some();
+            if !inside {
+                open.set(false);
             }
-        })
-    };
-    let tab_item = move |tab: Tab, key: &'static str, icon: fn() -> AnyView| {
-        view! {
-            <button class="nav-item nav-item--sub" class:is-active=move || current_tab() == Some(tab)
-                on:click=move |_| {
-                    if let Route::Site { site, .. } = ui.route.get_untracked() {
-                        ui.route.set(Route::Site { site, tab });
-                    }
-                }>
-                {icon()}<span>{ui.t(key)}</span>
-            </button>
+        });
+    let on_key = window_event_listener(leptos::ev::keydown, move |e: web_sys::KeyboardEvent| {
+        if e.key() == "Escape" {
+            open.set(false);
         }
-    };
+    });
+    let on_blur = window_event_listener(leptos::ev::blur, move |_| open.set(false));
+    on_cleanup(move || {
+        on_down.remove();
+        on_key.remove();
+        on_blur.remove();
+    });
     view! {
-        <aside class="sidebar">
-            <div class="sidebar-section">
-                <button class="nav-item" class:is-active=move || ui.route.get() == Route::Home
-                    on:click=move |_| ui.route.set(Route::Home)>
-                    {icons::grid()}<span>{ui.t("nav-all-sites")}</span>
-                </button>
-            </div>
-            <div class="sidebar-section sidebar-sites">
-                <p class="sidebar-title">{ui.t("nav-recent")}</p>
-                <For each=move || ui.recents.get() key=|r| r.path.clone() let:r>
-                    {
-                        let path = r.path.clone();
-                        let p_active = r.path.clone();
-                        let p_show = r.path.clone();
-                        view! {
-                            <button class="nav-item"
-                                class:is-active=move || current_path().as_deref() == Some(p_active.as_str()) && current_tab() == Some(Tab::Overview)
-                                title=r.path.clone()
-                                on:click=move |_| open_path(path.clone())>
-                                {icons::site()}<span class="nav-label">{r.name.clone()}</span>
-                            </button>
-                            <Show when=move || current_path().as_deref() == Some(p_show.as_str())>
-                                {tab_item(Tab::Editor, "nav-editor", icons::edit)}
-                                {tab_item(Tab::Build, "nav-build", icons::build)}
-                                {tab_item(Tab::Publish, "nav-publish", icons::upload)}
-                            </Show>
-                        }
-                    }
-                </For>
-            </div>
-            <div class="sidebar-section sidebar-bottom">
-                <button class="nav-item" class:is-active=move || ui.route.get() == Route::Settings
-                    on:click=move |_| ui.route.set(Route::Settings)>
-                    {icons::settings()}<span>{ui.t("nav-settings")}</span>
-                </button>
-            </div>
-        </aside>
+        <div class="site-menu">
+            <button class="site-menu-btn" aria-haspopup="menu" aria-expanded=move || open.get().to_string()
+                title=move || current().map(|s| s.path).unwrap_or_default()
+                on:click=move |_| open.update(|o| *o = !*o)>
+                <span class="site-menu-name">{move || current().map(|s| s.name).unwrap_or_default()}</span>
+                {icons::chevron_down()}
+            </button>
+            <Show when=move || open.get()>
+                <div class="menu site-menu-pop" role="menu">
+                    {move || {
+                        let here = current().map(|s| s.path).unwrap_or_default();
+                        let others: Vec<_> = ui.recents.get().into_iter().filter(|r| r.path != here).take(6).collect();
+                        (!others.is_empty()).then(|| view! {
+                            <p class="menu-title">{ui.t("nav-recent")}</p>
+                            {others.into_iter().map(|r| {
+                                let p = r.path.clone();
+                                view! {
+                                    <button class="menu-item" role="menuitem" title=r.path.clone()
+                                        on:click=move |_| { open.set(false); ui.open_path(p.clone(), Tab::Editor) }>
+                                        <span class="menu-label">{r.name.clone()}</span>
+                                    </button>
+                                }
+                            }).collect_view()}
+                            <div class="menu-sep"></div>
+                        })
+                    }}
+                    <button class="menu-item" role="menuitem" on:click=move |_| { open.set(false); ui.route.set(Route::Home) }>
+                        {icons::grid()}<span class="menu-label">{ui.t("nav-all-sites")}</span>
+                    </button>
+                    <button class="menu-item" role="menuitem" on:click=move |_| { open.set(false); ui.route.set(Route::Settings) }>
+                        {icons::settings()}<span class="menu-label">{ui.t("nav-app-settings")}</span>
+                    </button>
+                </div>
+            </Show>
+        </div>
     }
 }

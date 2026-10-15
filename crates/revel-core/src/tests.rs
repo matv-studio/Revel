@@ -520,3 +520,23 @@ fn textes_lies_ecrits_dans_leur_source() {
         Err(CoreError::Edit(revel_edit::EditError::Bound(_)))
     ));
 }
+
+#[test]
+fn dossier_d_un_nouveau_site() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent = dir.path();
+    assert_eq!(
+        site_folder(parent, "  Atelier Lumière & Cœur  "),
+        parent.join("atelier-lumiere-coeur")
+    );
+    assert_eq!(site_folder(parent, "???"), parent.join("site"));
+    // Dossier vide : réutilisé ; dossier occupé : suffixe.
+    std::fs::create_dir(parent.join("oka")).unwrap();
+    assert_eq!(site_folder(parent, "Oka"), parent.join("oka"));
+    std::fs::write(parent.join("oka/notes.txt"), "x").unwrap();
+    assert_eq!(site_folder(parent, "Oka"), parent.join("oka-2"));
+    let c = core(parent);
+    let s = c.create_site(parent, "Oka", "fr").unwrap();
+    assert!(s.path.ends_with("oka-2"));
+    assert!(c.cms(Path::new(&s.path)).unwrap().is_empty());
+}

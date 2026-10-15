@@ -26,6 +26,12 @@ pub struct SiteSummary {
     pub collections: Vec<CollectionSummary>,
     /// Environnements de publication déclarés (`production`, `staging`…).
     pub environments: Vec<String>,
+    /// Langue du site (`fr`).
+    #[serde(default)]
+    pub locale: String,
+    /// Redirections (ancienne adresse, nouvelle adresse).
+    #[serde(default)]
+    pub redirects: Vec<(String, String)>,
 }
 
 /// Page HTML du site, proposée dans l'éditeur.
@@ -45,6 +51,9 @@ pub struct EditorPageInfo {
     /// Gabarit de la page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout: Option<String>,
+    /// Contenu : nom de son fichier, sans extension.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,6 +61,42 @@ pub struct CollectionSummary {
     pub id: String,
     pub folder: String,
     pub entries: usize,
+}
+
+/// Collection de contenus, telle que l'affiche la vue CMS.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CmsCollection {
+    pub id: String,
+    /// Dossier des fichiers, relatif au site.
+    pub folder: String,
+    /// Champs de la collection (schéma), sinon ceux trouvés dans les contenus.
+    pub fields: Vec<CmsField>,
+    pub entries: Vec<CmsEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CmsField {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Type (`string`, `text`, `rich_text`, `image`, `date`, `boolean`, `number`, `list`,
+    /// `object`, `reference`, `references`) ; `None` : déduit des valeurs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+}
+
+/// Contenu d'une collection : en-tête du fichier Markdown et page publiée.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CmsEntry {
+    /// Nom du fichier, sans extension.
+    pub file: String,
+    /// Valeurs de l'en-tête (objet).
+    pub data: serde_json::Value,
+    /// Nombre de caractères du corps du texte.
+    pub body_len: usize,
+    /// Adresse de sa page ; `None` : pas de page (ou contenu non publié).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 }
 
 /// Résultat d'un import.

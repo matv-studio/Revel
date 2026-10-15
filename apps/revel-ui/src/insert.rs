@@ -1,46 +1,60 @@
-//! Panneau « Ajouter » (étape 2.5) : éléments de base insérés dans l'élément sélectionné (s'il peut
-//! contenir des enfants) ou juste après lui.
+//! Panneau « Ajouter » (étapes 2.5, 2.12) : éléments de base, par famille, à glisser sur la page
+//! (emplacement montré par le canevas) ou à insérer d'un clic dans l'élément sélectionné (s'il peut
+//! contenir des enfants) ou juste après lui. Les éléments prévus sont visibles, désactivés.
+//!
+//! Résolution des dépôts du canevas (`DropTarget`) en emplacement du document, pour une insertion
+//! ou un déplacement.
 
-use crate::editor::Ed;
+use crate::editor::{DragItem, DropTarget, Ed, Place, owner_of};
 use crate::{Ui, icons};
+use leptos::ev;
 use leptos::prelude::*;
 use revel_edit::make::Preset;
-use revel_edit::{Branch, Command, Owner, Parent};
+use revel_edit::{Branch, Command, Owner, Parent, Target};
 use revel_model::Node;
+use revel_model::ids::OwnerKind;
+use wasm_bindgen::JsCast;
 
 const VOID: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track",
     "wbr",
 ];
 
+/// Identifiant de la page fixe affichée.
+fn page_id(ed: Ed) -> Option<String> {
+    let url = ed.page.get_untracked();
+    ed.pages.with_untracked(|ps| {
+        ps.iter()
+            .find(|p| p.url == url)
+            .and_then(|p| p.page.clone())
+    })
+}
+
 /// Emplacement d'insertion : dans l'élément sélectionné, après lui, ou à la fin de la page.
 pub fn insertion_point(ed: Ed) -> Option<(Parent, usize)> {
     let target = ed.selected_target();
+    let page = page_id(ed);
     ed.doc.with_untracked(|d| {
         let d = d.as_ref()?;
         match target {
             Some(t) => {
                 let node = revel_edit::address::node(d, &t).ok()?;
-                match node {
+                let (p, i) = match node {
                     Node::Element { tag, children, .. }
                         if !VOID.contains(&tag.to_ascii_lowercase().as_str()) =>
                     {
-                        Some((Parent::of(&t, Branch::Children), children.len()))
+                        (Parent::of(&t, Branch::Children), children.len())
                     }
                     _ => {
                         let (p, i) = revel_edit::address::locate(d, &t).ok()?;
-                        Some((p, i + 1))
+                        (p, i + 1)
                     }
-                }
+                };
+                Some(into_page(d, page.as_deref(), p, i))
             }
             None => {
                 // Sans sélection : à la fin du corps de la page affichée (page fixe).
-                let url = ed.page.get_untracked();
-                let id = ed.pages.with_untracked(|ps| {
-                    ps.iter()
-                        .find(|p| p.url == url)
-                        .and_then(|p| p.page.clone())
-                })?;
+                let id = page?;
                 let body = d.pages.iter().find(|p| p.id == id)?.body.len();
                 Some((Parent::root(Owner::Page(id)), body))
             }
@@ -48,86 +62,406 @@ pub fn insertion_point(ed: Ed) -> Option<(Parent, usize)> {
     })
 }
 
-/// Élément proposé : préréglage, libellé, texte par défaut (clés de traduction), icône.
-type Item = (Preset, &'static str, &'static str, fn() -> AnyView);
+/// Liste d'un gabarit qui contient l'emplacement du contenu (`Slot`) : ce qui est déposé autour
+/// va dans la page affichée (au début avant l'emplacement, à la fin après), pas dans le gabarit
+/// partagé par toutes les pages.
+fn into_page(d: &revel_model::Site, page: Option<&str>, p: Parent, i: usize) -> (Parent, usize) {
+    if let (Owner::Layout(_), Some(page)) = (&p.owner, page)
+        && let Ok(list) = revel_edit::address::list(d, &p)
+        && let Some(slot) = list.iter().position(|n| matches!(n, Node::Slot))
+        && let Some(body) = d.pages.iter().find(|x| x.id == page).map(|x| x.body.len())
+    {
+        let at = if i <= slot { 0 } else { body };
+        return (Parent::root(Owner::Page(page.to_string())), at);
+    }
+    (p, i)
+}
+
+/// Adresse d'un nœud (son propriétaire retrouvé dans le document).
+fn target_of(d: &revel_model::Site, id: &str) -> Option<Target> {
+    let (kind, owner) = owner_of(d, id)?;
+    Some(Target {
+        owner: match kind {
+            OwnerKind::Page => Owner::Page(owner),
+            OwnerKind::Layout => Owner::Layout(owner),
+            OwnerKind::Component => Owner::Component(owner),
+        },
+        node: id.to_string(),
+    })
+}
+
+/// Emplacement (liste, position) d'un dépôt du canevas.
+pub fn drop_point(ed: Ed, t: &DropTarget) -> Option<(Parent, usize)> {
+    let page = page_id(ed);
+    ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let target = target_of(d, &t.at)?;
+        let (p, i) = match t.place {
+            Place::Before | Place::After => {
+                let (p, i) = revel_edit::address::locate(d, &target).ok()?;
+                (p, if t.place == Place::After { i + 1 } else { i })
+            }
+            Place::Inside => match revel_edit::address::node(d, &target).ok()? {
+                Node::Element { children, .. } => {
+                    (Parent::of(&target, Branch::Children), children.len())
+                }
+                _ => return None,
+            },
+        };
+        Some(into_page(d, page.as_deref(), p, i))
+    })
+}
+
+/// Commande d'un élément de la page glissé ailleurs (ou copié avec Alt). Pas de commande si
+/// l'emplacement est le sien, s'il est dans l'élément lui-même ou chez un autre propriétaire
+/// (page, gabarit, composant) : comme dans les calques.
+pub fn move_command(ed: Ed, id: &str, t: &DropTarget, copy: bool) -> Option<Command> {
+    let (to, mut index) = drop_point(ed, t)?;
+    ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let at = target_of(d, id)?;
+        let node = revel_edit::address::node(d, &at).ok()?.clone();
+        // Pas dans lui-même ni dans un de ses descendants.
+        if let Some(dest) = &to.node {
+            let mut inside = false;
+            revel_model::ids::walk(std::slice::from_ref(&node), &mut |n| {
+                if revel_model::ids::node_id(n) == Some(dest.as_str()) {
+                    inside = true;
+                }
+            });
+            if inside {
+                return None;
+            }
+        }
+        if copy {
+            let mut n = node;
+            let mut taken = d.node_ids();
+            revel_edit::make::refresh_ids(&mut n, &mut taken);
+            return Some(Command::Insert {
+                parent: to,
+                index,
+                node: n,
+            });
+        }
+        if to.owner != at.owner {
+            return None;
+        }
+        let (from, from_index) = revel_edit::address::locate(d, &at).ok()?;
+        if to == from && from_index < index {
+            index -= 1;
+        }
+        if to == from && index == from_index {
+            return None;
+        }
+        Some(Command::Move { at, to, index })
+    })
+}
+
+/// Élément proposé : préréglage (`None` : prévu), libellé, aide, texte par défaut (clés de
+/// traduction), icône, balise produite et nature (bloc), étape prévue.
+struct Item {
+    preset: Option<Preset>,
+    key: &'static str,
+    help: &'static str,
+    text: &'static str,
+    icon: fn() -> AnyView,
+    tag: &'static str,
+    block: bool,
+    step: u8,
+}
+
+const fn item(
+    preset: Preset,
+    key: &'static str,
+    help: &'static str,
+    text: &'static str,
+    icon: fn() -> AnyView,
+    tag: &'static str,
+    block: bool,
+) -> Item {
+    Item {
+        preset: Some(preset),
+        key,
+        help,
+        text,
+        icon,
+        tag,
+        block,
+        step: 0,
+    }
+}
+
+const fn planned(key: &'static str, icon: fn() -> AnyView, step: u8) -> Item {
+    Item {
+        preset: None,
+        key,
+        help: "",
+        text: "",
+        icon,
+        tag: "div",
+        block: true,
+        step,
+    }
+}
+
+/// Familles d'éléments (comme le panneau « Add » de Webflow).
+fn groups() -> Vec<(&'static str, Vec<Item>)> {
+    vec![
+        (
+            "insert-group-structure",
+            vec![
+                item(
+                    Preset::Section,
+                    "insert-section",
+                    "insert-help-section",
+                    "",
+                    icons::slot,
+                    "section",
+                    true,
+                ),
+                item(
+                    Preset::Container,
+                    "insert-container",
+                    "insert-help-container",
+                    "",
+                    icons::box_,
+                    "div",
+                    true,
+                ),
+                planned("insert-grid", icons::grid, 3),
+                planned("insert-columns", icons::layout, 3),
+            ],
+        ),
+        (
+            "insert-group-text",
+            vec![
+                item(
+                    Preset::Heading,
+                    "insert-heading",
+                    "insert-help-heading",
+                    "insert-text-heading",
+                    icons::text,
+                    "h2",
+                    true,
+                ),
+                item(
+                    Preset::Paragraph,
+                    "insert-paragraph",
+                    "insert-help-paragraph",
+                    "insert-text-paragraph",
+                    icons::text_left,
+                    "p",
+                    true,
+                ),
+                item(
+                    Preset::Link,
+                    "insert-link",
+                    "insert-help-link",
+                    "insert-text-link",
+                    icons::link,
+                    "a",
+                    false,
+                ),
+                item(
+                    Preset::Button,
+                    "insert-button",
+                    "insert-help-button",
+                    "insert-text-button",
+                    icons::wrap,
+                    "a",
+                    false,
+                ),
+                item(
+                    Preset::List,
+                    "insert-list",
+                    "insert-help-list",
+                    "insert-text-list",
+                    icons::list,
+                    "ul",
+                    true,
+                ),
+                planned("insert-rich-text", icons::text, 3),
+            ],
+        ),
+        (
+            "insert-group-media",
+            vec![
+                item(
+                    Preset::Image,
+                    "insert-image",
+                    "insert-help-image",
+                    "insert-text-image",
+                    icons::image,
+                    "img",
+                    false,
+                ),
+                planned("insert-video", icons::play, 3),
+                planned("insert-icon", icons::component, 3),
+                planned("insert-lottie", icons::bolt, 6),
+            ],
+        ),
+        (
+            "insert-group-cms",
+            vec![planned("insert-collection-list", icons::database, 3)],
+        ),
+        (
+            "insert-group-forms",
+            vec![planned("insert-form", icons::page, 5)],
+        ),
+        (
+            "insert-group-code",
+            vec![planned("insert-embed", icons::code, 3)],
+        ),
+    ]
+}
 
 #[component]
 pub fn Insert() -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
-    let items: [Item; 8] = [
-        (Preset::Section, "insert-section", "", icons::slot),
-        (Preset::Container, "insert-container", "", icons::box_),
-        (
-            Preset::Heading,
-            "insert-heading",
-            "insert-text-heading",
-            icons::text,
-        ),
-        (
-            Preset::Paragraph,
-            "insert-paragraph",
-            "insert-text-paragraph",
-            icons::text,
-        ),
-        (Preset::Link, "insert-link", "insert-text-link", icons::link),
-        (
-            Preset::Button,
-            "insert-button",
-            "insert-text-button",
-            icons::wrap,
-        ),
-        (
-            Preset::Image,
-            "insert-image",
-            "insert-text-image",
-            icons::image,
-        ),
-        (
-            Preset::List,
-            "insert-list",
-            "insert-text-list",
-            icons::repeat,
-        ),
-    ];
     let add = move |preset: Preset, text_key: &'static str| {
         let Some((parent, index)) = insertion_point(ed) else {
             ui.fail(revel_protocol::Failure::new("insert-no-place"));
             return;
         };
-        let text = if text_key.is_empty() {
-            String::new()
-        } else {
-            ui.now(text_key, &[])
-        };
-        ed.apply(
-            ui,
-            Command::InsertPreset {
-                parent,
-                index,
-                preset,
-                text,
-            },
-            false,
-        );
+        insert_at(ui, ed, preset, text_key, parent, index);
     };
-    let place = move || {
-        if ed.selected.get().is_some() {
-            ui.tx("insert-where-selection", &[])
-        } else {
-            ui.tx("insert-where-page", &[])
+
+    // Glisser vers la page : appui, puis déplacement de plus de 4 px. Le pointeur est capturé par
+    // l'élément du panneau ; au-dessus du cadre, sa position (pixels de la page) est transmise au
+    // canevas, qui montre l'emplacement et le renvoie (`ed.drop`).
+    let press = StoredValue::new(None::<(f64, f64)>);
+    let frame_point = move |cx: f64, cy: f64| -> Option<(f64, f64)> {
+        let f = ed.frame.get_untracked()?;
+        let r = f.get_bounding_client_rect();
+        let inside = cx >= r.left() && cx <= r.right() && cy >= r.top() && cy <= r.bottom();
+        let s = ed.scale();
+        inside.then(|| ((cx - r.left()) / s, (cy - r.top()) / s))
+    };
+    let on_down = move |e: ev::PointerEvent| {
+        if e.button() != 0 {
+            return;
+        }
+        if let Some(t) = e
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        {
+            let _ = t.set_pointer_capture(e.pointer_id());
+        }
+        press.set_value(Some((f64::from(e.client_x()), f64::from(e.client_y()))));
+    };
+    let on_move = move |e: ev::PointerEvent, it: DragItem| {
+        let Some((sx, sy)) = press.get_value() else {
+            return;
+        };
+        let (cx, cy) = (f64::from(e.client_x()), f64::from(e.client_y()));
+        if ed.drag.get_untracked().is_none() {
+            if (cx - sx).hypot(cy - sy) < 4.0 {
+                return;
+            }
+            ed.drop.set(None);
+            ed.post(serde_json::json!({ "type": "drag", "phase": "start", "tag": it.tag, "block": it.block }));
+            ed.drag.set(Some(it));
+        }
+        ed.drag_pos.set((cx, cy));
+        match frame_point(cx, cy) {
+            Some((x, y)) => {
+                ed.post(serde_json::json!({ "type": "drag", "phase": "move", "x": x, "y": y }))
+            }
+            None => {
+                // Hors du cadre : plus d'emplacement.
+                if ed.drop.get_untracked().is_some() {
+                    ed.post(serde_json::json!({ "type": "drag", "phase": "out" }));
+                    ed.drop.set(None);
+                }
+            }
         }
     };
+    let finish = move |e: Option<ev::PointerEvent>| {
+        press.set_value(None);
+        let Some(it) = ed.drag.get_untracked() else {
+            return false;
+        };
+        ed.drag.set(None);
+        ed.post(serde_json::json!({ "type": "drag", "phase": "end" }));
+        let over = e.is_some_and(|e| {
+            frame_point(f64::from(e.client_x()), f64::from(e.client_y())).is_some()
+        });
+        if let (true, Some(t)) = (over, ed.drop.get_untracked())
+            && let Some((parent, index)) = drop_point(ed, &t)
+        {
+            insert_at(ui, ed, it.preset, it.text_key, parent, index);
+        }
+        ed.drop.set(None);
+        true
+    };
+    // Échap : glisser annulé.
+    let on_key = window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
+        if e.key() == "Escape" && ed.drag.get_untracked().is_some() {
+            ed.drop.set(None);
+            finish(None);
+        }
+    });
+    on_cleanup(move || on_key.remove());
+
     view! {
         <div class="insert">
-            <p class="muted insert-help">{place}</p>
-            <div class="insert-grid">
-                {items.into_iter().map(|(preset, key, text_key, icon)| view! {
-                    <button class="insert-item" on:click=move |_| add(preset, text_key)>
-                        {icon()}<span>{ui.t(key)}</span>
-                    </button>
-                }).collect_view()}
-            </div>
+            {groups().into_iter().map(|(title, items)| view! {
+                <section class="insert-group">
+                    <p class="insert-group-title">{ui.t(title)}</p>
+                    <div class="insert-grid">
+                        {items.into_iter().map(|it| match it.preset {
+                            None => {
+                                let step = it.step;
+                                let key = it.key;
+                                view! {
+                                    <button class="insert-item is-planned" disabled=true data-item=key
+                                        title=move || format!("{} — {}", ui.tx(key, &[]), ui.tx("planned-step", &[("step", step.to_string())]))>
+                                        {(it.icon)()}<span>{ui.t(key)}</span>
+                                    </button>
+                                }.into_any()
+                            }
+                            Some(preset) => {
+                                let (key, help, text_key, tag, block) = (it.key, it.help, it.text, it.tag, it.block);
+                                let drag_item = move || DragItem { preset, text_key, label: ui.now(key, &[]), tag, block };
+                                view! {
+                                    <button class="insert-item" data-item=key
+                                        title=move || ui.tx(help, &[])
+                                        on:pointerdown=on_down
+                                        on:pointermove=move |e| on_move(e, drag_item())
+                                        on:pointerup=move |e| {
+                                            // Relâché sans glisser : clic (insertion à l'emplacement de la sélection).
+                                            if !finish(Some(e)) { add(preset, text_key) }
+                                        }
+                                        on:pointercancel=move |_| { finish(None); }
+                                        on:keydown=move |e: ev::KeyboardEvent| if e.key() == "Enter" || e.key() == " " { e.prevent_default(); add(preset, text_key) }>
+                                        {(it.icon)()}<span>{ui.t(key)}</span>
+                                    </button>
+                                }.into_any()
+                            }
+                        }).collect_view()}
+                    </div>
+                </section>
+            }).collect_view()}
         </div>
     }
+}
+
+/// Insère un élément du panneau à un emplacement.
+fn insert_at(ui: Ui, ed: Ed, preset: Preset, text_key: &str, parent: Parent, index: usize) {
+    let text = if text_key.is_empty() {
+        String::new()
+    } else {
+        ui.now(text_key, &[])
+    };
+    ed.apply(
+        ui,
+        Command::InsertPreset {
+            parent,
+            index,
+            preset,
+            text,
+        },
+        false,
+    );
 }

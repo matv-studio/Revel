@@ -179,6 +179,7 @@ impl Core {
                 page: p.page,
                 collection: p.collection,
                 layout: p.layout,
+                file: p.file,
             })
             .collect())
     }

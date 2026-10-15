@@ -32,7 +32,6 @@ new-site-name = Site name
 import-overwrite = This folder already contains a Revel site. Importing again replaces its structure (pages, layouts, collections); content and images are not changed.
 import-done = Import finished
 import-warnings = Points to check
-site-back = All sites
 site-pages = Pages
 site-layouts = Layouts
 site-components = Components
@@ -41,7 +40,6 @@ site-entries = { $count ->
         [one] { $count } entry
        *[other] { $count } entries
     }
-build-title = Generate
 build-env = Environment
 build-images = Responsive images (AVIF, WebP)
 build-run = Generate the site
@@ -53,7 +51,6 @@ build-done = { $generated } pages generated, { $copied } files copied, images: {
 build-warnings = Warnings
 build-failed = Generation failed. { $message }
 preview-open = Preview
-publish-title = Publish
 publish-empty = No hosting for this site yet. Add an SFTP server (OVH, o2switch…) or GitHub Pages to publish in one click.
 publish-add = Add hosting
 publish-name = Name
@@ -104,13 +101,9 @@ publish-key-recorded = First connection: the server key is recorded and will be 
 publish-failed = Publication failed. { $message }
 publish-warnings = Before publishing
 error = Error: { $message }
-nav-sites = Sites
 nav-recent = Recent
 nav-all-sites = All sites
-nav-overview = Overview
-nav-build = Generate
 nav-publish = Publish
-nav-editor = Editor
 # Visual editor (step 2)
 editor-loading = Opening the site in the editor…
 editor-canvas = Page canvas
@@ -121,7 +114,6 @@ editor-bp-desktop = Desktop (base)
 editor-bp-max = Up to { $width } px
 editor-bp-min = From { $width } px
 editor-zoom = Zoom
-editor-zoom-fit = Fit
 editor-scripts = Site scripts
 editor-scripts-help = Run the site's scripts in the canvas (off: clicks select elements)
 editor-undo = Undo (Ctrl+Z)
@@ -165,8 +157,6 @@ layers-slot = page content
 layers-markdown = content (Markdown)
 layers-badge-component = component
 insert-title = Add
-insert-where-selection = Added inside the selected element, or right after it.
-insert-where-page = Added at the end of the page. Select an element to choose where.
 insert-no-place = Select an element of the page where the new element should go.
 insert-section = Section
 insert-container = Container
@@ -282,14 +272,12 @@ settings-accent = Accent colour
 settings-accent-help = Used for primary buttons, selection and focus. “None” keeps the interface neutral.
 accent-none = None
 accent-custom = Custom
-overview-content = Content
 overview-structure = Structure
 overview-environments = Environments
 action-close = Close
 action-edit = Edit
 action-replace = Replace
 new-site-title = New site
-new-site-choose = Choose folder
 import-overwrite-title = Replace the existing site?
 publish-default-name = My hosting
 publish-form-new = New SFTP hosting
@@ -604,14 +592,14 @@ dock-reset = Default layout
 layers-search = Search layers
 layers-collapse = Collapse all
 layers-parent = Select parent
-editor-zoom-help = Zoom (Ctrl+wheel, Ctrl+0 fit, Ctrl+1 100%)
+editor-zoom-help = Zoom (Ctrl+wheel; Shift+1 fit, Shift+0 100%, Shift+2 selection)
 editor-zoom-fit-pct = Fit ({ $pct })
 editor-zoom-fit-short = Zoom to fit
 editor-zoom-100 = Zoom to 100%
 editor-path = Element path
 editor-scrub = Change a number
-key-zoom-fit = Ctrl+0
-key-zoom-100 = Ctrl+1
+key-zoom-fit = Shift+1
+key-zoom-100 = Shift+0
 key-zoom-wheel = Ctrl+wheel
 key-panels = Ctrl+\
 key-alt-click = Alt+click
@@ -622,3 +610,141 @@ home-view-grid = Grid
 home-view-list = List
 action-edit-site = Open the editor
 assets-none = No image with a fixed path in this site.
+
+# Site views (top bar)
+views = Site views
+view-editor = Editor
+view-cms = CMS
+view-locales = Localization
+view-settings = Settings
+nav-app-settings = Revel settings
+preview-help = Opens the generated site in the browser
+site-settings = Site settings
+action-open-help = Opens a folder containing a Revel site
+action-import-help = Creates a Revel site from an Eleventy project
+home-sort = Sort
+home-sort-recent = Recent
+home-sort-name = Name
+new-site-placeholder = My site
+new-site-lang = Site language
+new-site-location = Location
+new-site-change = Change…
+new-site-create = Create site
+
+# Site settings
+settings-general = General
+settings-publish = Publishing
+settings-export = Build
+settings-seo = SEO
+settings-redirects = Redirects
+settings-fonts = Fonts
+settings-code = Custom code
+settings-forms = Forms
+settings-backups = Backups
+settings-seo-planned = Title, description and share image of each page, sitemap and robots.txt.
+settings-fonts-planned = Site fonts: add, upload files, Google Fonts.
+settings-code-planned = Code added in the head or at the end of the page, for the whole site or one page.
+settings-forms-planned = Receiving the site’s form submissions (email, spreadsheet, external service).
+settings-backups-planned = Saved versions of the site, compared and restored.
+settings-identity = Identity
+settings-site-name = Name
+settings-site-url = Public address
+settings-site-lang = Language
+settings-site-folder = Folder
+redirects-add = Add a redirect
+redirects-none = No redirects.
+redirects-from = Old address
+redirects-to = New address
+lang-fr = French
+lang-en = English
+lang-de = German
+lang-es = Spanish
+lang-it = Italian
+lang-pt = Portuguese
+lang-nl = Dutch
+
+# Localization
+locales-add = Add a language
+locales-lang = Language
+locales-code = Code
+locales-prefix = Address
+locales-status = Status
+locales-primary = Primary language
+locales-planned = Translate the site: every page and every content item in several languages, per-language addresses (/fr/…) and hreflang tags.
+
+# CMS view
+cms-collections = Collections
+cms-search = Search content
+cms-fields-edit = Fields
+cms-file = File
+cms-no-entries = No content.
+cms-draft = Draft
+cms-open-page = Open the page in the editor
+cms-shown = { $shown } of { $total }
+cms-entry = Content
+cms-body = Text
+cms-body-len = { $count ->
+    [0] empty
+    [one] { $count } character
+   *[other] { $count } characters
+}
+cms-items = { $count ->
+    [one] { $count } item
+   *[other] { $count } items
+}
+cms-fields = { $count ->
+    [one] { $count } field
+   *[other] { $count } fields
+}
+
+# Add panel (groups, tooltip help, planned items)
+insert-group-structure = Structure
+insert-group-text = Text
+insert-group-media = Media
+insert-group-cms = CMS
+insert-group-forms = Forms
+insert-group-code = Code
+insert-help-section = Large part of the page (banner, introduction…). Drag onto the page to place it, or click to add it inside the selection.
+insert-help-container = Box that groups and aligns other elements. Drag onto the page, or click.
+insert-help-heading = Section heading (h2). Drag onto the page, or click.
+insert-help-paragraph = Block of text. Drag onto the page, or click.
+insert-help-link = Clickable text to a page or address. Drag onto the page, or click.
+insert-help-button = Link styled as a button. Drag onto the page, or click.
+insert-help-image = Optimized image (AVIF, WebP) in several sizes. Drag onto the page, or click.
+insert-help-list = Bulleted list. Drag onto the page, or click.
+insert-grid = Grid
+insert-columns = Columns
+insert-rich-text = Rich text
+insert-video = Video
+insert-icon = Icon
+insert-lottie = Lottie animation
+insert-collection-list = Collection list
+insert-form = Form
+insert-embed = HTML code
+
+# Canvas: selection navigation, moves, view
+editor-select-child = Select first child
+editor-select-parent = Select parent
+editor-select-sibling = Next, previous element
+editor-move = Move an element
+editor-move-copy = Copy while moving
+editor-order = Move up, down
+editor-zoom-selection = Zoom to selection
+editor-pan = Move the view
+key-child = Enter
+key-parent = Shift+Enter
+key-siblings = Tab · Shift+Tab
+key-move-drag = Drag
+key-copy-drag = Alt+drag
+key-order = Alt+↑ · Alt+↓
+key-wrap = Ctrl+G
+key-zoom-sel = Shift+2
+key-pan = Space+drag
+editor-copy = Copy
+editor-cut = Cut
+editor-paste = Paste
+editor-unwrap = Unwrap
+key-copy = Ctrl+C
+key-cut = Ctrl+X
+key-paste = Ctrl+V
+key-unwrap = Ctrl+Shift+G

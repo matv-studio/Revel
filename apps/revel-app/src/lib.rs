@@ -64,6 +64,45 @@ fn open_site(s: State<AppState>, path: String) -> Res<SiteSummary> {
     s.core.open_site(&PathBuf::from(path)).map_err(err)
 }
 
+/// Dossier proposé pour les nouveaux sites : `Documents/Revel` (dossier personnel à défaut).
+#[tauri::command]
+fn default_sites_dir(app: tauri::AppHandle) -> String {
+    app.path()
+        .document_dir()
+        .or_else(|_| app.path().home_dir())
+        .map(|d| d.join("Revel").display().to_string())
+        .unwrap_or_default()
+}
+
+/// Dossier qui sera créé pour un nouveau site nommé `name` dans `parent`.
+#[tauri::command]
+fn site_folder(parent: String, name: String) -> String {
+    revel_core::site_folder(&PathBuf::from(parent), &name)
+        .display()
+        .to_string()
+}
+
+/// Crée un site dans un nouveau dossier de `parent` (voir `site_folder`).
+#[tauri::command]
+fn create_site(s: State<AppState>, parent: String, name: String, lang: String) -> Res<SiteSummary> {
+    s.core
+        .create_site(&PathBuf::from(parent), &name, &lang)
+        .map_err(err)
+}
+
+/// Collections de contenus et leurs entrées (vue CMS).
+#[tauri::command]
+async fn cms_collections(
+    s: State<'_, AppState>,
+    path: String,
+) -> Res<Vec<revel_protocol::CmsCollection>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.cms(&PathBuf::from(path)))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
 #[tauri::command]
 fn new_site(s: State<AppState>, path: String, name: String, lang: String) -> Res<SiteSummary> {
     s.core
@@ -361,6 +400,10 @@ pub fn run() {
             has_site,
             open_site,
             new_site,
+            default_sites_dir,
+            site_folder,
+            create_site,
+            cms_collections,
             import_eleventy,
             build_site,
             open_preview,

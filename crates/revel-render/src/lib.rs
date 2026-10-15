@@ -288,6 +288,8 @@ pub struct PageRef {
     /// Contenu de collection : identifiant de la collection.
     pub collection: Option<String>,
     pub layout: Option<String>,
+    /// Contenu de collection : nom de son fichier, sans extension (`wattr`).
+    pub file: Option<String>,
 }
 
 /// Pages HTML du site (pages fixes puis contenus de collection), dans l'ordre de génération.
@@ -310,6 +312,7 @@ pub fn list_pages(input: &BuildInput) -> Result<Vec<PageRef>, RenderError> {
             page: j.page_id.clone(),
             collection: j.collection.clone(),
             layout: j.layout.clone(),
+            file: j.collection.as_ref().map(|_| j.file_slug.clone()),
         })
         .collect())
 }

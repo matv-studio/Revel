@@ -773,7 +773,7 @@ pub fn Layers() -> impl IntoView {
                     on:click=move |_| act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, 1))))>{icons::arrow_down()}</button>
                 <button class="icon-btn icon-btn--small" title=ui.t("layers-wrap") aria-label=ui.t("layers-wrap")
                     prop:disabled=move || target().is_none()
-                    on:click=move |_| act(target().map(|at| Command::Wrap { at, tag: "div".into() }))>{icons::wrap()}</button>
+                    on:click=move |_| { if let Some(at) = target() { ed.wrap(ui, at) } }>{icons::wrap()}</button>
                 <button class="icon-btn icon-btn--small" title=ui.t("layers-duplicate") aria-label=ui.t("layers-duplicate")
                     prop:disabled=move || target().is_none()
                     on:click=move |_| act(target().map(|at| Command::Duplicate { at }))>{icons::copy()}</button>
@@ -787,7 +787,7 @@ pub fn Layers() -> impl IntoView {
                     {menu_item("layers-up", "", icons::arrow_up, Box::new(move || act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, -1))))))}
                     {menu_item("layers-down", "", icons::arrow_down, Box::new(move || act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, 1))))))}
                     <hr class="menu-sep"/>
-                    {menu_item("layers-wrap", "", icons::wrap, Box::new(move || act(target().map(|at| Command::Wrap { at, tag: "div".into() }))))}
+                    {menu_item("layers-wrap", "", icons::wrap, Box::new(move || { if let Some(at) = target() { ed.wrap(ui, at) } }))}
                     {menu_item("layers-duplicate", "key-duplicate", icons::copy, Box::new(move || act(target().map(|at| Command::Duplicate { at }))))}
                     <hr class="menu-sep"/>
                     {menu_item("layers-delete", "key-delete", icons::trash, Box::new(move || act(target().map(|at| Command::Remove { at }))))}

@@ -239,6 +239,12 @@ impl Core {
         Ok(summary)
     }
 
+    /// Crée un site vide dans un nouveau dossier de `parent`, nommé d'après le site
+    /// (voir [`site_folder`]).
+    pub fn create_site(&self, parent: &Path, name: &str, lang: &str) -> Result<SiteSummary> {
+        self.new_site(&site_folder(parent, name), name, lang)
+    }
+
     /// Crée un site vide.
     pub fn new_site(&self, path: &Path, name: &str, lang: &str) -> Result<SiteSummary> {
         if path.join(revel_project::SITE_FILE).exists() {
@@ -532,6 +538,120 @@ impl Core {
     }
 }
 
+/// Dossier d'un nouveau site dans `parent` : nom du site en minuscules, sans accents ni espaces
+/// (`Atelier Lumen` -> `atelier-lumen`), suivi de `-2`, `-3`… si un dossier non vide porte déjà ce
+/// nom.
+pub fn site_folder(parent: &Path, name: &str) -> PathBuf {
+    let mut slug = String::new();
+    for c in name.trim().to_lowercase().chars() {
+        let c = match c {
+            'à' | 'á' | 'â' | 'ä' | 'ã' | 'å' => 'a',
+            'ç' => 'c',
+            'è' | 'é' | 'ê' | 'ë' => 'e',
+            'ì' | 'í' | 'î' | 'ï' => 'i',
+            'ñ' => 'n',
+            'ò' | 'ó' | 'ô' | 'ö' | 'õ' => 'o',
+            'ù' | 'ú' | 'û' | 'ü' => 'u',
+            'ý' | 'ÿ' => 'y',
+            'œ' => {
+                slug.push('o');
+                'e'
+            }
+            'æ' => {
+                slug.push('a');
+                'e'
+            }
+            c if c.is_ascii_alphanumeric() => c,
+            _ => '-',
+        };
+        if c != '-' || !slug.ends_with('-') {
+            slug.push(c);
+        }
+    }
+    let slug = slug.trim_matches('-');
+    let slug = if slug.is_empty() { "site" } else { slug };
+    let busy = |p: &Path| {
+        std::fs::read_dir(p)
+            .map(|mut d| d.next().is_some())
+            .unwrap_or(false)
+    };
+    let mut dir = parent.join(slug);
+    let mut n = 2;
+    while busy(&dir) {
+        dir = parent.join(format!("{slug}-{n}"));
+        n += 1;
+    }
+    dir
+}
+
+impl Core {
+    /// Collections de contenus du site, avec leurs entrées (vue CMS, lecture).
+    pub fn cms(&self, path: &Path) -> Result<Vec<revel_protocol::CmsCollection>> {
+        let p = revel_project::Project::open(path)?;
+        let entries = p.load_entries()?;
+        let urls: std::collections::HashMap<(String, String), String> = p
+            .list_pages()?
+            .into_iter()
+            .filter_map(|r| Some(((r.collection?, r.file?), r.url)))
+            .collect();
+        Ok(p.site
+            .collections
+            .iter()
+            .filter(|c| !c.folder.is_empty())
+            .map(|c| {
+                let list: Vec<revel_protocol::CmsEntry> = entries
+                    .iter()
+                    .filter(|e| e.folder == c.folder)
+                    .map(|e| revel_protocol::CmsEntry {
+                        file: e.file_stem.clone(),
+                        data: e.data.clone(),
+                        body_len: e.body.trim().chars().count(),
+                        url: urls.get(&(c.id.clone(), e.file_stem.clone())).cloned(),
+                    })
+                    .collect();
+                let fields = if c.fields.is_empty() {
+                    // Sans schéma : clés trouvées dans les en-têtes, dans l'ordre d'apparition.
+                    let mut names: Vec<String> = Vec::new();
+                    for e in &list {
+                        if let serde_json::Value::Object(m) = &e.data {
+                            for k in m.keys() {
+                                if !names.contains(k) {
+                                    names.push(k.clone());
+                                }
+                            }
+                        }
+                    }
+                    names
+                        .into_iter()
+                        .map(|name| revel_protocol::CmsField {
+                            name,
+                            label: None,
+                            kind: None,
+                        })
+                        .collect()
+                } else {
+                    c.fields
+                        .iter()
+                        .map(|f| revel_protocol::CmsField {
+                            name: f.name.clone(),
+                            label: f.label.clone(),
+                            kind: serde_json::to_value(&f.kind).ok().and_then(|v| {
+                                v.get("type").and_then(|t| t.as_str()).map(str::to_string)
+                            }),
+                        })
+                        .collect()
+                };
+                revel_protocol::CmsCollection {
+                    id: c.id.clone(),
+                    folder: c.folder.clone(),
+                    fields,
+                    entries: list,
+                }
+            })
+            .collect())
+    }
+}
+
 fn summarize(p: &revel_project::Project) -> Result<SiteSummary> {
     let entries = p.load_entries()?;
     Ok(SiteSummary {
@@ -561,6 +681,13 @@ fn summarize(p: &revel_project::Project) -> Result<SiteSummary> {
             }
             e
         },
+        locale: p.site.default_locale.clone(),
+        redirects: p
+            .site
+            .redirects
+            .iter()
+            .map(|r| (r.from.clone(), r.to.clone()))
+            .collect(),
     })
 }
 

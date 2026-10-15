@@ -229,12 +229,19 @@ pub fn instance_settings(
             false,
         )
     };
+    // Utilisation dans une liste de collection : propriétés reliables aux champs du contenu.
+    let list = ed.doc.with_untracked(|d| {
+        crate::blocks::enclosing_list(d.as_ref()?, &at.get_value())
+            .map(|(q, item)| (q.collection, item))
+    });
+    let cols = list.as_ref().map(|_| crate::blocks::collections(ed));
     let rows = c
         .props
         .iter()
         .map(|p| {
             let arg = args.get(&p.name).cloned();
-            prop_value_row(ui, ed, p.clone(), arg, set)
+            let bind = list.clone().zip(cols);
+            prop_value_row(ui, ed, p.clone(), arg, set, bind)
         })
         .collect_view();
     let has_props = !c.props.is_empty();
@@ -263,6 +270,13 @@ pub fn instance_settings(
     .into_any()
 }
 
+/// Liste de collection qui contient une utilisation : (collection, variable d'élément) et
+/// collections du site (champs).
+type ListBind = (
+    (String, String),
+    RwSignal<Vec<revel_protocol::CmsCollection>>,
+);
+
 /// Valeur d'une propriété pour une utilisation : vide, la valeur par défaut s'applique.
 fn prop_value_row(
     ui: Ui,
@@ -270,10 +284,82 @@ fn prop_value_row(
     p: PropDef,
     arg: Option<String>,
     set: impl Fn(String, Option<String>) + Copy + Send + Sync + 'static,
+    list: Option<ListBind>,
 ) -> AnyView {
     let name = StoredValue::new(p.name.clone());
     let label = p.label().to_string();
     let overridden = arg.is_some();
+    // Relié à un champ du contenu de la liste (`item.data.titre`).
+    if let Some(((collection, item), cols)) = list.clone()
+        && p.kind != PropKind::Switch
+        && let Some(field) = arg
+            .as_deref()
+            .and_then(|a| a.trim().strip_prefix(&format!("{item}.data.")))
+            .filter(|f| revel_model::valid_prop_name(f))
+    {
+        let field = field.to_string();
+        let shown = cols.with_untracked(|cs| {
+            cs.iter()
+                .find(|c| c.id == collection)
+                .and_then(|c| c.fields.iter().find(|f| f.name == field))
+                .and_then(|f| f.label.clone())
+        });
+        let shown = Signal::derive({
+            let field = field.clone();
+            let collection = collection.clone();
+            move || {
+                cols.with(|cs| {
+                    cs.iter()
+                        .find(|c| c.id == collection)
+                        .and_then(|c| c.fields.iter().find(|f| f.name == field))
+                        .and_then(|f| f.label.clone())
+                })
+                .or_else(|| shown.clone())
+                .unwrap_or_else(|| field.clone())
+            }
+        });
+        return view! {
+            <div class="view-line prop-row" data-prop=p.name.clone()>
+                <span class="prop-label">{kind_icon(p.kind)}{label}</span>
+                <span class="prop-chip prop-chip--field" title=format!("{{{{ {item}.data.{field} }}}}")>
+                    {icons::database()}<span>{shown}</span>
+                    <button class="chip-x" title=ui.t("component-unbind") aria-label=ui.t("component-unbind")
+                        on:click=move |_| set(name.get_value(), None)>{icons::close()}</button>
+                </span>
+            </div>
+        }
+        .into_any();
+    }
+    let can_bind = list.is_some() && p.kind != PropKind::Switch;
+    let field_menu = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        let Some(((collection, item), cols)) = list.clone() else {
+            return;
+        };
+        let items: Vec<CtxItem> = cols.with_untracked(|cs| {
+            cs.iter()
+                .find(|c| c.id == collection)
+                .map(|c| {
+                    c.fields
+                        .iter()
+                        .filter(|f| {
+                            !matches!(f.kind.as_deref(), Some("object" | "block" | "boolean"))
+                        })
+                        .map(|f| {
+                            let expr = format!("{item}.data.{}", f.name);
+                            CtxItem::new(
+                                f.label.clone().unwrap_or_else(|| f.name.clone()),
+                                move || set(name.get_value(), Some(expr.clone())),
+                            )
+                            .icon(icons::database)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        });
+        open(ui, &e, items);
+    };
+
     let reset = move || {
         overridden.then(|| {
             view! {
@@ -329,6 +415,10 @@ fn prop_value_row(
                     <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
                         on:click=move |_| crate::library::pick_image(ui, crate::library::media_shelf(ed), move |url| set(name.get_value(), Some(quote(&url))))>
                         {icons::image()}</button>
+                })}
+                {can_bind.then(|| view! {
+                    <button type="button" class="icon-btn icon-btn--small bind-field" title=ui.t("component-bind-field") aria-label=ui.t("component-bind-field")
+                        on:click=field_menu>{icons::database()}</button>
                 })}
                 {reset()}
             </Field>

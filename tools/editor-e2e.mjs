@@ -43,6 +43,9 @@ try {
   await page.keyboard.type('Atelier Lumière');
   await page.waitForFunction(() => /atelier-lumiere$/.test(document.querySelector('.path-value')?.textContent || ''));
   check('nouveau site : dossier proposé d\'après le nom', true, await page.textContent('.path-value'));
+  await page.click('.template-choice[data-template="new-site-template-showcase"]');
+  check('nouveau site : modèles proposés (vide, vitrine, blog)', (await page.$$('.template-choice')).length === 3
+    && (await page.getAttribute('.template-choice[data-template="new-site-template-showcase"]', 'aria-checked')) === 'true');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('.dialog--form'));
   // Un clic sur un site l'ouvre dans l'éditeur.
@@ -726,8 +729,17 @@ try {
       await page.click('.dock-panel[data-panel="settings"] .panel-title >> nth=0');
       const embed = await untilE(async () => (await frame.locator('.code-html .essai-code').count()) === 1);
       check('éléments : code HTML écrit tel quel', embed);
+      // Bloc prêt à l'emploi : section complète avec ses icônes et ses styles.
+      await page.click('.dock-tab[data-panel="layers"]');
+      await page.click('.layers .layer-label:has-text("section.intro-agency")');
+      await page.click('.dock-tab[data-panel="insert"]');
+      await page.locator('.insert-item[data-item="insert-block-features"]').scrollIntoViewIfNeeded();
+      await page.click('.insert-item[data-item="insert-block-features"]');
+      const block = await untilE(async () => (await frame.locator('.bloc-avantages .bloc-avantage .icone').count()) === 3);
+      const blockCss = block && await frame.locator('.bloc-avantages__grille').evaluate((g) => getComputedStyle(g).display);
+      check('éléments : bloc prêt à l\'emploi (avantages, icônes, styles)', block && blockCss === 'grid', String(blockCss));
       await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 12; i++) {
         if (JSON.stringify(await siteE()) === docE) break;
         await page.keyboard.press('Control+z');
         await page.waitForTimeout(300);

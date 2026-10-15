@@ -307,6 +307,7 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
     let parent = RwSignal::new(String::new());
     let folder = RwSignal::new(String::new());
     let busy = RwSignal::new(false);
+    let template = RwSignal::new(revel_protocol::SiteTemplate::Blank);
     let input = NodeRef::<leptos::html::Input>::new();
     spawn_local(async move {
         if let Ok(d) = api::default_sites_dir().await {
@@ -352,7 +353,7 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
         }
         busy.set(true);
         spawn_local(async move {
-            match api::create_site(&p, &n, &lang.get_untracked()).await {
+            match api::create_site(&p, &n, &lang.get_untracked(), template.get_untracked()).await {
                 Ok(s) => {
                     close.run(());
                     ui.open(s);
@@ -390,6 +391,24 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                         </select>
                     </div>
                 </label>
+                <div class="field">
+                    <span class="label">{ui.t("new-site-template")}</span>
+                    <div class="template-choices" role="radiogroup" aria-label=ui.t("new-site-template")>
+                        {[
+                            (revel_protocol::SiteTemplate::Blank, "new-site-template-blank", "new-site-template-blank-help", icons::page as fn() -> AnyView),
+                            (revel_protocol::SiteTemplate::Showcase, "new-site-template-showcase", "new-site-template-showcase-help", icons::layout as fn() -> AnyView),
+                            (revel_protocol::SiteTemplate::Blog, "new-site-template-blog", "new-site-template-blog-help", icons::database as fn() -> AnyView),
+                        ].into_iter().map(|(t, key, help, icon)| view! {
+                            <button type="button" class="template-choice" role="radio" data-template=key
+                                aria-checked=move || (template.get() == t).to_string()
+                                class:is-on=move || template.get() == t
+                                title=ui.t(help)
+                                on:click=move |_| template.set(t)>
+                                {icon()}<span>{ui.t(key)}</span>
+                            </button>
+                        }).collect_view()}
+                    </div>
+                </div>
                 <div class="field">
                     <span class="label">{ui.t("new-site-location")}</span>
                     <div class="path-field">

@@ -393,3 +393,5 @@
 .insp-attrs:not([open]) { gap: 0; }
 .insp-attrs { display: block; }
 .insp-attrs > * + * { margin-top: var(--s-2); }
+.prop-chip--field { background: var(--set-bg); color: var(--set-text); }
+.prop-chip--field .chip-x:hover { background: color-mix(in srgb, var(--set-text) 20%, transparent); }

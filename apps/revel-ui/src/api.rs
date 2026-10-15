@@ -168,14 +168,29 @@ pub async fn site_folder(parent: &str, name: &str) -> Res<String> {
 }
 
 /// Crée un site dans un nouveau dossier de `parent`.
-pub async fn create_site(parent: &str, name: &str, lang: &str) -> Res<SiteSummary> {
+pub async fn create_site(
+    parent: &str,
+    name: &str,
+    lang: &str,
+    template: revel_protocol::SiteTemplate,
+) -> Res<SiteSummary> {
     #[derive(Serialize)]
     struct A<'a> {
         parent: &'a str,
         name: &'a str,
         lang: &'a str,
+        template: revel_protocol::SiteTemplate,
     }
-    call("create_site", &A { parent, name, lang }).await
+    call(
+        "create_site",
+        &A {
+            parent,
+            name,
+            lang,
+            template,
+        },
+    )
+    .await
 }
 
 /// Collections de contenus du site et leurs entrées.

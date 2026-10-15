@@ -15,6 +15,7 @@ pub mod command;
 pub mod history;
 pub mod icons;
 pub mod make;
+pub mod ready;
 pub mod style;
 
 pub use address::{Branch, Owner, Parent, Target};

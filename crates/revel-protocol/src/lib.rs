@@ -14,6 +14,19 @@ pub struct RecentSite {
     pub opened_at: String,
 }
 
+/// Modèle d'un nouveau site.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SiteTemplate {
+    /// Une page d'accueil à remplir.
+    #[default]
+    Blank,
+    /// Site vitrine : accueil, à propos, contact, menu.
+    Showcase,
+    /// Blog : accueil, liste des articles, collection d'articles modifiable dans le CMS.
+    Blog,
+}
+
 /// Résumé d'un site ouvert.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SiteSummary {

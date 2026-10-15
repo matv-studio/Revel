@@ -28,6 +28,9 @@ enum Command {
         dir: PathBuf,
         #[arg(long, default_value = "Nouveau site")]
         name: String,
+        /// Modèle : `vitrine` ou `blog` (sans modèle : projet vide).
+        #[arg(long)]
+        template: Option<String>,
     },
     /// Importe un projet Eleventy : écrit `site.revel.json` à sa racine.
     ImportEleventy {
@@ -144,8 +147,32 @@ fn main() -> Result<()> {
                 println!("  - {}", caps.id);
             }
         }
-        Command::New { dir, name } => {
-            Project::create(&dir, Site::new(name, cli.lang.clone()))?;
+        Command::New {
+            dir,
+            name,
+            template,
+        } => {
+            match template.as_deref() {
+                None => {
+                    Project::create(&dir, Site::new(name, cli.lang.clone()))?;
+                }
+                Some(t) => {
+                    let template = match t {
+                        "vitrine" | "showcase" => revel_protocol::SiteTemplate::Showcase,
+                        "blog" => revel_protocol::SiteTemplate::Blog,
+                        "vide" | "blank" => revel_protocol::SiteTemplate::Blank,
+                        other => anyhow::bail!("modèle inconnu : {other} (vide, vitrine, blog)"),
+                    };
+                    let config =
+                        std::env::temp_dir().join(format!("revel-new-{}", std::process::id()));
+                    let core = revel_core::Core::new(
+                        &config,
+                        Box::new(revel_core::secrets::Memory::default()),
+                    );
+                    core.new_site_from(&dir, &name, &cli.lang, template)
+                        .map_err(|e| anyhow::anyhow!("{e}"))?;
+                }
+            }
             println!("{}", dir.join(revel_project::SITE_FILE).display());
         }
         Command::ImportEleventy { dir, dry_run } => {

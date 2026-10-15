@@ -4778,6 +4778,7 @@ dependencies = [
  "revel-import",
  "revel-model",
  "revel-project",
+ "revel-protocol",
  "revel-render",
  "revel-style",
  "serde_json",
@@ -4836,6 +4837,7 @@ version = "0.2.2"
 name = "revel-edit"
 version = "0.2.2"
 dependencies = [
+ "revel-markup",
  "revel-model",
  "revel-style",
  "serde",

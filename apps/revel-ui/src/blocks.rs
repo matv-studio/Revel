@@ -16,7 +16,7 @@ fn attr<'a>(attrs: &'a [Attr], name: &str) -> Option<&'a Attr> {
 }
 
 /// Collections du site (schéma de Pages CMS), relues à la demande.
-fn collections(ed: Ed) -> RwSignal<Vec<CmsCollection>> {
+pub(crate) fn collections(ed: Ed) -> RwSignal<Vec<CmsCollection>> {
     let cols = RwSignal::new(Vec::new());
     let path = ed.path.get_value();
     spawn_local(async move {
@@ -400,7 +400,7 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
 
 /// Boucle de collection la plus proche qui contient le nœud : sa cible, ses réglages, le nom de
 /// sa variable d'élément.
-fn enclosing_list(d: &Site, at: &Target) -> Option<(Query, String)> {
+pub(crate) fn enclosing_list(d: &Site, at: &Target) -> Option<(Query, String)> {
     let mut cur = at.clone();
     for _ in 0..64 {
         let (parent, _) = revel_edit::address::locate(d, &cur).ok()?;

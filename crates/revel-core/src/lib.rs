@@ -254,12 +254,44 @@ impl Core {
         self.new_site(&site_folder(parent, name), name, lang)
     }
 
+    /// Crée un site d'après un modèle dans un nouveau dossier de `parent`.
+    pub fn create_site_from(
+        &self,
+        parent: &Path,
+        name: &str,
+        lang: &str,
+        template: revel_protocol::SiteTemplate,
+    ) -> Result<SiteSummary> {
+        self.new_site_from(&site_folder(parent, name), name, lang, template)
+    }
+
     /// Crée un site vide.
     pub fn new_site(&self, path: &Path, name: &str, lang: &str) -> Result<SiteSummary> {
+        self.new_site_from(path, name, lang, revel_protocol::SiteTemplate::Blank)
+    }
+
+    /// Crée un site d'après un modèle (vide, vitrine, blog).
+    pub fn new_site_from(
+        &self,
+        path: &Path,
+        name: &str,
+        lang: &str,
+        template: revel_protocol::SiteTemplate,
+    ) -> Result<SiteSummary> {
         if path.join(revel_project::SITE_FILE).exists() {
             return Err(CoreError::AlreadyImported);
         }
-        let p = revel_project::Project::create(path, starter::starter_site(name, lang))?;
+        // Contenus d'exemple et description des collections, écrits avant l'ouverture du projet.
+        for (rel, text) in starter::template_files(template, lang) {
+            let f = path.join(rel);
+            if let Some(dir) = f.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            if !f.exists() {
+                std::fs::write(&f, text)?;
+            }
+        }
+        let p = revel_project::Project::create(path, starter::starter_from(name, lang, template))?;
         // Dossier des médias (copié tel quel à la publication).
         let _ = std::fs::create_dir_all(path.join("media"));
         let summary = summarize(&p)?;

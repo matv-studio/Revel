@@ -1355,3 +1355,57 @@ fn elements_avec_leurs_styles() {
     assert!(icons::ICONS.iter().all(|(_, p)| p.starts_with('<')));
     assert!(icons::ICONS.len() >= 30);
 }
+
+#[test]
+fn blocs_prets_a_l_emploi() {
+    let mut s = sample();
+    let before = json(&s);
+    let parent = Parent::of(&at(&s, "main"), Branch::Children);
+    let mut inverses = Vec::new();
+    for p in make::Preset::ALL
+        .into_iter()
+        .filter(|p| p.block().is_some())
+    {
+        let inv = apply(
+            &mut s,
+            &Command::InsertPreset {
+                parent: parent.clone(),
+                index: 0,
+                preset: p,
+                text: String::new(),
+            },
+        )
+        .unwrap_or_else(|e| panic!("{p:?} : {e}"));
+        inverses.push(inv);
+    }
+    let c = css(&s);
+    for sel in [
+        ".bloc {",
+        ".bloc-bouton--secondaire {",
+        ".bloc-avantage .icone {",
+        ".bloc-faq details p {",
+        ".bloc-contact__liste li {",
+    ] {
+        assert!(c.contains(sel), "{sel}\n{c}");
+    }
+    assert_eq!(
+        c.matches(".bloc {").count(),
+        1,
+        "règles communes une seule fois"
+    );
+    let txt = json(&s);
+    assert!(txt.contains("Questions fréquentes") && txt.contains("\"data-icon\""));
+    for inv in inverses.iter().rev() {
+        apply(&mut s, inv).unwrap();
+    }
+    assert_eq!(json(&s), before);
+    // Site en anglais : textes en anglais.
+    let mut en = Site::new("Test", "en");
+    en.pages.push(s.pages[0].clone());
+    let n = make::Preset::BlockFaq.node(&en, "");
+    assert!(
+        serde_json::to_string(&n)
+            .unwrap()
+            .contains("Frequently asked questions")
+    );
+}

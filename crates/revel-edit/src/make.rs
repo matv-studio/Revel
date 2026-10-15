@@ -102,10 +102,33 @@ pub enum Preset {
     Embed,
     /// Liste de collection : un élément par contenu.
     CollectionList,
+    /// Blocs prêts à l'emploi (sections complètes, [`crate::ready`]).
+    BlockHero,
+    BlockFeatures,
+    BlockTextImage,
+    BlockCta,
+    BlockTestimonial,
+    BlockFaq,
+    BlockContact,
 }
 
 impl Preset {
-    pub const ALL: [Preset; 15] = [
+    /// Bloc prêt à l'emploi correspondant.
+    pub fn block(self) -> Option<crate::ready::Block> {
+        use crate::ready::Block;
+        Some(match self {
+            Preset::BlockHero => Block::Hero,
+            Preset::BlockFeatures => Block::Features,
+            Preset::BlockTextImage => Block::TextImage,
+            Preset::BlockCta => Block::CallToAction,
+            Preset::BlockTestimonial => Block::Testimonial,
+            Preset::BlockFaq => Block::Faq,
+            Preset::BlockContact => Block::Contact,
+            _ => return None,
+        })
+    }
+
+    pub const ALL: [Preset; 22] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -121,10 +144,20 @@ impl Preset {
         Preset::Icon,
         Preset::Embed,
         Preset::CollectionList,
+        Preset::BlockHero,
+        Preset::BlockFeatures,
+        Preset::BlockTextImage,
+        Preset::BlockCta,
+        Preset::BlockTestimonial,
+        Preset::BlockFaq,
+        Preset::BlockContact,
     ];
 
     /// Règles de style dont l'élément a besoin (ajoutées si le site ne les a pas).
     pub fn rules(self) -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+        if let Some(b) = self.block() {
+            return b.rules();
+        }
         match self {
             Preset::Grid => vec![
                 (
@@ -182,6 +215,9 @@ impl Preset {
     /// Nouveau nœud (identifiants libres dans `site`). Les textes par défaut sont fournis par
     /// l'appelant (traduits dans la langue de l'interface).
     pub fn node(self, site: &Site, text: &str) -> Node {
+        if let Some(b) = self.block() {
+            return b.node(site);
+        }
         let mut taken = site.node_ids();
         let mut id = || {
             let i = fresh(&taken);
@@ -202,6 +238,14 @@ impl Preset {
         };
         let txt = |t: &str| Node::Text { text: t.into() };
         match self {
+            // Blocs : traités plus haut.
+            Preset::BlockHero
+            | Preset::BlockFeatures
+            | Preset::BlockTextImage
+            | Preset::BlockCta
+            | Preset::BlockTestimonial
+            | Preset::BlockFaq
+            | Preset::BlockContact => el(id(), "section", vec![], vec![]),
             Preset::Section => el(id(), "section", vec![], vec![]),
             Preset::Container => el(id(), "div", vec![], vec![]),
             Preset::Heading => el(id(), "h2", vec![], vec![txt(text)]),

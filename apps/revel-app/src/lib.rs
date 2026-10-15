@@ -83,9 +83,20 @@ fn site_folder(parent: String, name: String) -> String {
 
 /// Crée un site dans un nouveau dossier de `parent` (voir `site_folder`).
 #[tauri::command]
-fn create_site(s: State<AppState>, parent: String, name: String, lang: String) -> Res<SiteSummary> {
+fn create_site(
+    s: State<AppState>,
+    parent: String,
+    name: String,
+    lang: String,
+    template: Option<revel_protocol::SiteTemplate>,
+) -> Res<SiteSummary> {
     s.core
-        .create_site(&PathBuf::from(parent), &name, &lang)
+        .create_site_from(
+            &PathBuf::from(parent),
+            &name,
+            &lang,
+            template.unwrap_or_default(),
+        )
         .map_err(err)
 }
 

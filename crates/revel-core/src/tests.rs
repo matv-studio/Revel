@@ -1382,3 +1382,54 @@ fn medias_importes_et_remplaces() {
             .any(|p| p.from == "media")
     );
 }
+
+#[test]
+fn modeles_de_site() {
+    use revel_protocol::SiteTemplate;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    // Vitrine : trois pages faites de blocs, menu dans l'en-tête.
+    let v = d.path().join("vitrine");
+    let s = c
+        .new_site_from(&v, "Atelier", "fr", SiteTemplate::Showcase)
+        .unwrap();
+    assert_eq!(s.pages, 3);
+    c.build(&v, "production", false, &|_| {}).unwrap();
+    let out = out_dir(&v, "production");
+    let home = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        home.contains(r#"<a href="/a-propos/">À propos</a>"#),
+        "{home}"
+    );
+    assert!(
+        home.contains(r#"aria-current="page">Accueil</a>"#),
+        "{home}"
+    );
+    assert!(home.contains("bloc-avantages") && home.contains("bloc-appel"));
+    let contact = std::fs::read_to_string(out.join("contact/index.html")).unwrap();
+    assert!(contact.contains("Questions fréquentes"));
+    let css = std::fs::read_to_string(out.join("assets/site.css")).unwrap();
+    assert!(css.contains(".bloc-hero .bloc-titre") && css.contains(".entete__nav"));
+    // Blog : collection d'articles (fichiers et .pages.yml), liste des trois plus récents.
+    let b = d.path().join("blog");
+    c.new_site_from(&b, "Carnet", "fr", SiteTemplate::Blog)
+        .unwrap();
+    assert!(b.join(".pages.yml").is_file());
+    assert!(b.join("content/articles/bienvenue.md").is_file());
+    c.build(&b, "production", false, &|_| {}).unwrap();
+    let out = out_dir(&b, "production");
+    let home = std::fs::read_to_string(out.join("index.html")).unwrap();
+    let i1 = home.find("Un deuxième article").unwrap();
+    let i2 = home.find("Bienvenue sur le blog").unwrap();
+    assert!(i1 < i2, "plus récent d'abord");
+    let art = std::fs::read_to_string(out.join("articles/bienvenue/index.html")).unwrap();
+    assert!(
+        art.contains("<p class=\"article__date\">05/01/2026</p>"),
+        "{art}"
+    );
+    assert!(art.contains("Écrivez ici votre premier article"));
+    let cols = c.cms(&b).unwrap();
+    let a = cols.iter().find(|x| x.id == "articles").unwrap();
+    assert_eq!(a.entries.len(), 2);
+    assert!(a.fields.iter().any(|f| f.name == "description"));
+}

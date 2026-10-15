@@ -102,21 +102,34 @@ try {
     const t = document.querySelector('h1[data-rv="' + CSS.escape(hid) + '"]');
     return t.getAttribute('data-rv') === id || !!t.querySelector('[data-rv="' + CSS.escape(id) + '"]');
   }, [sel.id, h1Id]);
-  check('clic sur un titre : sélection transmise', inTitle && sel.rect && sel.rect.width > 0, sel.label);
+  // Titre dans un composant (en-tête d'un contenu) : l'utilisation entière est sélectionnée.
+  check('clic sur un titre : sélection transmise', (inTitle || !!sel.component) && sel.rect && sel.rect.width > 0, sel.label);
 
   const link = frame.locator('footer a[href^="/"]').first();
   const linkId = await link.getAttribute('data-rv');
   await link.click();
   const linkSel = await waitFor((m) => m.type === 'select' && m.id && m.id !== sel.id, 'select lien');
+  await parent.waitForTimeout(300);
   // Un composant utilisé deux fois (logo de l'en-tête et du pied de page) a les mêmes
   // identifiants dans les deux : l'élément cliqué est cherché dans le lien lui-même.
-  const inside = await f.evaluate(([id, lid]) => {
+  const inLink = (id) => f.evaluate(([id, lid]) => {
     const l = [...document.querySelectorAll('footer [data-rv="' + CSS.escape(lid) + '"]')][0];
     return !!l && (l.getAttribute('data-rv') === id || !!l.querySelector('[data-rv="' + CSS.escape(id) + '"]'));
-  }, [linkSel.id, linkId]);
-  await parent.waitForTimeout(300);
-  check('clic sur un lien : sélection, pas de navigation', inside && f.url().endsWith(page),
-    `${linkSel.label} ; ${f.url()}`);
+  }, [id, linkId]);
+  if (linkSel.component) {
+    // Lien dans un composant (pied de page) : un clic sélectionne l'utilisation entière, un
+    // double-clic ouvre le composant sur l'élément cliqué (3.6).
+    check('clic dans un composant : utilisation sélectionnée, pas de navigation',
+      f.url().endsWith(page) && linkSel.rect && linkSel.rect.height > 0, `${linkSel.label} ; ${f.url()}`);
+    await link.dblclick();
+    const inner = await waitFor((m) => m.type === 'select' && m.id && !m.component && m.id !== sel.id, 'select dans le composant');
+    await parent.waitForTimeout(300);
+    check('double-clic dans un composant : élément du composant sélectionné, pas de navigation',
+      (await inLink(inner.id)) && f.url().endsWith(page), `${inner.label} ; ${f.url()}`);
+  } else {
+    check('clic sur un lien : sélection, pas de navigation', (await inLink(linkSel.id)) && f.url().endsWith(page),
+      `${linkSel.label} ; ${f.url()}`);
+  }
 
   await frame.locator('main p').first().hover();
   const hov = await waitFor((m) => m.type === 'hover' && m.id, 'hover');

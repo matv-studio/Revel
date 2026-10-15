@@ -66,6 +66,9 @@ pub fn SiteView(site: SiteSummary) -> impl IntoView {
     }
 }
 
+/// Largeur de l'aperçu (`None` : toute la place), libellé, icône.
+type PreviewSize = (Option<u32>, &'static str, fn() -> AnyView);
+
 /// Aperçu du site dans l'espace de travail : la page comme elle sera publiée (scripts actifs),
 /// largeur d'écran au choix, rechargement, ouverture dans une fenêtre, fermeture (Échap).
 #[component]
@@ -99,7 +102,7 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
             }
         });
     };
-    let sizes: [(Option<u32>, &'static str, fn() -> AnyView); 3] = [
+    let sizes: [PreviewSize; 3] = [
         (None, "editor-bp-desktop-short", icons::desktop),
         (Some(768), "preview-tablet", icons::tablet),
         (Some(390), "preview-mobile", icons::mobile),

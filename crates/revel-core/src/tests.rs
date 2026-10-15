@@ -179,8 +179,10 @@ async fn publication_par_le_coeur() {
         })
         .await
         .unwrap();
-    assert_eq!(s.uploaded, 1);
+    // Page d'accueil et robots.txt (produit quand le site n'en a pas).
+    assert_eq!(s.uploaded, 2);
     assert!(s.key_recorded);
+    assert!(Path::new(&home).join("revel-coeur/robots.txt").is_file());
     let html = std::fs::read_to_string(Path::new(&home).join("revel-coeur/index.html")).unwrap();
     assert!(html.contains("<h1>Accueil</h1>"));
     // Clé enregistrée : la deuxième publication la vérifie ; rien à envoyer.

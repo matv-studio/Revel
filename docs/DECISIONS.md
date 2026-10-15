@@ -296,6 +296,6 @@ d'un élément se relie à une propriété (nouvelle, valeur par défaut : la va
 réécrit la valeur par défaut. Détacher une utilisation la remplace par une copie de son contenu, valeurs écrites
 dedans. Un composant ne peut pas être placé dans lui-même (refusé à l'édition, ignoré au rendu). Les propriétés
 de Webflow (texte, texte riche, image, lien, vidéo, nombre, interrupteur, liste de collection) servent de
-référence pour l'import de l'étape 7 ; texte riche, vidéo, nombre et liaison à un champ de collection depuis le
-panneau viendront avec 3.7 (listes de collection). Source : [Component properties — Webflow Help
+référence pour l'import de l'étape 7 ; la liaison d'une propriété à un champ de collection est faite (3.7),
+les propriétés texte riche, vidéo et nombre viendront plus tard. Source : [Component properties — Webflow Help
 Center](https://help.webflow.com/hc/en-us/articles/33961219350547).

@@ -67,7 +67,20 @@ fn field(v: &Value, components: &Map<String, Value>, depth: usize) -> Option<Cms
         "rich-text" => "rich_text".to_string(),
         other => other.to_string(),
     });
-    let fields = if depth < 4 {
+    let fields = if depth >= 4 {
+        Vec::new()
+    } else if let Some(blocks) = v.get("blocks").and_then(Value::as_array) {
+        // Blocs : chaque type de bloc est décrit comme un objet (ses champs), sous son nom.
+        blocks
+            .iter()
+            .filter_map(|b| {
+                let mut d = b.as_object()?.clone();
+                d.entry("type")
+                    .or_insert_with(|| Value::String("object".into()));
+                field(&Value::Object(d), components, depth + 1)
+            })
+            .collect()
+    } else {
         v.get("fields")
             .and_then(Value::as_array)
             .map(|a| {
@@ -76,11 +89,9 @@ fn field(v: &Value, components: &Map<String, Value>, depth: usize) -> Option<Cms
                     .collect()
             })
             .unwrap_or_default()
-    } else {
-        Vec::new()
     };
     let mut options = v.get("options").cloned().unwrap_or(Value::Null);
-    // Blocs : définitions gardées dans les options (éditeur de blocs à venir).
+    // Blocs : définitions d'origine gardées dans les options (réécrites telles quelles).
     if let Some(b) = v.get("blocks") {
         let mut o = options.as_object().cloned().unwrap_or_default();
         o.insert("blocks".into(), b.clone());
@@ -481,6 +492,43 @@ content:
         assert!(parse("pas: [du yaml").collections.is_empty());
         assert!(!parse(CONFIG).merge);
         assert!(parse("settings:\n  content:\n    merge: true\n").merge);
+    }
+
+    #[test]
+    fn blocs_decrits_comme_objets() {
+        let cfg = r#"
+components:
+  hero:
+    label: Grand titre
+    type: object
+    fields:
+      - { name: title, type: string }
+content:
+  - name: pages
+    type: collection
+    path: content/pages
+    fields:
+      - name: sections
+        type: block
+        list: true
+        blockKey: type
+        blocks:
+          - name: hero
+            component: hero
+          - name: text
+            label: Texte
+            fields:
+              - { name: body, type: rich-text }
+"#;
+        let p = parse(cfg);
+        let f = &p.collections[0].fields[0];
+        assert_eq!(f.kind.as_deref(), Some("block"));
+        assert_eq!(f.options["blockKey"], "type");
+        let names: Vec<&str> = f.fields.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, vec!["hero", "text"]);
+        assert_eq!(f.fields[0].label.as_deref(), Some("Grand titre"));
+        assert_eq!(f.fields[0].fields[0].name, "title");
+        assert_eq!(f.fields[1].fields[0].kind.as_deref(), Some("rich_text"));
     }
 
     #[test]

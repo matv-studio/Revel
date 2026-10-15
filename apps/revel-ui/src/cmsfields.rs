@@ -43,7 +43,11 @@ pub enum Kind {
         multiple: bool,
     },
     Object,
-    /// Valeur structurée sans contrôle dédié (blocs, listes d'objets) : texte JSON.
+    /// Liste d'objets (groupe de champs répété) : une carte par élément.
+    ObjectList,
+    /// Blocs de Pages CMS : liste d'éléments dont le type (`blockKey`) choisit les champs.
+    Blocks,
+    /// Valeur structurée sans contrôle dédié : texte JSON.
     Json,
 }
 
@@ -78,6 +82,17 @@ pub fn kind_of(f: &CmsField, v: Option<&Value>) -> Kind {
             } else {
                 Kind::Json
             }
+        }
+        "object"
+            if many && !f.fields.is_empty() && v.is_none_or(|v| v.is_array() || v.is_null()) =>
+        {
+            Kind::ObjectList
+        }
+        "block"
+            if !f.fields.is_empty()
+                && v.is_none_or(|v| v.is_array() || v.is_object() || v.is_null()) =>
+        {
+            Kind::Blocks
         }
         _ if many => Kind::Json,
         "string" | "uuid" => Kind::Text,
@@ -567,6 +582,9 @@ pub fn field_row(
             {help.is_some().then(icons::info)}
         </span>
     };
+    if matches!(kind, Kind::ObjectList | Kind::Blocks) {
+        return repeat_view(ui, f, kind, value, set, cols, head.into_any());
+    }
     if kind == Kind::Object {
         let subs = f.fields.clone();
         return view! {
@@ -867,7 +885,7 @@ fn control(
             }
             .into_any()
         }
-        Kind::Object => ().into_any(),
+        Kind::Object | Kind::ObjectList | Kind::Blocks => ().into_any(),
     }
 }
 
@@ -971,4 +989,190 @@ mod tests {
             ]
         );
     }
+}
+
+/// Valeur d'un champ d'une définition, à la création d'un élément.
+fn defaults_of(fields: &[CmsField]) -> serde_json::Map<String, Value> {
+    fields
+        .iter()
+        .filter_map(|f| f.default.clone().map(|d| (f.name.clone(), d)))
+        .collect()
+}
+
+/// Liste d'objets ou blocs : une carte par élément (type, monter, descendre, supprimer, champs),
+/// ajout en bas (choix du type pour des blocs).
+fn repeat_view(
+    ui: Ui,
+    f: CmsField,
+    kind: Kind,
+    value: Signal<Option<Value>>,
+    set: Callback<Option<Value>>,
+    cols: Cols,
+    head: AnyView,
+) -> AnyView {
+    let name = f.name.clone();
+    let blocks = kind == Kind::Blocks;
+    let key = StoredValue::new(
+        f.options
+            .get("blockKey")
+            .and_then(Value::as_str)
+            .unwrap_or("_block")
+            .to_string(),
+    );
+    // Blocs sans `list` : un seul bloc (objet).
+    let single = blocks && !f.list;
+    let fs = StoredValue::new(f);
+    let items = move || -> Vec<Value> {
+        match value.get() {
+            Some(Value::Array(a)) => a,
+            Some(v @ Value::Object(_)) => vec![v],
+            _ => Vec::new(),
+        }
+    };
+    let write = move |list: Vec<Value>| {
+        if single {
+            set.run(list.into_iter().next());
+        } else {
+            set.run((!list.is_empty()).then_some(Value::Array(list)));
+        }
+    };
+    let current = move || -> Vec<Value> {
+        match value.get_untracked() {
+            Some(Value::Array(a)) => a,
+            Some(v @ Value::Object(_)) => vec![v],
+            _ => Vec::new(),
+        }
+    };
+    let def_of = move |item: &Value| -> Option<CmsField> {
+        if !blocks {
+            return None;
+        }
+        let t = item
+            .get(key.get_value())
+            .and_then(Value::as_str)?
+            .to_string();
+        fs.with_value(|f| f.fields.iter().find(|b| b.name == t).cloned())
+    };
+    let add = move |e: leptos::ev::MouseEvent| {
+        if blocks {
+            use crate::ctxmenu::{CtxItem, open};
+            let defs = fs.with_value(|f| f.fields.clone());
+            let items: Vec<CtxItem> = defs
+                .into_iter()
+                .map(|d| {
+                    let label = label_of(&d);
+                    CtxItem::new(label, move || {
+                        let mut o = defaults_of(&d.fields);
+                        o.insert(key.get_value(), Value::String(d.name.clone()));
+                        let mut list = if single { Vec::new() } else { current() };
+                        list.push(Value::Object(o));
+                        write(list);
+                    })
+                })
+                .collect();
+            open(ui, &e, items);
+        } else {
+            let o = fs.with_value(|f| defaults_of(&f.fields));
+            let mut list = current();
+            list.push(Value::Object(o));
+            write(list);
+        }
+    };
+    view! {
+        <div class="cms-item-field cms-repeat" data-field=name>
+            {head}
+            {move || {
+                let list = items();
+                let n = list.len();
+                list.into_iter().enumerate().map(|(i, item)| {
+                    let def = def_of(&item);
+                    let title = if blocks {
+                        def.as_ref().map(label_of).unwrap_or_else(|| {
+                            item.get(key.get_value()).and_then(Value::as_str).unwrap_or("?").to_string()
+                        })
+                    } else {
+                        format!("{}", i + 1)
+                    };
+                    let subs: Option<Vec<CmsField>> = if blocks {
+                        def.map(|d| d.fields)
+                    } else {
+                        Some(fs.with_value(|f| f.fields.clone()))
+                    };
+                    let move_to = move |to: usize| {
+                        let mut list = current();
+                        if to < list.len() && i < list.len() {
+                            let it = list.remove(i);
+                            list.insert(to, it);
+                            write(list);
+                        }
+                    };
+                    let remove = move |_| {
+                        let mut list = current();
+                        if i < list.len() {
+                            list.remove(i);
+                            write(list);
+                        }
+                    };
+                    let body = match subs {
+                        Some(subs) => subs.into_iter().filter(|s| !s.hidden).map(|s| {
+                            let k = StoredValue::new(s.name.clone());
+                            let sub_value = Signal::derive(move || {
+                                let list = match value.get() {
+                                    Some(Value::Array(a)) => a,
+                                    Some(v @ Value::Object(_)) => vec![v],
+                                    _ => Vec::new(),
+                                };
+                                list.get(i).and_then(|o| o.get(k.get_value()).cloned())
+                            });
+                            let sub_set = Callback::new(move |v: Option<Value>| {
+                                let mut list = current();
+                                let Some(Value::Object(o)) = list.get_mut(i) else { return };
+                                match v {
+                                    Some(v) => { o.insert(k.get_value(), v); }
+                                    None => { o.remove(&k.get_value()); }
+                                }
+                                write(list);
+                            });
+                            field_row(s, sub_value, sub_set, cols, None)
+                        }).collect_view().into_any(),
+                        // Type de bloc inconnu du schéma : modifié en JSON.
+                        None => {
+                            let text = serde_json::to_string_pretty(&item).unwrap_or_default();
+                            view! {
+                                <textarea class="input cms-textarea cms-json" rows="5" spellcheck="false" prop:value=text
+                                    on:change=move |e| {
+                                        if let Ok(v) = serde_json::from_str::<Value>(&event_target_value(&e)) {
+                                            let mut list = current();
+                                            if i < list.len() {
+                                                list[i] = v;
+                                                write(list);
+                                            }
+                                        }
+                                    }></textarea>
+                            }.into_any()
+                        }
+                    };
+                    view! {
+                        <div class="cms-repeat-item" data-index=i>
+                            <div class="cms-repeat-head">
+                                <span class="cms-repeat-title">{title}</span>
+                                <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-up") aria-label=ui.t("cms-repeat-up")
+                                    disabled={i == 0} on:click=move |_| move_to(i.saturating_sub(1))>{icons::arrow_up()}</button>
+                                <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-down") aria-label=ui.t("cms-repeat-down")
+                                    disabled={i + 1 >= n} on:click=move |_| move_to(i + 1)>{icons::arrow_down()}</button>
+                                <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-remove") aria-label=ui.t("cms-repeat-remove")
+                                    on:click=remove>{icons::trash()}</button>
+                            </div>
+                            <div class="cms-repeat-body">{body}</div>
+                        </div>
+                    }
+                }).collect_view()
+            }}
+            {move || (!single || items().is_empty()).then(|| view! {
+                <button type="button" class="btn btn--small cms-repeat-add" on:click=add>
+                    {icons::plus()}{ui.t(if blocks { "cms-repeat-add-block" } else { "cms-repeat-add" })}</button>
+            })}
+        </div>
+    }
+    .into_any()
 }

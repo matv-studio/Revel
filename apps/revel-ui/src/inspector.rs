@@ -345,7 +345,7 @@ fn element(
                     </label>
                 </div>
             })}
-            <details class="insp-group insp-attrs" open=n_attrs <= 4>
+            <details class="insp-group insp-attrs" open={n_attrs <= 4}>
                 <summary class="panel-title">{ui.t("inspector-attributes")}<span class="list-count">{n_attrs}</span></summary>
                 {others.into_iter().map(|a| {
                     let name = a.name.clone();

@@ -574,3 +574,18 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .template-choice svg.icon { width: 20px; height: 20px; }
 .template-choice:hover { color: var(--text); }
 .template-choice.is-on { border-color: var(--focus); color: var(--text); box-shadow: inset 0 0 0 1px var(--focus); }
+/* Listes d'objets et blocs (fiche CMS) : une carte par élément. */
+.cms-repeat { display: flex; flex-direction: column; gap: var(--s-2); }
+.cms-repeat-item { border: var(--border) solid var(--line); border-radius: var(--radius-md); background: var(--bg); }
+.cms-repeat-head { display: flex; align-items: center; gap: 2px; padding: 4px 4px 4px 10px; border-bottom: var(--border) solid var(--line); }
+.cms-repeat-title { flex: 1; min-width: 0; font-size: var(--text-sm); font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cms-repeat-body { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3); }
+.cms-repeat-add { align-self: flex-start; }
+/* Schéma : champs d'un groupe, types de blocs. */
+.schema-subfields { display: flex; flex-direction: column; gap: 6px; }
+.schema-sub { display: grid; grid-template-columns: minmax(0, 1fr) 128px auto; gap: 6px; align-items: center; }
+.schema-sub-add, .schema-block-add { align-self: flex-start; justify-self: start; width: fit-content; }
+.schema-block { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--radius-md); border: var(--border) solid var(--line); background: var(--bg); }
+.schema-block-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.schema-block-name { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--weight-medium); font-size: var(--text-sm); }
+.schema-block-name svg.icon { width: 14px; height: 14px; color: var(--text-muted); }

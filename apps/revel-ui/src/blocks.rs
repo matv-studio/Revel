@@ -569,7 +569,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                                 <select class="input" on:change=move |e| set(slot, event_target_value(&e))>
                                     <option value="" prop:selected=cur.is_empty()>{ui.t(if slot == Slot::Text { "block-bound-written" } else { "block-bound-none" })}</option>
                                     {(slot == Slot::Href).then(|| view! {
-                                        <option value="@url" prop:selected=cur == "@url">{ui.t("block-bound-page")}</option>
+                                        <option value="@url" prop:selected={cur == "@url"}>{ui.t("block-bound-page")}</option>
                                     })}
                                     {move || {
                                         let list = fields(slot);

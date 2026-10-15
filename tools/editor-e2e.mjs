@@ -1383,6 +1383,25 @@ try {
     }
     await until(() => fs.readFileSync(file, 'utf8') === original, 'annulation');
     check('CMS : annulé, fichier identique octet pour octet', true);
+    // Blocs (3.7) : une carte par bloc (type, champs), ordre changé, bloc ajouté, annulés.
+    const blocksRow = row('blocks');
+    await page.waitForSelector(`${blocksRow} .cms-repeat-item`);
+    const types = () => (fs.readFileSync(file, 'utf8').match(/^- type: \w+/gm) || []).map((l) => l.slice(8));
+    const types0 = types();
+    const cards = await page.$$eval(`${blocksRow} .cms-repeat-title`, (t) => t.map((x) => x.textContent));
+    await page.click(`${blocksRow} .cms-repeat-item[data-index="0"] .cms-repeat-head .icon-btn >> nth=1`);
+    await until(() => types()[0] === types0[1] && types()[1] === types0[0], 'bloc descendu');
+    await page.click(`${blocksRow} .cms-repeat-add`);
+    await page.click('.ctx-menu .menu-item:has-text("Texte")');
+    await until(() => types().length === types0.length + 1 && types().at(-1) === 'text', 'bloc ajouté');
+    check('CMS : blocs en cartes (type et champs), ordre changé, bloc ajouté',
+      cards.length === types0.length && cards[0] === 'Citation', `${cards.length} blocs : ${cards.slice(0, 3).join(', ')}`);
+    for (let i = 0; i < 2; i++) {
+      await page.click('.cms-head .icon-btn[title^="Annuler"]');
+      await page.waitForTimeout(300);
+    }
+    await until(() => fs.readFileSync(file, 'utf8') === original, 'annulation des blocs');
+    check('CMS : blocs annulés, fichier identique', true);
 
     // ---------------------------------------------------------------- Schéma de Pages CMS (3.3)
     const heads = await page.$$eval('.cms-table thead th', (ths) => ths.map((t) => t.textContent.trim()));
@@ -1425,9 +1444,9 @@ try {
     await page.selectOption(row('expertises') + ' .tags-pick', option);
     await until(() => fs.readFileSync(file, 'utf8').includes('- ' + option + '\n'), 'référence ajoutée');
     check('CMS : référence ajoutée', true);
-    check('CMS : objet (référencement) en sous-fiche, blocs en JSON, champ caché replié',
+    check('CMS : objet (référencement) en sous-fiche, blocs en cartes, champ caché replié',
       !!(await page.$('.cms-item-body > .cms-object[data-field="seo"] legend'))
-        && !!(await page.$(row('blocks') + ' textarea.cms-json'))
+        && !!(await page.$(row('blocks') + ' .cms-repeat-item'))
         && !!(await page.$('.cms-more [data-field="wp_id"]')));
     if (shots) await page.screenshot({ path: `${shots}/cms-schema.png` });
     for (let i = 0; i < 2; i++) {
@@ -1506,6 +1525,21 @@ try {
     await page.click('.dialog .btn--danger');
     await until(() => !cfg().includes('couleur_dominante'), 'champ retiré');
     check('champs : champ retiré', true);
+    // Groupe de champs (3.7) : créé avec un premier champ, un champ ajouté, puis retiré.
+    await page.click('.new-field .btn');
+    await page.click('.new-field-menu [data-type="object"]');
+    await page.fill('.dialog input', 'Galerie');
+    await page.press('.dialog input', 'Enter');
+    await until(() => /- name: galerie\n {8}label: Galerie\n {8}type: object\n {8}fields:\n {10}- name: texte\n/.test(cfg()), 'groupe créé');
+    await page.waitForSelector('.schema-item [data-setting="fields"] .schema-sub-add');
+    await page.click('.schema-item [data-setting="fields"] .schema-sub-add');
+    await page.fill('.dialog input', 'Légende');
+    await page.press('.dialog input', 'Enter');
+    await until(() => /- name: legende\n {12}label: Légende\n {12}type: string\n/.test(cfg()), 'champ du groupe ajouté');
+    check('champs : groupe de champs créé, champ du groupe ajouté', true);
+    await page.click('.schema-item .cms-item-foot .btn--danger-ghost');
+    await page.click('.dialog .btn--danger');
+    await until(() => !cfg().includes('galerie'), 'groupe retiré');
     if (shots) await page.screenshot({ path: `${shots}/cms-champs.png` });
     // Fiche d'un contenu : le nouveau libellé et l'ordre du schéma.
     await page.click('.cms-fields-btn');
@@ -1514,7 +1548,7 @@ try {
     const formOrder = await page.$$eval('.cms-item-body > [data-field]', (fs) => fs.slice(0, 2).map((f) => f.dataset.field));
     check('champs : fiche d\'un contenu dans l\'ordre et avec les réglages du schéma', formOrder[0] === 'client', formOrder.join(','));
     await page.click('.cms-item-head h2');
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 10; i++) {
       await page.click('.cms-head .icon-btn[title^="Annuler"]');
       await page.waitForTimeout(250);
     }

@@ -275,13 +275,27 @@ pub fn set_field(text: &str, key: &str, value: Option<&Value>) -> Result<String,
                 {
                     format!("{}{}{}", &yaml[..s.start], emit_scalar(v), &yaml[s.end..])
                 }
-                // Réécrit en bloc à sa place.
-                _ => format!(
-                    "{}{}{}",
-                    &yaml[..b.start],
-                    emit_entry(key, v, 0),
-                    &yaml[b.end..]
-                ),
+                // Réécrit en bloc à sa place ; une liste garde le retrait de ses tirets (`- `
+                // au début de la ligne, ou décalé de deux espaces).
+                _ => {
+                    let old = &yaml[b.start..b.end];
+                    let dash = old
+                        .lines()
+                        .nth(1)
+                        .filter(|l| l.trim_start().starts_with('-'))
+                        .map(|l| l.len() - l.trim_start().len());
+                    let entry = match (v, dash) {
+                        (Value::Array(a), Some(d)) if !a.is_empty() => {
+                            let mut out = format!("{}:\n", emit_key(key));
+                            for item in a {
+                                out.push_str(&emit_item(item, d));
+                            }
+                            out
+                        }
+                        _ => emit_entry(key, v, 0),
+                    };
+                    format!("{}{}{}", &yaml[..b.start], entry, &yaml[b.end..])
+                }
             }
         }
     };
@@ -489,5 +503,19 @@ mod tests {
         );
         assert_eq!(field(&t, "title"), Some(json!("Nouveau : essai")));
         assert_eq!(set_body(&t, "Bonjour"), format!("{t}Bonjour\n"));
+    }
+
+    #[test]
+    fn liste_reecrite_avec_son_retrait() {
+        let text = "---\ntitle: A\nblocks:\n- type: quote\n  quote: |-\n    <p>Q</p>\n- type: text\n  body: x\ndate: 2026\n---\nCorps\n";
+        let v: Value = serde_json::json!([
+            { "type": "text", "body": "x" },
+            { "type": "quote", "quote": "<p>Q</p>" }
+        ]);
+        let out = set_field(text, "blocks", Some(&v)).unwrap();
+        assert_eq!(
+            out,
+            "---\ntitle: A\nblocks:\n- type: text\n  body: x\n- type: quote\n  quote: <p>Q</p>\ndate: 2026\n---\nCorps\n"
+        );
     }
 }

@@ -98,13 +98,13 @@ pub const TYPES: &[FieldType] = &[
         id: "object",
         key: "type-object",
         icon: icons::braces,
-        create: false,
+        create: true,
     },
     FieldType {
         id: "block",
         key: "type-block",
         icon: icons::component,
-        create: false,
+        create: true,
     },
     FieldType {
         id: "uuid",
@@ -664,7 +664,11 @@ fn type_options(
             .into_any()
         }
         "rich-text" => {
-            let cur = move || opt("format").and_then(|v| v.as_str().map(str::to_lowercase)).unwrap_or_else(|| "html".into());
+            let cur = move || {
+                opt("format")
+                    .and_then(|v| v.as_str().map(str::to_lowercase))
+                    .unwrap_or_else(|| "html".into())
+            };
             view! {
                 <div class="cms-item-field is-inline" data-setting="format">
                     <span class="label">{ui.t("cms-field-format")}</span>
@@ -680,7 +684,11 @@ fn type_options(
         }
         "select" => {
             let values = move || field.with(|f| f.as_ref().map(choices).unwrap_or_default());
-            let raw = move || opt("values").and_then(|v| v.as_array().cloned()).unwrap_or_default();
+            let raw = move || {
+                opt("values")
+                    .and_then(|v| v.as_array().cloned())
+                    .unwrap_or_default()
+            };
             let multiple = Signal::derive(move || opt("multiple") == Some(Value::Bool(true)));
             view! {
                 <div class="cms-item-field" data-setting="values">
@@ -723,8 +731,14 @@ fn type_options(
             .into_any()
         }
         "reference" => {
-            let target = move || opt("collection").and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
-            let multiple = Signal::derive(move || matches!(opt("multiple"), Some(Value::Bool(true) | Value::Object(_))));
+            let target = move || {
+                opt("collection")
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default()
+            };
+            let multiple = Signal::derive(move || {
+                matches!(opt("multiple"), Some(Value::Bool(true) | Value::Object(_)))
+            });
             let target_fields = move || {
                 let t = target();
                 cols.with(|c| {
@@ -739,7 +753,11 @@ fn type_options(
             let shown = move || {
                 opt("label")
                     .and_then(|v| v.as_str().map(str::to_string))
-                    .and_then(|l| l.strip_prefix("{fields.").and_then(|x| x.strip_suffix('}')).map(str::to_string))
+                    .and_then(|l| {
+                        l.strip_prefix("{fields.")
+                            .and_then(|x| x.strip_suffix('}'))
+                            .map(str::to_string)
+                    })
                     .unwrap_or_default()
             };
             view! {
@@ -815,25 +833,98 @@ fn type_options(
             .into_any()
         }
         "object" => {
-            let subs = move || {
-                field.with(|f| {
-                    f.as_ref()
-                        .map(|f| f.fields.iter().map(label_of).collect::<Vec<_>>().join(", "))
-                        .unwrap_or_default()
-                })
-            };
+            let comp = field.with_untracked(|f| f.as_ref().and_then(|f| f.component.clone()));
+            let subs = Signal::derive(move || {
+                field.with(|f| f.as_ref().map(|f| f.fields.clone()).unwrap_or_default())
+            });
             view! {
                 <div class="cms-item-field" data-setting="fields">
                     <span class="label">{ui.t("cms-field-subfields")}</span>
-                    <p class="schema-subs">{subs}</p>
+                    <SubFields fields=subs locked=comp.is_some()
+                        on_change=Callback::new(move |defs: Vec<Value>| set.run(json!({ "fields": defs })))/>
                 </div>
             }
             .into_any()
         }
-        "block" => view! {
-            <p class="schema-subs muted" title=move || ui.tx("planned-step", &[("step", "3".to_string())])>{ui.t("cms-field-blocks")}</p>
+        "block" => {
+            let comp = field.with_untracked(|f| f.as_ref().is_some_and(|f| f.component.is_some()));
+            // Définitions d'origine des types de blocs (réécrites telles quelles).
+            let raw = move || -> Vec<Value> {
+                field.with_untracked(|f| {
+                    f.as_ref()
+                        .and_then(|f| f.options.get("blocks").and_then(Value::as_array).cloned())
+                        .unwrap_or_default()
+                })
+            };
+            let types = Signal::derive(move || {
+                field.with(|f| f.as_ref().map(|f| f.fields.clone()).unwrap_or_default())
+            });
+            let write = move |blocks: Vec<Value>| set.run(json!({ "blocks": blocks }));
+            let add = move |_| {
+                let taken: Vec<String> = types
+                    .get_untracked()
+                    .iter()
+                    .map(|b| b.name.clone())
+                    .collect();
+                ui.ask.set(Some(Ask::input(
+                    ui.now("cms-block-new", &[]),
+                    ui.now("cms-field-label", &[]),
+                    String::new(),
+                    ui.now("action-create", &[]),
+                    move |label| {
+                        let label = label.trim().to_string();
+                        if label.is_empty() {
+                            return;
+                        }
+                        let mut blocks = raw();
+                        blocks.push(json!({
+                            "name": field_key(&label, &taken),
+                            "label": label,
+                            "fields": [{ "name": "texte", "label": ui.now("cms-sub-default", &[]), "type": "string" }]
+                        }));
+                        write(blocks);
+                    },
+                )));
+            };
+            view! {
+                <div class="cms-item-field" data-setting="blocks">
+                    <span class="label">{ui.t("cms-field-blocks")}</span>
+                    {move || types.get().into_iter().enumerate().map(|(i, b)| {
+                        let label = label_of(&b);
+                        let from_component = b.component.is_some() || comp;
+                        let subs = Signal::derive(move || types.with(|t| t.get(i).map(|b| b.fields.clone()).unwrap_or_default()));
+                        view! {
+                            <div class="schema-block" data-block=b.name.clone()>
+                                <div class="schema-block-head">
+                                    <span class="schema-block-name">{icons::component()}{label}</span>
+                                    <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-block-remove") aria-label=ui.t("cms-block-remove")
+                                        disabled=comp
+                                        on:click=move |_| {
+                                            let mut blocks = raw();
+                                            if i < blocks.len() {
+                                                blocks.remove(i);
+                                                write(blocks);
+                                            }
+                                        }>{icons::trash()}</button>
+                                </div>
+                                <SubFields fields=subs locked=from_component
+                                    on_change=Callback::new(move |defs: Vec<Value>| {
+                                        let mut blocks = raw();
+                                        if let Some(Value::Object(o)) = blocks.get_mut(i) {
+                                            o.insert("fields".into(), Value::Array(defs));
+                                            write(blocks);
+                                        }
+                                    })/>
+                            </div>
+                        }
+                    }).collect_view()}
+                    {(!comp).then(|| view! {
+                        <button type="button" class="btn btn--small schema-block-add" on:click=add>{icons::plus()}{ui.t("cms-block-add")}</button>
+                    })}
+                </div>
+            }
+            .into_any()
         }
-        .into_any(),
         _ => ().into_any(),
     }
 }
@@ -888,6 +979,19 @@ pub fn NewField(
                 let mut def = json!({ "name": key, "label": label, "type": t.id });
                 match t.id {
                     "select" => def["options"] = json!({ "values": [] }),
+                    // Groupe de champs : un premier champ texte ; blocs : un type « Texte ».
+                    "object" => {
+                        def["fields"] = json!([{ "name": "texte", "label": ui.now("cms-sub-default", &[]), "type": "string" }])
+                    }
+                    "block" => {
+                        def["list"] = json!(true);
+                        def["blockKey"] = json!("type");
+                        def["blocks"] = json!([{
+                            "name": "texte",
+                            "label": ui.now("cms-sub-default", &[]),
+                            "fields": [{ "name": "body", "label": ui.now("cms-sub-default", &[]), "type": "rich-text" }]
+                        }]);
+                    }
                     "reference" => {
                         // Collection proposée : une autre que celle-ci.
                         if let Some(o) = others
@@ -929,6 +1033,169 @@ pub fn NewField(
                     }).collect_view()}
                 </div>
             </Show>
+        </div>
+    }
+}
+
+/// Définition `.pages.yml` d'un champ (inverse de la lecture par le cœur).
+pub fn to_def(f: &CmsField) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String(f.name.clone()));
+    if let Some(c) = &f.component {
+        m.insert("component".into(), Value::String(c.clone()));
+        if let Some(l) = &f.label {
+            m.insert("label".into(), Value::String(l.clone()));
+        }
+        return Value::Object(m);
+    }
+    if let Some(l) = &f.label {
+        m.insert("label".into(), Value::String(l.clone()));
+    }
+    m.insert("type".into(), Value::String(yaml_type(f)));
+    if let Some(d) = &f.description {
+        m.insert("description".into(), Value::String(d.clone()));
+    }
+    if f.required {
+        m.insert("required".into(), Value::Bool(true));
+    }
+    if f.hidden {
+        m.insert("hidden".into(), Value::Bool(true));
+    }
+    if f.list {
+        m.insert("list".into(), Value::Bool(true));
+    }
+    if let Some(d) = &f.default {
+        m.insert("default".into(), d.clone());
+    }
+    if let Some(p) = &f.pattern {
+        m.insert("pattern".into(), Value::String(p.clone()));
+    }
+    let mut options = f.options.as_object().cloned().unwrap_or_default();
+    if f.kind.as_deref() == Some("block") {
+        if let Some(b) = options.remove("blocks") {
+            m.insert("blocks".into(), b);
+        }
+        if let Some(k) = options.remove("blockKey") {
+            m.insert("blockKey".into(), k);
+        }
+    } else if !f.fields.is_empty() {
+        m.insert(
+            "fields".into(),
+            Value::Array(f.fields.iter().map(to_def).collect()),
+        );
+    }
+    if !options.is_empty() {
+        m.insert("options".into(), Value::Object(options));
+    }
+    Value::Object(m)
+}
+
+/// Types proposés pour un champ d'un groupe ou d'un bloc.
+const SUB_TYPES: [&str; 8] = [
+    "string",
+    "text",
+    "rich-text",
+    "image",
+    "date",
+    "boolean",
+    "number",
+    "file",
+];
+
+/// Champs d'un groupe ou d'un type de bloc : libellé, type, suppression, ajout ; `locked` :
+/// définis par un composant de `.pages.yml` (lecture seule).
+#[component]
+fn SubFields(
+    #[prop(into)] fields: Signal<Vec<CmsField>>,
+    locked: bool,
+    on_change: Callback<Vec<Value>>,
+) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let defs = move || {
+        fields
+            .get_untracked()
+            .iter()
+            .map(to_def)
+            .collect::<Vec<Value>>()
+    };
+    let add = move |_| {
+        let taken: Vec<String> = fields
+            .get_untracked()
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        ui.ask.set(Some(Ask::input(
+            ui.now("cms-sub-new", &[]),
+            ui.now("cms-field-label", &[]),
+            String::new(),
+            ui.now("action-create", &[]),
+            move |label| {
+                let label = label.trim().to_string();
+                if label.is_empty() {
+                    return;
+                }
+                let mut d = defs();
+                d.push(
+                    json!({ "name": field_key(&label, &taken), "label": label, "type": "string" }),
+                );
+                on_change.run(d);
+            },
+        )));
+    };
+    view! {
+        <div class="schema-subfields">
+            {move || fields.get().into_iter().enumerate().map(|(i, f)| {
+                let kind = yaml_type(&f);
+                let simple = SUB_TYPES.contains(&kind.as_str());
+                let label = label_of(&f);
+                view! {
+                    <div class="schema-sub" data-sub=f.name.clone()>
+                        <input class="input schema-sub-label" prop:value=label disabled=locked
+                            aria-label=ui.t("cms-field-label") title=f.name.clone()
+                            on:change=move |e| {
+                                let v = event_target_value(&e).trim().to_string();
+                                if v.is_empty() { return; }
+                                let mut d = defs();
+                                if let Some(Value::Object(o)) = d.get_mut(i) {
+                                    o.insert("label".into(), Value::String(v));
+                                    on_change.run(d);
+                                }
+                            }/>
+                        <div class="select schema-sub-type">
+                            <select class="input" disabled={locked || !simple} aria-label=ui.t("cms-field-type")
+                                on:change=move |e| {
+                                    let v = event_target_value(&e);
+                                    let mut d = defs();
+                                    if let Some(Value::Object(o)) = d.get_mut(i) {
+                                        o.insert("type".into(), Value::String(v));
+                                        o.remove("options");
+                                        on_change.run(d);
+                                    }
+                                }>
+                                {(!simple).then(|| { let k = kind.clone(); view! { <option value=k.clone() selected=true>{k.clone()}</option> } })}
+                                {SUB_TYPES.iter().map(|t| {
+                                    let on = *t == kind;
+                                    let key = type_of(t).key;
+                                    view! { <option value=*t prop:selected=on>{ui.t(key)}</option> }
+                                }).collect_view()}
+                            </select>
+                        </div>
+                        <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-sub-remove") aria-label=ui.t("cms-sub-remove")
+                            disabled=locked
+                            on:click=move |_| {
+                                let mut d = defs();
+                                if i < d.len() {
+                                    d.remove(i);
+                                    on_change.run(d);
+                                }
+                            }>{icons::trash()}</button>
+                    </div>
+                }
+            }).collect_view()}
+            {(!locked).then(|| view! {
+                <button type="button" class="btn btn--small schema-sub-add" on:click=add>{icons::plus()}{ui.t("cms-sub-add")}</button>
+            })}
+            {locked.then(|| view! { <p class="muted small">{ui.t("cms-sub-locked")}</p> })}
         </div>
     }
 }

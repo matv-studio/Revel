@@ -160,7 +160,10 @@ Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arr
 | Dossiers (médias, composants) | Rangement de l'éditeur (`Site::library`) : aucun fichier déplacé, aucune adresse changée ; nouveau dossier (pied du panneau, menu d'un dossier), renommer, supprimer (le contenu remonte d'un niveau) ; nom saisi sur place, refusé (bordure rouge) s'il est vide ou déjà pris |
 | Fonction prévue | Bouton désactivé (`.is-planned`), étape en info-bulle ; panneau prévu : `Planned` |
 | Raccourcis | Ctrl+\ panneaux ; ↑ ↓ ← → dans les calques ; clic droit : menu contextuel ; voir aussi *Canevas* |
-| Ajouter | Familles (Structure, Texte, Médias, CMS, Formulaires, Code) ; tuiles icône + nom, aide en info-bulle ; glisser sur la page ou cliquer ; éléments prévus en pointillés, désactivés |
+| Ajouter | Familles (Structure, Texte, Médias, Blocs, CMS, Formulaires, Code) ; tuiles icône + nom, aide en info-bulle ; glisser sur la page ou cliquer ; éléments prévus en pointillés, désactivés ; un élément apporte ses règles de style si le site ne les a pas |
+| Liste de collection | Réglages : collection, filtre (champ, valeur), tri (champ, ordre), nombre ; éléments de la liste : « Relié au contenu » (texte, image, lien : champ du contenu ou page du contenu) |
+| Nouveau site | Nom, langue, modèle (trois cartes : Vide, Vitrine, Blog), emplacement |
+| Blocs du CMS | Une carte par élément d'une liste d'objets ou de blocs : type en titre, monter, descendre, supprimer, champs dessous ; « Ajouter un bloc » propose les types ; schéma : champs du groupe ou de chaque type de bloc sur une ligne (libellé, type, retirer) |
 
 ### Canevas (D-22)
 

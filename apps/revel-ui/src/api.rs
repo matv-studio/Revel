@@ -409,6 +409,11 @@ pub async fn edit_redo(path: &str) -> Res<revel_edit::EditState> {
     call("edit_redo", &PathArg { path }).await
 }
 
+/// Médias du site ouvert dans l'éditeur.
+pub async fn edit_media(path: &str) -> Res<Vec<revel_protocol::MediaFile>> {
+    call("edit_media", &PathArg { path }).await
+}
+
 /// Pages HTML du site (pages fixes et contenus).
 pub async fn edit_pages(path: &str) -> Res<Vec<revel_protocol::EditorPageInfo>> {
     call("edit_pages", &PathArg { path }).await

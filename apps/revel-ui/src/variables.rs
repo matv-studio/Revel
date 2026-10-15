@@ -254,7 +254,12 @@ pub fn Variables() -> impl IntoView {
                                             done();
                                         }
                                     }
-                                    on:blur=move |_| v.with_value(|v| commit(v, draft.get_untracked()))></textarea>
+                                    on:blur=move |_| {
+                                        // Champ retiré par Échap : rien à appliquer.
+                                        if let Some(d) = draft.try_get_untracked() {
+                                            v.with_value(|v| commit(v, d));
+                                        }
+                                    }></textarea>
                             </div>
                         }
                     }}

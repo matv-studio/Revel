@@ -1361,8 +1361,8 @@ fn panel_view(p: crate::dock::PanelId) -> AnyView {
         PanelId::Variables => view! { <crate::variables::Variables/> }.into_any(),
         PanelId::Cms => view! { <crate::panels::Cms/> }.into_any(),
         PanelId::Insert => view! { <crate::insert::Insert/> }.into_any(),
-        PanelId::Components => view! { <crate::panels::Components/> }.into_any(),
-        PanelId::Assets => view! { <crate::panels::Assets/> }.into_any(),
+        PanelId::Components => view! { <crate::library::Components/> }.into_any(),
+        PanelId::Assets => view! { <crate::library::Media/> }.into_any(),
         PanelId::Styles => {
             view! { <div class="panel-pad"><crate::styles::Styles/></div> }.into_any()
         }

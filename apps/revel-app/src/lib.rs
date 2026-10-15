@@ -361,6 +361,12 @@ fn edit_pages(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::Edito
     s.core.edit_pages(std::path::Path::new(&path)).map_err(err)
 }
 
+/// Médias d'un site ouvert pour l'édition (dossiers copiés tels quels).
+#[tauri::command]
+fn edit_media(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::MediaFile>> {
+    s.core.edit_media(std::path::Path::new(&path)).map_err(err)
+}
+
 /// Empreinte des fichiers du site (rechargement après une modification hors de Revel).
 #[tauri::command]
 fn edit_stamp(s: State<AppState>, path: String) -> Res<String> {
@@ -481,6 +487,7 @@ pub fn run() {
             edit_redo,
             edit_pages,
             edit_stamp,
+            edit_media,
             canvas_open,
             startup_site
         ])

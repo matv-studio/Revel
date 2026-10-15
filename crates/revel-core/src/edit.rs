@@ -230,7 +230,46 @@ fn exec(
             pagesyml::write(&project.dir, text.as_deref()).map_err(revel_edit::EditError::Bound)?;
             Ok(Command::WriteCmsConfig { text: old })
         }
+        // Suite qui écrit des fichiers du projet : chaque commande passe par le cœur ; échec :
+        // ce qui a été appliqué est annulé (la suite reste atomique).
+        Command::Batch { commands } if commands.iter().any(external) => {
+            let mut inverses: Vec<Command> = Vec::with_capacity(commands.len());
+            for c in commands {
+                match exec(project, site, c) {
+                    Ok(inv) => inverses.push(inv),
+                    Err(e) => {
+                        for inv in inverses.iter().rev() {
+                            let _ = exec(project, site, inv);
+                        }
+                        return Err(e);
+                    }
+                }
+            }
+            inverses.reverse();
+            Ok(Command::Batch { commands: inverses })
+        }
         other => revel_edit::apply(site, other),
+    }
+}
+
+/// Commande appliquée par le cœur (elle écrit des fichiers du projet), ou suite qui en contient.
+fn external(c: &Command) -> bool {
+    match c {
+        Command::Batch { commands } => commands.iter().any(external),
+        Command::SetBound { .. }
+        | Command::SetEntryField { .. }
+        | Command::SetEntryBody { .. }
+        | Command::CreateEntry { .. }
+        | Command::WriteEntry { .. }
+        | Command::SetCmsField { .. }
+        | Command::AddCmsField { .. }
+        | Command::RemoveCmsField { .. }
+        | Command::MoveCmsField { .. }
+        | Command::SetCmsCollection { .. }
+        | Command::CreateCmsCollection { .. }
+        | Command::RemoveCmsCollection { .. }
+        | Command::WriteCmsConfig { .. } => true,
+        _ => false,
     }
 }
 

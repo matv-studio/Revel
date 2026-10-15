@@ -216,6 +216,15 @@ pub enum Command {
         #[serde(default)]
         text: Option<String>,
     },
+    /// Nouveau gabarit, inséré à la position `index` de la liste (à la fin si elle est plus
+    /// courte). Refusé si l'identifiant est pris.
+    AddLayout {
+        layout: revel_model::Layout,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        index: Option<usize>,
+    },
+    /// Gabarit retiré ; refusé s'il sert de parent à un autre gabarit ou à une page.
+    RemoveLayout { id: String },
     /// Rangement de l'éditeur remplacé (dossiers et éléments rangés des médias ou des composants).
     SetShelf {
         kind: ShelfKind,
@@ -289,7 +298,11 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
             let mut out = Vec::with_capacity(commands.len());
             for c in commands {
                 let e = expand(&scratch, c)?;
-                apply(&mut scratch, &e)?;
+                // Commande appliquée par le cœur (fichiers du projet) : sans effet sur la copie.
+                match apply(&mut scratch, &e) {
+                    Ok(_) | Err(EditError::External) => {}
+                    Err(err) => return Err(err),
+                }
                 out.push(e);
             }
             Command::Batch { commands: out }
@@ -713,6 +726,47 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             Ok(Command::ResizeBreakpoint {
                 id: id.clone(),
                 width: old_w,
+            })
+        }
+        Command::AddLayout { layout, index } => {
+            if site.layouts.iter().any(|l| l.id == layout.id) {
+                return Err(EditError::DuplicateId(layout.id.clone()));
+            }
+            let used = site.node_ids();
+            let mut fresh = Vec::new();
+            walk(&layout.body, &mut |n| {
+                if let Some(id) = node_id(n) {
+                    fresh.push(id.to_string());
+                }
+            });
+            if let Some(id) = fresh.iter().find(|i| used.contains(*i)) {
+                return Err(EditError::DuplicateId(id.clone()));
+            }
+            let i = index.unwrap_or(usize::MAX).min(site.layouts.len());
+            site.layouts.insert(i, layout.clone());
+            Ok(Command::RemoveLayout {
+                id: layout.id.clone(),
+            })
+        }
+        Command::RemoveLayout { id } => {
+            let i = site
+                .layouts
+                .iter()
+                .position(|l| &l.id == id)
+                .ok_or_else(|| EditError::NotFound(id.clone()))?;
+            let used = site.layouts.iter().any(|l| l.parent.as_deref() == Some(id))
+                || site.pages.iter().any(|p| p.layout.as_deref() == Some(id))
+                || site
+                    .collections
+                    .iter()
+                    .any(|c| c.layout.as_deref() == Some(id));
+            if used {
+                return Err(EditError::WrongKind(id.clone()));
+            }
+            let layout = site.layouts.remove(i);
+            Ok(Command::AddLayout {
+                layout,
+                index: Some(i),
             })
         }
         Command::SetShelf { kind, shelf } => {

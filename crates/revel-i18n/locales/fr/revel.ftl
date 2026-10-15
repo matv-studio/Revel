@@ -600,11 +600,41 @@ components-uses = { $count ->
     }
 components-new = Nouveau composant
 assets-search = Rechercher un média
-assets-count = { $count ->
-        [one] { $count } image
-       *[other] { $count } images
-    }
 assets-import = Importer des médias
+library-new-folder = Nouveau dossier
+library-new-subfolder = Nouveau sous-dossier
+library-folder-name = Nom du dossier
+library-open = Ouvrir
+library-rename = Renommer
+library-delete-folder = Supprimer le dossier
+library-move-to = Déplacer dans « { $folder } »
+library-move-out = Retirer du dossier
+media-type-filter = Type de média
+media-all-types = Tous les types
+media-kind-image = Images
+media-kind-video = Vidéos
+media-kind-audio = Sons
+media-kind-document = Documents
+media-kind-font = Polices
+media-kind-animation = Animations
+media-kind-other = Autres
+media-sort = Trier
+media-sort-recent = Plus récents
+media-sort-oldest = Plus anciens
+media-sort-name = Nom (A → Z)
+media-sort-name-desc = Nom (Z → A)
+media-sort-type = Type
+media-sort-size = Taille
+media-copy-url = Copier l'adresse
+media-none = Aucun média dans les dossiers du site
+media-no-match = Aucun média trouvé
+media-count = { $count ->
+        [0] aucun média
+        [one] 1 média
+       *[other] { $count } médias
+    }
+size-kb = { $n } Ko
+size-mb = { $n } Mo
 dock-menu = Options du panneau
 dock-float = Détacher
 dock-close = Fermer « { $panel } »
@@ -633,7 +663,6 @@ home-view = Affichage
 home-view-grid = Grille
 home-view-list = Liste
 action-edit-site = Ouvrir l'éditeur
-assets-none = Aucune image à chemin fixe dans ce site.
 
 # Vues d'un site (barre supérieure)
 views = Vues du site

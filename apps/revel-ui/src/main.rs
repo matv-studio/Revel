@@ -15,6 +15,7 @@ mod icons;
 mod insert;
 mod inspector;
 mod layers;
+mod library;
 mod panels;
 mod publish;
 mod richtext;

@@ -149,6 +149,26 @@ fn percent_decode(s: &str) -> String {
 }
 
 /// Ajoute la liste des repères et le script du canevas avant `</body>`.
+/// Nombre de médias listés au plus (un dossier énorme ne bloque pas l'éditeur).
+const MEDIA_MAX: usize = 20_000;
+
+/// Ajoute le fichier `file` (adresse `url`) s'il s'agit d'un média.
+fn media_entry(file: &Path, url: &str, out: &mut Vec<revel_protocol::MediaFile>) {
+    let Some(kind) = revel_protocol::MediaKind::of(url) else {
+        return;
+    };
+    let meta = std::fs::metadata(file).ok();
+    out.push(revel_protocol::MediaFile {
+        url: url.to_string(),
+        kind,
+        size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+        modified: meta
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .and_then(|d| i64::try_from(d.as_secs()).ok()),
+    });
+}
+
 pub fn inject(html: &str, slots: &[Slot], vars: &[VarValue]) -> String {
     // `</` échappé : la liste ne peut pas fermer l'élément <script>.
     let json = |v: String| v.replace("</", "<\\/");
@@ -228,6 +248,62 @@ impl Core {
                 file: p.file,
             })
             .collect())
+    }
+
+    /// Médias du site : fichiers des dossiers copiés tels quels (`passthrough`), hors code et
+    /// fichiers cachés, triés par adresse.
+    pub fn edit_media(&self, path: &Path) -> Result<Vec<revel_protocol::MediaFile>> {
+        let (dir, pass) =
+            self.with_project(path, |p| Ok((p.dir.clone(), p.site.passthrough.clone())))?;
+        let mut out = Vec::new();
+        for pt in &pass {
+            let src = dir.join(&pt.from);
+            let to = pt.to.trim_matches('/');
+            let url = |rel: &str| match to {
+                "" => format!("/{rel}"),
+                t => format!("/{t}/{rel}"),
+            };
+            if src.is_file() {
+                let name = src.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                media_entry(
+                    &src,
+                    &match to {
+                        "" => format!("/{name}"),
+                        t => format!("/{t}"),
+                    },
+                    &mut out,
+                );
+                continue;
+            }
+            let mut stack = vec![(src.clone(), String::new(), 0usize)];
+            while let Some((d, rel, depth)) = stack.pop() {
+                let Ok(rd) = std::fs::read_dir(&d) else {
+                    continue;
+                };
+                for e in rd.flatten() {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    if name.starts_with('.') || out.len() >= MEDIA_MAX {
+                        continue;
+                    }
+                    let r = if rel.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{rel}/{name}")
+                    };
+                    let p = e.path();
+                    if p.is_dir() {
+                        if depth < 12 {
+                            stack.push((p, r, depth + 1));
+                        }
+                    } else {
+                        media_entry(&p, &url(&r), &mut out);
+                    }
+                }
+            }
+        }
+        out.sort_by(|a, b| a.url.cmp(&b.url));
+        out.dedup_by(|a, b| a.url == b.url);
+        Ok(out)
     }
 
     /// Réglages du canevas ouvert.

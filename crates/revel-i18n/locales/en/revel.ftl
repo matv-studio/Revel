@@ -597,11 +597,41 @@ components-uses = { $count ->
     }
 components-new = New component
 assets-search = Search assets
-assets-count = { $count ->
-        [one] { $count } image
-       *[other] { $count } images
-    }
 assets-import = Import assets
+library-new-folder = New folder
+library-new-subfolder = New subfolder
+library-folder-name = Folder name
+library-open = Open
+library-rename = Rename
+library-delete-folder = Delete folder
+library-move-to = Move to “{ $folder }”
+library-move-out = Remove from folder
+media-type-filter = Media type
+media-all-types = All types
+media-kind-image = Images
+media-kind-video = Videos
+media-kind-audio = Audio
+media-kind-document = Documents
+media-kind-font = Fonts
+media-kind-animation = Animations
+media-kind-other = Other
+media-sort = Sort
+media-sort-recent = Newest
+media-sort-oldest = Oldest
+media-sort-name = Name (A → Z)
+media-sort-name-desc = Name (Z → A)
+media-sort-type = Type
+media-sort-size = Size
+media-copy-url = Copy address
+media-none = No media in the site's folders
+media-no-match = No media found
+media-count = { $count ->
+        [0] no media
+        [one] 1 media file
+       *[other] { $count } media files
+    }
+size-kb = { $n } KB
+size-mb = { $n } MB
 dock-menu = Panel options
 dock-float = Detach
 dock-close = Close “{ $panel }”
@@ -630,7 +660,6 @@ home-view = View
 home-view-grid = Grid
 home-view-list = List
 action-edit-site = Open the editor
-assets-none = No image with a fixed path in this site.
 
 # Site views (top bar)
 views = Site views

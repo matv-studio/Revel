@@ -985,3 +985,50 @@ fn expression_invalide_refusee() {
     c.edit_undo(&site).unwrap();
     assert_eq!(std::fs::read_to_string(&file).unwrap(), saved);
 }
+
+#[test]
+fn medias_du_site() {
+    use revel_protocol::MediaKind;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let mut p = revel_project::Project::open(&site).unwrap();
+    p.site.passthrough = vec![
+        revel_model::Passthrough {
+            from: "src/media".into(),
+            to: "media".into(),
+        },
+        revel_model::Passthrough {
+            from: "src/static".into(),
+            to: "".into(),
+        },
+    ];
+    p.save().unwrap();
+    for (f, n) in [
+        ("src/media/2024/01/photo.JPG", 3),
+        ("src/media/2024/plaquette.pdf", 5),
+        ("src/media/.cache/x.png", 1),
+        ("src/media/police.woff2", 2),
+        ("src/static/favicon.png", 1),
+        ("src/static/contact.php", 1),
+        ("src/static/robots.txt", 1),
+    ] {
+        let path = site.join(f);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, vec![0u8; n]).unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    let m = c.edit_media(&site).unwrap();
+    let urls: Vec<(&str, MediaKind, u64)> =
+        m.iter().map(|f| (f.url.as_str(), f.kind, f.size)).collect();
+    assert_eq!(
+        urls,
+        vec![
+            ("/favicon.png", MediaKind::Image, 1),
+            ("/media/2024/01/photo.JPG", MediaKind::Image, 3),
+            ("/media/2024/plaquette.pdf", MediaKind::Document, 5),
+            ("/media/police.woff2", MediaKind::Font, 2),
+        ]
+    );
+    assert!(m.iter().all(|f| f.modified.is_some()));
+}

@@ -34,6 +34,54 @@ pub struct SiteSummary {
     pub redirects: Vec<(String, String)>,
 }
 
+/// Fichier média du site : fichier des dossiers copiés tels quels à la publication (images,
+/// vidéos, sons, documents, polices), hors code (CSS, scripts, pages).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaFile {
+    /// Adresse dans le site publié (`/media/2024/01/photo.jpg`).
+    pub url: String,
+    pub kind: MediaKind,
+    /// Taille en octets.
+    pub size: u64,
+    /// Date de modification (secondes depuis 1970).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modified: Option<i64>,
+}
+
+/// Type d'un média, d'après l'extension de son fichier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaKind {
+    Image,
+    Video,
+    Audio,
+    Document,
+    Font,
+    /// Animation Lottie (`.lottie`).
+    Animation,
+    Other,
+}
+
+impl MediaKind {
+    /// Type d'un fichier ; `None` : code ou fichier technique (pas un média).
+    pub fn of(name: &str) -> Option<MediaKind> {
+        let ext = name.rsplit_once('.')?.1.to_ascii_lowercase();
+        Some(match ext.as_str() {
+            "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "svg" | "ico" | "bmp" | "tif"
+            | "tiff" | "heic" => MediaKind::Image,
+            "mp4" | "webm" | "mov" | "m4v" | "ogv" => MediaKind::Video,
+            "mp3" | "wav" | "ogg" | "oga" | "m4a" | "aac" | "flac" | "opus" => MediaKind::Audio,
+            "pdf" | "doc" | "docx" | "odt" | "rtf" | "xls" | "xlsx" | "ods" | "csv" | "ppt"
+            | "pptx" | "odp" | "key" | "pages" | "numbers" | "epub" => MediaKind::Document,
+            "woff" | "woff2" | "ttf" | "otf" | "eot" => MediaKind::Font,
+            "lottie" => MediaKind::Animation,
+            "zip" | "rar" | "7z" | "gz" | "dmg" | "exe" | "msi" | "apk" | "glb" | "gltf"
+            | "usdz" | "vtt" | "srt" => MediaKind::Other,
+            _ => return None,
+        })
+    }
+}
+
 /// Page HTML du site, proposée dans l'éditeur.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EditorPageInfo {

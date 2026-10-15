@@ -423,9 +423,13 @@ fn prepare<'s>(b: &eval::Builder<'s>, input: &'s BuildInput) -> Result<Prepared<
             };
             let job = url.map(|url| Job {
                 url,
+                // Gabarit propre au contenu (`layout` de l'en-tête, vide : celui de la collection).
                 layout: data
                     .get("layout")
-                    .and_then(|v| v.as_str().map(str::to_string))
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|l| !l.is_empty())
+                    .map(str::to_string)
                     .or_else(|| col.layout.clone()),
                 data: data.clone(),
                 origins,

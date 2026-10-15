@@ -410,3 +410,37 @@ pub fn list_ordered() -> AnyView {
         r#"<path d="M7 4h7M7 8h7M7 12h7"/><path d="M2.5 3.2 3.5 2.7V6M2.3 9.6c.3-.6 1.9-.7 1.9.3 0 .7-1.9 1.6-1.9 2.6h2" stroke-width="1.2"/>"#,
     )
 }
+
+/// Vidéo (pellicule).
+pub fn video() -> AnyView {
+    svg(r#"<rect x="2" y="3.5" width="9" height="9" rx="1.5"/><path d="m11 7 3-2v6l-3-2"/>"#)
+}
+
+/// Son (note).
+pub fn audio() -> AnyView {
+    svg(
+        r#"<path d="M6 12V4l7-1.5v8"/><circle cx="4.5" cy="12" r="1.5"/><circle cx="11.5" cy="10.5" r="1.5"/>"#,
+    )
+}
+
+/// Document (feuille cornée).
+pub fn file() -> AnyView {
+    svg(r#"<path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3M6 8.5h4M6 11h4"/>"#)
+}
+
+/// Police de caractères.
+pub fn font() -> AnyView {
+    svg(r#"<path d="M3 13 6.5 3h1L11 13M4.3 9.5h5.4M11.5 13h2.5"/>"#)
+}
+
+/// Nouveau dossier.
+pub fn folder_plus() -> AnyView {
+    svg(
+        r#"<path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/><path d="M8 7v4M6 9h4"/>"#,
+    )
+}
+
+/// Tri (flèches haut et bas).
+pub fn sort() -> AnyView {
+    svg(r#"<path d="M5 3v10M2.5 10.5 5 13l2.5-2.5M11 13V3M8.5 5.5 11 3l2.5 2.5"/>"#)
+}

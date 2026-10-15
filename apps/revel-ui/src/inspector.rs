@@ -69,22 +69,31 @@ fn attr<'a>(attrs: &'a [Attr], name: &str) -> Option<&'a Attr> {
 
 /// Champ texte validé à la sortie ou par Entrée.
 #[component]
-fn Field(
+pub(crate) fn Field(
     #[prop(into)] label: Signal<String>,
     #[prop(into)] value: Signal<String>,
     on_commit: impl Fn(String) + Send + Sync + Clone + 'static,
     #[prop(optional)] mono: bool,
     #[prop(optional, into)] placeholder: MaybeProp<String>,
 ) -> impl IntoView {
-    let commit = on_commit.clone();
+    // Valeur validée une seule fois (Entrée puis sortie du champ : une seule modification).
+    let last = StoredValue::new(None::<String>);
+    let commit = move |v: String| {
+        if v == value.get_untracked() || last.with_value(|l| l.as_deref() == Some(v.as_str())) {
+            return;
+        }
+        last.set_value(Some(v.clone()));
+        on_commit(v);
+    };
+    let c2 = commit.clone();
     view! {
         <label class="field">
             <span class="label">{label}</span>
             <input class="input" class:input--mono=mono prop:value=value placeholder=placeholder
-                on:change=move |e| commit(event_target_value(&e))
+                on:change=move |e| c2(event_target_value(&e))
                 on:keydown=move |e: leptos::ev::KeyboardEvent| {
                     if e.key() == "Enter" {
-                        on_commit(event_target_value(&e));
+                        commit(event_target_value(&e));
                     }
                 }/>
         </label>

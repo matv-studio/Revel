@@ -1016,3 +1016,47 @@ fn gabarit_copie_puis_retire() {
     apply(&mut s, &inv).unwrap();
     assert_eq!(s, before);
 }
+
+#[test]
+fn nouvelle_page_et_copie() {
+    let mut s = sample();
+    let p = make::new_page(&s, "Nos offres d'été", "");
+    assert_eq!(p.path, "/nos-offres-d-ete/");
+    assert_eq!(p.name.as_deref(), Some("Nos offres d'été"));
+    apply(
+        &mut s,
+        &Command::AddPage {
+            page: p.clone(),
+            index: None,
+        },
+    )
+    .unwrap();
+    let p2 = make::new_page(&s, "Nos offres d'été", "emplois/2026");
+    assert_eq!(p2.path, "/emplois/2026/nos-offres-d-ete/");
+    let p3 = make::new_page(&s, "Nos offres d'été", "");
+    assert_eq!(p3.path, "/nos-offres-d-ete-2/");
+    assert_ne!(p3.id, p.id);
+    let c = make::duplicate_page(&s, &p.id, "copie").unwrap();
+    assert_eq!(c.path, "/nos-offres-d-ete-copie/");
+    assert_eq!(c.name.as_deref(), Some("Nos offres d'été (copie)"));
+    apply(
+        &mut s,
+        &Command::AddPage {
+            page: c,
+            index: None,
+        },
+    )
+    .unwrap();
+    let home = make::duplicate_page(&s, "accueil", "copie").unwrap();
+    assert_eq!(home.path, "/accueil-copie/");
+    assert!(revel_model::valid_page_path("/a/b-c_d.e/"));
+    assert!(
+        !revel_model::valid_page_path("/A/")
+            && !revel_model::valid_page_path("a/")
+            && !revel_model::valid_page_path("/a//b/")
+    );
+    assert_eq!(
+        revel_model::slugify("  Été 2026 : l'œuvre !"),
+        "ete-2026-l-oeuvre"
+    );
+}

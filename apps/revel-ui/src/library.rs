@@ -298,6 +298,46 @@ fn folder_input(
     commit: impl Fn(String) -> bool + Copy + 'static,
     cancel: impl Fn() + Copy + 'static,
 ) -> impl IntoView {
+    name_input(ui, initial, "library-folder-name", commit, cancel)
+}
+
+/// Nom d'un dossier saisi sur place (pages : renommage).
+pub(crate) fn folder_name_input(
+    ui: Ui,
+    initial: String,
+    commit: impl Fn(String) -> bool + Copy + 'static,
+    cancel: impl Fn() + Copy + 'static,
+) -> impl IntoView {
+    name_input(ui, initial, "library-folder-name", commit, cancel)
+}
+
+/// Ligne de saisie d'un nom (nouveau dossier, nouvelle page) : icône et champ.
+pub(crate) fn input_row(
+    ui: Ui,
+    icon: AnyView,
+    depth: usize,
+    key: &'static str,
+    commit: impl Fn(String) -> bool + Copy + 'static,
+    cancel: impl Fn() + Copy + 'static,
+) -> AnyView {
+    view! {
+        <div class="list-row list-folder is-editing" style=format!("--depth:{depth}")>
+            <span class="list-chevron"></span>
+            <span class="list-icon">{icon}</span>
+            {name_input(ui, String::new(), key, commit, cancel)}
+        </div>
+    }
+    .into_any()
+}
+
+/// Champ de nom saisi sur place (`key` : libellé et texte d'exemple).
+fn name_input(
+    ui: Ui,
+    initial: String,
+    key: &'static str,
+    commit: impl Fn(String) -> bool + Copy + 'static,
+    cancel: impl Fn() + Copy + 'static,
+) -> impl IntoView {
     let value = RwSignal::new(initial);
     let bad = RwSignal::new(false);
     let node = NodeRef::<leptos::html::Input>::new();
@@ -325,7 +365,7 @@ fn folder_input(
     };
     view! {
         <input class="folder-input" class:is-bad=move || bad.get() node_ref=node
-            aria-label=ui.t("library-folder-name") placeholder=ui.t("library-folder-name")
+            aria-label=ui.t(key) placeholder=ui.t(key)
             prop:value=move || value.get()
             on:input=move |e| { value.set(event_target_value(&e)); bad.set(false); }
             on:click=|e| e.stop_propagation()

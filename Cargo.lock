@@ -4799,6 +4799,7 @@ dependencies = [
  "revel-edit",
  "revel-git",
  "revel-import",
+ "revel-markup",
  "revel-model",
  "revel-project",
  "revel-protocol",

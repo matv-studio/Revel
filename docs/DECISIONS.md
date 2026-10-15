@@ -248,6 +248,20 @@ discussion intégrée à Revel, avec le fournisseur choisi (Anthropic, OpenAI ou
 compatible OpenAI, comme celle d'Ollama, https://docs.ollama.com/api/openai-compatibility), reste à décider
 (D-13 : pas de panneau de discussion pour l'instant).
 
+**D-32 — 15/10/2026 — prise.** **Pages : conventions de référencement et adresses.** Une page porte un nom dans
+Revel (`name`, sans effet sur le site), et son référencement dans `seo.title`, `seo.description`, `seo.image`
+et `noindex` (conventions du site Alunites, reprises par le site de départ d'un nouveau site). Les paramètres de la
+page écrivent ces valeurs là où la page les lit : variable `seo` de la page, ou fichier de données quand `seo` est
+un chemin vers les données (`pages.agence.seo`, aussi modifiable dans Pages CMS ; clé ajoutée sur place,
+commentaires gardés) ; une expression calculée n'est pas modifiable dans ces paramètres. `noindex` ajoute la balise
+`robots` si le gabarit ne l'écrit pas et retire la page du plan du site, produit à la génération (avec
+`robots.txt`) quand le site n'a pas ses propres pages à ces adresses. Une adresse se limite aux minuscules sans
+accent, chiffres, `-`, `_`, `.` ; changer l'adresse d'une page publiée ajoute une redirection 301 (les
+redirections qui menaient à l'ancienne adresse sont mises à jour). Les dossiers de pages sont des dossiers
+d'adresse (`/recrutement/…`), gardés quand ils sont vides ; renommer un dossier change les adresses de ses pages
+(avec redirections). Brouillon : page modifiable, non publiée. L'accueil (`/`) ne change pas d'adresse, ne se
+supprime pas et reste publié.
+
 **D-33 — 15/10/2026 — prise (demande de l'utilisateur).** **Étape 7 : compatibilité maximale avec Webflow,
 Framer et Figma.** Les notions de Revel restent proches de celles de ces outils pour que l'import soit fidèle :
 composants à propriétés par instance (Framer, Webflow), variables de design (couleurs, tailles, polices : Webflow,

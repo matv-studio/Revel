@@ -13,6 +13,7 @@ keyring = ["dep:keyring"]
 
 [dependencies]
 revel-model.workspace = true
+revel-markup.workspace = true
 revel-project.workspace = true
 revel-import.workspace = true
 revel-deploy.workspace = true

@@ -16,7 +16,7 @@ use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_edit::Command;
-use revel_protocol::EditorPageInfo;
+pub(crate) use revel_protocol::EditorPageInfo;
 use serde_json::json;
 use std::collections::BTreeSet;
 
@@ -31,7 +31,10 @@ pub fn open_page(ed: Ed, url: String) {
 
 /// Titre d'une page ; sans titre : d'après son adresse (`/mentions-legales/` -> « Mentions
 /// legales », `/` -> « Accueil »).
-fn title_of(p: &EditorPageInfo) -> String {
+pub(crate) fn title_of(p: &EditorPageInfo) -> String {
+    if let Some(n) = p.name.as_ref().filter(|n| !n.trim().is_empty()) {
+        return n.clone();
+    }
     if !p.title.is_empty() {
         return p.title.clone();
     }
@@ -232,82 +235,393 @@ pub fn attach(ui: Ui, ed: Ed, c: &CollectionInfo, p: &EditorPageInfo) {
     ed.apply(ui, Command::Batch { commands }, false);
 }
 
-/// Dossier de pages fixes (premier segment de l'adresse) et ses pages.
-type Folder = (String, Vec<EditorPageInfo>);
-
-/// Pages fixes : pages de premier niveau, puis dossiers (adresses à plusieurs segments).
-fn fixed_tree(ps: &[EditorPageInfo], q: &str) -> (Vec<EditorPageInfo>, Vec<Folder>) {
-    let mut top = Vec::new();
-    let mut folders: Vec<Folder> = Vec::new();
-    for p in ps
-        .iter()
-        .filter(|p| p.page.is_some())
-        .filter(|p| matches(q, &[&p.title, &p.url]))
-    {
-        let segs: Vec<&str> = p.url.split('/').filter(|s| !s.is_empty()).collect();
-        if segs.len() >= 2 {
-            match folders.iter_mut().find(|(f, _)| f == segs[0]) {
-                Some((_, v)) => v.push(p.clone()),
-                None => folders.push((segs[0].to_string(), vec![p.clone()])),
-            }
-        } else {
-            top.push(p.clone());
-        }
-    }
-    // Page d'index d'un dossier (`/legal/`) : rangée avec lui, en premier.
-    top.retain(|p| {
-        let seg = p.url.trim_matches('/').to_string();
-        match folders.iter_mut().find(|(f, _)| *f == seg) {
-            Some((_, v)) => {
-                v.insert(0, p.clone());
-                false
-            }
-            None => true,
-        }
-    });
-    folders.sort_by(|a, b| a.0.cmp(&b.0));
-    (top, folders)
+/// Dossier de pages fixes : chemin d'adresse (`""` : racine), sous-dossiers, pages (la page
+/// d'index du dossier, `/legal/`, en premier).
+#[derive(Clone, Debug, PartialEq, Default)]
+struct FolderNode {
+    path: String,
+    folders: Vec<FolderNode>,
+    pages: Vec<EditorPageInfo>,
 }
 
-/// Arbre des pages. `on_pick` : appelé après l'ouverture d'une page (menu de la barre d'outils).
-#[component]
-pub fn PageTree(
+impl FolderNode {
+    fn count(&self) -> usize {
+        self.pages.len() + self.folders.iter().map(FolderNode::count).sum::<usize>()
+    }
+    fn contains(&self, url: &str) -> bool {
+        self.pages.iter().any(|p| p.url == url) || self.folders.iter().any(|f| f.contains(url))
+    }
+}
+
+/// Arbre des pages fixes : dossiers du rangement et des adresses ; recherche : dossiers sans
+/// page trouvée retirés.
+fn page_tree(ps: &[EditorPageInfo], folders: &[String], q: &str) -> FolderNode {
+    let searching = !q.trim().is_empty();
+    let mut placed: Vec<(String, bool, EditorPageInfo)> = Vec::new();
+    for p in ps.iter().filter(|p| p.page.is_some()).filter(|p| {
+        matches(
+            q,
+            &[&p.title, &p.url, p.name.as_deref().unwrap_or_default()],
+        )
+    }) {
+        let own = p.url.trim_matches('/').to_string();
+        let index = p.url != "/" && p.url.ends_with('/') && folders.contains(&own);
+        let dir = if index {
+            own
+        } else {
+            crate::pageops::folder_of(&p.url)
+        };
+        placed.push((dir, index, p.clone()));
+    }
+    fn build(
+        path: &str,
+        folders: &[String],
+        placed: &[(String, bool, EditorPageInfo)],
+        searching: bool,
+    ) -> FolderNode {
+        let mut pages: Vec<EditorPageInfo> = placed
+            .iter()
+            .filter(|(d, i, _)| d == path && *i)
+            .map(|(_, _, p)| p.clone())
+            .collect();
+        pages.extend(
+            placed
+                .iter()
+                .filter(|(d, i, _)| d == path && !*i)
+                .map(|(_, _, p)| p.clone()),
+        );
+        let mut subs: Vec<FolderNode> = folders
+            .iter()
+            .filter(|f| crate::pageops::folder_of(&format!("/{f}/")) == path)
+            .map(|f| build(f, folders, placed, searching))
+            .filter(|f| !searching || f.count() > 0)
+            .collect();
+        subs.sort_by(|a, b| a.path.cmp(&b.path));
+        FolderNode {
+            path: path.to_string(),
+            folders: subs,
+            pages,
+        }
+    }
+    build("", folders, &placed, searching)
+}
+
+/// État partagé de l'arbre (dossiers dépliés, saisies en cours, actions du panneau).
+#[derive(Clone, Copy)]
+struct TreeCtx {
+    ui: Ui,
+    ed: Ed,
+    open: RwSignal<Vec<String>>,
     q: RwSignal<String>,
-    #[prop(optional)] on_pick: Option<Callback<()>>,
-) -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let ed = expect_context::<Ed>();
-    // Dossiers dépliés (pages fixes : `p:<segment>`, collections : `c:<id>`).
-    let open = RwSignal::new(Vec::<String>::new());
-    let toggle = move |k: String| {
-        open.update(|o| {
+    on_pick: Option<Callback<()>>,
+    on_settings: Option<Callback<String>>,
+    /// Dossier où une nouvelle page ou un nouveau dossier est en cours de saisie.
+    creating_page: RwSignal<Option<String>>,
+    creating_folder: RwSignal<Option<String>>,
+    renaming: RwSignal<Option<String>>,
+}
+
+impl TreeCtx {
+    fn toggle(self, k: String) {
+        self.open.update(|o| {
             if let Some(i) = o.iter().position(|x| *x == k) {
                 o.remove(i);
             } else {
                 o.push(k);
             }
         })
-    };
-    let go = move |url: String| {
-        open_page(ed, url);
-        if let Some(cb) = on_pick {
+    }
+
+    fn go(self, url: String) {
+        open_page(self.ed, url);
+        if let Some(cb) = self.on_pick {
             cb.run(());
         }
-    };
-    let page_menu = move |e: &web_sys::MouseEvent, url: String| {
+    }
+
+    fn page_menu(self, e: &web_sys::MouseEvent, p: &EditorPageInfo) {
         use crate::ctxmenu::{CtxItem, open as show};
-        let u2 = url.clone();
-        show(
-            ui,
-            e,
-            vec![
-                CtxItem::new(ui.now("library-open", &[]), move || go(url.clone()))
-                    .icon(icons::page),
-                CtxItem::new(ui.now("media-copy-url", &[]), move || api::copy_text(&u2))
-                    .icon(icons::link),
-            ],
+        let (ui, ed) = (self.ui, self.ed);
+        let Some(id) = p.page.clone() else { return };
+        let home = p.url == "/";
+        let url = p.url.clone();
+        let mut items = vec![
+            CtxItem::new(ui.now("library-open", &[]), {
+                let u = url.clone();
+                move || self.go(u.clone())
+            })
+            .icon(icons::page),
+        ];
+        if let Some(cb) = self.on_settings {
+            let i = id.clone();
+            items.push(
+                CtxItem::new(ui.now("pages-settings", &[]), move || cb.run(i.clone()))
+                    .icon(icons::settings),
+            );
+        }
+        items.push(
+            CtxItem::new(ui.now("pages-duplicate", &[]), {
+                let i = id.clone();
+                move || crate::pageops::duplicate(ui, ed, &i)
+            })
+            .icon(icons::copy)
+            .sep(),
         );
+        if !home {
+            let i = id.clone();
+            let draft = p.draft;
+            items.push(
+                CtxItem::new(
+                    ui.now(
+                        if draft {
+                            "pages-publish"
+                        } else {
+                            "pages-to-draft"
+                        },
+                        &[],
+                    ),
+                    move || crate::pageops::set_draft(ui, ed, &i, !draft),
+                )
+                .icon(icons::draft),
+            );
+            let here = crate::pageops::folder_of(&p.url);
+            let folders = ed
+                .doc
+                .with_untracked(|d| d.as_ref().map(crate::pageops::folders))
+                .unwrap_or_default();
+            for (n, f) in folders
+                .into_iter()
+                .filter(|f| *f != here && *f != url.trim_matches('/'))
+                .take(10)
+                .enumerate()
+            {
+                let i = id.clone();
+                let label = ui.now("library-move-to", &[("folder", f.replace('/', " › "))]);
+                let mut c = CtxItem::new(label, move || crate::pageops::move_to(ui, ed, &i, &f))
+                    .icon(icons::folder);
+                if n == 0 {
+                    c = c.sep();
+                }
+                items.push(c);
+            }
+            if !here.is_empty() {
+                let i = id.clone();
+                items.push(
+                    CtxItem::new(ui.now("pages-move-root", &[]), move || {
+                        crate::pageops::move_to(ui, ed, &i, "")
+                    })
+                    .icon(icons::arrow_up),
+                );
+            }
+        }
+        items.push(
+            CtxItem::new(ui.now("media-copy-url", &[]), {
+                let u = url.clone();
+                move || api::copy_text(&u)
+            })
+            .icon(icons::link)
+            .sep(),
+        );
+        if !home {
+            let i = id.clone();
+            items.push(
+                CtxItem::new(ui.now("pages-delete", &[]), move || {
+                    crate::pageops::delete(ui, ed, &i)
+                })
+                .icon(icons::trash)
+                .danger()
+                .sep(),
+            );
+        }
+        show(ui, e, items);
+    }
+
+    fn folder_menu(self, e: &web_sys::MouseEvent, node: &FolderNode) {
+        use crate::ctxmenu::{CtxItem, open as show};
+        let (ui, ed) = (self.ui, self.ed);
+        let path = node.path.clone();
+        let empty = node.count() == 0;
+        let (p1, p2, p3, p4) = (path.clone(), path.clone(), path.clone(), path.clone());
+        let items = vec![
+            CtxItem::new(ui.now("pages-new-here", &[]), move || {
+                self.open.update(|o| {
+                    if !o.contains(&format!("p:{p1}")) {
+                        o.push(format!("p:{p1}"))
+                    }
+                });
+                self.creating_page.set(Some(p1.clone()))
+            })
+            .icon(icons::plus),
+            CtxItem::new(ui.now("library-new-subfolder", &[]), move || {
+                self.creating_folder.set(Some(p2.clone()))
+            })
+            .icon(icons::folder_plus),
+            CtxItem::new(ui.now("library-rename", &[]), move || {
+                self.renaming.set(Some(p3.clone()))
+            })
+            .icon(icons::edit)
+            .sep(),
+            CtxItem::new(
+                ui.now(
+                    if empty {
+                        "library-delete-folder"
+                    } else {
+                        "pages-folder-not-empty"
+                    },
+                    &[],
+                ),
+                move || crate::pageops::delete_folder(ui, ed, &p4),
+            )
+            .icon(icons::trash)
+            .danger()
+            .disabled(!empty)
+            .sep(),
+        ];
+        show(ui, e, items);
+    }
+
+    fn page_row(self, p: EditorPageInfo, depth: usize) -> AnyView {
+        let (ui, ed) = (self.ui, self.ed);
+        let url = p.url.clone();
+        let (u1, u2) = (url.clone(), url.clone());
+        let p2 = p.clone();
+        let id = p.page.clone().unwrap_or_default();
+        let settings = self.on_settings.map(|cb| {
+            view! {
+                <span class="row-action" role="button" title=ui.t("pages-settings") aria-label=ui.t("pages-settings")
+                    on:click=move |e| { e.stop_propagation(); cb.run(id.clone()) }>{icons::settings()}</span>
+            }
+        });
+        view! {
+            <button class="list-row page-row" class:is-on=move || ed.page.get() == u1 class:is-draft=p.draft
+                style=format!("--depth:{depth}") title=p.url.clone() data-url=p.url.clone()
+                on:click=move |_| self.go(u2.clone())
+                on:contextmenu=move |e: leptos::ev::MouseEvent| self.page_menu(&e, &p2)>
+                <span class="list-chevron"></span>
+                <span class="list-icon">{if p.url == "/" { icons::grid() } else { icons::page() }}</span>
+                <span class="list-label">{title_of(&p)}</span>
+                {p.draft.then(|| view! { <span class="list-tag">{ui.t("pages-draft-tag")}</span> })}
+                <span class="list-meta">{p.url.clone()}</span>
+                {settings}
+            </button>
+        }
+        .into_any()
+    }
+
+    fn inputs(self, folder: &str, depth: usize) -> AnyView {
+        let f1 = folder.to_string();
+        let f2 = folder.to_string();
+        view! {
+            {move || self.creating_folder.get().filter(|p| *p == f1).map(|p| {
+                let parent = StoredValue::new(p);
+                crate::library::input_row(self.ui, icons::folder(), depth, "library-folder-name",
+                    move |name: String| crate::pageops::create_folder(self.ui, self.ed, &parent.get_value(), &name)
+                        .then(|| self.creating_folder.set(None)).is_some(),
+                    move || self.creating_folder.set(None))
+            })}
+            {move || self.creating_page.get().filter(|p| *p == f2).map(|p| {
+                let parent = StoredValue::new(p);
+                crate::library::input_row(self.ui, icons::page(), depth, "pages-name",
+                    move |name: String| crate::pageops::create(self.ui, self.ed, &name, &parent.get_value())
+                        .then(|| self.creating_page.set(None)).is_some(),
+                    move || self.creating_page.set(None))
+            })}
+        }
+        .into_any()
+    }
+
+    fn folder(self, node: FolderNode, depth: usize) -> AnyView {
+        let (ui, ed) = (self.ui, self.ed);
+        let key = format!("p:{}", node.path);
+        let k1 = key.clone();
+        let q = self.q;
+        let is_open = Memo::new(move |_| {
+            !q.with(|q| q.trim().is_empty()) || self.open.with(|o| o.contains(&k1))
+        });
+        let n2 = node.clone();
+        let has_current = Memo::new(move |_| {
+            let u = ed.page.get();
+            n2.contains(&u)
+        });
+        let n = node.count();
+        let path = StoredValue::new(node.path.clone());
+        let name = node.path.rsplit('/').next().unwrap_or_default().to_string();
+        let node_menu = node.clone();
+        let renaming = move || self.renaming.get().as_deref() == Some(path.get_value().as_str());
+        let row = view! {
+            <div class="list-row list-folder" role="treeitem" tabindex="0" style=format!("--depth:{depth}")
+                class:is-current=move || has_current.get() && !is_open.get()
+                data-folder=node.path.clone()
+                on:click=move |_| if !renaming() { self.toggle(key.clone()) }
+                on:contextmenu=move |e: leptos::ev::MouseEvent| self.folder_menu(&e, &node_menu)>
+                <span class="list-chevron">{move || if is_open.get() { icons::chevron_down() } else { icons::chevron_right() }}</span>
+                <span class="list-icon">{icons::folder()}</span>
+                {move || if renaming() {
+                    crate::library::folder_name_input(ui, name.clone(),
+                        move |v: String| crate::pageops::rename_folder(ui, ed, &path.get_value(), &v)
+                            .then(|| self.renaming.set(None)).is_some(),
+                        move || self.renaming.set(None)).into_any()
+                } else {
+                    view! { <span class="list-label">{name.clone()}</span> }.into_any()
+                }}
+                <span class="list-count">{n}</span>
+            </div>
+        };
+        let inside = node.clone();
+        view! {
+            {row}
+            {move || {
+                if is_open.get() {
+                    let f = inside.clone();
+                    view! {
+                        {self.inputs(&f.path, depth + 1)}
+                        {f.folders.into_iter().map(|sub| self.folder(sub, depth + 1)).collect_view()}
+                        {f.pages.into_iter().map(|p| self.page_row(p, depth + 1)).collect_view()}
+                    }.into_any()
+                } else {
+                    // Replié : seulement la page affichée.
+                    let u = ed.page.get();
+                    let mut cur = Vec::new();
+                    fn find(f: &FolderNode, u: &str, out: &mut Vec<EditorPageInfo>) {
+                        out.extend(f.pages.iter().filter(|p| p.url == u).cloned());
+                        for s in &f.folders { find(s, u, out); }
+                    }
+                    find(&inside, &u, &mut cur);
+                    cur.into_iter().map(|p| self.page_row(p, depth + 1)).collect_view().into_any()
+                }
+            }}
+        }
+        .into_any()
+    }
+}
+
+/// Arbre des pages. `on_pick` : appelé après l'ouverture d'une page (menu de la barre d'outils) ;
+/// `on_settings` : paramètres d'une page (panneau Pages).
+#[component]
+pub fn PageTree(
+    q: RwSignal<String>,
+    #[prop(optional)] on_pick: Option<Callback<()>>,
+    #[prop(optional)] on_settings: Option<Callback<String>>,
+    #[prop(optional)] creating_page: Option<RwSignal<Option<String>>>,
+    #[prop(optional)] creating_folder: Option<RwSignal<Option<String>>>,
+) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    // Dossiers dépliés (pages fixes : `p:<chemin>`, collections : `c:<id>`).
+    let open = RwSignal::new(Vec::<String>::new());
+    let tc = TreeCtx {
+        ui,
+        ed,
+        open,
+        q,
+        on_pick,
+        on_settings,
+        creating_page: creating_page.unwrap_or_else(|| RwSignal::new(None)),
+        creating_folder: creating_folder.unwrap_or_else(|| RwSignal::new(None)),
+        renaming: RwSignal::new(None),
     };
+    let toggle = move |k: String| tc.toggle(k);
+    let go = move |url: String| tc.go(url);
     let entry_menu = move |e: &web_sys::MouseEvent, c: CollectionInfo, p: EditorPageInfo| {
         use crate::ctxmenu::{CtxItem, open as show};
         let url = p.url.clone();
@@ -347,21 +661,6 @@ pub fn PageTree(
             ],
         );
     };
-    let page_row = move |p: EditorPageInfo, depth: usize| {
-        let url = p.url.clone();
-        let (u1, u2, u3) = (url.clone(), url.clone(), url.clone());
-        view! {
-            <button class="list-row page-row" class:is-on=move || ed.page.get() == u1
-                style=format!("--depth:{depth}") title=p.url.clone() data-url=p.url.clone()
-                on:click=move |_| go(u2.clone())
-                on:contextmenu=move |e: leptos::ev::MouseEvent| page_menu(&e, u3.clone())>
-                <span class="list-chevron"></span>
-                <span class="list-icon">{icons::page()}</span>
-                <span class="list-label">{title_of(&p)}</span>
-                <span class="list-meta">{p.url.clone()}</span>
-            </button>
-        }
-    };
     let entry_row = move |c: CollectionInfo, p: EditorPageInfo| {
         let url = p.url.clone();
         let (u1, u2) = (url.clone(), url.clone());
@@ -381,7 +680,11 @@ pub fn PageTree(
     };
     let fixed = Memo::new(move |_| {
         let q = q.get();
-        ed.pages.with(|ps| fixed_tree(ps, &q))
+        let folders = ed
+            .doc
+            .with(|d| d.as_ref().map(crate::pageops::folders))
+            .unwrap_or_default();
+        ed.pages.with(|ps| page_tree(ps, &folders, &q))
     });
     // Libellés des collections (`.pages.yml`), par dossier.
     let labels = RwSignal::new(std::collections::BTreeMap::<String, String>::new());
@@ -398,36 +701,12 @@ pub fn PageTree(
     let cols = Memo::new(move |_| collections(ed));
     view! {
         <div class="page-tree" role="tree">
+            {move || tc.inputs("", 0)}
             {move || {
-                let (top, folders) = fixed.get();
+                let root = fixed.get();
                 view! {
-                    {top.into_iter().map(|p| page_row(p, 0)).collect_view()}
-                    {folders.into_iter().map(|(f, pages)| {
-                        let key = format!("p:{f}");
-                        let k1 = key.clone();
-                        let is_open = Memo::new(move |_| !q.with(|q| q.trim().is_empty()) || open.with(|o| o.contains(&k1)));
-                        let urls: Vec<String> = pages.iter().map(|p| p.url.clone()).collect();
-                        let has_current = Memo::new(move |_| { let u = ed.page.get(); urls.contains(&u) });
-                        let n = pages.len();
-                        view! {
-                            <button class="list-row list-folder" style="--depth:0" class:is-current=move || has_current.get() && !is_open.get()
-                                data-folder=f.clone() on:click=move |_| toggle(key.clone())>
-                                <span class="list-chevron">{move || if is_open.get() { icons::chevron_down() } else { icons::chevron_right() }}</span>
-                                <span class="list-icon">{icons::folder()}</span>
-                                <span class="list-label">{f.clone()}</span>
-                                <span class="list-count">{n}</span>
-                            </button>
-                            {move || {
-                                let shown: Vec<EditorPageInfo> = if is_open.get() {
-                                    pages.clone()
-                                } else {
-                                    let u = ed.page.get();
-                                    pages.iter().filter(|p| p.url == u).cloned().collect()
-                                };
-                                shown.into_iter().map(|p| page_row(p, 1)).collect_view()
-                            }}
-                        }
-                    }).collect_view()}
+                    {root.pages.into_iter().map(|p| tc.page_row(p, 0)).collect_view()}
+                    {root.folders.into_iter().map(|f| tc.folder(f, 0)).collect_view()}
                 }
             }}
             {move || cols.get().into_iter().map(|c| {
@@ -501,20 +780,61 @@ pub fn PageTree(
     }
 }
 
-/// Panneau Pages.
+/// Panneau Pages : arbre des pages, ou paramètres d'une page.
 #[component]
 pub fn Pages() -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
     let q = RwSignal::new(String::new());
+    let settings = RwSignal::new(None::<String>);
+    let creating_page = RwSignal::new(None::<String>);
+    let creating_folder = RwSignal::new(None::<String>);
+    // Paramètres d'une page : par-dessus toute la colonne (ou la fenêtre) du panneau, pour avoir
+    // la hauteur nécessaire (comme Webflow).
+    let root = NodeRef::<leptos::html::Div>::new();
+    let rect = RwSignal::new(None::<(f64, f64, f64, f64)>);
+    let measure = move || {
+        let r = root.get_untracked().and_then(|el| {
+            let host = el.closest(".dock-col, .dock-float").ok().flatten()?;
+            let b = host.get_bounding_client_rect();
+            Some((b.left(), b.top(), b.width(), b.height()))
+        });
+        rect.set(r);
+    };
+    let on_resize = window_event_listener(leptos::ev::resize, move |_| {
+        if settings.get_untracked().is_some() {
+            measure()
+        }
+    });
+    on_cleanup(move || on_resize.remove());
+    let on_settings = Callback::new(move |id: String| {
+        measure();
+        settings.set(Some(id))
+    });
+    let close = Callback::new(move |_| settings.set(None));
     view! {
-        <div class="panel-list pages">
-            <crate::panels::Search value=q key="pages-search"/>
-            <div class="list-scroll"><PageTree q=q/></div>
-            <footer class="panel-foot">
-                <span class="panel-foot-text muted">{move || ui.tx("pages-count", &[("count", ed.pages.with(|p| p.iter().filter(|p| p.page.is_some()).count()).to_string())])}</span>
-                <crate::panels::PlannedButton key="pages-new" step=3 icon=icons::plus/>
-            </footer>
+        <div class="panel-list pages" node_ref=root>
+            {move || settings.get().map(|id| view! {
+                <div class="page-settings-overlay" style=move || rect.get().map(|(x, y, w, h)| format!("left:{x}px;top:{y}px;width:{w}px;height:{h}px")).unwrap_or_default()>
+                    <crate::pagesettings::PageSettings id=id on_close=close/>
+                </div>
+            })}
+            {move || match settings.get() {
+                Some(_) => ().into_any(),
+                None => view! {
+                    <crate::panels::Search value=q key="pages-search"/>
+                    <div class="list-scroll">
+                        <PageTree q=q on_settings=on_settings creating_page=creating_page creating_folder=creating_folder/>
+                    </div>
+                    <footer class="panel-foot">
+                        <span class="panel-foot-text muted">{move || ui.tx("pages-count", &[("count", ed.pages.with(|p| p.iter().filter(|p| p.page.is_some()).count()).to_string())])}</span>
+                        <button class="icon-btn icon-btn--small" title=ui.t("library-new-folder") aria-label=ui.t("library-new-folder")
+                            on:click=move |_| { q.set(String::new()); creating_folder.set(Some(String::new())) }>{icons::folder_plus()}</button>
+                        <button class="icon-btn icon-btn--small" title=ui.t("pages-new") aria-label=ui.t("pages-new")
+                            on:click=move |_| { q.set(String::new()); creating_page.set(Some(String::new())) }>{icons::plus()}</button>
+                    </footer>
+                }.into_any(),
+            }}
         </div>
     }
 }
@@ -610,18 +930,27 @@ mod tests {
             page("/legal/", true),
             page("/legal/mentions/", true),
             page("/legal/cgv/", true),
+            page("/emplois/2026/stage/", true),
             page("/projet/a/", false),
         ];
-        let (top, folders) = fixed_tree(&ps, "");
-        let urls: Vec<&str> = top.iter().map(|p| p.url.as_str()).collect();
+        let folders = vec![
+            "emplois".to_string(),
+            "emplois/2026".to_string(),
+            "legal".to_string(),
+            "vide".to_string(),
+        ];
+        let t = page_tree(&ps, &folders, "");
+        let urls: Vec<&str> = t.pages.iter().map(|p| p.url.as_str()).collect();
         assert_eq!(urls, vec!["/", "/agence/"]);
-        assert_eq!(folders.len(), 1);
-        let (f, inside) = &folders[0];
-        assert_eq!(f, "legal");
-        let inside: Vec<&str> = inside.iter().map(|p| p.url.as_str()).collect();
-        assert_eq!(inside, vec!["/legal/", "/legal/mentions/", "/legal/cgv/"]);
-        let (top, folders) = fixed_tree(&ps, "cgv");
-        assert!(top.is_empty() && folders[0].1.len() == 1);
+        let names: Vec<&str> = t.folders.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(names, vec!["emplois", "legal", "vide"]);
+        let legal: Vec<&str> = t.folders[1].pages.iter().map(|p| p.url.as_str()).collect();
+        assert_eq!(legal, vec!["/legal/", "/legal/mentions/", "/legal/cgv/"]);
+        assert_eq!(t.folders[0].folders[0].pages[0].url, "/emplois/2026/stage/");
+        assert_eq!(t.folders[0].count(), 1);
+        // Recherche : dossiers sans résultat retirés.
+        let t = page_tree(&ps, &folders, "cgv");
+        assert!(t.pages.is_empty() && t.folders.len() == 1 && t.folders[0].pages.len() == 1);
         assert_eq!(label_of("projets"), "Projets");
     }
 }

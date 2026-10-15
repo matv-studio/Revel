@@ -444,3 +444,13 @@ pub fn folder_plus() -> AnyView {
 pub fn sort() -> AnyView {
     svg(r#"<path d="M5 3v10M2.5 10.5 5 13l2.5-2.5M11 13V3M8.5 5.5 11 3l2.5 2.5"/>"#)
 }
+
+/// Retour (chevron vers la gauche).
+pub fn back() -> AnyView {
+    svg(r#"<path d="M10 3.5 5.5 8l4.5 4.5"/>"#)
+}
+
+/// Brouillon (crayon barré d'un trait).
+pub fn draft() -> AnyView {
+    svg(r#"<path d="M3 13h3l7-7-3-3-7 7z"/><path d="M8.5 4.5l3 3"/>"#)
+}

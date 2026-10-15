@@ -9,6 +9,9 @@ fn sample_site(dir: &Path, c: &Core) -> PathBuf {
     let site = dir.join("site");
     c.new_site(&site, "Essai", "fr").unwrap();
     let mut p = revel_project::Project::open(&site).unwrap();
+    // Site vide (sans le site de départ) : les essais construisent ce qu'ils vérifient.
+    let name = p.site.name.clone();
+    p.site = revel_model::Site::new(name, "fr");
     p.site.pages.push(Page {
         id: "index".into(),
         path: "/".into(),
@@ -1304,4 +1307,28 @@ fn pages_et_referencement() {
     }
     assert_eq!(std::fs::read_to_string(&file).unwrap(), data);
     assert_eq!(c.edit_open(&site).unwrap().site, opened.site);
+}
+
+#[test]
+fn nouveau_site_pret_a_modifier() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = d.path().join("atelier");
+    let summary = c.new_site(&site, "Atelier Lumière", "fr").unwrap();
+    assert_eq!(summary.pages, 1);
+    assert!(site.join("media").is_dir());
+    c.edit_open(&site).unwrap();
+    let pages = c.edit_pages(&site).unwrap();
+    assert_eq!(pages[0].url, "/");
+    assert_eq!(pages[0].name.as_deref(), Some("Accueil"));
+    c.build(&site, "production", false, &|_| {}).unwrap();
+    let out = out_dir(&site, "production");
+    let html = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(html.contains("<title>Atelier Lumière</title>"), "{html}");
+    assert!(
+        html.contains(r#"<h1 class="title">Atelier Lumière</h1>"#),
+        "{html}"
+    );
+    assert!(out.join("assets/site.css").is_file());
+    assert!(out.join("robots.txt").is_file());
 }

@@ -114,7 +114,7 @@ pub struct EditorPageInfo {
 }
 
 /// Référencement d'une page fixe et endroit où il s'écrit.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PageSeoInfo {
     #[serde(default)]
     pub title: String,

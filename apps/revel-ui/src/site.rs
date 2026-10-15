@@ -145,7 +145,7 @@ const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::General, "settings-general", None),
     (Section::Publish, "settings-publish", None),
     (Section::Export, "settings-export", None),
-    (Section::Seo, "settings-seo", Some(3)),
+    (Section::Seo, "settings-seo", None),
     (Section::Redirects, "settings-redirects", None),
     (Section::Fonts, "settings-fonts", Some(3)),
     (Section::Code, "settings-code", Some(3)),
@@ -162,6 +162,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         Section::Publish => view! { <crate::publish::Publish site=site.clone()/> }.into_any(),
         Section::Export => view! { <Export site=site.clone()/> }.into_any(),
         Section::Redirects => view! { <Redirects site=site.clone()/> }.into_any(),
+        Section::Seo => view! { <Seo site=site.clone()/> }.into_any(),
         other => {
             let (key, step) = SECTIONS
                 .iter()
@@ -283,38 +284,177 @@ fn General(site: SiteSummary) -> impl IntoView {
     }
 }
 
-/// Redirections du site (lecture ; modification prévue à l'étape 5 avec les hébergeurs).
+/// Document du site pour une rubrique des paramètres : relu à l'ouverture, modifié par des
+/// commandes (même historique que l'éditeur ; l'éditeur relit le document modifié).
+#[derive(Clone, Copy)]
+struct DocSession {
+    doc: RwSignal<Option<revel_model::Site>>,
+    apply: Callback<revel_edit::Command>,
+}
+
+fn doc_session(ui: Ui, path: String) -> DocSession {
+    let doc = RwSignal::new(None::<revel_model::Site>);
+    let path = StoredValue::new(path);
+    let reload = move || {
+        let p = path.get_value();
+        spawn_local(async move {
+            if let Ok(o) = api::edit_open(&p).await
+                && !doc.is_disposed()
+            {
+                doc.set(Some(o.site));
+            }
+        });
+    };
+    reload();
+    let apply = Callback::new(move |cmd: revel_edit::Command| {
+        let p = path.get_value();
+        spawn_local(async move {
+            if let Err(e) = api::edit_apply(&p, &cmd, false).await {
+                ui.fail(e);
+            }
+            if !doc.is_disposed() {
+                reload();
+            }
+        });
+    });
+    DocSession { doc, apply }
+}
+
+/// Redirections permanentes (301) du site : ajout, modification, retrait. Les changements
+/// d'adresse d'une page en ajoutent (paramètres de la page).
 #[component]
 fn Redirects(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
-    let list = site.redirects.clone();
-    let empty = list.is_empty();
+    let s = doc_session(ui, site.path.clone());
+    let list = move || {
+        s.doc
+            .with(|d| d.as_ref().map(|d| d.redirects.clone()).unwrap_or_default())
+    };
+    let set = move |l: Vec<revel_model::Redirect>| {
+        s.apply
+            .run(revel_edit::Command::SetRedirects { redirects: l })
+    };
+    let from = RwSignal::new(String::new());
+    let to = RwSignal::new(String::new());
+    let add = move || {
+        let (f, t) = (
+            from.get_untracked().trim().to_string(),
+            to.get_untracked().trim().to_string(),
+        );
+        if f.is_empty() || t.is_empty() {
+            return;
+        }
+        let f = if f.starts_with('/') {
+            f
+        } else {
+            format!("/{f}")
+        };
+        let mut l = list();
+        l.retain(|r| r.from != f);
+        l.push(revel_model::Redirect { from: f, to: t });
+        set(l);
+        from.set(String::new());
+        to.set(String::new());
+    };
     view! {
         <section class="page settings-page">
             <header class="page-head">
                 <h1>{ui.t("settings-redirects")}</h1>
-                <div class="toolbar">
-                    <button class="btn" disabled=true title=move || ui.tx("planned-step", &[("step", "5".to_string())])>
-                        {icons::plus()}{ui.t("redirects-add")}
-                    </button>
-                </div>
             </header>
-            {if empty {
-                view! { <div class="empty"><p>{ui.t("redirects-none")}</p></div> }.into_any()
-            } else {
-                view! {
-                    <div class="section section--flush">
-                        <table class="table table--compact">
-                            <thead><tr><th>{ui.t("redirects-from")}</th><th></th><th>{ui.t("redirects-to")}</th></tr></thead>
-                            <tbody>
-                                {list.into_iter().map(|(from, to)| view! {
-                                    <tr><td class="path">{from}</td><td class="muted col-arrow">{icons::arrow_right()}</td><td class="path">{to}</td></tr>
-                                }).collect_view()}
-                            </tbody>
-                        </table>
-                    </div>
-                }.into_any()
-            }}
+            <p class="muted help">{ui.t("redirects-help")}</p>
+            <div class="section section--flush">
+                <table class="table table--compact redirects">
+                    <thead><tr><th>{ui.t("redirects-from")}</th><th></th><th>{ui.t("redirects-to")}</th><th></th></tr></thead>
+                    <tbody>
+                        {move || list().into_iter().enumerate().map(|(i, r)| view! {
+                            <tr>
+                                <td class="path">{r.from.clone()}</td>
+                                <td class="muted col-arrow">{icons::arrow_right()}</td>
+                                <td class="path">{r.to.clone()}</td>
+                                <td class="col-actions">
+                                    <button class="icon-btn icon-btn--small" title=ui.t("redirects-remove") aria-label=ui.t("redirects-remove")
+                                        on:click=move |_| { let mut l = list(); if i < l.len() { l.remove(i); } set(l) }>{icons::trash()}</button>
+                                </td>
+                            </tr>
+                        }).collect_view()}
+                        <tr class="redirect-new">
+                            <td><input class="input input--mono" placeholder="/ancienne-adresse/" aria-label=ui.t("redirects-from")
+                                prop:value=move || from.get() on:input=move |e| from.set(event_target_value(&e))
+                                on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { add() }/></td>
+                            <td class="muted col-arrow">{icons::arrow_right()}</td>
+                            <td><input class="input input--mono" placeholder="/nouvelle-adresse/" aria-label=ui.t("redirects-to")
+                                prop:value=move || to.get() on:input=move |e| to.set(event_target_value(&e))
+                                on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { add() }/></td>
+                            <td class="col-actions">
+                                <button class="icon-btn icon-btn--small" title=ui.t("redirects-add") aria-label=ui.t("redirects-add")
+                                    on:click=move |_| add()>{icons::plus()}</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+/// Référencement du site : plan du site et robots.txt produits par Revel (sauf si le site a ses
+/// propres pages à ces adresses).
+#[component]
+fn Seo(site: SiteSummary) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let s = doc_session(ui, site.path.clone());
+    let seo = move || {
+        s.doc.with(|d| {
+            d.as_ref()
+                .map(|d| d.settings.seo.clone())
+                .unwrap_or_default()
+        })
+    };
+    let own = move |path: &str| {
+        s.doc.with(|d| {
+            d.as_ref()
+                .is_some_and(|d| d.pages.iter().any(|p| p.path == path))
+        })
+    };
+    let no_url = move || {
+        s.doc.with(|d| {
+            d.as_ref()
+                .is_some_and(|d| d.base_url.as_deref().unwrap_or_default().is_empty())
+        })
+    };
+    let set = move |f: &dyn Fn(&mut revel_model::SeoSettings)| {
+        let mut v = seo();
+        f(&mut v);
+        s.apply.run(revel_edit::Command::SetSeoSettings { seo: v });
+    };
+    view! {
+        <section class="page settings-page">
+            <header class="page-head"><h1>{ui.t("settings-seo")}</h1></header>
+            <div class="section">
+                <label class="view-line">
+                    <span>{ui.t("seo-sitemap")}</span>
+                    <span class="switch">
+                        <input type="checkbox" prop:checked=move || !seo().no_sitemap disabled=move || own("/sitemap.xml")
+                            on:change=move |e| { let on = event_target_checked(&e); set(&|v| v.no_sitemap = !on) }/>
+                        <span class="switch-track"></span>
+                    </span>
+                </label>
+                <p class="muted help">{move || ui.tx(if own("/sitemap.xml") { "seo-sitemap-own" } else if no_url() { "seo-sitemap-no-url" } else { "seo-sitemap-help" }, &[])}</p>
+            </div>
+            <div class="section">
+                <label class="field">
+                    <span class="label">"robots.txt"</span>
+                    <textarea class="input input--mono" rows="6" disabled=move || own("/robots.txt")
+                        placeholder="User-agent: *\nAllow: /"
+                        prop:value=move || seo().robots.unwrap_or_default()
+                        on:change=move |e| {
+                            let t = event_target_value(&e);
+                            set(&|v| v.robots = (!t.trim().is_empty()).then(|| t.clone()))
+                        }></textarea>
+                </label>
+                <p class="muted help">{move || ui.tx(if own("/robots.txt") { "seo-robots-own" } else { "seo-robots-help" }, &[])}</p>
+            </div>
+            <p class="muted help">{ui.t("seo-pages-help")}</p>
         </section>
     }
 }

@@ -191,3 +191,173 @@ pub fn layout_copy(site: &Site, from: &str, id: &str) -> Result<revel_model::Lay
         body,
     })
 }
+
+/// Adresse libre pour une page : `/<dossier>/<fragment>/` (`-2`, `-3`… si prise).
+pub fn free_page_path(site: &Site, folder: &str, slug: &str) -> String {
+    let slug = if slug.is_empty() { "page" } else { slug };
+    let prefix = match folder.trim_matches('/') {
+        "" => "/".to_string(),
+        f => format!("/{f}/"),
+    };
+    let mut path = format!("{prefix}{slug}/");
+    let mut n = 2;
+    while site.pages.iter().any(|p| p.path == path) {
+        path = format!("{prefix}{slug}-{n}/");
+        n += 1;
+    }
+    path
+}
+
+fn free_page_id(site: &Site, base: &str) -> String {
+    let base = if base.is_empty() { "page" } else { base };
+    let mut id = base.to_string();
+    let mut n = 2;
+    while site.pages.iter().any(|p| p.id == id) {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    id
+}
+
+/// Gabarit des pages fixes le plus utilisé (celui d'une nouvelle page).
+pub fn usual_layout(site: &Site) -> Option<String> {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for l in site
+        .pages
+        .iter()
+        .filter(|p| p.path.ends_with('/') || p.path.ends_with(".html"))
+        .filter_map(|p| p.layout.clone())
+    {
+        match counts.iter_mut().find(|(x, _)| *x == l) {
+            Some(c) => c.1 += 1,
+            None => counts.push((l, 1)),
+        }
+    }
+    counts.into_iter().max_by_key(|c| c.1).map(|c| c.0)
+}
+
+/// Nouvelle page `name` dans le dossier `folder` (chemin d'adresse, `""` : racine) : gabarit le
+/// plus utilisé, titre de référencement, un titre dans une section.
+pub fn new_page(site: &Site, name: &str, folder: &str) -> revel_model::Page {
+    let slug = revel_model::slugify(name);
+    let path = free_page_path(site, folder, &slug);
+    let id = free_page_id(site, &path.trim_matches('/').replace('/', "-"));
+    let layout = usual_layout(site);
+    let mut taken = site.node_ids();
+    let heading = Node::Element {
+        id: None,
+        tag: "h1".into(),
+        attrs: vec![],
+        children: vec![Node::Text {
+            text: name.to_string(),
+        }],
+    };
+    let mut body = match &layout {
+        Some(_) => vec![Node::Element {
+            id: None,
+            tag: "section".into(),
+            attrs: vec![Attr {
+                name: "class".into(),
+                value: Some("section".into()),
+                when: None,
+            }],
+            children: vec![heading],
+        }],
+        // Sans gabarit : document complet.
+        None => vec![
+            Node::Html {
+                html: "<!doctype html>".into(),
+            },
+            Node::Element {
+                id: None,
+                tag: "html".into(),
+                attrs: vec![],
+                children: vec![
+                    Node::Element {
+                        id: None,
+                        tag: "head".into(),
+                        attrs: vec![],
+                        children: vec![
+                            Node::Element {
+                                id: None,
+                                tag: "meta".into(),
+                                attrs: vec![Attr {
+                                    name: "charset".into(),
+                                    value: Some("utf-8".into()),
+                                    when: None,
+                                }],
+                                children: vec![],
+                            },
+                            Node::Element {
+                                id: None,
+                                tag: "title".into(),
+                                attrs: vec![],
+                                children: vec![Node::Text {
+                                    text: name.to_string(),
+                                }],
+                            },
+                        ],
+                    },
+                    Node::Element {
+                        id: None,
+                        tag: "body".into(),
+                        attrs: vec![],
+                        children: vec![heading],
+                    },
+                ],
+            },
+        ],
+    };
+    for n in body.iter_mut() {
+        refresh_ids(n, &mut taken);
+    }
+    let mut props = std::collections::BTreeMap::new();
+    if layout.is_some() {
+        props.insert("seo".into(), serde_json::json!({ "title": name }));
+    }
+    revel_model::Page {
+        id,
+        path,
+        layout,
+        props,
+        computed: Default::default(),
+        body,
+        draft: false,
+        name: Some(name.trim().to_string()).filter(|n| !n.is_empty()),
+    }
+}
+
+/// Copie d'une page (nouveaux identifiants, adresse `…-copie/`, nom « … (copie) »).
+pub fn duplicate_page(
+    site: &Site,
+    id: &str,
+    copy_word: &str,
+) -> Result<revel_model::Page, EditError> {
+    let src = site
+        .pages
+        .iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| EditError::NotFound(format!("page {id}")))?;
+    let mut p = src.clone();
+    let mut taken = site.node_ids();
+    for n in p.body.iter_mut() {
+        refresh_ids(n, &mut taken);
+    }
+    let trimmed = src.path.trim_end_matches('/');
+    let (folder, last) = trimmed.rsplit_once('/').unwrap_or(("", trimmed));
+    let last = if last.is_empty() { "accueil" } else { last };
+    p.path = free_page_path(
+        site,
+        folder,
+        &format!("{last}-{}", revel_model::slugify(copy_word)),
+    );
+    p.id = free_page_id(
+        site,
+        &format!("{}-{}", src.id, revel_model::slugify(copy_word)),
+    );
+    p.name = Some(format!(
+        "{} ({copy_word})",
+        src.name.clone().unwrap_or_else(|| last.to_string())
+    ));
+    Ok(p)
+}

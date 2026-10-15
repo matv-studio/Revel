@@ -575,6 +575,73 @@ try {
     await page.click('.panels-pop .menu-item--check:has-text("Pages")');
     await page.click('.panels-menu > summary');
     await page.waitForFunction(() => !document.querySelector('.page-pick'));
+    // Pages (3.4) : nouvelle page ouverte, paramètres (référencement, adresse avec redirection,
+    // brouillon), dossier, page rangée ; référencement d'une page lu dans un fichier de données ;
+    // tout annulé (document et fichiers identiques).
+    {
+      const doc34 = JSON.stringify((await invoke('edit_open')).site);
+      const agenceYml = path.join(siteDir, 'src/_data/pages/agence.yml');
+      const agence0 = fs.readFileSync(agenceYml, 'utf8');
+      const site34 = () => invoke('edit_open').then((o) => o.site);
+      await page.click('.dock-tab[data-panel="pages"]');
+      await page.click('.pages .panel-foot .icon-btn[title="Nouvelle page"]');
+      await page.keyboard.type('Offres d\'été');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.pages .page-row[data-url="/offres-d-ete/"]');
+      await waitFrame(() => location.pathname === '/offres-d-ete/' && !!document.querySelector('h1'), 'nouvelle page');
+      const np = (await site34()).pages.find((p) => p.path === '/offres-d-ete/');
+      check('pages : nouvelle page (gabarit du site, titre, ouverte)', !!np && np.layout === 'layouts/base' && np.name === 'Offres d\'été');
+      await page.hover('.pages .page-row[data-url="/offres-d-ete/"]');
+      await page.click('.pages .page-row[data-url="/offres-d-ete/"] .row-action');
+      await page.waitForSelector('.page-settings');
+      const seoTitle = page.locator('.page-settings-seo .field').nth(0).locator('input');
+      await seoTitle.fill('Nos offres');
+      await seoTitle.press('Enter');
+      await page.waitForFunction(() => document.querySelector('.serp-title')?.textContent === 'Nos offres');
+      const slugIn = page.locator('.path-input input');
+      await slugIn.fill('emplois-ete');
+      await slugIn.blur();
+      await waitFrame(() => location.pathname === '/emplois-ete/', 'adresse changée');
+      await page.waitForTimeout(300);
+      let s34 = await site34();
+      const moved = s34.pages.find((p) => p.id === np.id);
+      check('pages : référencement et adresse (redirection de l\'ancienne)', moved.props.seo.title === 'Nos offres' && moved.path === '/emplois-ete/'
+        && s34.redirects.some((r) => r.from === '/offres-d-ete/' && r.to === '/emplois-ete/'));
+      await page.click('.page-settings .view-line:has-text("Brouillon") .switch');
+      await page.waitForTimeout(600);
+      check('pages : brouillon', (await site34()).pages.find((p) => p.id === np.id).draft === true);
+      await page.click('.page-settings-head .icon-btn');
+      await page.click('.pages .panel-foot .icon-btn[title="Nouveau dossier"]');
+      await page.keyboard.type('Recrutement');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.pages .list-folder[data-folder="recrutement"]');
+      await page.click('.pages .page-row[data-url="/emplois-ete/"]', { button: 'right' });
+      await page.click('.ctx-menu .menu-item:has-text("recrutement")');
+      await page.waitForFunction(() => !!document.querySelector('.pages .page-row[data-url="/recrutement/emplois-ete/"]'));
+      check('pages : dossier créé, page rangée (adresse dans le dossier)', (await site34()).pages.some((p) => p.path === '/recrutement/emplois-ete/'));
+      if (shots) await page.locator('.dock-col--left').screenshot({ path: `${shots}/editeur-pages-dossier.png` });
+      // Page dont le référencement vient d'un fichier de données (site importé).
+      await page.hover('.pages .page-row[data-url="/agence/"]');
+      await page.click('.pages .page-row[data-url="/agence/"] .row-action');
+      await page.waitForSelector('.page-settings-note');
+      const desc = page.locator('.page-settings-seo textarea');
+      await desc.fill('Agence de communication plurielle, essai.');
+      await desc.blur();
+      await page.waitForFunction(() => document.querySelector('.serp-desc')?.textContent === 'Agence de communication plurielle, essai.');
+      const agence1 = fs.readFileSync(agenceYml, 'utf8');
+      check('pages : référencement écrit dans le fichier de données de la page', agence1 !== agence0 && agence1.includes('Agence de communication plurielle, essai.'));
+      if (shots) await page.locator('.dock-col--left').screenshot({ path: `${shots}/editeur-page-parametres.png` });
+      await page.click('.page-settings-head .icon-btn');
+      for (let i = 0; i < 7; i++) {
+        await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(350);
+      }
+      await page.waitForTimeout(800);
+      check('pages : tout annulé, document et fichier de données identiques', JSON.stringify(await site34()) === doc34 && fs.readFileSync(agenceYml, 'utf8') === agence0);
+      await waitFrame(() => location.pathname === '/' || !!document.querySelector('[data-rv]'), 'retour');
+      await page.click('.pages .page-row[data-url="/"]');
+    }
     await page.click('.dock-tab[data-panel="layers"]');
     await page.keyboard.press('Control+0');
     await page.waitForFunction(() => document.querySelector('iframe.canvas-frame').style.transform === 'scale(1)');

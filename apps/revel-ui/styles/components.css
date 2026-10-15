@@ -562,3 +562,8 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .rt-body strong, .rt-body b { font-weight: var(--weight-strong); }
 .rt-code { border: 0; border-radius: 0 0 var(--radius-md) var(--radius-md); min-height: 140px; height: auto;
   font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.5; padding: var(--s-2); resize: vertical; }
+
+/* Redirections modifiables (paramètres du site). */
+.redirects .col-actions { width: 36px; text-align: right; }
+.redirects .redirect-new td { padding-top: var(--s-2); }
+.redirects .redirect-new .input { width: 100%; height: var(--control-sm); }

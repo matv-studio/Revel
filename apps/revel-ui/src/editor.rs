@@ -413,7 +413,10 @@ impl Ed {
             }
             if matches!(
                 cmd,
-                Command::SetBreakpoints { .. } | Command::SetShelf { .. }
+                Command::SetBreakpoints { .. }
+                    | Command::SetShelf { .. }
+                    | Command::SetRedirects { .. }
+                    | Command::SetSeoSettings { .. }
             ) {
                 // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.
             } else if style_only(cmd) {
@@ -443,8 +446,19 @@ impl Ed {
                 Err(e) => ui.fail(e),
             }
             if let Ok(p) = api::edit_pages(&path).await {
-                if !p.iter().any(|x| x.url == self.page.get_untracked())
-                    && let Some(first) = p.first()
+                // Page demandée (nouvelle page, adresse changée), sinon la page affichée si elle
+                // existe encore, sinon l'accueil.
+                let want = ui
+                    .goto_page
+                    .get_untracked()
+                    .filter(|u| p.iter().any(|x| &x.url == u));
+                if let Some(u) = want {
+                    ui.goto_page.set(None);
+                    self.page.set(u);
+                    self.scroll.set((0.0, 0.0));
+                    self.selected.set(None);
+                } else if !p.iter().any(|x| x.url == self.page.get_untracked())
+                    && let Some(first) = p.iter().find(|x| x.url == "/").or(p.first())
                 {
                     self.page.set(first.url.clone());
                 }
@@ -967,7 +981,8 @@ impl Ed {
     }
 }
 
-/// Commande (ou suite) qui écrit des contenus de collection ou crée, retire une collection.
+/// Commande (ou suite) après laquelle document et liste des pages sont relus : contenus de
+/// collection, collections, fichiers de données, pages (adresse, brouillon, nom, référencement).
 fn writes_entries(c: &Command) -> bool {
     match c {
         Command::Batch { commands } => commands.iter().any(writes_entries),
@@ -976,7 +991,15 @@ fn writes_entries(c: &Command) -> bool {
         | Command::CreateEntry { .. }
         | Command::WriteEntry { .. }
         | Command::CreateCmsCollection { .. }
-        | Command::RemoveCmsCollection { .. } => true,
+        | Command::RemoveCmsCollection { .. }
+        | Command::SetDataValue { .. }
+        | Command::WriteDataFile { .. }
+        | Command::AddPage { .. }
+        | Command::RemovePage { .. }
+        | Command::SetPagePath { .. }
+        | Command::SetPageDraft { .. }
+        | Command::SetPageName { .. }
+        | Command::SetPageProp { .. } => true,
         _ => false,
     }
 }

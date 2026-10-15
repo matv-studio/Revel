@@ -20,6 +20,7 @@ mod github;
 pub mod pagescms;
 pub mod preview;
 pub mod secrets;
+pub mod starter;
 mod state;
 
 pub use secrets::SecretStore;
@@ -254,7 +255,9 @@ impl Core {
         if path.join(revel_project::SITE_FILE).exists() {
             return Err(CoreError::AlreadyImported);
         }
-        let p = revel_project::Project::create(path, revel_model::Site::new(name, lang))?;
+        let p = revel_project::Project::create(path, starter::starter_site(name, lang))?;
+        // Dossier des médias (copié tel quel à la publication).
+        let _ = std::fs::create_dir_all(path.join("media"));
         let summary = summarize(&p)?;
         self.touch_recent(&summary);
         Ok(summary)

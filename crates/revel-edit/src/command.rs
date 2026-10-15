@@ -125,6 +125,39 @@ pub enum Command {
         binding: crate::canvas::Binding,
         value: String,
     },
+    /// Champ de l'en-tête d'un contenu de collection (`value: None` : champ retiré). Appliquée par
+    /// le cœur, qui réécrit seulement ce champ dans le fichier ; inverse : `WriteEntry` (texte
+    /// exact du fichier avant la modification).
+    SetEntryField {
+        folder: String,
+        file: String,
+        key: String,
+        #[serde(default)]
+        value: Option<Value>,
+    },
+    /// Texte (Markdown) d'un contenu, après son en-tête. Appliquée par le cœur.
+    SetEntryBody {
+        folder: String,
+        file: String,
+        body: String,
+    },
+    /// Nouveau contenu : en-tête (`data`, objet) et texte. Appliquée par le cœur ; refusée si le
+    /// fichier existe.
+    CreateEntry {
+        folder: String,
+        file: String,
+        data: Value,
+        #[serde(default)]
+        body: String,
+    },
+    /// Fichier d'un contenu remplacé par un texte exact (`None` : supprimé) : suppression, et
+    /// inverse des commandes de contenu (fichier rétabli octet pour octet). Appliquée par le cœur.
+    WriteEntry {
+        folder: String,
+        file: String,
+        #[serde(default)]
+        text: Option<String>,
+    },
     /// Remplace la liste des points de rupture du site (la base `desktop` reste la première).
     SetBreakpoints { breakpoints: Vec<Breakpoint> },
     /// Nouvelle règle pour `selector` et `media`, placée dans la cascade (après les règles du même
@@ -547,7 +580,11 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             let index = crate::style::rule_index(site, rule)?;
             apply(site, &Command::RemoveStyleAt { index })
         }
-        Command::SetBound { .. } => Err(EditError::External),
+        Command::SetBound { .. }
+        | Command::SetEntryField { .. }
+        | Command::SetEntryBody { .. }
+        | Command::CreateEntry { .. }
+        | Command::WriteEntry { .. } => Err(EditError::External),
         Command::SetBreakpoints { breakpoints } => {
             check_breakpoints(breakpoints)?;
             Ok(Command::SetBreakpoints {
@@ -675,6 +712,14 @@ impl Command {
             ) => a == b && p == q,
             (Self::SetSelector { rule: a, .. }, Self::SetSelector { rule: b, .. }) => a == b,
             (Self::SetBound { binding: a, .. }, Self::SetBound { binding: b, .. }) => a == b,
+            (
+                Self::SetEntryBody {
+                    folder: a, file: f, ..
+                },
+                Self::SetEntryBody {
+                    folder: b, file: g, ..
+                },
+            ) => a == b && f == g,
             _ => false,
         }
     }

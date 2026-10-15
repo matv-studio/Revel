@@ -8,6 +8,7 @@ use crate::Ui;
 use leptos::ev;
 use leptos::html;
 use leptos::prelude::*;
+use std::sync::Arc;
 
 /// Demande affichée à l'utilisateur. Les textes sont déjà traduits.
 #[derive(Clone)]
@@ -20,8 +21,10 @@ pub struct Ask {
     pub confirm: String,
     /// Action destructrice : bouton de confirmation en rouge.
     pub danger: bool,
-    /// Appelé avec la valeur saisie (vide sans champ) quand l'utilisateur confirme.
-    pub on_confirm: Callback<String>,
+    /// Appelé avec la valeur saisie (vide sans champ) quand l'utilisateur confirme. Fonction
+    /// simple (pas un `Callback` réactif) : la vue qui a ouvert la boîte peut avoir été
+    /// redessinée entre-temps sans que l'action soit perdue.
+    pub on_confirm: Arc<dyn Fn(String) + Send + Sync>,
 }
 
 impl Ask {
@@ -37,7 +40,7 @@ impl Ask {
             input: None,
             confirm,
             danger: false,
-            on_confirm: Callback::new(move |_: String| on_confirm()),
+            on_confirm: Arc::new(move |_: String| on_confirm()),
         }
     }
 
@@ -59,7 +62,7 @@ impl Ask {
             input: Some((label, initial)),
             confirm,
             danger: false,
-            on_confirm: Callback::new(on_confirm),
+            on_confirm: Arc::new(on_confirm),
         }
     }
 }
@@ -99,7 +102,7 @@ pub fn Dialog() -> impl IntoView {
             return;
         }
         ui.ask.set(None);
-        a.on_confirm.run(v);
+        (a.on_confirm)(v);
     };
     let _esc = window_event_listener(ev::keydown, move |e| {
         if e.key() == "Escape" && ui.ask.with_untracked(|a| a.is_some()) {

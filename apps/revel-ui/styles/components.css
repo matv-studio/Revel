@@ -357,7 +357,7 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 
 /* --- Vue CMS --------------------------------------------------------------- */
 .cms { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); }
-.cms.has-item { grid-template-columns: 220px minmax(0, 1fr) 360px; }
+.cms.has-item { grid-template-columns: 220px minmax(0, 1fr) 400px; }
 .cms-cols {
   display: flex; flex-direction: column; min-height: 0;
   background: var(--surface); border-right: var(--border) solid var(--line);
@@ -407,14 +407,28 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .cms-item-head { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); border-bottom: var(--border) solid var(--line); }
 .cms-item-head h2 { flex: 1; min-width: 0; font-size: var(--text-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cms-item-body { flex: 1; overflow-y: auto; padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); }
-.cms-item-field { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: var(--s-2); align-items: baseline; }
-.cms-item-field.is-long { grid-template-columns: 1fr; gap: 4px; }
+/* Fiche : libellé à gauche, contrôle à droite ; textes longs sous leur libellé. */
+.cms-item-field { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: var(--s-2); align-items: center; }
+.cms-item-field.is-long { grid-template-columns: 1fr; gap: 6px; align-items: stretch; }
 .cms-item-field .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cms-value { font-size: var(--text-sm); white-space: pre-wrap; word-break: break-word; }
-.cms-value.chips { white-space: normal; }
-.cms-item-field.is-long .cms-value {
-  padding: var(--s-2); border-radius: var(--radius-md); background: var(--bg); border: var(--border) solid var(--line);
-  max-height: 220px; overflow: auto;
+.cms-item-field > .input, .cms-item-field .cms-image .input { width: 100%; }
+.cms-item-field .switch { justify-self: start; }
+.cms-textarea {
+  height: auto; min-height: 76px; padding: var(--s-2); resize: vertical;
+  font: inherit; font-size: var(--text-sm); line-height: 1.5;
 }
-.cms-item-foot { display: flex; justify-content: flex-end; gap: var(--s-2); padding: var(--s-3) var(--s-4); border-top: var(--border) solid var(--line); }
+.cms-body { min-height: 180px; }
+.cms-json { font-family: var(--font-mono); font-size: var(--text-xs); }
+.tags-input {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: var(--control-md);
+  padding: 3px; background: var(--bg); border: var(--border) solid var(--line-strong); border-radius: var(--radius-md);
+}
+.tags-input:focus-within { outline: 2px solid var(--focus); outline-offset: -1px; border-color: transparent; }
+.chip--tag { gap: 2px; padding-right: 2px; color: var(--text); }
+.chip--tag .chip-x { display: grid; place-items: center; width: 16px; height: 16px; border: 0; padding: 0; border-radius: 3px; background: none; color: var(--text-muted); }
+.chip--tag .chip-x:hover { background: var(--surface-hover); color: var(--text); }
+.chip--tag .chip-x svg.icon { width: 11px; height: 11px; }
+.tags-add { flex: 1; min-width: 60px; height: 20px; border: 0; background: none; color: var(--text); font: inherit; font-size: var(--text-sm); outline: none; }
+.cms-item-foot { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-4); border-top: var(--border) solid var(--line); }
+.cms-item-file { flex: 1; min-width: 0; font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @keyframes slide-in { from { opacity: 0; transform: translateX(8px); } }

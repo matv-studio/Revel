@@ -605,7 +605,7 @@ impl Core {
                     .map(|e| revel_protocol::CmsEntry {
                         file: e.file_stem.clone(),
                         data: e.data.clone(),
-                        body_len: e.body.trim().chars().count(),
+                        body: e.body.clone(),
                         url: urls.get(&(c.id.clone(), e.file_stem.clone())).cloned(),
                     })
                     .collect();

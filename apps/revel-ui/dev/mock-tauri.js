@@ -43,12 +43,12 @@
       { name: "title", label: "Titre", kind: "string" }, { name: "client", kind: "string" }, { name: "date", kind: "date" },
       { name: "categories", kind: "list" }, { name: "cover", label: "Image", kind: "image" }, { name: "featured", label: "À la une", kind: "boolean" } ],
       entries: [
-        { file: "wattr", data: { title: "Wattr", client: "Wattr", date: "2025-03-12", categories: ["Film", "IA"], cover: "/media/projets/wattr.jpg", featured: true }, body_len: 1840, url: "/project/wattr/" },
-        { file: "lumen", data: { title: "Atelier Lumen", client: "Lumen", date: "2024-11-02", categories: ["Motion"], cover: "/media/projets/lumen.jpg", featured: false }, body_len: 920, url: "/project/lumen/" },
-        { file: "oka", data: { title: "Maison Oka", client: "Oka", date: "2024-06-20", categories: ["Film"], cover: "/media/projets/oka.jpg", draft: true }, body_len: 0, url: null },
+        { file: "wattr", data: { title: "Wattr", client: "Wattr", date: "2025-03-12", categories: ["Film", "IA"], cover: "/media/projets/wattr.jpg", featured: true }, body: "## Le projet\n\nUn film pour **Wattr**.\n", url: "/project/wattr/" },
+        { file: "lumen", data: { title: "Atelier Lumen", client: "Lumen", date: "2024-11-02", categories: ["Motion"], cover: "/media/projets/lumen.jpg", featured: false }, body: "Texte.\n", url: "/project/lumen/" },
+        { file: "oka", data: { title: "Maison Oka", client: "Oka", date: "2024-06-20", categories: ["Film"], cover: "/media/projets/oka.jpg", draft: true }, body: "", url: null },
       ] },
     { id: "actualites", folder: "src/content/actualites", fields: [], entries: [
-        { file: "salon-2026", data: { title: "Salon 2026", date: "2026-02-01", tags: ["événement"] }, body_len: 600, url: "/actualites/salon-2026/" } ] },
+        { file: "salon-2026", data: { title: "Salon 2026", date: "2026-02-01", tags: ["événement"] }, body: "Le salon.\n", url: "/actualites/salon-2026/" } ] },
   ];
   async function invoke(cmd, args) {
     if (bridge && bridged.includes(cmd)) {

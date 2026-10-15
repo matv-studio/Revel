@@ -34,6 +34,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') console.log('console', m.text().slice(0, 300)); });
   await page.addInitScript(mock);
   await page.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&bridge=${encodeURIComponent(bridge)}`);
   // Nouveau site : dossier proposé d'après le nom, sans fenêtre du système.
@@ -777,6 +778,60 @@ try {
     check('textes : Échap abandonne la saisie', !(await f.evaluate(() => document.body.textContent.includes('xyz'))));
   }
   check('textes : document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base27.site));
+
+  // ------------------------------------------------------------------ CMS : contenus modifiés (3.1)
+  if (siteDir) {
+    const dir = path.join(siteDir, 'src/content/projets');
+    const listing = () => fs.readdirSync(dir).sort().join(',');
+    const list0 = listing();
+    const until = async (pred, what) => {
+      for (let i = 0; i < 60; i++) { if (pred()) return true; await page.waitForTimeout(100); }
+      if (shots) await page.screenshot({ path: `${shots}/cms-echec.png` });
+      const notice = await page.$eval('.notice', (n) => n.textContent).catch(() => '');
+      throw new Error('CMS : ' + what + (notice ? ` (${notice})` : ''));
+    };
+    await page.click('.view-tab[data-view="view-cms"]');
+    await page.click('.cms-col[data-collection="projets"]');
+    await page.waitForSelector('.cms-table tbody tr[data-entry]');
+    const first = await page.$eval('.cms-table tbody tr[data-entry]', (r) => r.dataset.entry);
+    const file = path.join(dir, first + '.md');
+    const original = fs.readFileSync(file, 'utf8');
+    await page.click(`.cms-table tbody tr[data-entry="${first}"]`);
+    await page.waitForSelector('.cms-item [data-field="title"] input');
+    await page.fill('.cms-item [data-field="title"] input', 'Titre essai CMS');
+    await page.keyboard.press('Tab');
+    await until(() => fs.readFileSync(file, 'utf8').includes('Titre essai CMS'), 'titre écrit');
+    const changed = fs.readFileSync(file, 'utf8').split('\n').filter((l, i) => l !== original.split('\n')[i]);
+    check('CMS : champ modifié, seule sa ligne change dans le fichier', changed.length === 1 && changed[0].startsWith('title:'), changed.join(' | '));
+    await page.fill('.cms-item [data-field="--body"] textarea', 'Texte essai CMS');
+    await page.keyboard.press('Tab');
+    await until(() => fs.readFileSync(file, 'utf8').endsWith('---\nTexte essai CMS\n'), 'texte écrit');
+    check('CMS : texte du contenu modifié', true);
+    if (shots) await page.screenshot({ path: `${shots}/cms-fiche.png` });
+    await page.click('.cms-head .icon-btn[title^="Annuler"]');
+    await page.waitForTimeout(300);
+    await page.click('.cms-head .icon-btn[title^="Annuler"]');
+    await until(() => fs.readFileSync(file, 'utf8') === original, 'annulation');
+    check('CMS : annulé, fichier identique octet pour octet', true);
+    // Nouveau contenu, puis supprimé ; annulé : dossier identique.
+    await page.click('.cms-new');
+    await page.fill('.dialog input', 'Essai Revel');
+    await page.press('.dialog input', 'Enter');
+    const created = path.join(dir, 'essai-revel.md');
+    await until(() => fs.existsSync(created), 'contenu créé');
+    await page.waitForSelector('.cms-item[data-entry="essai-revel"]');
+    check('CMS : nouveau contenu créé et ouvert', fs.readFileSync(created, 'utf8').startsWith('---\ntitle: Essai Revel\n'), fs.readFileSync(created, 'utf8').split('\n').slice(0, 4).join(' | '));
+    await page.click('.cms-item-foot .icon-btn');
+    await page.click('.dialog .btn--danger');
+    await until(() => !fs.existsSync(created), 'contenu supprimé');
+    check('CMS : contenu supprimé', true);
+    await page.keyboard.press('Control+z');
+    await until(() => fs.existsSync(created), 'suppression annulée (Ctrl+Z)');
+    await page.keyboard.press('Control+z');
+    await until(() => !fs.existsSync(created) && listing() === list0, 'création annulée');
+    check('CMS : Ctrl+Z rétablit puis retire le contenu, dossier identique', true);
+    await page.click('.view-tab[data-view="view-editor"]');
+  }
 
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {

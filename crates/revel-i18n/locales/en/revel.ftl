@@ -567,7 +567,7 @@ pages-count = { $count ->
 pages-new = New page
 pages-folder-new = New folder
 cms-none = No collection in this site.
-cms-entry-new = New entry
+cms-entry-new = New content
 cms-collection-new = New collection
 components-search = Search components
 components-uses = { $count ->
@@ -683,11 +683,6 @@ cms-open-page = Open the page in the editor
 cms-shown = { $shown } of { $total }
 cms-entry = Content
 cms-body = Text
-cms-body-len = { $count ->
-    [0] empty
-    [one] { $count } character
-   *[other] { $count } characters
-}
 cms-items = { $count ->
     [one] { $count } item
    *[other] { $count } items
@@ -748,3 +743,8 @@ key-copy = Ctrl+C
 key-cut = Ctrl+X
 key-paste = Ctrl+V
 key-unwrap = Ctrl+Shift+G
+cms-entry-title = Title
+action-create = Create
+cms-delete-title = Delete “{ $name }”?
+cms-delete-body = The content file is deleted. Ctrl+Z restores it while the site is open.
+cms-tag-add = Add…

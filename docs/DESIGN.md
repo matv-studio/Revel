@@ -100,7 +100,8 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Onglets de vue | `.views` > `.view-tab` | Voir *Structure* |
 | Menu | `.menu` > `.menu-item` (`.menu-title`, `.menu-sep`) | Menu du site, menu contextuel du canevas |
 | Rubriques | `.settings-nav` > `.settings-nav-item` (`.is-planned` + numéro d'étape) | Paramètres du site |
-| Vue CMS | `.cms` : `.cms-cols` (collections), `.cms-main` (tableau triable, recherche), `.cms-item` (fiche du contenu) | Lecture ; création et modification prévues à l'étape 3 |
+| Vue CMS | `.cms` : `.cms-cols` (collections), `.cms-main` (tableau triable, recherche, annuler/rétablir, nouveau contenu), `.cms-item` (fiche du contenu) | Fiche : un contrôle par type de champ (schéma, sinon déduit de la valeur), valeur écrite à la sortie du champ ; la fiche n'est pas redessinée pendant la saisie (le focus reste) ; suppression confirmée, annulable |
+| Liste de textes | `.tags-input` > `.chip--tag` + `.tags-add` | Pastilles retirées par ×, ajout par Entrée |
 | Tableau | `.table`, `.row-link`, `.table--compact` | Listes de sites, de collections ; ligne entière cliquable |
 | Faits | `.facts`, `.facts--inline` | Chiffres clés ; paires libellé / valeur |
 | Puce | `.chip` | Étiquette courte (environnement) |

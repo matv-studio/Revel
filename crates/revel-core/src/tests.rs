@@ -540,3 +540,141 @@ fn dossier_d_un_nouveau_site() {
     assert!(s.path.ends_with("oka-2"));
     assert!(c.cms(Path::new(&s.path)).unwrap().is_empty());
 }
+
+#[test]
+fn contenus_modifies_crees_supprimes_et_annules() {
+    use revel_edit::Command;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let entry = "---\n# Projet\ntitle: 'Wattr'\ntags:\n  - film\n---\n\nCorps\n";
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.collections.push(revel_model::Collection {
+            id: "projets".into(),
+            source: revel_model::CollectionSource::Folder,
+            folder: "contenus/projets".into(),
+            path: Some("/projet/{{ title }}/".into()),
+            layout: None,
+            props: Default::default(),
+            filter: None,
+            sort: None,
+            fields: vec![],
+        });
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("contenus/projets")).unwrap();
+        std::fs::write(site.join("contenus/projets/wattr.md"), entry).unwrap();
+    }
+    let read = || std::fs::read_to_string(site.join("contenus/projets/wattr.md")).unwrap();
+    c.edit_open(&site).unwrap();
+    let field = |key: &str, value: Option<serde_json::Value>| Command::SetEntryField {
+        folder: "contenus/projets".into(),
+        file: "wattr".into(),
+        key: key.into(),
+        value,
+    };
+    c.edit_apply(
+        &site,
+        field("title", Some(serde_json::json!("Wattr 2"))),
+        false,
+    )
+    .unwrap();
+    c.edit_apply(
+        &site,
+        field("tags", Some(serde_json::json!(["film", "ia"]))),
+        false,
+    )
+    .unwrap();
+    c.edit_apply(
+        &site,
+        field("featured", Some(serde_json::json!(true))),
+        false,
+    )
+    .unwrap();
+    c.edit_apply(
+        &site,
+        Command::SetEntryBody {
+            folder: "contenus/projets".into(),
+            file: "wattr".into(),
+            body: "Nouveau corps".into(),
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        read(),
+        "---\n# Projet\ntitle: 'Wattr 2'\ntags:\n  - film\n  - ia\nfeatured: true\n---\nNouveau corps\n"
+    );
+    // Nouveau contenu, visible dans la vue CMS avec l'adresse de sa page ; puis supprimé.
+    c.edit_apply(
+        &site,
+        Command::CreateEntry {
+            folder: "contenus/projets".into(),
+            file: "oka".into(),
+            data: serde_json::json!({ "title": "Oka" }),
+            body: String::new(),
+        },
+        false,
+    )
+    .unwrap();
+    let cms = c.cms(&site).unwrap();
+    let oka = cms[0].entries.iter().find(|e| e.file == "oka").unwrap();
+    assert_eq!(oka.url.as_deref(), Some("/projet/Oka/"));
+    assert!(
+        c.edit_apply(
+            &site,
+            Command::CreateEntry {
+                folder: "contenus/projets".into(),
+                file: "oka".into(),
+                data: serde_json::json!({}),
+                body: String::new(),
+            },
+            false,
+        )
+        .is_err()
+    );
+    c.edit_apply(
+        &site,
+        Command::WriteEntry {
+            folder: "contenus/projets".into(),
+            file: "wattr".into(),
+            text: None,
+        },
+        false,
+    )
+    .unwrap();
+    assert!(!site.join("contenus/projets/wattr.md").exists());
+    // Tout annulé : fichiers identiques octet pour octet, nouveau contenu retiré.
+    for _ in 0..6 {
+        c.edit_undo(&site).unwrap();
+    }
+    assert_eq!(read(), entry);
+    assert!(!site.join("contenus/projets/oka.md").exists());
+    // Rétabli, puis chemins refusés.
+    c.edit_redo(&site).unwrap();
+    assert!(read().contains("title: 'Wattr 2'"));
+    assert!(
+        c.edit_apply(
+            &site,
+            Command::WriteEntry {
+                folder: "contenus/projets".into(),
+                file: "../../site".into(),
+                text: Some("x".into()),
+            },
+            false,
+        )
+        .is_err()
+    );
+    assert!(
+        c.edit_apply(
+            &site,
+            Command::WriteEntry {
+                folder: "ailleurs".into(),
+                file: "x".into(),
+                text: Some("x".into()),
+            },
+            false,
+        )
+        .is_err()
+    );
+}

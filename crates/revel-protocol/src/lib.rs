@@ -92,8 +92,9 @@ pub struct CmsEntry {
     pub file: String,
     /// Valeurs de l'en-tête (objet).
     pub data: serde_json::Value,
-    /// Nombre de caractères du corps du texte.
-    pub body_len: usize,
+    /// Texte (Markdown) après l'en-tête.
+    #[serde(default)]
+    pub body: String,
     /// Adresse de sa page ; `None` : pas de page (ou contenu non publié).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,

@@ -119,7 +119,7 @@ pub fn find_scalar(yaml: &str, path: &[Seg]) -> Result<Option<Scalar>, BoundErro
 }
 
 /// Valeur qui serait lue comme autre chose qu'un texte sans guillemets (nombre, booléen, vide…).
-fn special(v: &str) -> bool {
+pub(crate) fn special(v: &str) -> bool {
     let l = v.to_ascii_lowercase();
     matches!(
         l.as_str(),
@@ -141,7 +141,7 @@ fn special(v: &str) -> bool {
 }
 
 /// Texte écrivable sans guillemets en conservant son type.
-fn plain_ok(new: &str, old: &str) -> bool {
+pub(crate) fn plain_ok(new: &str, old: &str) -> bool {
     !new.is_empty()
         && !new.contains(['\n', '\r', '\t'])
         && new.trim() == new
@@ -155,7 +155,7 @@ fn plain_ok(new: &str, old: &str) -> bool {
         && special(new) == special(old)
 }
 
-fn double_quoted(v: &str) -> String {
+pub(crate) fn double_quoted(v: &str) -> String {
     let mut out = String::with_capacity(v.len() + 2);
     out.push('"');
     for c in v.chars() {
@@ -213,7 +213,7 @@ pub fn set_yaml_value(
 }
 
 /// En-tête d'un fichier Markdown : (début, fin) du YAML entre les lignes `---`.
-fn front_matter_range(text: &str) -> Option<(usize, usize)> {
+pub(crate) fn front_matter_range(text: &str) -> Option<(usize, usize)> {
     let first = text.strip_prefix('\u{feff}').map_or(0, |_| 3);
     let rest = &text[first..];
     let open = if rest.starts_with("---\r\n") {
@@ -256,7 +256,7 @@ fn data_file(data_dir: &Path, path: &[Seg]) -> Option<(PathBuf, usize)> {
     None
 }
 
-fn write_atomic(path: &Path, text: &str) -> Result<(), BoundError> {
+pub(crate) fn write_atomic(path: &Path, text: &str) -> Result<(), BoundError> {
     let tmp = path.with_extension("revel-tmp");
     std::fs::write(&tmp, text)
         .and_then(|_| std::fs::rename(&tmp, path))

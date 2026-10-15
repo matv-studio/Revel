@@ -58,8 +58,72 @@ fn exec(
                 value: old,
             })
         }
+        Command::SetEntryField {
+            folder,
+            file,
+            key,
+            value,
+        } => {
+            let old = project
+                .entry_text(folder, file)
+                .map_err(revel_edit::EditError::Bound)?
+                .ok_or_else(|| revel_edit::EditError::Bound(format!("{folder}/{file}")))?;
+            let new = revel_project::entries::set_field(&old, key, value.as_ref())
+                .map_err(revel_edit::EditError::Bound)?;
+            write_entry(project, folder, file, Some(&new), Some(old))
+        }
+        Command::SetEntryBody { folder, file, body } => {
+            let old = project
+                .entry_text(folder, file)
+                .map_err(revel_edit::EditError::Bound)?
+                .ok_or_else(|| revel_edit::EditError::Bound(format!("{folder}/{file}")))?;
+            let new = revel_project::entries::set_body(&old, body);
+            write_entry(project, folder, file, Some(&new), Some(old))
+        }
+        Command::CreateEntry {
+            folder,
+            file,
+            data,
+            body,
+        } => {
+            if project
+                .entry_text(folder, file)
+                .map_err(revel_edit::EditError::Bound)?
+                .is_some()
+            {
+                return Err(revel_edit::EditError::Bound(format!(
+                    "le contenu existe déjà : {folder}/{file}"
+                )));
+            }
+            let text = revel_project::entries::entry_text(data, body);
+            write_entry(project, folder, file, Some(&text), None)
+        }
+        Command::WriteEntry { folder, file, text } => {
+            let old = project
+                .entry_text(folder, file)
+                .map_err(revel_edit::EditError::Bound)?;
+            write_entry(project, folder, file, text.as_deref(), old)
+        }
         other => revel_edit::apply(site, other),
     }
+}
+
+/// Écrit le fichier d'un contenu ; inverse : son texte d'avant (`None` : il n'existait pas).
+fn write_entry(
+    project: &Project,
+    folder: &str,
+    file: &str,
+    text: Option<&str>,
+    old: Option<String>,
+) -> std::result::Result<Command, revel_edit::EditError> {
+    project
+        .write_entry(folder, file, text)
+        .map_err(revel_edit::EditError::Bound)?;
+    Ok(Command::WriteEntry {
+        folder: folder.to_string(),
+        file: file.to_string(),
+        text: old,
+    })
 }
 
 /// Empreinte des fichiers lus par le canevas (document, données, contenus) : change quand l'un

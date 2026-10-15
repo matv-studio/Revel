@@ -318,6 +318,20 @@ impl Ed {
                 self.state.set(Some(st));
                 return;
             }
+            // Contenu de collection écrit par le cœur (vue CMS, annulation) : document, pages et
+            // canevas relus.
+            if matches!(
+                cmd,
+                Command::SetEntryField { .. }
+                    | Command::SetEntryBody { .. }
+                    | Command::CreateEntry { .. }
+                    | Command::WriteEntry { .. }
+            ) {
+                self.reopen(ui);
+                self.load.update(|n| *n += 1);
+                self.state.set(Some(st));
+                return;
+            }
             // Élément ajouté (copie, enveloppe, insertion) : sélectionné.
             if let Some(n) = inserted(cmd)
                 && let Some(id) = revel_model::ids::node_id(n)
@@ -368,6 +382,8 @@ impl Ed {
         self.state.set(Some(st));
     }
 
+    /// Document, historique et liste des pages relus (fichiers modifiés hors de l'éditeur : vue
+    /// CMS, Pages CMS, éditeur de texte).
     fn reopen(self, ui: Ui) {
         let path = self.path.get_value();
         spawn_local(async move {
@@ -377,6 +393,14 @@ impl Ed {
                     self.state.set(Some(o.state));
                 }
                 Err(e) => ui.fail(e),
+            }
+            if let Ok(p) = api::edit_pages(&path).await {
+                if !p.iter().any(|x| x.url == self.page.get_untracked())
+                    && let Some(first) = p.first()
+                {
+                    self.page.set(first.url.clone());
+                }
+                self.pages.set(p);
             }
         });
     }
@@ -1146,8 +1170,18 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             FromCanvas::Other => {}
         }
     });
-    // Raccourcis dans l'interface, calques compris (hors champs de saisie).
+    // Raccourcis dans l'interface, calques compris (hors champs de saisie), quand l'éditeur est
+    // la vue affichée (il reste en place, caché, pendant les autres vues).
     let on_key = window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
+        if !matches!(
+            ui.route.get_untracked(),
+            crate::Route::Site {
+                tab: crate::Tab::Editor,
+                ..
+            }
+        ) {
+            return;
+        }
         let in_field = document()
             .active_element()
             .map(|el| {

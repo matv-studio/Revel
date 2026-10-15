@@ -13,6 +13,7 @@
 //! peut accueillir `site.revel.json` à sa racine sans déplacer ses fichiers.
 
 pub mod bound;
+pub mod entries;
 
 use revel_model::Site;
 use revel_render::{

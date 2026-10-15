@@ -2,9 +2,14 @@
 //! élément glissé depuis le panneau « Ajouter ».
 //!
 //! - molette sur la page : la page défile ; molette autour du cadre : la vue se déplace ;
-//! - Ctrl+molette (ou pincement) : zoom autour du pointeur ;
+//! - Alt+molette (ou Ctrl+molette, pincement) : zoom autour du pointeur ;
 //! - espace maintenue + glisser, ou bouton du milieu : déplacement de la vue ;
-//! - clic dans le vide autour du cadre : plus de sélection.
+//! - clic dans le vide autour du cadre : plus de sélection ;
+//! - Ctrl+R : règles en pixels de la page ; guides de colonnes par-dessus la page.
+//!
+//! La molette est écoutée directement sur la zone, en mode actif (`passive: false`) : un
+//! écouteur délégué à la fenêtre (Leptos) y serait passif, le navigateur ignorerait alors
+//! `preventDefault` (https://developer.chrome.com/blog/scrolling-intervention-2/).
 //!
 //! Le cadre garde sa hauteur quand le zoom change (la page n'est pas remise en page) : elle
 //! correspond à la place disponible au zoom ajusté.
@@ -86,21 +91,67 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
     };
     let shield = move || ed.space.get() || ed.panning.get() || ed.drag.get().is_some();
 
-    view! {
-        <div class="canvas-area" node_ref=area
-            class:is-panning=move || ed.panning.get()
-            class:is-space=move || ed.space.get()
-            on:wheel=move |e: ev::WheelEvent| {
+    // Changement de taille d'écran (point de rupture) : le cadre glisse vers sa nouvelle largeur.
+    let resizing = RwSignal::new(false);
+    let timer = StoredValue::new(None::<leptos::leptos_dom::helpers::TimeoutHandle>);
+    Effect::new(move |prev: Option<String>| {
+        let bp = ed.breakpoint.get();
+        if prev.is_some_and(|p| p != bp) {
+            resizing.set(true);
+            if let Some(t) = timer.get_value() {
+                t.clear();
+            }
+            timer.set_value(
+                set_timeout_with_handle(
+                    move || resizing.set(false),
+                    std::time::Duration::from_millis(420),
+                )
+                .ok(),
+            );
+        }
+        bp
+    });
+
+    // Molette : écouteur actif posé sur la zone elle-même.
+    Effect::new(move |_| {
+        let Some(a) = area.get() else {
+            return;
+        };
+        let cb = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::WheelEvent)>::new(
+            move |e: web_sys::WheelEvent| {
                 e.prevent_default();
-                if e.ctrl_key() || e.meta_key() {
+                if e.alt_key() || e.ctrl_key() || e.meta_key() {
                     let at = local(e.client_x(), e.client_y());
-                    ed.zoom_by((-e.delta_y() * 0.002).exp(), at);
+                    // Alt+molette : certaines souris donnent un défilement horizontal.
+                    let d = if e.delta_y() != 0.0 {
+                        e.delta_y()
+                    } else {
+                        e.delta_x()
+                    };
+                    ed.zoom_by((-d * 0.002).exp(), at);
                 } else if e.shift_key() && e.delta_x() == 0.0 {
                     ed.pan_by(-e.delta_y(), 0.0);
                 } else {
                     ed.pan_by(-e.delta_x(), -e.delta_y());
                 }
-            }
+            },
+        );
+        let opts = web_sys::AddEventListenerOptions::new();
+        opts.set_passive(false);
+        let _ = a.add_event_listener_with_callback_and_add_event_listener_options(
+            "wheel",
+            cb.as_ref().unchecked_ref(),
+            &opts,
+        );
+        cb.forget();
+    });
+
+    view! {
+        <div class="canvas-area" node_ref=area
+            class:is-panning=move || ed.panning.get()
+            class:is-space=move || ed.space.get()
+            class:has-rulers=move || ed.rulers.get()
+            class:is-resizing=move || resizing.get()
             on:pointerdown=move |e: ev::PointerEvent| {
                 if e.button() == 1 {
                     e.prevent_default();
@@ -124,8 +175,12 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
                 }>
                     <iframe class="canvas-frame" node_ref=ed.frame title=ui.t("editor-canvas")
                         style=frame_style src=move || ed.src().unwrap_or_default()></iframe>
+                    <ColumnGuides/>
                 </Show>
             </div>
+            <Show when=move || ed.rulers.get()>
+                <Rulers/>
+            </Show>
             // Écran transparent au-dessus du cadre pendant un déplacement de la vue ou un glisser
             // depuis le panneau « Ajouter » : le pointeur reste dans l'interface.
             <Show when=shield>
@@ -137,7 +192,6 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
                         }
                     }></div>
             </Show>
-            <CanvasMenu/>
             {move || ed.drag.get().map(|d| {
                 let (x, y) = ed.drag_pos.get();
                 view! {
@@ -149,92 +203,247 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
     }
 }
 
-/// Menu contextuel du canevas (clic droit sur un élément de la page).
+/// Guides de colonnes par-dessus la page (comme les grilles de Figma) : bandes des colonnes,
+/// à la position et à l'échelle du cadre, sans capter le pointeur.
 #[component]
-fn CanvasMenu() -> impl IntoView {
+fn ColumnGuides() -> impl IntoView {
+    let ed = expect_context::<Ed>();
+    let style = move || {
+        let g = ed.geo();
+        format!(
+            "left:{}px;top:{}px;width:{}px;height:{}px;transform:scale({})",
+            g.x, g.y, g.w, g.h, g.s
+        )
+    };
+    let columns = move || {
+        let gd = ed.guides.get();
+        if !gd.on || gd.count == 0 {
+            return Vec::new();
+        }
+        let w = ed.geo().w;
+        let margin = f64::from(gd.margin);
+        let mut inner = (w - 2.0 * margin).max(0.0);
+        if gd.max > 0 {
+            inner = inner.min(f64::from(gd.max));
+        }
+        let left = (w - inner) / 2.0;
+        let n = f64::from(gd.count);
+        let gutter = f64::from(gd.gutter);
+        let col = ((inner - (n - 1.0) * gutter) / n).max(0.0);
+        (0..gd.count)
+            .map(|i| (left + f64::from(i) * (col + gutter), col))
+            .collect::<Vec<_>>()
+    };
+    view! {
+        <Show when=move || ed.guides.get().on>
+            <div class="column-guides" style=style aria-hidden="true">
+                {move || columns().into_iter().map(|(x, w)| view! {
+                    <div class="column-guide" style=format!("left:{x}px;width:{w}px")></div>
+                }).collect_view()}
+            </div>
+        </Show>
+    }
+}
+
+/// Pas des graduations : le plus petit dont les étiquettes restent espacées d'au moins `min`
+/// pixels de l'écran.
+fn ruler_step(scale: f64, min: f64) -> f64 {
+    [
+        1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0,
+    ]
+    .into_iter()
+    .find(|s| s * scale >= min)
+    .unwrap_or(10000.0)
+}
+
+/// Règles en pixels de la page (Ctrl+R) : en haut la largeur, à gauche la hauteur (défilement
+/// compris) ; la page est plus claire que ses abords.
+#[component]
+fn Rulers() -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
-    let close = move || ed.menu.set(None);
-    let on_down = window_event_listener(ev::pointerdown, move |e: web_sys::PointerEvent| {
-        if ed.menu.get_untracked().is_none() {
-            return;
-        }
-        let inside = e
-            .target()
-            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-            .and_then(|el| el.closest(".canvas-menu").ok().flatten())
-            .is_some();
-        if !inside {
-            ed.menu.set(None);
-        }
-    });
-    let on_key = window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
-        if e.key() == "Escape" && ed.menu.get_untracked().is_some() {
-            ed.menu.set(None);
-        }
-    });
-    let on_blur = window_event_listener(ev::blur, move |_| {
-        // Le canevas prend le focus au clic droit : le menu reste ouvert.
-        let to_canvas = document()
-            .active_element()
-            .is_some_and(|el| el.tag_name() == "IFRAME");
-        if !to_canvas {
-            ed.menu.set(None);
-        }
-    });
-    on_cleanup(move || {
-        on_down.remove();
-        on_key.remove();
-        on_blur.remove();
-    });
-    let has_sel = move || ed.selected.get().is_some();
-    let item = move |label: &'static str,
-                     key: &'static str,
-                     icon: fn() -> AnyView,
-                     enabled: Signal<bool>,
-                     run: Box<dyn Fn() + Send + Sync>| {
-        view! {
-            <button class="menu-item context-item" role="menuitem" prop:disabled=move || !enabled.get()
-                on:click=move |_| { close(); run() }>
-                <span class="menu-icon">{icon()}</span>
-                <span class="menu-label">{ui.t(label)}</span>
-                {(!key.is_empty()).then(|| view! { <kbd>{ui.t(key)}</kbd> })}
-            </button>
-        }
+    let top = NodeRef::<html::Canvas>::new();
+    let left = NodeRef::<html::Canvas>::new();
+    const T: f64 = 20.0;
+    let color = |name: &str| {
+        window()
+            .get_computed_style(&document().document_element()?)
+            .ok()
+            .flatten()?
+            .get_property_value(name)
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
     };
-    let sel = Signal::derive(has_sel);
-    let clip = Signal::derive(move || ui.clipboard.with(Option::is_some));
-    move || {
-        ed.menu.get().map(|(x, y)| {
-            // Menu gardé dans la fenêtre.
-            let (w, h) = (240.0, 360.0);
-            let vw = window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1e4);
-            let vh = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(1e4);
-            let (x, y) = (x.min(vw - w - 8.0).max(8.0), y.min(vh - h - 8.0).max(8.0));
-            view! {
-                <div class="context-menu canvas-menu pop" role="menu" style=format!("position:fixed;left:{x}px;top:{y}px")>
-                    {item("editor-select-parent", "key-parent", crate::icons::parent, sel, Box::new(move || ed.post(serde_json::json!({ "type": "nav", "dir": "parent" }))))}
-                    {item("editor-zoom-selection", "key-zoom-sel", crate::icons::search, sel, Box::new(move || ed.zoom_selection()))}
-                    <hr class="menu-sep"/>
-                    {item("editor-copy", "key-copy", crate::icons::copy, sel, Box::new(move || { ed.copy(ui, false); }))}
-                    {item("editor-cut", "key-cut", crate::icons::copy, sel, Box::new(move || { ed.copy(ui, true); }))}
-                    {item("editor-paste", "key-paste", crate::icons::copy, clip, Box::new(move || { ed.paste(ui); }))}
-                    {item("layers-duplicate", "key-duplicate", crate::icons::copy, sel, Box::new(move || {
-                        if let Some(at) = ed.selected_target() { ed.apply(ui, revel_edit::Command::Duplicate { at }, false) }
-                    }))}
-                    <hr class="menu-sep"/>
-                    {item("layers-wrap", "key-wrap", crate::icons::wrap, sel, Box::new(move || {
-                        if let Some(at) = ed.selected_target() { ed.wrap(ui, at) }
-                    }))}
-                    {item("editor-unwrap", "key-unwrap", crate::icons::reverse, sel, Box::new(move || { ed.unwrap(ui); }))}
-                    {item("layers-up", "", crate::icons::arrow_up, sel, Box::new(move || { ed.step(ui, -1); }))}
-                    {item("layers-down", "", crate::icons::arrow_down, sel, Box::new(move || { ed.step(ui, 1); }))}
-                    <hr class="menu-sep"/>
-                    {item("layers-delete", "key-delete", crate::icons::trash, sel, Box::new(move || {
-                        if let Some(at) = ed.selected_target() { ed.apply(ui, revel_edit::Command::Remove { at }, false) }
-                    }))}
-                </div>
+    Effect::new(move |_| {
+        let g = ed.geo();
+        let (aw, ah) = ed.area.get();
+        let (_, sy) = ed.live_scroll.get();
+        let _ = ui.settings.with(|s| s.theme.clone());
+        let (Some(tc), Some(lc)) = (top.get(), left.get()) else {
+            return;
+        };
+        let dpr = window().device_pixel_ratio().max(1.0);
+        let ink = color("--text-muted").unwrap_or_else(|| "#888".into());
+        let page = color("--surface").unwrap_or_else(|| "#222".into());
+        let out = color("--chrome").unwrap_or_else(|| "#111".into());
+        let step = ruler_step(g.s, 56.0);
+        let minor = if (step / 5.0) * g.s >= 6.0 {
+            step / 5.0
+        } else {
+            step
+        };
+        // (toile, longueur, origine écran, origine page, partie visible de la page, vertical)
+        for (cv, len, o, p0, (from, to), vertical) in [
+            (tc, aw, g.x, 0.0, (0.0, g.w), false),
+            (lc, ah - T, g.y - T, sy, (sy, sy + g.h), true),
+        ] {
+            let el: &web_sys::HtmlCanvasElement = &cv;
+            let (w, h) = if vertical { (T, len) } else { (len, T) };
+            el.set_width((w * dpr) as u32);
+            el.set_height((h * dpr) as u32);
+            let _ = el.set_attribute("style", &format!("width:{w}px;height:{h}px"));
+            let Some(ctx) = el
+                .get_context("2d")
+                .ok()
+                .flatten()
+                .and_then(|c| c.dyn_into::<web_sys::CanvasRenderingContext2d>().ok())
+            else {
+                continue;
+            };
+            let _ = ctx.set_transform(dpr, 0.0, 0.0, dpr, 0.0, 0.0);
+            if vertical {
+                // Axe vertical dessiné comme l'horizontal, tourné.
+                let _ = ctx.translate(T, 0.0);
+                let _ = ctx.rotate(std::f64::consts::FRAC_PI_2);
+            }
+            ctx.set_fill_style_str(&out);
+            ctx.fill_rect(0.0, 0.0, len, T);
+            // Page visible (en pixels de l'écran).
+            let a = o + (from - p0) * g.s;
+            let b = o + (to - p0) * g.s;
+            ctx.set_fill_style_str(&page);
+            ctx.fill_rect(a.max(0.0), 0.0, (b.min(len) - a.max(0.0)).max(0.0), T);
+            ctx.set_fill_style_str(&ink);
+            ctx.set_stroke_style_str(&ink);
+            ctx.set_font("10px system-ui, sans-serif");
+            ctx.set_line_width(1.0);
+            let first = ((p0 + (0.0 - o) / g.s) / minor).floor() * minor;
+            let last = p0 + (len - o) / g.s;
+            let mut v = first;
+            ctx.begin_path();
+            while v <= last {
+                let x = (o + (v - p0) * g.s).round() + 0.5;
+                let major = (v / step).round() * step == v;
+                let tick = if major { T * 0.55 } else { T * 0.25 };
+                // Graduation montée depuis le bord intérieur (côté page).
+                let (y0, y1) = if vertical { (0.0, tick) } else { (T - tick, T) };
+                ctx.move_to(x, y0);
+                ctx.line_to(x, y1);
+                if major {
+                    let _ = ctx.fill_text(
+                        &format!("{}", v as i64),
+                        x + 3.0,
+                        if vertical { T - 4.0 } else { 10.0 },
+                    );
+                }
+                v += minor;
+            }
+            ctx.stroke();
+        }
+    });
+    view! {
+        <div class="canvas-rulers" aria-hidden="true">
+            <canvas class="ruler ruler--top" node_ref=top></canvas>
+            <canvas class="ruler ruler--left" node_ref=left></canvas>
+            <div class="ruler-corner"></div>
+        </div>
+    }
+}
+
+/// Menu contextuel du canevas (clic droit sur un élément de la page), à la position donnée
+/// dans la fenêtre.
+pub fn open_canvas_menu(ui: Ui, ed: Ed, x: f64, y: f64) {
+    use crate::ctxmenu::{CtxItem, open_at};
+    use crate::icons;
+    let sel = ed.selected.get_untracked().is_none();
+    let clip = ui.clipboard.with_untracked(Option::is_none);
+    let k = |key: &str| ui.now(key, &[]);
+    let items = vec![
+        CtxItem::new(k("editor-select-parent"), move || {
+            ed.post(serde_json::json!({ "type": "nav", "dir": "parent" }))
+        })
+        .icon(icons::parent)
+        .key(k("key-parent"))
+        .disabled(sel),
+        CtxItem::new(k("editor-zoom-selection"), move || ed.zoom_selection())
+            .icon(icons::search)
+            .key(k("key-zoom-sel"))
+            .disabled(sel),
+        CtxItem::new(k("editor-copy"), move || {
+            ed.copy(ui, false);
+        })
+        .icon(icons::copy)
+        .key(k("key-copy"))
+        .disabled(sel)
+        .sep(),
+        CtxItem::new(k("editor-cut"), move || {
+            ed.copy(ui, true);
+        })
+        .icon(icons::copy)
+        .key(k("key-cut"))
+        .disabled(sel),
+        CtxItem::new(k("editor-paste"), move || {
+            ed.paste(ui);
+        })
+        .icon(icons::copy)
+        .key(k("key-paste"))
+        .disabled(clip),
+        CtxItem::new(k("layers-duplicate"), move || {
+            if let Some(at) = ed.selected_target() {
+                ed.apply(ui, revel_edit::Command::Duplicate { at }, false)
             }
         })
-    }
+        .icon(icons::copy)
+        .key(k("key-duplicate"))
+        .disabled(sel),
+        CtxItem::new(k("layers-wrap"), move || {
+            if let Some(at) = ed.selected_target() {
+                ed.wrap(ui, at)
+            }
+        })
+        .icon(icons::wrap)
+        .key(k("key-wrap"))
+        .disabled(sel)
+        .sep(),
+        CtxItem::new(k("editor-unwrap"), move || {
+            ed.unwrap(ui);
+        })
+        .icon(icons::reverse)
+        .key(k("key-unwrap"))
+        .disabled(sel),
+        CtxItem::new(k("layers-up"), move || {
+            ed.step(ui, -1);
+        })
+        .icon(icons::arrow_up)
+        .key(k("key-up"))
+        .disabled(sel),
+        CtxItem::new(k("layers-down"), move || {
+            ed.step(ui, 1);
+        })
+        .icon(icons::arrow_down)
+        .key(k("key-down"))
+        .disabled(sel),
+        CtxItem::new(k("layers-delete"), move || {
+            if let Some(at) = ed.selected_target() {
+                ed.apply(ui, revel_edit::Command::Remove { at }, false)
+            }
+        })
+        .icon(icons::trash)
+        .key(k("key-delete"))
+        .disabled(sel)
+        .danger()
+        .sep(),
+    ];
+    open_at(ui, x, y, items, true);
 }

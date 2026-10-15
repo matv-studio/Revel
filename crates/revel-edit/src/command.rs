@@ -208,6 +208,10 @@ pub enum Command {
         #[serde(default)]
         text: Option<String>,
     },
+    /// Largeur d'un point de rupture changée ; les règles de style écrites pour lui suivent
+    /// (`@media` réécrite). La largeur reste entre celles des points voisins du même sens (ordre
+    /// de la cascade inchangé).
+    ResizeBreakpoint { id: String, width: u32 },
     /// Remplace la liste des points de rupture du site (la base `desktop` reste la première).
     SetBreakpoints { breakpoints: Vec<Breakpoint> },
     /// Nouvelle règle pour `selector` et `media`, placée dans la cascade (après les règles du même
@@ -643,6 +647,61 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         | Command::CreateCmsCollection { .. }
         | Command::RemoveCmsCollection { .. }
         | Command::WriteCmsConfig { .. } => Err(EditError::External),
+        Command::ResizeBreakpoint { id, width } => {
+            let bad = |m: &str| EditError::InvalidBreakpoints(m.to_string());
+            let i = site
+                .breakpoints
+                .iter()
+                .position(|b| b.id == *id)
+                .ok_or_else(|| bad(id))?;
+            let old = site.breakpoints[i].clone();
+            let (old_w, is_max) = match (old.max_width, old.min_width) {
+                (Some(w), _) => (w, true),
+                (None, Some(w)) => (w, false),
+                _ => return Err(bad(id)),
+            };
+            if *width == old_w {
+                return Ok(cmd.clone());
+            }
+            // Points du même sens : la nouvelle largeur ne les franchit pas.
+            let same_side = site
+                .breakpoints
+                .iter()
+                .filter(|b| b.id != *id)
+                .filter_map(|b| if is_max { b.max_width } else { b.min_width });
+            let keeps_order = same_side
+                .into_iter()
+                .all(|w| w != *width && (w > old_w) == (w > *width));
+            if !keeps_order || !(100..100_000).contains(width) {
+                return Err(bad(id));
+            }
+            let old_media = old.media();
+            let mut new = old;
+            if is_max {
+                new.max_width = Some(*width);
+            } else {
+                new.min_width = Some(*width);
+            }
+            let new_media = new.media();
+            site.breakpoints[i] = new;
+            if let Some(sheet) = site.stylesheet.as_mut() {
+                for item in &mut sheet.items {
+                    match item {
+                        revel_model::StyleItem::Rule(r) if r.media == old_media => {
+                            r.media = new_media.clone()
+                        }
+                        revel_model::StyleItem::Comment { media, .. } if *media == old_media => {
+                            *media = new_media.clone()
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Ok(Command::ResizeBreakpoint {
+                id: id.clone(),
+                width: old_w,
+            })
+        }
         Command::SetBreakpoints { breakpoints } => {
             check_breakpoints(breakpoints)?;
             Ok(Command::SetBreakpoints {

@@ -262,6 +262,54 @@ pub fn SchemaList(
         on_up.remove();
         on_cancel.remove();
     });
+    // Menu contextuel d'un champ : monter, descendre, retirer.
+    let row_menu = move |e: &ev::MouseEvent, i: usize, n: usize, field: String, label: String| {
+        use crate::ctxmenu::{CtxItem, open};
+        selected.set(Some(field.clone()));
+        let (f1, f2, f3) = (field.clone(), field.clone(), field);
+        let items = vec![
+            CtxItem::new(ui.now("cms-field-up", &[]), move || {
+                apply.run(Command::MoveCmsField {
+                    folder: folder(),
+                    field: f1.clone(),
+                    index: i.saturating_sub(1),
+                })
+            })
+            .icon(icons::arrow_up)
+            .disabled(i == 0),
+            CtxItem::new(ui.now("cms-field-down", &[]), move || {
+                apply.run(Command::MoveCmsField {
+                    folder: folder(),
+                    field: f2.clone(),
+                    index: i + 1,
+                })
+            })
+            .icon(icons::arrow_down)
+            .disabled(i + 1 >= n),
+            CtxItem::new(ui.now("cms-field-remove", &[]), move || {
+                let f3 = f3.clone();
+                ui.ask.set(Some(
+                    Ask::confirm(
+                        ui.now("cms-field-remove-title", &[("name", label.clone())]),
+                        Some(ui.now("cms-field-remove-body", &[])),
+                        ui.now("cms-field-remove", &[]),
+                        move || {
+                            selected.set(None);
+                            apply.run(Command::RemoveCmsField {
+                                folder: folder(),
+                                field: f3.clone(),
+                            });
+                        },
+                    )
+                    .danger(),
+                ));
+            })
+            .icon(icons::trash)
+            .danger()
+            .sep(),
+        ];
+        open(ui, e, items);
+    };
     view! {
         <div class="schema">
             {move || col.with(|c| c.as_ref().is_some_and(|c| c.schema.is_none())).then(|| view! {
@@ -288,6 +336,10 @@ pub fn SchemaList(
                                 class:is-on=move || selected.get().as_deref() == Some(n2.as_str())
                                 class:is-drop-before=before class:is-drop-after=after
                                 class:is-dragged=from == Some(i)
+                                on:contextmenu={
+                                    let (field, label) = (f.name.clone(), label_of(&f));
+                                    move |e: ev::MouseEvent| row_menu(&e, i, n, field.clone(), label.clone())
+                                }
                                 on:click=move |_| selected.set(Some(name.clone()))>
                                 <span class="schema-grip" title=ui.t("cms-field-drag")
                                     on:pointerdown=move |e: ev::PointerEvent| {

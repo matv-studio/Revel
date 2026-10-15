@@ -34,7 +34,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections"];
+  const bridged = ["edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "preview_url"];
   // Nom de dossier d'un nouveau site (comme revel_core::site_folder, sans les suffixes).
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).
@@ -104,6 +104,8 @@
         return null;
       }
       case "open_preview": return "revel-preview://localhost/" + (args.page || "/").replace(/^\//, "");
+      // Sans pont : page de démonstration.
+      case "preview_url": return "data:text/html;charset=utf-8," + encodeURIComponent('<!doctype html><title>Aperçu</title><body style="margin:0;font:16px system-ui;display:grid;place-items:center;height:100vh;background:#f4f1ea;color:#222"><h1>Alunites</h1></body>') + "#";
       case "reveal_path": return null;
       case "export_site": {
         const ch = args.onEvent;

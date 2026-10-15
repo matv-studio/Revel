@@ -510,9 +510,9 @@
     if (e.key === " " || e.code === "Space") post({ type: "keyup", key: " ", code: "Space" });
   }, true);
 
-  // Molette avec Ctrl (ou pincement du pavé tactile) : zoom de l'éditeur autour du pointeur.
+  // Molette avec Alt (ou Ctrl, pincement du pavé tactile) : zoom de l'éditeur autour du pointeur.
   window.addEventListener("wheel", (e) => {
-    if (e.ctrlKey || e.metaKey) { e.preventDefault(); post({ type: "zoom", dy: e.deltaY, x: e.clientX, y: e.clientY }); }
+    if (e.altKey || e.ctrlKey || e.metaKey) { e.preventDefault(); post({ type: "zoom", dy: e.deltaY || e.deltaX, x: e.clientX, y: e.clientY }); }
   }, { passive: false });
   // Bouton du milieu : déplacement de la vue (écarts en pixels de l'écran).
   let panFrom = null;
@@ -530,13 +530,22 @@
   window.addEventListener("pointerup", (e) => { if (e.button === 1) panFrom = null; }, true);
 
   window.addEventListener("scroll", redraw, true);
+  // Défilement suivi une fois par image (règles de l'interface).
+  let scrollFrame = 0;
+  window.addEventListener("scroll", () => {
+    if (scrollFrame) return;
+    scrollFrame = requestAnimationFrame(() => { scrollFrame = 0; post({ type: "scrolled", x: window.scrollX, y: window.scrollY }); });
+  }, { passive: true });
   // Position de défilement transmise à l'interface (rétablie après un rechargement).
   let scrollTimer = 0;
   window.addEventListener("scroll", () => {
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => post({ type: "scroll", x: window.scrollX, y: window.scrollY }), 120);
   }, { passive: true });
-  window.addEventListener("resize", () => { redraw(); sendComputed(); });
+  // Taille du cadre changée (point de rupture, animée) : valeurs calculées envoyées une fois la
+  // taille stable.
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => { redraw(); clearTimeout(resizeTimer); resizeTimer = setTimeout(sendComputed, 120); });
   new ResizeObserver(redraw).observe(document.documentElement);
 
   // ---------------------------------------------------------------- aperçu des styles

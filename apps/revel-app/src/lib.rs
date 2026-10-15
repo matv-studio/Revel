@@ -181,6 +181,15 @@ async fn open_preview(
     Ok(url)
 }
 
+/// Adresse de l'aperçu du site, affiché dans l'espace de travail (cadre de l'interface) ; rien à
+/// générer avant.
+#[tauri::command]
+async fn preview_url(s: State<'_, AppState>, path: String, environment: String) -> Res<String> {
+    s.core
+        .preview_open(&PathBuf::from(&path), &environment)
+        .map_err(err)
+}
+
 /// Exporte le site (génération, puis copie dans un nouveau dossier de `parent`).
 #[tauri::command]
 async fn export_site(
@@ -455,6 +464,7 @@ pub fn run() {
             export_site,
             reveal_path,
             open_preview,
+            preview_url,
             list_profiles,
             save_profile,
             delete_profile,

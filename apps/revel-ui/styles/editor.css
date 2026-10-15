@@ -52,6 +52,19 @@
 .canvas-wait { display: grid; place-items: center; height: 100%; }
 /* Écran transparent au-dessus du cadre (déplacement de la vue, glisser depuis « Ajouter »). */
 .canvas-shield { position: absolute; inset: 0; z-index: 2; }
+/* Changement de taille d'écran : le cadre (et ses guides) glissent vers la nouvelle largeur. */
+.canvas-area.is-resizing .canvas-frame, .canvas-area.is-resizing .column-guides {
+  transition: width 360ms var(--ease), left 360ms var(--ease), top 360ms var(--ease), transform 360ms var(--ease);
+}
+@media (prefers-reduced-motion: reduce) { .canvas-area.is-resizing .canvas-frame, .canvas-area.is-resizing .column-guides { transition: none; } }
+/* Guides de colonnes (comme les grilles de Figma) et règles en pixels (Ctrl+R). */
+.column-guides { position: absolute; transform-origin: 0 0; pointer-events: none; }
+.column-guide { position: absolute; top: 0; bottom: 0; background: rgb(255 72 72 / .1); box-shadow: inset 1px 0 rgb(255 72 72 / .22), inset -1px 0 rgb(255 72 72 / .22); }
+.canvas-rulers { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.ruler { position: absolute; display: block; }
+.ruler--top { top: 0; left: 0; box-shadow: 0 1px var(--line); }
+.ruler--left { top: 20px; left: 0; box-shadow: 1px 0 var(--line); }
+.ruler-corner { position: absolute; top: 0; left: 0; width: 20px; height: 20px; background: var(--chrome); box-shadow: 1px 1px var(--line); }
 .canvas-area.is-space .canvas-shield { cursor: grab; }
 .canvas-area.is-panning .canvas-shield { cursor: grabbing; }
 /* Étiquette de l'élément glissé depuis le panneau « Ajouter ». */
@@ -156,6 +169,11 @@
 .context-menu { z-index: 80; width: auto; min-width: 220px; padding: 4px; gap: 0; }
 .context-item { display: flex; align-items: center; gap: 8px; height: 28px; font-weight: var(--weight-regular); font-size: var(--text-sm); }
 .context-item kbd { margin-left: auto; }
+.context-menu .context-item { display: flex; align-items: center; gap: 8px; }
+.context-item .menu-label { flex: 1; }
+.context-item.is-danger { color: var(--danger-text); }
+.context-item.is-danger .menu-icon { color: var(--danger-text); }
+.context-item:disabled { opacity: .4; }
 .layer.drop-before::before, .layer.drop-after::after {
   content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--focus);
 }
@@ -211,6 +229,17 @@
 }
 .bp-line { display: flex; align-items: center; justify-content: space-between; font-size: var(--text-sm); }
 .bp-add { display: grid; grid-template-columns: minmax(0, 1fr) 72px auto; gap: var(--s-1); }
+/* Point de rupture : sens, largeur modifiable, retrait. */
+.bp-edit { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s-2); }
+.bp-kind { color: var(--text-muted); }
+.bp-num { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); }
+.bp-num .input { width: 72px; height: var(--control-sm); text-align: right; }
+/* Affichage : règles, guides de colonnes. */
+.view-menu .bp-pop { width: 248px; }
+.view-line { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: 28px; font-size: var(--text-sm); }
+.view-num { width: 72px; text-align: right; }
+.view-guides { display: flex; flex-direction: column; gap: var(--s-1); padding-left: var(--s-2); border-left: var(--border) solid var(--line); transition: opacity var(--fast) var(--ease); }
+.view-guides.is-off { opacity: .45; }
 
 /* --- Raccourcis, enregistrement ---------------------------------------------------- */
 .bp-pop--right { left: auto; right: 0; }

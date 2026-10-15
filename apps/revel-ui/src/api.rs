@@ -247,6 +247,16 @@ pub async fn preview(path: &str, environment: &str, page: Option<&str>) -> Res<S
     .await
 }
 
+/// Adresse de l'aperçu du site, pour l'afficher dans l'espace de travail.
+pub async fn preview_url(path: &str, environment: &str) -> Res<String> {
+    #[derive(Serialize)]
+    struct A<'a> {
+        path: &'a str,
+        environment: &'a str,
+    }
+    call("preview_url", &A { path, environment }).await
+}
+
 /// Montre un dossier dans l'explorateur du système.
 pub async fn reveal(path: &str) -> Res<()> {
     call("reveal_path", &PathArg { path }).await

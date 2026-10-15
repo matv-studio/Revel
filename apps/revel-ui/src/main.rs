@@ -6,6 +6,7 @@ mod canvas;
 mod cms;
 mod cmsfields;
 mod cmsschema;
+mod ctxmenu;
 mod dialog;
 mod dock;
 mod editor;
@@ -57,6 +58,23 @@ pub fn tr_failure(lang: &str, f: &Failure) -> String {
     tr(lang, &f.key, &args)
 }
 
+/// Préférence d'affichage de cet utilisateur (stockage du navigateur ; absente si indisponible).
+pub fn pref_get(key: &str) -> Option<String> {
+    window()
+        .local_storage()
+        .ok()
+        .flatten()?
+        .get_item(&format!("revel.{key}"))
+        .ok()
+        .flatten()
+}
+
+pub fn pref_set(key: &str, value: &str) {
+    if let Some(s) = window().local_storage().ok().flatten() {
+        let _ = s.set_item(&format!("revel.{key}"), value);
+    }
+}
+
 /// Nombre passé en paramètre d'un texte traduit, arrondi à `decimals` chiffres après la
 /// virgule. La mise en forme (milliers, virgule décimale) et les pluriels relèvent de
 /// `revel-i18n`, selon la langue.
@@ -100,6 +118,10 @@ pub struct Ui {
     pub clipboard: RwSignal<Option<revel_model::Node>>,
     /// Page affichée dans l'éditeur (l'aperçu s'ouvre sur elle).
     pub current_page: RwSignal<Option<String>>,
+    /// Menu contextuel ouvert (clic droit).
+    pub context: RwSignal<Option<ctxmenu::CtxMenu>>,
+    /// Aperçu affiché dans l'espace de travail : adresse de base, page.
+    pub preview: RwSignal<Option<(String, String)>>,
 }
 
 impl Ui {
@@ -256,6 +278,8 @@ fn App() -> impl IntoView {
         goto_page: RwSignal::new(None),
         clipboard: RwSignal::new(None),
         current_page: RwSignal::new(None),
+        context: RwSignal::new(None),
+        preview: RwSignal::new(None),
     };
     provide_context(ui);
     spawn_local(async move {
@@ -285,6 +309,56 @@ fn App() -> impl IntoView {
         }
     });
     Effect::new(move |_| ui.settings.with(apply_settings));
+
+    // Menus déroulants (`details.bp-menu`) fermés par un clic ailleurs, Échap ou un clic dans le
+    // canevas (la fenêtre perd alors le focus).
+    let close_menus = |keep: Option<web_sys::Element>| {
+        if let Ok(list) = document().query_selector_all("details.bp-menu[open]") {
+            for i in 0..list.length() {
+                if let Some(d) = list
+                    .item(i)
+                    .and_then(|n| n.dyn_into::<web_sys::Element>().ok())
+                    && keep.as_ref().is_none_or(|t| !d.contains(Some(t)))
+                {
+                    let _ = d.remove_attribute("open");
+                }
+            }
+        }
+    };
+    let on_down =
+        window_event_listener(leptos::ev::pointerdown, move |e: web_sys::PointerEvent| {
+            let t = e
+                .target()
+                .and_then(|t| t.dyn_into::<web_sys::Element>().ok());
+            close_menus(t);
+        });
+    let on_esc = window_event_listener(leptos::ev::keydown, move |e: web_sys::KeyboardEvent| {
+        if e.key() == "Escape" {
+            close_menus(None);
+        }
+    });
+    let on_blur = window_event_listener(leptos::ev::blur, move |_| close_menus(None));
+    // Menu du navigateur au clic droit remplacé par les menus de Revel (gardé dans les champs de
+    // saisie : copier, coller, orthographe).
+    let on_context =
+        window_event_listener(leptos::ev::contextmenu, move |e: web_sys::MouseEvent| {
+            let in_field = e
+                .target()
+                .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                .is_some_and(|el| {
+                    matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA")
+                        || el.closest("[contenteditable]").ok().flatten().is_some()
+                });
+            if !in_field {
+                e.prevent_default();
+            }
+        });
+    on_cleanup(move || {
+        on_down.remove();
+        on_esc.remove();
+        on_blur.remove();
+        on_context.remove();
+    });
 
     // Page affichée : accueil, réglages, ou site ouvert (identifié par son dossier : changer de
     // vue dans le site ne recrée pas l'éditeur).
@@ -321,6 +395,7 @@ fn App() -> impl IntoView {
                 }}
             </main>
             <dialog::Dialog/>
+            <ctxmenu::ContextLayer/>
         </div>
     }
 }
@@ -348,17 +423,40 @@ fn TopBar() -> impl IntoView {
         _ => None,
     };
     let site_open = move || tab().is_some();
-    let preview = move |_| {
+    // Aperçu : dans l'espace de travail ; dans une nouvelle fenêtre avec Maj+clic ou par le menu.
+    let preview = move |window: bool| {
         if let Route::Site { site, .. } = ui.route.get_untracked() {
             let env = ui.preview_environment(&site);
             spawn_local(async move {
                 let page = ui.current_page.get_untracked();
-                if let Err(e) = api::preview(&site.path, &env, page.as_deref()).await {
-                    ui.fail(e);
+                if window {
+                    if let Err(e) = api::preview(&site.path, &env, page.as_deref()).await {
+                        ui.fail(e);
+                    }
+                    return;
+                }
+                match api::preview_url(&site.path, &env).await {
+                    Ok(base) => ui
+                        .preview
+                        .set(Some((base, page.unwrap_or_else(|| "/".into())))),
+                    Err(e) => ui.fail(e),
                 }
             });
         }
     };
+    let preview_menu = RwSignal::new(false);
+    let on_down =
+        window_event_listener(leptos::ev::pointerdown, move |e: web_sys::PointerEvent| {
+            let inside = e
+                .target()
+                .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                .and_then(|el| el.closest(".preview-split").ok().flatten())
+                .is_some();
+            if !inside {
+                preview_menu.set(false);
+            }
+        });
+    on_cleanup(move || on_down.remove());
     view! {
         <header class="topbar">
             <div class="topbar-start">
@@ -396,7 +494,29 @@ fn TopBar() -> impl IntoView {
             </nav>
             <div class="topbar-actions">
                 <Show when=site_open>
-                    <button class="btn" title=ui.t("preview-help") on:click=preview>{icons::play()}{ui.t("preview-open")}</button>
+                    <div class="split-btn preview-split" class:is-on=move || ui.preview.with(Option::is_some)>
+                        <button class="btn split-main" title=ui.t("preview-help")
+                            on:click=move |e: leptos::ev::MouseEvent| {
+                                if ui.preview.with_untracked(Option::is_some) && !e.shift_key() {
+                                    ui.preview.set(None);
+                                } else {
+                                    preview(e.shift_key());
+                                }
+                            }>{icons::play()}{ui.t("preview-open")}</button>
+                        <button class="btn split-more" aria-haspopup="menu" aria-expanded=move || preview_menu.get().to_string()
+                            title=ui.t("preview-options") aria-label=ui.t("preview-options")
+                            on:click=move |_| preview_menu.update(|o| *o = !*o)>{icons::chevron_down()}</button>
+                        <Show when=move || preview_menu.get()>
+                            <div class="menu preview-menu" role="menu">
+                                <button class="menu-item" role="menuitem" on:click=move |_| { preview_menu.set(false); preview(false); }>
+                                    {icons::play()}<span class="menu-label">{ui.t("preview-here")}</span>
+                                </button>
+                                <button class="menu-item" role="menuitem" on:click=move |_| { preview_menu.set(false); preview(true); }>
+                                    {icons::external()}<span class="menu-label">{ui.t("preview-window")}</span><kbd>{ui.t("key-preview-window")}</kbd>
+                                </button>
+                            </div>
+                        </Show>
+                    </div>
                     <button class="btn btn--primary" on:click=move |_| ui.tab(Tab::Settings(Section::Publish))>{ui.t("nav-publish")}</button>
                 </Show>
             </div>

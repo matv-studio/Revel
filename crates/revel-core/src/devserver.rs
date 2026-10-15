@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 /// Préfixe des commandes du pont.
 pub const INVOKE_PREFIX: &str = "/__revel/invoke/";
+/// Aperçu du site (pont des essais).
+pub const PREVIEW_PREFIX: &str = "/__preview/";
 
 fn arg<T: serde::de::DeserializeOwned>(args: &Value, name: &str) -> Result<T, Failure> {
     serde_json::from_value(args.get(name).cloned().unwrap_or(Value::Null))
@@ -55,6 +57,12 @@ impl Core {
             "edit_undo" => json(self.edit_undo(site).map_err(f)?),
             "edit_redo" => json(self.edit_redo(site).map_err(f)?),
             "cms_collections" => json(self.cms(site).map_err(f)?),
+            // Aperçu servi sous `/__preview/` (essais de l'interface).
+            "preview_url" => {
+                let env = arg::<Option<String>>(args, "environment")?.unwrap_or_default();
+                self.preview_open(site, &env).map_err(f)?;
+                json(format!("{base}{}", PREVIEW_PREFIX.trim_start_matches('/')))
+            }
             "canvas_open" => {
                 let scripts = arg::<Option<bool>>(args, "scripts")?.unwrap_or(false);
                 let current = self.canvas_options();
@@ -126,13 +134,16 @@ pub async fn serve(
                     ),
                 };
             }
-            let r = tokio::task::spawn_blocking(move || core.canvas_respond(&path))
-                .await
-                .unwrap_or_else(|e| CanvasResponse {
-                    status: 500,
-                    content_type: "text/plain".into(),
-                    body: e.to_string().into_bytes(),
-                });
+            let r = tokio::task::spawn_blocking(move || match path.strip_prefix(PREVIEW_PREFIX) {
+                Some(rest) if bridge => core.preview_respond(&format!("/{rest}")),
+                _ => core.canvas_respond(&path),
+            })
+            .await
+            .unwrap_or_else(|e| CanvasResponse {
+                status: 500,
+                content_type: "text/plain".into(),
+                body: e.to_string().into_bytes(),
+            });
             response(r.status, &r.content_type, r.body)
         }
     });

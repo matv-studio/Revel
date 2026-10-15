@@ -396,8 +396,6 @@ pub fn Layers() -> impl IntoView {
     let drag = RwSignal::new(None::<Row>);
     let drop_at = RwSignal::new(None::<(String, Zone)>);
     let query = RwSignal::new(String::new());
-    // Menu contextuel (clic droit) : position dans la fenêtre.
-    let menu = RwSignal::new(None::<(f64, f64)>);
 
     let all = Memo::new(move |_| {
         let url = ed.page.get();
@@ -605,39 +603,57 @@ pub fn Layers() -> impl IntoView {
         opened.set(HashSet::new());
         closed.set(keys);
     };
-    let on_outside =
-        window_event_listener(leptos::ev::pointerdown, move |e: web_sys::PointerEvent| {
-            if menu.get_untracked().is_none() {
-                return;
-            }
-            let inside = e
-                .target()
-                .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok())
-                .and_then(|el| el.closest(".context-menu").ok().flatten())
-                .is_some();
-            if !inside {
-                menu.set(None);
-            }
-        });
-    // Clic dans le canevas (autre document) : la fenêtre perd le focus.
-    let on_blur = window_event_listener(leptos::ev::blur, move |_| menu.set(None));
-    on_cleanup(move || {
-        on_outside.remove();
-        on_blur.remove();
-    });
-    let menu_item = move |key: &'static str,
-                          shortcut: &'static str,
-                          icon: fn() -> AnyView,
-                          run: Box<dyn Fn() + Send + Sync>| {
-        view! {
-            <button class="menu-item context-item" role="menuitem" on:click=move |_| { menu.set(None); run(); }>
-                <span class="menu-icon">{icon()}</span>
-                <span>{ui.t(key)}</span>
-                {(!shortcut.is_empty()).then(|| view! { <kbd>{ui.t(shortcut)}</kbd> })}
-            </button>
-        }
+    // Info-bulle : action et raccourci.
+    let tip = move |label: &str, key: &str| format!("{} ({})", ui.tx(label, &[]), ui.tx(key, &[]));
+    // Menu contextuel d'un calque (clic droit) : icône, action, raccourci.
+    let open_menu = move |e: &leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        let has = target().is_some();
+        let items = vec![
+            CtxItem::new(ui.now("layers-parent", &[]), move || {
+                if let Some(p) = parent_row() {
+                    select_row(&p)
+                }
+            })
+            .icon(icons::parent)
+            .key(ui.now("key-parent", &[]))
+            .disabled(parent_row().is_none()),
+            CtxItem::new(ui.now("layers-up", &[]), move || {
+                act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, -1))))
+            })
+            .icon(icons::arrow_up)
+            .key(ui.now("key-up", &[])),
+            CtxItem::new(ui.now("layers-down", &[]), move || {
+                act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, 1))))
+            })
+            .icon(icons::arrow_down)
+            .key(ui.now("key-down", &[])),
+            CtxItem::new(ui.now("layers-wrap", &[]), move || {
+                if let Some(at) = target() {
+                    ed.wrap(ui, at)
+                }
+            })
+            .icon(icons::wrap)
+            .key(ui.now("key-wrap", &[]))
+            .disabled(!has)
+            .sep(),
+            CtxItem::new(ui.now("layers-duplicate", &[]), move || {
+                act(target().map(|at| Command::Duplicate { at }))
+            })
+            .icon(icons::copy)
+            .key(ui.now("key-duplicate", &[]))
+            .disabled(!has),
+            CtxItem::new(ui.now("layers-delete", &[]), move || {
+                act(target().map(|at| Command::Remove { at }))
+            })
+            .icon(icons::trash)
+            .key(ui.now("key-delete", &[]))
+            .disabled(!has)
+            .danger()
+            .sep(),
+        ];
+        open(ui, e, items);
     };
-
     view! {
         <aside class="layers" aria-label=ui.t("layers-title")>
             <label class="panel-search">
@@ -698,9 +714,8 @@ pub fn Layers() -> impl IntoView {
                                 draggable=draggable
                                 on:click=move |_| r.with_value(|r| select_row(r))
                                 on:contextmenu=move |e: leptos::ev::MouseEvent| {
-                                    e.prevent_default();
                                     r.with_value(|r| select_row(r));
-                                    menu.set(Some((f64::from(e.client_x()), f64::from(e.client_y()))));
+                                    open_menu(&e);
                                 }
                                 on:mouseenter=move |_| ed.post(serde_json::json!({ "type": "hover", "id": id_hover.clone() }))
                                 on:mouseleave=move |_| ed.post(serde_json::json!({ "type": "hover", "id": null }))
@@ -762,37 +777,25 @@ pub fn Layers() -> impl IntoView {
                 <button class="icon-btn icon-btn--small" title=ui.t("layers-collapse") aria-label=ui.t("layers-collapse")
                     on:click=collapse_all>{icons::collapse()}</button>
                 <span class="toolbar-spacer"></span>
-                <button class="icon-btn icon-btn--small" title=ui.t("layers-parent") aria-label=ui.t("layers-parent")
+                <button class="icon-btn icon-btn--small" title=move || tip("layers-parent", "key-parent") aria-label=ui.t("layers-parent")
                     prop:disabled=move || parent_row().is_none()
                     on:click=move |_| { if let Some(p) = parent_row() { select_row(&p) } }>{icons::parent()}</button>
-                <button class="icon-btn icon-btn--small" title=ui.t("layers-up") aria-label=ui.t("layers-up")
+                <button class="icon-btn icon-btn--small" title=move || tip("layers-up", "key-up") aria-label=ui.t("layers-up")
                     prop:disabled=move || selected_row().is_none()
                     on:click=move |_| act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, -1))))>{icons::arrow_up()}</button>
-                <button class="icon-btn icon-btn--small" title=ui.t("layers-down") aria-label=ui.t("layers-down")
+                <button class="icon-btn icon-btn--small" title=move || tip("layers-down", "key-down") aria-label=ui.t("layers-down")
                     prop:disabled=move || selected_row().is_none()
                     on:click=move |_| act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, 1))))>{icons::arrow_down()}</button>
-                <button class="icon-btn icon-btn--small" title=ui.t("layers-wrap") aria-label=ui.t("layers-wrap")
+                <button class="icon-btn icon-btn--small" title=move || tip("layers-wrap", "key-wrap") aria-label=ui.t("layers-wrap")
                     prop:disabled=move || target().is_none()
                     on:click=move |_| { if let Some(at) = target() { ed.wrap(ui, at) } }>{icons::wrap()}</button>
-                <button class="icon-btn icon-btn--small" title=ui.t("layers-duplicate") aria-label=ui.t("layers-duplicate")
+                <button class="icon-btn icon-btn--small" title=move || tip("layers-duplicate", "key-duplicate") aria-label=ui.t("layers-duplicate")
                     prop:disabled=move || target().is_none()
                     on:click=move |_| act(target().map(|at| Command::Duplicate { at }))>{icons::copy()}</button>
-                <button class="icon-btn icon-btn--small" title=ui.t("layers-delete") aria-label=ui.t("layers-delete")
+                <button class="icon-btn icon-btn--small" title=move || tip("layers-delete", "key-delete") aria-label=ui.t("layers-delete")
                     prop:disabled=move || target().is_none()
                     on:click=move |_| act(target().map(|at| Command::Remove { at }))>{icons::trash()}</button>
             </footer>
-            {move || menu.get().map(|(x, y)| view! {
-                <div class="context-menu pop" role="menu" style=format!("position:fixed;left:{x}px;top:{y}px")>
-                    {menu_item("layers-parent", "", icons::parent, Box::new(move || { if let Some(p) = parent_row() { select_row(&p) } }))}
-                    {menu_item("layers-up", "", icons::arrow_up, Box::new(move || act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, -1))))))}
-                    {menu_item("layers-down", "", icons::arrow_down, Box::new(move || act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, 1))))))}
-                    <hr class="menu-sep"/>
-                    {menu_item("layers-wrap", "", icons::wrap, Box::new(move || { if let Some(at) = target() { ed.wrap(ui, at) } }))}
-                    {menu_item("layers-duplicate", "key-duplicate", icons::copy, Box::new(move || act(target().map(|at| Command::Duplicate { at }))))}
-                    <hr class="menu-sep"/>
-                    {menu_item("layers-delete", "key-delete", icons::trash, Box::new(move || act(target().map(|at| Command::Remove { at }))))}
-                </div>
-            })}
         </aside>
     }
 }

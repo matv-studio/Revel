@@ -499,6 +499,20 @@ impl Dock {
     /// Dépôt possible sous le pointeur.
     fn target(self, x: f64, y: f64) -> Option<(Rect, Drop)> {
         let el = document().element_from_point(x as f32, y as f32)?;
+        self.target_on(el, x, y)
+    }
+
+    /// Dépôt possible sous le pointeur, sans tenir compte d'un élément (fenêtre déplacée).
+    fn target_except(self, x: f64, y: f64, skip: &web_sys::Element) -> Option<(Rect, Drop)> {
+        let list = document().elements_from_point(x as f32, y as f32);
+        let el = list
+            .iter()
+            .filter_map(|v| v.dyn_into::<web_sys::Element>().ok())
+            .find(|e| !skip.contains(Some(e)))?;
+        self.target_on(el, x, y)
+    }
+
+    fn target_on(self, el: web_sys::Element, x: f64, y: f64) -> Option<(Rect, Drop)> {
         if let Some(strip) = el.closest("[data-tabs]").ok().flatten() {
             let group: u32 = strip.get_attribute("data-tabs")?.parse().ok()?;
             let tabs = strip.query_selector_all(".dock-tab").ok()?;
@@ -601,6 +615,41 @@ fn dragging_cursor(cursor: Option<&str>) {
     }
 }
 
+/// Menu contextuel d'un panneau (onglet, bandeau de son groupe) : détacher en fenêtre ou ancrer
+/// une fenêtre, fermer.
+fn tab_menu(dock: Dock, ui: Ui, panel: PanelId, e: &ev::MouseEvent) {
+    use crate::ctxmenu::{CtxItem, open};
+    let floating = dock
+        .layout
+        .with_untracked(|l| l.group_of(panel).is_some_and(|g| l.side_of(g).is_none()));
+    let (ox, oy) = dock.origin();
+    let (fx, fy) = (
+        f64::from(e.client_x()) - ox - 40.0,
+        f64::from(e.client_y()) - oy - 14.0,
+    );
+    let place = if floating {
+        CtxItem::new(ui.now("dock-dock", &[]), move || {
+            dock.layout.update(|l| {
+                l.put(panel, Drop::Column { side: panel.home() });
+            })
+        })
+    } else {
+        CtxItem::new(ui.now("dock-float", &[]), move || {
+            dock.layout.update(|l| {
+                l.put(panel, Drop::Float { x: fx, y: fy });
+            })
+        })
+    };
+    let items = vec![
+        place.icon(icons::external),
+        CtxItem::new(ui.now("dock-close-short", &[]), move || {
+            dock.layout.update(|l| l.close(panel))
+        })
+        .icon(icons::close),
+    ];
+    open(ui, e, items);
+}
+
 /// Onglet d'un panneau : clic = afficher ; glisser = déplacer.
 #[component]
 fn Tab(dock: Dock, group: u32, panel: PanelId) -> impl IntoView {
@@ -625,10 +674,15 @@ fn Tab(dock: Dock, group: u32, panel: PanelId) -> impl IntoView {
             data-panel=panel.name() title=ui.t(panel.key())
             on:pointerdown=move |e: ev::PointerEvent| {
                 if e.button() != 0 { return; }
+                // Seul onglet d'une fenêtre : le glisser déplace la fenêtre (voir `FloatView`).
+                if dock.layout.with_untracked(|l| l.floats.iter().any(|f| f.group.id == group && f.group.tabs.len() == 1)) {
+                    return;
+                }
                 capture(&e);
                 let p = (f64::from(e.client_x()), f64::from(e.client_y()));
                 dock.drag.set(Some(TabDrag { panel, start: p, pos: p, active: false }));
             }
+            on:contextmenu=move |e: ev::MouseEvent| tab_menu(dock, ui, panel, &e)
             on:pointermove=move |e: ev::PointerEvent| {
                 let Some(mut d) = dock.drag.get_untracked() else { return };
                 let p = (f64::from(e.client_x()), f64::from(e.client_y()));
@@ -726,7 +780,9 @@ fn GroupView(
                     }
                     on:pointerup=move |_| { split.set_value(None); dragging_cursor(None); }></div>
             })}
-            <header class="dock-head">
+            <header class="dock-head" on:contextmenu=move |e: ev::MouseEvent| {
+                if let Some(p) = active() { tab_menu(dock, ui, p, &e) }
+            }>
                 <div class="dock-tabs" role="tablist" data-tabs=id
                     on:wheel=move |e: ev::WheelEvent| {
                         // Molette : défilement horizontal des onglets qui ne tiennent pas.
@@ -853,6 +909,7 @@ fn FloatView(
     };
     let moving = StoredValue::new(None::<(f64, f64, f64, f64)>);
     let sizing = StoredValue::new(None::<(f64, f64, f64, f64)>);
+    let me = NodeRef::<leptos::html::Div>::new();
     let update = move |f: &dyn Fn(&mut Float)| {
         dock.layout.update(|l| {
             if let Some(x) = l.floats.iter_mut().find(|x| x.group.id == id) {
@@ -860,22 +917,100 @@ fn FloatView(
             }
         })
     };
+    // Fenêtre déplacée par tout son bandeau (poignée, barre d'onglets ; un onglet seul compris) ;
+    // Maj maintenue : emplacement d'ancrage montré sous le pointeur, la fenêtre s'y range au
+    // relâchement.
+    let start_move = move |e: &ev::PointerEvent| {
+        if e.button() != 0 {
+            return;
+        }
+        let Some(t) = e
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        else {
+            return;
+        };
+        let closest = |sel: &str| t.closest(sel).ok().flatten().is_some();
+        let single = dock.layout.with_untracked(|l| {
+            l.floats
+                .iter()
+                .any(|f| f.group.id == id && f.group.tabs.len() == 1)
+        });
+        if !closest(".dock-float-grip, .dock-head")
+            || closest(".dock-menu-wrap")
+            || (closest(".dock-tab") && !single)
+        {
+            return;
+        }
+        e.prevent_default();
+        capture(e);
+        let (x, y, _, _) = geom();
+        moving.set_value(Some((
+            f64::from(e.client_x()),
+            f64::from(e.client_y()),
+            x,
+            y,
+        )));
+        dragging_cursor(Some("move"));
+    };
+    let move_to = move |e: &ev::PointerEvent| {
+        let Some((x0, y0, fx, fy)) = moving.get_value() else {
+            return;
+        };
+        let (cx, cy) = (f64::from(e.client_x()), f64::from(e.client_y()));
+        let (nx, ny) = ((fx + cx - x0).max(0.0), (fy + cy - y0).max(0.0));
+        update(&|f| {
+            f.x = nx;
+            f.y = ny;
+        });
+        let hint = if e.shift_key() {
+            me.get_untracked()
+                .and_then(|el| dock.target_except(cx, cy, &el))
+                .filter(|(_, d)| !matches!(d, Drop::Float { .. }))
+        } else {
+            None
+        };
+        dock.hint.set(hint);
+    };
+    let end_move = move |e: &ev::PointerEvent| {
+        if moving.get_value().is_none() {
+            return;
+        }
+        moving.set_value(None);
+        dragging_cursor(None);
+        let hint = dock.hint.get_untracked();
+        dock.hint.set(None);
+        if let (true, Some((_, drop))) = (e.shift_key(), hint) {
+            dock.layout.update(|l| {
+                let Some(f) = l.floats.iter().find(|f| f.group.id == id).cloned() else {
+                    return;
+                };
+                let mut tabs = f.group.tabs.into_iter();
+                let Some(first) = tabs.next() else { return };
+                l.put(first, drop);
+                if let Some(g) = l.group_of(first) {
+                    for t in tabs {
+                        l.put(
+                            t,
+                            Drop::Join {
+                                group: g,
+                                index: usize::MAX,
+                            },
+                        );
+                    }
+                }
+                l.activate(f.group.active);
+            });
+        }
+    };
     view! {
-        <div class="dock-float" class:is-hidden=move || dock.layout.with(|l| l.hidden)
-            style=move || { let (x, y, w, h) = geom(); format!("left:{x}px;top:{y}px;width:{w}px;height:{h}px") }>
-            <div class="dock-float-grip" title=ui.t("dock-move")
-                on:pointerdown=move |e: ev::PointerEvent| {
-                    capture(&e);
-                    let (x, y, _, _) = geom();
-                    moving.set_value(Some((f64::from(e.client_x()), f64::from(e.client_y()), x, y)));
-                    dragging_cursor(Some("move"));
-                }
-                on:pointermove=move |e: ev::PointerEvent| {
-                    let Some((x0, y0, fx, fy)) = moving.get_value() else { return };
-                    let (nx, ny) = ((fx + f64::from(e.client_x()) - x0).max(0.0), (fy + f64::from(e.client_y()) - y0).max(0.0));
-                    update(&|f| { f.x = nx; f.y = ny; });
-                }
-                on:pointerup=move |_| { moving.set_value(None); dragging_cursor(None); }></div>
+        <div class="dock-float" node_ref=me class:is-hidden=move || dock.layout.with(|l| l.hidden)
+            style=move || { let (x, y, w, h) = geom(); format!("left:{x}px;top:{y}px;width:{w}px;height:{h}px") }
+            on:pointerdown=move |e: ev::PointerEvent| start_move(&e)
+            on:pointermove=move |e: ev::PointerEvent| move_to(&e)
+            on:pointerup=move |e: ev::PointerEvent| end_move(&e)
+            on:pointercancel=move |_| { moving.set_value(None); dock.hint.set(None); dragging_cursor(None); }>
+            <div class="dock-float-grip" title=ui.t("dock-move")></div>
             <GroupView dock id tabs floating=true panel/>
             <div class="dock-float-size"
                 on:pointerdown=move |e: ev::PointerEvent| {

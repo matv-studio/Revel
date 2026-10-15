@@ -474,7 +474,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     };
     // Nouvelle collection : nom demandé ; identifiant et dossier (à côté des autres collections)
     // tirés du nom ; champs de départ : titre et adresse ; ouverte dans « Champs ».
-    let new_collection = move |_| {
+    let new_collection = move |_: ()| {
         let existing = cols.get_untracked().unwrap_or_default();
         ui.ask.set(Some(Ask::input(
             ui.now("cms-collection-new", &[]),
@@ -555,6 +555,57 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         ));
     });
 
+    // Menus contextuels : contenu (ouvrir, page, supprimer), collection.
+    let row_menu = move |e: &ev::MouseEvent, file: String, url: Option<String>, label: String| {
+        use crate::ctxmenu::{CtxItem, open as open_menu};
+        let folder =
+            col.with_untracked(|c| c.as_ref().map(|c| c.folder.clone()).unwrap_or_default());
+        let f2 = file.clone();
+        let mut items = vec![
+            CtxItem::new(ui.now("cms-entry-open", &[]), move || {
+                open.set(Some(f2.clone()))
+            })
+            .icon(icons::edit),
+        ];
+        if let Some(u) = url {
+            items.push(
+                CtxItem::new(ui.now("cms-open-page", &[]), move || goto(u.clone()))
+                    .icon(icons::external),
+            );
+        }
+        items.push(
+            CtxItem::new(ui.now("action-delete", &[]), move || {
+                delete.run((folder.clone(), file.clone(), label.clone()))
+            })
+            .icon(icons::trash)
+            .danger()
+            .sep(),
+        );
+        open_menu(ui, e, items);
+    };
+    let col_menu = move |e: &ev::MouseEvent, id: String| {
+        use crate::ctxmenu::{CtxItem, open as open_menu};
+        let (a, b) = (id.clone(), id);
+        let items = vec![
+            CtxItem::new(ui.now("cms-entry-new", &[]), move || {
+                current.set(Some(a.clone()));
+                fields_mode.set(false);
+            })
+            .icon(icons::database),
+            CtxItem::new(ui.now("cms-fields-edit", &[]), move || {
+                current.set(Some(b.clone()));
+                fields_mode.set(true);
+            })
+            .icon(icons::list),
+            CtxItem::new(
+                ui.now("cms-collection-new", &[]),
+                move || new_collection(()),
+            )
+            .icon(icons::plus)
+            .sep(),
+        ];
+        open_menu(ui, e, items);
+    };
     view! {
         <div class="cms" class:has-item=move || if fields_mode.get() { sel_field.get().is_some() } else { open.get().is_some() }
             class:is-fields=move || fields_mode.get()>
@@ -570,6 +621,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                             view! {
                                 <button class="cms-col" class:is-on=move || current.get().as_deref() == Some(id.as_str())
                                     data-collection=c.id.clone() title=c.folder.clone()
+                                    on:contextmenu={ let id = c.id.clone(); move |e: ev::MouseEvent| col_menu(&e, id.clone()) }
                                     on:click=move |_| current.set(Some(id2.clone()))>
                                     <span class="list-icon">{icons::database()}</span>
                                     <span class="list-label">{col_label(&c)}</span>
@@ -582,7 +634,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 <footer class="panel-foot">
                     <span class="panel-foot-text muted"></span>
                     <button class="icon-btn icon-btn--small cms-col-new" title=ui.t("cms-collection-new")
-                        aria-label=ui.t("cms-collection-new") on:click=new_collection>{icons::plus()}</button>
+                        aria-label=ui.t("cms-collection-new") on:click=move |_| new_collection(())>{icons::plus()}</button>
                 </footer>
             </aside>
             <section class="cms-main">
@@ -670,6 +722,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                 view! {
                                                     <tr class="row-link" class:is-on=move || open.get().as_deref() == Some(f2.as_str())
                                                         data-entry=e.file.clone()
+                                                        on:contextmenu={
+                                                            let (file, url, label) = (e.file.clone(), e.url.clone(), entry_title(&e, &title));
+                                                            move |ev: ev::MouseEvent| row_menu(&ev, file.clone(), url.clone(), label.clone())
+                                                        }
                                                         on:click=move |_| open.set(Some(file.clone()))>
                                                         <td class="strong cms-td-title"><div class="cms-title-cell">
                                                             <span class="cms-cell">{entry_title(&e, &title)}</span>

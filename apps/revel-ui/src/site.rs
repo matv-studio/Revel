@@ -15,6 +15,29 @@ pub fn SiteView(site: SiteSummary) -> impl IntoView {
         Route::Site { tab, .. } => tab,
         _ => Tab::Editor,
     });
+    // Sens du passage d'un espace à l'autre (ordre des onglets) : animation de la vue.
+    let order = |t: Tab| match t {
+        Tab::Editor => 0,
+        Tab::Cms => 1,
+        Tab::Locales => 2,
+        Tab::Settings(_) => 3,
+    };
+    let dir = Memo::new(move |prev: Option<&(i32, i32, bool)>| {
+        let now = order(tab.get());
+        let before = prev.map_or(now, |p| p.0);
+        (now, if now < before { -1 } else { 1 }, now != before)
+    });
+    // Rubrique des paramètres changée : sans animation (même espace).
+    let quiet = move || !dir.with_untracked(|d| d.2);
+    // Aperçu fermé quand on change d'espace.
+    Effect::new(move |prev: Option<i32>| {
+        let now = order(tab.get());
+        if prev.is_some_and(|p| p != now) {
+            ui.preview.set(None);
+        }
+        now
+    });
+    on_cleanup(move || ui.preview.set(None));
     let editor_seen = RwSignal::new(false);
     Effect::new(move |_| {
         if tab.get() == Tab::Editor {
@@ -24,18 +47,92 @@ pub fn SiteView(site: SiteSummary) -> impl IntoView {
     let s_editor = site.clone();
     let site = StoredValue::new(site);
     view! {
-        <div class="site-view">
+        <div class="site-view" style=move || format!("--view-dir:{}", dir.get().1)>
             <Show when=move || editor_seen.get()>
                 <div class="view-pane view-pane--editor" class:is-hidden=move || tab.get() != Tab::Editor>
                     <crate::editor::Editor site=s_editor.clone()/>
                 </div>
             </Show>
+            <Show when=move || ui.preview.with(Option::is_some)>
+                <PreviewPane site=site.get_value()/>
+            </Show>
             {move || match tab.get() {
                 Tab::Editor => ().into_any(),
                 Tab::Cms => view! { <div class="view-pane"><crate::cms::CmsView site=site.get_value()/></div> }.into_any(),
                 Tab::Locales => view! { <div class="view-pane view-pane--scroll"><Locales site=site.get_value()/></div> }.into_any(),
-                Tab::Settings(sec) => view! { <div class="view-pane"><SiteSettings site=site.get_value() section=sec/></div> }.into_any(),
+                Tab::Settings(sec) => view! { <div class="view-pane" class:is-quiet=quiet()><SiteSettings site=site.get_value() section=sec/></div> }.into_any(),
             }}
+        </div>
+    }
+}
+
+/// Aperçu du site dans l'espace de travail : la page comme elle sera publiée (scripts actifs),
+/// largeur d'écran au choix, rechargement, ouverture dans une fenêtre, fermeture (Échap).
+#[component]
+fn PreviewPane(site: SiteSummary) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    // Largeur : `None` toute la place, sinon tablette ou mobile.
+    let width = RwSignal::new(None::<u32>);
+    let reload = RwSignal::new(0u32);
+    let url = move || {
+        ui.preview
+            .get()
+            .map(|(base, page)| format!("{base}{}", page.trim_start_matches('/')))
+            .unwrap_or_default()
+    };
+    let page = move || ui.preview.get().map(|p| p.1).unwrap_or_default();
+    let on_key = window_event_listener(leptos::ev::keydown, move |e: web_sys::KeyboardEvent| {
+        if e.key() == "Escape" && ui.ask.with_untracked(Option::is_none) {
+            ui.preview.set(None);
+        }
+    });
+    on_cleanup(move || on_key.remove());
+    let site = StoredValue::new(site);
+    let in_window = move |_| {
+        let s = site.get_value();
+        let env = ui.preview_environment(&s);
+        let p = page();
+        leptos::task::spawn_local(async move {
+            match api::preview(&s.path, &env, Some(&p)).await {
+                Ok(_) => ui.preview.set(None),
+                Err(e) => ui.fail(e),
+            }
+        });
+    };
+    let sizes: [(Option<u32>, &'static str, fn() -> AnyView); 3] = [
+        (None, "editor-bp-desktop-short", icons::desktop),
+        (Some(768), "preview-tablet", icons::tablet),
+        (Some(390), "preview-mobile", icons::mobile),
+    ];
+    view! {
+        <div class="preview-pane" role="region" aria-label=ui.t("preview-open")>
+            <div class="preview-bar">
+                <span class="preview-title">{icons::play()}<span>{ui.t("preview-open")}</span><span class="muted path">{page}</span></span>
+                <div class="segmented" role="group">
+                    {sizes.into_iter().map(|(w, key, icon)| view! {
+                        <button class:is-on=move || width.get() == w title=move || match w {
+                                Some(px) => format!("{} · {px} px", ui.tx(key, &[])),
+                                None => ui.tx(key, &[]),
+                            }
+                            aria-label=ui.t(key) on:click=move |_| width.set(w)>{icon()}</button>
+                    }).collect_view()}
+                </div>
+                <span class="toolbar-spacer"></span>
+                <button class="icon-btn" title=ui.t("preview-reload") aria-label=ui.t("preview-reload")
+                    on:click=move |_| reload.update(|n| *n += 1)>{icons::reset()}</button>
+                <button class="icon-btn" title=move || format!("{} ({})", ui.tx("preview-window", &[]), ui.tx("key-preview-window", &[]))
+                    aria-label=ui.t("preview-window") on:click=in_window>{icons::external()}</button>
+                <button class="btn" title=ui.t("preview-close-help") on:click=move |_| ui.preview.set(None)>{icons::close()}{ui.t("preview-close")}</button>
+            </div>
+            <div class="preview-stage" class:is-device=move || width.get().is_some()>
+                {move || {
+                    let _ = reload.get();
+                    view! {
+                        <iframe class="preview-frame" title=ui.t("preview-open") src=url()
+                            style=move || width.get().map(|w| format!("width:{w}px")).unwrap_or_default()></iframe>
+                    }
+                }}
+            </div>
         </div>
     }
 }

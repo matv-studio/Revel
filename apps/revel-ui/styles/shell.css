@@ -142,7 +142,11 @@
 
 /* Site ouvert : une vue occupe toute la place ; l'éditeur reste en place quand il est caché. */
 .site-view { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.view-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: view-in var(--normal) var(--ease) backwards; }
+/* Passage d'un espace à l'autre : glissement dans le sens des onglets, fondu. */
+@keyframes view-in { from { opacity: 0; transform: translateX(calc(var(--view-dir, 1) * 14px)); } }
+.view-pane.is-quiet { animation: none; }
+@media (prefers-reduced-motion: reduce) { .view-pane { animation: none; } }
 .view-pane.is-hidden { display: none; }
 .view-pane--scroll { overflow-y: auto; }
 .main:has(.site-view) { overflow: hidden; }
@@ -153,3 +157,29 @@
   .view-tab { padding: 0 var(--s-2); }
   .main { margin: 0 4px 4px; }
 }
+
+/* Bouton partagé : action principale et menu (Aperçu). */
+.split-btn { position: relative; display: inline-flex; }
+.split-btn .split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split-btn .split-more { width: 26px; padding: 0; justify-content: center; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: var(--border) solid var(--line); margin-left: -1px; }
+.split-btn .split-more svg.icon { width: 12px; height: 12px; }
+.split-btn.is-on .btn { background: var(--set-bg); border-color: transparent; color: var(--set-text); }
+.split-btn.is-on .btn svg.icon { color: var(--set-text); }
+.preview-menu { left: auto; right: 0; }
+.preview-menu kbd { margin-left: auto; }
+
+/* Aperçu dans l'espace de travail : par-dessus la vue en cours. */
+.preview-pane {
+  position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column;
+  background: var(--bg); animation: view-in var(--normal) var(--ease) backwards;
+}
+.preview-bar {
+  display: flex; align-items: center; gap: var(--s-2); height: 44px; padding: 0 var(--s-3);
+  background: var(--tab-bg); border-bottom: var(--border) solid var(--line);
+}
+.preview-title { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--weight-medium); margin-right: var(--s-2); }
+.preview-title .path { font-weight: var(--weight-regular); font-size: var(--text-xs); }
+.preview-stage { flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--chrome); }
+.preview-stage.is-device { padding: var(--s-4) 0; }
+.preview-frame { border: 0; width: 100%; height: 100%; background: #fff; transition: width var(--normal) var(--ease); }
+.preview-stage.is-device .preview-frame { border-radius: 10px; box-shadow: var(--shadow-dialog); }

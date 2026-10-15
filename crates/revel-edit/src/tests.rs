@@ -756,6 +756,63 @@ fn points_de_rupture() {
     }
 }
 
+#[test]
+fn point_de_rupture_redimensionne() {
+    use revel_model::Breakpoint;
+    let bp = |id: &str, max: Option<u32>| Breakpoint {
+        id: id.into(),
+        max_width: max,
+        min_width: None,
+    };
+    let with_bps = |s: &mut Site| {
+        s.breakpoints = vec![
+            bp("desktop", None),
+            bp("max-860", Some(860)),
+            bp("max-478", Some(478)),
+        ];
+    };
+    let mut s = sample();
+    with_bps(&mut s);
+    let inv = apply(
+        &mut s,
+        &Command::ResizeBreakpoint {
+            id: "max-860".into(),
+            width: 900,
+        },
+    )
+    .unwrap();
+    assert_eq!(s.breakpoints[1].max_width, Some(900));
+    // Règles et commentaire du bloc `@media` suivent.
+    assert!(css(&s).contains("@media (max-width: 900px)"), "{}", css(&s));
+    assert!(!css(&s).contains("860px"));
+    apply(&mut s, &inv).unwrap();
+    assert!(css(&s).contains("@media (max-width: 860px)"));
+    // Ordre de la cascade gardé : pas au-delà d'un voisin, ni sur sa largeur.
+    for w in [478, 400, 50] {
+        assert!(
+            apply(
+                &mut s,
+                &Command::ResizeBreakpoint {
+                    id: "max-860".into(),
+                    width: w,
+                },
+            )
+            .is_err(),
+            "{w}"
+        );
+    }
+    assert!(
+        apply(
+            &mut s,
+            &Command::ResizeBreakpoint {
+                id: "desktop".into(),
+                width: 1200,
+            },
+        )
+        .is_err()
+    );
+}
+
 /// Générateur pseudo-aléatoire reproductible (xorshift).
 struct Rng(u64);
 impl Rng {

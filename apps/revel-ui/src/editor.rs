@@ -62,6 +62,11 @@ enum FromCanvas {
         x: f64,
         y: f64,
     },
+    /// Défilement en cours (une fois par image) : règles.
+    Scrolled {
+        x: f64,
+        y: f64,
+    },
     Computed {
         values: std::collections::HashMap<String, String>,
     },
@@ -196,6 +201,30 @@ pub struct Geo {
 /// Marge autour du cadre (zoom ajusté).
 pub const GUTTER: f64 = 48.0;
 
+/// Guides de colonnes affichés sur la page (grille web : colonnes, gouttière, marges, largeur
+/// maximale du contenu).
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, Deserialize)]
+pub struct Guides {
+    pub on: bool,
+    pub count: u32,
+    pub gutter: u32,
+    pub margin: u32,
+    /// Largeur maximale du contenu (0 : toute la largeur).
+    pub max: u32,
+}
+
+impl Default for Guides {
+    fn default() -> Self {
+        Self {
+            on: false,
+            count: 12,
+            gutter: 24,
+            margin: 24,
+            max: 0,
+        }
+    }
+}
+
 /// État de l'éditeur, partagé par ses panneaux.
 #[derive(Clone, Copy)]
 pub struct Ed {
@@ -225,8 +254,6 @@ pub struct Ed {
     pub drag_pos: RwSignal<(f64, f64)>,
     /// Emplacement de dépôt proposé par le canevas.
     pub drop: RwSignal<Option<DropTarget>>,
-    /// Menu contextuel du canevas ouvert (position dans la fenêtre).
-    pub menu: RwSignal<Option<(f64, f64)>>,
     /// Échelle du zoom ajusté (affichée dans la liste des zooms).
     pub fit: RwSignal<f64>,
     pub selected: RwSignal<Option<Selection>>,
@@ -237,6 +264,12 @@ pub struct Ed {
     pub load: RwSignal<u64>,
     /// Défilement du canevas, rétabli après un rechargement.
     pub scroll: RwSignal<(f64, f64)>,
+    /// Défilement suivi en continu (règles).
+    pub live_scroll: RwSignal<(f64, f64)>,
+    /// Règles en pixels (Ctrl+R).
+    pub rulers: RwSignal<bool>,
+    /// Guides de colonnes.
+    pub guides: RwSignal<Guides>,
     /// Valeurs effectives des propriétés de style de l'élément sélectionné (canevas).
     pub computed: RwSignal<std::collections::HashMap<String, String>>,
     /// Nombre d'éléments de la page qui portent la classe réglée (sélecteur, nombre).
@@ -264,7 +297,8 @@ pub fn style_only(c: &Command) -> bool {
         | Command::InsertStyle { .. }
         | Command::RemoveStyleAt { .. }
         | Command::RemoveRule { .. }
-        | Command::AddRule { .. } => true,
+        | Command::AddRule { .. }
+        | Command::ResizeBreakpoint { .. } => true,
         Command::Batch { commands } => !commands.is_empty() && commands.iter().all(style_only),
         _ => false,
     }
@@ -440,6 +474,12 @@ impl Ed {
                 None => return false,
             },
             ("g", true) => return self.unwrap(ui),
+            // Règles en pixels (Ctrl+R, comme Figma ; le rechargement de la fenêtre est neutralisé).
+            ("r", true) if !k.shift => {
+                let on = !self.rulers.get_untracked();
+                self.rulers.set(on);
+                crate::pref_set("rulers", if on { "1" } else { "0" });
+            }
             // Copier, couper, coller des éléments.
             ("c", true) if !k.shift => return self.copy(ui, false),
             ("x", true) if !k.shift => return self.copy(ui, true),
@@ -1018,13 +1058,19 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         drag: RwSignal::new(None),
         drag_pos: RwSignal::new((0.0, 0.0)),
         drop: RwSignal::new(None),
-        menu: RwSignal::new(None),
         fit: RwSignal::new(1.0),
         selected: RwSignal::new(None),
         hovered: RwSignal::new(None),
         scripts: RwSignal::new(false),
         load: RwSignal::new(0),
         scroll: RwSignal::new((0.0, 0.0)),
+        live_scroll: RwSignal::new((0.0, 0.0)),
+        rulers: RwSignal::new(crate::pref_get("rulers").as_deref() == Some("1")),
+        guides: RwSignal::new(
+            crate::pref_get("guides")
+                .and_then(|g| serde_json::from_str(&g).ok())
+                .unwrap_or_default(),
+        ),
         computed: RwSignal::new(Default::default()),
         count: RwSignal::new(None),
         own_change: RwSignal::new(0.0),
@@ -1104,6 +1150,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             FromCanvas::Ready { path } => {
                 // Navigation impossible dans le canevas : la page est celle demandée.
                 let _ = path;
+                ed.live_scroll.set((0.0, 0.0));
                 ed.post(serde_json::json!({ "type": "watch", "props": crate::styles::watched() }));
                 let (x, y) = ed.scroll.get_untracked();
                 if x != 0.0 || y != 0.0 {
@@ -1132,7 +1179,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 if let Some(f) = ed.frame.get_untracked() {
                     let r = f.get_bounding_client_rect();
                     let s = ed.scale();
-                    ed.menu.set(Some((r.left() + x * s, r.top() + y * s)));
+                    crate::canvas::open_canvas_menu(ui, ed, r.left() + x * s, r.top() + y * s);
                 }
             }
             FromCanvas::Measure { rect } => {
@@ -1171,6 +1218,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 }
             }
             FromCanvas::Scroll { x, y } => ed.scroll.set((x, y)),
+            FromCanvas::Scrolled { x, y } => ed.live_scroll.set((x, y)),
             FromCanvas::Computed { values } => ed.computed.set(values),
             FromCanvas::Count { selector, n } => ed.count.set(Some((selector, n))),
             FromCanvas::Zoom { dy, x, y } => {
@@ -1422,6 +1470,7 @@ fn Toolbar() -> impl IntoView {
             <button class="tool-toggle" class:is-on=move || ed.scripts.get() aria-pressed=move || ed.scripts.get().to_string()
                 title=ui.t("editor-scripts-help") aria-label=ui.t("editor-scripts")
                 on:click=move |_| set_scripts(!ed.scripts.get_untracked())>{icons::code()}</button>
+            <ViewMenu/>
             <div class="toolbar-spacer"></div>
             <crate::dock::PanelsMenu/>
             <details class="bp-menu shortcuts">
@@ -1450,6 +1499,7 @@ fn Toolbar() -> impl IntoView {
                         ("key-zoom-100", "editor-zoom-100"),
                         ("key-zoom-sel", "editor-zoom-selection"),
                         ("key-zoom-wheel", "editor-zoom"),
+                        ("key-rulers", "editor-rulers"),
                         ("key-pan", "editor-pan"),
                         ("key-panels", "dock-hide-all"),
                         ("key-alt-click", "styles-reset"),
@@ -1464,6 +1514,73 @@ fn Toolbar() -> impl IntoView {
             <button class="icon-btn btn-redo" title=ui.t("editor-redo") aria-label=ui.t("editor-redo")
                 prop:disabled=move || !can_redo() on:click=move |_| ed.redo(ui)>{icons::redo()}</button>
         </div>
+    }
+}
+
+/// Affichage du canevas : règles en pixels, guides de colonnes (nombre, gouttière, marges,
+/// largeur maximale du contenu). Préférences de l'utilisateur, gardées d'une session à l'autre.
+#[component]
+fn ViewMenu() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let set_guides = move |f: &dyn Fn(&mut Guides)| {
+        ed.guides.update(|g| f(g));
+        if let Ok(j) = serde_json::to_string(&ed.guides.get_untracked()) {
+            crate::pref_set("guides", &j);
+        }
+    };
+    let number = move |label: &'static str,
+                       help: Option<&'static str>,
+                       get: fn(&Guides) -> u32,
+                       put: fn(&mut Guides, u32),
+                       min: u32,
+                       max: u32| {
+        view! {
+            <label class="view-line" title=move || help.map(|h| ui.tx(h, &[])).unwrap_or_default()>
+                <span>{ui.t(label)}</span>
+                <input class="input input--mono view-num" type="number" min=min max=max
+                    prop:value=move || { let v = get(&ed.guides.get()); if v == 0 && min == 0 { String::new() } else { v.to_string() } }
+                    placeholder=move || if min == 0 { "—".to_string() } else { String::new() }
+                    on:change=move |e| {
+                        let v = event_target_value(&e).trim().parse::<u32>().unwrap_or(0).clamp(min, max);
+                        set_guides(&|g| put(g, v));
+                    }/>
+            </label>
+        }
+    };
+    view! {
+        <details class="bp-menu view-menu pop-menu">
+            <summary class="tool-toggle" class:is-on=move || ed.rulers.get() || ed.guides.get().on
+                title=ui.t("editor-view") aria-label=ui.t("editor-view")>{icons::ruler()}</summary>
+            <div class="bp-pop">
+                <label class="view-line" title=move || ui.tx("key-rulers", &[])>
+                    <span>{ui.t("editor-rulers")}</span>
+                    <span class="switch">
+                        <input type="checkbox" prop:checked=move || ed.rulers.get()
+                            on:change=move |e| {
+                                let on = event_target_checked(&e);
+                                ed.rulers.set(on);
+                                crate::pref_set("rulers", if on { "1" } else { "0" });
+                            }/>
+                        <span class="switch-track"></span>
+                    </span>
+                </label>
+                <label class="view-line">
+                    <span>{ui.t("editor-guides")}</span>
+                    <span class="switch">
+                        <input type="checkbox" prop:checked=move || ed.guides.get().on
+                            on:change=move |e| { let on = event_target_checked(&e); set_guides(&|g| g.on = on); }/>
+                        <span class="switch-track"></span>
+                    </span>
+                </label>
+                <div class="view-guides" class:is-off=move || !ed.guides.get().on>
+                    {number("editor-guides-count", None, |g| g.count, |g, v| g.count = v, 1, 24)}
+                    {number("editor-guides-gutter", None, |g| g.gutter, |g, v| g.gutter = v, 0, 200)}
+                    {number("editor-guides-margin", None, |g| g.margin, |g, v| g.margin = v, 0, 400)}
+                    {number("editor-guides-max", Some("editor-guides-max-help"), |g| g.max, |g, v| g.max = v, 0, 4000)}
+                </div>
+            </div>
+        </details>
     }
 }
 
@@ -1541,30 +1658,44 @@ fn BreakpointMenu() -> impl IntoView {
         ed.apply(ui, Command::SetBreakpoints { breakpoints: v }, false);
     };
     view! {
-        <details class="bp-menu">
+        <details class="bp-menu bp-manage">
             <summary class="icon-btn" title=ui.t("editor-bp-manage") aria-label=ui.t("editor-bp-manage")>{icons::plus()}</summary>
             <div class="bp-pop">
                 <p class="panel-title">{ui.t("editor-breakpoints")}</p>
-                {move || list().into_iter().filter(|b| b.id != "desktop").map(|b| {
-                    let id = b.id.clone();
-                    let label = match (b.max_width, b.min_width) {
-                        (Some(w), _) => ui.tx("editor-bp-max", &[("width", w.to_string())]),
-                        (_, Some(w)) => ui.tx("editor-bp-min", &[("width", w.to_string())]),
-                        _ => String::new(),
+                {move || sorted(list()).into_iter().filter(|b| b.id != "desktop").map(|b| {
+                    let (id, id2) = (b.id.clone(), b.id.clone());
+                    let (kind, help, w) = match (b.max_width, b.min_width) {
+                        (Some(w), _) => ("editor-bp-kind-max", "editor-bp-kind-max-help", w),
+                        (_, Some(w)) => ("editor-bp-kind-min", "editor-bp-kind-min-help", w),
+                        _ => ("", "", 0),
                     };
                     view! {
-                        <div class="bp-line">
-                            <span>{label}</span>
-                            <button class="icon-btn" title=ui.t("editor-bp-remove") aria-label=ui.t("editor-bp-remove")
+                        <div class="bp-line bp-edit" data-bp=b.id.clone()>
+                            <span class="bp-kind" title=ui.t(help)>{ui.t(kind)}</span>
+                            <label class="bp-num" title=ui.t("editor-bp-width-help")>
+                                <input class="input input--mono" type="number" min="100" step="1" prop:value=w.to_string()
+                                    on:keydown=move |e: leptos::ev::KeyboardEvent| {
+                                        if e.key() == "Enter" && let Some(t) = e.target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlInputElement>(t).ok()) { let _ = t.blur(); }
+                                    }
+                                    on:change=move |e| {
+                                        let input = event_target::<web_sys::HtmlInputElement>(&e);
+                                        match input.value().trim().parse::<u32>() {
+                                            Ok(v) if v != w => ed.apply(ui, Command::ResizeBreakpoint { id: id2.clone(), width: v }, false),
+                                            _ => input.set_value(&w.to_string()),
+                                        }
+                                    }/>
+                                <span class="muted">"px"</span>
+                            </label>
+                            <button class="icon-btn icon-btn--small" title=ui.t("editor-bp-remove") aria-label=ui.t("editor-bp-remove")
                                 on:click=move |_| remove(id.clone())>{icons::trash()}</button>
                         </div>
                     }
                 }).collect_view()}
                 <div class="bp-add">
-                    <div class="select">
+                    <div class="select" title=move || ui.tx(if kind_max.get() { "editor-bp-kind-max-help" } else { "editor-bp-kind-min-help" }, &[])>
                         <select class="input" on:change=move |e| kind_max.set(event_target_value(&e) == "max")>
-                            <option value="max" selected=move || kind_max.get()>{ui.t("editor-bp-kind-max")}</option>
-                            <option value="min" selected=move || !kind_max.get()>{ui.t("editor-bp-kind-min")}</option>
+                            <option value="max" title=ui.t("editor-bp-kind-max-help") selected=move || kind_max.get()>{ui.t("editor-bp-kind-max")}</option>
+                            <option value="min" title=ui.t("editor-bp-kind-min-help") selected=move || !kind_max.get()>{ui.t("editor-bp-kind-min")}</option>
                         </select>
                     </div>
                     <input class="input input--mono" inputmode="numeric" placeholder="px" prop:value=move || width.get()

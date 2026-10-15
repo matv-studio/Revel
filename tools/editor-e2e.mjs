@@ -320,6 +320,37 @@ try {
     await page.click('.dock-tab[data-panel="assets"]');
     await dragTo('.dock-tab[data-panel="assets"]', '.canvas-area', { x: 200, y: 160 });
     check('espace de travail : panneau détaché en fenêtre flottante', !!(await page.$('.dock-float .dock-tab[data-panel="assets"]')));
+    // Fenêtre déplacée par son bandeau (onglet seul compris), puis ancrée avec Maj.
+    const fpos = () => page.$eval('.dock-float', (f) => [parseFloat(f.style.left), parseFloat(f.style.top)]);
+    const f0 = await fpos();
+    const ft = await page.locator('.dock-float .dock-tab').boundingBox();
+    await page.mouse.move(ft.x + ft.width / 2, ft.y + ft.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(ft.x + ft.width / 2 + 80, ft.y + ft.height / 2 + 40, { steps: 6 });
+    await page.mouse.up();
+    const f1 = await fpos();
+    check('fenêtre détachée : déplacée par son bandeau', Math.abs(f1[0] - f0[0] - 80) < 2 && Math.abs(f1[1] - f0[1] - 40) < 2, `${f0} → ${f1}`);
+    const fh = await page.locator('.dock-float .dock-head').boundingBox();
+    const rt = await page.locator('.dock-col--right .dock-tabs').first().boundingBox();
+    await page.mouse.move(fh.x + fh.width - 40, fh.y + fh.height / 2);
+    await page.mouse.down();
+    await page.keyboard.down('Shift');
+    await page.mouse.move(rt.x + rt.width / 2, rt.y + rt.height / 2, { steps: 10 });
+    const shiftHint = !!(await page.$('.dock-hint'));
+    await page.mouse.up();
+    await page.keyboard.up('Shift');
+    await page.waitForTimeout(150);
+    check('fenêtre détachée : Maj montre l\'ancrage et range la fenêtre', shiftHint && !!(await inCol('right', 'assets')) && !(await page.$('.dock-float')));
+    // Menu contextuel d'un onglet : détacher, ancrer.
+    await page.click('.dock-tab[data-panel="assets"]', { button: 'right' });
+    await page.waitForSelector('.ctx-menu');
+    const labels = await page.$$eval('.ctx-menu .menu-label', (ls) => ls.map((l) => l.textContent));
+    await page.click('.ctx-menu .menu-item:has-text("Détacher")');
+    await page.waitForSelector('.dock-float .dock-tab[data-panel="assets"]');
+    await page.click('.dock-float .dock-tab[data-panel="assets"]', { button: 'right' });
+    await page.click('.ctx-menu .menu-item:has-text("Ancrer")');
+    await page.waitForFunction(() => !document.querySelector('.dock-float'));
+    check('onglet : menu contextuel (détacher, ancrer, fermer)', labels.join('|') === 'Détacher|Fermer', labels.join('|'));
     // Groupe redimensionné (poignée entre deux groupes de la colonne de gauche).
     const g2 = page.locator('.dock-col--left .dock-group').nth(1);
     const h0 = (await g2.boundingBox()).height;
@@ -380,6 +411,12 @@ try {
     check('calques : flèche vers le bas, élément suivant', after !== 'h1.hero__title', after);
     await page.click('.layers .layer:has-text("h1.hero__title")', { button: 'right' });
     check('calques : menu contextuel', !!(await page.waitForSelector('.context-menu')));
+    // Une ligne par action : icône et libellé alignés, raccourci à droite, sans répétition.
+    const rowsOk = await page.$$eval('.context-menu .context-item', (items) => items.every((it) => {
+      const i = it.querySelector('.menu-icon').getBoundingClientRect(), l = it.querySelector('.menu-label').getBoundingClientRect();
+      return Math.abs((i.top + i.bottom) / 2 - (l.top + l.bottom) / 2) < 3 && !/\(/.test(l.textContent);
+    }));
+    check('calques : menu en lignes (icône, libellé, raccourci)', rowsOk);
     await page.mouse.click(700, 400);
     await page.waitForTimeout(100);
     check('calques : menu contextuel fermé par un clic ailleurs', !(await page.$('.context-menu')));
@@ -471,11 +508,11 @@ try {
 
     // Menu contextuel du canevas : copier, puis coller à côté (Ctrl+V).
     await canvas.locator('.intro-agency__links a').first().click({ button: 'right' });
-    await page.waitForSelector('.canvas-menu');
+    await page.waitForSelector('.ctx-menu');
     check('clic droit dans le canevas : menu de l\'éditeur', true);
     if (shots) await page.screenshot({ path: `${shots}/editeur-menu-canevas.png` });
-    await page.click('.canvas-menu .menu-item:has-text("Copier")');
-    await page.waitForFunction(() => !document.querySelector('.canvas-menu'));
+    await page.click('.ctx-menu .menu-item:has-text("Copier")');
+    await page.waitForFunction(() => !document.querySelector('.ctx-menu'));
     await canvas.locator('.intro-agency__links a').nth(1).click();
     await page.keyboard.press('Control+v');
     f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && document.querySelectorAll('.intro-agency__links a').length === 3, 'collage');
@@ -520,8 +557,45 @@ try {
     await page.waitForTimeout(150);
     const p2 = await pos();
     check('molette autour du cadre : la vue se déplace', Math.abs(p2[1] - p1[1] + 100) < 2, `${p1} → ${p2}`);
+    // Alt+molette hors du cadre, juste après un défilement : zoom, action du navigateur empêchée.
+    await page.evaluate(() => { window.__wheel = []; document.addEventListener('wheel', (e) => window.__wheel.push(e.defaultPrevented)); });
+    const s0 = await page.$eval('iframe.canvas-frame', (e) => e.style.transform);
+    await page.keyboard.down('Alt');
+    await page.mouse.wheel(0, -200);
+    await page.keyboard.up('Alt');
+    await page.waitForFunction((t) => document.querySelector('iframe.canvas-frame').style.transform !== t, s0);
+    check('Alt+molette hors du cadre : zoom', (await page.evaluate(() => window.__wheel)).every(Boolean), await page.$eval('iframe.canvas-frame', (e) => e.style.transform));
     await page.keyboard.press('Shift+Digit1');
     await page.waitForFunction(() => document.querySelector('.editor-zoom select').value === '');
+    // Règles (Ctrl+R) et guides de colonnes.
+    await page.mouse.click(area.x + area.width - 6, area.y + area.height - 10);
+    await page.keyboard.press('Control+r');
+    await page.waitForSelector('.canvas-rulers canvas.ruler--top');
+    await page.click('.view-menu summary');
+    await page.click('.view-menu .view-line:nth-child(2) .switch');
+    await page.fill('.view-menu .view-guides .view-line:nth-child(1) input', '4');
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(() => document.querySelectorAll('.column-guide').length === 4);
+    await page.mouse.click(area.x + area.width - 6, area.y + area.height - 10);
+    check('règles (Ctrl+R), guides de colonnes, menu fermé au clic ailleurs', !(await page.$('.view-menu[open]')));
+    await page.keyboard.press('Control+r');
+    await page.click('.view-menu summary');
+    await page.click('.view-menu .view-line:nth-child(2) .switch');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.canvas-rulers') && !document.querySelector('.column-guide') && !document.querySelector('.view-menu[open]'));
+    // Aperçu dans l'espace de travail, à la page affichée ; Échap le ferme.
+    await page.click('.preview-split .split-main');
+    await page.waitForSelector('.preview-pane iframe.preview-frame');
+    const psrc = await page.getAttribute('.preview-frame', 'src');
+    const pframe = await (await page.$('.preview-frame')).contentFrame();
+    await pframe.waitForLoadState();
+    const ptitle = await pframe.title();
+    await page.click('.preview-pane .segmented button:nth-child(3)');
+    await page.waitForFunction(() => Math.abs(document.querySelector('.preview-frame').getBoundingClientRect().width - 390) < 2).catch(() => {});
+    const pw = await page.$eval('.preview-frame', (f) => f.getBoundingClientRect().width);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.preview-pane'));
+    check('aperçu dans l\'espace de travail (page affichée, largeur mobile, Échap)', psrc.includes('/__preview/') && ptitle.length > 0 && Math.abs(pw - 390) < 2, `${psrc} « ${ptitle} » ${pw}`);
 
     // Vues du site : CMS puis retour à l'éditeur sans recharger le canevas.
     await frameOf().evaluate(() => { window.__keep = 1; });
@@ -637,6 +711,8 @@ try {
   // Point de rupture 600 : nouvelle règle placée dans la cascade.
   const bps2 = await page.$$('.editor-toolbar .segmented button');
   await bps2[bps2.length - 1].click();
+  // Fin du glissement du cadre vers la nouvelle largeur.
+  await page.waitForFunction(() => !document.querySelector('.canvas-area.is-resizing'));
   await page.waitForTimeout(400);
   await styleInput('font-size').fill('40px');
   await styleInput('font-size').press('Enter');
@@ -658,13 +734,23 @@ try {
   await page.click('.bp-add .btn');
   await page.waitForFunction(() => [...document.querySelectorAll('.editor-toolbar .segmented .bp-width')].some((e) => e.textContent === '480'));
   check('points de rupture : 480 px ajouté', JSON.stringify((await invoke('edit_open')).site.breakpoints).includes('max-480'));
-  await page.click('.bp-line:has-text("480") .icon-btn');
+  await page.click('.bp-edit[data-bp="max-480"] .icon-btn');
   await page.waitForFunction(() => ![...document.querySelectorAll('.editor-toolbar .segmented .bp-width')].some((e) => e.textContent === '480'));
-  await page.click('.bp-line:has-text("600") .icon-btn');
+  // Largeur modifiée dans sa case : les règles du point de rupture suivent ; annulée.
+  await page.fill('.bp-edit[data-bp="max-600"] input', '620');
+  await page.press('.bp-edit[data-bp="max-600"] input', 'Enter');
+  await page.waitForFunction(() => [...document.querySelectorAll('.editor-toolbar .segmented .bp-width')].some((e) => e.textContent === '620'));
+  const site620 = (await invoke('edit_open')).site;
+  const media620 = rulesOf(site620, '.hero__title').map(([it]) => it.media).filter(Boolean);
+  check('points de rupture : largeur modifiée, règles déplacées avec elle', media620.includes('(max-width: 620px)') && !media620.includes('(max-width: 600px)'), media620.join(' ; '));
+  await page.click('.editor-toolbar .btn-undo');
+  await page.waitForFunction(() => [...document.querySelectorAll('.editor-toolbar .segmented .bp-width')].some((e) => e.textContent === '600'));
+  await page.click('.bp-manage > summary');
+  await page.click('.bp-edit[data-bp="max-600"] .icon-btn');
   await page.waitForSelector('.notice--error');
   check('points de rupture : retrait refusé quand des styles l\'utilisent', JSON.stringify((await invoke('edit_open')).site.breakpoints).includes('max-600'));
   await page.click('.notice--error .icon-btn');
-  await page.click('.bp-menu > summary');
+  check('points de rupture : menu fermé par un clic ailleurs', !(await page.$('.bp-menu[open]')));
   if (shots) await page.screenshot({ path: `${shots}/editeur-styles.png` });
   // Aucun libellé tronqué dans l'inspecteur (sections dépliées).
   for (const d of await page.$$('.dock-panel[data-panel="styles"] details:not([open]) > summary')) await d.click().catch(() => {});

@@ -104,7 +104,7 @@
   --bg: var(--gray-900);            /* fond de l'application, canevas */
   --surface: var(--gray-850);       /* panneaux, barres d'outils */
   --chrome: #2a2a2a;                /* cadre de la fenêtre et barre supérieure, autour du plateau */
-  --stage-line: #3a3a3a;            /* contour du plateau et de l'onglet actif */
+  --stage-line-base: #3a3a3a;            /* contour du plateau et de l'onglet actif */
   --surface-raised: var(--gray-800);/* sections, champs */
   --surface-hover: var(--gray-750);
   --surface-active: var(--gray-700);
@@ -133,7 +133,7 @@
   --bg: var(--gray-100);
   --surface: var(--gray-0);
   --chrome: #e3e3e3;
-  --stage-line: #cfcfcf;
+  --stage-line-base: #cfcfcf;
   --surface-raised: var(--gray-0);
   --surface-hover: var(--gray-50);
   --surface-active: var(--gray-150);
@@ -161,7 +161,7 @@
     --bg: var(--gray-100);
     --surface: var(--gray-0);
   --chrome: #e3e3e3;
-  --stage-line: #cfcfcf;
+  --stage-line-base: #cfcfcf;
     --surface-raised: var(--gray-0);
     --surface-hover: var(--gray-50);
     --surface-active: var(--gray-150);
@@ -194,5 +194,7 @@
   --danger-solid-ink: #ffffff;
   --primary-ink: var(--accent-ink, var(--inverse-ink));
   --focus: var(--accent, var(--text-muted));
+  /* Contour du plateau et de l'onglet actif : couleur d'accent si elle est réglée. */
+  --stage-line: var(--accent, var(--stage-line-base));
   --selection: color-mix(in srgb, var(--accent, var(--text)) 14%, transparent);
 }

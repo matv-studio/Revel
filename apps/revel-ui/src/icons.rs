@@ -323,6 +323,13 @@ pub fn search() -> AnyView {
     svg(r#"<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/>"#)
 }
 
+/// Affichage du canevas (règles, guides).
+pub fn ruler() -> AnyView {
+    svg(
+        r#"<rect x="1.75" y="5.25" width="12.5" height="5.5" rx="1"/><path d="M4.5 5.25v2.25M7 5.25v1.5M9.5 5.25v2.25M12 5.25v1.5"/>"#,
+    )
+}
+
 /// Champ date.
 pub fn calendar() -> AnyView {
     svg(

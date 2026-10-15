@@ -70,6 +70,34 @@ pub fn Home() -> impl IntoView {
             ui.reload_recents();
         });
     };
+    // Menu contextuel d'un site : ouvrir, paramètres, afficher le dossier, retirer de la liste.
+    let site_menu = move |e: &leptos::ev::MouseEvent, path: String| {
+        use crate::ctxmenu::{CtxItem, open};
+        let (a, b, c, d) = (path.clone(), path.clone(), path.clone(), path);
+        let items = vec![
+            CtxItem::new(ui.now("action-edit-site", &[]), move || {
+                open_path(a.clone())
+            })
+            .icon(icons::edit),
+            CtxItem::new(ui.now("site-settings", &[]), move || {
+                open_settings(b.clone())
+            })
+            .icon(icons::settings),
+            CtxItem::new(ui.now("export-reveal", &[]), move || {
+                let p = c.clone();
+                leptos::task::spawn_local(async move {
+                    if let Err(e) = api::reveal(&p).await {
+                        ui.fail(e);
+                    }
+                });
+            })
+            .icon(icons::folder),
+            CtxItem::new(ui.now("action-forget", &[]), move || forget(d.clone()))
+                .icon(icons::close)
+                .sep(),
+        ];
+        open(ui, e, items);
+    };
     let query = RwSignal::new(String::new());
     // Vue en grille ou en liste (préférence gardée dans ce navigateur).
     let grid = RwSignal::new(
@@ -188,6 +216,7 @@ pub fn Home() -> impl IntoView {
                                     let opened = r.opened_at.clone();
                                     view! {
                                         <tr class="row-link site-open" data-site=r.path.clone() title=ui.t("action-edit-site")
+                                            on:contextmenu={ let p = r.path.clone(); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone()) }
                                             on:click=move |_| open_path(p.clone())>
                                             <td class="strong">
                                                 <span class="site-dot" style=format!("--hue:{}", hue(&r.name))></span>
@@ -219,6 +248,7 @@ pub fn Home() -> impl IntoView {
                                     <article class="site-card site-open" data-site=r.path.clone() title=r.path.clone()
                                         tabindex="0" style=format!("--hue:{}", hue(&r.name))
                                         on:click=move |_| open_path(p.clone())
+                                        on:contextmenu={ let p = r.path.clone(); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone()) }
                                         on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { open_path(p4.clone()) }>
                                         <div class="site-thumb"><span class="site-mono">{mono(&r.name)}</span></div>
                                         <div class="site-info">

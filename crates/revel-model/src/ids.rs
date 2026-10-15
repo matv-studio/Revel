@@ -291,6 +291,7 @@ mod tests {
                 },
             ],
             draft: false,
+            code: Default::default(),
             name: None,
         });
         s.components

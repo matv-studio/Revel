@@ -36,6 +36,7 @@ fn sample() -> Site {
             el("footer", &[], vec![]),
         ],
         draft: false,
+        code: Default::default(),
         name: None,
     });
     s.components.push(Component::new(
@@ -1676,6 +1677,79 @@ fn historique_par_groupe() {
     assert_eq!(
         s.locales[0].texts.get("Carte").map(String::as_str),
         Some("Map")
+    );
+}
+
+#[test]
+fn reglages_du_site() {
+    let mut s = sample();
+    s.locales.push(revel_model::Locale::new("en"));
+    let before = json(&s);
+    let info = |name: &str, url: Option<&str>, lang: &str| Command::SetSiteInfo {
+        name: name.into(),
+        base_url: url.map(str::to_string),
+        default_locale: lang.into(),
+        typography: Some("fr".into()),
+    };
+    let inv = apply(
+        &mut s,
+        &info(" Alunites ", Some(" https://alunites.com/ "), "fr"),
+    )
+    .unwrap();
+    assert_eq!(s.name, "Alunites");
+    assert_eq!(s.base_url.as_deref(), Some("https://alunites.com"));
+    assert_eq!(s.settings.typography.as_deref(), Some("fr"));
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+    // Refusés : nom vide, adresse sans http(s), langue déjà utilisée par une autre langue.
+    assert!(apply(&mut s, &info(" ", None, "fr")).is_err());
+    assert!(apply(&mut s, &info("A", Some("alunites.com"), "fr")).is_err());
+    assert!(apply(&mut s, &info("A", None, "en")).is_err());
+    assert!(apply(&mut s, &info("A", None, "x y")).is_err());
+    assert_eq!(json(&s), before);
+    // Langue principale changée ; adresse retirée (vide).
+    let inv = apply(&mut s, &info("A", Some(""), "de")).unwrap();
+    assert_eq!(
+        (s.default_locale.as_str(), s.base_url.as_deref()),
+        ("de", None)
+    );
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+    // Code ajouté au site et à une page.
+    let code = |head: &str| revel_model::CustomCode {
+        head: head.into(),
+        body: String::new(),
+    };
+    let inv = apply(
+        &mut s,
+        &Command::SetCode {
+            page: None,
+            code: code("<meta name=\"a\">\n"),
+        },
+    )
+    .unwrap();
+    assert_eq!(s.settings.code.head, "<meta name=\"a\">");
+    apply(&mut s, &inv).unwrap();
+    let inv = apply(
+        &mut s,
+        &Command::SetCode {
+            page: Some("accueil".into()),
+            code: code("<style></style>"),
+        },
+    )
+    .unwrap();
+    assert_eq!(s.pages[0].code.head, "<style></style>");
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+    assert!(
+        apply(
+            &mut s,
+            &Command::SetCode {
+                page: Some("absente".into()),
+                code: code("x"),
+            }
+        )
+        .is_err()
     );
 }
 

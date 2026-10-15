@@ -340,3 +340,21 @@ d'annulation. Qualité : bonne sur les phrases, faible sur les fragments isolés
 [modèles Helsinki-NLP — Hugging Face](https://huggingface.co/Helsinki-NLP), [Embedding additional files —
 Tauri](https://v2.tauri.app/develop/resources/).
 
+**D-37 — 15/10/2026 — prise.** **Réglages du site (3.9) : identité, code personnalisé, polices.** Nom,
+adresse publique (`https://…`, sans `/` final, vérifiée) et langue principale (code valide, absent des autres
+langues) se modifient comme toute commande (`SetSiteInfo`, annulable), avec la typographie française. Code
+personnalisé (comme Webflow) : celui du site, puis celui de la page, ajoutés avant `</head>` et avant `</body>`
+de chaque page HTML, après la typographie et les liens de langue (gardé tel qu'écrit) ; présent dans l'aperçu et
+le site publié, jamais dans le canevas (scripts arrêtés). Polices (D-24) : une police du site est une famille
+déclarée par des règles `@font-face` de la feuille de style ; Revel les liste (graisses, styles, plages des
+polices variables, taille des fichiers, utilisation par `font-family`, `font` ou une variable CSS). Ajout depuis
+Google Fonts : catalogue lu sur `fonts.google.com/metadata/fonts` (gardé un mois dans les réglages pour le
+travail sans connexion), feuille de l'API CSS2, fichiers WOFF2 des graisses choisies et des seuls jeux de
+caractères utiles aux langues du site (latin et latin étendu, plus cyrillique, grec ou vietnamien selon les
+langues), copiés dans `<médias>/fonts/<famille>/` ; import de fichiers WOFF2, WOFF, TTF, OTF (contenu vérifié ;
+graisse et style lus dans le nom du fichier, modifiables). Règles insérées après les `@import` (sinon ignorés).
+Ajout et retrait sont une seule étape d'annulation chacun : les fichiers sont déplacés (`MoveFiles`) entre leur
+place et `.revel/`, dossiers vidés retirés. Sources : [Custom code in head and body tags — Webflow Help
+Center](https://help.webflow.com/site-settings/custom-code), [CSS API update — Google
+Fonts](https://developers.google.com/fonts/docs/css2).
+

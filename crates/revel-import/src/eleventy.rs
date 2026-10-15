@@ -343,6 +343,7 @@ pub fn import(root: &Path, profile: &Profile) -> Result<(Site, Report), ImportEr
             computed,
             body,
             draft: false,
+            code: Default::default(),
             name: None,
         });
         report.pages += 1;

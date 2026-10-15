@@ -597,7 +597,10 @@ fn HostForm(
     view! {
         <form class="stack" on:submit=move |e| { e.prevent_default(); if complete() { save.run(()) } }>
             <div class="section-head">
-                <h2>{title}</h2>
+                <h2 title=move || match kind() {
+                    Kind::Sftp => ui.tx("publish-form-help", &[]),
+                    Kind::Github => ui.tx("publish-form-help-github", &[]),
+                }>{title}</h2>
                 <Show when=move || is_new>
                     <div class="segmented" role="radiogroup" aria-label=ui.t("publish-kind")>
                         {kind_btn(Kind::Sftp, "publish-kind-sftp")}
@@ -605,10 +608,6 @@ fn HostForm(
                     </div>
                 </Show>
             </div>
-            <p class="muted help">{move || match kind() {
-                Kind::Sftp => ui.tx("publish-form-help", &[]),
-                Kind::Github => ui.tx("publish-form-help-github", &[]),
-            }}</p>
             <Show when=move || kind() == Kind::Github>
                 <div class="subsection">
                     <span class="label">{ui.t("github-account")}</span>

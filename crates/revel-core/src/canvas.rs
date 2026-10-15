@@ -330,7 +330,7 @@ impl Core {
 
     /// Dossier des médias du site : dossier copié tel quel publié sous `/media` (sinon le premier
     /// dossier copié tel quel) ; sans dossier copié, `media/` est créé et déclaré.
-    fn media_dir(&self, path: &Path) -> Result<(PathBuf, String)> {
+    pub(crate) fn media_dir(&self, path: &Path) -> Result<(PathBuf, String)> {
         let found = self.with_project(path, |p| {
             let pick = p
                 .site

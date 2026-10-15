@@ -534,6 +534,48 @@ pub enum TranslateEvent {
     Preparing,
 }
 
+/// Police du site (3.9, D-24) : famille déclarée par des règles `@font-face` de la feuille de
+/// style, fichiers servis par le site.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FontFamily {
+    pub family: String,
+    pub faces: Vec<FontFace>,
+    /// Règles de style qui l'utilisent (`font-family`).
+    pub uses: usize,
+    /// Taille des fichiers, en octets.
+    pub size: u64,
+}
+
+/// Graisse et style d'une police (plusieurs règles `@font-face` : jeux de caractères).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FontFace {
+    /// `400`, `700`, `100 900` (police variable).
+    pub weight: String,
+    /// `normal` ou `italic`.
+    pub style: String,
+    /// Adresses des fichiers.
+    pub files: Vec<String>,
+}
+
+/// Police du catalogue de Google Fonts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoogleFont {
+    pub family: String,
+    pub category: String,
+    /// `400`, `400i`, `700`…
+    pub variants: Vec<String>,
+}
+
+/// Fichier de police importé (contenu en base64), graisse et style choisis.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FontUpload {
+    pub name: String,
+    pub data: String,
+    pub weight: String,
+    #[serde(default)]
+    pub italic: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

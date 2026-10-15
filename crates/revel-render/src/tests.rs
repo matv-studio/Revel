@@ -116,6 +116,7 @@ fn site() -> Site {
         ),
         computed: Default::default(),
         draft: false,
+        code: Default::default(),
         name: None,
     });
     s.pages.push(Page {
@@ -134,6 +135,7 @@ fn site() -> Site {
         .nodes,
         computed: Default::default(),
         draft: false,
+        code: Default::default(),
         name: None,
     });
     s
@@ -196,6 +198,32 @@ fn site_complet() {
     assert!(sm.contains("<loc>https://alunites.com/project/a/</loc>"));
     assert!(sm.contains("<loc>https://alunites.com/</loc>"));
     assert!(!sm.contains("sitemap.xml"));
+}
+
+#[test]
+fn code_ajoute() {
+    let mut s = site();
+    s.settings.code = revel_model::CustomCode {
+        head: "<meta name=\"verif\" content=\"x'y\">".into(),
+        body: "<script>track('site')</script>".into(),
+    };
+    s.pages[0].code.body = "<script>track('page')</script>".into();
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    // Avant `</head>` et `</body>`, site puis page, sans retouche typographique.
+    let head = home.find("<meta name=\"verif\" content=\"x'y\">\n</head>");
+    let site_js = home.find("<script>track('site')</script>");
+    let page_js = home.find("<script>track('page')</script>\n</body>");
+    assert!(
+        head.is_some() && site_js.is_some() && page_js.is_some(),
+        "{home}"
+    );
+    assert!(site_js < page_js);
+    // Pas dans le canevas de l'éditeur (scripts arrêtés).
+    let e = render_editor(&input(&s, vec![]), "/", &EditorOptions { scripts: false })
+        .unwrap()
+        .unwrap();
+    assert!(!e.html.contains("track("), "{}", e.html);
 }
 
 #[test]
@@ -435,6 +463,7 @@ fn pages_brouillon_indexation_et_plan_du_site() {
             "<html><head><title>x</title></head><body><p>{{ seo.title }}</p></body></html>",
         ),
         draft: false,
+        code: Default::default(),
         name: None,
     };
     let mut accueil = page("index", "/");
@@ -686,6 +715,7 @@ fn langues() {
         ),
         computed: Default::default(),
         draft: false,
+        code: Default::default(),
         name: None,
     });
     s.ensure_ids();

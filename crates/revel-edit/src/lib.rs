@@ -74,6 +74,9 @@ pub enum EditError {
     /// Code de langue invalide, déjà présent ou langue inconnue.
     #[error("langue refusée : {0}")]
     InvalidLocale(String),
+    /// Réglage du site refusé (nom vide, adresse invalide).
+    #[error("{0}")]
+    InvalidSite(String),
 }
 
 impl EditError {
@@ -101,6 +104,7 @@ impl EditError {
             Self::InvalidProp(_) => "error-edit-prop",
             Self::SelfUse(_) => "error-edit-self-use",
             Self::InvalidLocale(_) => "error-edit-locale",
+            Self::InvalidSite(_) => "error-edit-site",
         }
     }
 }

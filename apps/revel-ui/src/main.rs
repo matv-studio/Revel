@@ -29,6 +29,7 @@ mod publish;
 mod richtext;
 mod settings;
 mod site;
+mod sitesettings;
 mod styles;
 mod variables;
 

@@ -296,6 +296,65 @@ fn exec(
                 text: old,
             })
         }
+        Command::MoveFiles { moves } => {
+            use revel_edit::EditError::Bound;
+            let inside =
+                |rel: &str| -> std::result::Result<std::path::PathBuf, revel_edit::EditError> {
+                    let p = Path::new(rel);
+                    if rel.is_empty()
+                        || p.is_absolute()
+                        || p.components()
+                            .any(|c| !matches!(c, std::path::Component::Normal(_)))
+                    {
+                        return Err(Bound(format!("chemin refusé : {rel}")));
+                    }
+                    Ok(project.dir.join(p))
+                };
+            let mut done: Vec<(String, String)> = Vec::new();
+            for (from, to) in moves {
+                let r = (|| {
+                    let (a, b) = (inside(from)?, inside(to)?);
+                    if b.exists() {
+                        return Err(Bound(format!("fichier déjà présent : {to}")));
+                    }
+                    if let Some(d) = b.parent() {
+                        std::fs::create_dir_all(d).map_err(|e| Bound(e.to_string()))?;
+                    }
+                    std::fs::rename(&a, &b).map_err(|e| Bound(format!("{from} : {e}")))
+                })();
+                if let Err(e) = r {
+                    // Déplacements déjà faits remis en place.
+                    for (f, t) in done.iter().rev() {
+                        let _ = std::fs::rename(project.dir.join(t), project.dir.join(f));
+                    }
+                    return Err(e);
+                }
+                done.push((from.clone(), to.clone()));
+            }
+            // Dossiers vidés retirés (dossier d'une police), jamais un dossier copié tel quel ni
+            // le dossier du site.
+            let roots: Vec<std::path::PathBuf> = project
+                .site
+                .passthrough
+                .iter()
+                .map(|p| project.dir.join(&p.from))
+                .collect();
+            for (from, _) in &done {
+                let mut d = project.dir.join(from);
+                while let Some(parent) = d.parent() {
+                    if parent == project.dir
+                        || roots.iter().any(|r| r == parent)
+                        || std::fs::remove_dir(parent).is_err()
+                    {
+                        break;
+                    }
+                    d = parent.to_path_buf();
+                }
+            }
+            Ok(Command::MoveFiles {
+                moves: done.into_iter().rev().map(|(f, t)| (t, f)).collect(),
+            })
+        }
         Command::WriteCmsConfig { text } => {
             let old = pagesyml::read(&project.dir).map_err(revel_edit::EditError::Bound)?;
             pagesyml::write(&project.dir, text.as_deref()).map_err(revel_edit::EditError::Bound)?;
@@ -391,6 +450,7 @@ fn external(c: &Command) -> bool {
         | Command::RemoveCmsCollection { .. }
         | Command::WriteCmsConfig { .. }
         | Command::SetDataValue { .. }
+        | Command::MoveFiles { .. }
         | Command::WriteDataFile { .. } => true,
         _ => false,
     }

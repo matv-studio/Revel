@@ -105,12 +105,17 @@ pub fn Settings() -> impl IntoView {
 }
 
 /// Taille lisible (Mo, Go).
-fn size(ui: Ui, bytes: u64) -> String {
+pub(crate) fn size(ui: Ui, bytes: u64) -> String {
     let mb = bytes as f64 / 1_000_000.0;
     if mb >= 1000.0 {
         ui.now("size-gb", &[("n", format!("{:.1}", mb / 1000.0))])
-    } else {
+    } else if mb >= 1.0 {
         ui.now("size-mb", &[("n", format!("{mb:.0}"))])
+    } else {
+        ui.now(
+            "size-kb",
+            &[("n", format!("{:.0}", (bytes as f64 / 1000.0).max(1.0)))],
+        )
     }
 }
 

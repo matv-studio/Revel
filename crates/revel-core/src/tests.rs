@@ -25,6 +25,7 @@ fn sample_site(dir: &Path, c: &Core) -> PathBuf {
             el("h1", &[], vec![out("title")]),
         ],
         draft: false,
+        code: Default::default(),
         name: None,
     });
     p.save().unwrap();
@@ -1182,6 +1183,7 @@ fn pages_et_referencement() {
             computed: [("seo".to_string(), "pages.agence.seo".to_string())].into(),
             body: vec![el("p", &[], vec![out("seo.title")])],
             draft: false,
+            code: Default::default(),
             name: None,
         });
         p.save().unwrap();
@@ -1435,6 +1437,89 @@ fn modeles_de_site() {
 }
 
 const PAGES_YML: &str = "# Contenus\ncontent:\n  - name: projets\n    label: Projets\n    type: collection\n    path: contenus/projets\n    fields:\n      - name: title\n        type: string\n  - name: accueil\n    label: Accueil\n    type: file\n    path: donnees/pages/accueil.yml\n    fields:\n      - name: hero\n        type: object\n        fields:\n          - name: title\n            type: string\n";
+
+#[test]
+fn polices_importees_retirees_annulees() {
+    use base64::Engine as _;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.stylesheet = Some(revel_model::Stylesheet {
+            url: "/css/site.css".into(),
+            source: None,
+            items: revel_style::parse(
+                "@import url(\"/x.css\");\nh1 { font-family: \"Brand Sans\", sans-serif; }",
+            )
+            .unwrap(),
+        });
+        p.save().unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    let sheet0 = c.edit_site(&site).unwrap().stylesheet;
+    let woff2 = |n: u8| {
+        base64::engine::general_purpose::STANDARD.encode([b'w', b'O', b'F', b'2', n, n, n, n])
+    };
+    let up = |name: &str, weight: &str, italic: bool, n: u8| revel_protocol::FontUpload {
+        name: name.into(),
+        data: woff2(n),
+        weight: weight.into(),
+        italic,
+    };
+    // Fichier refusé (contenu qui n'est pas une police).
+    let bad = revel_protocol::FontUpload {
+        name: "x.woff2".into(),
+        data: base64::engine::general_purpose::STANDARD.encode(b"<html>"),
+        weight: "400".into(),
+        italic: false,
+    };
+    assert!(c.fonts_add_files(&site, "Brand Sans", &[bad]).is_err());
+    c.fonts_add_files(
+        &site,
+        "Brand Sans",
+        &[
+            up("BrandSans-Regular.woff2", "400", false, 1),
+            up("BrandSans-BoldItalic.woff2", "700", true, 2),
+        ],
+    )
+    .unwrap();
+    let fonts = c.fonts(&site).unwrap();
+    assert_eq!(fonts.len(), 1);
+    assert_eq!(fonts[0].family, "Brand Sans");
+    assert_eq!(fonts[0].uses, 1);
+    assert_eq!(fonts[0].size, 16);
+    assert_eq!(
+        fonts[0]
+            .faces
+            .iter()
+            .map(|f| (f.weight.as_str(), f.style.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("400", "normal"), ("700", "italic")]
+    );
+    let file = site.join("media/fonts/brand-sans/brandsans-regular.woff2");
+    assert!(file.is_file());
+    // Règles après l'`@import` (sinon il ne serait plus lu).
+    let sheet = c.edit_site(&site).unwrap().stylesheet.unwrap();
+    assert!(
+        matches!(&sheet.items[0], revel_model::StyleItem::Raw { css } if css.starts_with("@import"))
+    );
+    assert!(
+        matches!(&sheet.items[1], revel_model::StyleItem::Raw { css } if css.contains("/media/fonts/brand-sans/brandsans-regular.woff2"))
+    );
+    // Retrait : règles retirées, fichiers rangés ; annuler remet tout.
+    c.fonts_remove(&site, "brand sans").unwrap();
+    assert!(c.fonts(&site).unwrap().is_empty());
+    assert!(!file.exists());
+    c.edit_undo(&site).unwrap();
+    assert!(file.is_file());
+    assert_eq!(c.fonts(&site).unwrap()[0].faces.len(), 2);
+    // Annuler l'ajout : fichiers sortis du site, document identique.
+    c.edit_undo(&site).unwrap();
+    assert!(!file.exists());
+    assert!(c.fonts(&site).unwrap().is_empty());
+    assert_eq!(c.edit_site(&site).unwrap().stylesheet, sheet0);
+}
 
 #[test]
 fn traduction_automatique_lots_et_relecture() {

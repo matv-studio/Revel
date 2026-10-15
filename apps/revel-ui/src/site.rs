@@ -147,8 +147,8 @@ const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::Export, "settings-export", None),
     (Section::Seo, "settings-seo", None),
     (Section::Redirects, "settings-redirects", None),
-    (Section::Fonts, "settings-fonts", Some(3)),
-    (Section::Code, "settings-code", Some(3)),
+    (Section::Fonts, "settings-fonts", None),
+    (Section::Code, "settings-code", None),
     (Section::Forms, "settings-forms", Some(5)),
     (Section::Backups, "settings-backups", Some(3)),
 ];
@@ -158,7 +158,9 @@ const SECTIONS: &[(Section, &str, Option<u8>)] = &[
 fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let body = match section {
-        Section::General => view! { <General site=site.clone()/> }.into_any(),
+        Section::General => view! { <crate::sitesettings::General site=site.clone()/> }.into_any(),
+        Section::Fonts => view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any(),
+        Section::Code => view! { <crate::sitesettings::Code site=site.clone()/> }.into_any(),
         Section::Publish => view! { <crate::publish::Publish site=site.clone()/> }.into_any(),
         Section::Export => view! { <Export site=site.clone()/> }.into_any(),
         Section::Redirects => view! { <Redirects site=site.clone()/> }.into_any(),
@@ -203,8 +205,6 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
 fn planned_key(s: Section) -> &'static str {
     match s {
         Section::Seo => "settings-seo-planned",
-        Section::Fonts => "settings-fonts-planned",
-        Section::Code => "settings-code-planned",
         Section::Forms => "settings-forms-planned",
         Section::Backups => "settings-backups-planned",
         _ => "settings-general",
@@ -219,80 +219,15 @@ pub fn capitalize(s: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Nom d'une langue dans la langue de l'interface (`fr` -> « Français »).
-pub fn language_name(ui: Ui, code: &str) -> String {
-    let base = code.split(['-', '_']).next().unwrap_or(code).to_lowercase();
-    let key = format!("lang-{base}");
-    let name = ui.tx(&key, &[]);
-    if name == key { code.to_string() } else { name }
-}
-
-/// Paramètres généraux : identité, structure, environnements.
-#[component]
-fn General(site: SiteSummary) -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    // Résumé relu (le site a pu changer dans l'éditeur).
-    let fresh = RwSignal::new(site.clone());
-    let path = site.path.clone();
-    spawn_local(async move {
-        if let Ok(s) = api::open_site(&path).await {
-            fresh.set(s);
-        }
-    });
-    let n_cols = move || {
-        fresh.with(|s| {
-            s.collections
-                .iter()
-                .filter(|c| !c.folder.is_empty())
-                .count()
-        })
-    };
-    view! {
-        <section class="page settings-page">
-            <header class="page-head"><h1>{ui.t("settings-general")}</h1></header>
-            <div class="section">
-                <h2>{ui.t("settings-identity")}</h2>
-                <div class="form-grid">
-                    <span class="label">{ui.t("settings-site-name")}</span>
-                    <span class="strong">{move || fresh.with(|s| s.name.clone())}</span>
-                    <span class="label">{ui.t("settings-site-url")}</span>
-                    <span class="path">{move || fresh.with(|s| s.base_url.clone()).unwrap_or_else(|| "—".into())}</span>
-                    <span class="label">{ui.t("settings-site-lang")}</span>
-                    <span>{move || language_name(ui, &fresh.with(|s| s.locale.clone()))}</span>
-                    <span class="label">{ui.t("settings-site-folder")}</span>
-                    <span class="muted path">{move || fresh.with(|s| s.path.clone())}</span>
-                </div>
-            </div>
-            <div class="section">
-                <h2>{ui.t("overview-structure")}</h2>
-                <dl class="facts">
-                    <div><dt>{ui.t("site-pages")}</dt><dd>{move || fresh.with(|s| s.pages)}</dd></div>
-                    <div><dt>{ui.t("site-layouts")}</dt><dd>{move || fresh.with(|s| s.layouts)}</dd></div>
-                    <div><dt>{ui.t("site-components")}</dt><dd>{move || fresh.with(|s| s.components)}</dd></div>
-                    <div>
-                        <dt>{ui.t("site-collections")}</dt>
-                        <dd><button class="link-btn" title=ui.t("view-cms") on:click=move |_| ui.tab(Tab::Cms)>{n_cols}</button></dd>
-                    </div>
-                </dl>
-            </div>
-            <div class="section">
-                <h2>{ui.t("overview-environments")}</h2>
-                <div class="chips">{move || fresh.with(|s| s.environments.clone()).into_iter().map(|e| view! { <span class="chip">{e}</span> }).collect_view()}</div>
-            </div>
-            <p class="muted help">{move || ui.tx("planned-edit", &[("step", "3".to_string())])}</p>
-        </section>
-    }
-}
-
 /// Document du site pour une rubrique des paramètres : relu à l'ouverture, modifié par des
 /// commandes (même historique que l'éditeur ; l'éditeur relit le document modifié).
 #[derive(Clone, Copy)]
-struct DocSession {
-    doc: RwSignal<Option<revel_model::Site>>,
-    apply: Callback<revel_edit::Command>,
+pub(crate) struct DocSession {
+    pub doc: RwSignal<Option<revel_model::Site>>,
+    pub apply: Callback<revel_edit::Command>,
 }
 
-fn doc_session(ui: Ui, path: String) -> DocSession {
+pub(crate) fn doc_session(ui: Ui, path: String) -> DocSession {
     let doc = RwSignal::new(None::<revel_model::Site>);
     let path = StoredValue::new(path);
     let reload = move || {
@@ -359,9 +294,8 @@ fn Redirects(site: SiteSummary) -> impl IntoView {
     view! {
         <section class="page settings-page">
             <header class="page-head">
-                <h1>{ui.t("settings-redirects")}</h1>
+                <h1 title=ui.t("redirects-help")>{ui.t("settings-redirects")}</h1>
             </header>
-            <p class="muted help">{ui.t("redirects-help")}</p>
             <div class="section section--flush">
                 <table class="table table--compact redirects">
                     <thead><tr><th>{ui.t("redirects-from")}</th><th></th><th>{ui.t("redirects-to")}</th><th></th></tr></thead>
@@ -429,21 +363,26 @@ fn Seo(site: SiteSummary) -> impl IntoView {
     };
     view! {
         <section class="page settings-page">
-            <header class="page-head"><h1>{ui.t("settings-seo")}</h1></header>
+            <header class="page-head"><h1 title=ui.t("seo-pages-help")>{ui.t("settings-seo")}</h1></header>
             <div class="section">
-                <label class="view-line">
-                    <span>{ui.t("seo-sitemap")}</span>
+                <label class="view-line" title=move || ui.tx(if own("/sitemap.xml") { "seo-sitemap-own" } else if no_url() { "seo-sitemap-no-url" } else { "seo-sitemap-help" }, &[])>
+                    <span>
+                        {ui.t("seo-sitemap")}
+                        {move || (own("/sitemap.xml") || no_url()).then(|| view! { <span class="seo-warn">{icons::warning()}</span> })}
+                    </span>
                     <span class="switch">
                         <input type="checkbox" prop:checked=move || !seo().no_sitemap disabled=move || own("/sitemap.xml")
                             on:change=move |e| { let on = event_target_checked(&e); set(&|v| v.no_sitemap = !on) }/>
                         <span class="switch-track"></span>
                     </span>
                 </label>
-                <p class="muted help">{move || ui.tx(if own("/sitemap.xml") { "seo-sitemap-own" } else if no_url() { "seo-sitemap-no-url" } else { "seo-sitemap-help" }, &[])}</p>
             </div>
             <div class="section">
                 <label class="field">
-                    <span class="label">"robots.txt"</span>
+                    <span class="label" title=move || ui.tx(if own("/robots.txt") { "seo-robots-own" } else { "seo-robots-help" }, &[])>
+                        "robots.txt"
+                        {move || own("/robots.txt").then(|| view! { <span class="seo-warn">{icons::warning()}</span> })}
+                    </span>
                     <textarea class="input input--mono" rows="6" disabled=move || own("/robots.txt")
                         placeholder="User-agent: *\nAllow: /"
                         prop:value=move || seo().robots.unwrap_or_default()
@@ -452,9 +391,7 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                             set(&|v| v.robots = (!t.trim().is_empty()).then(|| t.clone()))
                         }></textarea>
                 </label>
-                <p class="muted help">{move || ui.tx(if own("/robots.txt") { "seo-robots-own" } else { "seo-robots-help" }, &[])}</p>
             </div>
-            <p class="muted help">{ui.t("seo-pages-help")}</p>
         </section>
     }
 }

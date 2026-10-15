@@ -303,7 +303,50 @@ fn build_pages(
     Ok(())
 }
 
-/// Dernières retouches d'une page HTML : `noindex`, typographie, langues.
+/// Code ajouté (3.9) : celui du site puis celui de la page, avant `</head>` et `</body>`. Pas
+/// dans le canevas de l'éditeur (scripts arrêtés), seulement dans l'aperçu et le site publié.
+fn custom_code(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String {
+    if b.editor.as_ref().is_some_and(|e| !e.scripts) {
+        return html;
+    }
+    let page = j
+        .page_id
+        .as_deref()
+        .and_then(|id| site.pages.iter().find(|p| p.id == id))
+        .map(|p| &p.code);
+    let join = |f: fn(&revel_model::CustomCode) -> &str| -> String {
+        [Some(&site.settings.code), page]
+            .into_iter()
+            .flatten()
+            .map(f)
+            .filter(|c| !c.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let head = join(|c| &c.head);
+    let body = join(|c| &c.body);
+    let mut html = html;
+    if !head.is_empty() {
+        html = insert_before(&html, "</head>", &head, false);
+    }
+    if !body.is_empty() {
+        html = insert_before(&html, "</body>", &body, true);
+    }
+    html
+}
+
+/// Insère `code` avant la dernière balise fermante `tag` (casse ignorée) ; sans elle : au début
+/// (`at_end` faux) ou à la fin du document.
+fn insert_before(html: &str, tag: &str, code: &str, at_end: bool) -> String {
+    let lower = html.to_ascii_lowercase();
+    match lower.rfind(tag) {
+        Some(i) => format!("{}{code}\n{}", &html[..i], &html[i..]),
+        None if at_end => format!("{html}\n{code}"),
+        None => format!("{code}\n{html}"),
+    }
+}
+
+/// Dernières retouches d'une page HTML : `noindex`, typographie, langues, code ajouté.
 fn finish_html(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String {
     let html = noindex_meta(j, html);
     // Typographie française : pour la langue principale et les autres langues françaises.
@@ -317,7 +360,9 @@ fn finish_html(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String 
     } else {
         html
     };
-    localize_html(b, site, &j.url, html)
+    // Code ajouté en dernier : gardé tel qu'écrit (ni typographie ni liens de langue).
+    let html = localize_html(b, site, &j.url, html);
+    custom_code(b, site, j, html)
 }
 
 /// Page qui existe dans chaque langue : page HTML, sauf la page d'erreur 404.

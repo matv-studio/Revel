@@ -239,6 +239,26 @@ pub enum Command {
     },
     /// Référencement du site (plan du site, `robots.txt`).
     SetSeoSettings { seo: revel_model::SeoSettings },
+    /// Identité du site (3.9) : nom, adresse publique (`https://…`, sans `/` final ; vide :
+    /// aucune), langue principale (code valide, différent des autres langues), typographie
+    /// (`fr` ou aucune).
+    SetSiteInfo {
+        name: String,
+        #[serde(default)]
+        base_url: Option<String>,
+        default_locale: String,
+        #[serde(default)]
+        typography: Option<String>,
+    },
+    /// Fichiers du site déplacés (chemins relatifs au dossier du site : de, vers). Appliquée par
+    /// le cœur : polices mises en place ou rangées dans `.revel/`, de façon annulable.
+    MoveFiles { moves: Vec<(String, String)> },
+    /// Code ajouté (3.9) : au site (`page` absent) ou à une page.
+    SetCode {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        page: Option<String>,
+        code: revel_model::CustomCode,
+    },
     /// Valeur d'un fichier de données (`binding` : source `data`, chemin jusqu'à la clé), clé
     /// créée au besoin, retirée avec `None`. Appliquée par le cœur ; inverse : `WriteDataFile`.
     SetDataValue {
@@ -898,6 +918,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         | Command::RemoveCmsCollection { .. }
         | Command::WriteCmsConfig { .. }
         | Command::SetDataValue { .. }
+        | Command::MoveFiles { .. }
         | Command::WriteDataFile { .. } => Err(EditError::External),
         Command::ResizeBreakpoint { id, width } => {
             let bad = |m: &str| EditError::InvalidBreakpoints(m.to_string());
@@ -1038,6 +1059,62 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         Command::SetSeoSettings { seo } => Ok(Command::SetSeoSettings {
             seo: std::mem::replace(&mut site.settings.seo, seo.clone()),
         }),
+        Command::SetSiteInfo {
+            name,
+            base_url,
+            default_locale,
+            typography,
+        } => {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(EditError::InvalidSite("name".into()));
+            }
+            let url = match base_url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
+                None => None,
+                Some(u) => Some(clean_url(u).ok_or_else(|| EditError::InvalidSite(u.to_string()))?),
+            };
+            let code = default_locale.trim();
+            if !code.eq_ignore_ascii_case(&site.default_locale)
+                && (!revel_model::valid_locale_code(code)
+                    || site
+                        .locales
+                        .iter()
+                        .any(|l| l.code.eq_ignore_ascii_case(code)))
+            {
+                return Err(EditError::InvalidLocale(code.to_string()));
+            }
+            let typo = typography
+                .as_deref()
+                .filter(|t| *t == "fr")
+                .map(str::to_string);
+            Ok(Command::SetSiteInfo {
+                name: std::mem::replace(&mut site.name, name.to_string()),
+                base_url: std::mem::replace(&mut site.base_url, url),
+                default_locale: std::mem::replace(&mut site.default_locale, code.to_string()),
+                typography: std::mem::replace(&mut site.settings.typography, typo),
+            })
+        }
+        Command::SetCode { page, code } => {
+            let clean = revel_model::CustomCode {
+                head: code.head.trim_end().to_string(),
+                body: code.body.trim_end().to_string(),
+            };
+            let slot = match page {
+                None => &mut site.settings.code,
+                Some(id) => {
+                    &mut site
+                        .pages
+                        .iter_mut()
+                        .find(|p| p.id == *id)
+                        .ok_or_else(|| EditError::NotFound(id.clone()))?
+                        .code
+                }
+            };
+            Ok(Command::SetCode {
+                page: page.clone(),
+                code: std::mem::replace(slot, clean),
+            })
+        }
         Command::AddLayout { layout, index } => {
             if site.layouts.iter().any(|l| l.id == layout.id) {
                 return Err(EditError::DuplicateId(layout.id.clone()));
@@ -1470,4 +1547,19 @@ impl Command {
             _ => false,
         }
     }
+}
+
+/// Adresse publique d'un site : `http(s)://hôte[/chemin]`, sans `/` final.
+pub fn clean_url(u: &str) -> Option<String> {
+    let u = u.trim().trim_end_matches('/');
+    let rest = u
+        .strip_prefix("https://")
+        .or_else(|| u.strip_prefix("http://"))?;
+    let host = rest.split('/').next().unwrap_or_default();
+    let ok = !host.is_empty()
+        && !rest.contains(char::is_whitespace)
+        && host
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | ':' | '[' | ']'));
+    ok.then(|| u.to_string())
 }

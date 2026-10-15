@@ -412,6 +412,64 @@ async fn translate(
         .map_err(err)
 }
 
+/// Polices du site (règles `@font-face`, 3.9).
+#[tauri::command]
+fn fonts(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::FontFamily>> {
+    s.core.fonts(&PathBuf::from(path)).map_err(err)
+}
+
+/// Catalogue de Google Fonts (gardé pour le travail sans connexion).
+#[tauri::command]
+async fn fonts_google(s: State<'_, AppState>) -> Res<Vec<revel_protocol::GoogleFont>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.fonts_google())
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Ajoute une police de Google Fonts (fichiers téléchargés dans le site).
+#[tauri::command]
+async fn fonts_add_google(
+    s: State<'_, AppState>,
+    path: String,
+    family: String,
+    variants: Vec<String>,
+) -> Res<revel_edit::EditState> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.fonts_add_google(&PathBuf::from(path), &family, &variants)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Ajoute des fichiers de police importés.
+#[tauri::command]
+async fn fonts_add_files(
+    s: State<'_, AppState>,
+    path: String,
+    family: String,
+    files: Vec<revel_protocol::FontUpload>,
+) -> Res<revel_edit::EditState> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.fonts_add_files(&PathBuf::from(path), &family, &files)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Retire une police du site (annulable).
+#[tauri::command]
+fn fonts_remove(s: State<AppState>, path: String, family: String) -> Res<revel_edit::EditState> {
+    s.core
+        .fonts_remove(&PathBuf::from(path), &family)
+        .map_err(err)
+}
+
 /// Langues de traduction automatique : livrées, téléchargées, à télécharger.
 #[tauri::command]
 fn translate_packs(s: State<AppState>) -> Vec<revel_protocol::TranslatePack> {
@@ -620,6 +678,11 @@ pub fn run() {
             translate_can,
             translate,
             translate_packs,
+            fonts,
+            fonts_google,
+            fonts_add_google,
+            fonts_add_files,
+            fonts_remove,
             translate_install,
             translate_install_cancel,
             translate_remove,

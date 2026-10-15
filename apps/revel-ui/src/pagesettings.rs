@@ -231,6 +231,25 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                             <span class="serp-title">{shown_title}</span>
                             <span class="serp-desc">{seo.description.clone()}</span>
                         </div>
+                        <h3 class="page-settings-section" title=ui.t("page-code-help")>{ui.t("page-code")}</h3>
+                        {
+                            let (c1, c2) = (p.code.clone(), p.code.clone());
+                            let (q1, q2) = (pid.clone(), pid.clone());
+                            view! {
+                                <div class="page-settings-code">
+                                    {crate::sitesettings::code_field(ui, "code-head", "code-head-help", move || c1.head.clone(), move |v| {
+                                        let mut c = page.get_untracked().map(|p| p.code).unwrap_or_default();
+                                        c.head = v;
+                                        ed.apply(ui, Command::SetCode { page: Some(q1.clone()), code: c }, false)
+                                    })}
+                                    {crate::sitesettings::code_field(ui, "code-body", "code-body-help", move || c2.body.clone(), move |v| {
+                                        let mut c = page.get_untracked().map(|p| p.code).unwrap_or_default();
+                                        c.body = v;
+                                        ed.apply(ui, Command::SetCode { page: Some(q2.clone()), code: c }, false)
+                                    })}
+                                </div>
+                            }
+                        }
                     </div>
                     <footer class="panel-foot page-settings-foot">
                         <button class="btn btn--small" on:click={let i = pid.clone(); move |_| pageops::duplicate(ui, ed, &i)}>

@@ -1582,6 +1582,64 @@ try {
     await until(() => cfg() === cfg0 && fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8') === doc0 && !fs.existsSync(path.dirname(stage)), 'collection annulée');
     check('collection : annulée, fichiers identiques', true);
 
+    // ---------------------------------------------------------------- Réglages du site (3.9)
+    {
+      const docS = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
+      const doc9 = docS();
+      await page.click('.view-tab[data-view="view-settings"]');
+      await page.click('.settings-nav-item[data-section="settings-general"]');
+      await page.waitForSelector('#site-name');
+      await page.waitForFunction(() => document.querySelector('#site-name').value !== '');
+      const oldName = await page.inputValue('#site-name');
+      await page.fill('#site-name', oldName + ' essai');
+      await page.press('#site-name', 'Tab');
+      await until(() => JSON.parse(docS()).name === oldName + ' essai', 'nom du site');
+      await page.waitForFunction((n) => document.querySelector('.site-menu-name')?.textContent === n, oldName + ' essai');
+      await page.fill('#site-url', 'pas une adresse');
+      await page.press('#site-url', 'Tab');
+      await page.waitForSelector('.notice--error');
+      const refused = (await page.textContent('.notice--error')).trim();
+      check('réglages du site : nom modifié (barre supérieure), adresse invalide refusée', JSON.parse(docS()).base_url !== 'pas une adresse', refused);
+      await page.click('.notice--error .icon-btn');
+      // Code personnalisé du site.
+      await page.click('.settings-nav-item[data-section="settings-code"]');
+      await page.waitForSelector('.code-input');
+      await page.fill('.code-field >> nth=0 >> textarea', '<meta name="essai-e2e" content="1">');
+      await page.locator('.code-field >> nth=0 >> textarea').blur();
+      await until(() => JSON.parse(docS()).settings?.code?.head === '<meta name="essai-e2e" content="1">', 'code ajouté');
+      check('réglages du site : code personnalisé (en-tête) enregistré', true);
+      if (shots) await page.screenshot({ path: `${shots}/code-personnalise.png` });
+      // Polices : fichier importé (graisse et style lus dans le nom), puis retiré.
+      await page.click('.settings-nav-item[data-section="settings-fonts"]');
+      await page.waitForSelector('.font-list');
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.fonts-page .page-head .btn:not(.btn--primary)')]);
+      await chooser.setFiles({ name: 'EssaiSans-BoldItalic.woff2', mimeType: 'font/woff2', buffer: Buffer.from('wOF2essai-e2e') });
+      await page.waitForSelector('.fonts-dialog .fi-row');
+      const fam = await page.inputValue('.fonts-dialog .field input');
+      const w = await page.$eval('.fonts-dialog .fi-row select', (s) => s.value);
+      const it = await page.$eval('.fonts-dialog .fi-row input[type="checkbox"]', (c) => c.checked);
+      check('polices : famille, graisse et italique lus dans le nom du fichier', fam === 'Essai Sans' && w === '700' && it, `${fam} ${w} ${it}`);
+      if (shots) await page.screenshot({ path: `${shots}/polices-import.png` });
+      await page.click('.fonts-dialog button[type="submit"]');
+      await page.waitForSelector('.font-row[data-family="Essai Sans"]');
+      const fontDir = path.join(siteDir, 'src/media/fonts/essai-sans');
+      check('polices : fichier copié dans le site, règle @font-face ajoutée', fs.existsSync(path.join(fontDir, 'essaisans-bolditalic.woff2'))
+        && docS().includes('font-family: \\"Essai Sans\\"'), (await page.textContent('.font-row[data-family="Essai Sans"]')).trim());
+      if (shots) await page.screenshot({ path: `${shots}/polices.png` });
+      await page.click('.font-row[data-family="Essai Sans"] .icon-btn');
+      await page.click('.dialog .btn--danger');
+      await page.waitForSelector('.font-row[data-family="Essai Sans"]', { state: 'detached' });
+      check('polices : retirée (fichier rangé dans .revel)', !fs.existsSync(fontDir));
+      // Tout annuler : document et fichiers identiques.
+      await page.click('.view-tab[data-view="view-editor"]');
+      for (let i = 0; i < 6 && (docS() !== doc9 || fs.existsSync(fontDir)); i++) {
+        await page.click('.editor-toolbar .btn-undo');
+        await page.waitForTimeout(400);
+      }
+      await until(() => docS() === doc9 && !fs.existsSync(fontDir), 'réglages annulés');
+      check('réglages du site : tout annulé (document, polices)', true);
+    }
+
     // ---------------------------------------------------------------- Langues (3.8)
     const docL = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
     const dataEn = path.join(siteDir, 'src/_data/en');

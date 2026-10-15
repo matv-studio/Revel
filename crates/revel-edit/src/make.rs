@@ -658,6 +658,7 @@ pub fn new_page(site: &Site, name: &str, folder: &str) -> revel_model::Page {
         computed: Default::default(),
         body,
         draft: false,
+        code: Default::default(),
         name: Some(name.trim().to_string()).filter(|n| !n.is_empty()),
     }
 }

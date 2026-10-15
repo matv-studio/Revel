@@ -22,7 +22,7 @@ use revel_protocol::{CmsCollection, SiteSummary};
 use std::collections::BTreeMap;
 
 /// Langues proposées à l'ajout (les autres : code saisi).
-const COMMON: &[&str] = &[
+pub(crate) const COMMON: &[&str] = &[
     "en", "fr", "de", "es", "it", "pt", "nl", "ca", "pl", "sv", "da", "ja", "zh", "ar",
 ];
 

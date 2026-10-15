@@ -16,6 +16,7 @@ use std::sync::atomic::AtomicBool;
 pub mod canvas;
 pub mod devserver;
 mod edit;
+mod fonts;
 mod github;
 pub mod pagescms;
 pub mod preview;
@@ -75,6 +76,9 @@ pub enum CoreError {
     TranslateCancelled,
     #[error("un téléchargement de langue est déjà en cours")]
     TranslateBusy,
+    /// Police refusée ou introuvable.
+    #[error("police : {0}")]
+    Font(String),
     /// Import ou remplacement d'un média refusé.
     #[error("{0}")]
     Media(String),
@@ -134,6 +138,7 @@ impl CoreError {
             }
             Self::TranslateCancelled => Failure::new("error-translate-cancelled"),
             Self::TranslateBusy => Failure::new("error-translate-busy"),
+            Self::Font(detail) => Failure::new("error-font").arg("detail", detail.clone()),
             Self::Media(detail) => Failure::new("error-media").arg("detail", detail.clone()),
             Self::Other(detail) => Failure::detail(detail.clone()),
         }
@@ -176,6 +181,8 @@ pub struct Core {
     translator: Mutex<Option<std::sync::Arc<revel_translate::Engine>>>,
     bundled_models: Mutex<Option<PathBuf>>,
     user_models: PathBuf,
+    /// Dossier des réglages de l'application (catalogues gardés pour le travail sans connexion).
+    config_dir: PathBuf,
     translate_busy: AtomicBool,
     translate_cancel: AtomicBool,
 }
@@ -227,9 +234,15 @@ impl Core {
             translator: Mutex::new(None),
             bundled_models: Mutex::new(None),
             user_models: config_dir.join("models"),
+            config_dir: config_dir.to_path_buf(),
             translate_busy: AtomicBool::new(false),
             translate_cancel: AtomicBool::new(false),
         }
+    }
+
+    /// Dossier des réglages de l'application.
+    pub(crate) fn config_dir(&self) -> &Path {
+        &self.config_dir
     }
 
     fn with_state<T>(&self, f: impl FnOnce(&mut State) -> T) -> T {

@@ -334,6 +334,27 @@ pub struct Settings {
     /// du nom du site.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub no_translate: Vec<String>,
+    /// Code ajouté à toutes les pages HTML du site (3.9).
+    #[serde(default, skip_serializing_if = "CustomCode::is_empty")]
+    pub code: CustomCode,
+}
+
+/// Code ajouté tel quel aux pages HTML (statistiques, vérification d'un service, scripts) :
+/// `head` avant `</head>`, `body` avant `</body>`. Celui du site d'abord, puis celui de la page.
+/// Il n'est pas exécuté dans le canevas de l'éditeur (comme Webflow), seulement dans l'aperçu et
+/// le site publié.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomCode {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub head: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub body: String,
+}
+
+impl CustomCode {
+    pub fn is_empty(&self) -> bool {
+        self.head.trim().is_empty() && self.body.trim().is_empty()
+    }
 }
 
 /// Plan du site (`sitemap.xml`) et `robots.txt` produits à la génération quand aucune page du site
@@ -442,6 +463,9 @@ pub struct Page {
     /// Nom de la page dans Revel (sans effet sur le site publié) ; `None` : titre ou adresse.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Code ajouté à cette page, après celui du site (3.9).
+    #[serde(default, skip_serializing_if = "CustomCode::is_empty")]
+    pub code: CustomCode,
 }
 
 /// Gabarit partagé par plusieurs pages.
@@ -936,6 +960,7 @@ mod tests {
             ],
             computed: Default::default(),
             draft: false,
+            code: Default::default(),
             name: None,
         });
         site.layouts.push(Layout {

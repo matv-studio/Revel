@@ -95,6 +95,28 @@ impl Core {
             "translate_can" => {
                 json(self.translate_can(&arg::<String>(args, "from")?, &arg::<String>(args, "to")?))
             }
+            "fonts" => json(self.fonts(site).map_err(f)?),
+            "fonts_google" => json(self.fonts_google().map_err(f)?),
+            "fonts_add_google" => json(
+                self.fonts_add_google(
+                    site,
+                    &arg::<String>(args, "family")?,
+                    &arg::<Vec<String>>(args, "variants")?,
+                )
+                .map_err(f)?,
+            ),
+            "fonts_add_files" => json(
+                self.fonts_add_files(
+                    site,
+                    &arg::<String>(args, "family")?,
+                    &arg::<Vec<revel_protocol::FontUpload>>(args, "files")?,
+                )
+                .map_err(f)?,
+            ),
+            "fonts_remove" => json(
+                self.fonts_remove(site, &arg::<String>(args, "family")?)
+                    .map_err(f)?,
+            ),
             "translate_packs" => json(self.translate_packs()),
             "translate_install" => json(
                 self.translate_install(&arg::<String>(args, "code")?, |_| {})

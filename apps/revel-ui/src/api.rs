@@ -351,6 +351,48 @@ pub async fn github_connect(on: impl Fn(GithubEvent) + 'static) -> Res<String> {
     call_with_channel("github_connect", &NoArgs {}, on).await
 }
 
+/// Polices du site.
+pub async fn fonts(path: &str) -> Res<Vec<revel_protocol::FontFamily>> {
+    call("fonts", &serde_json::json!({ "path": path })).await
+}
+
+/// Catalogue de Google Fonts.
+pub async fn fonts_google() -> Res<Vec<revel_protocol::GoogleFont>> {
+    call("fonts_google", &NoArgs {}).await
+}
+
+pub async fn fonts_add_google(
+    path: &str,
+    family: &str,
+    variants: &[String],
+) -> Res<revel_edit::EditState> {
+    call(
+        "fonts_add_google",
+        &serde_json::json!({ "path": path, "family": family, "variants": variants }),
+    )
+    .await
+}
+
+pub async fn fonts_add_files(
+    path: &str,
+    family: &str,
+    files: &[revel_protocol::FontUpload],
+) -> Res<revel_edit::EditState> {
+    call(
+        "fonts_add_files",
+        &serde_json::json!({ "path": path, "family": family, "files": files }),
+    )
+    .await
+}
+
+pub async fn fonts_remove(path: &str, family: &str) -> Res<revel_edit::EditState> {
+    call(
+        "fonts_remove",
+        &serde_json::json!({ "path": path, "family": family }),
+    )
+    .await
+}
+
 /// Langues de traduction automatique (livrées, téléchargées, à télécharger).
 pub async fn translate_packs() -> Res<Vec<revel_protocol::TranslatePack>> {
     call("translate_packs", &NoArgs {}).await

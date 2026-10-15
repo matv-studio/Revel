@@ -219,6 +219,7 @@ fn page_of(
         computed: Default::default(),
         body: vec![main],
         draft: false,
+        code: Default::default(),
         name: Some(name.into()),
     });
     s.ensure_ids();
@@ -281,6 +282,7 @@ pub fn starter_from(name: &str, lang: &str, template: SiteTemplate) -> Site {
         computed: Default::default(),
         body: parse(HOME),
         draft: false,
+        code: Default::default(),
         name: Some(
             if lang.starts_with("fr") {
                 "Accueil"

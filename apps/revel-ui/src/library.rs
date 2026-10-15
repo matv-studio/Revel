@@ -306,11 +306,19 @@ fn folder_input(
             el.select();
         }
     });
-    let done = move || {
+    // Saisie terminée : la sortie du champ retiré ne la traite pas une seconde fois.
+    let closed = StoredValue::new(false);
+    let finish = move |ok: bool| {
+        if closed.try_get_value().unwrap_or(true) {
+            return;
+        }
         let v = value.get_untracked();
-        if v.trim().is_empty() {
+        if !ok || v.trim().is_empty() {
+            closed.set_value(true);
             cancel();
-        } else if !commit(v) {
+        } else if commit(v) {
+            closed.set_value(true);
+        } else {
             bad.set(true);
         }
     };
@@ -323,16 +331,13 @@ fn folder_input(
             on:keydown=move |e: leptos::ev::KeyboardEvent| {
                 e.stop_propagation();
                 match e.key().as_str() {
-                    "Enter" => { e.prevent_default(); done() }
-                    "Escape" => { e.prevent_default(); cancel() }
+                    "Enter" => { e.prevent_default(); finish(true) }
+                    "Escape" => { e.prevent_default(); finish(false) }
                     _ => {}
                 }
             }
-            on:blur=move |_| {
-                // Champ retiré (Entrée, Échap) : déjà traité.
-                let (Some(v), Some(b)) = (value.try_get_untracked(), bad.try_get_untracked()) else { return };
-                if v.trim().is_empty() || b { cancel() } else { done() }
-            }/>
+            // Sortie du champ : nom valide appliqué, sinon abandon.
+            on:blur=move |_| finish(!bad.try_get_untracked().unwrap_or(true))/>
     }
 }
 

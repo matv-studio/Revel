@@ -230,8 +230,20 @@ pub fn Variables() -> impl IntoView {
                     {move || {
                         let original = v.with_value(|v| v.expr.clone().unwrap_or_default());
                         let draft = RwSignal::new(original.clone());
+                        // Saisie terminée (Entrée, Échap, sortie du champ) : appliquée une seule
+                        // fois, même si le navigateur signale encore la sortie du champ retiré.
+                        let closed = StoredValue::new(false);
                         let rows = original.lines().count().clamp(1, 8);
-                        let done = move || editing.set(None);
+                        let finish = move |apply: bool| {
+                            if closed.try_get_value().unwrap_or(true) {
+                                return;
+                            }
+                            closed.set_value(true);
+                            if apply && let Some(d) = draft.try_get_untracked() {
+                                v.with_value(|v| commit(v, d));
+                            }
+                            editing.set(None);
+                        };
                         view! {
                             <div class="var-edit">
                                 <textarea class="var-expr" spellcheck="false" rows=rows
@@ -240,26 +252,15 @@ pub fn Variables() -> impl IntoView {
                                     on:input=move |e| draft.set(event_target_value(&e))
                                     on:keydown=move |e: leptos::ev::KeyboardEvent| {
                                         e.stop_propagation();
-                                        // Échap : rien n'est appliqué ; Entrée : appliqué en quittant
-                                        // le champ (une seule fois, par `blur`).
                                         if e.key() == "Escape" {
                                             e.prevent_default();
-                                            draft.set(original.clone());
-                                            done();
+                                            finish(false);
                                         } else if e.key() == "Enter" && !e.shift_key() {
                                             e.prevent_default();
-                                            if let Some(t) = e.target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlElement>(t).ok()) {
-                                                let _ = t.blur();
-                                            }
-                                            done();
+                                            finish(true);
                                         }
                                     }
-                                    on:blur=move |_| {
-                                        // Champ retiré par Échap : rien à appliquer.
-                                        if let Some(d) = draft.try_get_untracked() {
-                                            v.with_value(|v| commit(v, d));
-                                        }
-                                    }></textarea>
+                                    on:blur=move |_| finish(true)></textarea>
                             </div>
                         }
                     }}

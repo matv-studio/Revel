@@ -120,6 +120,8 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 }
 .segmented button:hover { color: var(--text); }
 .segmented button.is-on { background: var(--surface-active); color: var(--text); }
+.segmented.is-disabled { opacity: .45; }
+.segmented button:disabled { cursor: default; }
 
 /* Interrupteur */
 .switch { position: relative; display: inline-flex; width: 32px; height: 18px; }
@@ -617,3 +619,46 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 /* Contenu dans une autre langue : traduit (bleu) ou repris de la langue principale (orange). */
 .loc-dot { order: -1; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--inherit-text); margin-right: var(--s-2); }
 .loc-dot.is-done { background: var(--set-text); }
+
+/* --- Glissières ------------------------------------------------------------------------------
+   Trait fin sombre (piste), trait de progression un peu plus épais par-dessus jusqu'à la poignée
+   (--fill), poignée verticale fine. Progression : bleue si la valeur est réglée ici, orange si
+   elle est héritée (code couleur D-21), grise sinon. .range--plain : piste seule (taille des
+   vignettes des médias). */
+.range {
+  --fill: 100%;
+  --range-fill-color: var(--text-muted);
+  flex: 1; min-width: 0; height: var(--control-sm); margin: 0; padding: 0; background: none;
+  appearance: none; -webkit-appearance: none; cursor: pointer; outline: none;
+}
+.range.is-here { --range-fill-color: var(--set-text); }
+.range.is-inherited { --range-fill-color: var(--inherit-text); }
+.range::-webkit-slider-runnable-track {
+  height: var(--range-fill); border-radius: calc(var(--range-fill) / 2);
+  background:
+    linear-gradient(var(--range-fill-color), var(--range-fill-color)) left center / var(--fill) 100% no-repeat,
+    linear-gradient(var(--range-track-bg), var(--range-track-bg)) center / 100% var(--range-track) no-repeat;
+}
+.range--plain::-webkit-slider-runnable-track {
+  height: var(--range-track); border-radius: calc(var(--range-track) / 2);
+  background: var(--range-track-bg);
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: var(--range-handle-w); height: var(--range-handle-h);
+  margin-top: calc((var(--range-fill) - var(--range-handle-h)) / 2);
+  border: 0; border-radius: 2px; background: var(--gray-0);
+  box-shadow: 0 0 0 1px var(--range-handle-ring), 0 1px 3px rgb(0 0 0 / .35);
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.range--plain::-webkit-slider-thumb { margin-top: calc((var(--range-track) - var(--range-handle-h)) / 2); }
+.range:hover::-webkit-slider-thumb { transform: scaleY(1.12); }
+.range:active::-webkit-slider-thumb { transform: scaleY(1.12); box-shadow: 0 0 0 1px var(--range-handle-ring), 0 0 0 4px color-mix(in srgb, var(--text) 14%, transparent); }
+.range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--focus); }
+.range::-moz-range-track { height: var(--range-track); border-radius: calc(var(--range-track) / 2); background: var(--range-track-bg); }
+.range::-moz-range-progress { height: var(--range-fill); border-radius: calc(var(--range-fill) / 2); background: var(--range-fill-color); }
+.range--plain::-moz-range-progress { background: transparent; }
+.range::-moz-range-thumb {
+  width: var(--range-handle-w); height: var(--range-handle-h); border: 0; border-radius: 2px;
+  background: var(--gray-0); box-shadow: 0 0 0 1px var(--range-handle-ring), 0 1px 3px rgb(0 0 0 / .35);
+}

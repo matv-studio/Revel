@@ -1606,8 +1606,9 @@ try {
     const dataKey = (await page.textContent('.loc-table tbody tr:first-child .loc-key')).trim();
     await page.fill('.loc-table tbody tr:first-child .loc-input', 'Data in English');
     await page.press('.loc-table tbody tr:first-child .loc-input', 'Tab');
-    await until(() => fs.existsSync(dataEn), 'fichier de données de la langue');
-    const enFiles = fs.readdirSync(dataEn, { recursive: true }).filter((f) => /\.ya?ml$/.test(f));
+    const enYaml = () => (fs.existsSync(dataEn) ? fs.readdirSync(dataEn, { recursive: true }) : []).filter((f) => /\.ya?ml$/.test(f));
+    await until(() => enYaml().some((f) => fs.readFileSync(path.join(dataEn, f), 'utf8').includes('Data in English')), 'fichier de données de la langue');
+    const enFiles = enYaml();
     check('langues : donnée traduite dans src/_data/en (copie du fichier)', enFiles.length === 1
       && fs.readFileSync(path.join(dataEn, enFiles[0]), 'utf8').includes('Data in English'), `${dataKey} → ${enFiles.join(',')}`);
     if (shots) await page.screenshot({ path: `${shots}/localisation.png` });

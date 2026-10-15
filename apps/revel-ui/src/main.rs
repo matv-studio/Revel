@@ -264,6 +264,11 @@ fn apply_settings(s: &AppSettings) {
         _ => root.remove_attribute("data-theme"),
     };
     let _ = root.set_attribute("lang", &s.lang);
+    // Étendue de l'accent : seulement avec une couleur d'accent (`standard` : règles de base).
+    let _ = match (s.accent.is_some(), s.accent_scope.as_str()) {
+        (true, scope @ ("minimal" | "full")) => root.set_attribute("data-accent-scope", scope),
+        _ => root.remove_attribute("data-accent-scope"),
+    };
     if let Ok(el) = root.dyn_into::<web_sys::HtmlElement>() {
         let style = el.style();
         match &s.accent {

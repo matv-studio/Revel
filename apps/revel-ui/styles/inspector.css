@@ -165,7 +165,9 @@
 .seg button svg.icon { flex: none; width: 14px; height: 14px; }
 .seg button:hover { color: var(--text); }
 .seg button.is-implied { color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }
-.seg button.is-on { background: var(--surface-active); color: var(--text); }
+.seg button.is-implied.is-inherited { color: var(--inherit-text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--inherit-text) 45%, transparent); }
+/* Option réglée ici : bleu (code couleur des valeurs, D-21). */
+.seg button.is-on { background: var(--set-bg); color: var(--set-text); }
 .glyph { font-size: var(--text-xs); font-weight: var(--weight-strong); letter-spacing: .02em; }
 
 .tool-toggle {
@@ -267,14 +269,14 @@
 .cp-row { display: flex; align-items: center; gap: var(--s-2); }
 .cp-eye { flex: none; width: var(--control-md); height: var(--control-md); }
 .cp-sliders { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.cp-hue, .cp-alpha { position: relative; height: 12px; border-radius: 6px; touch-action: none; cursor: pointer; outline: none; }
+.cp-hue, .cp-alpha { position: relative; height: 6px; margin: 5px 0; border-radius: 3px; touch-action: none; cursor: pointer; outline: none; }
 .cp-hue { background: linear-gradient(to right, #f00 0%, #ff0 16.7%, #0f0 33.3%, #0ff 50%, #00f 66.7%, #f0f 83.3%, #f00 100%); }
 .cp-alpha { background: linear-gradient(to right, rgb(0 0 0 / 0), var(--cp-color)), var(--checker); }
 .cp-knob {
-  position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; transform: translate(-50%, -50%);
-  box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgb(0 0 0 / .25), 0 1px 3px rgb(0 0 0 / .35); pointer-events: none;
+  position: absolute; top: 50%; width: var(--range-handle-w); height: var(--range-handle-h);
+  border-radius: 2px; transform: translate(-50%, -50%); background: var(--gray-0);
+  box-shadow: 0 0 0 1px var(--range-handle-ring), 0 1px 3px rgb(0 0 0 / .35); pointer-events: none;
 }
-.cp-alpha .cp-knob { background: transparent; }
 .cp-fields { display: flex; gap: 4px; align-items: stretch; }
 .cp-model { flex: 0 0 64px; }
 .cp-model select.input { height: var(--control-sm); font-size: var(--text-xs); padding-left: 6px; padding-right: 18px; }
@@ -303,30 +305,6 @@
 .cp-swatch:hover { box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3px var(--text-muted); }
 
 /* --- Opacité, ombres ------------------------------------------------------------------------ */
-/* Glissière : piste fine remplie jusqu'au curseur (--fill), curseur rond. */
-.range {
-  --fill: 100%;
-  flex: 1; min-width: 0; height: var(--control-sm); margin: 0; background: none;
-  appearance: none; -webkit-appearance: none; cursor: pointer;
-}
-.range::-webkit-slider-runnable-track {
-  height: 4px; border-radius: 2px;
-  background: linear-gradient(to right, var(--text-muted) var(--fill), var(--surface-active) var(--fill));
-}
-.range::-moz-range-track { height: 4px; border-radius: 2px; background: var(--surface-active); }
-.range::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--text-muted); }
-.range::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 50%;
-  background: var(--gray-0); border: 0; box-shadow: 0 0 0 1px rgb(0 0 0 / .25), 0 1px 3px rgb(0 0 0 / .35);
-  transition: transform var(--fast) var(--ease);
-}
-.range::-moz-range-thumb {
-  width: 12px; height: 12px; border-radius: 50%; border: 0;
-  background: var(--gray-0); box-shadow: 0 0 0 1px rgb(0 0 0 / .25), 0 1px 3px rgb(0 0 0 / .35);
-}
-.range:hover::-webkit-slider-thumb, .range:active::-webkit-slider-thumb { transform: scale(1.15); }
-.range:focus-visible { outline: none; }
-.range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--focus); }
 .ctl-line > .range + .nbox { flex: 0 0 64px; }
 .shadows { display: flex; flex-direction: column; gap: 6px; }
 .shadow-count { font-size: var(--text-xs); }

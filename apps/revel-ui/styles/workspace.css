@@ -280,7 +280,7 @@
 .asset-grid.is-small { gap: 4px; }
 .asset-grid.is-small figcaption { display: none; }
 /* Taille des vignettes : glissière courte dans le pied du panneau. */
-.thumb-size { flex: none; width: 56px; height: 16px; margin: 0 4px; accent-color: var(--text-muted); cursor: default; }
+.thumb-size { flex: none; width: 64px; margin: 0 6px; }
 .asset { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .asset-thumb {
   aspect-ratio: 1; border-radius: var(--radius-md); overflow: hidden;

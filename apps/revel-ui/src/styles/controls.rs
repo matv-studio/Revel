@@ -701,6 +701,7 @@ pub fn Seg(
                 let implied = move || pv.with(|p| p.here.is_none() && matches(&opt, &p.hint()));
                 view! {
                     <button role="radio" class:is-on=on class:is-implied=implied
+                        class:is-inherited=move || pv.with(|p| matches!(p.origin, Origin::Inherited(_)))
                         aria-checked=move || on().to_string()
                         title=move || format!("{} ({prop}: {})", ui.tx(opt.key, &[]), opt.v) aria-label=ui.t(opt.key)
                         on:click=move |_| sx.set(prop, Some(opt.v.to_string()))>

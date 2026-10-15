@@ -964,6 +964,8 @@ fn Opacity(sx: Sx) -> impl IntoView {
     view! {
         <div class="ctl-line">
             <input type="range" class="range" min="0" max="100" step="1" prop:value=move || pct().round().to_string()
+                class:is-here=move || pv.with(|p| p.origin == super::ctx::Origin::Here)
+                class:is-inherited=move || pv.with(|p| matches!(p.origin, super::ctx::Origin::Inherited(_)))
                 style=move || format!("--fill: {}%", pct().round())
                 aria-label=sx.ui.t("styles-opacity")
                 on:input=move |e| {

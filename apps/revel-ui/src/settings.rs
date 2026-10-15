@@ -1,4 +1,4 @@
-//! Réglages de l'application : langue, thème, couleur d'accent.
+//! Réglages de l'application : langue, thème, couleur d'accent et son étendue.
 
 use crate::{Ui, api};
 use leptos::prelude::*;
@@ -73,8 +73,21 @@ pub fn Settings() -> impl IntoView {
                                 on:change=move |ev| { let v = event_target_value(&ev); update(&|s| s.accent = Some(v.clone())) }/>
                         </label>
                     </div>
-                    <span></span>
-
+                    <span class="label" title=ui.t("settings-accent-scope-help")>{ui.t("settings-accent-scope")}</span>
+                    <div class="segmented accent-scope" role="radiogroup" class:is-disabled=move || accent().is_none()
+                        title=move || accent().is_none().then(|| ui.tx("settings-accent-scope-none", &[]))>
+                        {[("minimal", "accent-scope-minimal", "accent-scope-minimal-help"),
+                          ("standard", "accent-scope-standard", "accent-scope-standard-help"),
+                          ("full", "accent-scope-full", "accent-scope-full-help")]
+                            .into_iter().map(|(value, key, help)| view! {
+                                <button role="radio" data-scope=value
+                                    class:is-on=move || ui.settings.with(|s| s.accent_scope == value)
+                                    aria-checked=move || ui.settings.with(|s| (s.accent_scope == value).to_string())
+                                    prop:disabled=move || accent().is_none()
+                                    title=ui.t(help)
+                                    on:click=move |_| update(&|s| s.accent_scope = value.to_string())>{ui.t(key)}</button>
+                            }).collect_view()}
+                    </div>
                 </div>
             </div>
             <div class="section">

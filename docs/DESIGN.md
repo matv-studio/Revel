@@ -11,11 +11,16 @@ Revel n'en reprend ni les couleurs ni les marques.
 ## Principes
 
 1. **Le contenu de l'utilisateur est la seule couleur.** L'interface est en gris neutres.
-   Aucune couleur décorative ; les couleurs fonctionnelles restent discrètes : erreur, réussite, et dans le
-   panneau de styles l'origine des valeurs (bleu réglé ici, orange hérité, comme Webflow — D-21).
+   Aucune couleur décorative ; les couleurs fonctionnelles restent discrètes : erreur, réussite, et l'origine
+   des valeurs (bleu : réglée ici ou propre à la langue affichée ; orange : héritée ou reprise de la langue
+   principale ; vert : composants — comme Webflow, D-21). Ce code s'étend à tout élément qu'il rend plus lisible :
+   libellés, choix à boutons, progression des glissières, langue affichée, contenus traduits.
 2. **Un seul accent, choisi par l'utilisateur.** *Réglages > Couleur d'accent* : « Aucune » par défaut.
    Sans accent, l'action principale est en contraste inversé (blanc sur sombre, noir sur clair).
-   L'accent ne sert qu'à trois choses : action principale, sélection, focus.
+   *Réglages > Étendue de l'accent* choisit combien d'éléments le prennent : **Minimale** (focus, contour du
+   plan de travail), **Standard** (par défaut : aussi l'action principale, les interrupteurs, la sélection),
+   **Étendue** (aussi les onglets, choix, lignes actives, glissières et barres d'avancement neutres). L'accent ne
+   remplace jamais le code couleur fonctionnel (bleu, orange, vert).
 3. **Une action principale par zone.** Une seule `.btn--primary` visible par section ou barre.
 4. **Densité d'outil.** Texte 13 px, contrôles 28 px, grille de 4 px : beaucoup d'information sans
    surcharge, comme Figma. Les pages de réglages restent aérées.
@@ -26,6 +31,10 @@ Revel n'en reprend ni les couleurs ni les marques.
    les préférences « réduire les animations » du système sont respectées.
 7. **Accessible par défaut.** Focus visible au clavier, contrastes AA, libellés sur les boutons-icônes,
    rôles ARIA sur les choix exclusifs.
+8. **Même exigence partout** (demande du 15/10/2026). Chaque fonction nouvelle reçoit le même soin d'interface
+   que le reste de l'application (niveau Webflow, Framer, Figma) : composants du système, code couleur, peu de
+   texte, vérification visuelle dans les deux thèmes avant d'être considérée finie. Là où le produit est faible
+   (lisibilité, densité, retour d'action), on l'améliore sans attendre qu'on le demande.
 
 ## Jetons (`styles/tokens.css`)
 
@@ -46,6 +55,7 @@ Revel n'en reprend ni les couleurs ni les marques.
 | Rayons | `--radius-sm` 4, `--radius-md` 6, `--radius-lg` 8 | Puces, contrôles, sections |
 | Structure | `--topbar-h` 44 | Barre supérieure (onglets compris) |
 | Mouvement | `--ease`, `--fast` 120 ms, `--normal` 200 ms | Transitions de retour d'action |
+| Glissières | `--range-track` 2, `--range-fill` 4, `--range-handle-w` 3, `--range-handle-h` 14, `--range-track-bg`, `--range-handle-ring` | Trait fin sombre, trait de progression, poignée verticale (aussi teinte et opacité du sélecteur de couleur) |
 
 Thèmes : sombre (défaut), clair, ou système (`data-theme` absent sur `<html>`).
 L'accent est appliqué par l'application en définissant `--accent` et `--accent-ink` sur `:root`
@@ -117,11 +127,12 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Panneau de styles | `styles/inspector.css`, `src/styles/` | Voir la section *Panneau de styles* |
 | Libellé de propriété | `.style-label` (`.is-here`, `.is-inherited`) + `.dot` | Pastille dans la marge (texte aligné) ; clic : origine et *Réinitialiser* ; Alt+clic : réinitialise ; glisser : change le nombre |
 | Champ numérique | `.num` (`NumBox`) | Calculs, flèches (Maj ×10, Alt ×0,1), menu d'unités expliqué (`.num-unit`), préfixe à glisser |
-| Choix à boutons | `.seg` (`.is-on` réglé ici, `.is-implied` en vigueur sans être réglé) | Texte ou icônes ; 2 à 5 options |
+| Choix à boutons | `.seg` (`.is-on` réglé ici : bleu ; `.is-implied` en vigueur sans être réglé : contour, orange s'il est hérité) | Texte ou icônes ; 2 à 5 options |
+| Glissière | `.range` (`.is-here`, `.is-inherited`), `.range--plain` | Trait fin sombre, progression un peu plus épaisse par-dessus jusqu'à la poignée (bleue réglée ici, orange héritée, grise sinon), poignée verticale fine (allongée au survol, anneau au glisser) ; `--plain` : piste seule, sans progression (taille des vignettes des médias) |
 | Bascule | `.tool-toggle` | Italique, souligné, angles indépendants |
 | Boîte d'alignement | `.align-box` | 3 × 3 ; positions d'une pile ou d'une image de fond |
 | Boîte des marges | `.bm-box` | Marge extérieure autour de la marge intérieure ; décalages d'une position |
-| Couleur | `.color-input` + `.cp` | Pastille, valeur, sélecteur (plan, teinte, opacité, pipette, modèles, couleurs du site, contraste) |
+| Couleur | `.color-input` + `.cp` | Pastille, valeur, sélecteur (plan, teinte, opacité, pipette, modèles, couleurs du site, contraste) ; teinte et opacité : barres fines, poignée verticale comme les glissières |
 | Menu flottant | `.pop` (`Pop`) | Ouvert par un `.pop-trigger` ; fermé par un clic ailleurs ou Échap (avant tout raccourci de l'éditeur) |
 
 Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arrondies, dessinées pour Revel.
@@ -152,7 +163,7 @@ Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arr
 | Pages | Arbre (`PageTree`, aussi dans le menu de la barre d'outils) : pages fixes (dossiers d'après l'adresse), une ligne par collection (le modèle, icône base de données). Repliée, la collection du contenu affiché est en évidence (`--selection`) et ne montre que ce contenu ; dépliée, tous ses contenus ; design propre marqué d'une icône bleue (`--set-text`) ; design sans contenu en orange, supprimable |
 | Modèle, design propre | Pastille de la barre d'outils : « Modèle · Projets » (les modifications valent pour tous les contenus) + bouton « Créer un design propre » ; « Design propre » (bleu) + bouton « Revenir au modèle ». Annulable en une étape |
 | Variables | Affectations `{% set %}` de la page, de ses gabarits et de ses composants, rangées par propriétaire (dossiers repliables) : nom en chasse fixe, valeur calculée à droite (atténuée : vide, liste, objet, non calculée), icône de boucle ou de condition à gauche, icône « varie » à droite ; clic : expression modifiable (Entrée applique, Échap abandonne), syntaxe vérifiée avant l'application |
-| Médias | Filtre par type et tri (récents, anciens, nom, type, taille) en deux petites listes sous la recherche ; dossiers en lignes puis grille de vignettes (icône et extension pour les fichiers non image) ; fil d'Ariane dans un dossier ; glisser une vignette sur un dossier ou le fil d'Ariane pour la ranger, sur la page pour la placer ; pied : nombre, glissière courte de taille des vignettes, nouveau dossier, import (icônes seules) ; fichiers du système déposés sur le panneau (contour d'accent) ; clic : détails par-dessus la colonne (aperçu, adresse, taille, texte alternatif par défaut, Remplacer, Placer) |
+| Médias | Filtre par type et tri (récents, anciens, nom, type, taille) en deux petites listes sous la recherche ; dossiers en lignes puis grille de vignettes (icône et extension pour les fichiers non image) ; fil d'Ariane dans un dossier ; glisser une vignette sur un dossier ou le fil d'Ariane pour la ranger, sur la page pour la placer ; pied : nombre, glissière courte de taille des vignettes (piste seule), nouveau dossier, import (icônes seules) ; fichiers du système déposés sur le panneau (contour d'accent) ; clic : détails par-dessus la colonne (aperçu, adresse, taille, texte alternatif par défaut, Remplacer, Placer) |
 | Choisir une image | Fenêtre centrée au-dessus de tout (y compris des volets par-dessus la colonne) : titre, recherche, dossier (dans l'éditeur), vignettes cliquables, nombre et « Importer » en pied ; Échap ou clic hors de la fenêtre : fermée ; ouverte par un bouton icône à droite du champ (source d'image, image de partage, champ image du CMS), désactivé pour une valeur calculée |
 | Composants | Arbre de dossiers repliables, nom et nombre d'utilisations ; glisser sur un dossier (rangement) ou sur la page (utilisation) ; double-clic : modifier ; menu : modifier, placer, renommer, déplacer, supprimer (s'il n'est pas utilisé) ; pied : nombre, nouveau dossier, « + » créer à partir de la sélection |
 | Utilisation de composant | Couleur des composants : vert (comme Webflow). Un clic sélectionne l'utilisation entière (cadre et étiquette « ◆ nom ») ; double-clic : composant ouvert, le reste de la page estompé, barre en bas du canevas (nom, « Terminer ») ; Réglages : nom, Modifier le composant, Détacher, valeur de chaque propriété (vide : valeur par défaut en indication, bouton pour y revenir) |

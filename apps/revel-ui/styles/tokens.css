@@ -93,6 +93,12 @@
 
   /* --- Mouvement ---------------------------------------------------- */
   --ease: cubic-bezier(.2, 0, 0, 1);
+  /* Glissières : trait fin (piste), trait de progression un peu plus épais par-dessus, poignée
+     verticale fine. */
+  --range-track: 2px;
+  --range-fill: 4px;
+  --range-handle-w: 3px;
+  --range-handle-h: 14px;
   --fast: 120ms;
   --normal: 200ms;
 }
@@ -124,6 +130,8 @@
   --warning-text: var(--orange-text-dark);
   --inherit-bg: rgb(243 160 64 / .14);
   --overlay: rgb(0 0 0 / .55);      /* fond derrière une boîte de dialogue */
+  --range-track-bg: #0c0c0c;        /* glissière : trait fin sombre */
+  --range-handle-ring: rgb(0 0 0 / .55);
   --shadow-dialog: 0 16px 40px rgb(0 0 0 / .45), 0 0 0 1px var(--line-strong);
 }
 
@@ -153,6 +161,8 @@
   --warning-text: var(--orange-text-light);
   --inherit-bg: rgb(243 160 64 / .16);
   --overlay: rgb(0 0 0 / .28);
+  --range-track-bg: #c9c9c9;
+  --range-handle-ring: rgb(0 0 0 / .28);
   --shadow-dialog: 0 16px 40px rgb(0 0 0 / .18), 0 0 0 1px var(--line);
 }
 @media (prefers-color-scheme: light) {
@@ -181,6 +191,8 @@
     --warning-text: var(--orange-text-light);
     --inherit-bg: rgb(243 160 64 / .16);
     --overlay: rgb(0 0 0 / .28);
+    --range-track-bg: #c9c9c9;
+    --range-handle-ring: rgb(0 0 0 / .28);
     --shadow-dialog: 0 16px 40px rgb(0 0 0 / .18), 0 0 0 1px var(--line);
   }
 }
@@ -197,4 +209,16 @@
   /* Contour du plateau et de l'onglet actif : couleur d'accent si elle est réglée. */
   --stage-line: var(--accent, var(--stage-line-base));
   --selection: color-mix(in srgb, var(--accent, var(--text)) 14%, transparent);
+}
+/* Étendue de l'accent (Réglages > Étendue de l'accent), seulement avec une couleur d'accent :
+   minimale — focus et contour du plan de travail ; standard — règles ci-dessus ; étendue — aussi les
+   éléments actifs de l'interface (shell.css). */
+:root[data-accent-scope="minimal"] {
+  --primary: var(--inverse);
+  --primary-ink: var(--inverse-ink);
+  --selection: color-mix(in srgb, var(--text) 14%, transparent);
+}
+:root[data-accent-scope="full"] {
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  --accent-text: color-mix(in srgb, var(--accent) 72%, var(--text));
 }

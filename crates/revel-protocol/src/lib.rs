@@ -467,10 +467,19 @@ pub struct AppSettings {
     /// Couleur d'accent (`#rrggbb`) ; `None` : interface neutre, sans accent.
     #[serde(default)]
     pub accent: Option<String>,
+    /// Éléments qui prennent la couleur d'accent : `minimal` (focus et contour du plan de
+    /// travail), `standard` (aussi l'action principale et la sélection), `full` (aussi les onglets,
+    /// choix et éléments actifs).
+    #[serde(default = "default_accent_scope")]
+    pub accent_scope: String,
 }
 
 fn default_theme() -> String {
     "system".into()
+}
+
+fn default_accent_scope() -> String {
+    "standard".into()
 }
 
 impl Default for AppSettings {
@@ -479,6 +488,7 @@ impl Default for AppSettings {
             lang: "fr".into(),
             theme: default_theme(),
             accent: None,
+            accent_scope: default_accent_scope(),
         }
     }
 }

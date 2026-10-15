@@ -183,3 +183,20 @@
 .preview-stage.is-device { padding: var(--s-4) 0; }
 .preview-frame { border: 0; width: 100%; height: 100%; background: #fff; transition: width var(--normal) var(--ease); }
 .preview-stage.is-device .preview-frame { border-radius: 10px; box-shadow: var(--shadow-dialog); }
+
+/* --- Accent étendu (Réglages > Étendue de l'accent : Étendue) -------------------------------
+   Éléments actifs de l'interface teintés de l'accent. Les couleurs fonctionnelles restent (bleu
+   réglé ici, orange hérité, vert des composants) : elles ne sont jamais remplacées par l'accent. */
+:root[data-accent-scope="full"] :is(
+  .segmented button.is-on, .settings-nav-item.is-on, .cms-col.is-on, .list-row.is-on, .rt-btn.is-on,
+  .editor-toolbar .tool-toggle.is-on, .topbar-actions .icon-btn.is-on
+) { background: var(--accent-soft); color: var(--accent-text); }
+:root[data-accent-scope="full"] :is(
+  .segmented button.is-on, .settings-nav-item.is-on, .cms-col.is-on, .list-row.is-on,
+  .editor-toolbar .tool-toggle.is-on, .topbar-actions .icon-btn.is-on
+) svg.icon { color: var(--accent-text); }
+:root[data-accent-scope="full"] :is(.cms-table tr.is-on td, .locales-table tr.is-on td) { background: var(--accent-soft); }
+:root[data-accent-scope="full"] :is(.view-tab.is-on, .dock-tab.is-on, .link-btn) { color: var(--accent-text); }
+:root[data-accent-scope="full"] .range:not(.is-here):not(.is-inherited) { --range-fill-color: var(--accent); }
+:root[data-accent-scope="full"] .meter-fill { background: var(--accent); }
+:root[data-accent-scope="full"] .editor-toolbar .tool-toggle.is-on { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }

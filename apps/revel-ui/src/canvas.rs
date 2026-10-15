@@ -28,10 +28,13 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
     let area = NodeRef::<html::Div>::new();
 
     // Taille de la zone (fenêtre, colonnes de l'espace de travail, panneaux masqués).
+    // L'observateur de taille peut encore appeler après la fermeture du site (zone retirée) :
+    // valeurs déjà libérées ignorées.
     let measure = move || {
-        if let Some(a) = area.get_untracked() {
-            ed.area
-                .set((f64::from(a.client_width()), f64::from(a.client_height())));
+        if let Some(Some(a)) = area.try_get_untracked() {
+            let _ = ed
+                .area
+                .try_set((f64::from(a.client_width()), f64::from(a.client_height())));
         }
     };
     let on_resize = window_event_listener(ev::resize, move |_| measure());

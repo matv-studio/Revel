@@ -96,6 +96,8 @@ pub struct Ui {
     pub goto_page: RwSignal<Option<String>>,
     /// Élément copié (Ctrl+C), collé avec de nouveaux identifiants (Ctrl+V), d'un site à l'autre.
     pub clipboard: RwSignal<Option<revel_model::Node>>,
+    /// Page affichée dans l'éditeur (l'aperçu s'ouvre sur elle).
+    pub current_page: RwSignal<Option<String>>,
 }
 
 impl Ui {
@@ -251,6 +253,7 @@ fn App() -> impl IntoView {
         github: RwSignal::new(None),
         goto_page: RwSignal::new(None),
         clipboard: RwSignal::new(None),
+        current_page: RwSignal::new(None),
     };
     provide_context(ui);
     spawn_local(async move {
@@ -347,7 +350,8 @@ fn TopBar() -> impl IntoView {
         if let Route::Site { site, .. } = ui.route.get_untracked() {
             let env = ui.preview_environment(&site);
             spawn_local(async move {
-                if let Err(e) = api::preview(&site.path, &env).await {
+                let page = ui.current_page.get_untracked();
+                if let Err(e) = api::preview(&site.path, &env, page.as_deref()).await {
                     ui.fail(e);
                 }
             });

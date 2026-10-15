@@ -163,6 +163,26 @@ Framer et Webflow** :
   (https://github.com/MicrosoftEdge/WebView2Feedback/issues/5687, corrigé dans WebView2 155) ; le nouveau parcours
   évite la saisie juste avant la fenêtre.
 
+**D-23 — 15/10/2026 — prise (choix de l'utilisateur).** **Langues : un dossier par langue, comme Webflow
+Localization** : contenus et données de chaque langue dans leur propre dossier (`content/en/…`, `data/en/…`),
+adresses préfixées (`/en/…`, la langue principale sans préfixe), balises `hreflang` générées. Fichiers simples,
+lisibles dans Pages CMS ; Revel garde les structures des langues alignées (étape 3.8).
+
+**D-24 — 15/10/2026 — prise (choix de l'utilisateur).** **Polices copiées dans le site** : les fichiers de police
+(importés ou téléchargés depuis Google Fonts par Revel) sont servis par le site lui-même ; aucune requête des
+visiteurs vers Google (RGPD).
+
+**D-25 — 15/10/2026 — prise (choix de l'utilisateur).** **Synchronisation GitHub à la publication** : Revel
+enregistre (commit) et envoie les fichiers du site sur son dépôt quand on publie, ou à la demande ; il récupère
+avant les enregistrements faits ailleurs (Pages CMS).
+
+**D-26 — 15/10/2026 — prise (demande de l'utilisateur).** **Aperçu sans génération, « Générer » devient
+« Exporter »** : l'aperçu ouvre le site tel qu'il sera publié, pages rendues à la demande depuis le document en
+cours (protocole `revel-preview`, sans repères ni script de l'éditeur, scripts du site actifs ; identique à la
+génération, vérifié par `canvas-check`), à la page affichée dans l'éditeur ; plus rien à générer avant. La
+publication génère elle-même. L'ancienne rubrique « Génération » devient « Export » : fichiers du site copiés
+dans un nouveau dossier choisi (héberger ailleurs, archiver), avec « Afficher le dossier ».
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

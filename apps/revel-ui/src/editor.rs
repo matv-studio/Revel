@@ -1046,6 +1046,10 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         }
     });
 
+    // Page affichée, connue de la barre supérieure (l'aperçu s'ouvre sur elle).
+    Effect::new(move |_| ui.current_page.set(Some(ed.page.get())));
+    on_cleanup(move || ui.current_page.set(None));
+
     // Page demandée par une autre vue (vue CMS) : affichée dès que la liste des pages est connue.
     Effect::new(move |_| {
         let Some(url) = ui.goto_page.get() else {

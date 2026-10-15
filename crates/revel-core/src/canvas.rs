@@ -8,6 +8,10 @@
 //! - autres fichiers : copies du projet (`passthrough`).
 //!
 //! Un seul site à la fois dans le canevas (celui de la fenêtre d'édition).
+//!
+//! **Aperçu** (protocole `revel-preview`, étape 2.13) : mêmes réponses, page sans repères ni script
+//! du canevas, scripts du site actifs — identique à la page générée (vérifié par
+//! `canvas-check`) —, rendue à la demande depuis le document en cours : rien à générer avant.
 
 use crate::{Core, CoreError, Result};
 use revel_edit::canvas::Slot;
@@ -50,6 +54,8 @@ pub(crate) struct Canvas {
     site: PathBuf,
     pipeline: Arc<revel_assets::Pipeline>,
     opts: CanvasOptions,
+    /// Environnement des pages rendues (`production` pour le canevas).
+    environment: String,
 }
 
 /// Réglages du canevas.
@@ -68,6 +74,15 @@ impl Default for CanvasOptions {
             scripts: false,
             responsive_images: true,
         }
+    }
+}
+
+/// Adresse de base de l'aperçu selon le système.
+pub fn preview_base_url() -> &'static str {
+    if cfg!(any(windows, target_os = "android")) {
+        "http://revel-preview.localhost/"
+    } else {
+        "revel-preview://localhost/"
     }
 }
 
@@ -164,8 +179,38 @@ impl Core {
             site: path.to_path_buf(),
             pipeline,
             opts,
+            environment: "production".into(),
         });
         Ok(base_url().to_string())
+    }
+
+    /// Aperçu d'un site pour un environnement : pages rendues à la demande depuis le document en
+    /// cours (session d'édition ouverte si besoin) ; renvoie l'adresse de base du protocole.
+    pub fn preview_open(&self, path: &Path, environment: &str) -> Result<String> {
+        self.edit_open(path)?;
+        let pipeline = self.with_project(path, |p| {
+            Ok(Arc::new(revel_assets::Pipeline::new(
+                &p.dir,
+                &p.site.passthrough,
+                &p.site.settings.image_widths,
+            )))
+        })?;
+        let mut c = self.preview.lock().unwrap_or_else(|e| e.into_inner());
+        *c = Some(Canvas {
+            site: path.to_path_buf(),
+            pipeline,
+            opts: CanvasOptions {
+                scripts: true,
+                responsive_images: true,
+            },
+            environment: environment.to_string(),
+        });
+        Ok(preview_base_url().to_string())
+    }
+
+    /// Réponse du protocole de l'aperçu.
+    pub fn preview_respond(&self, uri_path: &str) -> CanvasResponse {
+        respond(self.canvas_response(uri_path, true))
     }
 
     /// Pages HTML d'un site ouvert pour l'édition (document en mémoire).
@@ -192,18 +237,10 @@ impl Core {
 
     /// Réponse du protocole du canevas pour le chemin demandé (`/agence/`, `/assets/css/site.css`).
     pub fn canvas_respond(&self, uri_path: &str) -> CanvasResponse {
-        match self.canvas_response(uri_path) {
-            Ok(Some(r)) => r,
-            Ok(None) => CanvasResponse::not_found(),
-            Err(e) => CanvasResponse {
-                status: 500,
-                content_type: "text/plain; charset=utf-8".into(),
-                body: e.to_string().into_bytes(),
-            },
-        }
+        respond(self.canvas_response(uri_path, false))
     }
 
-    fn canvas_response(&self, uri_path: &str) -> Result<Option<CanvasResponse>> {
+    fn canvas_response(&self, uri_path: &str, preview: bool) -> Result<Option<CanvasResponse>> {
         let raw = uri_path.split(['?', '#']).next().unwrap_or("/");
         let decoded = percent_decode(raw);
         let path = decoded.as_str();
@@ -211,16 +248,22 @@ impl Core {
         if !path.starts_with('/') || path.split(['/', '\\']).any(|s| s == "..") {
             return Ok(None);
         }
-        if path == CANVAS_JS_URL {
+        if path == CANVAS_JS_URL && !preview {
             return Ok(Some(CanvasResponse::ok(
                 "text/javascript; charset=utf-8",
                 CANVAS_JS.as_bytes().to_vec(),
             )));
         }
-        let (site, pipeline, opts) = {
-            let c = self.canvas.lock().unwrap_or_else(|e| e.into_inner());
+        let (site, pipeline, opts, environment) = {
+            let slot = if preview { &self.preview } else { &self.canvas };
+            let c = slot.lock().unwrap_or_else(|e| e.into_inner());
             let c = c.as_ref().ok_or(CoreError::NotOpen)?;
-            (c.site.clone(), c.pipeline.clone(), c.opts)
+            (
+                c.site.clone(),
+                c.pipeline.clone(),
+                c.opts,
+                c.environment.clone(),
+            )
         };
         // Feuille de style du modèle.
         let sheet = self.with_project(&site, |p| {
@@ -254,14 +297,18 @@ impl Core {
                 Ok(p.render_editor(
                     path,
                     hooks,
-                    "production",
+                    &environment,
                     &EditorOptions {
                         scripts: opts.scripts,
                     },
                 )?)
             })?;
             if let Some(page) = page {
-                let html = inject(&page.html, &page.slots);
+                let html = if preview {
+                    revel_render::strip_editor_marks(&page.html)
+                } else {
+                    inject(&page.html, &page.slots)
+                };
                 return Ok(Some(CanvasResponse::ok(
                     "text/html; charset=utf-8",
                     html.into_bytes(),
@@ -275,6 +322,18 @@ impl Core {
                 .ok()
                 .map(|b| CanvasResponse::ok(content_type(path), b))
         }))
+    }
+}
+
+fn respond(r: Result<Option<CanvasResponse>>) -> CanvasResponse {
+    match r {
+        Ok(Some(r)) => r,
+        Ok(None) => CanvasResponse::not_found(),
+        Err(e) => CanvasResponse {
+            status: 500,
+            content_type: "text/plain; charset=utf-8".into(),
+            body: e.to_string().into_bytes(),
+        },
     }
 }
 

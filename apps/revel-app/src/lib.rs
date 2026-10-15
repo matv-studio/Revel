@@ -1,19 +1,18 @@
 //! Coque applicative : relie l'interface Leptos (`apps/revel-ui`) aux services de
 //! `revel-core` par des commandes Tauri. Aucune logique métier ici.
 
-use revel_core::{Core, CoreError, preview::Preview};
+use revel_core::{Core, CoreError};
 use revel_protocol::{
     AppSettings, BuildEvent, DeployEvent, Failure, GithubEvent, HostingProfile, ImportResult,
     RecentSite, SiteSummary,
 };
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::ipc::Channel;
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 struct AppState {
     core: Arc<Core>,
-    preview: Mutex<Option<Preview>>,
 }
 
 /// Les échecs sont transmis à l'interface sous forme de clé de traduction (`Failure`).
@@ -145,37 +144,76 @@ async fn build_site(
     .map_err(err)
 }
 
-/// Démarre (ou redémarre) l'aperçu du dernier site généré et l'ouvre dans une fenêtre.
+/// Aperçu du site dans une fenêtre : pages rendues à la demande depuis le document en cours
+/// (protocole `revel-preview`, rien à générer avant), à partir de `page` (`/agence/`). Commande
+/// asynchrone : une fenêtre créée dans une commande synchrone bloque sous Windows.
 #[tauri::command]
 async fn open_preview(
     app: tauri::AppHandle,
     s: State<'_, AppState>,
     path: String,
     environment: String,
+    page: Option<String>,
 ) -> Res<String> {
-    let dir = revel_core::out_dir(&PathBuf::from(&path), &environment);
-    if !dir.join("index.html").is_file() {
-        return Err(CoreError::NotBuilt.failure());
-    }
-    let p = revel_core::preview::start(dir)
-        .await
-        .map_err(|e| CoreError::Io(e).failure())?;
-    let url = p.url.clone();
-    if let Ok(mut slot) = s.preview.lock() {
-        *slot = Some(p);
-    }
+    let base = s
+        .core
+        .preview_open(&PathBuf::from(&path), &environment)
+        .map_err(err)?;
+    let page = page.unwrap_or_default();
+    let url = format!("{base}{}", page.trim_start_matches('/'));
     let parsed: tauri::Url = url.parse().map_err(sys)?;
     if let Some(w) = app.get_webview_window("preview") {
         w.navigate(parsed).map_err(sys)?;
         let _ = w.set_focus();
     } else {
-        WebviewWindowBuilder::new(&app, "preview", WebviewUrl::External(parsed))
+        // Windows : `http://revel-preview.localhost/` ; ailleurs : `revel-preview://localhost/`.
+        let target = if parsed.scheme() == "http" || parsed.scheme() == "https" {
+            WebviewUrl::External(parsed)
+        } else {
+            WebviewUrl::CustomProtocol(parsed)
+        };
+        WebviewWindowBuilder::new(&app, "preview", target)
             .title("Revel — aperçu")
             .inner_size(1280.0, 860.0)
             .build()
             .map_err(sys)?;
     }
     Ok(url)
+}
+
+/// Exporte le site (génération, puis copie dans un nouveau dossier de `parent`).
+#[tauri::command]
+async fn export_site(
+    s: State<'_, AppState>,
+    path: String,
+    environment: String,
+    images: bool,
+    parent: String,
+    on_event: Channel<BuildEvent>,
+) -> Res<String> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.export(
+            &PathBuf::from(path),
+            &environment,
+            images,
+            &PathBuf::from(parent),
+            &|e| {
+                let _ = on_event.send(e);
+            },
+        )
+    })
+    .await
+    .map_err(sys)?
+    .map(|s| s.out_dir)
+    .map_err(err)
+}
+
+/// Montre un dossier ou un fichier dans l'explorateur du système (dossier exporté).
+#[tauri::command]
+fn reveal_path(app: tauri::AppHandle, path: String) -> Res<()> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().reveal_item_in_dir(&path).map_err(sys)
 }
 
 #[tauri::command]
@@ -320,16 +358,22 @@ fn edit_stamp(s: State<AppState>, path: String) -> Res<String> {
     s.core.edit_stamp(std::path::Path::new(&path)).map_err(err)
 }
 
-/// Réponse du protocole `revel-canvas` (canevas de l'éditeur, sans port réseau).
+/// Réponse des protocoles `revel-canvas` (canevas de l'éditeur) et `revel-preview` (aperçu),
+/// sans port réseau.
 fn canvas_protocol(
     app: &tauri::AppHandle,
     request: tauri::http::Request<Vec<u8>>,
     responder: tauri::UriSchemeResponder,
+    preview: bool,
 ) {
     let core = app.state::<AppState>().core.clone();
     let path = request.uri().path().to_string();
     std::thread::spawn(move || {
-        let r = core.canvas_respond(&path);
+        let r = if preview {
+            core.preview_respond(&path)
+        } else {
+            core.canvas_respond(&path)
+        };
         let response = tauri::http::Response::builder()
             .status(r.status)
             .header(tauri::http::header::CONTENT_TYPE, r.content_type)
@@ -377,7 +421,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("revel-canvas", |ctx, request, responder| {
-            canvas_protocol(ctx.app_handle(), request, responder);
+            canvas_protocol(ctx.app_handle(), request, responder, false);
+        })
+        .register_asynchronous_uri_scheme_protocol("revel-preview", |ctx, request, responder| {
+            canvas_protocol(ctx.app_handle(), request, responder, true);
         })
         .setup(|app| {
             let dir = app
@@ -387,7 +434,6 @@ pub fn run() {
             let secrets: Box<dyn revel_core::SecretStore> = Box::new(revel_core::secrets::Keyring);
             app.manage(AppState {
                 core: Arc::new(Core::new(&dir, secrets)),
-                preview: Mutex::new(None),
             });
             Ok(())
         })
@@ -406,6 +452,8 @@ pub fn run() {
             cms_collections,
             import_eleventy,
             build_site,
+            export_site,
+            reveal_path,
             open_preview,
             list_profiles,
             save_profile,

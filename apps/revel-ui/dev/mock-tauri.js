@@ -80,7 +80,15 @@
         ch.onmessage({ event: "finished", environment: args.environment, out_dir: "", generated: 70, copied: 443, images_produced: 12, images_cached: 3831, images_failed: 0, seconds: 3.4, warnings: [] });
         return null;
       }
-      case "open_preview": throw { key: "error-not-built", args: [] };
+      case "open_preview": return "revel-preview://localhost/" + (args.page || "/").replace(/^\//, "");
+      case "reveal_path": return null;
+      case "export_site": {
+        const ch = args.onEvent;
+        for (const [phase, done, total] of [["pages", 1, 1], ["copies", 1, 1], ["images", 2, 4], ["images", 4, 4]]) { await wait(120); ch.onmessage({ event: "progress", phase, done, total }); }
+        const out = args.parent + "\\alunites-" + args.environment;
+        ch.onmessage({ event: "finished", environment: args.environment, out_dir: out, generated: 71, copied: 442, images_produced: 12, images_cached: 380, images_failed: 0, seconds: 4.2, warnings: [] });
+        return out;
+      }
       case "github_account": return github;
       case "github_disconnect": github = null; return null;
       case "github_cancel": return null;

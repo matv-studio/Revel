@@ -37,20 +37,14 @@ sortie (étapes 1 et 2).
 | 3.10 | **Versions et synchronisation** : sauvegardes (versions du site comparées et restaurées), synchronisation avec le dépôt GitHub du site (enregistrements de Pages CMS) | `revel-git`, `revel-core`, `revel-ui` |
 | 3.11 | **Canevas, suite** : poignées de taille (largeur et hauteur écrites dans la classe), marges visibles au survol, plusieurs points de rupture côte à côte, sélection multiple, palette de commandes (Ctrl+K) | `revel-core` (canvas.js), `revel-ui` |
 
-## Choix à faire
+## Choix retenus (15/10/2026, voir DECISIONS.md)
 
-Proposés ci-dessous, à confirmer par l'utilisateur ; les sous-étapes 3.1 à 3.7 n'en dépendent pas.
-
-- **Langues (3.8)** — (a) un dossier de contenus et de données par langue (`content/en/…`, `data/en/…`) et
-  adresses préfixées (`/en/…`), comme Webflow Localization : fichiers séparés, lisibles dans Pages CMS, mais
-  structure dupliquée à garder alignée ; (b) une seule source avec les textes traduits dans chaque fichier
-  (`title: { fr: …, en: … }`) : rien à aligner, mais fichiers moins lisibles et Pages CMS ne sait pas les éditer
-  comme des champs simples.
-- **Polices (3.9)** — (a) fichiers de police copiés dans le site (aucune requête vers Google, conforme au RGPD) ;
-  (b) lien vers Google Fonts (plus simple, mais adresse IP des visiteurs transmise à Google).
-- **Synchronisation (3.10)** — (a) Revel enregistre (commit) et envoie sur la branche du site à chaque
-  publication ou à la demande ; (b) à chaque enregistrement, en continu (proche de Webflow, mais beaucoup de
-  commits).
+- **D-23 — langues** : un dossier de contenus et de données par langue, adresses préfixées (`/en/…`), comme
+  Webflow Localization.
+- **D-24 — polices** : fichiers copiés dans le site (aucune requête vers Google).
+- **D-25 — synchronisation** : enregistrement et envoi sur le dépôt GitHub du site à la publication, ou à la
+  demande.
+- **D-26 — aperçu et export** : aperçu sans génération préalable ; « Générer » devient « Exporter ».
 
 ## Avancement
 

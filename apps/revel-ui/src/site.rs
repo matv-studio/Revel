@@ -60,7 +60,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
     let body = match section {
         Section::General => view! { <General site=site.clone()/> }.into_any(),
         Section::Publish => view! { <crate::publish::Publish site=site.clone()/> }.into_any(),
-        Section::Export => view! { <Build site=site.clone()/> }.into_any(),
+        Section::Export => view! { <Export site=site.clone()/> }.into_any(),
         Section::Redirects => view! { <Redirects site=site.clone()/> }.into_any(),
         other => {
             let (key, step) = SECTIONS
@@ -258,21 +258,39 @@ fn Locales(site: SiteSummary) -> impl IntoView {
     }
 }
 
-/// Génération du site dans un dossier (export), pour un environnement.
+/// Export du site : fichiers finaux (pages, styles, images optimisées) copiés dans un nouveau
+/// dossier choisi, pour héberger le site ailleurs ou l'archiver. L'aperçu et la publication n'en
+/// ont pas besoin (D-26).
 #[component]
-pub fn Build(site: SiteSummary) -> impl IntoView {
+pub fn Export(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let env = RwSignal::new(ui.preview_environment(&site));
-    // L'aperçu de la barre supérieure suit l'environnement choisi ici.
-    Effect::new(move |_| ui.environment.set(Some(env.get())));
     let images = RwSignal::new(true);
+    let parent = RwSignal::new(String::new());
     let running = RwSignal::new(false);
     let progress = RwSignal::new(None::<(BuildPhase, usize, usize)>);
     let result = RwSignal::new(None::<Result<BuildSummary, Failure>>);
     let path = StoredValue::new(site.path.clone());
-    // Fin de la génération. Les événements du canal peuvent arriver après la réponse de la
-    // commande : l'état final est fixé par le premier signal de fin, et les messages de
-    // progression qui suivent sont ignorés.
+    // Dossier proposé : celui des sites (Documents/Revel).
+    spawn_local(async move {
+        if let Ok(d) = api::default_sites_dir().await
+            && parent.get_untracked().is_empty()
+        {
+            parent.set(d);
+        }
+    });
+    let change = move |_| {
+        spawn_local(async move {
+            let start = parent.get_untracked();
+            match api::pick_folder_at(Some(start.as_str()).filter(|s| !s.is_empty())).await {
+                Ok(Some(p)) => parent.set(p),
+                Ok(None) => {}
+                Err(e) => ui.fail(e),
+            }
+        })
+    };
+    // Fin de l'export. Les événements du canal peuvent arriver après la réponse de la commande :
+    // l'état final est fixé par le premier signal de fin, la progression qui suit est ignorée.
     let finish = move |r: Result<BuildSummary, Failure>| {
         result.set(Some(r));
         progress.set(None);
@@ -284,10 +302,11 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
         result.set(None);
         ui.activity.set(Some(0.02));
         spawn_local(async move {
-            let r = api::build(
+            let r = api::export(
                 &path.get_value(),
                 &env.get_untracked(),
                 images.get_untracked(),
+                &parent.get_untracked(),
                 move |e| match e {
                     BuildEvent::Progress { .. } if result.with_untracked(|r| r.is_some()) => {}
                     BuildEvent::Progress { phase, done, total } => {
@@ -296,7 +315,7 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
                             BuildPhase::Pages => 0.05,
                             BuildPhase::Copies => 0.1,
                             BuildPhase::Images if total > 0 => {
-                                0.1 + 0.9 * done as f32 / total as f32
+                                0.1 + 0.85 * done as f32 / total as f32
                             }
                             BuildPhase::Images => 0.1,
                         };
@@ -313,14 +332,6 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
                 finish(Err(e));
             }
         });
-    };
-    // Aperçu de l'environnement qui vient d'être généré.
-    let preview = move |environment: String| {
-        spawn_local(async move {
-            if let Err(e) = api::preview(&path.get_value(), &environment).await {
-                ui.fail(e);
-            }
-        })
     };
     let envs = site.environments.clone();
     let phase_text = move || {
@@ -339,11 +350,14 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
     view! {
         <section class="page settings-page">
             <header class="page-head">
-                <h1>{ui.t("settings-export")}</h1>
+                <div>
+                    <h1>{ui.t("export-title")}</h1>
+                    <p class="muted page-lead">{ui.t("export-lead")}</p>
+                </div>
             </header>
             <div class="section">
                 <div class="form-grid">
-                    <span class="label">{ui.t("build-env")}</span>
+                    <span class="label" title=ui.t("export-env-help")>{ui.t("build-env")}</span>
                     <div class="segmented" role="radiogroup">
                         {envs.into_iter().map(|e| {
                             let v = e.clone();
@@ -354,16 +368,21 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
                             }
                         }).collect_view()}
                     </div>
-                    <span class="label">{ui.t("build-images")}</span>
+                    <span class="label" title=ui.t("export-images-help")>{ui.t("build-images")}</span>
                     <label class="switch">
                         <input type="checkbox" prop:checked=move || images.get() on:change=move |ev| images.set(event_target_checked(&ev))/>
                         <span class="switch-track"></span>
                     </label>
+                    <span class="label">{ui.t("export-where")}</span>
+                    <div class="path-field">
+                        <span class="path-value" title=move || parent.get()>{move || parent.get()}</span>
+                        <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
+                    </div>
                 </div>
                 <div class="toolbar toolbar--start">
-                    <button class="btn btn--primary" on:click=run disabled=move || running.get()>
-                        {icons::build()}
-                        {move || if running.get() { ui.tx("build-running", &[]) } else { ui.tx("build-run", &[]) }}
+                    <button class="btn btn--primary" on:click=run disabled=move || running.get() || parent.with(String::is_empty)>
+                        {icons::upload()}
+                        {move || if running.get() { ui.tx("export-running", &[]) } else { ui.tx("export-run", &[]) }}
                     </button>
                     <span class="muted">{phase_text}</span>
                 </div>
@@ -371,7 +390,7 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
             {move || result.get().map(|r| match r {
                 Ok(s) => {
                     let n = s.warnings.len();
-                    let built = s.environment.clone();
+                    let dir = s.out_dir.clone();
                     let msg = ui.tx("build-done", &[
                         ("generated", crate::num(s.generated as f64, 0)),
                         ("copied", crate::num(s.copied as f64, 0)),
@@ -383,8 +402,12 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
                         <div class="section" aria-live="polite">
                             <div class="section-head">
                                 <p class="status status--ok">{icons::check()}<span>{msg}</span></p>
-                                <button class="btn" on:click=move |_| preview(built.clone())>{icons::play()}{ui.t("preview-open")}</button>
+                                <button class="btn" on:click=move |_| {
+                                    let d = dir.clone();
+                                    spawn_local(async move { if let Err(e) = api::reveal(&d).await { ui.fail(e) } });
+                                }>{icons::folder()}{ui.t("export-reveal")}</button>
                             </div>
+                            <p class="muted path">{s.out_dir.clone()}</p>
                             <Show when=move || { n > 0 }>
                                 <h3>{ui.t("build-warnings")}</h3>
                                 <ul class="list-plain">{s.warnings.iter().map(|w| view! { <li>{w.clone()}</li> }).collect_view()}</ul>
@@ -392,7 +415,7 @@ pub fn Build(site: SiteSummary) -> impl IntoView {
                         </div>
                     }.into_any()
                 }
-                Err(f) => view! { <div class="notice notice--error" role="alert">{ui.tx("build-failed", &[("message", ui.failure(&f))])}</div> }.into_any(),
+                Err(f) => view! { <div class="notice notice--error" role="alert">{ui.tx("export-failed", &[("message", ui.failure(&f))])}</div> }.into_any(),
             })}
         </section>
     }

@@ -225,7 +225,7 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
         run.set(Some(Run {
             profile: id.clone(),
             dry_run,
-            status: Some(ui.now("build-running", &[])),
+            status: Some(ui.now("publish-building", &[])),
             ..Default::default()
         }));
         ui.activity.set(Some(0.02));

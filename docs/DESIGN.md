@@ -77,8 +77,10 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 - **Changer de vue ne recharge rien** : l'éditeur reste monté, caché, pendant que les autres vues sont affichées.
 - **Activité** (génération, publication) : ligne de 2 px en haut de la fenêtre, visible depuis n'importe quelle vue.
 - **Paramètres du site** : rubriques à gauche (comme les réglages d'un site Webflow) — Général, Publication,
-  Génération, Référencement, Redirections, Polices, Code personnalisé, Formulaires, Sauvegardes ; les rubriques
+  Export, Référencement, Redirections, Polices, Code personnalisé, Formulaires, Sauvegardes ; les rubriques
   prévues sont affichées en gris avec leur étape.
+- **Aperçu** (D-26) : le site tel qu'il sera publié, dans une fenêtre, à la page affichée dans l'éditeur ; rien à
+  générer avant. **Export** : fichiers du site copiés dans un dossier choisi, « Afficher le dossier » ensuite.
 
 ## Composants (`styles/components.css`)
 

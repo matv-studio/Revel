@@ -141,6 +141,8 @@ pub struct Core {
     /// Sites ouverts dans l'éditeur (clé : chemin du site).
     sessions: Mutex<std::collections::HashMap<String, edit::Session>>,
     canvas: Mutex<Option<canvas::Canvas>>,
+    /// Aperçu (protocole `revel-preview`).
+    preview: Mutex<Option<canvas::Canvas>>,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -186,6 +188,7 @@ impl Core {
             github_cancel: AtomicBool::new(false),
             sessions: Mutex::new(std::collections::HashMap::new()),
             canvas: Mutex::new(None),
+            preview: Mutex::new(None),
         }
     }
 
@@ -327,6 +330,36 @@ impl Core {
                 Err(e)
             }
         }
+    }
+
+    /// Exporte le site : génération (`<site>/.revel/out/<env>`), puis copie des fichiers dans un
+    /// nouveau dossier de `parent` nommé d'après le site et l'environnement
+    /// (`alunites-production`, suffixe si le dossier existe). Le résumé indique ce dossier.
+    pub fn export(
+        &self,
+        path: &Path,
+        environment: &str,
+        images: bool,
+        parent: &Path,
+        on_event: &(dyn Fn(BuildEvent) + Sync),
+    ) -> Result<BuildSummary> {
+        // Progression et échec transmis ; la fin est annoncée après la copie.
+        let inner = |e: BuildEvent| {
+            if !matches!(e, BuildEvent::Finished(_)) {
+                on_event(e)
+            }
+        };
+        let mut summary = self.build(path, environment, images, &inner)?;
+        let name = revel_project::Project::open(path)?.site.name;
+        let dest = site_folder(parent, &format!("{name} {environment}"));
+        if let Err(e) = copy_tree(&out_dir(path, environment), &dest) {
+            let e = CoreError::Io(e);
+            on_event(BuildEvent::Failed(e.failure()));
+            return Err(e);
+        }
+        summary.out_dir = dest.display().to_string();
+        on_event(BuildEvent::Finished(summary.clone()));
+        Ok(summary)
     }
 
     pub fn profiles(&self, site: &str) -> Vec<HostingProfile> {
@@ -536,6 +569,21 @@ impl Core {
             }
         }
     }
+}
+
+/// Copie récursive d'un dossier (le dossier d'arrivée est créé).
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for e in std::fs::read_dir(from)? {
+        let e = e?;
+        let target = to.join(e.file_name());
+        if e.file_type()?.is_dir() {
+            copy_tree(&e.path(), &target)?;
+        } else {
+            std::fs::copy(e.path(), &target)?;
+        }
+    }
+    Ok(())
 }
 
 /// Dossier d'un nouveau site dans `parent` : nom du site en minuscules, sans accents ni espaces

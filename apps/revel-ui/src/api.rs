@@ -200,37 +200,56 @@ pub async fn has_site(path: &str) -> Res<bool> {
     call("has_site", &PathArg { path }).await
 }
 
-pub async fn build(
+/// Exporte le site dans un nouveau dossier de `parent` ; renvoie ce dossier.
+pub async fn export(
     path: &str,
     environment: &str,
     images: bool,
+    parent: &str,
     on: impl Fn(BuildEvent) + 'static,
-) -> Res<()> {
+) -> Res<String> {
     #[derive(Serialize)]
     struct A<'a> {
         path: &'a str,
         environment: &'a str,
         images: bool,
+        parent: &'a str,
     }
-    call_with_channel::<_, (), _>(
-        "build_site",
+    call_with_channel::<_, String, _>(
+        "export_site",
         &A {
             path,
             environment,
             images,
+            parent,
         },
         on,
     )
     .await
 }
 
-pub async fn preview(path: &str, environment: &str) -> Res<String> {
+/// Aperçu du site (pages rendues à la demande), à partir de `page`.
+pub async fn preview(path: &str, environment: &str, page: Option<&str>) -> Res<String> {
     #[derive(Serialize)]
     struct A<'a> {
         path: &'a str,
         environment: &'a str,
+        page: Option<&'a str>,
     }
-    call("open_preview", &A { path, environment }).await
+    call(
+        "open_preview",
+        &A {
+            path,
+            environment,
+            page,
+        },
+    )
+    .await
+}
+
+/// Montre un dossier dans l'explorateur du système.
+pub async fn reveal(path: &str) -> Res<()> {
+    call("reveal_path", &PathArg { path }).await
 }
 
 pub async fn profiles(site: &str) -> Res<Vec<(HostingProfile, bool)>> {

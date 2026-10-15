@@ -678,3 +678,32 @@ fn contenus_modifies_crees_supprimes_et_annules() {
         .is_err()
     );
 }
+
+#[test]
+fn apercu_sans_generation_et_export() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    // Aperçu : page rendue à la demande, sans repères ni script du canevas.
+    let base = c.preview_open(&site, "production").unwrap();
+    assert!(base.contains("revel-preview"));
+    let r = c.preview_respond("/");
+    assert_eq!(r.status, 200);
+    let html = String::from_utf8(r.body).unwrap();
+    assert!(html.contains("<h1>Accueil</h1>"), "{html}");
+    assert!(!html.contains("data-rv") && !html.contains("rv:") && !html.contains("canvas.js"));
+    assert_eq!(c.preview_respond(canvas::CANVAS_JS_URL).status, 404);
+    // Export : génération puis copie dans un nouveau dossier.
+    let exports = d.path().join("exports");
+    let s = c
+        .export(&site, "production", false, &exports, &|_| {})
+        .unwrap();
+    assert!(s.out_dir.ends_with("essai-production"), "{}", s.out_dir);
+    let index = std::fs::read_to_string(Path::new(&s.out_dir).join("index.html")).unwrap();
+    assert!(index.contains("<h1>Accueil</h1>"));
+    // Deuxième export : dossier distinct.
+    let s2 = c
+        .export(&site, "production", false, &exports, &|_| {})
+        .unwrap();
+    assert!(s2.out_dir.ends_with("essai-production-2"));
+}

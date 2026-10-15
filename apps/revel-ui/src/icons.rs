@@ -29,10 +29,6 @@ pub fn grid() -> AnyView {
     )
 }
 
-pub fn build() -> AnyView {
-    svg(r#"<path d="M3 13l4-4M9.5 2.5l4 4-5 5-4-4z"/>"#)
-}
-
 pub fn upload() -> AnyView {
     svg(r#"<path d="M8 11V3M5 6l3-3 3 3M3 11v2h10v-2"/>"#)
 }

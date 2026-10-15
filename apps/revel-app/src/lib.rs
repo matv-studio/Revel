@@ -412,6 +412,136 @@ async fn translate(
         .map_err(err)
 }
 
+/// Versions du site (3.10) : état ; `None` : versions pas encore activées.
+#[tauri::command]
+fn versions_status(
+    s: State<AppState>,
+    path: String,
+) -> Res<Option<revel_protocol::VersionsStatus>> {
+    s.core.versions_status(&PathBuf::from(path)).map_err(err)
+}
+
+#[tauri::command]
+async fn versions_init(
+    s: State<'_, AppState>,
+    path: String,
+    message: String,
+) -> Res<revel_protocol::VersionInfo> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.versions_init(&PathBuf::from(path), &message))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+#[tauri::command]
+fn versions_list(
+    s: State<AppState>,
+    path: String,
+    limit: usize,
+) -> Res<Vec<revel_protocol::VersionInfo>> {
+    s.core
+        .versions_list(&PathBuf::from(path), limit)
+        .map_err(err)
+}
+
+#[tauri::command]
+async fn versions_save(
+    s: State<'_, AppState>,
+    path: String,
+    message: String,
+) -> Res<Option<revel_protocol::VersionInfo>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.versions_save(&PathBuf::from(path), &message))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+#[tauri::command]
+fn versions_changes(
+    s: State<AppState>,
+    path: String,
+    id: Option<String>,
+    of_version: bool,
+) -> Res<Vec<revel_protocol::FileChange>> {
+    s.core
+        .versions_changes(&PathBuf::from(path), id.as_deref(), of_version)
+        .map_err(err)
+}
+
+#[tauri::command]
+fn versions_diff(
+    s: State<AppState>,
+    path: String,
+    id: Option<String>,
+    of_version: bool,
+    file: String,
+) -> Res<Option<Vec<revel_protocol::DiffLine>>> {
+    let p = PathBuf::from(path);
+    match (id, of_version) {
+        (Some(i), true) => s.core.versions_version_diff(&p, &i, &file),
+        (id, _) => s.core.versions_diff(&p, id.as_deref(), &file),
+    }
+    .map_err(err)
+}
+
+#[tauri::command]
+async fn versions_restore(
+    s: State<'_, AppState>,
+    path: String,
+    id: String,
+    before: String,
+    message: String,
+) -> Res<Option<revel_protocol::VersionInfo>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.versions_restore(&PathBuf::from(path), &id, &before, &message)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+#[tauri::command]
+async fn versions_sync(
+    s: State<'_, AppState>,
+    path: String,
+    message: String,
+    merge: String,
+) -> Res<revel_protocol::SyncInfo> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.versions_sync(&PathBuf::from(path), &message, &merge)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+#[tauri::command]
+async fn versions_resolve(
+    s: State<'_, AppState>,
+    path: String,
+    keep_ours: bool,
+    message: String,
+) -> Res<revel_protocol::SyncInfo> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.versions_resolve(&PathBuf::from(path), keep_ours, &message)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+#[tauri::command]
+fn versions_set_remote(s: State<AppState>, path: String, url: String) -> Res<()> {
+    s.core
+        .versions_set_remote(&PathBuf::from(path), &url)
+        .map_err(err)
+}
+
 /// Polices du site (règles `@font-face`, 3.9).
 #[tauri::command]
 fn fonts(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::FontFamily>> {
@@ -679,6 +809,16 @@ pub fn run() {
             translate,
             translate_packs,
             fonts,
+            versions_status,
+            versions_init,
+            versions_list,
+            versions_save,
+            versions_changes,
+            versions_diff,
+            versions_restore,
+            versions_sync,
+            versions_resolve,
+            versions_set_remote,
             fonts_google,
             fonts_add_google,
             fonts_add_files,

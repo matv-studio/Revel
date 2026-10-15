@@ -24,6 +24,7 @@ pub mod secrets;
 pub mod starter;
 mod state;
 mod translate;
+mod versions;
 
 pub use secrets::SecretStore;
 pub use state::State;

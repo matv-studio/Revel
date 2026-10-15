@@ -72,7 +72,7 @@ pub struct Report {
     pub dry_run: bool,
 }
 
-fn callbacks<'a>(token: Option<&'a str>) -> RemoteCallbacks<'a> {
+pub(crate) fn callbacks<'a>(token: Option<&'a str>) -> RemoteCallbacks<'a> {
     let mut cb = RemoteCallbacks::new();
     let mut tried = false;
     cb.credentials(move |_url, _user, _allowed| {
@@ -88,7 +88,7 @@ fn callbacks<'a>(token: Option<&'a str>) -> RemoteCallbacks<'a> {
     cb
 }
 
-fn proxy<'a>() -> ProxyOptions<'a> {
+pub(crate) fn proxy<'a>() -> ProxyOptions<'a> {
     let mut p = ProxyOptions::new();
     p.auto();
     p

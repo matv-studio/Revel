@@ -888,6 +888,19 @@ impl Core {
         self.with_session(path, |s| Ok(s.project.site.clone()))
     }
 
+    /// Relit depuis le disque le site d'une session ouverte (fichiers remplacés : version
+    /// restaurée, récupérée) ; l'historique repart de zéro. Sans session : rien.
+    pub fn edit_reload(&self, path: &Path) -> Result<()> {
+        let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(s) = map.get_mut(&key(path)) {
+            s.project = Project::open(path)?;
+            s.history = History::default();
+            s.revision += 1;
+            s.saved_mtime = mtime(path);
+        }
+        Ok(())
+    }
+
     pub fn edit_close(&self, path: &Path) {
         let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         map.remove(&key(path));

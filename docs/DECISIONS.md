@@ -358,3 +358,20 @@ place et `.revel/`, dossiers vidés retirés. Sources : [Custom code in head and
 Center](https://help.webflow.com/site-settings/custom-code), [CSS API update — Google
 Fonts](https://developers.google.com/fonts/docs/css2).
 
+**D-38 — 15/10/2026 — prise.** **Versions du site et synchronisation GitHub (3.10, D-25).** Le dossier du
+site est un dépôt Git ordinaire (`git2`, sans Git installé) ; « Activer les versions » le crée s'il n'existe pas,
+ajoute `.revel/` (caches, corbeille) au `.gitignore` et enregistre une première version. Une version enregistre
+tous les fichiers du site (ajoutés, modifiés, supprimés), avec un message (proposé : date et heure) et l'auteur
+réglé pour Git (dépôt ou ordinateur), sinon le compte GitHub connecté, sinon « Revel ». Paramètres › Versions : changements en cours, puis versions
+de la plus récente à la plus ancienne (fusions marquées) ; pour chacune, fichiers changés et comparaison ligne
+par ligne (3 lignes de contexte, nombres de lignes ajoutées et retirées). Restaurer une version ne réécrit pas
+l'historique : l'état actuel est d'abord enregistré (« Avant restauration »), puis les fichiers de la version
+remis en place et enregistrés comme nouvelle version, comme les sauvegardes de Webflow ; le document ouvert est
+relu (historique d'annulation vidé). Synchronisation avec `origin` (adresse du dépôt GitHub, identifiants du
+compte connecté) : changements en cours enregistrés, versions en ligne récupérées (Pages CMS) en avance rapide ou
+fusion sans conflit, puis versions du site envoyées en avance rapide seulement (rien n'est écrasé en ligne). En
+cas de conflit rien n'est changé : les fichiers sont indiqués et l'on choisit, pour eux, la version du site ou
+celle en ligne. La publication synchronise avant de publier quand l'option du profil est active (par défaut) et
+s'arrête sur un conflit. Sources : [Save and restore backups — Webflow Help
+Center](https://help.webflow.com/hc/en-us/articles/33961244069395), [Dealing with non-fast-forward errors —
+GitHub Docs](https://docs.github.com/en/get-started/using-git/dealing-with-non-fast-forward-errors).

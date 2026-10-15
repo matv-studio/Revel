@@ -371,6 +371,7 @@ error-font = Font: { $detail }
 error-edit-site = Invalid address: “{ $detail }” (expected: https://…)
 error-translate-pair = No translation model for { $from } → { $to }.
 error-translate = Automatic translation failed: { $detail }
+error-versions-conflict = Same lines changed online and in the site: resolve the conflict in Settings › Versions before publishing.
 error-translate-integrity = Downloaded translation file is corrupted ({ $detail }): download it again.
 error-translate-cancelled = Download cancelled.
 error-translate-busy = A language download is already in progress.
@@ -835,10 +836,57 @@ settings-redirects = Redirects
 settings-fonts = Fonts
 settings-code = Custom code
 settings-forms = Forms
-settings-backups = Backups
+settings-versions = Versions
+versions-help = Saved versions of the site (Git repository of its folder): compare, restore, sync with the site's GitHub repository (Pages CMS commits)
+versions-changes = { $n ->
+    [one] 1 change
+   *[other] { $n } changes
+}
+versions-changes-help = Files changed since the last version
+versions-clean = Up to date
+versions-sync = Sync
+versions-sync-help = Save changes, get online versions (Pages CMS), then send the site's versions
+versions-sync-account = Connect a GitHub account in the app settings
+versions-ahead = Versions to send
+versions-behind = Online versions to get
+versions-save = Save a version
+versions-message = Description
+versions-default-message = Version of { $date }
+versions-first = First version
+versions-merge-message = Versions retrieved from the online repository
+versions-init = Turn on versions
+versions-init-help = The site folder becomes a Git repository: each version saves all its files
+versions-remote = GitHub repository
+versions-remote-help = HTTPS address of the site's repository, synced with Pages CMS
+versions-branch = Branch
+versions-conflict = Same lines changed online and in the site: nothing was changed.
+versions-keep-ours = Keep the site's version
+versions-keep-theirs = Take the online version
+versions-resolved-ours = Conflict resolved: site version kept
+versions-resolved-theirs = Conflict resolved: online version kept
+versions-current = Current changes
+versions-current-help = Not saved yet
+versions-latest = Latest
+versions-files = Files changed
+versions-restore = Restore
+versions-restore-help = Bring back this version's files (the current state is saved first)
+versions-restore-title = Restore “{ $name }”?
+versions-before-restore = Before restore
+versions-restored = Restore of “{ $name }”
+versions-no-files = No file changed
+versions-added = Added
+versions-deleted = Deleted
+versions-modified = Modified
+versions-binary = Binary file
+versions-more-lines = { $n } more lines
+time-now = Just now
+time-min = { $n } min ago
+time-hours = { $n ->
+    [one] 1 h ago
+   *[other] { $n } h ago
+}
 settings-seo-planned = Title, description and share image of each page, sitemap and robots.txt.
 settings-forms-planned = Receiving the site’s form submissions (email, spreadsheet, external service).
-settings-backups-planned = Saved versions of the site, compared and restored.
 settings-identity = Identity
 settings-site-name = Name
 settings-site-url = Public address
@@ -1128,6 +1176,10 @@ export-run = Export
 export-running = Exporting…
 export-reveal = Show folder
 export-failed = Export failed. { $message }
+publish-sync-versions = Sync versions before publishing
+publish-sync-versions-help = Saves changes, gets those made elsewhere (Pages CMS) and sends them to the site's repository (Settings › Versions)
+publish-syncing = Syncing versions…
+publish-sync-message = Publication
 publish-building = Preparing the site files…
 
 # Collection schema (step 3.3)

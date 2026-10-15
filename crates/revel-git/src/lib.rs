@@ -3,13 +3,16 @@
 //! - [`publish`] : publication d'un dossier (site généré) sur une branche d'un dépôt distant,
 //!   sans copie de travail, en n'envoyant que les changements (GitHub Pages, et tout dépôt Git) ;
 //! - [`github`] (fonction `github`) : connexion par autorisation sur github.com (device flow,
-//!   D-11), compte, dépôt, activation de GitHub Pages.
+//!   D-11), compte, dépôt, activation de GitHub Pages ;
+//! - [`versions`] : versions du site (dépôt Git du dossier du site), comparaison, restauration,
+//!   synchronisation avec son dépôt distant (D-25).
 //!
 //! libgit2 est compilée dans Revel (D-12) : aucune installation de Git n'est nécessaire.
 
 #[cfg(feature = "github")]
 pub mod github;
 pub mod publish;
+pub mod versions;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {

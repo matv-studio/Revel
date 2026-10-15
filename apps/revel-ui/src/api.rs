@@ -351,6 +351,106 @@ pub async fn github_connect(on: impl Fn(GithubEvent) + 'static) -> Res<String> {
     call_with_channel("github_connect", &NoArgs {}, on).await
 }
 
+/// Versions du site (3.10) ; `None` : versions pas encore activées.
+pub async fn versions_status(path: &str) -> Res<Option<revel_protocol::VersionsStatus>> {
+    call("versions_status", &serde_json::json!({ "path": path })).await
+}
+
+pub async fn versions_init(path: &str, message: &str) -> Res<revel_protocol::VersionInfo> {
+    call(
+        "versions_init",
+        &serde_json::json!({ "path": path, "message": message }),
+    )
+    .await
+}
+
+pub async fn versions_list(path: &str, limit: usize) -> Res<Vec<revel_protocol::VersionInfo>> {
+    call(
+        "versions_list",
+        &serde_json::json!({ "path": path, "limit": limit }),
+    )
+    .await
+}
+
+pub async fn versions_save(path: &str, message: &str) -> Res<Option<revel_protocol::VersionInfo>> {
+    call(
+        "versions_save",
+        &serde_json::json!({ "path": path, "message": message }),
+    )
+    .await
+}
+
+/// Fichiers changés : par une version (`of_version`), ou depuis une version (ou la dernière).
+pub async fn versions_changes(
+    path: &str,
+    id: Option<&str>,
+    of_version: bool,
+) -> Res<Vec<revel_protocol::FileChange>> {
+    call(
+        "versions_changes",
+        &serde_json::json!({ "path": path, "id": id, "ofVersion": of_version }),
+    )
+    .await
+}
+
+pub async fn versions_diff(
+    path: &str,
+    id: Option<&str>,
+    of_version: bool,
+    file: &str,
+) -> Res<Option<Vec<revel_protocol::DiffLine>>> {
+    call(
+        "versions_diff",
+        &serde_json::json!({ "path": path, "id": id, "ofVersion": of_version, "file": file }),
+    )
+    .await
+}
+
+pub async fn versions_restore(
+    path: &str,
+    id: &str,
+    before: &str,
+    message: &str,
+) -> Res<Option<revel_protocol::VersionInfo>> {
+    call(
+        "versions_restore",
+        &serde_json::json!({ "path": path, "id": id, "before": before, "message": message }),
+    )
+    .await
+}
+
+pub async fn versions_sync(
+    path: &str,
+    message: &str,
+    merge: &str,
+) -> Res<revel_protocol::SyncInfo> {
+    call(
+        "versions_sync",
+        &serde_json::json!({ "path": path, "message": message, "merge": merge }),
+    )
+    .await
+}
+
+pub async fn versions_resolve(
+    path: &str,
+    keep_ours: bool,
+    message: &str,
+) -> Res<revel_protocol::SyncInfo> {
+    call(
+        "versions_resolve",
+        &serde_json::json!({ "path": path, "keepOurs": keep_ours, "message": message }),
+    )
+    .await
+}
+
+pub async fn versions_set_remote(path: &str, url: &str) -> Res<()> {
+    call(
+        "versions_set_remote",
+        &serde_json::json!({ "path": path, "url": url }),
+    )
+    .await
+}
+
 /// Polices du site.
 pub async fn fonts(path: &str) -> Res<Vec<revel_protocol::FontFamily>> {
     call("fonts", &serde_json::json!({ "path": path })).await

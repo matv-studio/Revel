@@ -33,7 +33,7 @@ impl Core {
     }
 
     /// Jeton valide (renouvelé s'il expire bientôt) ; erreur si aucun compte n'est connecté.
-    fn github_token(&self) -> Result<Token> {
+    pub(crate) fn github_token(&self) -> Result<Token> {
         let t = self.github_token_raw()?.ok_or(CoreError::GithubSignedOut)?;
         if !t.needs_refresh(github::now()) {
             return Ok(t);

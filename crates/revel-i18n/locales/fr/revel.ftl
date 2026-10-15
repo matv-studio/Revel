@@ -374,6 +374,7 @@ error-font = Police : { $detail }
 error-edit-site = Adresse invalide : « { $detail } » (attendue : https://…)
 error-translate-pair = Aucun modèle de traduction pour { $from } → { $to }.
 error-translate = Traduction automatique impossible : { $detail }
+error-versions-conflict = Mêmes lignes modifiées en ligne et dans le site : conflit à régler dans Paramètres › Versions avant de publier.
 error-translate-integrity = Fichier de traduction téléchargé altéré ({ $detail }) : téléchargement à relancer.
 error-translate-cancelled = Téléchargement annulé.
 error-translate-busy = Un téléchargement de langue est déjà en cours.
@@ -838,10 +839,57 @@ settings-redirects = Redirections
 settings-fonts = Polices
 settings-code = Code personnalisé
 settings-forms = Formulaires
-settings-backups = Sauvegardes
+settings-versions = Versions
+versions-help = Versions enregistrées du site (dépôt Git de son dossier) : comparer, restaurer, synchroniser avec le dépôt GitHub du site (enregistrements de Pages CMS)
+versions-changes = { $n ->
+    [one] 1 changement
+   *[other] { $n } changements
+}
+versions-changes-help = Fichiers modifiés depuis la dernière version
+versions-clean = À jour
+versions-sync = Synchroniser
+versions-sync-help = Enregistrer les changements, récupérer les versions en ligne (Pages CMS) puis envoyer celles du site
+versions-sync-account = Compte GitHub à connecter dans les réglages de l’application
+versions-ahead = Versions à envoyer
+versions-behind = Versions en ligne à récupérer
+versions-save = Enregistrer une version
+versions-message = Description
+versions-default-message = Version du { $date }
+versions-first = Première version
+versions-merge-message = Versions récupérées du dépôt en ligne
+versions-init = Activer les versions
+versions-init-help = Le dossier du site devient un dépôt Git : chaque version enregistre tous ses fichiers
+versions-remote = Dépôt GitHub
+versions-remote-help = Adresse HTTPS du dépôt du site, synchronisé avec Pages CMS
+versions-branch = Branche
+versions-conflict = Mêmes lignes modifiées en ligne et dans le site : rien n’a été changé.
+versions-keep-ours = Garder la version du site
+versions-keep-theirs = Prendre la version en ligne
+versions-resolved-ours = Conflit réglé : version du site gardée
+versions-resolved-theirs = Conflit réglé : version en ligne gardée
+versions-current = Changements en cours
+versions-current-help = Pas encore enregistrés
+versions-latest = Dernière
+versions-files = Fichiers changés
+versions-restore = Restaurer
+versions-restore-help = Remettre les fichiers de cette version (l’état actuel est enregistré d’abord)
+versions-restore-title = Restaurer « { $name } » ?
+versions-before-restore = Avant restauration
+versions-restored = Restauration de « { $name } »
+versions-no-files = Aucun fichier changé
+versions-added = Ajouté
+versions-deleted = Supprimé
+versions-modified = Modifié
+versions-binary = Fichier binaire
+versions-more-lines = { $n } lignes de plus
+time-now = À l’instant
+time-min = il y a { $n } min
+time-hours = { $n ->
+    [one] il y a 1 h
+   *[other] il y a { $n } h
+}
 settings-seo-planned = Titre, description et image de partage de chaque page, plan du site et robots.txt.
 settings-forms-planned = Réception des formulaires du site (courriel, tableau, service externe).
-settings-backups-planned = Versions enregistrées du site, comparées et restaurées.
 settings-identity = Identité
 settings-site-name = Nom
 settings-site-url = Adresse publique
@@ -1131,6 +1179,10 @@ export-run = Exporter
 export-running = Export…
 export-reveal = Afficher le dossier
 export-failed = Échec de l’export. { $message }
+publish-sync-versions = Synchroniser les versions avant de publier
+publish-sync-versions-help = Enregistre les changements, récupère ceux faits ailleurs (Pages CMS) et les envoie sur le dépôt du site (Paramètres › Versions)
+publish-syncing = Synchronisation des versions…
+publish-sync-message = Publication
 publish-building = Préparation des fichiers du site…
 
 # Schéma des collections (étape 3.3)

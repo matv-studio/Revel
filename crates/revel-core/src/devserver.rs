@@ -95,6 +95,67 @@ impl Core {
             "translate_can" => {
                 json(self.translate_can(&arg::<String>(args, "from")?, &arg::<String>(args, "to")?))
             }
+            "versions_status" => json(self.versions_status(site).map_err(f)?),
+            "versions_init" => json(
+                self.versions_init(site, &arg::<String>(args, "message")?)
+                    .map_err(f)?,
+            ),
+            "versions_list" => json(
+                self.versions_list(site, arg::<usize>(args, "limit")?)
+                    .map_err(f)?,
+            ),
+            "versions_save" => json(
+                self.versions_save(site, &arg::<String>(args, "message")?)
+                    .map_err(f)?,
+            ),
+            "versions_changes" => json(
+                self.versions_changes(
+                    site,
+                    arg::<Option<String>>(args, "id")?.as_deref(),
+                    arg::<Option<bool>>(args, "ofVersion")?.unwrap_or(false),
+                )
+                .map_err(f)?,
+            ),
+            "versions_diff" => {
+                let id = arg::<Option<String>>(args, "id")?;
+                let file = arg::<String>(args, "file")?;
+                json(
+                    match (id, arg::<Option<bool>>(args, "ofVersion")?.unwrap_or(false)) {
+                        (Some(i), true) => self.versions_version_diff(site, &i, &file),
+                        (id, _) => self.versions_diff(site, id.as_deref(), &file),
+                    }
+                    .map_err(f)?,
+                )
+            }
+            "versions_restore" => json(
+                self.versions_restore(
+                    site,
+                    &arg::<String>(args, "id")?,
+                    &arg::<String>(args, "before")?,
+                    &arg::<String>(args, "message")?,
+                )
+                .map_err(f)?,
+            ),
+            "versions_sync" => json(
+                self.versions_sync(
+                    site,
+                    &arg::<String>(args, "message")?,
+                    &arg::<String>(args, "merge")?,
+                )
+                .map_err(f)?,
+            ),
+            "versions_resolve" => json(
+                self.versions_resolve(
+                    site,
+                    arg::<bool>(args, "keepOurs")?,
+                    &arg::<String>(args, "message")?,
+                )
+                .map_err(f)?,
+            ),
+            "versions_set_remote" => json(
+                self.versions_set_remote(site, &arg::<String>(args, "url")?)
+                    .map_err(f)?,
+            ),
             "fonts" => json(self.fonts(site).map_err(f)?),
             "fonts_google" => json(self.fonts_google().map_err(f)?),
             "fonts_add_google" => json(

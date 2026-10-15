@@ -3,7 +3,7 @@
 
 use crate::dialog::Ask;
 use crate::site::{DocSession, doc_session};
-use crate::{Route, Tab, Ui, api, icons};
+use crate::{Tab, Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_edit::Command;
@@ -59,20 +59,6 @@ pub fn General(site: SiteSummary) -> impl IntoView {
         if v == before {
             return;
         }
-        // Barre supérieure et liste des sites : nom, langue et adresse à jour.
-        let valid_url = v
-            .base_url
-            .as_deref()
-            .is_none_or(|u| u.starts_with("https://") || u.starts_with("http://"));
-        if !v.name.trim().is_empty() && valid_url {
-            ui.route.update(|r| {
-                if let Route::Site { site, .. } = r {
-                    site.name = v.name.trim().to_string();
-                    site.locale = v.locale.clone();
-                    site.base_url = v.base_url.clone();
-                }
-            });
-        }
         s.apply.run(Command::SetSiteInfo {
             name: v.name,
             base_url: v.base_url,
@@ -83,6 +69,10 @@ pub fn General(site: SiteSummary) -> impl IntoView {
         set_timeout(refresh, std::time::Duration::from_millis(250));
     };
     let current = move || info(s);
+    // Une valeur par champ : un champ en cours de saisie n'est pas remis à zéro quand un autre
+    // est enregistré.
+    let name = Memo::new(move |_| current().map(|i| i.name).unwrap_or_default());
+    let url = Memo::new(move |_| current().and_then(|i| i.base_url).unwrap_or_default());
     let langs = move || {
         let taken: Vec<String> = s.doc.with(|d| {
             d.as_ref()
@@ -115,12 +105,27 @@ pub fn General(site: SiteSummary) -> impl IntoView {
                 <div class="form-grid">
                     <label class="label" for="site-name">{ui.t("settings-site-name")}</label>
                     <input id="site-name" class="input" spellcheck="false"
-                        prop:value=move || current().map(|i| i.name).unwrap_or_default()
-                        on:change=move |e| { let v = event_target_value(&e); if !v.trim().is_empty() { set(&|i| i.name = v.trim().to_string()) } }/>
+                        prop:value=name
+                        on:change=move |e| {
+                            let v = event_target_value(&e);
+                            if v.trim().is_empty() {
+                                event_target::<web_sys::HtmlInputElement>(&e).set_value(&name.get_untracked());
+                            } else {
+                                set(&|i| i.name = v.trim().to_string())
+                            }
+                        }/>
                     <label class="label" for="site-url" title=ui.t("settings-site-url-help")>{ui.t("settings-site-url")}</label>
                     <input id="site-url" class="input input--mono" spellcheck="false" placeholder="https://exemple.com"
-                        prop:value=move || current().and_then(|i| i.base_url).unwrap_or_default()
-                        on:change=move |e| { let v = event_target_value(&e); set(&|i| i.base_url = Some(v.trim().to_string()).filter(|u| !u.is_empty())) }/>
+                        prop:value=url
+                        on:change=move |e| {
+                            let v = event_target_value(&e);
+                            set(&|i| i.base_url = Some(v.trim().to_string()).filter(|u| !u.is_empty()));
+                            // Adresse refusée : la valeur enregistrée revient.
+                            let v = v.trim();
+                            if !(v.is_empty() || v.starts_with("https://") || v.starts_with("http://")) {
+                                event_target::<web_sys::HtmlInputElement>(&e).set_value(&url.get_untracked());
+                            }
+                        }/>
                     <label class="label" for="site-lang" title=ui.t("settings-site-lang-help")>{ui.t("settings-site-lang")}</label>
                     <select id="site-lang" class="input"
                         on:change=move |e| { let v = event_target_value(&e); set(&|i| i.locale = v.clone()) }>
@@ -197,6 +202,9 @@ pub fn Code(site: SiteSummary) -> impl IntoView {
                 .unwrap_or_default()
         })
     };
+    // Un champ en cours de saisie n'est pas remis à zéro quand l'autre est enregistré.
+    let head = Memo::new(move |_| code().head);
+    let body = Memo::new(move |_| code().body);
     let set = move |head: Option<String>, body: Option<String>| {
         let mut c = code();
         if let Some(h) = head {
@@ -230,8 +238,8 @@ pub fn Code(site: SiteSummary) -> impl IntoView {
         <section class="page settings-page">
             <header class="page-head"><h1 title=ui.t("code-help")>{ui.t("settings-code")}</h1></header>
             <div class="section">
-                {code_field(ui, "code-head", "code-head-help", move || code().head, move |v| set(Some(v), None))}
-                {code_field(ui, "code-body", "code-body-help", move || code().body, move |v| set(None, Some(v)))}
+                {code_field(ui, "code-head", "code-head-help", move || head.get(), move |v| set(Some(v), None))}
+                {code_field(ui, "code-body", "code-body-help", move || body.get(), move |v| set(None, Some(v)))}
             </div>
             {move || {
                 let p = pages();

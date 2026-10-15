@@ -32,6 +32,7 @@ mod site;
 mod sitesettings;
 mod styles;
 mod variables;
+mod versions;
 
 use dialog::Ask;
 use leptos::prelude::*;
@@ -200,6 +201,29 @@ impl Ui {
         self.route.set(Route::Site { site, tab });
         self.reload_recents();
     }
+    /// Barre supérieure et liste des sites : nom, langue et adresse du site ouvert à jour
+    /// (identité modifiée, annulée, version restaurée).
+    pub fn site_identity(self, d: &revel_model::Site) {
+        let same = self.route.with_untracked(|r| match r {
+            Route::Site { site, .. } => {
+                site.name == d.name
+                    && site.locale == d.default_locale
+                    && site.base_url == d.base_url
+            }
+            _ => true,
+        });
+        if same {
+            return;
+        }
+        self.route.update(|r| {
+            if let Route::Site { site, .. } = r {
+                site.name = d.name.clone();
+                site.locale = d.default_locale.clone();
+                site.base_url = d.base_url.clone();
+            }
+        });
+        self.reload_recents();
+    }
     /// Change de vue dans le site ouvert.
     pub fn tab(self, tab: Tab) {
         if let Route::Site { site, .. } = self.route.get_untracked() {
@@ -245,7 +269,7 @@ pub enum Section {
     Forms,
     Fonts,
     Code,
-    Backups,
+    Versions,
 }
 
 #[derive(Clone, Debug, PartialEq)]

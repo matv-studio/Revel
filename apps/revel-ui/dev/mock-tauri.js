@@ -36,7 +36,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
+  const bridged = ["versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_resolve", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
   // Nom de dossier d'un nouveau site (comme revel_core::site_folder, sans les suffixes).
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).

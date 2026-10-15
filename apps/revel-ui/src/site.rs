@@ -150,7 +150,7 @@ const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::Fonts, "settings-fonts", None),
     (Section::Code, "settings-code", None),
     (Section::Forms, "settings-forms", Some(5)),
-    (Section::Backups, "settings-backups", Some(3)),
+    (Section::Versions, "settings-versions", None),
 ];
 
 /// Paramètres du site : rubriques à gauche (comme les réglages d'un site Webflow), contenu à droite.
@@ -161,6 +161,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         Section::General => view! { <crate::sitesettings::General site=site.clone()/> }.into_any(),
         Section::Fonts => view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any(),
         Section::Code => view! { <crate::sitesettings::Code site=site.clone()/> }.into_any(),
+        Section::Versions => view! { <crate::versions::Versions site=site.clone()/> }.into_any(),
         Section::Publish => view! { <crate::publish::Publish site=site.clone()/> }.into_any(),
         Section::Export => view! { <Export site=site.clone()/> }.into_any(),
         Section::Redirects => view! { <Redirects site=site.clone()/> }.into_any(),
@@ -206,7 +207,6 @@ fn planned_key(s: Section) -> &'static str {
     match s {
         Section::Seo => "settings-seo-planned",
         Section::Forms => "settings-forms-planned",
-        Section::Backups => "settings-backups-planned",
         _ => "settings-general",
     }
 }
@@ -236,6 +236,7 @@ pub(crate) fn doc_session(ui: Ui, path: String) -> DocSession {
             if let Ok(o) = api::edit_open(&p).await
                 && !doc.is_disposed()
             {
+                ui.site_identity(&o.site);
                 doc.set(Some(o.site));
             }
         });

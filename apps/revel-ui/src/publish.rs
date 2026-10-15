@@ -35,6 +35,8 @@ struct Form {
     repo: String,
     branch: String,
     domain: String,
+    /// Versions synchronisées avant de publier (D-25).
+    sync_versions: bool,
 }
 
 impl Form {
@@ -46,6 +48,7 @@ impl Form {
             port: "22".into(),
             remote_dir: "www/".into(),
             branch: "gh-pages".into(),
+            sync_versions: true,
             ..Default::default()
         }
     }
@@ -56,6 +59,7 @@ impl Form {
             name: p.name.clone(),
             environment: p.environment.clone(),
             has_secret,
+            sync_versions: p.sync_versions,
             ..Default::default()
         };
         match &p.target {
@@ -108,6 +112,7 @@ impl Form {
             name: self.name.trim().to_string(),
             environment: self.environment.clone(),
             target,
+            sync_versions: self.sync_versions,
         }
     }
 
@@ -248,6 +253,34 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
                 reload.run(());
             };
             let ended = move || run.with_untracked(|r| r.as_ref().is_none_or(|r| r.done.is_some()));
+            // Versions (D-25) : changements enregistrés et synchronisés avec le dépôt du site avant
+            // de publier (récupère d'abord ce qui a été fait ailleurs, Pages CMS).
+            let sync = !dry_run
+                && list.with_untracked(|l| {
+                    l.as_ref()
+                        .and_then(|l| l.iter().find(|(p, _)| p.id == id))
+                        .is_some_and(|(p, _)| p.sync_versions)
+                });
+            if sync
+                && let Ok(Some(st)) = api::versions_status(&path.get_value()).await
+                && st.remote.is_some()
+            {
+                let t = ui.now("publish-syncing", &[]);
+                upd(&|r| r.status = Some(t.clone()));
+                let message = ui.now("publish-sync-message", &[]);
+                let merge = ui.now("versions-merge-message", &[]);
+                match api::versions_sync(&path.get_value(), &message, &merge).await {
+                    Ok(info) if !info.conflicts.is_empty() => {
+                        end(Err(Failure::new("error-versions-conflict")));
+                        return;
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        end(Err(e));
+                        return;
+                    }
+                }
+            }
             let r = api::deploy(&path.get_value(), &id, dry_run, move |e| match e {
                 DeployEvent::Finished(s) => end(Ok(s)),
                 DeployEvent::Failed(f) => end(Err(f)),
@@ -644,6 +677,14 @@ fn HostForm(
                     {field("publish-domain", "text", |f| f.domain.clone(), |f, v| f.domain = v, Some("publish-domain-help"))}
                 </div>
             </Show>
+            <label class="view-line publish-sync" title=ui.t("publish-sync-versions-help")>
+                <span>{ui.t("publish-sync-versions")}</span>
+                <span class="switch">
+                    <input type="checkbox" prop:checked=move || editing.with(|f| f.as_ref().is_some_and(|f| f.sync_versions))
+                        on:change=move |e| { let on = event_target_checked(&e); editing.update(|f| if let Some(f) = f { f.sync_versions = on }) }/>
+                    <span class="switch-track"></span>
+                </span>
+            </label>
             <div class="toolbar toolbar--start">
                 <button type="submit" class="btn btn--primary" disabled=move || !complete()>{ui.t("action-save")}</button>
                 <button type="button" class="btn" on:click=move |_| editing.set(None)>{ui.t("action-cancel")}</button>

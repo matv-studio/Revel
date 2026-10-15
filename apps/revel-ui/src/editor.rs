@@ -420,6 +420,11 @@ impl Ed {
                     ok = revel_edit::apply(d, cmd).is_ok();
                 }
             });
+            if matches!(cmd, Command::SetSiteInfo { .. })
+                && let Some(d) = self.doc.read_untracked().as_ref()
+            {
+                ui.site_identity(d);
+            }
             if !ok {
                 // Copie locale désynchronisée : relue depuis le cœur.
                 self.reopen(ui);
@@ -464,6 +469,7 @@ impl Ed {
         spawn_local(async move {
             match api::edit_open(&path).await {
                 Ok(o) => {
+                    ui.site_identity(&o.site);
                     self.doc.set(Some(o.site));
                     self.state.set(Some(o.state));
                 }

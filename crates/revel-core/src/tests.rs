@@ -70,6 +70,7 @@ fn recents_generation_et_hebergements() {
         .save_profile(
             &key,
             HostingProfile {
+                sync_versions: true,
                 id: String::new(),
                 name: "OVH".into(),
                 environment: "production".into(),
@@ -159,6 +160,7 @@ async fn publication_par_le_coeur() {
         .save_profile(
             &key,
             HostingProfile {
+                sync_versions: true,
                 id: String::new(),
                 name: "Essai".into(),
                 environment: "production".into(),
@@ -1437,6 +1439,59 @@ fn modeles_de_site() {
 }
 
 const PAGES_YML: &str = "# Contenus\ncontent:\n  - name: projets\n    label: Projets\n    type: collection\n    path: contenus/projets\n    fields:\n      - name: title\n        type: string\n  - name: accueil\n    label: Accueil\n    type: file\n    path: donnees/pages/accueil.yml\n    fields:\n      - name: hero\n        type: object\n        fields:\n          - name: title\n            type: string\n";
+
+#[test]
+fn versions_du_site() {
+    use revel_edit::Command;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    c.edit_open(&site).unwrap();
+    assert!(c.versions_status(&site).unwrap().is_none());
+    let v1 = c.versions_init(&site, "Première version").unwrap();
+    assert!(
+        std::fs::read_to_string(site.join(".gitignore"))
+            .unwrap()
+            .contains(".revel/")
+    );
+    let s = c.versions_status(&site).unwrap().unwrap();
+    assert_eq!((s.changes, s.remote.as_deref()), (0, None));
+    // Modification dans l'éditeur : un fichier changé, comparé à la dernière version.
+    let info = |name: &str| Command::SetSiteInfo {
+        name: name.into(),
+        base_url: None,
+        default_locale: "fr".into(),
+        typography: None,
+    };
+    c.edit_apply(&site, info("Nouveau nom"), false).unwrap();
+    assert_eq!(c.versions_status(&site).unwrap().unwrap().changes, 1);
+    let ch = c.versions_changes(&site, None, false).unwrap();
+    assert_eq!(
+        (ch[0].path.as_str(), ch[0].change.as_str()),
+        ("site.revel.json", "modified")
+    );
+    let diff = c
+        .versions_diff(&site, None, "site.revel.json")
+        .unwrap()
+        .unwrap();
+    assert!(
+        diff.iter()
+            .any(|l| l.kind == '+' && l.text.contains("Nouveau nom"))
+    );
+    let v2 = c.versions_save(&site, "Renommé").unwrap().unwrap();
+    assert_eq!(c.versions_list(&site, 10).unwrap().len(), 2);
+    assert_eq!(
+        c.versions_changes(&site, Some(&v2.id), true).unwrap().len(),
+        1
+    );
+    // Restauration : session relue depuis le disque (ancien nom), l'éditeur continue.
+    c.versions_restore(&site, &v1.id, "Avant restauration", "Restauration")
+        .unwrap();
+    assert_eq!(c.edit_site(&site).unwrap().name, "Essai");
+    c.edit_apply(&site, info("Encore"), false).unwrap();
+    assert_eq!(c.versions_list(&site, 10).unwrap().len(), 3);
+    assert!(c.versions_sync(&site, "m", "f").is_err());
+}
 
 #[test]
 fn polices_importees_retirees_annulees() {

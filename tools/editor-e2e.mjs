@@ -1640,6 +1640,48 @@ try {
       check('réglages du site : tout annulé (document, polices)', true);
     }
 
+    // ---------------------------------------------------------------- Versions (3.10)
+    {
+      const docV = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
+      const docv0 = docV();
+      await page.click('.view-tab[data-view="view-settings"]');
+      await page.click('.settings-nav-item[data-section="settings-versions"]');
+      await page.waitForSelector('.versions-empty .btn, .ver-item');
+      if (await page.$('.versions-empty .btn')) {
+        await page.click('.versions-empty .btn');
+        await page.waitForSelector('.ver-item', { timeout: 120000 });
+      }
+      check('versions : activées (dépôt du site, première version)', fs.existsSync(path.join(siteDir, '.git'))
+        && fs.readFileSync(path.join(siteDir, '.gitignore'), 'utf8').includes('.revel/'));
+      // Changement : code personnalisé ajouté, comparé à la dernière version.
+      await page.click('.settings-nav-item[data-section="settings-code"]');
+      await page.waitForSelector('.code-input');
+      await page.fill('.code-field >> nth=0 >> textarea', '<meta name="version-e2e">');
+      await page.locator('.code-field >> nth=0 >> textarea').blur();
+      await until(() => docV().includes('version-e2e'), 'changement enregistré');
+      await page.click('.settings-nav-item[data-section="settings-versions"]');
+      await page.waitForSelector('.ver-item--current');
+      await page.click('.ver-item--current');
+      await page.waitForSelector('.diff tr.is-add');
+      const added = await page.$$eval('.diff tr.is-add .diff-text', (l) => l.map((x) => x.textContent).join(' '));
+      check('versions : changements en cours comparés ligne à ligne', added.includes('version-e2e'), added.slice(0, 80));
+      if (shots) await page.screenshot({ path: `${shots}/versions.png` });
+      await page.click('.versions-save');
+      await page.fill('.dialog input', 'Essai e2e');
+      await page.click('.dialog button[type="submit"]');
+      await page.waitForFunction(() => document.querySelector('.ver-item:not(.ver-item--current) .ver-msg')?.textContent === 'Essai e2e', null, { timeout: 60000 });
+      check('versions : version enregistrée (plus de changement en cours)', !(await page.$('.ver-item--current')));
+      // Restauration de la version précédente : document revenu à l'identique.
+      await page.click('.ver-item:not(.ver-item--current) >> nth=1');
+      await page.waitForSelector('.ver-detail-head .btn--danger-ghost');
+      await page.click('.ver-detail-head .btn--danger-ghost');
+      await page.click('.dialog .btn--danger');
+      await until(() => docV() === docv0, 'version restaurée');
+      await page.waitForFunction(() => /Restauration/.test(document.querySelector('.ver-item:not(.ver-item--current) .ver-msg')?.textContent || ''), null, { timeout: 60000 });
+      check('versions : version précédente restaurée (document identique, nouvelle version)', true,
+        (await page.textContent('.ver-item:not(.ver-item--current) .ver-msg')).trim());
+    }
+
     // ---------------------------------------------------------------- Langues (3.8)
     const docL = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
     const dataEn = path.join(siteDir, 'src/_data/en');
@@ -1783,6 +1825,7 @@ try {
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {
   check('déroulement', false, e.message);
+  if (shots) await page.screenshot({ path: `${shots}/echec.png` }).catch(() => {});
 } finally {
   await browser.close();
 }

@@ -303,6 +303,14 @@ pub struct HostingProfile {
     /// Environnement généré pour cet hébergement (`production`, `staging`…).
     pub environment: String,
     pub target: HostingTarget,
+    /// Avant de publier : changements enregistrés et versions synchronisées avec le dépôt du site
+    /// (D-25), quand le site a des versions et un dépôt distant.
+    #[serde(default = "yes")]
+    pub sync_versions: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -574,6 +582,65 @@ pub struct FontUpload {
     pub weight: String,
     #[serde(default)]
     pub italic: bool,
+}
+
+/// Versions du site (3.10, D-25) : état du dépôt Git du dossier du site.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionsStatus {
+    pub branch: String,
+    /// Fichiers changés depuis la dernière version.
+    pub changes: usize,
+    /// Dépôt distant (`origin`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote: Option<String>,
+    /// Versions à envoyer, versions en ligne à récupérer (selon la dernière synchronisation).
+    pub ahead: usize,
+    pub behind: usize,
+    /// Compte GitHub connecté (nécessaire pour un dépôt GitHub).
+    pub github: bool,
+}
+
+/// Version enregistrée du site.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionInfo {
+    pub id: String,
+    pub message: String,
+    pub author: String,
+    /// Secondes depuis 1970.
+    pub time: i64,
+    /// Fichiers changés par cette version.
+    pub files: usize,
+    /// Fusion de versions faites ailleurs (Pages CMS).
+    pub merge: bool,
+}
+
+/// Fichier changé : `added`, `modified`, `deleted`, `renamed`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileChange {
+    pub path: String,
+    pub change: String,
+}
+
+/// Ligne d'une comparaison : `+`, `-` ou ` `.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiffLine {
+    pub kind: char,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new: Option<u32>,
+    pub text: String,
+}
+
+/// Résultat d'une synchronisation avec le dépôt distant.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SyncInfo {
+    pub pulled: usize,
+    pub pushed: usize,
+    pub merged: bool,
+    /// Fichiers modifiés des deux côtés : rien n'a été changé, choix à faire.
+    #[serde(default)]
+    pub conflicts: Vec<String>,
 }
 
 #[cfg(test)]

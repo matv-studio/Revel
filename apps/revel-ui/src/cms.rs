@@ -374,7 +374,14 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 return;
             }
             match r {
-                Ok(st) => state.set(Some(st)),
+                Ok(st) => {
+                    if matches!(st.applied, Some(revel_edit::Command::SetSiteInfo { .. }))
+                        && let Ok(o) = api::edit_open(&p).await
+                    {
+                        ui.site_identity(&o.site);
+                    }
+                    state.set(Some(st))
+                }
                 Err(e) => ui.fail(e),
             }
             reload();
@@ -390,7 +397,14 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 return;
             }
             match r {
-                Ok(st) => state.set(Some(st)),
+                Ok(st) => {
+                    if matches!(st.applied, Some(revel_edit::Command::SetSiteInfo { .. }))
+                        && let Ok(o) = api::edit_open(&p).await
+                    {
+                        ui.site_identity(&o.site);
+                    }
+                    state.set(Some(st))
+                }
                 Err(e) => ui.fail(e),
             }
             reload();

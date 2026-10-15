@@ -24,6 +24,7 @@ revel-edit.workspace = true
 revel-render.workspace = true
 revel-style.workspace = true
 revel-assets.workspace = true
+revel-translate = { workspace = true, features = ["download"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

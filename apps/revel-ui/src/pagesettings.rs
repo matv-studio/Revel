@@ -182,11 +182,11 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                                 <fieldset class="page-settings-seo page-settings-locale" disabled=!from_page
                                     title=move || if from_page { ui.now("pages-seo-locale", &[]) } else { ui.now("pages-seo-locale-data", &[]) }>
                                     <Field label=ui.t("pages-seo-title") value=ed.translation(&code, &t_src).unwrap_or_default() placeholder=t_src.clone()
-                                        on_commit=move |v: String| ed.apply(ui, Command::SetTranslation { locale: c1.clone(), source: t2.clone(), text: Some(v) }, false)/>
+                                        on_commit=move |v: String| ed.apply(ui, Command::SetTranslation { locale: c1.clone(), source: t2.clone(), text: Some(v), machine: false }, false)/>
                                     <label class="field">
                                         <span class="label">{ui.t("pages-seo-description")}</span>
                                         <textarea class="input" rows="3" prop:value=ed.translation(&code, &d_src).unwrap_or_default() placeholder=d_src.clone()
-                                            on:change=move |e| ed.apply(ui, Command::SetTranslation { locale: c2.clone(), source: d2.clone(), text: Some(event_target_value(&e)) }, false)></textarea>
+                                            on:change=move |e| ed.apply(ui, Command::SetTranslation { locale: c2.clone(), source: d2.clone(), text: Some(event_target_value(&e)), machine: false }, false)></textarea>
                                     </label>
                                 </fieldset>
                             }

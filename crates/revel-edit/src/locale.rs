@@ -57,6 +57,28 @@ pub fn text_like(s: &str) -> bool {
             .any(|c| c.is_uppercase() || (c.is_alphabetic() && !c.is_ascii()))
 }
 
+/// Marque « à relire » d'un texte des pages ([`revel_model::Locale::machine`]).
+pub fn text_key(source: &str) -> String {
+    format!("text:{}", normalize(source))
+}
+
+/// Marque « à relire » d'une valeur d'un fichier de données (chemin comme dans les expressions).
+pub fn data_key(path: &[crate::canvas::Seg]) -> String {
+    let parts: Vec<String> = path
+        .iter()
+        .map(|p| match p {
+            crate::canvas::Seg::Key(k) => k.clone(),
+            crate::canvas::Seg::Index(i) => i.to_string(),
+        })
+        .collect();
+    format!("data:{}", parts.join("."))
+}
+
+/// Marque « à relire » d'un contenu (dossier de la collection dans la langue principale).
+pub fn entry_key(folder: &str, file: &str) -> String {
+    format!("entry:{}/{file}", folder.trim_end_matches('/'))
+}
+
 /// Texte écrit dans le site et endroits où il apparaît.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SiteText {

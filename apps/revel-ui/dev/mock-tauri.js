@@ -26,6 +26,8 @@
     redirects: [["/projets/ancien-film/", "/project/wattr/"], ["/equipe/", "/agence/"]],
   };
   const fail = params.get("fail");
+  const installedPacks = new Set(), offPacks = new Set();
+  let lastPacks = [];
   let github = params.get("github") || null;
   const ghProfile = [{ id: "h2", name: "GitHub Pages", environment: "production", target: { kind: "github_pages", repo: "matv-studio/alunites-revel-lab", branch: "gh-pages", custom_domain: null } }, true];
   const profiles = params.get("noprofiles") ? [] : params.get("ghprofile") ? [ghProfile] : [[{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true]];
@@ -34,7 +36,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
+  const bridged = ["translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
   // Nom de dossier d'un nouveau site (comme revel_core::site_folder, sans les suffixes).
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).
@@ -74,13 +76,18 @@
         { file: "salon-2026", data: { title: "Salon 2026", date: "2026-02-01", tags: ["événement"] }, body: "Le salon.\n", url: "/actualites/salon-2026/" } ] },
   ];
   async function invoke(cmd, args) {
-    if (bridge && bridged.includes(cmd)) {
+    // Langue de traduction par le pont : remise en service d'une langue livrée (sans
+    // téléchargement) ; téléchargement réel seulement avec `dl=1` (600 Mo), sinon simulé.
+    const realInstall = cmd.startsWith("translate_install")
+      && (params.get("dl") || lastPacks.some((p) => p.code === args?.code && p.state === "bundled_off"));
+    if (bridge && (bridged.includes(cmd) || realInstall)) {
       // Corps en texte brut : requête simple, sans demande préalable (CORS).
       const r = await fetch(bridge.replace(/\/$/, "") + "/__revel/invoke/" + cmd, {
         method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify(args || {}),
       });
       const v = await r.json();
       if (!r.ok) throw v;
+      if (cmd === "translate_packs") lastPacks = v;
       return v;
     }
     switch (cmd) {
@@ -116,6 +123,20 @@
         ch.onmessage({ event: "finished", environment: args.environment, out_dir: out, generated: 71, copied: 442, images_produced: 12, images_cached: 380, images_failed: 0, seconds: 4.2, warnings: [] });
         return out;
       }
+      // Langues de traduction (sans pont) : français livré, allemand téléchargé.
+      case "translate_packs": return ["fr", "de", "es", "it", "nl", "sv", "zh"].map((code, i) => ({
+        code, state: i === 0 ? (offPacks.has(code) ? "bundled_off" : "bundled") : (i === 1 || installedPacks.has(code)) ? "installed" : "available", download: 597_000_000, disk: 298_000_000 }));
+      case "translate_install": {
+        if (args.code === "fr" && offPacks.delete("fr")) return null;
+        const ch = args.onEvent;
+        for (let d = 0; d <= 100; d += 10) { await wait(params.get("dlslow") ? 900 : 60); ch.onmessage({ event: "progress", done: d * 5_970_000, total: 597_000_000 }); }
+        ch.onmessage({ event: "preparing" }); await wait(300);
+        installedPacks.add(args.code);
+        return null;
+      }
+      case "translate_install_cancel": return null;
+      case "translate_remove": if (args.code === "fr") offPacks.add("fr"); installedPacks.delete(args.code); return null;
+      case "translate_can": return false;
       case "github_account": return github;
       case "github_disconnect": github = null; return null;
       case "github_cancel": return null;

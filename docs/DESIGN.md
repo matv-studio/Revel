@@ -13,8 +13,9 @@ Revel n'en reprend ni les couleurs ni les marques.
 1. **Le contenu de l'utilisateur est la seule couleur.** L'interface est en gris neutres.
    Aucune couleur décorative ; les couleurs fonctionnelles restent discrètes : erreur, réussite, et l'origine
    des valeurs (bleu : réglée ici ou propre à la langue affichée ; orange : héritée ou reprise de la langue
-   principale ; vert : composants — comme Webflow, D-21). Ce code s'étend à tout élément qu'il rend plus lisible :
-   libellés, choix à boutons, progression des glissières, langue affichée, contenus traduits.
+   principale ; vert : composants — comme Webflow, D-21 ; violet : traduction automatique à relire, D-36). Ce
+   code s'étend à tout élément qu'il rend plus lisible : libellés, choix à boutons, progression des glissières,
+   langue affichée, contenus traduits.
 2. **Un seul accent, choisi par l'utilisateur.** *Réglages > Couleur d'accent* : « Aucune » par défaut.
    Sans accent, l'action principale est en contraste inversé (blanc sur sombre, noir sur clair).
    *Réglages > Étendue de l'accent* choisit combien d'éléments le prennent : **Minimale** (focus, contour du
@@ -24,7 +25,9 @@ Revel n'en reprend ni les couleurs ni les marques.
 3. **Une action principale par zone.** Une seule `.btn--primary` visible par section ou barre.
 4. **Densité d'outil.** Texte 13 px, contrôles 28 px, grille de 4 px : beaucoup d'information sans
    surcharge, comme Figma. Les pages de réglages restent aérées.
-5. **Peu de texte, mots simples, verbes d'action.** Les explications vont en info-bulle (D-21). Un bouton dit ce qu'il fait (« Générer le site », « Publier ») ;
+5. **Peu de texte, mots simples, verbes d'action.** Aucune phrase d'explication visible dans une fenêtre, un
+   panneau, une liste ou des réglages : les explications vont en info-bulle (D-21 ; demande répétée le
+   15/10/2026). Une fenêtre montre le titre, les choix et les boutons, rien d'autre. Un bouton dit ce qu'il fait (« Générer le site », « Publier ») ;
    le message de fin reprend le même verbe (« Publication terminée »). Phrases en casse normale,
    jamais de libellés en capitales. Une erreur dit ce qui s'est passé et comment y remédier.
 6. **Rien ne bouge sans raison.** Seuls les retours à une action sont animés (progression, bascule) ;

@@ -478,3 +478,15 @@ pub fn unlink() -> AnyView {
 pub fn prop_dot() -> AnyView {
     svg(r#"<circle cx="8" cy="8" r="5.25"/><circle cx="8" cy="8" r="1.75" fill="currentColor"/>"#)
 }
+
+/// Traduction automatique (D-36) : étincelle.
+pub fn sparkle() -> AnyView {
+    svg(
+        r#"<path d="M7 2.5l1.2 3.3L11.5 7 8.2 8.2 7 11.5 5.8 8.2 2.5 7l3.3-1.2z"/><path d="M12.5 10.5v3M11 12h3"/>"#,
+    )
+}
+
+/// Télécharger.
+pub fn download() -> AnyView {
+    svg(r#"<path d="M8 3v8M5 8l3 3 3-3M3 11v2h10v-2"/>"#)
+}

@@ -951,46 +951,6 @@ fn TagsInput(items: Signal<Vec<String>>, set: Callback<Vec<String>>) -> impl Int
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn formats_de_date() {
-        let p = parse_date("yyyy-MM-dd'T'HH:mm:ss", "2024-05-01T10:30:05").unwrap();
-        assert_eq!((p.y, p.mo, p.d, p.h, p.mi, p.s), (2024, 5, 1, 10, 30, 5));
-        assert_eq!(format_date("yyyy-MM-dd'T'HH:mm", p), "2024-05-01T10:30");
-        assert_eq!(format_date("dd/MM/yy", p), "01/05/24");
-        assert_eq!(format_date("d 'h''' H", p), "1 h' 10");
-        assert!(parse_date("yyyy-MM-dd", "2024-05-01T10:30").is_none());
-        assert_eq!(iso_parts("2024-05-01 10:30:00Z").map(|p| p.mi), Some(30));
-        assert_eq!(iso_parts("2024-05-01").map(|p| (p.d, p.h)), Some((1, 0)));
-    }
-
-    #[test]
-    fn modeles() {
-        let item = serde_json::json!({ "name": "a.md", "fields": { "slug": "a", "seo": { "title": "T" } } });
-        assert_eq!(
-            interpolate("{fields.slug}|{slug}|{name}|{seo.title}|{x}", &item),
-            "a|a|a.md|T|"
-        );
-        let f = CmsField {
-            name: "s".into(),
-            kind: Some("select".into()),
-            options: serde_json::json!({ "values": ["a", { "name": "b", "label": "Bé" }, { "value": 3 }] }),
-            ..Default::default()
-        };
-        assert_eq!(
-            choices(&f),
-            vec![
-                ("a".into(), "a".into()),
-                ("b".into(), "Bé".into()),
-                ("3".into(), "3".into())
-            ]
-        );
-    }
-}
-
 /// Valeur d'un champ d'une définition, à la création d'un élément.
 fn defaults_of(fields: &[CmsField]) -> serde_json::Map<String, Value> {
     fields
@@ -1175,4 +1135,44 @@ fn repeat_view(
         </div>
     }
     .into_any()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_de_date() {
+        let p = parse_date("yyyy-MM-dd'T'HH:mm:ss", "2024-05-01T10:30:05").unwrap();
+        assert_eq!((p.y, p.mo, p.d, p.h, p.mi, p.s), (2024, 5, 1, 10, 30, 5));
+        assert_eq!(format_date("yyyy-MM-dd'T'HH:mm", p), "2024-05-01T10:30");
+        assert_eq!(format_date("dd/MM/yy", p), "01/05/24");
+        assert_eq!(format_date("d 'h''' H", p), "1 h' 10");
+        assert!(parse_date("yyyy-MM-dd", "2024-05-01T10:30").is_none());
+        assert_eq!(iso_parts("2024-05-01 10:30:00Z").map(|p| p.mi), Some(30));
+        assert_eq!(iso_parts("2024-05-01").map(|p| (p.d, p.h)), Some((1, 0)));
+    }
+
+    #[test]
+    fn modeles() {
+        let item = serde_json::json!({ "name": "a.md", "fields": { "slug": "a", "seo": { "title": "T" } } });
+        assert_eq!(
+            interpolate("{fields.slug}|{slug}|{name}|{seo.title}|{x}", &item),
+            "a|a|a.md|T|"
+        );
+        let f = CmsField {
+            name: "s".into(),
+            kind: Some("select".into()),
+            options: serde_json::json!({ "values": ["a", { "name": "b", "label": "Bé" }, { "value": 3 }] }),
+            ..Default::default()
+        };
+        assert_eq!(
+            choices(&f),
+            vec![
+                ("a".into(), "a".into()),
+                ("b".into(), "Bé".into()),
+                ("3".into(), "3".into())
+            ]
+        );
+    }
 }

@@ -22,6 +22,7 @@ pub mod preview;
 pub mod secrets;
 pub mod starter;
 mod state;
+mod translate;
 
 pub use secrets::SecretStore;
 pub use state::State;
@@ -64,6 +65,16 @@ pub enum CoreError {
     Edit(revel_edit::EditError),
     #[error("site non ouvert dans l'éditeur")]
     NotOpen,
+    #[error("pas de traduction automatique de « {0} » vers « {1} »")]
+    NoTranslation(String, String),
+    #[error("traduction automatique : {0}")]
+    Translate(String),
+    #[error("fichier de traduction téléchargé altéré : {0}")]
+    TranslateIntegrity(String),
+    #[error("téléchargement annulé")]
+    TranslateCancelled,
+    #[error("un téléchargement de langue est déjà en cours")]
+    TranslateBusy,
     /// Import ou remplacement d'un média refusé.
     #[error("{0}")]
     Media(String),
@@ -112,6 +123,17 @@ impl CoreError {
             Self::GithubCancelled => Failure::new("error-github-cancelled"),
             Self::Edit(e) => Failure::new(e.key()).arg("detail", e.to_string()),
             Self::NotOpen => Failure::new("error-edit-not-open"),
+            Self::NoTranslation(from, to) => Failure::new("error-translate-pair")
+                .arg("from", revel_model::language_name(from))
+                .arg("to", revel_model::language_name(to)),
+            Self::Translate(detail) => {
+                Failure::new("error-translate").arg("detail", detail.clone())
+            }
+            Self::TranslateIntegrity(detail) => {
+                Failure::new("error-translate-integrity").arg("detail", detail.clone())
+            }
+            Self::TranslateCancelled => Failure::new("error-translate-cancelled"),
+            Self::TranslateBusy => Failure::new("error-translate-busy"),
             Self::Media(detail) => Failure::new("error-media").arg("detail", detail.clone()),
             Self::Other(detail) => Failure::detail(detail.clone()),
         }
@@ -149,6 +171,13 @@ pub struct Core {
     canvas: Mutex<Option<canvas::Canvas>>,
     /// Aperçu (protocole `revel-preview`).
     preview: Mutex<Option<canvas::Canvas>>,
+    /// Traduction automatique hors ligne (D-36) : moteur (recréé quand les langues changent),
+    /// modèles livrés avec l'application, langues téléchargées, téléchargement en cours.
+    translator: Mutex<Option<std::sync::Arc<revel_translate::Engine>>>,
+    bundled_models: Mutex<Option<PathBuf>>,
+    user_models: PathBuf,
+    translate_busy: AtomicBool,
+    translate_cancel: AtomicBool,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -195,6 +224,11 @@ impl Core {
             sessions: Mutex::new(std::collections::HashMap::new()),
             canvas: Mutex::new(None),
             preview: Mutex::new(None),
+            translator: Mutex::new(None),
+            bundled_models: Mutex::new(None),
+            user_models: config_dir.join("models"),
+            translate_busy: AtomicBool::new(false),
+            translate_cancel: AtomicBool::new(false),
         }
     }
 

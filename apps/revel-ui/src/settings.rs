@@ -1,9 +1,11 @@
-//! Réglages de l'application : langue, thème, couleur d'accent et son étendue.
+//! Réglages de l'application : langue, thème, couleur d'accent et son étendue, langues de
+//! traduction automatique (D-36).
 
-use crate::{Ui, api};
+use crate::dialog::Ask;
+use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use revel_protocol::AppSettings;
+use revel_protocol::{AppSettings, PackState, TranslateEvent, TranslatePack};
 
 /// Couleurs proposées (une seule est utilisée à la fois).
 const PRESETS: &[&str] = &["#3D7EFF", "#7C5CFF", "#1F9D6B", "#E8890C", "#E5487A"];
@@ -90,15 +92,167 @@ pub fn Settings() -> impl IntoView {
                     </div>
                 </div>
             </div>
+            <TranslatePacks/>
             <div class="section">
                 <h2>{ui.t("settings-accounts")}</h2>
                 <div class="form-grid">
-                    <span class="label">"GitHub"</span>
+                    <span class="label" title=ui.t("settings-github-help")>"GitHub"</span>
                     <crate::account::GithubAccount/>
-                    <span></span>
-                    <p class="muted help">{ui.t("settings-github-help")}</p>
                 </div>
             </div>
         </section>
+    }
+}
+
+/// Taille lisible (Mo, Go).
+fn size(ui: Ui, bytes: u64) -> String {
+    let mb = bytes as f64 / 1_000_000.0;
+    if mb >= 1000.0 {
+        ui.now("size-gb", &[("n", format!("{:.1}", mb / 1000.0))])
+    } else {
+        ui.now("size-mb", &[("n", format!("{mb:.0}"))])
+    }
+}
+
+/// Langues de traduction automatique : livrées, téléchargées (retirables), à télécharger. Le
+/// téléchargement continue quand on quitte les réglages.
+#[component]
+fn TranslatePacks() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let packs = RwSignal::new(None::<Vec<TranslatePack>>);
+    let reload = move || {
+        spawn_local(async move {
+            match api::translate_packs().await {
+                Ok(p) => {
+                    if !packs.is_disposed() {
+                        packs.set(Some(p))
+                    }
+                }
+                Err(e) => ui.fail(e),
+            }
+        })
+    };
+    reload();
+    // Téléchargement terminé (ou arrêté) : liste relue.
+    Effect::new(move |prev: Option<bool>| {
+        let busy = ui.pack_job.with(Option::is_some);
+        if prev == Some(true) && !busy {
+            reload();
+        }
+        busy
+    });
+    let install = move |code: String| {
+        if ui.pack_job.with_untracked(Option::is_some) {
+            return;
+        }
+        ui.pack_job.set(Some((code.clone(), Some(0.0))));
+        ui.activity.set(Some(0.02));
+        spawn_local(async move {
+            let r = api::translate_install(&code, move |e| {
+                let f = match e {
+                    TranslateEvent::Progress { done, total } => {
+                        Some(done as f32 / total.max(1) as f32)
+                    }
+                    TranslateEvent::Preparing => None,
+                };
+                ui.pack_job.update(|j| {
+                    if let Some(j) = j {
+                        j.1 = f;
+                    }
+                });
+                ui.activity.set(Some(f.unwrap_or(0.98).clamp(0.02, 0.98)));
+            })
+            .await;
+            ui.pack_job.set(None);
+            ui.activity.set(None);
+            if let Err(e) = r
+                && e.key != "error-translate-cancelled"
+            {
+                ui.fail(e);
+            }
+        });
+    };
+    let remove = move |code: String| {
+        let name = revel_model::language_name(&code);
+        ui.ask.set(Some(
+            Ask::confirm(
+                ui.now("settings-translate-remove-title", &[("name", name)]),
+                None,
+                ui.now("action-remove", &[]),
+                move || {
+                    let code = code.clone();
+                    spawn_local(async move {
+                        if let Err(e) = api::translate_remove(&code).await {
+                            ui.fail(e);
+                        }
+                        reload();
+                    })
+                },
+            )
+            .danger(),
+        ));
+    };
+    let row = move |p: TranslatePack| {
+        let code = StoredValue::new(p.code.clone());
+        let job = move || {
+            ui.pack_job
+                .with(|j| j.as_ref().filter(|j| j.0 == code.get_value()).map(|j| j.1))
+        };
+        let state = p.state;
+        view! {
+            <li class="pack" data-pack=p.code.clone() class:is-on=matches!(state, PackState::Bundled | PackState::Installed)>
+                <span class="pack-name">{revel_model::language_name(&p.code)}</span>
+                <span class="muted path pack-code">{p.code.clone()}</span>
+                <span class="pack-side">
+                    {move || match (state, job()) {
+                        (_, Some(f)) => view! {
+                            <span class="meter-bar pack-bar" class:is-busy=f.is_none()>
+                                <span class="meter-fill" style:width=format!("{:.1}%", f.unwrap_or(1.0) * 100.0)></span>
+                            </span>
+                            <span class="pack-num">{match f {
+                                Some(f) => format!("{:.0} %", f * 100.0),
+                                None => ui.now("settings-translate-preparing", &[]),
+                            }}</span>
+                            <button class="icon-btn icon-btn--small" title=ui.t("action-cancel") aria-label=ui.t("action-cancel")
+                                disabled=f.is_none()
+                                on:click=move |_| { spawn_local(async { let _ = api::translate_install_cancel().await; }); }>{icons::close()}</button>
+                        }.into_any(),
+                        (PackState::Bundled | PackState::Installed, None) => view! {
+                            <span class="muted pack-size">{size(ui, p.disk)}</span>
+                            <button class="icon-btn icon-btn--small pack-remove" title=ui.t("settings-translate-remove") aria-label=ui.t("settings-translate-remove")
+                                on:click=move |_| remove(code.get_value())>{icons::trash()}</button>
+                        }.into_any(),
+                        (PackState::BundledOff, None) => view! {
+                            <span class="muted pack-size">{size(ui, p.disk)}</span>
+                            <button class="btn btn--small pack-get" title=ui.t("settings-translate-add-help")
+                                disabled=move || ui.pack_job.with(Option::is_some)
+                                on:click=move |_| install(code.get_value())>{icons::plus()}{ui.t("settings-translate-add")}</button>
+                        }.into_any(),
+                        (PackState::Available, None) => view! {
+                            <span class="muted pack-size">{size(ui, p.disk)}</span>
+                            <button class="btn btn--small pack-get"
+                                title=ui.tx("settings-translate-get-help", &[("size", size(ui, p.download))])
+                                disabled=move || ui.pack_job.with(Option::is_some)
+                                on:click=move |_| install(code.get_value())>{icons::download()}{ui.t("settings-translate-get")}</button>
+                        }.into_any(),
+                    }}
+                </span>
+            </li>
+        }
+    };
+    view! {
+        <div class="section">
+            <h2 title=ui.t("settings-translate-help")>{ui.t("settings-translate")}</h2>
+            <ul class="packs">
+                {move || packs.get().map(|mut list| {
+                    list.sort_by_key(|p| match p.state {
+                        PackState::Bundled | PackState::Installed => 0,
+                        PackState::BundledOff => 1,
+                        PackState::Available => 2,
+                    });
+                    list.into_iter().map(row).collect_view()
+                })}
+            </ul>
+        </div>
     }
 }

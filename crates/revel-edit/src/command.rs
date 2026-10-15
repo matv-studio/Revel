@@ -344,7 +344,19 @@ pub enum Command {
         source: String,
         #[serde(default)]
         text: Option<String>,
+        /// Traduction automatique, à relire (D-36) ; saisie : marque retirée.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        machine: bool,
     },
+    /// Marques « traduction automatique à relire » posées (`on`) ou retirées (clés de
+    /// [`revel_model::Locale::machine`]).
+    MarkMachine {
+        locale: String,
+        keys: Vec<String>,
+        on: bool,
+    },
+    /// Mots gardés tels quels par la traduction automatique (réglages du site).
+    SetNoTranslate { terms: Vec<String> },
     /// Traduction du texte écrit à un endroit (canevas, inspecteur), remplacée par
     /// `SetTranslation` avec le texte de la langue principale.
     Translate {
@@ -376,6 +388,7 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
                 locale: locale.clone(),
                 source: crate::locale::source_at(site, place)?,
                 text: Some(text.clone()),
+                machine: false,
             }
         }
         Command::Wrap { at, tag } => {
@@ -1107,6 +1120,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             locale,
             source,
             text,
+            machine,
         } => {
             let l = site
                 .locales
@@ -1121,6 +1135,12 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 .as_deref()
                 .map(crate::locale::normalize)
                 .filter(|t| !t.is_empty());
+            let mark = crate::locale::text_key(&key);
+            let was_machine = if *machine && text.is_some() {
+                !l.machine.insert(mark)
+            } else {
+                l.machine.remove(&mark)
+            };
             let old = match text {
                 Some(t) => l.texts.insert(key.clone(), t),
                 None => l.texts.remove(&key),
@@ -1128,7 +1148,47 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             Ok(Command::SetTranslation {
                 locale: locale.clone(),
                 source: key,
+                machine: was_machine && old.is_some(),
                 text: old,
+            })
+        }
+        Command::MarkMachine { locale, keys, on } => {
+            let l = site
+                .locales
+                .iter_mut()
+                .find(|l| l.code == *locale)
+                .ok_or_else(|| EditError::InvalidLocale(locale.clone()))?;
+            // Seules les marques changées sont rétablies à l'annulation.
+            let changed: Vec<String> = keys
+                .iter()
+                .filter(|k| {
+                    if *on {
+                        l.machine.insert((*k).clone())
+                    } else {
+                        l.machine.remove(*k)
+                    }
+                })
+                .cloned()
+                .collect();
+            Ok(Command::MarkMachine {
+                locale: locale.clone(),
+                keys: changed,
+                on: !on,
+            })
+        }
+        Command::SetNoTranslate { terms } => {
+            let clean: Vec<String> = terms
+                .iter()
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .fold(Vec::new(), |mut v, t| {
+                    if !v.contains(&t) {
+                        v.push(t);
+                    }
+                    v
+                });
+            Ok(Command::SetNoTranslate {
+                terms: std::mem::replace(&mut site.settings.no_translate, clean),
             })
         }
         Command::SetMediaAlt { url, alt } => {

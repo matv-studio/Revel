@@ -339,6 +339,15 @@ github-code-help = On github.com, enter this code to authorize Revel:
 github-open = Copy code and open github.com
 github-copy = Copy code
 github-waiting = Waiting for your authorization on github.com… This updates automatically.
+settings-translate = Automatic translation
+settings-translate-help = Languages translated on this computer, offline. A language is downloaded once from Hugging Face (OPUS-MT models by the University of Helsinki); between two languages, translation goes through English.
+settings-translate-add = Add
+settings-translate-add-help = Shipped with Revel: added without downloading
+settings-translate-get = Download
+settings-translate-get-help = { $size } to download, once
+settings-translate-remove = Remove language
+settings-translate-remove-title = Remove “{ $name }” from automatic translation?
+settings-translate-preparing = Preparing…
 settings-accounts = Accounts
 settings-github-help = Used to publish on GitHub Pages. Revel asks for access to your repositories; the token is kept in the system keychain.
 error-github-signed-out = No GitHub account connected, or the connection has expired. Connect to GitHub, then try again.
@@ -358,6 +367,11 @@ error-edit-duplicate = Change refused: an element identifier would be duplicated
 error-edit-move = An element cannot be placed inside itself.
 error-edit-tag = Invalid tag name: letters, digits and hyphens only. ({ $detail })
 error-edit-not-open = This site is not open in the editor.
+error-translate-pair = No translation model for { $from } → { $to }.
+error-translate = Automatic translation failed: { $detail }
+error-translate-integrity = Downloaded translation file is corrupted ({ $detail }): download it again.
+error-translate-cancelled = Download cancelled.
+error-translate-busy = A language download is already in progress.
 error-edit-css = CSS refused: a single declaration, with no semicolon or brace outside quotes, and no “!important” in the value (separate checkbox). ({ $detail })
 error-media = Media not imported: { $detail }
 error-edit-expr = Invalid expression, nothing was changed. ({ $detail })
@@ -753,6 +767,7 @@ picker-count-images = { $count ->
     }
 size-kb = { $n } KB
 size-mb = { $n } MB
+size-gb = { $n } GB
 dock-menu = Panel options
 dock-float = Detach
 dock-close = Close “{ $panel }”
@@ -882,6 +897,36 @@ locales-translation = Translation
 locales-none = No texts
 locales-place-layout = Layout { $name }
 locales-entry-done = Translated
+locales-auto = Translate automatically
+locales-auto-help = Translate texts not translated yet, on this computer, offline
+locales-auto-none = No model for { $from } → { $to }: download the language in Settings › Automatic translation
+locales-auto-nothing = Everything is already translated
+locales-auto-title = Translate automatically
+locales-auto-texts = { $n ->
+    [one] 1 text
+   *[other] { $n } texts
+}
+locales-auto-entries = { $n ->
+    [one] 1 item
+   *[other] { $n } items
+}
+locales-auto-keep = Words to keep as is
+locales-auto-keep-help = Brand or product names, separated by commas. The site name is always kept.
+locales-auto-start = Translate
+locales-auto-running = Translating { $from } → { $to }
+locales-auto-eta-min = about { $n } min
+locales-auto-eta-less = less than a minute
+locales-auto-eta-wait = estimating…
+locales-auto-stop = Stop
+locales-auto-stop-help = Stop after the current batch (what is translated is kept)
+locales-auto-stopping = Stopping…
+locales-review = To review
+locales-review-help = Machine translation to review
+locales-review-ok = Mark as reviewed
+locales-review-only = To review
+locales-review-only-help = Only machine translations to review
+locales-review-all = Mark all as reviewed
+locales-progress-auto-help = { $done } of { $total } texts translated, { $auto } to review
 action-add = Add
 action-rename = Rename
 action-remove = Remove
@@ -892,6 +937,7 @@ cms-locale-help = Language of displayed items
 cms-locale-shared = Fields and items are shared by all languages: change them in the primary language
 cms-untranslated = To translate
 cms-untranslated-help = Not translated yet: primary-language content; an edit creates the translation
+cms-auto = Machine-translated
 
 # CMS view
 cms-collections = Collections

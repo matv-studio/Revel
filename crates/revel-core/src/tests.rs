@@ -1437,6 +1437,119 @@ fn modeles_de_site() {
 const PAGES_YML: &str = "# Contenus\ncontent:\n  - name: projets\n    label: Projets\n    type: collection\n    path: contenus/projets\n    fields:\n      - name: title\n        type: string\n  - name: accueil\n    label: Accueil\n    type: file\n    path: donnees/pages/accueil.yml\n    fields:\n      - name: hero\n        type: object\n        fields:\n          - name: title\n            type: string\n";
 
 #[test]
+fn traduction_automatique_lots_et_relecture() {
+    use revel_edit::Command;
+    use revel_edit::canvas::{Binding, Seg, Source};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let data = "hero:\n  title: L'agence\n";
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.data_dir = Some("donnees".into());
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("donnees/pages")).unwrap();
+        std::fs::write(site.join("donnees/pages/accueil.yml"), data).unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    c.edit_apply(
+        &site,
+        Command::AddLocale {
+            locale: revel_model::Locale::new("en"),
+            index: None,
+        },
+        false,
+    )
+    .unwrap();
+    let before = std::fs::read_to_string(site.join(revel_project::SITE_FILE)).unwrap();
+    let k = |s: &str| Seg::Key(s.into());
+    let path = vec![k("pages"), k("accueil"), k("hero"), k("title")];
+    let binding = Binding {
+        source: Source::LocaleData {
+            locale: "en".into(),
+        },
+        path: path.clone(),
+    };
+    let key = revel_edit::locale::data_key(&path);
+    let marks = || {
+        c.edit_site(&site).unwrap().locales[0]
+            .machine
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    // Deux lots d'une même opération : une seule étape d'annulation.
+    c.edit_apply_grouped(
+        &site,
+        Command::Batch {
+            commands: vec![
+                Command::SetDataValue {
+                    binding: binding.clone(),
+                    value: Some(serde_json::json!("The agency")),
+                },
+                Command::MarkMachine {
+                    locale: "en".into(),
+                    keys: vec![key.clone()],
+                    on: true,
+                },
+            ],
+        },
+        "auto-1",
+    )
+    .unwrap();
+    c.edit_apply_grouped(
+        &site,
+        Command::SetTranslation {
+            locale: "en".into(),
+            source: "Bonjour".into(),
+            text: Some("Hello".into()),
+            machine: true,
+        },
+        "auto-1",
+    )
+    .unwrap();
+    assert_eq!(marks(), vec![key.clone(), "text:Bonjour".to_string()]);
+    let en = site.join("donnees/en/pages/accueil.yml");
+    assert!(std::fs::read_to_string(&en).unwrap().contains("The agency"));
+    // Valeur écrite à la main : marque retirée ; annuler la rétablit.
+    c.edit_apply(
+        &site,
+        Command::SetBound {
+            binding: binding.clone(),
+            value: "Our agency".into(),
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(marks(), vec!["text:Bonjour".to_string()]);
+    c.edit_undo(&site).unwrap();
+    assert_eq!(marks(), vec![key.clone(), "text:Bonjour".to_string()]);
+    // Une annulation retire toute l'opération (fichier de la langue compris).
+    c.edit_undo(&site).unwrap();
+    assert!(!en.exists());
+    assert_eq!(
+        std::fs::read_to_string(site.join(revel_project::SITE_FILE)).unwrap(),
+        before
+    );
+    // Sans modèles : traduction indisponible, erreur explicite.
+    if std::env::var_os("REVEL_MODELS").is_none() {
+        assert!(!c.translate_can("fr", "en"));
+        let e = c
+            .translate(
+                "fr",
+                "en",
+                &[revel_protocol::TranslateItem {
+                    text: "Bonjour".into(),
+                    format: None,
+                }],
+                &[],
+            )
+            .unwrap_err();
+        assert_eq!(e.failure().key, "error-translate-pair");
+    }
+}
+
+#[test]
 fn langues_fichiers_et_generation() {
     use revel_edit::Command;
     use revel_edit::canvas::{Binding, Seg, Source};

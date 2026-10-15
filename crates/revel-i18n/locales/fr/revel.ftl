@@ -342,6 +342,15 @@ github-code-help = Sur github.com, saisissez ce code pour autoriser Revel :
 github-open = Copier le code et ouvrir github.com
 github-copy = Copier le code
 github-waiting = En attente de votre autorisation sur github.com… Cette fenêtre se met à jour automatiquement.
+settings-translate = Traduction automatique
+settings-translate-help = Langues traduites sur cet ordinateur, sans connexion. Une langue se télécharge une fois depuis Hugging Face (modèles OPUS-MT de l’université d’Helsinki) ; entre deux langues, la traduction passe par l’anglais.
+settings-translate-add = Ajouter
+settings-translate-add-help = Livrée avec Revel : ajoutée sans téléchargement
+settings-translate-get = Télécharger
+settings-translate-get-help = { $size } à télécharger, une seule fois
+settings-translate-remove = Retirer la langue
+settings-translate-remove-title = Retirer « { $name } » de la traduction automatique ?
+settings-translate-preparing = Préparation…
 settings-accounts = Comptes
 settings-github-help = Utilisé pour publier sur GitHub Pages. Revel demande l’accès à vos dépôts ; le jeton est conservé dans le trousseau du système.
 error-github-signed-out = Aucun compte GitHub connecté, ou la connexion a expiré. Connectez-vous à GitHub, puis recommencez.
@@ -361,6 +370,11 @@ error-edit-duplicate = Modification refusée : un identifiant d'élément serait
 error-edit-move = Un élément ne peut pas être placé à l'intérieur de lui-même.
 error-edit-tag = Nom de balise invalide : lettres, chiffres et tirets uniquement. ({ $detail })
 error-edit-not-open = Ce site n'est pas ouvert dans l'éditeur.
+error-translate-pair = Aucun modèle de traduction pour { $from } → { $to }.
+error-translate = Traduction automatique impossible : { $detail }
+error-translate-integrity = Fichier de traduction téléchargé altéré ({ $detail }) : téléchargement à relancer.
+error-translate-cancelled = Téléchargement annulé.
+error-translate-busy = Un téléchargement de langue est déjà en cours.
 error-edit-css = CSS refusé : une seule déclaration, sans point-virgule ni accolade en dehors des guillemets, et sans « !important » dans la valeur (case à cocher séparée). ({ $detail })
 error-media = Média non importé : { $detail }
 error-edit-expr = Expression invalide, rien n'a été modifié. ({ $detail })
@@ -756,6 +770,7 @@ picker-count-images = { $count ->
     }
 size-kb = { $n } Ko
 size-mb = { $n } Mo
+size-gb = { $n } Go
 dock-menu = Options du panneau
 dock-float = Détacher
 dock-close = Fermer « { $panel } »
@@ -885,6 +900,36 @@ locales-translation = Traduction
 locales-none = Aucun texte
 locales-place-layout = Gabarit { $name }
 locales-entry-done = Traduit
+locales-auto = Traduire automatiquement
+locales-auto-help = Traduire sur cet ordinateur, sans connexion, les textes pas encore traduits
+locales-auto-none = Aucun modèle pour { $from } → { $to } : langue à télécharger dans Réglages › Traduction automatique
+locales-auto-nothing = Tout est déjà traduit
+locales-auto-title = Traduire automatiquement
+locales-auto-texts = { $n ->
+    [one] 1 texte
+   *[other] { $n } textes
+}
+locales-auto-entries = { $n ->
+    [one] 1 contenu
+   *[other] { $n } contenus
+}
+locales-auto-keep = Mots à garder tels quels
+locales-auto-keep-help = Noms de marque ou de produit, séparés par des virgules. Le nom du site est toujours gardé.
+locales-auto-start = Traduire
+locales-auto-running = Traduction { $from } → { $to }
+locales-auto-eta-min = environ { $n } min
+locales-auto-eta-less = moins d’une minute
+locales-auto-eta-wait = estimation…
+locales-auto-stop = Arrêter
+locales-auto-stop-help = Arrêter après le lot en cours (ce qui est traduit est gardé)
+locales-auto-stopping = Arrêt…
+locales-review = À relire
+locales-review-help = Traduction automatique à relire
+locales-review-ok = Marquer comme relu
+locales-review-only = À relire
+locales-review-only-help = Seulement les traductions automatiques à relire
+locales-review-all = Tout marquer comme relu
+locales-progress-auto-help = { $done } textes traduits sur { $total }, dont { $auto } à relire
 action-add = Ajouter
 action-rename = Renommer
 action-remove = Retirer
@@ -895,6 +940,7 @@ cms-locale-help = Langue des contenus affichés
 cms-locale-shared = Champs et contenus communs à toutes les langues : à modifier dans la langue principale
 cms-untranslated = À traduire
 cms-untranslated-help = Pas encore traduit : contenu de la langue principale ; une modification crée la traduction
+cms-auto = Traduit automatiquement
 
 # Vue CMS
 cms-collections = Collections

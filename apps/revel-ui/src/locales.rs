@@ -6,7 +6,11 @@
 //! - **Données** : textes des fichiers de données, écrits dans le dossier de la langue
 //!   (`_data/en/…`, copié au besoin par le cœur) ;
 //! - **Contenus** : contenus des collections, traduits dans la vue CMS (dossier de la langue).
+//!
+//! Traduction automatique hors ligne (D-36, [`crate::autotr`]) : textes pas encore traduits,
+//! marqués « à relire » jusqu'à ce qu'ils soient relus (validés ou modifiés).
 
+use crate::autotr::{self, Unit};
 use crate::dialog::Ask;
 use crate::{Tab, Ui, api, icons};
 use leptos::prelude::*;
@@ -29,12 +33,15 @@ enum Part {
     Entries,
 }
 
-/// Données de la vue : document, textes des fichiers de données par langue, contenus.
+/// Données de la vue : document, textes des fichiers de données par langue, contenus, langues
+/// traduisibles automatiquement.
 #[derive(Clone, Copy)]
 struct LocSession {
     doc: RwSignal<Option<revel_model::Site>>,
     data: RwSignal<BTreeMap<String, Vec<DataText>>>,
     cms: RwSignal<Option<Vec<CmsCollection>>>,
+    /// Traduction automatique possible vers chaque langue (modèles livrés).
+    can: RwSignal<BTreeMap<String, bool>>,
     apply: Callback<Command>,
 }
 
@@ -42,6 +49,7 @@ fn session(ui: Ui, path: String) -> LocSession {
     let doc = RwSignal::new(None::<revel_model::Site>);
     let data = RwSignal::new(BTreeMap::<String, Vec<DataText>>::new());
     let cms = RwSignal::new(None::<Vec<CmsCollection>>);
+    let can = RwSignal::new(BTreeMap::<String, bool>::new());
     let path = StoredValue::new(path);
     let reload = move || {
         let p = path.get_value();
@@ -53,12 +61,19 @@ fn session(ui: Ui, path: String) -> LocSession {
                 return;
             }
             let codes: Vec<String> = o.site.locales.iter().map(|l| l.code.clone()).collect();
+            let primary = o.site.default_locale.clone();
             doc.set(Some(o.site));
             let mut all = BTreeMap::new();
+            let mut ok = BTreeMap::new();
             for c in codes {
                 if let Ok(list) = api::edit_locale_data(&p, &c).await {
-                    all.insert(c, list);
+                    all.insert(c.clone(), list);
                 }
+                // Relue à chaque fois : une langue peut avoir été téléchargée entre-temps.
+                ok.insert(c.clone(), api::translate_can(&primary, &c).await);
+            }
+            if !can.is_disposed() {
+                can.set(ok);
             }
             if let Ok(c) = api::cms_collections(&p).await
                 && !cms.is_disposed()
@@ -71,6 +86,14 @@ fn session(ui: Ui, path: String) -> LocSession {
         });
     };
     reload();
+    // Traduction automatique en cours : textes relus après chaque lot écrit.
+    Effect::new(move |prev: Option<Option<usize>>| {
+        let now = ui.auto.with(|j| j.as_ref().map(|j| j.done));
+        if prev.is_some_and(|p| p != now) {
+            reload();
+        }
+        now
+    });
     let apply = Callback::new(move |cmd: Command| {
         let p = path.get_value();
         spawn_local(async move {
@@ -86,6 +109,7 @@ fn session(ui: Ui, path: String) -> LocSession {
         doc,
         data,
         cms,
+        can,
         apply,
     }
 }
@@ -103,33 +127,93 @@ fn entry_title(c: &CmsCollection, e: &revel_protocol::CmsEntry) -> String {
         .unwrap_or_else(|| e.file.clone())
 }
 
-/// Avancement d'une langue : (traduits, total).
+/// Avancement d'une langue : (traduits, dont traductions automatiques à relire, total).
 fn progress(
     texts: &[SiteText],
     l: &revel_model::Locale,
     data: Option<&Vec<DataText>>,
     cms: Option<&Vec<CmsCollection>>,
-) -> (usize, usize) {
-    let mut done = texts
-        .iter()
-        .filter(|t| l.texts.contains_key(&t.source))
-        .count();
+) -> (usize, usize, usize) {
+    use revel_edit::locale::{data_key, entry_key, text_key};
+    let mut done = 0;
+    let mut auto = 0;
+    for t in texts.iter().filter(|t| l.texts.contains_key(&t.source)) {
+        done += 1;
+        auto += usize::from(l.machine.contains(&text_key(&t.source)));
+    }
     let mut total = texts.len();
     if let Some(d) = data {
         total += d.len();
-        done += d.iter().filter(|t| data_done(t)).count();
+        for t in d.iter().filter(|t| data_done(t)) {
+            done += 1;
+            auto += usize::from(l.machine.contains(&data_key(&t.path)));
+        }
     }
     for c in cms.into_iter().flatten() {
         total += c.entries.len();
         if let Some(own) = c.locales.get(&l.code) {
-            done += c
+            for e in c
                 .entries
                 .iter()
                 .filter(|e| own.iter().any(|o| o.file == e.file))
-                .count();
+            {
+                done += 1;
+                auto += usize::from(l.machine.contains(&entry_key(&c.folder, &e.file)));
+            }
         }
     }
-    (done, total)
+    (done, auto, total)
+}
+
+/// Textes pas encore traduits d'une langue, par partie : pages, données, contenus.
+fn untranslated(
+    texts: &[SiteText],
+    l: &revel_model::Locale,
+    data: Option<&Vec<DataText>>,
+    cms: Option<&Vec<CmsCollection>>,
+) -> [Vec<Unit>; 3] {
+    let pages = texts
+        .iter()
+        .filter(|t| !l.texts.contains_key(&t.source))
+        .map(|t| Unit::Text {
+            source: t.source.clone(),
+        })
+        .collect();
+    let data = data
+        .into_iter()
+        .flatten()
+        .filter(|t| !data_done(t))
+        .map(|t| Unit::Data {
+            path: t.path.clone(),
+            text: t.source.clone(),
+        })
+        .collect();
+    let mut entries = Vec::new();
+    for c in cms.into_iter().flatten() {
+        let own = c.locales.get(&l.code);
+        for e in &c.entries {
+            if own.is_some_and(|o| o.iter().any(|o| o.file == e.file)) {
+                continue;
+            }
+            entries.push(Unit::Entry {
+                folder: c.folder.clone(),
+                file: e.file.clone(),
+                data: e.data.clone(),
+                body: e.body.clone(),
+                fields: c.fields.clone(),
+            });
+        }
+    }
+    [pages, data, entries]
+}
+
+/// Durée restante lisible.
+fn eta(ui: Ui, secs: Option<u64>) -> String {
+    match secs {
+        None => ui.now("locales-auto-eta-wait", &[]),
+        Some(s) if s < 60 => ui.now("locales-auto-eta-less", &[]),
+        Some(s) => ui.now("locales-auto-eta-min", &[("n", s.div_ceil(60).to_string())]),
+    }
 }
 
 #[component]
@@ -164,7 +248,83 @@ pub fn Locales(site: SiteSummary) -> impl IntoView {
     });
     let part = RwSignal::new(Part::Pages);
     let todo_only = RwSignal::new(false);
+    let review_only = RwSignal::new(false);
     let query = RwSignal::new(String::new());
+    // Fenêtre « Traduire automatiquement » : langue, parties choisies, mots gardés.
+    let dlg = RwSignal::new(None::<String>);
+    let dlg_parts = RwSignal::new([true; 3]);
+    let dlg_keep = RwSignal::new(String::new());
+    let site_path = StoredValue::new(site.path.clone());
+    // Textes pas encore traduits de chaque partie, pour une langue.
+    let todo = move |code: &str| -> Option<[Vec<Unit>; 3]> {
+        s.doc.with(|d| {
+            let l = d.as_ref()?.locale(code)?.clone();
+            Some(s.data.with(|data| {
+                s.cms
+                    .with(|cms| texts.with(|tx| untranslated(tx, &l, data.get(code), cms.as_ref())))
+            }))
+        })
+    };
+    // Traduction automatique en cours sur ce site.
+    let job = Memo::new(move |_| ui.auto.get().filter(|j| j.path == site_path.get_value()));
+    let open_auto = move |code: String| {
+        let keep = s.doc.with_untracked(|d| {
+            d.as_ref()
+                .map(|d| d.settings.no_translate.join(", "))
+                .unwrap_or_default()
+        });
+        dlg_keep.set(keep);
+        dlg_parts.set([true; 3]);
+        dlg.set(Some(code));
+    };
+    let esc = window_event_listener(leptos::ev::keydown, move |e| {
+        if e.key() == "Escape" && dlg.with_untracked(Option::is_some) {
+            e.prevent_default();
+            dlg.set(None);
+        }
+    });
+    on_cleanup(move || esc.remove());
+    let start_auto = move || {
+        let Some(code) = dlg.get_untracked() else {
+            return;
+        };
+        dlg.set(None);
+        let Some(parts) = todo(&code) else {
+            return;
+        };
+        let on = dlg_parts.get_untracked();
+        let units: Vec<Unit> = parts
+            .into_iter()
+            .zip(on)
+            .filter(|(_, on)| *on)
+            .flat_map(|(u, _)| u)
+            .collect();
+        let terms: Vec<String> = dlg_keep
+            .get_untracked()
+            .split([',', ';', '\n'])
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .collect();
+        let (name, old, primary) = s.doc.with_untracked(|d| {
+            d.as_ref()
+                .map(|d| {
+                    (
+                        d.name.clone(),
+                        d.settings.no_translate.clone(),
+                        d.default_locale.clone(),
+                    )
+                })
+                .unwrap_or_default()
+        });
+        if terms != old {
+            s.apply.run(Command::SetNoTranslate {
+                terms: terms.clone(),
+            });
+        }
+        let mut keep = vec![name];
+        keep.extend(terms);
+        autotr::start(ui, site_path.get_value(), primary, code, units, keep);
+    };
 
     let add = move |code: String| {
         let code = code.trim().to_string();
@@ -280,10 +440,14 @@ pub fn Locales(site: SiteSummary) -> impl IntoView {
                             let code = l.code.clone();
                             let code2 = l.code.clone();
                             let prog = Memo::new(move |_| {
-                                let (d, t) = s.data.with(|data| s.cms.with(|cms| {
+                                // Langue relue dans le document (marques « à relire » à jour).
+                                let l1 = s.doc.with(|d| d.as_ref().and_then(|d| d.locale(&l1.code)).cloned()).unwrap_or_else(|| l1.clone());
+                                let (d, a, t) = s.data.with(|data| s.cms.with(|cms| {
                                     texts.with(|tx| progress(tx, &l1, data.get(&l1.code), cms.as_ref()))
                                 }));
-                                (d, t, if t == 0 { 100 } else if d > 0 { (d * 100 / t).max(1) } else { 0 })
+                                let pct = |n: usize| if t == 0 { 0.0 } else { n as f64 * 100.0 / t as f64 };
+                                let shown = if t == 0 { 100 } else if d > 0 { (d * 100 / t).max(1) } else { 0 };
+                                (d, a, t, shown, pct(d - a), pct(a))
                             });
                             view! {
                                 <tr data-locale=l.code.clone() class="row-link" class:is-on=move || sel.get().as_deref() == Some(code.as_str())
@@ -292,9 +456,19 @@ pub fn Locales(site: SiteSummary) -> impl IntoView {
                                     <td class="muted path">{l.code.clone()}</td>
                                     <td class="muted path">{format!("/{}/", l.code)}</td>
                                     <td>
-                                        <div class="meter" title=move || { let (d, t, _) = prog.get(); ui.tx("locales-progress-help", &[("done", d.to_string()), ("total", t.to_string())]) }>
-                                            <span class="meter-bar"><span class="meter-fill" style:width=move || format!("{}%", prog.get().2)></span></span>
-                                            <span class="meter-num">{move || format!("{} %", prog.get().2)}</span>
+                                        <div class="meter" title=move || {
+                                            let (d, a, t, ..) = prog.get();
+                                            if a > 0 {
+                                                ui.tx("locales-progress-auto-help", &[("done", d.to_string()), ("total", t.to_string()), ("auto", a.to_string())])
+                                            } else {
+                                                ui.tx("locales-progress-help", &[("done", d.to_string()), ("total", t.to_string())])
+                                            }
+                                        }>
+                                            <span class="meter-bar">
+                                                <span class="meter-fill" style:width=move || format!("{:.2}%", if prog.get().2 == 0 { 100.0 } else { prog.get().4 })></span>
+                                                <span class="meter-fill meter-fill--auto" style:width=move || format!("{:.2}%", prog.get().5)></span>
+                                            </span>
+                                            <span class="meter-num">{move || format!("{} %", prog.get().3)}</span>
                                         </div>
                                     </td>
                                     <td on:click=|e| e.stop_propagation()>
@@ -344,18 +518,111 @@ pub fn Locales(site: SiteSummary) -> impl IntoView {
                             <button class="tool-toggle locales-todo" class:is-on=move || todo_only.get()
                                 aria-pressed=move || todo_only.get().to_string()
                                 title=ui.t("locales-todo-help") aria-label=ui.t("locales-todo")
-                                on:click=move |_| todo_only.update(|t| *t = !*t)>{icons::filter()}</button>
+                                on:click=move |_| { review_only.set(false); todo_only.update(|t| *t = !*t) }>{icons::filter()}</button>
+                            <button class="tool-toggle tool-toggle--auto locales-review" class:is-on=move || review_only.get()
+                                aria-pressed=move || review_only.get().to_string()
+                                title=ui.t("locales-review-only-help") aria-label=ui.t("locales-review-only")
+                                on:click=move |_| { todo_only.set(false); review_only.update(|t| *t = !*t) }>{icons::sparkle()}</button>
+                            {
+                                let code = StoredValue::new(code.clone());
+                                let state = Memo::new(move |_| {
+                                    let c = code.get_value();
+                                    let can = s.can.with(|m| m.get(&c).copied());
+                                    let left = todo(&c).map(|p| p.iter().map(Vec::len).sum::<usize>()).unwrap_or(0);
+                                    (can, left)
+                                });
+                                let from = move || s.doc.with(|d| d.as_ref().map(|d| revel_model::language_name(&d.default_locale)).unwrap_or_default());
+                                move || (job.get().is_none()).then(|| view! {
+                                    <button class="btn btn--auto locales-auto"
+                                        disabled=move || { let (can, left) = state.get(); can != Some(true) || left == 0 }
+                                        title=move || {
+                                            let (can, left) = state.get();
+                                            if can == Some(false) {
+                                                ui.tx("locales-auto-none", &[("from", from()), ("to", revel_model::language_name(&code.get_value()))])
+                                            } else if left == 0 {
+                                                ui.tx("locales-auto-nothing", &[])
+                                            } else {
+                                                ui.tx("locales-auto-help", &[])
+                                            }
+                                        }
+                                        on:click=move |_| open_auto(code.get_value())>
+                                        {icons::sparkle()}{ui.t("locales-auto")}
+                                    </button>
+                                })
+                            }
                         </div>
                     </div>
+                    {move || job.get().map(|j| {
+                        let pct = if j.chars_total == 0 { 0.0 } else { j.chars_done as f64 * 100.0 / j.chars_total as f64 };
+                        view! {
+                            <div class="auto-run" role="status">
+                                <span class="auto-run-icon">{icons::sparkle()}</span>
+                                <span class="auto-run-label">{ui.tx("locales-auto-running", &[("from", s.doc.with_untracked(|d| d.as_ref().map(|d| revel_model::language_name(&d.default_locale)).unwrap_or_default())), ("to", revel_model::language_name(&j.code))])}</span>
+                                <span class="meter-bar auto-run-bar"><span class="meter-fill meter-fill--auto" style:width=format!("{pct:.2}%")></span></span>
+                                <span class="auto-run-count">{format!("{} / {}", j.done, j.total)}</span>
+                                <span class="auto-run-eta muted">{eta(ui, j.remaining())}</span>
+                                <button class="btn btn--small auto-run-stop" disabled=j.stop title=ui.t("locales-auto-stop-help")
+                                    on:click=move |_| ui.auto.update(|j| if let Some(j) = j { j.stop = true })>
+                                    {if j.stop { ui.now("locales-auto-stopping", &[]) } else { ui.now("locales-auto-stop", &[]) }}
+                                </button>
+                            </div>
+                        }
+                    })}
                     {
                         let code = StoredValue::new(code);
                         move || match part.get() {
-                            Part::Pages => view! { <PageTexts s=s code=code.get_value() texts=texts todo_only=todo_only query=query/> }.into_any(),
-                            Part::Data => view! { <DataTexts s=s code=code.get_value() todo_only=todo_only query=query/> }.into_any(),
-                            Part::Entries => view! { <EntryTexts s=s code=code.get_value() todo_only=todo_only query=query/> }.into_any(),
+                            Part::Pages => view! { <PageTexts s=s code=code.get_value() texts=texts todo_only=todo_only review_only=review_only query=query/> }.into_any(),
+                            Part::Data => view! { <DataTexts s=s code=code.get_value() todo_only=todo_only review_only=review_only query=query/> }.into_any(),
+                            Part::Entries => view! { <EntryTexts s=s code=code.get_value() todo_only=todo_only review_only=review_only query=query/> }.into_any(),
                         }
                     }
                 </div>
+            })}
+            {move || dlg.get().map(|code| {
+                let parts = todo(&code).unwrap_or_default();
+                let counts: [usize; 3] = [parts[0].len(), parts[1].len(), parts[2].len()];
+                let rows = [
+                    (0usize, "locales-part-pages", ui.now("locales-auto-texts", &[("n", counts[0].to_string())])),
+                    (1, "locales-part-data", ui.now("locales-auto-texts", &[("n", counts[1].to_string())])),
+                    (2, "locales-part-entries", ui.now("locales-auto-entries", &[("n", counts[2].to_string())])),
+                ];
+                let none = move || { let on = dlg_parts.get(); !(0..3).any(|i| on[i] && counts[i] > 0) };
+                view! {
+                    <div class="overlay" on:mousedown=move |e| if e.target() == e.current_target() { dlg.set(None) }>
+                        <form class="dialog auto-dialog" role="dialog" aria-modal="true" aria-labelledby="auto-title"
+                            on:submit=move |e| { e.prevent_default(); if !none() { start_auto() } }>
+                            <h2 id="auto-title">{ui.t("locales-auto-title")}</h2>
+                            <p class="auto-pair">
+                                <span>{move || s.doc.with(|d| d.as_ref().map(|d| revel_model::language_name(&d.default_locale)).unwrap_or_default())}</span>
+                                {icons::arrow_right()}
+                                <span class="strong">{revel_model::language_name(&code)}</span>
+                            </p>
+                            <div class="auto-parts">
+                                {rows.into_iter().map(|(i, key, count)| view! {
+                                    <label class="view-line auto-part" class:is-empty={counts[i] == 0}>
+                                        <span>{ui.t(key)}</span>
+                                        <span class="muted auto-part-count">{count}</span>
+                                        <span class="switch">
+                                            <input type="checkbox" disabled={counts[i] == 0}
+                                                prop:checked={move || counts[i] > 0 && dlg_parts.get()[i]}
+                                                on:change=move |e| { let v = event_target_checked(&e); dlg_parts.update(|p| p[i] = v) }/>
+                                            <span class="switch-track"></span>
+                                        </span>
+                                    </label>
+                                }).collect_view()}
+                            </div>
+                            <label class="field" title=ui.t("locales-auto-keep-help")>
+                                <span class="label">{ui.t("locales-auto-keep")}</span>
+                                <input class="input" type="text" spellcheck="false" autocomplete="off"
+                                    prop:value=move || dlg_keep.get() on:input=move |e| dlg_keep.set(event_target_value(&e))/>
+                            </label>
+                            <div class="dialog-actions">
+                                <button type="button" class="btn" on:click=move |_| dlg.set(None)>{ui.t("action-cancel")}</button>
+                                <button type="submit" class="btn btn--primary" disabled=none>{icons::sparkle()}{ui.t("locales-auto-start")}</button>
+                            </div>
+                        </form>
+                    </div>
+                }
             })}
         </section>
     }
@@ -405,6 +672,7 @@ fn PageTexts(
     code: String,
     texts: Memo<Vec<SiteText>>,
     todo_only: RwSignal<bool>,
+    review_only: RwSignal<bool>,
     query: RwSignal<String>,
 ) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -429,16 +697,18 @@ fn PageTexts(
     };
     let rows = move || {
         let q = query.get().trim().to_lowercase();
-        let tr = s.doc.with(|d| {
+        let (tr, machine) = s.doc.with(|d| {
             d.as_ref()
                 .and_then(|d| d.locale(&code.get_value()))
-                .map(|l| l.texts.clone())
+                .map(|l| (l.texts.clone(), l.machine.clone()))
                 .unwrap_or_default()
         });
+        let auto = |t: &SiteText| machine.contains(&revel_edit::locale::text_key(&t.source));
         texts
             .get()
             .into_iter()
             .filter(|t| !todo_only.get() || !tr.contains_key(&t.source))
+            .filter(|t| !review_only.get() || auto(t))
             .filter(|t| {
                 q.is_empty()
                     || t.source.to_lowercase().contains(&q)
@@ -446,8 +716,15 @@ fn PageTexts(
                         .get(&t.source)
                         .is_some_and(|x| x.to_lowercase().contains(&q))
             })
-            .map(|t| (tr.get(&t.source).cloned(), t))
+            .map(|t| (tr.get(&t.source).cloned(), auto(&t), t))
             .collect::<Vec<_>>()
+    };
+    let review_all = move |keys: Vec<String>| {
+        s.apply.run(Command::MarkMachine {
+            locale: code.get_value(),
+            keys,
+            on: false,
+        })
     };
     view! {
         <table class="table loc-table">
@@ -461,23 +738,33 @@ fn PageTexts(
                     if list.is_empty() {
                         return view! { <tr><td colspan="2" class="muted loc-empty">{ui.t("locales-none")}</td></tr> }.into_any();
                     }
-                    list.into_iter().map(|(value, t)| {
+                    let auto_keys: Vec<String> = list.iter().filter(|r| r.1).map(|r| revel_edit::locale::text_key(&r.2.source)).collect();
+                    let rows = list.into_iter().map(|(value, auto, t)| {
                         let places = t.places.iter().map(names).collect::<Vec<_>>().join(" · ");
                         let source = t.source.clone();
+                        let key = revel_edit::locale::text_key(&t.source);
                         let done = value.is_some();
                         view! {
-                            <tr class:is-done=done>
+                            <tr class:is-done=done class:is-auto=auto>
                                 <td class="loc-source" title=places>{t.source.clone()}</td>
-                                <td>{translation_input(ui, &t.source, value, move |v| {
-                                    s.apply.run(Command::SetTranslation {
-                                        locale: code.get_value(),
-                                        source: source.clone(),
-                                        text: Some(v),
-                                    })
-                                })}</td>
+                                <td><div class="loc-field">
+                                    {translation_input(ui, &t.source, value, move |v| {
+                                        s.apply.run(Command::SetTranslation {
+                                            locale: code.get_value(),
+                                            source: source.clone(),
+                                            text: Some(v),
+                                            machine: false,
+                                        })
+                                    })}
+                                    {auto.then(|| review_button(ui, move || review_all(vec![key.clone()])))}
+                                </div></td>
                             </tr>
                         }
-                    }).collect_view().into_any()
+                    }).collect_view();
+                    view! {
+                        {review_bar(ui, review_only, auto_keys, review_all)}
+                        {rows}
+                    }.into_any()
                 }}
             </tbody>
         </table>
@@ -490,6 +777,7 @@ fn DataTexts(
     s: LocSession,
     code: String,
     todo_only: RwSignal<bool>,
+    review_only: RwSignal<bool>,
     query: RwSignal<String>,
 ) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -503,14 +791,33 @@ fn DataTexts(
             .collect::<Vec<_>>()
             .join(" › ")
     };
+    let machine = move || {
+        s.doc.with(|d| {
+            d.as_ref()
+                .and_then(|d| d.locale(&code.get_value()))
+                .map(|l| l.machine.clone())
+                .unwrap_or_default()
+        })
+    };
+    let review_all = move |keys: Vec<String>| {
+        s.apply.run(Command::MarkMachine {
+            locale: code.get_value(),
+            keys,
+            on: false,
+        })
+    };
     let rows = move || {
         let q = query.get().trim().to_lowercase();
+        let machine = machine();
         s.data.with(|d| {
             d.get(&code.get_value())
                 .cloned()
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|t| !todo_only.get() || !data_done(t))
+                .filter(|t| {
+                    !review_only.get() || machine.contains(&revel_edit::locale::data_key(&t.path))
+                })
                 .filter(|t| {
                     q.is_empty()
                         || t.source.to_lowercase().contains(&q)
@@ -529,17 +836,25 @@ fn DataTexts(
                     if list.is_empty() {
                         return view! { <tr><td colspan="2" class="muted loc-empty">{ui.t("locales-none")}</td></tr> }.into_any();
                     }
-                    list.into_iter().map(|t| {
+                    let machine = machine();
+                    let auto_keys: Vec<String> = list
+                        .iter()
+                        .map(|t| revel_edit::locale::data_key(&t.path))
+                        .filter(|k| machine.contains(k))
+                        .collect();
+                    let rows = list.into_iter().map(|t| {
                         let done = data_done(&t);
                         let path = t.path.clone();
+                        let key = revel_edit::locale::data_key(&t.path);
+                        let auto = done && machine.contains(&key);
                         let value = t.text.clone().filter(|_| done);
                         view! {
-                            <tr class:is-done=done>
+                            <tr class:is-done=done class:is-auto=auto>
                                 <td class="loc-source">
                                     <span class="loc-key muted path">{label(&t.path)}</span>
                                     <span>{t.source.clone()}</span>
                                 </td>
-                                <td>{translation_input(ui, &t.source, value, move |v| {
+                                <td><div class="loc-field">{translation_input(ui, &t.source, value, move |v| {
                                     let binding = Binding {
                                         source: Source::LocaleData { locale: code.get_value() },
                                         path: path.clone(),
@@ -551,10 +866,16 @@ fn DataTexts(
                                     } else {
                                         Command::SetBound { binding, value: v }
                                     })
-                                })}</td>
+                                })}
+                                {auto.then(|| review_button(ui, move || review_all(vec![key.clone()])))}
+                                </div></td>
                             </tr>
                         }
-                    }).collect_view().into_any()
+                    }).collect_view();
+                    view! {
+                        {review_bar(ui, review_only, auto_keys, review_all)}
+                        {rows}
+                    }.into_any()
                 }}
             </tbody>
         </table>
@@ -567,6 +888,7 @@ fn EntryTexts(
     s: LocSession,
     code: String,
     todo_only: RwSignal<bool>,
+    review_only: RwSignal<bool>,
     query: RwSignal<String>,
 ) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -582,11 +904,23 @@ fn EntryTexts(
                 {move || {
                     let q = query.get().trim().to_lowercase();
                     let cols = s.cms.get().unwrap_or_default();
+                    let machine = s.doc.with(|d| {
+                        d.as_ref()
+                            .and_then(|d| d.locale(&code.get_value()))
+                            .map(|l| l.machine.clone())
+                            .unwrap_or_default()
+                    });
                     let mut rows = Vec::new();
+                    let mut auto_keys = Vec::new();
                     for c in &cols {
                         let own = c.locales.get(&code.get_value()).cloned().unwrap_or_default();
                         for e in &c.entries {
                             let done = own.iter().any(|o| o.file == e.file);
+                            let key = revel_edit::locale::entry_key(&c.folder, &e.file);
+                            let auto = done && machine.contains(&key);
+                            if review_only.get() && !auto {
+                                continue;
+                            }
                             let title = own
                                 .iter()
                                 .find(|o| o.file == e.file)
@@ -598,20 +932,33 @@ fn EntryTexts(
                             {
                                 continue;
                             }
-                            rows.push((c.id.clone(), crate::cms::col_label(c), e.file.clone(), title, done));
+                            if auto {
+                                auto_keys.push(key.clone());
+                            }
+                            rows.push((c.id.clone(), crate::cms::col_label(c), e.file.clone(), title, done, auto, key));
                         }
                     }
                     if rows.is_empty() {
                         return view! { <tr><td colspan="3" class="muted loc-empty">{ui.t("locales-none")}</td></tr> }.into_any();
                     }
-                    rows.into_iter().map(|(col, label, file, title, done)| {
+                    let review_all = move |keys: Vec<String>| {
+                        s.apply.run(Command::MarkMachine { locale: code.get_value(), keys, on: false })
+                    };
+                    let rows = rows.into_iter().map(|(col, label, file, title, done, auto, key)| {
                         let (c2, f2) = (col.clone(), file.clone());
                         view! {
-                            <tr class="row-link" class:is-done=done data-entry=file.clone() on:click=move |_| open(c2.clone(), f2.clone())>
+                            <tr class="row-link" class:is-done=done class:is-auto=auto data-entry=file.clone() on:click=move |_| open(c2.clone(), f2.clone())>
                                 <td class="strong">{title}</td>
                                 <td class="muted">{label}</td>
                                 <td class="loc-state">
-                                    {if done {
+                                    {if auto {
+                                        view! {
+                                            <span class="loc-state-auto" on:click=|e| e.stop_propagation()>
+                                                <span class="chip chip--auto" title=ui.t("locales-review-help")>{icons::sparkle()}{ui.t("locales-review")}</span>
+                                                {review_button(ui, move || review_all(vec![key.clone()]))}
+                                            </span>
+                                        }.into_any()
+                                    } else if done {
                                         view! { <span class="chip chip--ok">{ui.t("locales-entry-done")}</span> }.into_any()
                                     } else {
                                         view! { <span class="chip chip--todo">{ui.t("cms-untranslated")}</span> }.into_any()
@@ -619,9 +966,48 @@ fn EntryTexts(
                                 </td>
                             </tr>
                         }
-                    }).collect_view().into_any()
+                    }).collect_view();
+                    view! {
+                        {review_bar(ui, review_only, auto_keys, review_all)}
+                        {rows}
+                    }.into_any()
                 }}
             </tbody>
         </table>
     }
+}
+
+/// Bouton « Marquer comme relu » d'une traduction automatique.
+fn review_button(ui: Ui, on: impl Fn() + 'static) -> AnyView {
+    view! {
+        <button type="button" class="icon-btn icon-btn--small loc-review" title=ui.t("locales-review-ok")
+            aria-label=ui.t("locales-review-ok") on:click=move |e| { e.stop_propagation(); on() }>
+            {icons::check()}
+        </button>
+    }
+    .into_any()
+}
+
+/// Ligne « Tout marquer comme relu » en tête de liste (filtre « À relire »).
+fn review_bar(
+    ui: Ui,
+    review_only: RwSignal<bool>,
+    keys: Vec<String>,
+    on: impl Fn(Vec<String>) + 'static,
+) -> Option<AnyView> {
+    (review_only.get_untracked() && !keys.is_empty()).then(|| {
+        let n = keys.len();
+        view! {
+            <tr class="loc-review-bar">
+                <td colspan="3">
+                    <span class="chip chip--auto">{icons::sparkle()}{ui.t("locales-review")}</span>
+                    <span class="muted">{n}</span>
+                    <button type="button" class="btn btn--small" on:click=move |_| on(keys.clone())>
+                        {icons::check()}{ui.t("locales-review-all")}
+                    </button>
+                </td>
+            </tr>
+        }
+        .into_any()
+    })
 }

@@ -1,0 +1,31 @@
+[package]
+name = "revel-translate"
+description = "Traduction automatique hors ligne (modèles Marian OPUS-MT intégrés à Revel)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# Téléchargement des langues du catalogue (réglages de l'application, construction des
+# installateurs).
+download = ["dep:ureq", "dep:sha2"]
+
+[dependencies]
+candle-core = { version = "0.11.0", default-features = false }
+candle-nn = { version = "0.11.0", default-features = false }
+candle-transformers = { version = "0.11.0", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+unicode-normalization = "0.1.24"
+# Client HTTP synchrone, TLS en Rust avec les certificats racine du système (comme revel-git).
+ureq = { version = "3.4.2", features = ["platform-verifier"], optional = true }
+sha2 = { version = "0.10.9", optional = true }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "preparer"
+required-features = ["download"]

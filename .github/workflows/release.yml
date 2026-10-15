@@ -36,8 +36,34 @@ jobs:
           if [ "$CHOIX" = "tous" ]; then sel="$all"; else sel=$(echo "$all" | jq -c --arg o "$CHOIX" '[.[] | select(.os == $o)]'); fi
           echo "matrix=$(echo "$sel" | jq -c '{include: .}')" >> "$GITHUB_OUTPUT"
 
+  # Langues de traduction livrées (D-36 : français et anglais), communes à tous les systèmes :
+  # téléchargées une fois depuis Hugging Face (révisions et empreintes figées dans
+  # crates/revel-translate/src/catalog.rs, comme depuis les réglages de l'application), préparées,
+  # transmises aux installateurs.
+  modeles:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Rust (version de rust-toolchain.toml)
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Préparation
+        run: cargo run --release -q -p revel-translate --features download --example preparer -- apps/revel-app/models fr
+      - name: Vérification
+        shell: bash
+        run: |
+          n=$(find apps/revel-app/models -name model.safetensors | wc -l)
+          du -sh apps/revel-app/models/*/ | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$n" -ne 2 ]; then echo "::error::$n modèles préparés sur 2"; exit 1; fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: modeles
+          path: apps/revel-app/models/
+          retention-days: 1
+          compression-level: 0
+
   bundle:
-    needs: plan
+    needs: [plan, modeles]
     permissions:
       contents: write
     strategy:
@@ -46,6 +72,11 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
+      # Modèles de traduction inclus dans l'installateur (ressources Tauri, dossier models/).
+      - uses: actions/download-artifact@v8
+        with:
+          name: modeles
+          path: apps/revel-app/models/
       - name: Dépendances système (Linux)
         if: runner.os == 'Linux'
         run: |

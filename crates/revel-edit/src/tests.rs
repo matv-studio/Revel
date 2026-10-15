@@ -1501,6 +1501,7 @@ fn langues_et_traductions() {
             locale: "en".into(),
             source: "Bonjour".into(),
             text: Some(" Hello ".into()),
+            machine: false,
         }
     );
     let inv = apply(&mut s, &t).unwrap();
@@ -1551,6 +1552,7 @@ fn langues_et_traductions() {
             locale: "en".into(),
             source: "Carte".into(),
             text: Some("Card".into()),
+            machine: false,
         },
     )
     .unwrap();
@@ -1559,6 +1561,122 @@ fn langues_et_traductions() {
     assert!(s.locales.is_empty());
     apply(&mut s, &inv).unwrap();
     assert_eq!(json(&s), before);
+}
+
+#[test]
+fn traduction_automatique_a_relire() {
+    let mut s = sample();
+    apply(
+        &mut s,
+        &Command::AddLocale {
+            locale: revel_model::Locale::new("en"),
+            index: None,
+        },
+    )
+    .unwrap();
+    let before = json(&s);
+    let auto = |text: &str, machine: bool| Command::SetTranslation {
+        locale: "en".into(),
+        source: "Bonjour".into(),
+        text: Some(text.into()),
+        machine,
+    };
+    // Traduction automatique : marquée ; annuler retire texte et marque.
+    let inv = apply(&mut s, &auto("Hello", true)).unwrap();
+    assert!(s.locales[0].machine.contains("text:Bonjour"));
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+    // Saisie après une traduction automatique : marque retirée, rétablie à l'annulation.
+    apply(&mut s, &auto("Hello", true)).unwrap();
+    let marked = json(&s);
+    let inv = apply(&mut s, &auto("Hi", false)).unwrap();
+    assert!(s.locales[0].machine.is_empty());
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), marked);
+    // Marques posées et retirées par lot ; annuler ne touche que celles qui ont changé.
+    let inv = apply(
+        &mut s,
+        &Command::MarkMachine {
+            locale: "en".into(),
+            keys: vec!["text:Bonjour".into(), "data:site.title".into()],
+            on: false,
+        },
+    )
+    .unwrap();
+    assert!(s.locales[0].machine.is_empty());
+    assert_eq!(
+        inv,
+        Command::MarkMachine {
+            locale: "en".into(),
+            keys: vec!["text:Bonjour".into()],
+            on: true,
+        }
+    );
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), marked);
+    // Mots gardés : espaces retirés, doublons et vides ignorés.
+    let inv = apply(
+        &mut s,
+        &Command::SetNoTranslate {
+            terms: vec![
+                " Alunites ".into(),
+                "".into(),
+                "Alunites".into(),
+                "Wattr".into(),
+            ],
+        },
+    )
+    .unwrap();
+    assert_eq!(s.settings.no_translate, vec!["Alunites", "Wattr"]);
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), marked);
+}
+
+#[test]
+fn historique_par_groupe() {
+    let mut s = sample();
+    apply(
+        &mut s,
+        &Command::AddLocale {
+            locale: revel_model::Locale::new("en"),
+            index: None,
+        },
+    )
+    .unwrap();
+    let before = json(&s);
+    let mut h = crate::History::default();
+    let tr = |source: &str, text: &str| Command::SetTranslation {
+        locale: "en".into(),
+        source: source.into(),
+        text: Some(text.into()),
+        machine: true,
+    };
+    let mut ex = |site: &mut revel_model::Site, c: &Command| apply(site, c);
+    h.apply_grouped(&mut s, tr("Bonjour", "Hello"), "auto", &mut ex)
+        .unwrap();
+    h.apply_grouped(&mut s, tr("Carte", "Card"), "auto", &mut ex)
+        .unwrap();
+    assert_eq!(s.locales[0].texts.len(), 2);
+    // Un seul retour en arrière pour tout le groupe ; rétablir refait tout.
+    h.undo_with(&mut s, &mut ex).unwrap();
+    assert_eq!(json(&s), before);
+    assert!(!h.can_undo());
+    h.redo_with(&mut s, &mut ex).unwrap();
+    assert_eq!(s.locales[0].texts.len(), 2);
+    // Autre commande entre deux lots : nouveau groupe, nouvelle étape.
+    h.apply_with(&mut s, tr("Carte", "Map"), false, &mut ex)
+        .unwrap();
+    h.apply_grouped(&mut s, tr("Bonjour", "Hi"), "auto", &mut ex)
+        .unwrap();
+    h.undo_with(&mut s, &mut ex).unwrap();
+    assert_eq!(
+        s.locales[0].texts.get("Bonjour").map(String::as_str),
+        Some("Hello")
+    );
+    assert_eq!(
+        s.locales[0].texts.get("Carte").map(String::as_str),
+        Some("Map")
+    );
 }
 
 #[test]

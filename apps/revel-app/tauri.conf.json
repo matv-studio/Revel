@@ -37,6 +37,7 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Visual website builder",
+    "resources": ["models/"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

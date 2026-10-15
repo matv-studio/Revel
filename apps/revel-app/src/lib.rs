@@ -294,10 +294,15 @@ fn edit_apply(
     path: String,
     command: revel_edit::Command,
     coalesce: bool,
+    group: Option<String>,
 ) -> Res<revel_edit::EditState> {
-    s.core
-        .edit_apply(&PathBuf::from(path), command, coalesce)
-        .map_err(err)
+    let path = PathBuf::from(path);
+    match group {
+        // Lots d'une même opération (traduction automatique) : une seule étape d'annulation.
+        Some(g) => s.core.edit_apply_grouped(&path, command, &g),
+        None => s.core.edit_apply(&path, command, coalesce),
+    }
+    .map_err(err)
 }
 
 #[tauri::command]
@@ -382,6 +387,64 @@ fn edit_locale_data(
     s.core
         .edit_locale_data(std::path::Path::new(&path), &code)
         .map_err(err)
+}
+
+/// Traduction automatique possible d'une langue vers une autre (modèles livrés, D-36).
+#[tauri::command]
+fn translate_can(s: State<AppState>, from: String, to: String) -> bool {
+    s.core.translate_can(&from, &to)
+}
+
+/// Traduction automatique hors ligne d'un lot de textes (plusieurs secondes : hors du fil
+/// principal).
+#[tauri::command]
+async fn translate(
+    s: State<'_, AppState>,
+    from: String,
+    to: String,
+    items: Vec<revel_protocol::TranslateItem>,
+    keep: Vec<String>,
+) -> Res<Vec<String>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.translate(&from, &to, &items, &keep))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Langues de traduction automatique : livrées, téléchargées, à télécharger.
+#[tauri::command]
+fn translate_packs(s: State<AppState>) -> Vec<revel_protocol::TranslatePack> {
+    s.core.translate_packs()
+}
+
+/// Télécharge une langue de traduction (avancement transmis par `on_event`).
+#[tauri::command]
+async fn translate_install(
+    s: State<'_, AppState>,
+    code: String,
+    on_event: Channel<revel_protocol::TranslateEvent>,
+) -> Res<()> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.translate_install(&code, |e| {
+            let _ = on_event.send(e);
+        })
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+#[tauri::command]
+fn translate_install_cancel(s: State<AppState>) {
+    s.core.translate_install_cancel();
+}
+
+/// Retire une langue de traduction téléchargée.
+#[tauri::command]
+fn translate_remove(s: State<AppState>, code: String) -> Res<()> {
+    s.core.translate_remove(&code).map_err(err)
 }
 
 /// Médias d'un site ouvert pour l'édition (dossiers copiés tels quels).
@@ -506,9 +569,15 @@ pub fn run() {
                 .app_config_dir()
                 .unwrap_or_else(|_| std::env::temp_dir().join("revel"));
             let secrets: Box<dyn revel_core::SecretStore> = Box::new(revel_core::secrets::Keyring);
-            app.manage(AppState {
-                core: Arc::new(Core::new(&dir, secrets)),
-            });
+            let core = Arc::new(Core::new(&dir, secrets));
+            // Modèles de traduction livrés dans les ressources de l'installateur (D-36).
+            if let Ok(models) = app
+                .path()
+                .resolve("models", tauri::path::BaseDirectory::Resource)
+            {
+                core.set_models_dir(&models);
+            }
+            app.manage(AppState { core });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -548,6 +617,12 @@ pub fn run() {
             edit_stamp,
             edit_media,
             edit_locale_data,
+            translate_can,
+            translate,
+            translate_packs,
+            translate_install,
+            translate_install_cancel,
+            translate_remove,
             edit_import_media,
             edit_replace_media,
             canvas_open,

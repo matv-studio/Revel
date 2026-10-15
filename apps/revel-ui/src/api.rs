@@ -351,6 +351,33 @@ pub async fn github_connect(on: impl Fn(GithubEvent) + 'static) -> Res<String> {
     call_with_channel("github_connect", &NoArgs {}, on).await
 }
 
+/// Langues de traduction automatique (livrées, téléchargées, à télécharger).
+pub async fn translate_packs() -> Res<Vec<revel_protocol::TranslatePack>> {
+    call("translate_packs", &NoArgs {}).await
+}
+
+/// Télécharge une langue de traduction ; `on` reçoit l'avancement.
+pub async fn translate_install(
+    code: &str,
+    on: impl Fn(revel_protocol::TranslateEvent) + 'static,
+) -> Res<()> {
+    call_with_channel(
+        "translate_install",
+        &serde_json::json!({ "code": code }),
+        on,
+    )
+    .await
+}
+
+pub async fn translate_install_cancel() -> Res<()> {
+    call("translate_install_cancel", &NoArgs {}).await
+}
+
+/// Retire une langue de traduction téléchargée.
+pub async fn translate_remove(code: &str) -> Res<()> {
+    call("translate_remove", &serde_json::json!({ "code": code })).await
+}
+
 pub async fn github_cancel() -> Res<()> {
     call("github_cancel", &NoArgs {}).await
 }
@@ -451,6 +478,56 @@ pub async fn edit_replace_media(
     call(
         "edit_replace_media",
         &serde_json::json!({ "path": path, "url": url, "name": name, "data": data }),
+    )
+    .await
+}
+
+/// Commande d'une opération faite par lots (traduction automatique) : les commandes d'un même
+/// `group` envoyées à la suite forment une seule étape d'annulation.
+pub async fn edit_apply_group(
+    path: &str,
+    command: &revel_edit::Command,
+    group: &str,
+) -> Res<revel_edit::EditState> {
+    #[derive(Serialize)]
+    struct A<'a> {
+        path: &'a str,
+        command: &'a revel_edit::Command,
+        coalesce: bool,
+        group: &'a str,
+    }
+    call(
+        "edit_apply",
+        &A {
+            path,
+            command,
+            coalesce: false,
+            group,
+        },
+    )
+    .await
+}
+
+/// Traduction automatique possible d'une langue vers une autre (modèles livrés, D-36).
+pub async fn translate_can(from: &str, to: &str) -> bool {
+    call(
+        "translate_can",
+        &serde_json::json!({ "from": from, "to": to }),
+    )
+    .await
+    .unwrap_or(false)
+}
+
+/// Traduction automatique hors ligne d'un lot de textes.
+pub async fn translate(
+    from: &str,
+    to: &str,
+    items: &[revel_protocol::TranslateItem],
+    keep: &[String],
+) -> Res<Vec<String>> {
+    call(
+        "translate",
+        &serde_json::json!({ "from": from, "to": to, "items": items, "keep": keep }),
     )
     .await
 }

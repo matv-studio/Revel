@@ -17,7 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub mod ids;
 pub mod migrations;
@@ -205,6 +205,10 @@ pub struct Locale {
     /// espaces regroupés -> traduction).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub texts: BTreeMap<String, String>,
+    /// Traductions automatiques à relire (D-36) : `text:<texte d'origine>` (textes des pages),
+    /// `data:<chemin>` (fichiers de données), `entry:<dossier>/<fichier>` (contenus).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub machine: BTreeSet<String>,
 }
 
 impl Locale {
@@ -326,6 +330,10 @@ pub struct Settings {
     /// Référencement du site : plan du site et `robots.txt` produits par Revel.
     #[serde(default, skip_serializing_if = "SeoSettings::is_default")]
     pub seo: SeoSettings,
+    /// Mots gardés tels quels par la traduction automatique (noms de marque, de produit), en plus
+    /// du nom du site.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub no_translate: Vec<String>,
 }
 
 /// Plan du site (`sitemap.xml`) et `robots.txt` produits à la génération quand aucune page du site

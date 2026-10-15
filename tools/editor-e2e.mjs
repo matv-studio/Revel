@@ -1612,6 +1612,49 @@ try {
     check('langues : donnée traduite dans src/_data/en (copie du fichier)', enFiles.length === 1
       && fs.readFileSync(path.join(dataEn, enFiles[0]), 'utf8').includes('Data in English'), `${dataKey} → ${enFiles.join(',')}`);
     if (shots) await page.screenshot({ path: `${shots}/localisation.png` });
+    // Traduction automatique hors ligne (D-36) : modèles présents (pont lancé avec REVEL_MODELS)
+    // ou bouton indisponible, avec sa raison au survol (CI, sans modèles).
+    await page.click('.locales-texts .segmented button:nth-child(1)');
+    await page.waitForSelector('.locales-auto');
+    await page.waitForTimeout(300);
+    let autoSteps = 0;
+    if (await page.$eval('.locales-auto', (b) => b.disabled)) {
+      check('traduction auto : indisponible sans modèle (raison au survol)', /mod[eè]l|traduit/i.test(await page.getAttribute('.locales-auto', 'title')),
+        await page.getAttribute('.locales-auto', 'title'));
+    } else {
+      await page.click('.locales-auto');
+      await page.waitForSelector('.auto-dialog');
+      const counts = await page.$$eval('.auto-part-count', (l) => l.map((x) => x.textContent.trim()));
+      check('traduction auto : fenêtre (parties à traduire, mots gardés)', counts.length === 3 && !!(await page.$('.auto-dialog input[type="text"]')), counts.join(' · '));
+      if (shots) await page.screenshot({ path: `${shots}/traduction-auto-fenetre.png` });
+      // Pages seulement (données et contenus décochés : essai rapide).
+      for (const n of [2, 3]) {
+        const box = `.auto-dialog label.auto-part:nth-of-type(${n}) input`;
+        if (await page.$eval(box, (i) => i.checked)) await page.click(`.auto-dialog label.auto-part:nth-of-type(${n}) .switch`);
+      }
+      await page.click('.auto-dialog button[type="submit"]');
+      await page.waitForSelector('.auto-run');
+      if (shots) await page.screenshot({ path: `${shots}/traduction-auto-en-cours.png` });
+      await page.waitForSelector('.auto-run', { state: 'detached', timeout: 300000 });
+      await until(() => /"machine": \[/.test(docL()), 'marques à relire');
+      const enDoc = JSON.parse(docL()).locales.find((l) => l.code === 'en');
+      const marked = enDoc.machine.filter((k) => k.startsWith('text:'));
+      check('traduction auto : textes des pages traduits, marqués « à relire », saisie gardée',
+        marked.length > 3 && marked.every((k) => enDoc.texts[k.slice(5)]) && enDoc.texts['Faire rayonner'] === 'Make it shine' && !marked.includes('text:Faire rayonner'),
+        `${marked.length} textes ; ${marked.slice(0, 2).map((k) => `${k.slice(5)} → ${enDoc.texts[k.slice(5)]}`).join(' ; ')}`);
+      await page.waitForSelector('.loc-table tr.is-auto .loc-review');
+      if (shots) await page.screenshot({ path: `${shots}/traduction-auto.png` });
+      // Relu : marque retirée ; filtre « À relire ».
+      await page.click('.loc-table tr.is-auto .loc-review');
+      await until(() => JSON.parse(docL()).locales[0].machine.length === enDoc.machine.length - 1, 'marque retirée');
+      await page.click('.locales-review');
+      await page.waitForTimeout(200);
+      const rows = await page.$$eval('.loc-table tbody tr:not(.loc-review-bar)', (l) => l.map((r) => r.classList.contains('is-auto')));
+      check('traduction auto : relu (marque retirée), filtre « À relire »', rows.length === enDoc.machine.length - 1 && rows.every(Boolean)
+        && !!(await page.$('.loc-review-bar')), `${rows.length} lignes`);
+      await page.click('.locales-review');
+      autoSteps = 2;
+    }
     // Contenus : ouverture dans le CMS, langue choisie.
     await page.click('.locales-texts .segmented button:nth-child(3)');
     await page.waitForSelector('.loc-table tr[data-entry]');
@@ -1643,13 +1686,41 @@ try {
     // Langue principale, puis tout annuler : fichiers identiques.
     await page.selectOption('.editor-locale select', '');
     f = await waitFrame(() => !location.pathname.startsWith('/en/'), 'retour en français');
-    for (let i = 0; i < 6 && (docL() !== doc0 || fs.existsSync(dataEn)); i++) {
+    for (let i = 0; i < 6 + autoSteps && (docL() !== doc0 || fs.existsSync(dataEn)); i++) {
       await page.click('.editor-toolbar .btn-undo');
       await page.waitForTimeout(400);
     }
     await until(() => docL() === doc0 && !fs.existsSync(dataEn), 'langue annulée');
     check('langues : tout annulé (document, dossier de la langue retiré)', true);
   }
+
+  // ---------------------------------------------------------------- Langues de traduction (D-36)
+  await page.click('.topbar button.logo');
+  await page.click('.view-tab[data-view="nav-settings"]');
+  await page.waitForSelector('.packs .pack');
+  const packs = await page.$$eval('.pack', (l) => l.map((x) => [x.dataset.pack, x.querySelector('.pack-get') ? 'get' : x.querySelector('.pack-remove') ? 'rm' : '?']));
+  const bundled = packs.filter(([, a]) => a === 'rm').map(([c]) => c);
+  check('réglages : langues de traduction (catalogue, chacune retirable ou téléchargeable)', packs.length >= 20
+    && packs.every(([, a]) => a !== '?'), packs.map(([c, a]) => c + (a === 'rm' ? '✓' : '')).join(' '));
+  // Langue livrée retirée puis remise en service (sans téléchargement).
+  if (bundled.includes('fr')) {
+    await page.click('.pack[data-pack="fr"] .pack-remove');
+    await page.click('.dialog .btn--danger');
+    await page.waitForSelector('.pack[data-pack="fr"] .pack-get');
+    const off = await page.textContent('.pack[data-pack="fr"] .pack-get');
+    await page.click('.pack[data-pack="fr"] .pack-get');
+    await page.waitForSelector('.pack[data-pack="fr"] .pack-remove');
+    check('réglages : langue livrée retirée, puis remise sans téléchargement', true, off.trim());
+  }
+  // Téléchargement simulé (sans `dl=1`, l'interface ne télécharge pas réellement) : avancement.
+  const getBtn = '.pack:has(.pack-get) .pack-get';
+  const getCode = await page.$eval(getBtn, (b) => b.closest('.pack').dataset.pack);
+  await page.click(getBtn);
+  await page.waitForSelector(`.pack[data-pack="${getCode}"] .pack-bar`);
+  const others = await page.$$eval('.pack-get', (l) => l.every((b) => b.disabled));
+  if (shots) await page.screenshot({ path: `${shots}/reglages-traduction.png` });
+  await page.waitForSelector(`.pack[data-pack="${getCode}"] .pack-bar`, { state: 'detached', timeout: 20000 });
+  check('réglages : téléchargement d\'une langue (avancement, un seul à la fois)', others, getCode);
 
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {

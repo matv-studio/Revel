@@ -317,3 +317,26 @@ en adresses complètes (adresse du site requise), plan du site de Revel avec les
 Typographie française seulement pour le français. Structure et styles sont communs à toutes les langues.
 Sources : [Localization overview — Webflow Help Center](https://help.webflow.com/hc/en-us/articles/33961235675155),
 [Localized versions of your pages — Google Search Central](https://developers.google.com/search/docs/specialty/international/localized-versions).
+
+**D-36 — 15/10/2026 — prise.** **Indépendance : traduction automatique hors ligne.** Principe (demande du
+15/10/2026) : Revel doit être l'outil le plus complet possible sans dépendre d'un prestataire extérieur ni d'une
+connexion avant la mise en ligne du site ; une fonction ne doit pas devenir inutilisable parce qu'un service
+change ses conditions (DeepL, Google). La traduction automatique utilise donc les modèles Marian OPUS-MT de
+l'université d'Helsinki (licence Apache-2.0), exécutés sur le processeur par `candle` (`revel-translate` :
+découpage SentencePiece et lecture des poids Flax écrits en Rust, sans Python). Français ↔ anglais livrés dans
+l'installateur (ressources Tauri) ; 20 autres langues (vers et depuis l'anglais : allemand, espagnol, italien,
+néerlandais, suédois, danois, finnois, tchèque, slovaque, hongrois, bulgare, russe, ukrainien, estonien,
+catalan, chinois, arabe, hindi, indonésien, vietnamien) téléchargées une fois depuis les réglages, depuis Hugging
+Face, aux révisions figées et empreintes SHA-256 vérifiées (`catalog.rs`, produit par
+`tools/models-catalog.py`) ; ensuite tout fonctionne sans connexion. Entre deux langues sans modèle direct, la
+traduction passe par l'anglais (allemand → français : allemand → anglais → français). Toute langue peut être
+retirée : fichiers téléchargés supprimés ; langue livrée mise hors service (ses fichiers font partie de
+l'installation, en lecture seule) et remise sans téléchargement. On traduit toujours depuis la langue
+principale du site, seulement ce qui n'est pas encore traduit ; HTML, Markdown, expressions, adresses et mots
+gardés (nom du site, liste du site) sont préservés ; chaque traduction est marquée « à relire »
+(`Locale::machine`) jusqu'à ce qu'elle soit validée ou modifiée ; toute l'opération forme une seule étape
+d'annulation. Qualité : bonne sur les phrases, faible sur les fragments isolés (« Mettre la vidéo en pause » →
+« Breaking the video ») : d'où la relecture. Sources : [OPUS-MT — Helsinki-NLP](https://github.com/Helsinki-NLP/Opus-MT),
+[modèles Helsinki-NLP — Hugging Face](https://huggingface.co/Helsinki-NLP), [Embedding additional files —
+Tauri](https://v2.tauri.app/develop/resources/).
+

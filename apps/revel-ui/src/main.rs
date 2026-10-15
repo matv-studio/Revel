@@ -2,6 +2,7 @@
 
 mod account;
 mod api;
+mod autotr;
 mod blocks;
 mod canvas;
 mod cms;
@@ -143,6 +144,10 @@ pub struct Ui {
     pub locale: RwSignal<Option<String>>,
     /// Contenu à ouvrir dans la vue CMS (collection, fichier), demandé par une autre vue.
     pub goto_entry: RwSignal<Option<(String, String)>>,
+    /// Traduction automatique en cours (D-36).
+    pub auto: RwSignal<Option<autotr::Job>>,
+    /// Langue de traduction en téléchargement : code, avancement (0..1, `None` : préparation).
+    pub pack_job: RwSignal<Option<(String, Option<f32>)>>,
 }
 
 impl Ui {
@@ -319,6 +324,8 @@ fn App() -> impl IntoView {
         media_rev: RwSignal::new(0),
         locale: RwSignal::new(None),
         goto_entry: RwSignal::new(None),
+        auto: RwSignal::new(None),
+        pack_job: RwSignal::new(None),
     };
     provide_context(ui);
     spawn_local(async move {

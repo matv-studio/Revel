@@ -493,6 +493,47 @@ impl Default for AppSettings {
     }
 }
 
+/// Texte à traduire automatiquement (D-36).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranslateItem {
+    pub text: String,
+    /// `plain`, `markdown` ou `html` ; absente : devinée d'après le texte.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+}
+
+/// Langue de traduction automatique (réglages de l'application, D-36).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranslatePack {
+    /// Code de la langue (`de`).
+    pub code: String,
+    pub state: PackState,
+    /// Taille à télécharger et taille une fois installée, en octets.
+    pub download: u64,
+    pub disk: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PackState {
+    /// Livrée avec Revel, en service.
+    Bundled,
+    /// Livrée avec Revel, retirée par l'utilisateur (remise en service sans téléchargement).
+    BundledOff,
+    /// Téléchargée.
+    Installed,
+    /// À télécharger.
+    Available,
+}
+
+/// Avancement du téléchargement d'une langue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum TranslateEvent {
+    Progress { done: u64, total: u64 },
+    Preparing,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

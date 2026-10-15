@@ -97,10 +97,14 @@ fn exec(
                 .ensure_locale_file(binding)
                 .map_err(revel_edit::EditError::Bound)?;
             match project.set_bound(site, binding, value) {
-                Ok(old) => Ok(created.unwrap_or(Command::SetBound {
-                    binding: binding.clone(),
-                    value: old,
-                })),
+                Ok(old) => Ok(reviewed(
+                    site,
+                    binding,
+                    created.unwrap_or(Command::SetBound {
+                        binding: binding.clone(),
+                        value: old,
+                    }),
+                )),
                 Err(e) => {
                     if let Some(c) = created {
                         let _ = exec(project, site, &c);
@@ -267,10 +271,14 @@ fn exec(
                 .ensure_locale_file(binding)
                 .map_err(revel_edit::EditError::Bound)?;
             match project.set_data_value(binding, value.as_ref()) {
-                Ok((file, old)) => Ok(created.unwrap_or(Command::WriteDataFile {
-                    file,
-                    text: Some(old),
-                })),
+                Ok((file, old)) => Ok(reviewed(
+                    site,
+                    binding,
+                    created.unwrap_or(Command::WriteDataFile {
+                        file,
+                        text: Some(old),
+                    }),
+                )),
                 Err(e) => {
                     if let Some(c) = created {
                         let _ = exec(project, site, &c);
@@ -312,6 +320,37 @@ fn exec(
             Ok(Command::Batch { commands: inverses })
         }
         other => revel_edit::apply(site, other),
+    }
+}
+
+/// Valeur d'un fichier de données d'une langue écrite à la main : marque « traduction
+/// automatique à relire » retirée (D-36), rétablie avec l'inverse.
+fn reviewed(
+    site: &mut revel_model::Site,
+    binding: &revel_edit::canvas::Binding,
+    inverse: Command,
+) -> Command {
+    let revel_edit::canvas::Source::LocaleData { locale } = &binding.source else {
+        return inverse;
+    };
+    let key = revel_edit::locale::data_key(&binding.path);
+    let removed = site
+        .locales
+        .iter_mut()
+        .find(|l| l.code == *locale)
+        .is_some_and(|l| l.machine.remove(&key));
+    if !removed {
+        return inverse;
+    }
+    Command::Batch {
+        commands: vec![
+            inverse,
+            Command::MarkMachine {
+                locale: locale.clone(),
+                keys: vec![key],
+                on: true,
+            },
+        ],
     }
 }
 
@@ -688,6 +727,22 @@ impl Core {
     /// Applique une commande, l'enregistre dans l'historique et sur disque.
     /// `coalesce` : saisie continue dans un même champ (une seule étape d'annulation).
     pub fn edit_apply(&self, path: &Path, cmd: Command, coalesce: bool) -> Result<EditState> {
+        self.edit_apply_in(path, cmd, coalesce, None)
+    }
+
+    /// Comme [`Core::edit_apply`] ; les commandes d'un même `group` envoyées à la suite forment
+    /// une seule étape d'annulation (traduction automatique faite par lots).
+    pub fn edit_apply_grouped(&self, path: &Path, cmd: Command, group: &str) -> Result<EditState> {
+        self.edit_apply_in(path, cmd, false, Some(group))
+    }
+
+    fn edit_apply_in(
+        &self,
+        path: &Path,
+        cmd: Command,
+        coalesce: bool,
+        group: Option<&str>,
+    ) -> Result<EditState> {
         self.with_session(path, |s| {
             // Texte lié saisi dans le canevas : sans la typographie de la page si la source ne
             // l'utilisait pas.
@@ -707,12 +762,12 @@ impl Core {
             };
             let project = &s.project;
             let mut site = project.site.clone();
-            let applied = s
-                .history
-                .apply_with(&mut site, cmd, coalesce, &mut |site, c| {
-                    exec(project, site, c)
-                })
-                .map_err(CoreError::Edit)?;
+            let mut run = |site: &mut revel_model::Site, c: &Command| exec(project, site, c);
+            let applied = match group {
+                Some(g) => s.history.apply_grouped(&mut site, cmd, g, &mut run),
+                None => s.history.apply_with(&mut site, cmd, coalesce, &mut run),
+            }
+            .map_err(CoreError::Edit)?;
             s.project.site = site;
             s.revision += 1;
             s.save()?;

@@ -9,6 +9,14 @@ use crate::command::{Command, apply, expand};
 /// Exécutant d'une commande : l'applique et renvoie son inverse.
 pub type Exec<'a> = dyn FnMut(&mut Site, &Command) -> Result<Command, EditError> + 'a;
 
+/// Commandes d'une suite, ou la commande seule.
+fn flatten(c: Command) -> Vec<Command> {
+    match c {
+        Command::Batch { commands } => commands,
+        other => vec![other],
+    }
+}
+
 /// Étape de l'historique : commande appliquée et commande qui l'annule.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Step {
@@ -24,6 +32,8 @@ pub struct History {
     limit: usize,
     /// La prochaine commande peut être fusionnée avec la dernière (saisie continue).
     open_field: bool,
+    /// Groupe de la dernière étape (voir [`History::apply_grouped`]).
+    group: Option<String>,
 }
 
 impl Default for History {
@@ -39,6 +49,7 @@ impl History {
             undone: Vec::new(),
             limit: limit.max(1),
             open_field: false,
+            group: None,
         }
     }
 
@@ -92,12 +103,52 @@ impl History {
             }
         }
         self.open_field = coalesce;
+        self.group = None;
+        Ok(applied)
+    }
+
+    /// Comme [`History::apply_with`], les commandes d'un même `group` appliquées à la suite
+    /// formant une seule étape (traduction automatique faite par lots : une seule annulation).
+    pub fn apply_grouped(
+        &mut self,
+        site: &mut Site,
+        cmd: Command,
+        group: &str,
+        exec: &mut Exec<'_>,
+    ) -> Result<Command, EditError> {
+        let cmd = expand(site, &cmd)?;
+        let inverse = exec(site, &cmd)?;
+        let applied = cmd.clone();
+        self.undone.clear();
+        self.open_field = false;
+        if self.group.as_deref() == Some(group)
+            && let Some(last) = self.done.last_mut()
+        {
+            let forward = std::mem::replace(&mut last.forward, Command::Batch { commands: vec![] });
+            let before = std::mem::replace(&mut last.inverse, Command::Batch { commands: vec![] });
+            let mut fw = flatten(forward);
+            fw.push(cmd);
+            let mut inv = vec![inverse];
+            inv.extend(flatten(before));
+            last.forward = Command::Batch { commands: fw };
+            last.inverse = Command::Batch { commands: inv };
+        } else {
+            self.done.push(Step {
+                forward: cmd,
+                inverse,
+            });
+            if self.done.len() > self.limit {
+                self.done.remove(0);
+            }
+            self.group = Some(group.to_string());
+        }
         Ok(applied)
     }
 
     /// Termine la saisie en cours : la prochaine commande ouvrira une nouvelle étape.
     pub fn seal(&mut self) {
         self.open_field = false;
+        self.group = None;
     }
 
     /// Annule la dernière étape ; renvoie la commande appliquée pour l'annuler.
@@ -111,6 +162,7 @@ impl History {
         exec: &mut Exec<'_>,
     ) -> Result<Option<Command>, EditError> {
         self.open_field = false;
+        self.group = None;
         let Some(step) = self.done.pop() else {
             return Ok(None);
         };
@@ -138,6 +190,7 @@ impl History {
         exec: &mut Exec<'_>,
     ) -> Result<Option<Command>, EditError> {
         self.open_field = false;
+        self.group = None;
         let Some(step) = self.undone.pop() else {
             return Ok(None);
         };

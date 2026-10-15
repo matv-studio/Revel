@@ -283,6 +283,11 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     // Tri choisi ; `None` : celui du schéma (`view.sort`).
     let sort = RwSignal::new(None::<Option<(String, bool)>>);
     let state = RwSignal::new(None::<EditState>);
+    // Traductions automatiques à relire (D-36), par langue : clés `entry:<dossier>/<fichier>`.
+    let marks = RwSignal::new(std::collections::BTreeMap::<
+        String,
+        std::collections::BTreeSet<String>,
+    >::new());
     let path = StoredValue::new(site.path.clone());
     let site_locale = StoredValue::new(site.locale.clone());
     // Identifiants de toutes les collections du site (y compris sans dossier).
@@ -307,7 +312,20 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                     if current.get_untracked().is_none() {
                         current.set(c.first().map(|c| c.id.clone()));
                     }
+                    let localized = c.iter().any(|c| !c.locales.is_empty());
                     cols.set(Some(c));
+                    if localized
+                        && let Ok(o) = api::edit_open(&p).await
+                        && !marks.is_disposed()
+                    {
+                        marks.set(
+                            o.site
+                                .locales
+                                .into_iter()
+                                .map(|l| (l.code, l.machine))
+                                .collect(),
+                        );
+                    }
                 }
                 Err(e) => {
                     cols.set(Some(Vec::new()));
@@ -437,6 +455,41 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     });
     let col = Memo::new(move |_| shown.get().map(|s| s.0));
     let translated = Memo::new(move |_| shown.get().map(|s| s.1).unwrap_or_default());
+    // Dossier de la collection affichée dans la langue principale (clés des marques).
+    let primary_folder = Memo::new(move |_| {
+        let id = current.get()?;
+        cols.with(|c| {
+            c.as_ref()?
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| c.folder.clone())
+        })
+    });
+    // Contenus traduits automatiquement, à relire, dans la langue affichée.
+    let auto_files = Memo::new(move |_| {
+        let (Some(code), Some(folder)) = (lang.get(), primary_folder.get()) else {
+            return std::collections::BTreeSet::new();
+        };
+        let prefix = revel_edit::locale::entry_key(&folder, "");
+        marks.with(|m| {
+            m.get(&code)
+                .map(|keys| {
+                    keys.iter()
+                        .filter_map(|k| k.strip_prefix(&prefix).map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    });
+    let review = Callback::new(move |file: String| {
+        if let (Some(code), Some(folder)) = (lang.get_untracked(), primary_folder.get_untracked()) {
+            apply.run(Command::MarkMachine {
+                locale: code,
+                keys: vec![revel_edit::locale::entry_key(&folder, &file)],
+                on: false,
+            });
+        }
+    });
     let langs = Memo::new(move |_| {
         cols.with(|c| {
             c.as_ref()
@@ -839,13 +892,15 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                             {draft.then(|| view! { <span class="chip chip--draft">{ui.t("cms-draft")}</span> })}
                                                             {
                                                                 // Autre langue : point bleu (traduit) ou orange (contenu de la
-                                                                // langue principale), comme les valeurs propres et héritées.
+                                                                // langue principale), comme les valeurs propres et héritées ;
+                                                                // violet : traduction automatique à relire.
                                                                 let f3 = e.file.clone();
                                                                 move || lang.get().map(|_| {
                                                                     let done = translated.with(|t| t.contains(&f3));
+                                                                    let auto = done && auto_files.with(|a| a.contains(&f3));
                                                                     view! {
-                                                                        <span class="loc-dot" class:is-done=done
-                                                                            title=ui.t(if done { "cms-translated-help" } else { "cms-untranslated-help" })></span>
+                                                                        <span class="loc-dot" class:is-done=done class:is-auto=auto
+                                                                            title=ui.t(if auto { "locales-review-help" } else if done { "cms-translated-help" } else { "cms-untranslated-help" })></span>
                                                                     }
                                                                 })
                                                             }
@@ -891,7 +946,9 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 }.into_any())
             } else {
                 open.get().map(|file| view! {
-                    <EntryForm file=file col=col cols=Signal::derive(move || cols.get()) title=Signal::derive(move || layout.get().and_then(|l| l.0))
+                    <EntryForm file=file.clone() col=col cols=Signal::derive(move || cols.get()) title=Signal::derive(move || layout.get().and_then(|l| l.0))
+                        auto=Signal::derive({ let f = file.clone(); move || auto_files.with(|a| a.contains(&f)) })
+                        review=review
                         apply=apply delete=delete close=Callback::new(move |()| open.set(None)) goto=Callback::new(goto)/>
                 }.into_any())
             }}
@@ -909,6 +966,9 @@ fn EntryForm(
     col: Memo<Option<CmsCollection>>,
     cols: Cols,
     title: Signal<Option<String>>,
+    /// Traduction automatique à relire (autre langue, D-36).
+    auto: Signal<bool>,
+    review: Callback<String>,
     apply: Callback<Command>,
     delete: Callback<(String, String, String)>,
     close: Callback<()>,
@@ -1019,6 +1079,15 @@ fn EntryForm(
                     on:click=move |_| close.run(())>{icons::close()}</button>
             </header>
             <div class="cms-item-body">
+                {move || auto.get().then(|| view! {
+                    <div class="cms-auto" role="note">
+                        <span class="cms-auto-icon">{icons::sparkle()}</span>
+                        <span title=ui.t("locales-review-help")>{ui.t("cms-auto")}</span>
+                        <button type="button" class="btn btn--small" on:click=move |_| review.run(file.get_value())>
+                            {icons::check()}{ui.t("locales-review-ok")}
+                        </button>
+                    </div>
+                })}
                 {shown.into_iter().map(row).collect_view()}
                 <div class="cms-item-field" data-field="--body">
                     <span class="label">{ui.t("cms-body")}</span>

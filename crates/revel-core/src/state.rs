@@ -22,6 +22,9 @@ pub struct State {
     /// Identifiant du compte GitHub connecté (le jeton est dans le trousseau).
     #[serde(default)]
     pub github_login: Option<String>,
+    /// Langues de traduction livrées avec l'application et retirées par l'utilisateur (D-36).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub translate_off: Vec<String>,
 }
 
 impl State {

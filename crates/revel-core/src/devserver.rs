@@ -52,11 +52,14 @@ impl Core {
         match cmd {
             "edit_open" => json(self.edit_open(site).map_err(f)?),
             "edit_apply" => json(
-                self.edit_apply(
-                    site,
-                    arg(args, "command")?,
-                    arg::<Option<bool>>(args, "coalesce")?.unwrap_or(false),
-                )
+                match arg::<Option<String>>(args, "group")? {
+                    Some(g) => self.edit_apply_grouped(site, arg(args, "command")?, &g),
+                    None => self.edit_apply(
+                        site,
+                        arg(args, "command")?,
+                        arg::<Option<bool>>(args, "coalesce")?.unwrap_or(false),
+                    ),
+                }
                 .map_err(f)?,
             ),
             "edit_seal" => json(self.edit_seal(site).map_err(f)?),
@@ -89,6 +92,31 @@ impl Core {
             "edit_undo" => json(self.edit_undo(site).map_err(f)?),
             "edit_redo" => json(self.edit_redo(site).map_err(f)?),
             "cms_collections" => json(self.cms(site).map_err(f)?),
+            "translate_can" => {
+                json(self.translate_can(&arg::<String>(args, "from")?, &arg::<String>(args, "to")?))
+            }
+            "translate_packs" => json(self.translate_packs()),
+            "translate_install" => json(
+                self.translate_install(&arg::<String>(args, "code")?, |_| {})
+                    .map_err(f)?,
+            ),
+            "translate_install_cancel" => {
+                self.translate_install_cancel();
+                json(())
+            }
+            "translate_remove" => json(
+                self.translate_remove(&arg::<String>(args, "code")?)
+                    .map_err(f)?,
+            ),
+            "translate" => json(
+                self.translate(
+                    &arg::<String>(args, "from")?,
+                    &arg::<String>(args, "to")?,
+                    &arg::<Vec<revel_protocol::TranslateItem>>(args, "items")?,
+                    &arg::<Option<Vec<String>>>(args, "keep")?.unwrap_or_default(),
+                )
+                .map_err(f)?,
+            ),
             // Aperçu servi sous `/__preview/` (essais de l'interface).
             "preview_url" => {
                 let env = arg::<Option<String>>(args, "environment")?.unwrap_or_default();

@@ -751,3 +751,22 @@ action-create = Créer
 cms-delete-title = Supprimer « { $name } » ?
 cms-delete-body = Le fichier du contenu est supprimé. Ctrl+Z le rétablit tant que le site est ouvert.
 cms-tag-add = Ajouter…
+
+# Texte riche (étape 3.2)
+rt-toolbar = Mise en forme
+rt-block = Type de paragraphe
+rt-p = Paragraphe
+rt-h2 = Titre 2
+rt-h3 = Titre 3
+rt-h4 = Titre 4
+rt-quote = Citation
+rt-bold = Gras (Ctrl+B)
+rt-italic = Italique (Ctrl+I)
+rt-link = Lien (Ctrl+K) ; adresse vide : lien retiré
+rt-link-apply = Appliquer
+rt-ul = Liste à puces
+rt-ol = Liste numérotée
+rt-clear = Retirer la mise en forme
+rt-source-md = Voir et modifier le Markdown
+rt-source-html = Voir et modifier le HTML
+cms-body-empty = Écrire le texte du contenu…

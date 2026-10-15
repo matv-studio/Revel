@@ -803,14 +803,30 @@ try {
     await until(() => fs.readFileSync(file, 'utf8').includes('Titre essai CMS'), 'titre écrit');
     const changed = fs.readFileSync(file, 'utf8').split('\n').filter((l, i) => l !== original.split('\n')[i]);
     check('CMS : champ modifié, seule sa ligne change dans le fichier', changed.length === 1 && changed[0].startsWith('title:'), changed.join(' | '));
-    await page.fill('.cms-item [data-field="--body"] textarea', 'Texte essai CMS');
-    await page.keyboard.press('Tab');
+    // Texte du contenu (texte riche écrit en Markdown) : saisi, puis mis en gras.
+    const body = '.cms-item [data-field="--body"] .rt-body';
+    await page.click(body);
+    await page.keyboard.type('Texte essai CMS');
+    await page.click('.cms-item-head h2');
     await until(() => fs.readFileSync(file, 'utf8').endsWith('---\nTexte essai CMS\n'), 'texte écrit');
-    check('CMS : texte du contenu modifié', true);
+    await page.click(body);
+    await page.keyboard.press('Control+a');
+    await page.click('.cms-item [data-field="--body"] .rt-btn[title^="Gras"]');
+    await page.click('.cms-item-head h2');
+    await until(() => fs.readFileSync(file, 'utf8').endsWith('---\n**Texte essai CMS**\n'), 'gras');
+    check('CMS : texte riche saisi et mis en gras, écrit en Markdown', true);
+    // Champ HTML importé (texte riche écrit en HTML, bloc littéral gardé).
+    await page.click('.cms-item [data-field="intro"] .rt-body');
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type(' Ajout essai.');
+    await page.click('.cms-item-head h2');
+    await until(() => /intro: \|-\n[^]*Ajout essai\.<\/p>/.test(fs.readFileSync(file, 'utf8')), 'champ HTML');
+    check('CMS : champ HTML modifié au texte riche, bloc littéral gardé', true);
     if (shots) await page.screenshot({ path: `${shots}/cms-fiche.png` });
-    await page.click('.cms-head .icon-btn[title^="Annuler"]');
-    await page.waitForTimeout(300);
-    await page.click('.cms-head .icon-btn[title^="Annuler"]');
+    for (let i = 0; i < 4; i++) {
+      await page.click('.cms-head .icon-btn[title^="Annuler"]');
+      await page.waitForTimeout(300);
+    }
     await until(() => fs.readFileSync(file, 'utf8') === original, 'annulation');
     check('CMS : annulé, fichier identique octet pour octet', true);
     // Nouveau contenu, puis supprimé ; annulé : dossier identique.

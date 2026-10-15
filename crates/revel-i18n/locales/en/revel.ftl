@@ -748,3 +748,22 @@ action-create = Create
 cms-delete-title = Delete “{ $name }”?
 cms-delete-body = The content file is deleted. Ctrl+Z restores it while the site is open.
 cms-tag-add = Add…
+
+# Rich text (step 3.2)
+rt-toolbar = Formatting
+rt-block = Paragraph type
+rt-p = Paragraph
+rt-h2 = Heading 2
+rt-h3 = Heading 3
+rt-h4 = Heading 4
+rt-quote = Quote
+rt-bold = Bold (Ctrl+B)
+rt-italic = Italic (Ctrl+I)
+rt-link = Link (Ctrl+K); empty address removes the link
+rt-link-apply = Apply
+rt-ul = Bulleted list
+rt-ol = Numbered list
+rt-clear = Clear formatting
+rt-source-md = View and edit the Markdown
+rt-source-html = View and edit the HTML
+cms-body-empty = Write the content text…

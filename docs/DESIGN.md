@@ -102,6 +102,7 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Rubriques | `.settings-nav` > `.settings-nav-item` (`.is-planned` + numéro d'étape) | Paramètres du site |
 | Vue CMS | `.cms` : `.cms-cols` (collections), `.cms-main` (tableau triable, recherche, annuler/rétablir, nouveau contenu), `.cms-item` (fiche du contenu) | Fiche : un contrôle par type de champ (schéma, sinon déduit de la valeur), valeur écrite à la sortie du champ ; la fiche n'est pas redessinée pendant la saisie (le focus reste) ; suppression confirmée, annulable |
 | Liste de textes | `.tags-input` > `.chip--tag` + `.tags-add` | Pastilles retirées par ×, ajout par Entrée |
+| Texte riche | `.rt` : `.rt-bar` (type de paragraphe, gras, italique, lien, listes, retirer la mise en forme · source), `.rt-body` (modifiable), `.rt-code` (source) | Boutons sans prise de focus (la sélection reste) ; collage en texte brut ; jamais dans un `<label>` (le clic irait au premier bouton) |
 | Tableau | `.table`, `.row-link`, `.table--compact` | Listes de sites, de collections ; ligne entière cliquable |
 | Faits | `.facts`, `.facts--inline` | Chiffres clés ; paires libellé / valeur |
 | Puce | `.chip` | Étiquette courte (environnement) |

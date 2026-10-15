@@ -69,6 +69,8 @@
       case "site_folder": return args.parent + "\\" + slug(args.name || "");
       case "create_site": return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
       case "cms_collections": return cms;
+      // Sans pont : document minimal (vue CMS, captures) ; modifications non simulées.
+      case "edit_open": return { site: { schema_version: 3, name: site.name, default_locale: "fr" }, state: { revision: 0, can_undo: false, can_redo: false } };
       case "has_site": return true;
       case "list_profiles": return profiles;
       case "build_site": {

@@ -14,6 +14,7 @@ mod inspector;
 mod layers;
 mod panels;
 mod publish;
+mod richtext;
 mod settings;
 mod site;
 mod styles;

@@ -263,12 +263,14 @@ pub fn set_field(text: &str, key: &str, value: Option<&Value>) -> Result<String,
                 .flatten()
                 .filter(|s| s.start >= b.start && s.end <= b.end);
             match (in_place, v) {
-                // Texte : style d'écriture gardé (sans guillemets, guillemets, bloc).
-                (Some(_), Value::String(s)) => {
+                // Texte sur une ligne : style d'écriture gardé (sans guillemets, guillemets) ; sur
+                // plusieurs lignes : bloc littéral réécrit à sa place (plus bas).
+                (Some(_), Value::String(s)) if !s.contains('\n') => {
                     set_yaml_value(yaml, &[Seg::Key(key.to_string())], s)?.0
                 }
                 (Some(s), _)
                     if !matches!(s.style, ScalarStyle::Literal | ScalarStyle::Folded)
+                        && !matches!(v, Value::String(_))
                         && !emit_scalar(v).is_empty() =>
                 {
                     format!("{}{}{}", &yaml[..s.start], emit_scalar(v), &yaml[s.end..])
@@ -450,6 +452,19 @@ mod tests {
         assert_eq!(field(&t, "title"), Some(json!("Wattr")));
         let t = set_field(DOC, "resume", Some(&json!("Ligne 1\nLigne 2"))).unwrap();
         assert_eq!(field(&t, "resume"), Some(json!("Ligne 1\nLigne 2")));
+    }
+
+    #[test]
+    fn texte_sur_plusieurs_lignes_en_bloc() {
+        let doc = "---\nintro: |-\n  <p>Un</p>\n  <p>Deux</p>\nfin: 1\n---\n";
+        let t = set_field(doc, "intro", Some(&json!("<p>Un</p>\n<p>Trois</p>"))).unwrap();
+        assert_eq!(
+            t,
+            "---\nintro: |-\n  <p>Un</p>\n  <p>Trois</p>\nfin: 1\n---\n"
+        );
+        let t = set_field(doc, "intro", Some(&json!("<p>Seul</p>"))).unwrap();
+        assert_eq!(field(&t, "intro"), Some(json!("<p>Seul</p>")));
+        assert!(t.ends_with("fin: 1\n---\n"));
     }
 
     #[test]

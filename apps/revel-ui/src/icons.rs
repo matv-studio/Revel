@@ -348,3 +348,15 @@ pub fn globe() -> AnyView {
         r#"<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.8 1.7 2.6 3.7 2.6 6S9.8 12.3 8 14M8 2C6.2 3.7 5.4 5.7 5.4 8s.8 4.3 2.6 6"/>"#,
     )
 }
+
+/// Gras.
+pub fn bold() -> AnyView {
+    svg(r#"<path d="M5 3h4a2.5 2.5 0 0 1 0 5H5zM5 8h4.8a2.5 2.5 0 0 1 0 5H5z"/>"#)
+}
+
+/// Liste numérotée.
+pub fn list_ordered() -> AnyView {
+    svg(
+        r#"<path d="M7 4h7M7 8h7M7 12h7"/><path d="M2.5 3.2 3.5 2.7V6M2.3 9.6c.3-.6 1.9-.7 1.9.3 0 .7-1.9 1.6-1.9 2.6h2" stroke-width="1.2"/>"#,
+    )
+}

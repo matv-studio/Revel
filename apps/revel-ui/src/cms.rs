@@ -97,8 +97,16 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     let state = RwSignal::new(None::<EditState>);
     let path = StoredValue::new(site.path.clone());
     let reload = move || {
+        let Some(p) = path.try_get_value() else {
+            return;
+        };
         spawn_local(async move {
-            match api::cms_collections(&path.get_value()).await {
+            let r = api::cms_collections(&p).await;
+            // Vue fermée pendant la lecture.
+            if current.is_disposed() {
+                return;
+            }
+            match r {
                 Ok(c) => {
                     if current.get_untracked().is_none() {
                         current.set(c.first().map(|c| c.id.clone()));
@@ -113,16 +121,24 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         })
     };
     // Session d'édition du site (partagée avec l'éditeur : un seul historique).
+    let p0 = site.path.clone();
     spawn_local(async move {
-        match api::edit_open(&path.get_value()).await {
+        match api::edit_open(&p0).await {
             Ok(o) => state.set(Some(o.state)),
             Err(e) => ui.fail(e),
         }
     });
     reload();
     let apply = Callback::new(move |cmd: Command| {
+        let Some(p) = path.try_get_value() else {
+            return;
+        };
         spawn_local(async move {
-            match api::edit_apply(&path.get_value(), &cmd, false).await {
+            let r = api::edit_apply(&p, &cmd, false).await;
+            if state.is_disposed() {
+                return;
+            }
+            match r {
                 Ok(st) => {
                     state.set(Some(st));
                     reload();
@@ -135,8 +151,15 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         })
     });
     let undo = move || {
+        let Some(p) = path.try_get_value() else {
+            return;
+        };
         spawn_local(async move {
-            match api::edit_undo(&path.get_value()).await {
+            let r = api::edit_undo(&p).await;
+            if state.is_disposed() {
+                return;
+            }
+            match r {
                 Ok(st) => state.set(Some(st)),
                 Err(e) => ui.fail(e),
             }
@@ -144,8 +167,15 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         })
     };
     let redo = move || {
+        let Some(p) = path.try_get_value() else {
+            return;
+        };
         spawn_local(async move {
-            match api::edit_redo(&path.get_value()).await {
+            let r = api::edit_redo(&p).await;
+            if state.is_disposed() {
+                return;
+            }
+            match r {
                 Ok(st) => state.set(Some(st)),
                 Err(e) => ui.fail(e),
             }
@@ -159,9 +189,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         if !matches!(ui.route.get_untracked(), Route::Site { tab: Tab::Cms, .. }) {
             return;
         }
-        let in_field = document()
-            .active_element()
-            .is_some_and(|el| matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT"));
+        let in_field = document().active_element().is_some_and(|el| {
+            matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
+                || el.has_attribute("contenteditable")
+        });
         if in_field || !(e.ctrl_key() || e.meta_key()) {
             return;
         }
@@ -528,6 +559,7 @@ fn kind_of(f: &CmsField, v: Option<&Value>) -> Kind {
         Some(Value::Array(_) | Value::Object(_)) => Kind::Json,
         Some(Value::String(s)) if is_date(s) => Kind::Date,
         Some(Value::String(s)) if is_image(s) => Kind::Image,
+        Some(Value::String(s)) if crate::richtext::looks_like_html(s) => Kind::Rich,
         Some(Value::String(s)) if s.contains('\n') || s.chars().count() > 90 => Kind::LongText,
         _ => Kind::Text,
     }
@@ -646,7 +678,18 @@ fn EntryForm(
                                     commit_text(v)
                                 }/>
                         }.into_any(),
-                        Kind::LongText | Kind::Rich => view! {
+                        Kind::Rich => {
+                            let format = if text().trim().is_empty() || crate::richtext::looks_like_html(&text()) {
+                                crate::richtext::Format::Html
+                            } else {
+                                crate::richtext::Format::Markdown
+                            };
+                            view! {
+                                <crate::richtext::RichText value=Signal::derive(text) format=format
+                                    on_commit=Callback::new(move |v: String| commit_text(v))/>
+                            }.into_any()
+                        }
+                        Kind::LongText => view! {
                             <textarea class="input cms-textarea" rows="4" prop:value=text
                                 on:change=move |e| commit_text(event_target_value(&e))></textarea>
                         }.into_any(),
@@ -672,25 +715,44 @@ fn EntryForm(
                         }.into_any(),
                     };
                     let long = matches!(kind, Kind::LongText | Kind::Rich | Kind::Json);
-                    view! {
-                        <label class="cms-item-field" class:is-long=long data-field=f.name.clone()>
-                            <span class="label" title=f.name.clone()>{label}</span>
-                            {control}
-                        </label>
+                    // Contrôle composé (texte riche, liste à pastilles) : pas dans un `<label>`, qui
+                    // renverrait chaque clic vers son premier bouton.
+                    if matches!(kind, Kind::Rich | Kind::List) {
+                        view! {
+                            <div class="cms-item-field" class:is-long=long data-field=f.name.clone()>
+                                <span class="label" title=f.name.clone()>{label}</span>
+                                {control}
+                            </div>
+                        }.into_any()
+                    } else {
+                        view! {
+                            <label class="cms-item-field" class:is-long=long data-field=f.name.clone()>
+                                <span class="label" title=f.name.clone()>{label}</span>
+                                {control}
+                            </label>
+                        }.into_any()
                     }
                 }).collect_view()}
-                <label class="cms-item-field is-long" data-field="--body">
+                <div class="cms-item-field is-long" data-field="--body">
                     <span class="label">{ui.t("cms-body")}</span>
-                    <textarea class="input cms-textarea cms-body" rows="10"
-                        prop:value=move || entry.with(|e| e.as_ref().map(|e| e.body.clone()).unwrap_or_default())
-                        on:change=move |e| {
-                            let body = event_target_value(&e);
-                            if entry.with_untracked(|x| x.as_ref().is_some_and(|x| x.body.trim_end() == body.trim_end())) {
-                                return;
-                            }
-                            apply.run(Command::SetEntryBody { folder: folder(), file: file.get_value(), body });
-                        }></textarea>
-                </label>
+                    {
+                        let body_text = Signal::derive(move || entry.with(|e| e.as_ref().map(|e| e.body.clone()).unwrap_or_default()));
+                        let format = if crate::richtext::looks_like_html(&body_text.get_untracked()) {
+                            crate::richtext::Format::Html
+                        } else {
+                            crate::richtext::Format::Markdown
+                        };
+                        view! {
+                            <crate::richtext::RichText value=body_text format=format placeholder=ui.now("cms-body-empty", &[])
+                                on_commit=Callback::new(move |body: String| {
+                                    if entry.with_untracked(|x| x.as_ref().is_some_and(|x| x.body.trim_end() == body.trim_end())) {
+                                        return;
+                                    }
+                                    apply.run(Command::SetEntryBody { folder: folder(), file: file.get_value(), body });
+                                })/>
+                        }
+                    }
+                </div>
             </div>
             <footer class="cms-item-foot">
                 <span class="muted path cms-item-file" title=move || format!("{}/{}.md", folder(), file.get_value())>

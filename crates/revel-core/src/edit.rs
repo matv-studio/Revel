@@ -225,6 +225,21 @@ fn exec(
                 fields: item.get("fields").cloned().unwrap_or(serde_json::json!([])),
             })
         }
+        Command::SetDataValue { binding, value } => {
+            let (file, old) = project
+                .set_data_value(binding, value.as_ref())
+                .map_err(revel_edit::EditError::Bound)?;
+            Ok(Command::WriteDataFile { file, text: old })
+        }
+        Command::WriteDataFile { file, text } => {
+            let old = project
+                .write_data_file(file, text)
+                .map_err(revel_edit::EditError::Bound)?;
+            Ok(Command::WriteDataFile {
+                file: file.clone(),
+                text: old,
+            })
+        }
         Command::WriteCmsConfig { text } => {
             let old = pagesyml::read(&project.dir).map_err(revel_edit::EditError::Bound)?;
             pagesyml::write(&project.dir, text.as_deref()).map_err(revel_edit::EditError::Bound)?;
@@ -268,7 +283,9 @@ fn external(c: &Command) -> bool {
         | Command::SetCmsCollection { .. }
         | Command::CreateCmsCollection { .. }
         | Command::RemoveCmsCollection { .. }
-        | Command::WriteCmsConfig { .. } => true,
+        | Command::WriteCmsConfig { .. }
+        | Command::SetDataValue { .. }
+        | Command::WriteDataFile { .. } => true,
         _ => false,
     }
 }

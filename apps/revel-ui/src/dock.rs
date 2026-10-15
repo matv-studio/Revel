@@ -162,7 +162,7 @@ impl Default for Layout {
                 },
                 Group {
                     id: 2,
-                    tabs: vec![PanelId::Layers, PanelId::Variables, PanelId::Insert],
+                    tabs: vec![PanelId::Layers, PanelId::Insert],
                     active: PanelId::Layers,
                     size: 0.68,
                 },
@@ -176,8 +176,9 @@ impl Default for Layout {
             left_w: 260.0,
             right_w: 284.0,
             floats: Vec::new(),
-            // Contenus des collections : vue CMS et panneau Pages.
-            closed: vec![PanelId::Cms],
+            // Fermés par défaut (menu « Panneaux ») : contenus des collections (vue CMS et
+            // panneau Pages), variables des gabarits (logique du code importé).
+            closed: vec![PanelId::Cms, PanelId::Variables],
             hidden: false,
             next: 4,
         }
@@ -398,12 +399,16 @@ impl Layout {
     /// (sinon avant celui qui le suit) dans le groupe où ce voisin se trouve.
     fn default_spot(&self, p: PanelId) -> Option<(u32, usize)> {
         let def = Layout::default();
-        let tabs = &def.groups().find(|g| g.tabs.contains(&p))?.tabs;
-        let at = tabs.iter().position(|t| *t == p)?;
         let find = |n: PanelId| {
             self.groups()
                 .find_map(|g| Some((g.id, g.tabs.iter().position(|t| *t == n)?)))
         };
+        // Panneau fermé par défaut : après les calques.
+        let Some(g) = def.groups().find(|g| g.tabs.contains(&p)) else {
+            return find(PanelId::Layers).map(|(g, i)| (g, i + 1));
+        };
+        let tabs = &g.tabs;
+        let at = tabs.iter().position(|t| *t == p)?;
         tabs[..at]
             .iter()
             .rev()
@@ -439,9 +444,15 @@ impl Layout {
         self.closed.retain(|c| !seen.contains(c));
         // Panneaux nouveaux ajoutés sans changer l'onglet affiché des groupes.
         let actives: Vec<(u32, PanelId)> = self.groups().map(|g| (g.id, g.active)).collect();
+        // Panneau nouveau : ouvert, sauf s'il est fermé dans la disposition par défaut.
+        let closed_by_default = Layout::default().closed;
         for p in PanelId::ALL {
             if !seen.contains(&p) && !self.closed.contains(&p) {
-                self.open(p);
+                if closed_by_default.contains(&p) {
+                    self.closed.push(p);
+                } else {
+                    self.open(p);
+                }
             }
         }
         for g in self.groups_mut() {
@@ -1255,11 +1266,14 @@ mod tests {
         r.open(PanelId::Pages);
         assert_eq!(r.left[0].tabs[0], PanelId::Pages);
         assert_eq!(r.left[1].active, PanelId::Layers);
-        // Disposition d'une version sans « Variables » : ajouté à côté des calques.
+        // Disposition d'une version sans « Variables » : panneau fermé (comme par défaut) ;
+        // rouvert, il vient à côté des calques.
         let mut old = Layout::default();
         old.left[1].tabs = vec![PanelId::Layers, PanelId::Cms, PanelId::Insert];
         old.closed.clear();
-        let n = old.normalize();
+        let mut n = old.normalize();
+        assert!(n.closed.contains(&PanelId::Variables));
+        n.open(PanelId::Variables);
         assert_eq!(
             n.left[1].tabs,
             vec![
@@ -1269,7 +1283,6 @@ mod tests {
                 PanelId::Insert
             ]
         );
-        assert_eq!(n.left[1].active, PanelId::Layers);
         // Disposition abîmée : doublons retirés, panneaux manquants ajoutés, largeurs bornées.
         let mut bad = Layout::default();
         bad.left[0].tabs.push(PanelId::Layers);

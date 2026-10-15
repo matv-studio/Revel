@@ -80,11 +80,15 @@ pub struct Library {
     pub media: Shelf,
     #[serde(default, skip_serializing_if = "Shelf::is_empty")]
     pub components: Shelf,
+    /// Dossiers de pages créés vides (chemins d'adresse `offres/2026`) ; une page est dans un
+    /// dossier par son adresse.
+    #[serde(default, skip_serializing_if = "Shelf::is_empty")]
+    pub pages: Shelf,
 }
 
 impl Library {
     pub fn is_empty(&self) -> bool {
-        self.media.is_empty() && self.components.is_empty()
+        self.media.is_empty() && self.components.is_empty() && self.pages.is_empty()
     }
 }
 
@@ -176,6 +180,80 @@ pub struct Settings {
     /// `value | nom(arg)` évalue `expr` avec `params[0] = value`, `params[1] = arg`…
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub filters: BTreeMap<String, CustomFilter>,
+    /// Référencement du site : plan du site et `robots.txt` produits par Revel.
+    #[serde(default, skip_serializing_if = "SeoSettings::is_default")]
+    pub seo: SeoSettings,
+}
+
+/// Plan du site (`sitemap.xml`) et `robots.txt` produits à la génération quand aucune page du site
+/// n'a déjà ces adresses.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SeoSettings {
+    /// Plan du site désactivé (produit par défaut).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_sitemap: bool,
+    /// Texte de `robots.txt` ; `None` : tout autoriser et indiquer le plan du site.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub robots: Option<String>,
+}
+
+impl SeoSettings {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+/// Adresse d'une page acceptée par Revel : commence par `/`, segments en minuscules, chiffres,
+/// `-`, `_`, `.` ; une page HTML finit par `/` (dossier) ou `.html`.
+pub fn valid_page_path(path: &str) -> bool {
+    let Some(rest) = path.strip_prefix('/') else {
+        return false;
+    };
+    let segs: Vec<&str> = rest.split('/').collect();
+    segs.iter().enumerate().all(|(i, s)| {
+        let last = i + 1 == segs.len();
+        (last && s.is_empty())
+            || (!s.is_empty()
+                && *s != "."
+                && *s != ".."
+                && s.chars().all(|c| {
+                    c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '-' | '_' | '.')
+                }))
+    }) && !path.contains("//")
+}
+
+/// Fragment d'adresse tiré d'un texte (`Nos offres d'été` -> `nos-offres-d-ete`).
+pub fn slugify(text: &str) -> String {
+    let mut out = String::new();
+    for c in text
+        .chars()
+        .flat_map(|c| fold_accent(c).chars().collect::<Vec<_>>())
+    {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
+    }
+    out.trim_end_matches('-').to_string()
+}
+
+fn fold_accent(c: char) -> String {
+    let base = match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'À' | 'Á' | 'Â' | 'Ã' | 'Ä' | 'Å' => "a",
+        'ç' | 'Ç' => "c",
+        'è' | 'é' | 'ê' | 'ë' | 'È' | 'É' | 'Ê' | 'Ë' => "e",
+        'ì' | 'í' | 'î' | 'ï' | 'Ì' | 'Í' | 'Î' | 'Ï' => "i",
+        'ñ' | 'Ñ' => "n",
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'Ò' | 'Ó' | 'Ô' | 'Õ' | 'Ö' => "o",
+        'ù' | 'ú' | 'û' | 'ü' | 'Ù' | 'Ú' | 'Û' | 'Ü' => "u",
+        'ý' | 'ÿ' | 'Ý' => "y",
+        'œ' | 'Œ' => "oe",
+        'æ' | 'Æ' => "ae",
+        'ß' => "ss",
+        _ => return c.to_string(),
+    };
+    base.to_string()
 }
 
 /// Filtre défini par une expression.
@@ -210,6 +288,9 @@ pub struct Page {
     /// Brouillon : non publié.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub draft: bool,
+    /// Nom de la page dans Revel (sans effet sur le site publié) ; `None` : titre ou adresse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 /// Gabarit partagé par plusieurs pages.

@@ -216,11 +216,16 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let site = input.site;
     let b = eval::Builder::new(input);
     let mut warnings = Vec::new();
-    let prepared = prepare(&b, input)?;
+    let prepared = prepare(&b, input, false)?;
     let mut files = Vec::new();
     for j in &prepared.jobs {
         let kind = DocKind::of_path(&j.url);
         let html = b.render_job(&prepared.globals, j, kind, &mut warnings)?;
+        let html = if kind == DocKind::Html {
+            noindex_meta(j, html)
+        } else {
+            html
+        };
         let html = if kind == DocKind::Html && site.settings.typography.as_deref() == Some("fr") {
             typography::french(&html)
         } else {
@@ -232,8 +237,101 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
         });
     }
     warnings.extend(b.take_warnings());
+    seo_files(site, &prepared.jobs, &mut files, &mut warnings);
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(BuildOutput { files, warnings })
+}
+
+/// Variable de page vraie (`noindex: true`, `"true"`, `1`).
+fn truthy(data: &BTreeMap<String, Value>, key: &str) -> bool {
+    data.get(key).is_some_and(|v| v.is_true())
+}
+
+/// Page `noindex` : balise `<meta name="robots" content="noindex">` ajoutée dans `<head>` si le
+/// gabarit n'en écrit pas déjà une.
+fn noindex_meta(j: &Job, html: String) -> String {
+    if !truthy(&j.data, "noindex") {
+        return html;
+    }
+    let lower = html.to_ascii_lowercase();
+    if lower.contains("name=\"robots\"") || lower.contains("name=robots") {
+        return html;
+    }
+    match lower.find("</head") {
+        Some(i) => format!(
+            "{}<meta name=\"robots\" content=\"noindex\">{}",
+            &html[..i],
+            &html[i..]
+        ),
+        None => html,
+    }
+}
+
+/// Plan du site (`sitemap.xml`) et `robots.txt` produits quand aucune page du site n'a déjà ces
+/// adresses (réglages de référencement du site).
+fn seo_files(site: &Site, jobs: &[Job], files: &mut Vec<OutputFile>, warnings: &mut Vec<String>) {
+    let has_sitemap = files.iter().any(|f| f.path == "sitemap.xml");
+    let has_robots = files.iter().any(|f| f.path == "robots.txt");
+    let base = site
+        .base_url
+        .as_deref()
+        .map(|b| b.trim_end_matches('/').to_string());
+    let mut sitemap = has_sitemap;
+    if !sitemap && !site.settings.seo.no_sitemap {
+        match &base {
+            Some(base) => {
+                let mut xml = String::from(
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+                );
+                let mut urls: Vec<&str> = jobs
+                    .iter()
+                    .filter(|j| DocKind::of_path(&j.url) == DocKind::Html)
+                    .filter(|j| !truthy(&j.data, "noindex"))
+                    .filter(|j| !j.url.ends_with("404.html") && !j.url.ends_with("/404/"))
+                    .map(|j| j.url.as_str())
+                    .collect();
+                urls.sort();
+                urls.dedup();
+                for u in urls {
+                    xml.push_str(&format!(
+                        "  <url><loc>{}{}</loc></url>\n",
+                        html::escape(base),
+                        html::escape(u)
+                    ));
+                }
+                xml.push_str("</urlset>\n");
+                files.push(OutputFile {
+                    path: "sitemap.xml".into(),
+                    bytes: xml.into_bytes(),
+                });
+                sitemap = true;
+            }
+            None => warnings.push(
+                "plan du site non produit : adresse du site absente (paramètres du site)".into(),
+            ),
+        }
+    }
+    if !has_robots {
+        let mut text = site
+            .settings
+            .seo
+            .robots
+            .clone()
+            .unwrap_or_else(|| "User-agent: *\nAllow: /\n".into());
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        if sitemap
+            && let Some(base) = &base
+            && !text.to_ascii_lowercase().contains("sitemap:")
+        {
+            text.push_str(&format!("Sitemap: {base}/sitemap.xml\n"));
+        }
+        files.push(OutputFile {
+            path: "robots.txt".into(),
+            bytes: text.into_bytes(),
+        });
+    }
 }
 
 /// Rend une page HTML pour l'éditeur (étape 2.2) : même HTML que la génération, avec les repères
@@ -245,7 +343,7 @@ pub fn render_editor(
 ) -> Result<Option<EditorPage>, RenderError> {
     let site = input.site;
     let mut b = eval::Builder::new(input);
-    let prepared = prepare(&b, input)?;
+    let prepared = prepare(&b, input, true)?;
     let wanted = normalize_url(url);
     let Some(job) = prepared
         .jobs
@@ -262,6 +360,7 @@ pub fn render_editor(
     });
     let mut warnings = Vec::new();
     let html = b.render_job(&prepared.globals, job, DocKind::Html, &mut warnings)?;
+    let html = noindex_meta(job, html);
     let html = if site.settings.typography.as_deref() == Some("fr") {
         typography::french(&html)
     } else {
@@ -303,12 +402,45 @@ pub struct PageRef {
     pub layout: Option<String>,
     /// Contenu de collection : nom de son fichier, sans extension (`wattr`).
     pub file: Option<String>,
+    /// Page en brouillon (non publiée).
+    pub draft: bool,
+    /// Nom de la page dans Revel.
+    pub name: Option<String>,
+    /// Page fixe : référencement (titre, description, image, indexation) et sa source.
+    pub seo: Option<PageSeo>,
+}
+
+/// Référencement d'une page fixe : valeurs de `seo` (`title`, `description`, `image`) et
+/// `noindex`, avec l'endroit où `seo` s'écrit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageSeo {
+    pub title: String,
+    pub description: String,
+    pub image: String,
+    pub noindex: bool,
+    pub source: SeoSource,
+}
+
+/// Endroit où s'écrivent les valeurs de `seo` d'une page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SeoSource {
+    /// Variable de la page (créée au besoin).
+    Page,
+    /// Fichier de données : chemin des clés de l'objet `seo` (`pages`, `agence`, `seo`).
+    Data(Vec<String>),
+    /// Expression calculée (pas un simple chemin) : non modifiable ici.
+    Computed,
 }
 
 /// Pages HTML du site (pages fixes puis contenus de collection), dans l'ordre de génération.
 pub fn list_pages(input: &BuildInput) -> Result<Vec<PageRef>, RenderError> {
     let b = eval::Builder::new(input);
-    let prepared = prepare(&b, input)?;
+    let prepared = prepare(&b, input, true)?;
+    let page_of = |j: &Job| {
+        j.page_id
+            .as_ref()
+            .and_then(|id| input.site.pages.iter().find(|p| &p.id == id))
+    };
     let title = |d: &BTreeMap<String, Value>| -> String {
         let text = |v: Option<Value>| v.filter(|v| v.as_str().is_some()).map(|v| v.to_string());
         text(d.get("title").cloned())
@@ -326,8 +458,45 @@ pub fn list_pages(input: &BuildInput) -> Result<Vec<PageRef>, RenderError> {
             collection: j.collection.clone(),
             layout: j.layout.clone(),
             file: j.collection.as_ref().map(|_| j.file_slug.clone()),
+            draft: page_of(j).is_some_and(|p| p.draft),
+            name: page_of(j).and_then(|p| p.name.clone()),
+            seo: page_of(j).map(|p| page_seo(p, &j.data)),
         })
         .collect())
+}
+
+/// Référencement d'une page fixe.
+fn page_seo(p: &revel_model::Page, data: &BTreeMap<String, Value>) -> PageSeo {
+    let seo = data.get("seo");
+    let text = |k: &str| {
+        seo.and_then(|s| s.get_attr(k).ok())
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default()
+    };
+    let source = if p.props.contains_key("seo") {
+        SeoSource::Page
+    } else if let Some(e) = p.computed.get("seo") {
+        match revel_edit::canvas::path_expr(e) {
+            Some((head, segs)) if segs.iter().all(|s| matches!(s, Seg::Key(_))) => {
+                let mut keys = vec![head];
+                keys.extend(segs.into_iter().filter_map(|s| match s {
+                    Seg::Key(k) => Some(k),
+                    Seg::Index(_) => None,
+                }));
+                SeoSource::Data(keys)
+            }
+            _ => SeoSource::Computed,
+        }
+    } else {
+        SeoSource::Page
+    };
+    PageSeo {
+        title: text("title"),
+        description: text("description"),
+        image: text("image"),
+        noindex: truthy(data, "noindex"),
+        source,
+    }
 }
 
 /// HTML du canevas sans les repères de l'éditeur (`data-rv="…"`, `<!--rv:N-->`, `<!--/rv:N-->`) :
@@ -375,7 +544,12 @@ fn entry_layout(
     }
 }
 
-fn prepare<'s>(b: &eval::Builder<'s>, input: &'s BuildInput) -> Result<Prepared<'s>, RenderError> {
+/// `drafts` : pages en brouillon comprises (éditeur, aperçu), sinon écartées (génération).
+fn prepare<'s>(
+    b: &eval::Builder<'s>,
+    input: &'s BuildInput,
+    drafts: bool,
+) -> Result<Prepared<'s>, RenderError> {
     let site = input.site;
     let mut entries_index: std::collections::HashMap<String, Vec<(String, String, Value)>> =
         std::collections::HashMap::new();
@@ -495,7 +669,7 @@ fn prepare<'s>(b: &eval::Builder<'s>, input: &'s BuildInput) -> Result<Prepared<
 
     // 2. Pages fixes.
     let partial_globals = b.globals(collections.clone());
-    for p in site.pages.iter().filter(|p| !p.draft) {
+    for p in site.pages.iter().filter(|p| drafts || !p.draft) {
         let mut data: BTreeMap<String, Value> = BTreeMap::new();
         let mut origins: BTreeMap<String, Binding> = BTreeMap::new();
         let key = |source: Source, k: &str| Binding {

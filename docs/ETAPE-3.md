@@ -36,6 +36,7 @@ sortie (étapes 1 et 2).
 | 3.9 | **Réglages du site** : nom, adresse, langue modifiables ; polices (fichiers, Google Fonts téléchargées dans le site) ; code ajouté (en-tête, fin de page, par site ou par page) | `revel-model`, `revel-render`, `revel-ui` |
 | 3.10 | **Versions et synchronisation** : sauvegardes (versions du site comparées et restaurées), synchronisation avec le dépôt GitHub du site (enregistrements de Pages CMS) | `revel-git`, `revel-core`, `revel-ui` |
 | 3.11 | **Canevas, suite** : poignées de taille (largeur et hauteur écrites dans la classe), marges visibles au survol, plusieurs points de rupture côte à côte, sélection multiple, palette de commandes (Ctrl+K) | `revel-core` (canvas.js), `revel-ui` |
+| 3.12 | **Réglages lisibles à la place des variables du code importé** (demande du 15/10/2026, D-28) : les calculs `{% set %}` les plus utiles d'un site importé deviennent des réglages simples — titre de l'onglet (format « titre | nom du site »), adresse officielle et image de partage (paramètres de la page et du site), menu du site (liste de liens), contenus mis en avant (choix dans une liste) ; le panneau Variables reste fermé par défaut | `revel-render`, `revel-edit`, `revel-ui` |
 
 ## Choix retenus (15/10/2026, voir DECISIONS.md)
 

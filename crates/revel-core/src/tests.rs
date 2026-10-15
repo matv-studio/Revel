@@ -22,6 +22,7 @@ fn sample_site(dir: &Path, c: &Core) -> PathBuf {
             el("h1", &[], vec![out("title")]),
         ],
         draft: false,
+        name: None,
     });
     p.save().unwrap();
     site
@@ -1153,4 +1154,152 @@ fn design_propre_a_un_contenu() {
         "{:?}",
         r.warnings
     );
+}
+
+#[test]
+fn pages_et_referencement() {
+    use revel_edit::Command;
+    use revel_edit::canvas::{Binding, Seg, Source};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let data = "# Agence\nseo:\n  title: L'agence # titre\n";
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.data_dir = Some("donnees".into());
+        p.site.pages.push(Page {
+            id: "agence".into(),
+            path: "/agence/".into(),
+            layout: None,
+            props: Default::default(),
+            computed: [("seo".to_string(), "pages.agence.seo".to_string())].into(),
+            body: vec![el("p", &[], vec![out("seo.title")])],
+            draft: false,
+            name: None,
+        });
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("donnees/pages")).unwrap();
+        std::fs::write(site.join("donnees/pages/agence.yml"), data).unwrap();
+    }
+    let opened = c.edit_open(&site).unwrap();
+    let pages = c.edit_pages(&site).unwrap();
+    let agence = pages.iter().find(|p| p.url == "/agence/").unwrap();
+    let seo = agence.seo.clone().unwrap();
+    assert_eq!(seo.title, "L'agence");
+    assert_eq!(seo.data_path, vec!["pages", "agence", "seo"]);
+    let key = |k: &str| Binding {
+        source: Source::Data,
+        path: seo
+            .data_path
+            .iter()
+            .map(|s| Seg::Key(s.clone()))
+            .chain([Seg::Key(k.into())])
+            .collect(),
+    };
+    // Titre réécrit sur place, image ajoutée, en une étape.
+    c.edit_apply(
+        &site,
+        Command::Batch {
+            commands: vec![
+                Command::SetDataValue {
+                    binding: key("title"),
+                    value: Some(serde_json::json!("Notre agence")),
+                },
+                Command::SetDataValue {
+                    binding: key("image"),
+                    value: Some(serde_json::json!("/media/agence.jpg")),
+                },
+            ],
+        },
+        false,
+    )
+    .unwrap();
+    let file = site.join("donnees/pages/agence.yml");
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "# Agence\nseo:\n  title: Notre agence # titre\n  image: /media/agence.jpg\n"
+    );
+    // Nouvelle page, adresse changée avec redirection, brouillon.
+    let mut np = opened.site.pages[0].clone();
+    np.id = "offres".into();
+    np.path = "/offres/".into();
+    np.body = vec![];
+    c.edit_apply(
+        &site,
+        Command::AddPage {
+            page: np.clone(),
+            index: None,
+        },
+        false,
+    )
+    .unwrap();
+    assert!(matches!(
+        c.edit_apply(
+            &site,
+            Command::AddPage {
+                page: np,
+                index: None
+            },
+            false
+        ),
+        Err(CoreError::Edit(revel_edit::EditError::DuplicateId(_)))
+    ));
+    assert!(matches!(
+        c.edit_apply(
+            &site,
+            Command::SetPagePath {
+                id: "offres".into(),
+                path: "/agence/".into()
+            },
+            false
+        ),
+        Err(CoreError::Edit(revel_edit::EditError::PathTaken(_)))
+    ));
+    assert!(
+        c.edit_apply(
+            &site,
+            Command::SetPagePath {
+                id: "offres".into(),
+                path: "/Offres été/".into()
+            },
+            false
+        )
+        .is_err()
+    );
+    c.edit_apply(
+        &site,
+        Command::Batch {
+            commands: vec![
+                Command::SetPagePath {
+                    id: "offres".into(),
+                    path: "/emplois/".into(),
+                },
+                Command::SetRedirects {
+                    redirects: vec![revel_model::Redirect {
+                        from: "/offres/".into(),
+                        to: "/emplois/".into(),
+                    }],
+                },
+                Command::SetPageDraft {
+                    id: "offres".into(),
+                    draft: true,
+                },
+            ],
+        },
+        false,
+    )
+    .unwrap();
+    let pages = c.edit_pages(&site).unwrap();
+    assert!(pages.iter().find(|p| p.url == "/emplois/").unwrap().draft);
+    c.build(&site, "production", false, &|_| {}).unwrap();
+    assert!(
+        !out_dir(&site, "production").join("emplois").exists(),
+        "brouillon non publié"
+    );
+    // Tout annulé : fichier de données et document d'origine.
+    for _ in 0..3 {
+        c.edit_undo(&site).unwrap();
+    }
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), data);
+    assert_eq!(c.edit_open(&site).unwrap().site, opened.site);
 }

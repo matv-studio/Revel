@@ -246,6 +246,19 @@ impl Core {
                 collection: p.collection,
                 layout: p.layout,
                 file: p.file,
+                draft: p.draft,
+                name: p.name,
+                seo: p.seo.map(|s| revel_protocol::PageSeoInfo {
+                    title: s.title,
+                    description: s.description,
+                    image: s.image,
+                    noindex: s.noindex,
+                    computed: s.source == revel_render::SeoSource::Computed,
+                    data_path: match s.source {
+                        revel_render::SeoSource::Data(k) => k,
+                        _ => Vec::new(),
+                    },
+                }),
             })
             .collect())
     }

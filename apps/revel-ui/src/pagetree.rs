@@ -596,6 +596,9 @@ mod tests {
             collection: (!fixed).then(|| "projets".into()),
             layout: None,
             file: None,
+            draft: false,
+            name: None,
+            seo: None,
         }
     }
 

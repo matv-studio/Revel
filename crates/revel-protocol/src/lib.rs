@@ -102,6 +102,35 @@ pub struct EditorPageInfo {
     /// Contenu : nom de son fichier, sans extension.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// Page en brouillon (non publiée).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub draft: bool,
+    /// Nom de la page dans Revel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Page fixe : référencement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seo: Option<PageSeoInfo>,
+}
+
+/// Référencement d'une page fixe et endroit où il s'écrit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PageSeoInfo {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub image: String,
+    #[serde(default)]
+    pub noindex: bool,
+    /// `seo` dans un fichier de données : chemin des clés (`pages`, `agence`, `seo`) ; vide :
+    /// variable de la page.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub data_path: Vec<String>,
+    /// `seo` calculé par une expression : non modifiable dans les paramètres de la page.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub computed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

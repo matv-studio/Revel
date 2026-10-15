@@ -36,6 +36,7 @@ fn sample() -> Site {
             el("footer", &[], vec![]),
         ],
         draft: false,
+        name: None,
     });
     s.components.push(Component {
         id: "carte".into(),

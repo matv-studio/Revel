@@ -291,6 +291,7 @@ mod tests {
                 },
             ],
             draft: false,
+            name: None,
         });
         s.components.push(Component {
             id: "carte".into(),

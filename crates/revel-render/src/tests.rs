@@ -115,6 +115,7 @@ fn site() -> Site {
         ),
         computed: Default::default(),
         draft: false,
+        name: None,
     });
     s.pages.push(Page {
         id: "sitemap".into(),
@@ -132,6 +133,7 @@ fn site() -> Site {
         .nodes,
         computed: Default::default(),
         draft: false,
+        name: None,
     });
     s
 }
@@ -169,9 +171,12 @@ fn site_complet() {
             "index.html",
             "project/a/index.html",
             "project/b/index.html",
+            "robots.txt",
             "sitemap.xml"
         ]
     );
+    // `robots.txt` produit (le site n'en a pas), plan du site du site gardé.
+    assert!(file(&out, "robots.txt").starts_with("User-agent: *\nAllow: /\n"));
 
     let home = file(&out, "index.html");
     assert!(home.contains("<title>Accueil | Alunites</title>"), "{home}");
@@ -413,4 +418,93 @@ fn valeurs_des_variables_pour_l_editeur() {
     assert!(check_expression("a | f(b) if c else d").is_ok());
     assert!(check_expression("a |").is_err());
     assert!(check_expression("(a").is_err());
+}
+
+#[test]
+fn pages_brouillon_indexation_et_plan_du_site() {
+    let mut s = Site::new("Essai", "fr");
+    s.base_url = Some("https://exemple.fr/".into());
+    let page = |id: &str, path: &str| Page {
+        id: id.into(),
+        path: path.into(),
+        layout: None,
+        props: Default::default(),
+        computed: Default::default(),
+        body: parse(
+            "<html><head><title>x</title></head><body><p>{{ seo.title }}</p></body></html>",
+        ),
+        draft: false,
+        name: None,
+    };
+    let mut accueil = page("index", "/");
+    accueil.name = Some("Accueil".into());
+    accueil.props.insert(
+        "seo".into(),
+        json!({"title": "Bienvenue", "description": "D"}),
+    );
+    let mut cachee = page("cachee", "/cachee/");
+    cachee.props.insert("noindex".into(), json!(true));
+    let mut brouillon = page("brouillon", "/brouillon/");
+    brouillon.draft = true;
+    let mut liee = page("liee", "/liee/");
+    liee.computed
+        .insert("seo".into(), "pages[\"liee\"].seo".into());
+    s.data
+        .insert("pages".into(), json!({"liee": {"seo": {"title": "Liée"}}}));
+    s.pages = vec![accueil, cachee, brouillon, liee];
+    s.ensure_ids();
+    let inp = input(&s, Vec::new());
+    let out = build(&inp).unwrap();
+    let paths: Vec<&str> = out.files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(
+        paths,
+        vec![
+            "cachee/index.html",
+            "index.html",
+            "liee/index.html",
+            "robots.txt",
+            "sitemap.xml"
+        ],
+        "brouillon non publié"
+    );
+    assert!(
+        file(&out, "cachee/index.html")
+            .contains(r#"<meta name="robots" content="noindex"></head>"#)
+    );
+    assert!(!file(&out, "index.html").contains("robots"));
+    let sm = file(&out, "sitemap.xml");
+    assert!(
+        sm.contains("<loc>https://exemple.fr/</loc>")
+            && sm.contains("<loc>https://exemple.fr/liee/</loc>")
+    );
+    assert!(!sm.contains("cachee") && !sm.contains("brouillon"), "{sm}");
+    assert_eq!(
+        file(&out, "robots.txt"),
+        "User-agent: *\nAllow: /\nSitemap: https://exemple.fr/sitemap.xml\n"
+    );
+    // Réglages : plan du site désactivé, robots.txt personnalisé.
+    let mut s2 = s.clone();
+    s2.settings.seo = revel_model::SeoSettings {
+        no_sitemap: true,
+        robots: Some("User-agent: *\nDisallow: /".into()),
+    };
+    let out2 = build(&input(&s2, Vec::new())).unwrap();
+    assert!(!out2.files.iter().any(|f| f.path == "sitemap.xml"));
+    assert_eq!(file(&out2, "robots.txt"), "User-agent: *\nDisallow: /\n");
+    // Éditeur : brouillon listé, référencement et sa source.
+    let pages = list_pages(&inp).unwrap();
+    let get = |u: &str| pages.iter().find(|p| p.url == u).unwrap();
+    assert!(get("/brouillon/").draft);
+    assert_eq!(get("/").name.as_deref(), Some("Accueil"));
+    let seo = get("/").seo.clone().unwrap();
+    assert_eq!(
+        (seo.title.as_str(), seo.description.as_str(), seo.source),
+        ("Bienvenue", "D", SeoSource::Page)
+    );
+    assert!(get("/cachee/").seo.as_ref().unwrap().noindex);
+    assert_eq!(
+        get("/liee/").seo.as_ref().unwrap().source,
+        SeoSource::Data(vec!["pages".into(), "liee".into(), "seo".into()])
+    );
+    assert_eq!(get("/liee/").seo.as_ref().unwrap().title, "Liée");
 }

@@ -346,6 +346,7 @@ pub fn import(root: &Path, profile: &Profile) -> Result<(Site, Report), ImportEr
             computed,
             body,
             draft: false,
+            name: None,
         });
         report.pages += 1;
     }

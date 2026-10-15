@@ -49,6 +49,12 @@ pub enum EditError {
     External,
     #[error("valeur liée non modifiable : {0}")]
     Bound(String),
+    #[error("adresse de page invalide : {0}")]
+    InvalidPath(String),
+    #[error("adresse déjà utilisée par une autre page : {0}")]
+    PathTaken(String),
+    #[error("redirection invalide : {0}")]
+    InvalidRedirect(String),
     /// Expression dont la syntaxe est invalide : l'expression et le message du moteur.
     #[error("{0}")]
     InvalidExpr(String),
@@ -72,6 +78,9 @@ impl EditError {
             Self::InvalidBreakpoints(_) => "error-edit-breakpoints",
             Self::External | Self::Bound(_) => "error-edit-bound",
             Self::InvalidExpr(_) => "error-edit-expr",
+            Self::InvalidPath(_) => "error-edit-path",
+            Self::PathTaken(_) => "error-edit-path-taken",
+            Self::InvalidRedirect(_) => "error-edit-redirect",
         }
     }
 }

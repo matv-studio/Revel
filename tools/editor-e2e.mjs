@@ -427,6 +427,13 @@ try {
     // Variables : affectations de la page (plus dans les calques), valeur calculée au rendu ;
     // expression modifiée sur place, refusée si sa syntaxe est fausse, annulée par Ctrl+Z.
     const varLayers = await page.$$eval('.layers .layer', (r) => r.filter((e) => /^variable /.test(e.textContent.trim())).length);
+    // Panneau fermé par défaut : ouvert par le menu « Panneaux », à côté des calques.
+    const varHidden = !(await page.$('.dock-tab[data-panel="variables"]'));
+    await page.click('.panels-menu > summary');
+    await page.click('.panels-pop .menu-item--check:has-text("Variables")');
+    await page.click('.panels-menu > summary');
+    const besideLayers = await page.$eval('.dock-tab[data-panel="variables"]', (t) => { const ps = [...t.closest('.dock-tabs').querySelectorAll('.dock-tab')].map((x) => x.dataset.panel); return ps.indexOf('variables') === ps.indexOf('layers') + 1; });
+    check('variables : panneau fermé par défaut, rouvert à côté des calques', varHidden && besideLayers);
     await page.click('.dock-tab[data-panel="variables"]');
     await page.waitForSelector('.variables .var[data-var="canonical"] .var-value:not(.is-muted)');
     const owners = await page.$$eval('.variables .var-owner .list-label', (r) => r.map((e) => e.textContent.trim()));

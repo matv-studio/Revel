@@ -14,6 +14,7 @@ use crate::address::{self, Parent, Target};
 pub enum ShelfKind {
     Media,
     Components,
+    Pages,
 }
 
 /// Modification du document de site. Sérialisable : la même commande vient de l'interface, de la
@@ -216,6 +217,38 @@ pub enum Command {
         #[serde(default)]
         text: Option<String>,
     },
+    /// Nouvelle page, insérée à la position `index` de la liste (à la fin si elle est plus
+    /// courte). Refusée si l'identifiant ou l'adresse est pris, ou si un nœud reprend un
+    /// identifiant existant.
+    AddPage {
+        page: revel_model::Page,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        index: Option<usize>,
+    },
+    /// Page supprimée (inverse : `AddPage` à sa place).
+    RemovePage { id: String },
+    /// Adresse d'une page (refusée si invalide ou prise par une autre page).
+    SetPagePath { id: String, path: String },
+    /// Page en brouillon (non publiée) ou publiée.
+    SetPageDraft { id: String, draft: bool },
+    /// Nom d'une page dans Revel (`None` : titre ou adresse).
+    SetPageName { id: String, name: Option<String> },
+    /// Redirections du site remplacées.
+    SetRedirects {
+        redirects: Vec<revel_model::Redirect>,
+    },
+    /// Référencement du site (plan du site, `robots.txt`).
+    SetSeoSettings { seo: revel_model::SeoSettings },
+    /// Valeur d'un fichier de données (`binding` : source `data`, chemin jusqu'à la clé), clé
+    /// créée au besoin, retirée avec `None`. Appliquée par le cœur ; inverse : `WriteDataFile`.
+    SetDataValue {
+        binding: crate::canvas::Binding,
+        #[serde(default)]
+        value: Option<Value>,
+    },
+    /// Fichier de données (chemin relatif au projet) remplacé par un texte exact. Appliquée par
+    /// le cœur.
+    WriteDataFile { file: String, text: String },
     /// Nouveau gabarit, inséré à la position `index` de la liste (à la fin si elle est plus
     /// courte). Refusé si l'identifiant est pris.
     AddLayout {
@@ -309,6 +342,21 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
         }
         other => other.clone(),
     })
+}
+
+/// Adresse de page valide et libre (`except` : la page qui la porte déjà).
+fn check_page_path(site: &Site, path: &str, except: Option<&String>) -> Result<(), EditError> {
+    if !revel_model::valid_page_path(path) {
+        return Err(EditError::InvalidPath(path.to_string()));
+    }
+    if site
+        .pages
+        .iter()
+        .any(|p| p.path == path && Some(&p.id) != except)
+    {
+        return Err(EditError::PathTaken(path.to_string()));
+    }
+    Ok(())
 }
 
 fn element_attrs<'a>(site: &'a mut Site, at: &Target) -> Result<&'a mut Vec<Attr>, EditError> {
@@ -672,7 +720,9 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         | Command::SetCmsCollection { .. }
         | Command::CreateCmsCollection { .. }
         | Command::RemoveCmsCollection { .. }
-        | Command::WriteCmsConfig { .. } => Err(EditError::External),
+        | Command::WriteCmsConfig { .. }
+        | Command::SetDataValue { .. }
+        | Command::WriteDataFile { .. } => Err(EditError::External),
         Command::ResizeBreakpoint { id, width } => {
             let bad = |m: &str| EditError::InvalidBreakpoints(m.to_string());
             let i = site
@@ -728,6 +778,90 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 width: old_w,
             })
         }
+        Command::AddPage { page, index } => {
+            if site.pages.iter().any(|p| p.id == page.id) {
+                return Err(EditError::DuplicateId(page.id.clone()));
+            }
+            check_page_path(site, &page.path, None)?;
+            let used = site.node_ids();
+            let mut fresh = Vec::new();
+            walk(&page.body, &mut |n| {
+                if let Some(id) = node_id(n) {
+                    fresh.push(id.to_string());
+                }
+            });
+            if let Some(id) = fresh.iter().find(|i| used.contains(*i)) {
+                return Err(EditError::DuplicateId(id.clone()));
+            }
+            let i = index.unwrap_or(usize::MAX).min(site.pages.len());
+            site.pages.insert(i, page.clone());
+            Ok(Command::RemovePage {
+                id: page.id.clone(),
+            })
+        }
+        Command::RemovePage { id } => {
+            let i = site
+                .pages
+                .iter()
+                .position(|p| &p.id == id)
+                .ok_or_else(|| EditError::NotFound(format!("page {id}")))?;
+            let page = site.pages.remove(i);
+            Ok(Command::AddPage {
+                page,
+                index: Some(i),
+            })
+        }
+        Command::SetPagePath { id, path } => {
+            check_page_path(site, path, Some(id))?;
+            let p = site
+                .pages
+                .iter_mut()
+                .find(|p| &p.id == id)
+                .ok_or_else(|| EditError::NotFound(format!("page {id}")))?;
+            Ok(Command::SetPagePath {
+                id: id.clone(),
+                path: std::mem::replace(&mut p.path, path.clone()),
+            })
+        }
+        Command::SetPageDraft { id, draft } => {
+            let p = site
+                .pages
+                .iter_mut()
+                .find(|p| &p.id == id)
+                .ok_or_else(|| EditError::NotFound(format!("page {id}")))?;
+            Ok(Command::SetPageDraft {
+                id: id.clone(),
+                draft: std::mem::replace(&mut p.draft, *draft),
+            })
+        }
+        Command::SetPageName { id, name } => {
+            let p = site
+                .pages
+                .iter_mut()
+                .find(|p| &p.id == id)
+                .ok_or_else(|| EditError::NotFound(format!("page {id}")))?;
+            let name = name
+                .as_ref()
+                .map(|n| n.trim().to_string())
+                .filter(|n| !n.is_empty());
+            Ok(Command::SetPageName {
+                id: id.clone(),
+                name: std::mem::replace(&mut p.name, name),
+            })
+        }
+        Command::SetRedirects { redirects } => {
+            for r in redirects {
+                if !r.from.starts_with('/') || r.from == r.to || r.to.trim().is_empty() {
+                    return Err(EditError::InvalidRedirect(r.from.clone()));
+                }
+            }
+            Ok(Command::SetRedirects {
+                redirects: std::mem::replace(&mut site.redirects, redirects.clone()),
+            })
+        }
+        Command::SetSeoSettings { seo } => Ok(Command::SetSeoSettings {
+            seo: std::mem::replace(&mut site.settings.seo, seo.clone()),
+        }),
         Command::AddLayout { layout, index } => {
             if site.layouts.iter().any(|l| l.id == layout.id) {
                 return Err(EditError::DuplicateId(layout.id.clone()));
@@ -773,6 +907,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             let slot = match kind {
                 ShelfKind::Media => &mut site.library.media,
                 ShelfKind::Components => &mut site.library.components,
+                ShelfKind::Pages => &mut site.library.pages,
             };
             Ok(Command::SetShelf {
                 kind: *kind,

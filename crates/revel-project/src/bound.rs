@@ -318,6 +318,57 @@ impl crate::Project {
         }
     }
 
+    /// Écrit une valeur dans un fichier de données (`b` : source `data`, chemin jusqu'à la clé ;
+    /// `None` : clé retirée). Renvoie le fichier (relatif au projet) et son texte d'avant.
+    pub fn set_data_value(
+        &self,
+        b: &Binding,
+        value: Option<&serde_json::Value>,
+    ) -> Result<(String, String), BoundError> {
+        if !matches!(b.source, Source::Data) {
+            return Err("pas un fichier de données".into());
+        }
+        let (file, inner, _) = self.source_file(b)?;
+        let keys: Vec<String> = inner
+            .iter()
+            .map(|s| match s {
+                Seg::Key(k) => Ok(k.clone()),
+                Seg::Index(_) => Err("chemin dans une liste non pris en charge".to_string()),
+            })
+            .collect::<Result<_, _>>()?;
+        let old = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
+        let new = crate::yamlpath::set_path(&old, &keys, value)?;
+        if new != old {
+            write_atomic(&file, &new)?;
+        }
+        let rel = file
+            .strip_prefix(&self.dir)
+            .map_err(|_| "fichier hors du projet".to_string())?
+            .to_string_lossy()
+            .replace('\\', "/");
+        Ok((rel, old))
+    }
+
+    /// Fichier de données (relatif au projet, dans le dossier de données) remplacé par `text`.
+    pub fn write_data_file(&self, file: &str, text: &str) -> Result<String, BoundError> {
+        let dir = self
+            .site
+            .data_dir
+            .as_ref()
+            .ok_or_else(|| "pas de dossier de données".to_string())?;
+        if file.split(['/', '\\']).any(|s| s == "..")
+            || !file
+                .replace('\\', "/")
+                .starts_with(&format!("{}/", dir.trim_end_matches('/')))
+        {
+            return Err(format!("fichier refusé : {file}"));
+        }
+        let path = self.dir.join(file);
+        let old = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        write_atomic(&path, text)?;
+        Ok(old)
+    }
+
     /// Valeur actuelle (texte) d'une valeur liée.
     pub fn bound_value(&self, b: &Binding) -> Result<String, BoundError> {
         match &b.source {

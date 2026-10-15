@@ -168,6 +168,7 @@ impl Shelves {
                     .map(|d| match kind {
                         ShelfKind::Media => d.library.media.clone(),
                         ShelfKind::Components => d.library.components.clone(),
+                        ShelfKind::Pages => d.library.pages.clone(),
                     })
                     .unwrap_or_default()
             })
@@ -509,6 +510,10 @@ fn human_size(ui: Ui, n: u64) -> String {
     ui.now(unit, &[("n", num)])
 }
 
+/// Largeur des vignettes de médias (px).
+const THUMB_MIN: u32 = 44;
+const THUMB_MAX: u32 = 160;
+
 /// Médias du site, rangés en dossiers.
 #[component]
 pub fn Media() -> impl IntoView {
@@ -523,6 +528,13 @@ pub fn Media() -> impl IntoView {
     let sort = RwSignal::new(MediaSort::parse(
         &crate::pref_get("media.sort").unwrap_or_default(),
     ));
+    // Taille des vignettes (px), gardée d'une session à l'autre.
+    let thumb = RwSignal::new(
+        crate::pref_get("media.thumb")
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(72)
+            .clamp(THUMB_MIN, THUMB_MAX),
+    );
     // Liste relue à l'ouverture du panneau et après une modification de fichiers hors de Revel.
     let path = ed.path.get_value();
     Effect::new(move |_| {
@@ -755,11 +767,23 @@ pub fn Media() -> impl IntoView {
                             <p class="panel-empty muted">{ui.t(if empty_site { "media-none" } else { "media-no-match" })}</p>
                         }).into_any();
                     }
-                    view! { <div class="asset-grid">{v.into_iter().map(tile).collect_view()}</div> }.into_any()
+                    view! {
+                        <div class="asset-grid" class:is-small=move || thumb.get() < 60
+                            style=move || format!("--thumb:{}px", thumb.get())>{v.into_iter().map(tile).collect_view()}</div>
+                    }.into_any()
                 }}
             </div>
             <footer class="panel-foot">
                 <span class="panel-foot-text muted">{move || ui.tx("media-count", &[("count", shown.with(Vec::len).to_string())])}</span>
+                <input class="thumb-size" type="range" min=THUMB_MIN max=THUMB_MAX step="4"
+                    title=ui.t("media-thumb-size") aria-label=ui.t("media-thumb-size")
+                    prop:value=move || thumb.get().to_string()
+                    on:input=move |e| {
+                        if let Ok(v) = event_target_value(&e).parse::<u32>() {
+                            thumb.set(v.clamp(THUMB_MIN, THUMB_MAX));
+                            crate::pref_set("media.thumb", &v.to_string());
+                        }
+                    }/>
                 <button class="icon-btn icon-btn--small" title=ui.t("library-new-folder") aria-label=ui.t("library-new-folder")
                     on:click=move |_| { q.set(String::new()); sh.creating.set(Some(folder.get_untracked())) }>{icons::folder_plus()}</button>
                 <PlannedButton key="assets-import" step=3 icon=icons::upload/>

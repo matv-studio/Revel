@@ -85,6 +85,7 @@ La **liaison MCP est prévue dès maintenant** :
   et le serveur MCP appellent les mêmes commandes ; elles servent aussi à annuler/rétablir ;
 - `revel-mcp` (étape 4) exposera ces commandes avec le SDK officiel `rmcp` (github.com/modelcontextprotocol/rust-sdk) :
   en local (stdio) pour Claude Desktop / Claude Code, et en HTTP pour un connecteur personnalisé claude.ai (avec tunnel).
+  Élargie par D-31 (tout assistant, pas seulement Claude).
 
 **D-15 — 13/10/2026 — prise (demande de l'utilisateur).** Direction artistique propre à Revel, sans reprise
 de celle d'Alunites : références d'usage Figma, Framer et Webflow ; interface en **gris neutres**, **un seul accent**
@@ -231,6 +232,31 @@ clé vide reprend le modèle ; un gabarit introuvable reprend le modèle avec un
 design propre dont le contenu a disparu est signalé dans le panneau Pages et supprimable ; le gabarit n'est retiré
 au retour au modèle que s'il ne sert à aucun autre contenu. Les modifications du modèle ne s'appliquent plus au
 design propre (c'est son rôle) ; il n'y a pas de fusion automatique.
+
+**D-31 — 15/10/2026 — prise (demande de l'utilisateur).** **Étape 4 : tout assistant IA, pas seulement Claude.**
+Revel se pilote par n'importe quel modèle (Claude, GPT, modèle local) grâce au protocole MCP, devenu commun :
+ChatGPT accepte des serveurs MCP en mode développeur (lecture et écriture, transports SSE et HTTP en flux,
+https://www.infoq.com/news/2025/10/chat-gpt-mcp), l'API Responses et l'Agents SDK d'OpenAI aussi (stdio, HTTP),
+Codex et l'application ChatGPT de bureau partagent leur configuration MCP (stdio et HTTP,
+https://learn.chatgpt.com/docs/extend/mcp?surface=cli), LM Studio depuis 0.3.17 (serveurs locaux et distants,
+`mcp.json`, https://lmstudio.ai/blog/mcp), Open WebUI depuis 0.6.31 (HTTP en flux seulement, utilisé avec Ollama,
+https://docs.openwebui.com/features/mcp). D'où : `revel-mcp` en **stdio** et en **HTTP en flux sur la machine**
+(127.0.0.1, jeton d'accès) ; accès à distance (connecteurs de ChatGPT et de claude.ai, qui n'atteignent pas la
+machine directement) par tunnel avec authentification ; les mêmes commandes décrites en **OpenAPI** pour les outils
+sans MCP. Les outils exposés sont les commandes de D-13 (annulables, visibles dans l'historique de Revel). Une
+discussion intégrée à Revel, avec le fournisseur choisi (Anthropic, OpenAI ou un modèle local par une API
+compatible OpenAI, comme celle d'Ollama, https://docs.ollama.com/api/openai-compatibility), reste à décider
+(D-13 : pas de panneau de discussion pour l'instant).
+
+**D-33 — 15/10/2026 — prise (demande de l'utilisateur).** **Étape 7 : compatibilité maximale avec Webflow,
+Framer et Figma.** Les notions de Revel restent proches de celles de ces outils pour que l'import soit fidèle :
+composants à propriétés par instance (Framer, Webflow), variables de design (couleurs, tailles, polices : Webflow,
+Figma), points de rupture, collections du CMS, dossiers de pages. Sources d'import vérifiées : Webflow exporte le
+code d'un site et son API de données lit collections, champs et contenus
+(https://developers.webflow.com/data/reference/cms) ; Framer ne propose pas d'export HTML
+(https://www.framer.com/help/articles/can-i-export-my-website-to-html-and-self-host-it/) : le site publié sera lu à
+son adresse ; Figma donne le document en JSON et des rendus d'images par son API
+(https://developers.figma.com/docs/rest-api/file-endpoints).
 
 ## Décisions ouvertes
 

@@ -183,6 +183,16 @@ génération, vérifié par `canvas-check`), à la page affichée dans l'éditeu
 publication génère elle-même. L'ancienne rubrique « Génération » devient « Export » : fichiers du site copiés
 dans un nouveau dossier choisi (héberger ailleurs, archiver), avec « Afficher le dossier ».
 
+**D-27 — 15/10/2026 — prise.** **Schéma des collections : `.pages.yml` de Pages CMS, sans copie.** Revel lit les
+champs, libellés, aides, valeurs par défaut, champs cachés, choix, références, objets et la présentation des
+tableaux dans le fichier de configuration de Pages CMS (https://pagescms.org/docs/configuration/), et y écrira les
+modifications de champs (3.3, texte modifié sur place, commentaires gardés). Une seule source : Revel et Pages CMS
+décrivent toujours les mêmes contenus. Sans `.pages.yml`, les champs sont déduits des contenus ; le fichier est
+créé à la première modification de champs. Dates écrites au format déclaré (`options.format`, jetons de date-fns
+comme Pages CMS) ; références résolues par le nom de collection de `.pages.yml` et ses modèles (`{fields.slug}`) ;
+nom d'un nouveau contenu tiré du modèle `filename`. Les collections d'Eleventy qui lisent un même dossier
+(`offres`, `toutesOffres`) apparaissent une seule fois dans la vue CMS.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

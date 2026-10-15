@@ -323,6 +323,13 @@ pub fn search() -> AnyView {
     svg(r#"<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/>"#)
 }
 
+/// Aide d'un champ (texte au survol).
+pub fn info() -> AnyView {
+    svg(
+        r#"<circle cx="8" cy="8" r="5.75"/><path d="M8 7.25v3.5"/><circle cx="8" cy="5.1" r=".4" fill="currentColor"/>"#,
+    )
+}
+
 /// Sélectionner l'élément parent.
 pub fn parent() -> AnyView {
     svg(r#"<path d="M5 6.5 8 3.5l3 3M8 3.5v9"/>"#)

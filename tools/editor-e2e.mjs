@@ -797,8 +797,9 @@ try {
     const file = path.join(dir, first + '.md');
     const original = fs.readFileSync(file, 'utf8');
     await page.click(`.cms-table tbody tr[data-entry="${first}"]`);
-    await page.waitForSelector('.cms-item [data-field="title"] input');
-    await page.fill('.cms-item [data-field="title"] input', 'Titre essai CMS');
+    const row = (name) => `.cms-item-body > [data-field="${name}"]`;
+    await page.waitForSelector(row('title') + ' input');
+    await page.fill(row('title') + ' input', 'Titre essai CMS');
     await page.keyboard.press('Tab');
     await until(() => fs.readFileSync(file, 'utf8').includes('Titre essai CMS'), 'titre écrit');
     const changed = fs.readFileSync(file, 'utf8').split('\n').filter((l, i) => l !== original.split('\n')[i]);
@@ -829,6 +830,59 @@ try {
     }
     await until(() => fs.readFileSync(file, 'utf8') === original, 'annulation');
     check('CMS : annulé, fichier identique octet pour octet', true);
+
+    // ---------------------------------------------------------------- Schéma de Pages CMS (3.3)
+    const heads = await page.$$eval('.cms-table thead th', (ths) => ths.map((t) => t.textContent.trim()));
+    check('CMS : nom, colonnes et tri du schéma (.pages.yml)',
+      (await page.textContent('.cms-col[data-collection="projets"] .list-label')) === 'Projets'
+        && heads[0] === 'Titre' && heads[1] === 'Client' && heads[2] === 'Date↓' && heads[3] === 'Publié', heads.join(' | '));
+    const newest = fs.readdirSync(dir).filter((f) => f.endsWith('.md'))
+      .map((f) => [f.slice(0, -3), (fs.readFileSync(path.join(dir, f), 'utf8').match(/^date: '?([^'\n]+)/m) || [])[1] || ''])
+      .sort((a, b) => b[1].localeCompare(a[1]))[0][0];
+    check('CMS : tri par date décroissante', first === newest, `${first} / ${newest}`);
+    // Champ obligatoire vidé, adresse hors motif : refusés, rien n'est écrit.
+    check('CMS : champ obligatoire marqué', !!(await page.$(row('title') + ' .cms-req')));
+    const title0 = await page.inputValue(row('title') + ' input');
+    await page.fill(row('title') + ' input', '');
+    await page.keyboard.press('Tab');
+    await page.waitForSelector(row('title') + ' .field-error');
+    const slug0 = await page.inputValue(row('slug') + ' input');
+    await page.fill(row('slug') + ' input', 'Pas Valide');
+    await page.keyboard.press('Tab');
+    await page.waitForSelector(row('slug') + ' .field-error');
+    await page.waitForTimeout(300);
+    check('CMS : valeur obligatoire vide et motif non respecté refusés', fs.readFileSync(file, 'utf8') === original);
+    await page.fill(row('title') + ' input', title0);
+    await page.fill(row('slug') + ' input', slug0);
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(() => !document.querySelector('.cms-item .field-error'));
+    // Date avec heure, écrite au format du schéma.
+    const dateIn = row('date') + ' input';
+    const d0 = await page.inputValue(dateIn);
+    check('CMS : date et heure lues au format du schéma', (await page.getAttribute(dateIn, 'type')) === 'datetime-local' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(d0), d0);
+    await page.fill(dateIn, '2026-03-20T08:15');
+    await page.click('.cms-item-head h2');
+    await until(() => /^date: '?2026-03-20T08:15:00'?$/m.test(fs.readFileSync(file, 'utf8')), 'date écrite');
+    check('CMS : date écrite au format du schéma', true);
+    // Références : libellés des contenus liés, ajout depuis la liste.
+    const refs = await page.$$eval(row('expertises') + ' .chip--tag', (cs) => cs.map((c) => c.textContent.trim()));
+    const refValues = await page.$$eval(row('expertises') + ' .chip--tag', (cs) => cs.map((c) => c.title));
+    check('CMS : références affichées par leur titre', refs.length > 0 && refs.every((r, i) => r !== refValues[i]), refs.join(', '));
+    const option = await page.$eval(row('expertises') + ' .tags-pick option:nth-child(2)', (o) => o.value);
+    await page.selectOption(row('expertises') + ' .tags-pick', option);
+    await until(() => fs.readFileSync(file, 'utf8').includes('- ' + option + '\n'), 'référence ajoutée');
+    check('CMS : référence ajoutée', true);
+    check('CMS : objet (référencement) en sous-fiche, blocs en JSON, champ caché replié',
+      !!(await page.$('.cms-item-body > .cms-object[data-field="seo"] legend'))
+        && !!(await page.$(row('blocks') + ' textarea.cms-json'))
+        && !!(await page.$('.cms-more [data-field="wp_id"]')));
+    if (shots) await page.screenshot({ path: `${shots}/cms-schema.png` });
+    for (let i = 0; i < 2; i++) {
+      await page.click('.cms-head .icon-btn[title^="Annuler"]');
+      await page.waitForTimeout(300);
+    }
+    await until(() => fs.readFileSync(file, 'utf8') === original, 'annulation (schéma)');
+    check('CMS : date et référence annulées, fichier identique', true);
     // Nouveau contenu, puis supprimé ; annulé : dossier identique.
     await page.click('.cms-new');
     await page.fill('.dialog input', 'Essai Revel');
@@ -836,7 +890,9 @@ try {
     const created = path.join(dir, 'essai-revel.md');
     await until(() => fs.existsSync(created), 'contenu créé');
     await page.waitForSelector('.cms-item[data-entry="essai-revel"]');
-    check('CMS : nouveau contenu créé et ouvert', fs.readFileSync(created, 'utf8').startsWith('---\ntitle: Essai Revel\n'), fs.readFileSync(created, 'utf8').split('\n').slice(0, 4).join(' | '));
+    check('CMS : nouveau contenu créé et ouvert, valeurs du schéma (adresse, publié, date du jour)',
+      /^---\ntitle: Essai Revel\nslug: essai-revel\npublished: true\ndate: '?\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d'?\n/.test(fs.readFileSync(created, 'utf8')),
+      fs.readFileSync(created, 'utf8').split('\n').slice(0, 5).join(' | '));
     await page.click('.cms-item-foot .icon-btn');
     await page.click('.dialog .btn--danger');
     await until(() => !fs.existsSync(created), 'contenu supprimé');

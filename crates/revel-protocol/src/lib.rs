@@ -67,22 +67,75 @@ pub struct CollectionSummary {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CmsCollection {
     pub id: String,
+    /// Nom affiché (configuration de Pages CMS), sinon `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     /// Dossier des fichiers, relatif au site.
     pub folder: String,
-    /// Champs de la collection (schéma), sinon ceux trouvés dans les contenus.
+    /// Champs : schéma de la collection (`.pages.yml` de Pages CMS), sinon ceux trouvés dans
+    /// les contenus.
     pub fields: Vec<CmsField>,
+    /// Nom de la collection dans `.pages.yml` quand son schéma en vient (les références
+    /// désignent une collection par ce nom).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+    /// Tableau : champ principal, colonnes, tri (`view` de Pages CMS).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<CmsTableView>,
+    /// Modèle du nom de fichier d'un nouveau contenu (`{fields.slug}.md`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
     pub entries: Vec<CmsEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Présentation du tableau d'une collection.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct CmsTableView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<String>,
+    /// Ordre décroissant.
+    #[serde(default)]
+    pub descending: bool,
+}
+
+/// Champ d'une collection (types et options de Pages CMS).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct CmsField {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
-    /// Type (`string`, `text`, `rich_text`, `image`, `date`, `boolean`, `number`, `list`,
-    /// `object`, `reference`, `references`) ; `None` : déduit des valeurs.
+    /// Type (`string`, `text`, `rich_text`, `image`, `file`, `date`, `boolean`, `number`,
+    /// `select`, `reference`, `object`, `block`, `code`, `list`) ; `None` : déduit des valeurs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    /// Aide affichée au survol du libellé.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+    /// Champ technique, caché par défaut dans la fiche.
+    #[serde(default)]
+    pub hidden: bool,
+    /// Liste de valeurs de ce type.
+    #[serde(default)]
+    pub list: bool,
+    /// Valeur d'un nouveau contenu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<serde_json::Value>,
+    /// Options du type (format d'un texte riche, choix d'une liste, collection d'une référence,
+    /// heure d'une date, motif…), telles qu'écrites dans `.pages.yml`.
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub options: serde_json::Value,
+    /// Motif (expression régulière) d'un texte.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pattern: Option<String>,
+    /// Champs d'un objet.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<CmsField>,
 }
 
 /// Contenu d'une collection : en-tête du fichier Markdown et page publiée.

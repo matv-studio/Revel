@@ -774,3 +774,11 @@ export-running = Exporting…
 export-reveal = Show folder
 export-failed = Export failed. { $message }
 publish-building = Preparing the site files…
+
+# Collection schema (step 3.3)
+cms-required = Required field
+cms-required-mark = Required
+cms-pattern = Invalid format
+cms-json = Invalid value: { $detail }
+cms-more = Other values ({ $count })
+cms-more-help = Fields hidden in Pages CMS and values missing from the schema, kept as they are

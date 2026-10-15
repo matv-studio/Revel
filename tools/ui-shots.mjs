@@ -28,6 +28,7 @@ const shots = [
   ["cms-dark-fr", "theme=dark&lang=fr", [site, view("view-cms")]],
   ["cms-entry-light-fr", "theme=light&lang=fr", [site, view("view-cms"), ".cms-table tbody tr >> nth=0"]],
   ["cms-entry-dark-en", "theme=dark&lang=en", [site, view("view-cms"), ".cms-table tbody tr >> nth=2"]],
+  ["cms-entry-more-dark-fr", "theme=dark&lang=fr", [site, view("view-cms"), ".cms-table tbody tr >> nth=0", ".cms-more summary"]],
   ["locales-dark-fr", "theme=dark&lang=fr", [site, view("view-locales")]],
   ["redirects-light-fr", "theme=light&lang=fr", [site, section("settings-redirects")]],
   ["seo-planned-dark-fr", "theme=dark&lang=fr", [site, section("settings-seo")]],

@@ -379,9 +379,11 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
   background: var(--surface); border-bottom: var(--border) solid var(--line);
 }
 .cms-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s-3); }
-.cms-title h1 { font-size: var(--text-lg); }
+.cms-title h1 { font-size: var(--text-lg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 100%; }
 .cms-title .path { font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cms-search { width: 220px; margin: 0; height: var(--control-md); background: var(--bg); border-color: var(--line-strong); }
+.cms-search { flex: 0 1 220px; min-width: 120px; margin: 0; height: var(--control-md); background: var(--bg); border-color: var(--line-strong); }
+/* Fiche ouverte : place gardée pour le nom de la collection (dossier au survol). */
+.cms.has-item .cms-title .path { display: none; }
 .cms-table-wrap { flex: 1; overflow: auto; padding: var(--s-2) var(--s-3) var(--s-4); }
 .cms-table th { position: sticky; top: 0; z-index: 1; background: var(--bg); padding-top: var(--s-2); white-space: nowrap; }
 .cms-table td { max-width: 260px; }
@@ -407,10 +409,44 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .cms-item-head { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); border-bottom: var(--border) solid var(--line); }
 .cms-item-head h2 { flex: 1; min-width: 0; font-size: var(--text-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cms-item-body { flex: 1; overflow-y: auto; padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); }
-/* Fiche : libellé à gauche, contrôle à droite ; textes longs sous leur libellé. */
-.cms-item-field { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: var(--s-2); align-items: center; }
-.cms-item-field.is-long { grid-template-columns: 1fr; gap: 6px; align-items: stretch; }
+/* Fiche : libellé au-dessus du contrôle (libellés du schéma souvent longs) ; case à cocher sur
+   la ligne de son libellé. */
+.cms-item-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: stretch; }
+.cms-item-field.is-inline { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s-2); }
 .cms-item-field .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Libellé : texte, marque d'un champ obligatoire, aide au survol. */
+.cms-label { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.cms-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cms-req { color: var(--danger-text); }
+.cms-label svg.icon { flex: none; width: 12px; height: 12px; color: var(--text-faint); }
+.cms-item-field.is-invalid .input, .cms-item-field.is-invalid .tags-input { border-color: var(--danger-text); }
+.field-error { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--danger-text); }
+/* Objet (référencement…) : ses champs dans un cadre. */
+.cms-object {
+  margin: 0; min-width: 0; padding: var(--s-2) var(--s-3) var(--s-3);
+  display: flex; flex-direction: column; gap: var(--s-3);
+  border: var(--border) solid var(--line); border-radius: var(--radius-md);
+}
+.cms-object > legend { padding: 0 4px; max-width: 100%; }
+/* Choix multiples : pastilles à cocher. */
+.choice-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip--choice { border: var(--border) solid var(--line-strong); background: none; height: 24px; cursor: pointer; }
+.chip--choice:hover:not(:disabled) { color: var(--text); border-color: var(--text-faint); }
+.chip--choice.is-on { background: var(--set-bg); border-color: transparent; color: var(--set-text); }
+.chip--choice:disabled { opacity: .4; cursor: default; }
+.tags-pick { flex: 1; min-width: 90px; height: 20px; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: var(--text-sm); }
+.tags-pick:focus { outline: none; color: var(--text); }
+/* Valeurs repliées (champs cachés, hors schéma). */
+.cms-more { border-top: var(--border) solid var(--line); padding-top: var(--s-2); }
+.cms-more > summary {
+  list-style: none; display: flex; align-items: center; gap: 4px; cursor: default;
+  font-size: var(--text-xs); color: var(--text-muted); font-weight: var(--weight-medium);
+}
+.cms-more > summary::-webkit-details-marker { display: none; }
+.cms-more > summary:hover { color: var(--text); }
+.cms-more > summary svg.icon { width: 12px; height: 12px; transition: transform var(--fast) var(--ease); }
+.cms-more[open] > summary svg.icon { transform: rotate(90deg); }
+.cms-more-body { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
 .cms-item-field > .input, .cms-item-field .cms-image .input { width: 100%; }
 .cms-item-field .switch { justify-self: start; }
 .cms-textarea {

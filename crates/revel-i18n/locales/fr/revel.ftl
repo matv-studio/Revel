@@ -777,3 +777,11 @@ export-running = Export…
 export-reveal = Afficher le dossier
 export-failed = Échec de l’export. { $message }
 publish-building = Préparation des fichiers du site…
+
+# Schéma des collections (étape 3.3)
+cms-required = Champ obligatoire
+cms-required-mark = Obligatoire
+cms-pattern = Format non valide
+cms-json = Valeur non valide : { $detail }
+cms-more = Autres valeurs ({ $count })
+cms-more-help = Champs cachés dans Pages CMS et valeurs absentes du schéma, gardés tels quels

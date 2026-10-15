@@ -17,6 +17,7 @@ pub mod canvas;
 pub mod devserver;
 mod edit;
 mod github;
+pub mod pagescms;
 pub mod preview;
 pub mod secrets;
 mod state;
@@ -642,10 +643,25 @@ impl Core {
             .into_iter()
             .filter_map(|r| Some(((r.collection?, r.file?), r.url)))
             .collect();
-        Ok(p.site
-            .collections
-            .iter()
-            .filter(|c| !c.folder.is_empty())
+        let pages_cms = pagescms::load(&p.dir);
+        // Un dossier lu par plusieurs collections d'Eleventy (`offres`, `toutesOffres`) : une
+        // seule collection affichée, celle qui porte le nom donné par Pages CMS, sinon la
+        // première.
+        let mut kept: Vec<&revel_model::Collection> = Vec::new();
+        for c in p.site.collections.iter().filter(|c| !c.folder.is_empty()) {
+            let named = |x: &revel_model::Collection| {
+                pages_cms
+                    .iter()
+                    .any(|pc| pc.name == x.id && pc.path == pagescms::norm_path(&x.folder))
+            };
+            match kept.iter().position(|k| k.folder == c.folder) {
+                Some(i) if named(c) && !named(kept[i]) => kept[i] = c,
+                Some(_) => {}
+                None => kept.push(c),
+            }
+        }
+        Ok(kept
+            .into_iter()
             .map(|c| {
                 let list: Vec<revel_protocol::CmsEntry> = entries
                     .iter()
@@ -657,8 +673,14 @@ impl Core {
                         url: urls.get(&(c.id.clone(), e.file_stem.clone())).cloned(),
                     })
                     .collect();
-                let fields = if c.fields.is_empty() {
-                    // Sans schéma : clés trouvées dans les en-têtes, dans l'ordre d'apparition.
+                // Schéma : `.pages.yml` (Pages CMS), sinon celui du document, sinon les clés
+                // trouvées dans les en-têtes, dans l'ordre d'apparition.
+                let pages = pages_cms
+                    .iter()
+                    .find(|x| x.path == pagescms::norm_path(&c.folder));
+                let fields = if let Some(pc) = pages {
+                    pc.fields.clone()
+                } else if c.fields.is_empty() {
                     let mut names: Vec<String> = Vec::new();
                     for e in &list {
                         if let serde_json::Value::Object(m) = &e.data {
@@ -673,8 +695,7 @@ impl Core {
                         .into_iter()
                         .map(|name| revel_protocol::CmsField {
                             name,
-                            label: None,
-                            kind: None,
+                            ..Default::default()
                         })
                         .collect()
                 } else {
@@ -686,13 +707,18 @@ impl Core {
                             kind: serde_json::to_value(&f.kind).ok().and_then(|v| {
                                 v.get("type").and_then(|t| t.as_str()).map(str::to_string)
                             }),
+                            ..Default::default()
                         })
                         .collect()
                 };
                 revel_protocol::CmsCollection {
                     id: c.id.clone(),
+                    label: pages.and_then(|x| x.label.clone()),
                     folder: c.folder.clone(),
                     fields,
+                    schema: pages.map(|x| x.name.clone()),
+                    view: pages.and_then(|x| x.view.clone()),
+                    filename: pages.and_then(|x| x.filename.clone()),
                     entries: list,
                 }
             })

@@ -680,6 +680,54 @@ fn contenus_modifies_crees_supprimes_et_annules() {
 }
 
 #[test]
+fn schema_des_collections_lu_dans_pages_cms() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        // Deux collections d'Eleventy sur le même dossier : une seule dans la vue CMS.
+        for id in ["toutesOffres", "offres"] {
+            p.site.collections.push(revel_model::Collection {
+                id: id.into(),
+                source: revel_model::CollectionSource::Folder,
+                folder: "contenus/offres".into(),
+                path: None,
+                layout: None,
+                props: Default::default(),
+                filter: None,
+                sort: None,
+                fields: vec![],
+            });
+        }
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("contenus/offres")).unwrap();
+        std::fs::write(
+            site.join("contenus/offres/stage.md"),
+            "---\ntitle: Stage\nville: Lyon\n---\n",
+        )
+        .unwrap();
+    }
+    std::fs::write(
+        site.join(".pages.yml"),
+        "content:\n  - name: offres\n    label: Offres d'emploi\n    type: collection\n    path: contenus/offres/\n    view: { primary: title, sort: date, order: desc }\n    fields:\n      - { name: title, label: Titre, type: string, required: true }\n      - { name: date, type: date, options: { time: true } }\n",
+    )
+    .unwrap();
+    let cms = c.cms(&site).unwrap();
+    assert_eq!(cms.len(), 1);
+    let o = &cms[0];
+    assert_eq!(o.id, "offres");
+    assert_eq!(o.schema.as_deref(), Some("offres"));
+    assert_eq!(o.label.as_deref(), Some("Offres d'emploi"));
+    assert_eq!(o.fields.len(), 2);
+    assert!(o.fields[0].required);
+    assert_eq!(o.fields[1].options["time"], true);
+    assert!(o.view.as_ref().unwrap().descending);
+    // La valeur hors du schéma reste dans le contenu (la fiche l'affiche à part).
+    assert_eq!(o.entries[0].data["ville"], "Lyon");
+}
+
+#[test]
 fn apercu_sans_generation_et_export() {
     let d = tempfile::tempdir().unwrap();
     let c = core(d.path());

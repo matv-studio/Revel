@@ -39,13 +39,36 @@
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).
   const cms = [
-    { id: "projets", folder: "src/content/projets", fields: [
-      { name: "title", label: "Titre", kind: "string" }, { name: "client", kind: "string" }, { name: "date", kind: "date" },
-      { name: "categories", kind: "list" }, { name: "cover", label: "Image", kind: "image" }, { name: "featured", label: "À la une", kind: "boolean" } ],
+    { id: "projets", label: "Projets", schema: "projets", folder: "src/content/projets", filename: "{fields.slug}.md",
+      view: { primary: "title", fields: ["title", "client", "date", "expertises", "published"], sort: "date", descending: true },
+      fields: [
+        { name: "title", label: "Titre", kind: "string", required: true },
+        { name: "slug", label: "Adresse de la page (slug)", kind: "string", required: true, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          description: "La page sera publiée sur /project/<slug>/. Ne plus modifier après publication (référencement)." },
+        { name: "published", label: "Publié", kind: "boolean", default: true },
+        { name: "date", label: "Date", kind: "date", options: { time: true, format: "yyyy-MM-dd'T'HH:mm:ss" } },
+        { name: "client", label: "Client", kind: "string" },
+        { name: "expertises", label: "Expertises", kind: "reference", options: { collection: "expertises", multiple: true, value: "{fields.slug}", label: "{fields.title}" } },
+        { name: "format", label: "Format", kind: "select", options: { values: [{ name: "film", label: "Film" }, { name: "motion", label: "Motion design" }, { name: "photo", label: "Photographie" }] } },
+        { name: "cover", label: "Image principale", kind: "image", required: true },
+        { name: "hook", label: "Accroche (une ligne par entrée)", kind: "string", list: true },
+        { name: "intro", label: "Texte d'introduction", kind: "rich_text", options: { format: "html" } },
+        { name: "seo", label: "Référencement (SEO)", kind: "object", fields: [
+          { name: "title", label: "Titre SEO", kind: "string", description: "Affiché dans Google." },
+          { name: "description", label: "Description SEO", kind: "text" } ] },
+        { name: "wp_id", label: "Identifiant WordPress", kind: "number", hidden: true },
+      ],
       entries: [
-        { file: "wattr", data: { title: "Wattr", client: "Wattr", date: "2025-03-12", categories: ["Film", "IA"], cover: "/media/projets/wattr.jpg", featured: true }, body: "## Le projet\n\nUn film pour **Wattr**.\n", url: "/project/wattr/" },
-        { file: "lumen", data: { title: "Atelier Lumen", client: "Lumen", date: "2024-11-02", categories: ["Motion"], cover: "/media/projets/lumen.jpg", featured: false }, body: "Texte.\n", url: "/project/lumen/" },
-        { file: "oka", data: { title: "Maison Oka", client: "Oka", date: "2024-06-20", categories: ["Film"], cover: "/media/projets/oka.jpg", draft: true }, body: "", url: null },
+        { file: "wattr", data: { title: "Wattr", slug: "wattr", published: true, date: "2025-03-12T10:00:00", client: "Wattr", expertises: ["film", "ia"], format: "film", cover: "/media/projets/wattr.jpg", hook: ["Un film", "pour Wattr"], intro: "<p>Un film pour <strong>Wattr</strong>.</p>", seo: { title: "Wattr, le film" }, wp_id: 812 }, body: "", url: "/project/wattr/" },
+        { file: "lumen", data: { title: "Atelier Lumen", slug: "lumen", published: true, date: "2024-11-02T09:30:00", client: "Lumen", expertises: ["motion"], format: "motion", cover: "/media/projets/lumen.jpg" }, body: "", url: "/project/lumen/" },
+        { file: "oka", data: { title: "Maison Oka", slug: "oka", published: false, date: "2024-06-20T14:00:00", client: "Oka", expertises: [], cover: "/media/projets/oka.jpg" }, body: "", url: null },
+      ] },
+    { id: "expertises", label: "Expertises", schema: "expertises", folder: "src/content/expertises",
+      fields: [{ name: "title", label: "Titre", kind: "string", required: true }, { name: "slug", kind: "string" }],
+      entries: [
+        { file: "film", data: { title: "Film et vidéo", slug: "film" }, body: "", url: "/expertises/film/" },
+        { file: "motion", data: { title: "Motion design", slug: "motion" }, body: "", url: "/expertises/motion/" },
+        { file: "ia", data: { title: "Création par IA", slug: "ia" }, body: "", url: "/expertises/ia/" },
       ] },
     { id: "actualites", folder: "src/content/actualites", fields: [], entries: [
         { file: "salon-2026", data: { title: "Salon 2026", date: "2026-02-01", tags: ["événement"] }, body: "Le salon.\n", url: "/actualites/salon-2026/" } ] },

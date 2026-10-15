@@ -1,8 +1,11 @@
-//! Vue CMS (étapes 2.12, 3.1) : collections de contenus en tableau (recherche, tri) et fiche du
-//! contenu choisi, modifiable champ par champ ; création et suppression de contenus. Chaque
-//! modification est une commande (`SetEntryField`, `SetEntryBody`, `CreateEntry`, `WriteEntry`)
-//! appliquée par le cœur, annulable (Ctrl+Z) ; le fichier Markdown reste lisible par Pages CMS.
+//! Vue CMS (étapes 2.12, 3.1, 3.3) : collections de contenus en tableau (recherche, tri) et fiche
+//! du contenu choisi, modifiable champ par champ ; création et suppression de contenus. Le schéma
+//! de Pages CMS (`.pages.yml`) donne les libellés, les colonnes, le tri et les contrôles
+//! (`cmsfields`). Chaque modification est une commande (`SetEntryField`, `SetEntryBody`,
+//! `CreateEntry`, `WriteEntry`) appliquée par le cœur, annulable (Ctrl+Z) ; le fichier Markdown
+//! reste lisible par Pages CMS.
 
+use crate::cmsfields::{self, Cols, field_row, label_of};
 use crate::dialog::Ask;
 use crate::panels::PlannedButton;
 use crate::site::capitalize;
@@ -13,6 +16,7 @@ use leptos::task::spawn_local;
 use revel_edit::{Command, EditState};
 use revel_protocol::{CmsCollection, CmsEntry, CmsField, SiteSummary};
 use serde_json::Value;
+use std::collections::HashMap;
 
 /// Variables techniques des en-têtes, gardées hors du tableau (visibles dans la fiche).
 const HIDDEN: &[&str] = &[
@@ -24,41 +28,122 @@ const HIDDEN: &[&str] = &[
 ];
 /// Noms habituels du champ titre.
 const TITLES: &[&str] = &["title", "titre", "name", "nom"];
-/// Colonnes affichées en plus du titre.
+/// Colonnes affichées en plus du titre (sans colonnes déclarées par le schéma).
 const MAX_COLUMNS: usize = 5;
 
-/// Libellé d'un champ : celui du schéma, sinon le nom mis en forme (`date_debut` -> « Date debut »).
-fn field_label(f: &CmsField) -> String {
-    f.label
-        .clone()
-        .unwrap_or_else(|| capitalize(&f.name.replace(['_', '-'], " ")))
+/// Nom affiché d'une collection.
+fn col_label(c: &CmsCollection) -> String {
+    c.label.clone().unwrap_or_else(|| capitalize(&c.id))
+}
+
+/// Champ principal (titre) : celui du schéma, sinon un nom habituel, sinon (schéma) le premier
+/// champ simple.
+fn primary_of(c: &CmsCollection) -> Option<String> {
+    if let Some(p) = c.view.as_ref().and_then(|v| v.primary.clone()) {
+        return Some(p);
+    }
+    c.fields
+        .iter()
+        .find(|f| TITLES.contains(&f.name.to_lowercase().as_str()))
+        .or_else(|| {
+            c.schema.as_ref().and(
+                c.fields
+                    .iter()
+                    .find(|f| !f.hidden && !matches!(f.kind.as_deref(), Some("object" | "block"))),
+            )
+        })
+        .map(|f| f.name.clone())
+}
+
+/// Colonnes du tableau : celles du schéma (`view.fields`), sinon les premiers champs simples.
+fn columns_of(c: &CmsCollection, primary: Option<&String>) -> Vec<CmsField> {
+    if let Some(v) = c.view.as_ref().filter(|v| !v.fields.is_empty()) {
+        return v
+            .fields
+            .iter()
+            .filter(|n| Some(*n) != primary)
+            .map(|n| {
+                c.fields
+                    .iter()
+                    .find(|f| &f.name == n)
+                    .cloned()
+                    .unwrap_or_else(|| CmsField {
+                        name: n.clone(),
+                        ..Default::default()
+                    })
+            })
+            .collect();
+    }
+    c.fields
+        .iter()
+        .filter(|f| {
+            Some(&f.name) != primary
+                && !f.hidden
+                && !HIDDEN.contains(&f.name.as_str())
+                && !matches!(
+                    f.kind.as_deref(),
+                    Some("object" | "block" | "rich_text" | "code")
+                )
+        })
+        .take(MAX_COLUMNS)
+        .cloned()
+        .collect()
+}
+
+/// Libellés des valeurs d'une colonne de choix ou de références.
+fn value_labels(cols: &[CmsCollection], f: &CmsField) -> Option<HashMap<String, String>> {
+    match f.kind.as_deref() {
+        Some("select") => Some(cmsfields::choices(f).into_iter().collect()),
+        Some("reference") => Some(cmsfields::reference_choices(cols, f).into_iter().collect()),
+        _ => None,
+    }
 }
 
 /// Valeur d'un champ en texte court (cellule du tableau).
-fn cell(ui: Ui, v: Option<&Value>) -> String {
+fn cell(
+    ui: Ui,
+    f: &CmsField,
+    v: Option<&Value>,
+    labels: Option<&HashMap<String, String>>,
+) -> String {
+    let name = |s: &str| {
+        labels
+            .and_then(|l| l.get(s))
+            .cloned()
+            .unwrap_or_else(|| s.to_string())
+    };
     match v {
         None | Some(Value::Null) => String::new(),
         Some(Value::Bool(b)) => if *b { "✓" } else { "—" }.to_string(),
         Some(Value::Number(n)) => n.to_string(),
         Some(Value::String(s)) => {
-            // Date ISO : date locale ; chemin de fichier : son nom.
-            if s.len() >= 10 && s.as_bytes()[4] == b'-' && s.as_bytes()[7] == b'-' {
-                let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(s));
-                if !d.get_time().is_nan() {
+            // Date : date locale (et heure si le champ en a une).
+            if cmsfields::is_date(s) || f.kind.as_deref() == Some("date") {
+                let iso = if f.kind.as_deref() == Some("date") {
+                    cmsfields::date_read(f, s)
+                } else {
+                    s.clone()
+                };
+                let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(&iso));
+                if !iso.is_empty() && !d.get_time().is_nan() {
                     let opts = js_sys::Object::new();
                     let _ = js_sys::Reflect::set(&opts, &"dateStyle".into(), &"medium".into());
+                    if iso.len() > 10 {
+                        let _ = js_sys::Reflect::set(&opts, &"timeStyle".into(), &"short".into());
+                    }
                     return d
-                        .to_locale_date_string(&ui.lang(), &opts)
+                        .to_locale_string(&ui.lang(), &opts)
                         .as_string()
                         .unwrap_or_else(|| s.clone());
                 }
             }
-            s.clone()
+            name(s)
         }
         Some(Value::Array(a)) => {
-            if a.iter().all(|x| x.is_string()) && a.len() <= 3 {
+            if a.iter().all(|x| x.is_string()) && (a.len() <= 3 || labels.is_some()) {
                 a.iter()
                     .filter_map(|x| x.as_str())
+                    .map(name)
                     .collect::<Vec<_>>()
                     .join(", ")
             } else {
@@ -86,6 +171,66 @@ fn is_draft(e: &CmsEntry) -> bool {
         || e.data.get("published").and_then(Value::as_bool) == Some(false)
 }
 
+/// Nouveau contenu : nom de fichier (modèle de la collection, sinon tiré du titre, unique) et
+/// en-tête dans l'ordre du schéma : titre, adresse (`slug`) tirée du titre, valeurs par défaut,
+/// date du jour pour les dates (comme Pages CMS).
+fn new_entry_data(c: &CmsCollection, primary: &str, title: &str) -> (String, Value) {
+    let taken = |s: &str| {
+        c.entries
+            .iter()
+            .any(|e| e.file == s || e.data.get("slug").and_then(Value::as_str) == Some(s))
+    };
+    let unique = |base: String| {
+        let mut s = base.clone();
+        let mut n = 2;
+        while taken(&s) {
+            s = format!("{base}-{n}");
+            n += 1;
+        }
+        s
+    };
+    let slug = unique(cmsfields::slugify(title));
+    let mut data = serde_json::Map::new();
+    if c.schema.is_none() {
+        data.insert(primary.into(), Value::String(title.into()));
+        if c.fields.iter().any(|f| f.name == "date") {
+            let iso = js_sys::Date::new_0()
+                .to_iso_string()
+                .as_string()
+                .unwrap_or_default();
+            data.insert("date".into(), Value::String(iso.chars().take(10).collect()));
+        }
+        return (slug, Value::Object(data));
+    }
+    for f in c.fields.iter().filter(|f| !f.hidden) {
+        let v = if f.name == primary {
+            Some(Value::String(title.into()))
+        } else if let Some(d) = &f.default {
+            Some(d.clone())
+        } else if f.name == "slug" && matches!(f.kind.as_deref(), None | Some("string")) {
+            Some(Value::String(slug.clone()))
+        } else if f.kind.as_deref() == Some("date") && !f.list {
+            Some(Value::String(cmsfields::date_now(f)))
+        } else {
+            None
+        };
+        if let Some(v) = v {
+            data.insert(f.name.clone(), v);
+        }
+    }
+    if !data.contains_key(primary) {
+        data.insert(primary.into(), Value::String(title.into()));
+    }
+    let data = Value::Object(data);
+    let file = c
+        .filename
+        .as_deref()
+        .and_then(|t| cmsfields::file_from_template(t, primary, &data))
+        .map(|f| if f == slug { f } else { unique(f) })
+        .unwrap_or(slug);
+    (file, data)
+}
+
 #[component]
 pub fn CmsView(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -93,7 +238,8 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     let current = RwSignal::new(None::<String>);
     let open = RwSignal::new(None::<String>);
     let query = RwSignal::new(String::new());
-    let sort = RwSignal::new(None::<(String, bool)>);
+    // Tri choisi ; `None` : celui du schéma (`view.sort`).
+    let sort = RwSignal::new(None::<Option<(String, bool)>>);
     let state = RwSignal::new(None::<EditState>);
     let path = StoredValue::new(site.path.clone());
     let reload = move || {
@@ -217,19 +363,17 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     // Champ titre et colonnes affichées.
     let layout = Memo::new(move |_| {
         let c = col.get()?;
-        let title = c
-            .fields
-            .iter()
-            .find(|f| TITLES.contains(&f.name.to_lowercase().as_str()))
-            .map(|f| f.name.clone());
-        let columns: Vec<CmsField> = c
-            .fields
-            .iter()
-            .filter(|f| Some(&f.name) != title.as_ref() && !HIDDEN.contains(&f.name.as_str()))
-            .take(MAX_COLUMNS)
-            .cloned()
-            .collect();
+        let title = primary_of(&c);
+        let columns = columns_of(&c, title.as_ref());
         Some((title, columns))
+    });
+    let sorting = Memo::new(move |_| {
+        sort.get().unwrap_or_else(|| {
+            col.with(|c| {
+                let v = c.as_ref()?.view.as_ref()?;
+                Some((v.sort.clone()?, v.descending))
+            })
+        })
     });
     let rows = Memo::new(move |_| {
         let Some(c) = col.get() else {
@@ -246,7 +390,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                     || e.data.to_string().to_lowercase().contains(&q)
             })
             .collect();
-        if let Some((field, desc)) = sort.get() {
+        if let Some((field, desc)) = sorting.get() {
             let key = |e: &CmsEntry| -> String {
                 if Some(&field) == title.as_ref() {
                     entry_title(e, &title).to_lowercase()
@@ -267,16 +411,15 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         list
     });
     let sort_by = move |field: String| {
-        sort.update(|s| {
-            *s = match s.take() {
-                Some((f, false)) if f == field => Some((f, true)),
-                Some((f, true)) if f == field => None,
-                _ => Some((field, false)),
-            }
-        })
+        let next = match sorting.get_untracked() {
+            Some((f, false)) if f == field => Some((f, true)),
+            Some((f, true)) if f == field => None,
+            _ => Some((field, false)),
+        };
+        sort.set(Some(next));
     };
     let sort_mark = move |field: &str| {
-        sort.with(|s| match s {
+        sorting.with(|s| match s {
             Some((f, false)) if f == field => "↑",
             Some((f, true)) if f == field => "↓",
             _ => "",
@@ -286,40 +429,33 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         ui.goto_page.set(Some(url));
         ui.tab(Tab::Editor);
     };
-    // Nouveau contenu : titre demandé, nom de fichier tiré du titre (unique dans la collection).
+    // Nouveau contenu : titre demandé ; nom de fichier et valeurs d'après le schéma.
     let new_entry = move |_| {
         let Some(c) = col.get_untracked() else {
             return;
         };
-        let title_key = layout
+        let primary = layout
             .get_untracked()
             .and_then(|l| l.0)
             .unwrap_or_else(|| "title".into());
+        let label = c
+            .fields
+            .iter()
+            .find(|f| f.name == primary && f.label.is_some())
+            .map(label_of)
+            .unwrap_or_else(|| ui.now("cms-entry-title", &[]));
         ui.ask.set(Some(Ask::input(
             ui.now("cms-entry-new", &[]),
-            ui.now("cms-entry-title", &[]),
+            label,
             String::new(),
             ui.now("action-create", &[]),
             move |title| {
-                let base = slugify(&title);
-                let mut file = base.clone();
-                let mut n = 2;
-                while c.entries.iter().any(|e| e.file == file) {
-                    file = format!("{base}-{n}");
-                    n += 1;
-                }
-                let mut data = serde_json::Map::new();
-                data.insert(title_key.clone(), Value::String(title));
-                if c.fields.iter().any(|f| f.name == "date") {
-                    let d = js_sys::Date::new_0();
-                    let iso = d.to_iso_string().as_string().unwrap_or_default();
-                    data.insert("date".into(), Value::String(iso.chars().take(10).collect()));
-                }
+                let (file, data) = new_entry_data(&c, &primary, &title);
                 open.set(Some(file.clone()));
                 apply.run(Command::CreateEntry {
                     folder: c.folder.clone(),
                     file,
-                    data: Value::Object(data),
+                    data,
                     body: String::new(),
                 });
             },
@@ -360,7 +496,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                     data-collection=c.id.clone() title=c.folder.clone()
                                     on:click=move |_| current.set(Some(id2.clone()))>
                                     <span class="list-icon">{icons::database()}</span>
-                                    <span class="list-label">{capitalize(&c.id)}</span>
+                                    <span class="list-label">{col_label(&c)}</span>
                                     <span class="list-count">{c.entries.len()}</span>
                                 </button>
                             }
@@ -376,7 +512,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 {move || col.get().map(|c| view! {
                     <header class="cms-head">
                         <div class="cms-title">
-                            <h1>{capitalize(&c.id)}</h1>
+                            <h1 title=c.folder.clone()>{col_label(&c)}</h1>
                             <span class="muted path" title=c.folder.clone()>{c.folder.clone()}</span>
                         </div>
                         <label class="panel-search cms-search">
@@ -408,7 +544,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                     <thead><tr>
                                         <th class="cms-th-title">
                                             <button class="th-sort" on:click=move |_| sort_by(tkey.clone())>
-                                                {title.as_ref().and_then(|t| col.get().and_then(|c| c.fields.into_iter().find(|f| &f.name == t))).map(|f| field_label(&f)).unwrap_or_else(|| ui.tx("cms-file", &[]))}
+                                                {title.as_ref().and_then(|t| col.get().and_then(|c| c.fields.into_iter().find(|f| &f.name == t))).map(|f| label_of(&f)).unwrap_or_else(|| ui.tx("cms-file", &[]))}
                                                 <span class="th-mark">{move || sort_mark(&tkey2)}</span>
                                             </button>
                                         </th>
@@ -416,7 +552,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                             let (n1, n2) = (f.name.clone(), f.name.clone());
                                             view! {
                                                 <th><button class="th-sort" on:click=move |_| sort_by(n1.clone())>
-                                                    {field_label(f)}<span class="th-mark">{move || sort_mark(&n2)}</span>
+                                                    {label_of(f)}<span class="th-mark">{move || sort_mark(&n2)}</span>
                                                 </button></th>
                                             }
                                         }).collect_view()}
@@ -426,6 +562,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                         {move || {
                                             let title = title.clone();
                                             let columns = columns.clone();
+                                            let labels: Vec<Option<HashMap<String, String>>> = cols.with(|all| {
+                                                let all = all.as_deref().unwrap_or_default();
+                                                columns.iter().map(|f| value_labels(all, f)).collect()
+                                            });
                                             let list = rows.get();
                                             if list.is_empty() {
                                                 return view! {
@@ -445,8 +585,8 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                             <span class="cms-cell">{entry_title(&e, &title)}</span>
                                                             {draft.then(|| view! { <span class="chip chip--draft">{ui.t("cms-draft")}</span> })}
                                                         </div></td>
-                                                        {columns.iter().map(|f| view! {
-                                                            <td class="muted"><span class="cms-cell">{cell(ui, e.data.get(&f.name))}</span></td>
+                                                        {columns.iter().zip(&labels).map(|(f, l)| view! {
+                                                            <td class="muted"><span class="cms-cell">{cell(ui, f, e.data.get(&f.name), l.as_ref())}</span></td>
                                                         }).collect_view()}
                                                         <td class="col-actions">
                                                             {url.map(|u| view! {
@@ -477,118 +617,22 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 </footer>
             </section>
             {move || open.get().map(|file| view! {
-                <EntryForm file=file col=col title=Signal::derive(move || layout.get().and_then(|l| l.0))
+                <EntryForm file=file col=col cols=Signal::derive(move || cols.get()) title=Signal::derive(move || layout.get().and_then(|l| l.0))
                     apply=apply delete=delete close=Callback::new(move |()| open.set(None)) goto=Callback::new(goto)/>
             })}
         </div>
     }
 }
 
-/// Nom de fichier tiré d'un titre (`L'Été à Oka` -> `l-ete-a-oka`).
-fn slugify(s: &str) -> String {
-    let mut out = String::new();
-    for c in s.trim().to_lowercase().chars() {
-        let c = match c {
-            'à' | 'á' | 'â' | 'ä' | 'ã' | 'å' => 'a',
-            'ç' => 'c',
-            'è' | 'é' | 'ê' | 'ë' => 'e',
-            'ì' | 'í' | 'î' | 'ï' => 'i',
-            'ñ' => 'n',
-            'ò' | 'ó' | 'ô' | 'ö' | 'õ' => 'o',
-            'ù' | 'ú' | 'û' | 'ü' => 'u',
-            'ý' | 'ÿ' => 'y',
-            'œ' => {
-                out.push('o');
-                'e'
-            }
-            'æ' => {
-                out.push('a');
-                'e'
-            }
-            c if c.is_ascii_alphanumeric() => c,
-            _ => '-',
-        };
-        if c != '-' || !out.ends_with('-') {
-            out.push(c);
-        }
-    }
-    let out = out.trim_matches('-').chars().take(80).collect::<String>();
-    if out.is_empty() {
-        "contenu".into()
-    } else {
-        out
-    }
-}
-
-/// Type de contrôle d'un champ : celui du schéma, sinon déduit de la valeur.
-#[derive(Clone, Debug, PartialEq)]
-enum Kind {
-    Text,
-    LongText,
-    Rich,
-    Image,
-    Date,
-    Bool,
-    Number,
-    List,
-    Reference(Option<String>),
-    Json,
-}
-
-fn kind_of(f: &CmsField, v: Option<&Value>) -> Kind {
-    match f.kind.as_deref() {
-        Some("string") => return Kind::Text,
-        Some("text") => return Kind::LongText,
-        Some("rich_text") => return Kind::Rich,
-        Some("image") => return Kind::Image,
-        Some("date") => return Kind::Date,
-        Some("boolean") => return Kind::Bool,
-        Some("number") => return Kind::Number,
-        Some("list")
-            if v.is_none_or(|v| v.as_array().is_some_and(|a| a.iter().all(Value::is_string))) =>
-        {
-            return Kind::List;
-        }
-        Some("reference") => return Kind::Reference(None),
-        _ => {}
-    }
-    match v {
-        Some(Value::Bool(_)) => Kind::Bool,
-        Some(Value::Number(_)) => Kind::Number,
-        Some(Value::Array(a)) if a.iter().all(Value::is_string) => Kind::List,
-        Some(Value::Array(_) | Value::Object(_)) => Kind::Json,
-        Some(Value::String(s)) if is_date(s) => Kind::Date,
-        Some(Value::String(s)) if is_image(s) => Kind::Image,
-        Some(Value::String(s)) if crate::richtext::looks_like_html(s) => Kind::Rich,
-        Some(Value::String(s)) if s.contains('\n') || s.chars().count() > 90 => Kind::LongText,
-        _ => Kind::Text,
-    }
-}
-
-fn is_date(s: &str) -> bool {
-    let b = s.as_bytes();
-    b.len() >= 10
-        && b[..4].iter().all(u8::is_ascii_digit)
-        && b[4] == b'-'
-        && b[7] == b'-'
-        && b[5..7].iter().all(u8::is_ascii_digit)
-        && b[8..10].iter().all(u8::is_ascii_digit)
-}
-
-fn is_image(s: &str) -> bool {
-    let l = s.to_lowercase();
-    [".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg"]
-        .iter()
-        .any(|e| l.ends_with(e))
-}
-
-/// Fiche d'un contenu : chaque champ modifiable (valeur écrite à la sortie du champ), texte,
-/// suppression, ouverture de la page dans l'éditeur. La fiche n'est pas reconstruite quand les
-/// données sont relues : le champ en cours de saisie garde le focus.
+/// Fiche d'un contenu : chaque champ du schéma modifiable (valeur écrite à la sortie du champ),
+/// texte, suppression, ouverture de la page dans l'éditeur ; champs cachés et valeurs hors du
+/// schéma repliés en bas. La fiche n'est pas reconstruite quand les données sont relues : le
+/// champ en cours de saisie garde le focus.
 #[component]
 fn EntryForm(
     file: String,
     col: Memo<Option<CmsCollection>>,
+    cols: Cols,
     title: Signal<Option<String>>,
     apply: Callback<Command>,
     delete: Callback<(String, String, String)>,
@@ -610,6 +654,24 @@ fn EntryForm(
         move || col.with_untracked(|c| c.as_ref().map(|c| c.folder.clone()).unwrap_or_default());
     let fields: Vec<CmsField> =
         col.with_untracked(|c| c.as_ref().map(|c| c.fields.clone()).unwrap_or_default());
+    // Valeurs hors du schéma (gardées telles quelles, comme le fait Pages CMS).
+    let extra: Vec<CmsField> = entry.with_untracked(|e| {
+        e.as_ref()
+            .and_then(|e| e.data.as_object())
+            .map(|m| {
+                m.keys()
+                    .filter(|k| !fields.iter().any(|f| &f.name == *k))
+                    .map(|k| CmsField {
+                        name: k.clone(),
+                        ..Default::default()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    });
+    let (shown, mut more): (Vec<CmsField>, Vec<CmsField>) =
+        fields.into_iter().partition(|f| !f.hidden);
+    more.extend(extra);
     let set = move |key: String, value: Option<Value>| {
         // Rien à écrire si la valeur n'a pas changé.
         let old = entry.with_untracked(|e| e.as_ref().and_then(|e| e.data.get(&key).cloned()));
@@ -623,13 +685,27 @@ fn EntryForm(
             value,
         });
     };
-    let value_of =
-        move |key: &str| entry.with(|e| e.as_ref().and_then(|e| e.data.get(key).cloned()));
+    let row = move |f: CmsField| {
+        let key = StoredValue::new(f.name.clone());
+        let value = Signal::derive(move || {
+            entry.with(|e| {
+                e.as_ref()
+                    .and_then(|e| e.data.get(key.get_value()).cloned())
+            })
+        });
+        field_row(
+            f,
+            value,
+            Callback::new(move |v| set(key.get_value(), v)),
+            cols,
+        )
+    };
     let heading = move || {
         entry
             .with(|e| e.as_ref().map(|e| entry_title(e, &title.get())))
             .unwrap_or_default()
     };
+    let more_count = more.len();
     view! {
         <aside class="cms-item" aria-label=ui.t("cms-entry") data-entry=file.get_value()>
             <header class="cms-item-head">
@@ -638,102 +714,8 @@ fn EntryForm(
                     on:click=move |_| close.run(())>{icons::close()}</button>
             </header>
             <div class="cms-item-body">
-                {fields.into_iter().map(|f| {
-                    let kind = kind_of(&f, entry.with_untracked(|e| e.as_ref().and_then(|e| e.data.get(&f.name).cloned())).as_ref());
-                    let label = field_label(&f);
-                    let key = StoredValue::new(f.name.clone());
-                    let text = move || match value_of(&key.get_value()) {
-                        Some(Value::String(s)) => s,
-                        Some(Value::Number(n)) => n.to_string(),
-                        Some(v @ (Value::Array(_) | Value::Object(_))) => serde_json::to_string_pretty(&v).unwrap_or_default(),
-                        _ => String::new(),
-                    };
-                    let commit_text = move |v: String| set(key.get_value(), Some(Value::String(v)));
-                    let date_text = move || text().chars().take(10).collect::<String>();
-                    let control = match kind {
-                        Kind::Bool => view! {
-                            <label class="switch">
-                                <input type="checkbox" prop:checked=move || matches!(value_of(&key.get_value()), Some(Value::Bool(true)))
-                                    on:change=move |e| set(key.get_value(), Some(Value::Bool(event_target_checked(&e))))/>
-                                <span class="switch-track"></span>
-                            </label>
-                        }.into_any(),
-                        Kind::Number => view! {
-                            <input class="input" type="number" step="any" prop:value=text
-                                on:change=move |e| {
-                                    let v = event_target_value(&e);
-                                    let n = v.trim().parse::<f64>().ok().and_then(|x| {
-                                        if x.fract() == 0.0 && x.abs() < 1e15 { Some(serde_json::Number::from(x as i64)) } else { serde_json::Number::from_f64(x) }
-                                    });
-                                    set(key.get_value(), Some(n.map(Value::Number).unwrap_or(Value::Null)));
-                                }/>
-                        }.into_any(),
-                        Kind::Date => view! {
-                            <input class="input" type="date" prop:value=date_text
-                                on:change=move |e| {
-                                    let v = event_target_value(&e);
-                                    // L'heure éventuelle de l'ancienne valeur est gardée.
-                                    let old = text();
-                                    let v = if v.is_empty() { v } else if old.len() > 10 && is_date(&old) { format!("{v}{}", &old[10..]) } else { v };
-                                    commit_text(v)
-                                }/>
-                        }.into_any(),
-                        Kind::Rich => {
-                            let format = if text().trim().is_empty() || crate::richtext::looks_like_html(&text()) {
-                                crate::richtext::Format::Html
-                            } else {
-                                crate::richtext::Format::Markdown
-                            };
-                            view! {
-                                <crate::richtext::RichText value=Signal::derive(text) format=format
-                                    on_commit=Callback::new(move |v: String| commit_text(v))/>
-                            }.into_any()
-                        }
-                        Kind::LongText => view! {
-                            <textarea class="input cms-textarea" rows="4" prop:value=text
-                                on:change=move |e| commit_text(event_target_value(&e))></textarea>
-                        }.into_any(),
-                        Kind::Json => view! {
-                            <textarea class="input cms-textarea cms-json" rows="5" spellcheck="false" prop:value=text
-                                on:change=move |e| {
-                                    match serde_json::from_str::<Value>(&event_target_value(&e)) {
-                                        Ok(v) => set(key.get_value(), Some(v)),
-                                        Err(err) => ui.fail(revel_protocol::Failure::detail(err.to_string())),
-                                    }
-                                }></textarea>
-                        }.into_any(),
-                        Kind::List => view! { <TagsInput value=Signal::derive(move || value_of(&key.get_value())) set=Callback::new(move |v: Value| set(key.get_value(), Some(v)))/> }.into_any(),
-                        Kind::Image => view! {
-                            <div class="cms-image">
-                                <input class="input" type="text" spellcheck="false" prop:value=text
-                                    on:change=move |e| commit_text(event_target_value(&e))/>
-                            </div>
-                        }.into_any(),
-                        Kind::Text | Kind::Reference(_) => view! {
-                            <input class="input" type="text" prop:value=text
-                                on:change=move |e| commit_text(event_target_value(&e))/>
-                        }.into_any(),
-                    };
-                    let long = matches!(kind, Kind::LongText | Kind::Rich | Kind::Json);
-                    // Contrôle composé (texte riche, liste à pastilles) : pas dans un `<label>`, qui
-                    // renverrait chaque clic vers son premier bouton.
-                    if matches!(kind, Kind::Rich | Kind::List) {
-                        view! {
-                            <div class="cms-item-field" class:is-long=long data-field=f.name.clone()>
-                                <span class="label" title=f.name.clone()>{label}</span>
-                                {control}
-                            </div>
-                        }.into_any()
-                    } else {
-                        view! {
-                            <label class="cms-item-field" class:is-long=long data-field=f.name.clone()>
-                                <span class="label" title=f.name.clone()>{label}</span>
-                                {control}
-                            </label>
-                        }.into_any()
-                    }
-                }).collect_view()}
-                <div class="cms-item-field is-long" data-field="--body">
+                {shown.into_iter().map(row).collect_view()}
+                <div class="cms-item-field" data-field="--body">
                     <span class="label">{ui.t("cms-body")}</span>
                     {
                         let body_text = Signal::derive(move || entry.with(|e| e.as_ref().map(|e| e.body.clone()).unwrap_or_default()));
@@ -753,6 +735,15 @@ fn EntryForm(
                         }
                     }
                 </div>
+                {(more_count > 0).then(|| view! {
+                    <details class="cms-more">
+                        <summary title=ui.t("cms-more-help")>
+                            {icons::chevron_right()}
+                            <span>{ui.tx("cms-more", &[("count", more_count.to_string())])}</span>
+                        </summary>
+                        <div class="cms-more-body">{more.into_iter().map(row).collect_view()}</div>
+                    </details>
+                })}
             </div>
             <footer class="cms-item-foot">
                 <span class="muted path cms-item-file" title=move || format!("{}/{}.md", folder(), file.get_value())>
@@ -765,47 +756,5 @@ fn EntryForm(
                 })}
             </footer>
         </aside>
-    }
-}
-
-/// Liste de textes : pastilles (× pour retirer), champ pour ajouter (Entrée).
-#[component]
-fn TagsInput(value: Signal<Option<Value>>, set: Callback<Value>) -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let items = move || -> Vec<String> {
-        value
-            .get()
-            .and_then(|v| v.as_array().cloned())
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|x| x.as_str().map(str::to_string))
-            .collect()
-    };
-    view! {
-        <div class="tags-input">
-            {move || items().into_iter().enumerate().map(|(i, t)| view! {
-                <span class="chip chip--tag">{t}
-                    <button class="chip-x" title=ui.t("action-delete") aria-label=ui.t("action-delete")
-                        on:click=move |e| {
-                            e.prevent_default();
-                            let mut v = items();
-                            if i < v.len() { v.remove(i); }
-                            set.run(Value::Array(v.into_iter().map(Value::String).collect()));
-                        }>{icons::close()}</button>
-                </span>
-            }).collect_view()}
-            <input class="tags-add" type="text" placeholder=ui.t("cms-tag-add")
-                on:keydown=move |e: ev::KeyboardEvent| {
-                    if e.key() != "Enter" { return; }
-                    e.prevent_default();
-                    let input = event_target::<web_sys::HtmlInputElement>(&e);
-                    let t = input.value().trim().to_string();
-                    if t.is_empty() { return; }
-                    input.set_value("");
-                    let mut v = items();
-                    if !v.contains(&t) { v.push(t); }
-                    set.run(Value::Array(v.into_iter().map(Value::String).collect()));
-                }/>
-        </div>
     }
 }

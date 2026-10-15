@@ -311,11 +311,11 @@ try {
       await page.waitForTimeout(200);
       return hint;
     };
-    // Onglet « CMS » déposé dans le groupe de droite.
-    const hint = await dragTo('.dock-tab[data-panel="cms"]', '.dock-col--right .dock-tabs');
-    check('espace de travail : onglet glissé dans une autre colonne', hint && !!(await inCol('right', 'cms')) && !(await inCol('left', 'cms')));
+    // Onglet « Ajouter » déposé dans le groupe de droite.
+    const hint = await dragTo('.dock-tab[data-panel="insert"]', '.dock-col--right .dock-tabs');
+    check('espace de travail : onglet glissé dans une autre colonne', hint && !!(await inCol('right', 'insert')) && !(await inCol('left', 'insert')));
     const saved = await page.evaluate(() => localStorage.getItem('revel.workspace.v1') || '');
-    check('espace de travail : disposition gardée', saved.includes('"cms"') && JSON.parse(saved).right[0].tabs.includes('cms'));
+    check('espace de travail : disposition gardée', saved.includes('"insert"') && JSON.parse(saved).right[0].tabs.includes('insert'));
     // Fenêtre flottante : onglet « Médias » déposé sur le canevas.
     await page.click('.dock-tab[data-panel="assets"]');
     await dragTo('.dock-tab[data-panel="assets"]', '.canvas-area', { x: 200, y: 160 });
@@ -392,7 +392,7 @@ try {
     await page.click('.panels-menu > summary');
     await page.click('.panels-pop .menu-item:has-text("Disposition par défaut")');
     await page.click('.panels-menu > summary');
-    check('espace de travail : disposition par défaut rétablie', !!(await inCol('left', 'cms')) && !(await page.$('.dock-float')));
+    check('espace de travail : disposition par défaut rétablie', !!(await inCol('left', 'insert')) && !(await page.$('.dock-float')));
   }
 
   // Calques : recherche, clavier, menu contextuel ; fil d'Ariane ; zoom au clavier.
@@ -424,6 +424,32 @@ try {
     await page.click('.node-path .node-crumb:has-text("section.hero")');
     await page.waitForTimeout(200);
     check('fil d\'Ariane : parent sélectionné', (await page.textContent('.layers .layer.is-selected')).trim() === 'section.hero');
+    // Variables : affectations de la page (plus dans les calques), valeur calculée au rendu ;
+    // expression modifiée sur place, refusée si sa syntaxe est fausse, annulée par Ctrl+Z.
+    const varLayers = await page.$$eval('.layers .layer', (r) => r.filter((e) => /^variable /.test(e.textContent.trim())).length);
+    await page.click('.dock-tab[data-panel="variables"]');
+    await page.waitForSelector('.variables .var[data-var="canonical"] .var-value:not(.is-muted)');
+    const owners = await page.$$eval('.variables .var-owner .list-label', (r) => r.map((e) => e.textContent.trim()));
+    const canon = '.variables .var[data-var="canonical"]';
+    const v0 = (await page.textContent(canon + ' .var-value')).trim();
+    check('variables : rangées par gabarit, page et composant, valeur calculée', varLayers === 0 && owners.includes('base') && owners.includes('header') && /^https?:\/\//.test(v0), `${owners.join(', ')} ; canonical = ${v0}`);
+    const docV = JSON.stringify((await invoke('edit_open')).site);
+    await page.click(canon + ' .var-head');
+    await page.fill(canon + ' .var-expr', 'page.url |');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.notice--error');
+    check('variables : expression invalide refusée, rien n\'est écrit', JSON.stringify((await invoke('edit_open')).site) === docV, (await page.textContent('.notice--error')).trim());
+    await page.click('.notice--error .icon-btn');
+    await page.click(canon + ' .var-head');
+    await page.fill(canon + ' .var-expr', '"https://essai.example/"');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction((sel) => document.querySelector(sel + ' .var-value')?.textContent.trim() === 'https://essai.example/', canon);
+    check('variables : expression modifiée, valeur recalculée', true);
+    await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+    await page.keyboard.press('Control+z');
+    await page.waitForFunction(([sel, v]) => document.querySelector(sel + ' .var-value')?.textContent.trim() === v, [canon, v0]);
+    check('variables : Ctrl+Z, document identique', JSON.stringify((await invoke('edit_open')).site) === docV);
+    await page.click('.dock-tab[data-panel="layers"]');
     await page.keyboard.press('Control+0');
     await page.waitForFunction(() => document.querySelector('iframe.canvas-frame').style.transform === 'scale(1)');
     await page.keyboard.press('Control+1');

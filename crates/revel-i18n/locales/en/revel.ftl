@@ -149,7 +149,6 @@ layers-each = for { $item } in { $list }
 layers-empty-list = if the list is empty
 layers-image = image { $src }
 layers-html = HTML
-layers-var = variable { $name }
 layers-slot = page content
 layers-markdown = content (Markdown)
 layers-badge-component = component
@@ -352,6 +351,7 @@ error-edit-move = An element cannot be placed inside itself.
 error-edit-tag = Invalid tag name: letters, digits and hyphens only. ({ $detail })
 error-edit-not-open = This site is not open in the editor.
 error-edit-css = CSS refused: a single declaration, with no semicolon or brace outside quotes, and no “!important” in the value (separate checkbox). ({ $detail })
+error-edit-expr = Invalid expression, nothing was changed. ({ $detail })
 error-edit-no-stylesheet = This site does not have a stylesheet yet.
 error-edit-breakpoints = Invalid breakpoints: each width can be used only once and must be a positive number of pixels. ({ $detail })
 error-edit-bound = This text comes from a file that cannot be modified here. ({ $detail })
@@ -554,6 +554,30 @@ panel-components = Components
 panel-assets = Assets
 panel-interactions = Interactions
 panel-interactions-planned = Animations and interactions
+panel-variables = Variables
+variables-search = Search variables
+variables-none = No variables on this page
+variables-no-match = No matching variable
+variables-owner-layout = Layout { $name }
+variables-owner-component = Component { $name }
+variables-owner-page = Page { $name }
+variables-value-empty = empty
+variables-value-list = { $count ->
+        [0] empty list
+        [one] list · 1 item
+       *[other] list · { $count } items
+    }
+variables-value-object = { $count ->
+        [0] empty object
+        [one] object · 1 key
+       *[other] object · { $count } keys
+    }
+variables-varies = Different value on each pass: the first one is shown
+variables-not-run = Not computed on this page (condition not met)
+variables-block = { $name }: captured HTML content (block)
+variables-edit = Edit expression
+variables-copy-name = Copy name
+variables-expression = Expression
 planned-step = planned for step { $step }
 planned-edit = Editing: step { $step }
 pages-search = Search pages

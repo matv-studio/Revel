@@ -30,6 +30,8 @@ pub struct Selection {
 enum FromCanvas {
     Ready {
         path: String,
+        #[serde(default)]
+        vars: Vec<revel_edit::canvas::VarValue>,
     },
     Hover {
         id: Option<String>,
@@ -268,6 +270,8 @@ pub struct Ed {
     pub live_scroll: RwSignal<(f64, f64)>,
     /// Règles en pixels (Ctrl+R).
     pub rulers: RwSignal<bool>,
+    /// Valeurs des affectations `{% set %}` de la page affichée (relevées au rendu du canevas).
+    pub vars: RwSignal<Vec<revel_edit::canvas::VarValue>>,
     /// Guides de colonnes.
     pub guides: RwSignal<Guides>,
     /// Valeurs effectives des propriétés de style de l'élément sélectionné (canevas).
@@ -415,8 +419,11 @@ impl Ed {
             if gone {
                 self.selected.set(None);
             }
-            if matches!(cmd, Command::SetBreakpoints { .. }) {
-                // Points de rupture : réglage de l'éditeur, la page ne change pas.
+            if matches!(
+                cmd,
+                Command::SetBreakpoints { .. } | Command::SetShelf { .. }
+            ) {
+                // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.
             } else if style_only(cmd) {
                 if let Some(url) = self
                     .doc
@@ -1065,6 +1072,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         load: RwSignal::new(0),
         scroll: RwSignal::new((0.0, 0.0)),
         live_scroll: RwSignal::new((0.0, 0.0)),
+        vars: RwSignal::new(Vec::new()),
         rulers: RwSignal::new(crate::pref_get("rulers").as_deref() == Some("1")),
         guides: RwSignal::new(
             crate::pref_get("guides")
@@ -1147,9 +1155,10 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             return;
         };
         match msg {
-            FromCanvas::Ready { path } => {
+            FromCanvas::Ready { path, vars } => {
                 // Navigation impossible dans le canevas : la page est celle demandée.
                 let _ = path;
+                ed.vars.set(vars);
                 ed.live_scroll.set((0.0, 0.0));
                 ed.post(serde_json::json!({ "type": "watch", "props": crate::styles::watched() }));
                 let (x, y) = ed.scroll.get_untracked();
@@ -1349,6 +1358,7 @@ fn panel_view(p: crate::dock::PanelId) -> AnyView {
     match p {
         PanelId::Pages => view! { <crate::panels::Pages/> }.into_any(),
         PanelId::Layers => view! { <crate::layers::Layers/> }.into_any(),
+        PanelId::Variables => view! { <crate::variables::Variables/> }.into_any(),
         PanelId::Cms => view! { <crate::panels::Cms/> }.into_any(),
         PanelId::Insert => view! { <crate::insert::Insert/> }.into_any(),
         PanelId::Components => view! { <crate::panels::Components/> }.into_any(),

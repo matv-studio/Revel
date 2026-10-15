@@ -64,6 +64,44 @@ pub enum Source {
     EntryItem { folder: String, file: String },
 }
 
+/// Valeur d'une affectation `{% set %}` au rendu de la page affichée (panneau Variables).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VarValue {
+    /// Emplacement de l'affectation.
+    pub parent: Parent,
+    pub index: usize,
+    /// Valeur à la première exécution.
+    pub value: Shown,
+    /// Exécutée plusieurs fois avec des valeurs différentes (dans une boucle, un composant
+    /// répété).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub varies: bool,
+}
+
+/// Résumé lisible d'une valeur.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Shown {
+    /// Indéfinie, `none` ou texte vide.
+    Empty,
+    /// Texte (tronqué), avec `html` pour un fragment HTML (`| safe`).
+    Text {
+        text: String,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        html: bool,
+    },
+    /// Nombre ou booléen, écrit comme dans une expression.
+    Literal { text: String },
+    /// Liste de `len` éléments.
+    List { len: usize },
+    /// Objet de `len` clés ; `label` : son titre (`title`, `name`, `label`, `data.title`).
+    Object {
+        len: usize,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+}
+
 /// Étape d'un chemin dans une valeur.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]

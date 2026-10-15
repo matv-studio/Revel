@@ -152,7 +152,6 @@ layers-each = pour { $item } dans { $list }
 layers-empty-list = si la liste est vide
 layers-image = image { $src }
 layers-html = HTML
-layers-var = variable { $name }
 layers-slot = contenu de la page
 layers-markdown = contenu (Markdown)
 layers-badge-component = composant
@@ -355,6 +354,7 @@ error-edit-move = Un élément ne peut pas être placé à l'intérieur de lui-m
 error-edit-tag = Nom de balise invalide : lettres, chiffres et tirets uniquement. ({ $detail })
 error-edit-not-open = Ce site n'est pas ouvert dans l'éditeur.
 error-edit-css = CSS refusé : une seule déclaration, sans point-virgule ni accolade en dehors des guillemets, et sans « !important » dans la valeur (case à cocher séparée). ({ $detail })
+error-edit-expr = Expression invalide, rien n'a été modifié. ({ $detail })
 error-edit-no-stylesheet = Ce site n'a pas encore de feuille de style.
 error-edit-breakpoints = Points de rupture invalides : chaque largeur ne peut servir qu'une fois et doit être un nombre de pixels positif. ({ $detail })
 error-edit-bound = Ce texte vient d'un fichier qui ne peut pas être modifié ici. ({ $detail })
@@ -557,6 +557,30 @@ panel-components = Composants
 panel-assets = Médias
 panel-interactions = Interactions
 panel-interactions-planned = Animations et interactions
+panel-variables = Variables
+variables-search = Rechercher une variable
+variables-none = Aucune variable sur cette page
+variables-no-match = Aucune variable trouvée
+variables-owner-layout = Gabarit { $name }
+variables-owner-component = Composant { $name }
+variables-owner-page = Page { $name }
+variables-value-empty = vide
+variables-value-list = { $count ->
+        [0] liste vide
+        [one] liste · 1 élément
+       *[other] liste · { $count } éléments
+    }
+variables-value-object = { $count ->
+        [0] objet vide
+        [one] objet · 1 clé
+       *[other] objet · { $count } clés
+    }
+variables-varies = Valeur différente à chaque passage : la première est affichée
+variables-not-run = Pas calculée sur cette page (condition non remplie)
+variables-block = { $name } : contenu HTML capturé (bloc)
+variables-edit = Modifier l'expression
+variables-copy-name = Copier le nom
+variables-expression = Expression
 planned-step = prévu à l'étape { $step }
 planned-edit = Modification : étape { $step }
 pages-search = Rechercher une page

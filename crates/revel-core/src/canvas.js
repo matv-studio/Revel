@@ -2,7 +2,8 @@
 //
 // Injecté par Revel dans chaque page affichée dans l'éditeur (jamais dans le site publié).
 // Les éléments portent `data-rv="<identifiant du nœud>"` ; les textes, expressions et composants
-// sont entourés de commentaires `<!--rv:N-->` … `<!--/rv:N-->` décrits par la liste `#rv-slots`.
+// sont entourés de commentaires `<!--rv:N-->` … `<!--/rv:N-->` décrits par la liste `#rv-slots` ;
+// `#rv-vars` donne les valeurs des affectations `{% set %}`.
 // Échanges avec l'interface de Revel (fenêtre parente) par `postMessage`, champ `revel: 1`.
 (() => {
   "use strict";
@@ -12,12 +13,17 @@
   const slotsEl = document.getElementById("rv-slots");
   let slots = [];
   try { slots = JSON.parse(slotsEl ? slotsEl.textContent : "[]"); } catch (_) { slots = []; }
+  // Valeurs des affectations `{% set %}` au rendu (panneau Variables).
+  const varsEl = document.getElementById("rv-vars");
+  let vars = [];
+  try { vars = JSON.parse(varsEl ? varsEl.textContent : "[]"); } catch (_) { vars = []; }
 
   // La page doit rester identique au site généré : les éléments ajoutés par Revel sont retirés
   // (sinon `:last-child` changerait), et les commentaires repères sont remplacés par des plages
   // (Range) vivantes, puis les textes adjacents fusionnés comme dans le site (sinon la mise en
   // forme du texte pourrait varier d'une fraction de pixel).
   if (slotsEl) slotsEl.remove();
+  if (varsEl) varsEl.remove();
   if (document.currentScript) document.currentScript.remove();
   const ranges = [];
   {
@@ -662,6 +668,7 @@
     path: location.pathname,
     title: document.title,
     slots: slots.length,
+    vars,
     scroll: { x: window.scrollX, y: window.scrollY },
   });
 })();

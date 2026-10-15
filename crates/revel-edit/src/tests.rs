@@ -927,3 +927,27 @@ fn suites_aleatoires_reversibles() {
     }
     assert!(styled > 200, "commandes de style appliquées : {styled}");
 }
+
+#[test]
+fn rangement_des_medias_et_composants() {
+    let mut s = sample();
+    let before = serde_json::to_string(&s).unwrap();
+    let shelf = revel_model::Shelf {
+        folders: vec!["logos".into(), "logos/clients".into()],
+        items: [("/media/a.png".to_string(), "logos/clients".to_string())].into(),
+    };
+    let inv = apply(
+        &mut s,
+        &Command::SetShelf {
+            kind: ShelfKind::Media,
+            shelf: shelf.clone(),
+        },
+    )
+    .unwrap();
+    assert_eq!(s.library.media, shelf);
+    assert!(s.library.components.is_empty());
+    assert!(serde_json::to_string(&s).unwrap().contains("\"library\""));
+    apply(&mut s, &inv).unwrap();
+    // Rangement vide : rien n'est écrit dans le document.
+    assert_eq!(serde_json::to_string(&s).unwrap(), before);
+}

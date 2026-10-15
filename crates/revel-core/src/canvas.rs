@@ -14,7 +14,7 @@
 //! `canvas-check`) —, rendue à la demande depuis le document en cours : rien à générer avant.
 
 use crate::{Core, CoreError, Result};
-use revel_edit::canvas::Slot;
+use revel_edit::canvas::{Slot, VarValue};
 use revel_render::EditorOptions;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -149,13 +149,14 @@ fn percent_decode(s: &str) -> String {
 }
 
 /// Ajoute la liste des repères et le script du canevas avant `</body>`.
-pub fn inject(html: &str, slots: &[Slot]) -> String {
+pub fn inject(html: &str, slots: &[Slot], vars: &[VarValue]) -> String {
     // `</` échappé : la liste ne peut pas fermer l'élément <script>.
-    let json = serde_json::to_string(slots)
-        .unwrap_or_else(|_| "[]".into())
-        .replace("</", "<\\/");
+    let json = |v: String| v.replace("</", "<\\/");
+    let slots = json(serde_json::to_string(slots).unwrap_or_else(|_| "[]".into()));
+    let vars = json(serde_json::to_string(vars).unwrap_or_else(|_| "[]".into()));
     let tail = format!(
-        "<script type=\"application/json\" id=\"rv-slots\">{json}</script>\
+        "<script type=\"application/json\" id=\"rv-slots\">{slots}</script>\
+         <script type=\"application/json\" id=\"rv-vars\">{vars}</script>\
          <script src=\"{CANVAS_JS_URL}\"></script>"
     );
     match html.to_ascii_lowercase().rfind("</body") {
@@ -307,7 +308,7 @@ impl Core {
                 let html = if preview {
                     revel_render::strip_editor_marks(&page.html)
                 } else {
-                    inject(&page.html, &page.slots)
+                    inject(&page.html, &page.slots, &page.vars)
                 };
                 return Ok(Some(CanvasResponse::ok(
                     "text/html; charset=utf-8",
@@ -347,7 +348,7 @@ mod tests {
             owner: revel_edit::Owner::Page("a".into()),
             node: "x</script>".into(),
         }];
-        let h = inject("<html><body><p>a</p></BODY></html>", &slots);
+        let h = inject("<html><body><p>a</p></BODY></html>", &slots, &[]);
         assert!(
             h.starts_with("<html><body><p>a</p><script type=\"application/json\" id=\"rv-slots\">")
         );

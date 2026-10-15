@@ -28,7 +28,6 @@ pub enum Kind {
     Use(String),
     Image(String),
     Html,
-    Var(String),
     /// Emplacement du contenu dans un gabarit (contenu Markdown pour un contenu de collection).
     Slot {
         markdown: bool,
@@ -80,8 +79,26 @@ const VOID: &[&str] = &[
     "wbr",
 ];
 
+/// Affectation de variable (`{% set %}`) de la page affichée : listée dans le panneau Variables,
+/// pas dans les calques.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VarRow {
+    pub owner: Owner,
+    pub parent: Parent,
+    pub index: usize,
+    pub name: String,
+    /// Expression (`None` : bloc `{% set %}…{% endset %}`, contenu HTML capturé).
+    pub expr: Option<String>,
+    /// Dans une boucle ou une condition (libellé du bloc le plus proche).
+    pub within: Option<Kind>,
+}
+
 struct Builder<'a> {
     doc: &'a Site,
+    /// Affectations rencontrées (une fois chacune, même dans un composant utilisé plusieurs fois).
+    vars: Vec<VarRow>,
+    /// Bloc logique le plus proche (boucle, condition) du parcours en cours.
+    within: Vec<Kind>,
     /// Corps à insérer à la place de chaque `Slot`, du gabarit extérieur vers la page.
     inner: Vec<(Owner, &'a [Node])>,
     markdown: bool,
@@ -106,6 +123,22 @@ impl<'a> Builder<'a> {
             {
                 continue;
             }
+            if let Node::Set { name, .. } | Node::SetBlock { name, .. } = n {
+                if !self.vars.iter().any(|v| v.parent == parent && v.index == i) {
+                    self.vars.push(VarRow {
+                        owner: owner.clone(),
+                        parent: parent.clone(),
+                        index: i,
+                        name: name.clone(),
+                        expr: match n {
+                            Node::Set { expr, .. } => Some(expr.clone()),
+                            _ => None,
+                        },
+                        within: self.within.last().cloned(),
+                    });
+                }
+                continue;
+            }
             let k = format!("{key}/{i}");
             let depth = ancestors.len();
             let id = revel_model::ids::node_id(n).map(str::to_string);
@@ -122,7 +155,7 @@ impl<'a> Builder<'a> {
                     item: item.clone(),
                     expr: short(expr, 32),
                 },
-                Node::Set { name, .. } | Node::SetBlock { name, .. } => Kind::Var(name.clone()),
+                Node::Set { .. } | Node::SetBlock { .. } => unreachable!(),
                 Node::Slot => Kind::Slot {
                     markdown: self.markdown && slot_level + 1 >= self.inner.len(),
                 },
@@ -160,8 +193,12 @@ impl<'a> Builder<'a> {
                 node: id.clone(),
                 branch: b,
             };
+            let logic = matches!(n, Node::If { .. } | Node::Each { .. });
+            if logic {
+                self.within.push(self.rows[at].kind.clone());
+            }
             match n {
-                Node::Element { children, .. } | Node::SetBlock { children, .. } => {
+                Node::Element { children, .. } => {
                     self.list(children, owner, of(Branch::Children), &k, &anc, slot_level);
                 }
                 Node::If {
@@ -204,6 +241,9 @@ impl<'a> Builder<'a> {
                     }
                 }
                 _ => {}
+            }
+            if logic {
+                self.within.pop();
             }
             self.rows[at].has_children = self.rows.len() > before;
         }
@@ -249,6 +289,15 @@ impl<'a> Builder<'a> {
 
 /// Toutes les lignes de l'arbre de la page (gabarits emboîtés, page, composants).
 pub fn rows(doc: &Site, page: &revel_protocol::EditorPageInfo) -> Vec<Row> {
+    tree(doc, page).0
+}
+
+/// Affectations de variables de la page (gabarits emboîtés, page, composants), dans l'ordre.
+pub fn variables(doc: &Site, page: &revel_protocol::EditorPageInfo) -> Vec<VarRow> {
+    tree(doc, page).1
+}
+
+fn tree(doc: &Site, page: &revel_protocol::EditorPageInfo) -> (Vec<Row>, Vec<VarRow>) {
     let mut chain: Vec<&revel_model::Layout> = Vec::new();
     let mut cur = page.layout.clone();
     while let Some(id) = cur {
@@ -275,6 +324,8 @@ pub fn rows(doc: &Site, page: &revel_protocol::EditorPageInfo) -> Vec<Row> {
     }
     let mut b = Builder {
         doc,
+        vars: Vec::new(),
+        within: Vec::new(),
         inner: inner.clone(),
         markdown: fixed.is_none(),
         rows: Vec::new(),
@@ -283,7 +334,7 @@ pub fn rows(doc: &Site, page: &revel_protocol::EditorPageInfo) -> Vec<Row> {
     if let Some((o, body)) = inner.first().cloned() {
         b.list(body, &o, Parent::root(o.clone()), "", &[], 0);
     }
-    b.rows
+    (b.rows, b.vars)
 }
 
 /// Commande de déplacement d'une ligne vers une autre (`zone` : avant, après, dans).
@@ -351,7 +402,7 @@ pub enum Zone {
     Inside,
 }
 
-fn label(ui: Ui, k: &Kind) -> String {
+pub fn label(ui: Ui, k: &Kind) -> String {
     match k {
         Kind::Element { tag, class } if class.is_empty() => tag.clone(),
         Kind::Element { tag, class } => format!("{tag}.{class}"),
@@ -367,7 +418,6 @@ fn label(ui: Ui, k: &Kind) -> String {
         Kind::Use(c) => c.rsplit('/').next().unwrap_or(c).to_string(),
         Kind::Image(src) => ui.tx("layers-image", &[("src", src.clone())]),
         Kind::Html => ui.tx("layers-html", &[]),
-        Kind::Var(n) => ui.tx("layers-var", &[("name", n.clone())]),
         Kind::Slot { markdown: true } => ui.tx("layers-markdown", &[]),
         Kind::Slot { markdown: false } => ui.tx("layers-slot", &[]),
     }
@@ -382,7 +432,7 @@ fn icon(k: &Kind) -> AnyView {
         Kind::Each { .. } => icons::repeat(),
         Kind::Use(_) => icons::component(),
         Kind::Image(_) => icons::image(),
-        Kind::Html | Kind::Var(_) => icons::code(),
+        Kind::Html => icons::code(),
         Kind::Slot { .. } => icons::slot(),
     }
 }
@@ -704,7 +754,7 @@ pub fn Layers() -> impl IntoView {
                         let draggable = r.with_value(|r| r.id.is_some()).to_string();
                         view! {
                             <div class="layer" role="treeitem" class:is-selected=is_selected
-                                class:is-logic=matches!(kind, Kind::If(_) | Kind::Each { .. } | Kind::Branch(_) | Kind::Var(_))
+                                class:is-logic=matches!(kind, Kind::If(_) | Kind::Each { .. } | Kind::Branch(_))
                                 class:is-text=matches!(kind, Kind::Text(_) | Kind::Expr(_) | Kind::Html)
                                 class:drop-before=zone_class(Zone::Before)
                                 class:drop-after=zone_class(Zone::After)

@@ -937,3 +937,51 @@ fn apercu_sans_generation_et_export() {
         .unwrap();
     assert!(s2.out_dir.ends_with("essai-production-2"));
 }
+
+#[test]
+fn expression_invalide_refusee() {
+    use revel_edit::{Command, Owner, Parent};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    c.edit_open(&site).unwrap();
+    let file = site.join(revel_project::SITE_FILE);
+    let root = Parent::root(Owner::Page("index".into()));
+    let set = |expr: &str| revel_model::Node::Set {
+        name: "x".into(),
+        expr: expr.into(),
+    };
+    let replace = |expr: &str| Command::Replace {
+        parent: root.clone(),
+        index: 0,
+        node: set(expr),
+    };
+    c.edit_apply(
+        &site,
+        Command::Insert {
+            parent: root.clone(),
+            index: 0,
+            node: set("1"),
+        },
+        false,
+    )
+    .unwrap();
+    let saved = std::fs::read_to_string(&file).unwrap();
+    // Syntaxe fausse : refusée, rien n'est écrit.
+    let err = c.edit_apply(&site, replace("a |"), false).unwrap_err();
+    assert!(
+        matches!(&err, CoreError::Edit(revel_edit::EditError::InvalidExpr(m)) if m.starts_with("a |")),
+        "{err:?}"
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), saved);
+    // Filtre inconnu du moteur : accepté (résolu au rendu).
+    c.edit_apply(&site, replace("site.title | inconnu"), false)
+        .unwrap();
+    assert!(
+        std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("site.title | inconnu")
+    );
+    c.edit_undo(&site).unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), saved);
+}

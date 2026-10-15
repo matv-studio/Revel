@@ -44,11 +44,32 @@ impl Session {
 
 /// Exécutant des commandes d'une session : `SetBound` écrit la source de la valeur (fichier de
 /// données, en-tête d'un contenu) ou la variable de page ; le reste passe par `revel_edit::apply`.
+/// Expressions écrites par une commande (affectation, condition, boucle) : syntaxe vérifiée avant
+/// l'application, pour que la page reste affichable.
+fn check_exprs(c: &Command) -> std::result::Result<(), revel_edit::EditError> {
+    let check = |e: &str| {
+        revel_render::check_expression(e)
+            .map_err(|m| revel_edit::EditError::InvalidExpr(format!("{e} : {m}")))
+    };
+    match c {
+        Command::Replace {
+            node: revel_model::Node::Set { expr, .. } | revel_model::Node::Out { expr },
+            ..
+        } => check(expr),
+        Command::SetLogic { cond, expr, .. } => {
+            cond.iter().chain(expr.iter()).try_for_each(|e| check(e))
+        }
+        Command::Batch { commands } => commands.iter().try_for_each(check_exprs),
+        _ => Ok(()),
+    }
+}
+
 fn exec(
     project: &Project,
     site: &mut revel_model::Site,
     c: &Command,
 ) -> std::result::Result<Command, revel_edit::EditError> {
+    check_exprs(c)?;
     match c {
         Command::SetBound { binding, value } => {
             let old = project

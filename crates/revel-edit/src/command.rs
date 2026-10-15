@@ -8,6 +8,14 @@ use serde_json::Value;
 use crate::EditError;
 use crate::address::{self, Parent, Target};
 
+/// Rangement de l'éditeur concerné par [`Command::SetShelf`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShelfKind {
+    Media,
+    Components,
+}
+
 /// Modification du document de site. Sérialisable : la même commande vient de l'interface, de la
 /// ligne de commande ou du serveur MCP.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -207,6 +215,11 @@ pub enum Command {
     WriteCmsConfig {
         #[serde(default)]
         text: Option<String>,
+    },
+    /// Rangement de l'éditeur remplacé (dossiers et éléments rangés des médias ou des composants).
+    SetShelf {
+        kind: ShelfKind,
+        shelf: revel_model::Shelf,
     },
     /// Largeur d'un point de rupture changée ; les règles de style écrites pour lui suivent
     /// (`@media` réécrite). La largeur reste entre celles des points voisins du même sens (ordre
@@ -700,6 +713,16 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             Ok(Command::ResizeBreakpoint {
                 id: id.clone(),
                 width: old_w,
+            })
+        }
+        Command::SetShelf { kind, shelf } => {
+            let slot = match kind {
+                ShelfKind::Media => &mut site.library.media,
+                ShelfKind::Components => &mut site.library.components,
+            };
+            Ok(Command::SetShelf {
+                kind: *kind,
+                shelf: std::mem::replace(slot, shelf.clone()),
             })
         }
         Command::SetBreakpoints { breakpoints } => {

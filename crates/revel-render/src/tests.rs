@@ -362,3 +362,55 @@ fn rendu_pour_l_editeur() {
             .is_none()
     );
 }
+
+#[test]
+fn valeurs_des_variables_pour_l_editeur() {
+    use revel_edit::canvas::Shown;
+    use revel_edit::{Owner, Parent};
+    let mut s = site();
+    s.data.insert(
+        "pages".into(),
+        json!({"accueil": {"title": "Bienvenue", "items": [1, 2, 3]}}),
+    );
+    s.pages[0].body.extend(parse(
+        r#"{% set home = pages.accueil %}{% set n = home.items | length %}{% set vide = "" %}<ul>{% for i in home.items %}{% set double = i * 2 %}<li>{{ double }}</li>{% endfor %}</ul>"#,
+    ));
+    s.ensure_ids();
+    let inp = input(&s, Vec::new());
+    let ed = render_editor(&inp, "/", &EditorOptions::default())
+        .unwrap()
+        .unwrap();
+    let page = Owner::Page("index".into());
+    let at = |i: usize| {
+        ed.vars
+            .iter()
+            .find(|v| v.parent == Parent::root(page.clone()) && v.index == i)
+            .unwrap_or_else(|| panic!("affectation {i} : {:?}", ed.vars))
+    };
+    let first = s.pages[0]
+        .body
+        .iter()
+        .position(|n| matches!(n, Node::Set { name, .. } if name == "home"))
+        .unwrap();
+    assert_eq!(
+        at(first).value,
+        Shown::Object {
+            len: 2,
+            label: Some("Bienvenue".into())
+        }
+    );
+    assert_eq!(at(first + 1).value, Shown::Literal { text: "3".into() });
+    assert_eq!(at(first + 2).value, Shown::Empty);
+    // Dans la boucle : première valeur, puis « varie ».
+    assert!(
+        ed.vars.iter().any(|v| v.parent.node.is_some()
+            && v.value == Shown::Literal { text: "2".into() }
+            && v.varies),
+        "{:?}",
+        ed.vars
+    );
+    // Syntaxe des expressions (variables et filtres inconnus acceptés).
+    assert!(check_expression("a | f(b) if c else d").is_ok());
+    assert!(check_expression("a |").is_err());
+    assert!(check_expression("(a").is_err());
+}

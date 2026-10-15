@@ -67,6 +67,41 @@ pub struct Site {
     /// Redirections permanentes (301) déclarées dans Revel.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub redirects: Vec<Redirect>,
+    /// Rangement de l'éditeur (dossiers des médias et des composants) ; sans effet sur le site
+    /// publié ni sur l'emplacement des fichiers.
+    #[serde(default, skip_serializing_if = "Library::is_empty")]
+    pub library: Library,
+}
+
+/// Rangement des médias et des composants dans l'éditeur.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Library {
+    #[serde(default, skip_serializing_if = "Shelf::is_empty")]
+    pub media: Shelf,
+    #[serde(default, skip_serializing_if = "Shelf::is_empty")]
+    pub components: Shelf,
+}
+
+impl Library {
+    pub fn is_empty(&self) -> bool {
+        self.media.is_empty() && self.components.is_empty()
+    }
+}
+
+/// Dossiers (chemins `logos/clients`, dans l'ordre de création) et dossier de chaque élément
+/// rangé (adresse d'un média, identifiant d'un composant). Un élément absent est à la racine.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Shelf {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folders: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub items: BTreeMap<String, String>,
+}
+
+impl Shelf {
+    pub fn is_empty(&self) -> bool {
+        self.folders.is_empty() && self.items.is_empty()
+    }
 }
 
 impl Site {
@@ -87,6 +122,7 @@ impl Site {
             breakpoints: Breakpoint::defaults(),
             stylesheet: None,
             redirects: Vec::new(),
+            library: Library::default(),
         }
     }
 

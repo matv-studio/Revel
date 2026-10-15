@@ -206,6 +206,8 @@ pub struct EditorOptions {
 pub struct EditorPage {
     pub html: String,
     pub slots: Vec<Slot>,
+    /// Valeurs des affectations `{% set %}` de la page, de ses gabarits et de ses composants.
+    pub vars: Vec<revel_edit::canvas::VarValue>,
     pub warnings: Vec<String>,
 }
 
@@ -254,6 +256,7 @@ pub fn render_editor(
     };
     b.editor = Some(eval::Editor {
         slots: Default::default(),
+        vars: Default::default(),
         scripts: opts.scripts,
         entries: prepared.entries.clone(),
     });
@@ -265,16 +268,26 @@ pub fn render_editor(
         html
     };
     warnings.extend(b.take_warnings());
-    let slots = b
+    let (slots, vars) = b
         .editor
         .take()
-        .map(|e| e.slots.into_inner())
+        .map(|e| (e.slots.into_inner(), e.vars.into_inner()))
         .unwrap_or_default();
     Ok(Some(EditorPage {
         html,
         slots,
+        vars,
         warnings,
     }))
+}
+
+/// Syntaxe d'une expression (`a | f(b)`, `x if c else y`…). Les variables et filtres inconnus
+/// ne sont pas des erreurs ici : ils sont résolus au rendu.
+pub fn check_expression(expr: &str) -> Result<(), String> {
+    minijinja::Environment::new()
+        .compile_expression(expr)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Page HTML du site, pour la liste des pages de l'éditeur.

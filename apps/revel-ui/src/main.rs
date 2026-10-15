@@ -21,6 +21,7 @@ mod richtext;
 mod settings;
 mod site;
 mod styles;
+mod variables;
 
 use dialog::Ask;
 use leptos::prelude::*;

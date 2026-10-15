@@ -34,7 +34,7 @@ pub fn Planned(key: &'static str, step: u8, icon: fn() -> AnyView) -> impl IntoV
 
 /// Champ de recherche d'un panneau.
 #[component]
-fn Search(value: RwSignal<String>, key: &'static str) -> impl IntoView {
+pub(crate) fn Search(value: RwSignal<String>, key: &'static str) -> impl IntoView {
     let ui = expect_context::<Ui>();
     view! {
         <label class="panel-search">

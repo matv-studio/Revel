@@ -16,6 +16,7 @@ use wasm_bindgen::JsCast;
 pub enum PanelId {
     Pages,
     Layers,
+    Variables,
     Cms,
     Insert,
     Components,
@@ -26,9 +27,10 @@ pub enum PanelId {
 }
 
 impl PanelId {
-    pub const ALL: [PanelId; 9] = [
+    pub const ALL: [PanelId; 10] = [
         PanelId::Pages,
         PanelId::Layers,
+        PanelId::Variables,
         PanelId::Cms,
         PanelId::Insert,
         PanelId::Components,
@@ -43,6 +45,7 @@ impl PanelId {
         match self {
             PanelId::Pages => "panel-pages",
             PanelId::Layers => "layers-title",
+            PanelId::Variables => "panel-variables",
             PanelId::Cms => "panel-cms",
             PanelId::Insert => "insert-title",
             PanelId::Components => "panel-components",
@@ -58,6 +61,7 @@ impl PanelId {
         match self {
             PanelId::Pages => "pages",
             PanelId::Layers => "layers",
+            PanelId::Variables => "variables",
             PanelId::Cms => "cms",
             PanelId::Insert => "insert",
             PanelId::Components => "components",
@@ -65,6 +69,14 @@ impl PanelId {
             PanelId::Styles => "styles",
             PanelId::Settings => "settings",
             PanelId::Interactions => "interactions",
+        }
+    }
+
+    /// Panneau à côté duquel celui-ci s'ouvre (variables avec les calques).
+    fn beside(self) -> Option<PanelId> {
+        match self {
+            PanelId::Variables => Some(PanelId::Layers),
+            _ => None,
         }
     }
 
@@ -158,7 +170,7 @@ impl Default for Layout {
                 },
                 Group {
                     id: 2,
-                    tabs: vec![PanelId::Layers, PanelId::Cms, PanelId::Insert],
+                    tabs: vec![PanelId::Layers, PanelId::Variables, PanelId::Insert],
                     active: PanelId::Layers,
                     size: 0.68,
                 },
@@ -172,7 +184,8 @@ impl Default for Layout {
             left_w: 260.0,
             right_w: 284.0,
             floats: Vec::new(),
-            closed: Vec::new(),
+            // Contenus des collections : vue CMS et panneau Pages.
+            closed: vec![PanelId::Cms],
             hidden: false,
             next: 4,
         }
@@ -362,6 +375,20 @@ impl Layout {
             self.activate(p);
             return;
         }
+        let near = p.beside().and_then(|n| {
+            self.groups()
+                .find_map(|g| Some((g.id, g.tabs.iter().position(|t| *t == n)?)))
+        });
+        if let Some((group, i)) = near {
+            self.put(
+                p,
+                Drop::Join {
+                    group,
+                    index: i + 1,
+                },
+            );
+            return;
+        }
         let side = p.home();
         let first = match side {
             Side::Left => self.left.last().map(|g| g.id),
@@ -409,9 +436,18 @@ impl Layout {
         self.right.retain(|g| !g.tabs.is_empty());
         self.floats.retain(|f| !f.group.tabs.is_empty());
         self.closed.retain(|c| !seen.contains(c));
+        // Panneaux nouveaux ajoutés sans changer l'onglet affiché des groupes.
+        let actives: Vec<(u32, PanelId)> = self.groups().map(|g| (g.id, g.active)).collect();
         for p in PanelId::ALL {
             if !seen.contains(&p) && !self.closed.contains(&p) {
                 self.open(p);
+            }
+        }
+        for g in self.groups_mut() {
+            if let Some((_, a)) = actives.iter().find(|(id, _)| *id == g.id)
+                && g.tabs.contains(a)
+            {
+                g.active = *a;
             }
         }
         self.hidden = false;
@@ -1204,12 +1240,29 @@ mod tests {
     #[test]
     fn fermer_rouvrir_et_relire() {
         let mut l = Layout::default();
-        l.close(PanelId::Cms);
         assert!(l.group_of(PanelId::Cms).is_none());
+        l.close(PanelId::Insert);
+        assert!(l.group_of(PanelId::Insert).is_none());
         assert!(all_once(&l));
+        l.open(PanelId::Insert);
         l.open(PanelId::Cms);
-        assert!(l.group_of(PanelId::Cms).is_some());
+        assert!(l.group_of(PanelId::Insert).is_some() && l.group_of(PanelId::Cms).is_some());
         assert!(all_once(&l));
+        // Disposition d'une version sans « Variables » : ajouté à côté des calques.
+        let mut old = Layout::default();
+        old.left[1].tabs = vec![PanelId::Layers, PanelId::Cms, PanelId::Insert];
+        old.closed.clear();
+        let n = old.normalize();
+        assert_eq!(
+            n.left[1].tabs,
+            vec![
+                PanelId::Layers,
+                PanelId::Variables,
+                PanelId::Cms,
+                PanelId::Insert
+            ]
+        );
+        assert_eq!(n.left[1].active, PanelId::Layers);
         // Disposition abîmée : doublons retirés, panneaux manquants ajoutés, largeurs bornées.
         let mut bad = Layout::default();
         bad.left[0].tabs.push(PanelId::Layers);

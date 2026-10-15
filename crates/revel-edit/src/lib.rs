@@ -16,7 +16,7 @@ pub mod make;
 pub mod style;
 
 pub use address::{Branch, Owner, Parent, Target};
-pub use command::{Command, apply, expand};
+pub use command::{Command, ShelfKind, apply, expand};
 pub use history::{Exec, History, Step};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -49,6 +49,9 @@ pub enum EditError {
     External,
     #[error("valeur liée non modifiable : {0}")]
     Bound(String),
+    /// Expression dont la syntaxe est invalide : l'expression et le message du moteur.
+    #[error("{0}")]
+    InvalidExpr(String),
 }
 
 impl EditError {
@@ -68,6 +71,7 @@ impl EditError {
             Self::NoStylesheet => "error-edit-no-stylesheet",
             Self::InvalidBreakpoints(_) => "error-edit-breakpoints",
             Self::External | Self::Bound(_) => "error-edit-bound",
+            Self::InvalidExpr(_) => "error-edit-expr",
         }
     }
 }

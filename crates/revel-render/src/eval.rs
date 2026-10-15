@@ -5,7 +5,7 @@ use crate::{BuildInput, DocKind, ImageArgs, Job, RenderError};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use minijinja::value::{Object, Rest};
 use minijinja::{Environment, Error, ErrorKind, State, UndefinedBehavior, Value};
-use revel_edit::canvas::{Binding, Seg, Slot, Source, path_expr, source_path};
+use revel_edit::canvas::{Binding, Seg, Shown, Slot, Source, VarValue, path_expr, source_path};
 use revel_edit::{Branch, Owner, Parent};
 use revel_model::{Layout, Node, Site};
 use std::cell::RefCell;
@@ -171,6 +171,8 @@ const DATA_SCRIPTS: &[&str] = &["application/ld+json", "application/json", "text
 /// État du rendu pour l'éditeur.
 pub(crate) struct Editor {
     pub(crate) slots: RefCell<Vec<Slot>>,
+    /// Valeurs des affectations `{% set %}` (panneau Variables), dans l'ordre d'exécution.
+    pub(crate) vars: RefCell<Vec<VarValue>>,
     /// Scripts du site exécutés dans le canevas.
     pub(crate) scripts: bool,
     /// Éléments de collection : `fileSlug` -> (dossier, fichier, adresse).
@@ -232,6 +234,28 @@ impl<'a> Builder<'a> {
 
     fn marking(&self, at: &At) -> bool {
         at.mark && self.editor.is_some()
+    }
+
+    /// Valeur d'une affectation exécutée (la première est gardée ; `varies` si une autre
+    /// exécution donne une valeur différente).
+    fn record_var(&self, parent: Parent, index: usize, v: &Value) {
+        let Some(e) = self.editor.as_ref() else {
+            return;
+        };
+        let value = shown(v);
+        let mut vars = e.vars.borrow_mut();
+        match vars
+            .iter_mut()
+            .find(|x| x.index == index && x.parent == parent)
+        {
+            Some(x) => x.varies |= x.value != value,
+            None => vars.push(VarValue {
+                parent,
+                index,
+                value,
+                varies: false,
+            }),
+        }
     }
 
     /// Ajoute un repère ; renvoie son numéro.
@@ -794,6 +818,9 @@ impl<'a> Builder<'a> {
             }
             Node::Set { name, expr } => {
                 let v = self.eval(scope, expr, ctx)?;
+                if marking && let Some(parent) = at.parent() {
+                    self.record_var(parent, index, &v);
+                }
                 let origin = match path_expr(expr) {
                     Some(_) => self.origin_of(scope, expr),
                     None => self.origin_of_value(&v),
@@ -922,6 +949,55 @@ fn with_marker(html: &str, id: &str) -> String {
 }
 
 /// Valeur affichée : rien pour `none`/indéfini ; échappée sauf valeur sûre (`| safe`).
+/// Résumé d'une valeur pour le panneau Variables.
+pub(crate) fn shown(v: &Value) -> Shown {
+    use minijinja::value::ValueKind;
+    const MAX: usize = 160;
+    match v.kind() {
+        ValueKind::Undefined | ValueKind::None => Shown::Empty,
+        ValueKind::Bool | ValueKind::Number => Shown::Literal {
+            text: v.to_string(),
+        },
+        ValueKind::String => {
+            let s = v.as_str().unwrap_or_default();
+            if s.trim().is_empty() {
+                return Shown::Empty;
+            }
+            let mut text: String = s.chars().take(MAX).collect();
+            if s.chars().nth(MAX).is_some() {
+                text.push('…');
+            }
+            Shown::Text {
+                text,
+                html: v.is_safe(),
+            }
+        }
+        ValueKind::Seq | ValueKind::Iterable => Shown::List {
+            len: v.len().unwrap_or(0),
+        },
+        _ => {
+            let text = |x: Value| {
+                x.as_str()
+                    .filter(|s| !s.trim().is_empty())
+                    .map(|s| s.chars().take(80).collect::<String>())
+            };
+            let label = ["title", "name", "label"]
+                .iter()
+                .find_map(|k| v.get_attr(k).ok().and_then(text))
+                .or_else(|| {
+                    v.get_attr("data")
+                        .ok()
+                        .and_then(|d| d.get_attr("title").ok())
+                        .and_then(text)
+                });
+            Shown::Object {
+                len: v.len().unwrap_or(0),
+                label,
+            }
+        }
+    }
+}
+
 fn display(v: &Value, escape_unsafe: bool) -> String {
     if v.is_undefined() || v.is_none() {
         return String::new();

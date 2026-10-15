@@ -25,7 +25,7 @@ struct Block {
 }
 
 /// Nom d'un champ sur une ligne de premier niveau (`titre: …`, `"a b": …`).
-fn key_of(line: &str) -> Option<String> {
+pub(crate) fn key_of(line: &str) -> Option<String> {
     let t = line.trim_end();
     for q in ['"', '\''] {
         if let Some(rest) = t.strip_prefix(q) {
@@ -124,7 +124,7 @@ fn is_scalar(v: &Value) -> bool {
 }
 
 /// Champ `key: value` écrit en YAML (style bloc, retrait de deux espaces), lignes terminées.
-fn emit_entry(key: &str, v: &Value, indent: usize) -> String {
+pub(crate) fn emit_entry(key: &str, v: &Value, indent: usize) -> String {
     let pad = " ".repeat(indent);
     let k = emit_key(key);
     match v {
@@ -169,7 +169,7 @@ fn emit_entry(key: &str, v: &Value, indent: usize) -> String {
 }
 
 /// Élément de liste (`- …`) écrit en YAML.
-fn emit_item(v: &Value, indent: usize) -> String {
+pub(crate) fn emit_item(v: &Value, indent: usize) -> String {
     let pad = " ".repeat(indent);
     match v {
         Value::Object(m) if !m.is_empty() => {
@@ -216,7 +216,7 @@ fn read_field(yaml: &str, key: &str) -> Result<Option<Value>, BoundError> {
 }
 
 /// Égalité de valeurs après relecture (un nombre entier peut revenir en flottant et inversement).
-fn same(a: &Value, b: &Value) -> bool {
+pub(crate) fn same(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
         (Value::Null, Value::String(s)) | (Value::String(s), Value::Null) => s.is_empty(),
@@ -391,6 +391,12 @@ impl crate::Project {
             None => {
                 if p.is_file() {
                     std::fs::remove_file(&p).map_err(|e| format!("{} : {e}", p.display()))?;
+                    // Dossier resté vide (créé pour ce contenu) : retiré, comme le ferait Git.
+                    if let Some(dir) = p.parent()
+                        && std::fs::read_dir(dir).is_ok_and(|mut d| d.next().is_none())
+                    {
+                        let _ = std::fs::remove_dir(dir);
+                    }
                 }
             }
         }

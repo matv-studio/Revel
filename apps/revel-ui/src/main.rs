@@ -5,6 +5,7 @@ mod api;
 mod canvas;
 mod cms;
 mod cmsfields;
+mod cmsschema;
 mod dialog;
 mod dock;
 mod editor;

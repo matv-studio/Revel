@@ -323,6 +323,46 @@ pub fn search() -> AnyView {
     svg(r#"<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/>"#)
 }
 
+/// Champ date.
+pub fn calendar() -> AnyView {
+    svg(
+        r#"<rect x="2.75" y="3.75" width="10.5" height="9.5" rx="1.5"/><path d="M2.75 6.75h10.5M5.5 2.5v2.5M10.5 2.5v2.5"/>"#,
+    )
+}
+
+/// Champ oui / non.
+pub fn toggle() -> AnyView {
+    svg(
+        r#"<rect x="1.75" y="4.75" width="12.5" height="6.5" rx="3.25"/><circle cx="11" cy="8" r="1.75"/>"#,
+    )
+}
+
+/// Champ nombre.
+pub fn hash() -> AnyView {
+    svg(r#"<path d="M6.25 2.75 5 13.25M11 2.75 9.75 13.25M3 6h10.5M2.5 10H13"/>"#)
+}
+
+/// Poignée de déplacement.
+pub fn grip() -> AnyView {
+    svg(
+        r#"<g fill="currentColor" stroke="none"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></g>"#,
+    )
+}
+
+/// Caché (œil barré).
+pub fn eye_off() -> AnyView {
+    svg(
+        r#"<path d="M2 8s2.25-4.25 6-4.25S14 8 14 8s-2.25 4.25-6 4.25S2 8 2 8z"/><circle cx="8" cy="8" r="1.75"/><path d="M3 13 13 3"/>"#,
+    )
+}
+
+/// Avertissement.
+pub fn warning() -> AnyView {
+    svg(
+        r#"<path d="M8 2.5 14 13H2L8 2.5z"/><path d="M8 6.75v3"/><circle cx="8" cy="11.4" r=".4" fill="currentColor"/>"#,
+    )
+}
+
 /// Aide d'un champ (texte au survol).
 pub fn info() -> AnyView {
     svg(

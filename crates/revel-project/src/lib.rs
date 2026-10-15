@@ -14,6 +14,7 @@
 
 pub mod bound;
 pub mod entries;
+pub mod pagesyml;
 
 use revel_model::Site;
 use revel_render::{

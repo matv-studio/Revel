@@ -6,8 +6,8 @@
 //! reste lisible par Pages CMS.
 
 use crate::cmsfields::{self, Cols, field_row, label_of};
+use crate::cmsschema::{FieldSettings, NewField, SchemaList};
 use crate::dialog::Ask;
-use crate::panels::PlannedButton;
 use crate::site::capitalize;
 use crate::{Route, Tab, Ui, api, icons};
 use leptos::ev;
@@ -38,7 +38,7 @@ fn col_label(c: &CmsCollection) -> String {
 
 /// Champ principal (titre) : celui du schéma, sinon un nom habituel, sinon (schéma) le premier
 /// champ simple.
-fn primary_of(c: &CmsCollection) -> Option<String> {
+pub(crate) fn primary_of(c: &CmsCollection) -> Option<String> {
     if let Some(p) = c.view.as_ref().and_then(|v| v.primary.clone()) {
         return Some(p);
     }
@@ -56,7 +56,7 @@ fn primary_of(c: &CmsCollection) -> Option<String> {
 }
 
 /// Colonnes du tableau : celles du schéma (`view.fields`), sinon les premiers champs simples.
-fn columns_of(c: &CmsCollection, primary: Option<&String>) -> Vec<CmsField> {
+pub(crate) fn columns_of(c: &CmsCollection, primary: Option<&String>) -> Vec<CmsField> {
     if let Some(v) = c.view.as_ref().filter(|v| !v.fields.is_empty()) {
         return v
             .fields
@@ -237,11 +237,21 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     let cols = RwSignal::new(None::<Vec<CmsCollection>>);
     let current = RwSignal::new(None::<String>);
     let open = RwSignal::new(None::<String>);
+    // Mode « Champs » (schéma de la collection) et champ choisi.
+    let fields_mode = RwSignal::new(false);
+    let sel_field = RwSignal::new(None::<String>);
     let query = RwSignal::new(String::new());
     // Tri choisi ; `None` : celui du schéma (`view.sort`).
     let sort = RwSignal::new(None::<Option<(String, bool)>>);
     let state = RwSignal::new(None::<EditState>);
     let path = StoredValue::new(site.path.clone());
+    // Identifiants de toutes les collections du site (y compris sans dossier).
+    let site_ids = StoredValue::new(
+        site.collections
+            .iter()
+            .map(|c| c.id.clone())
+            .collect::<Vec<_>>(),
+    );
     let reload = move || {
         let Some(p) = path.try_get_value() else {
             return;
@@ -353,6 +363,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     Effect::new(move |_| {
         let _ = current.get();
         open.set(None);
+        sel_field.set(None);
         query.set(String::new());
         sort.set(None);
     });
@@ -461,6 +472,70 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
             },
         )));
     };
+    // Nouvelle collection : nom demandé ; identifiant et dossier (à côté des autres collections)
+    // tirés du nom ; champs de départ : titre et adresse ; ouverte dans « Champs ».
+    let new_collection = move |_| {
+        let existing = cols.get_untracked().unwrap_or_default();
+        ui.ask.set(Some(Ask::input(
+            ui.now("cms-collection-new", &[]),
+            ui.now("cms-collection-name", &[]),
+            String::new(),
+            ui.now("action-create", &[]),
+            move |label| {
+                let label = label.trim().to_string();
+                if label.is_empty() {
+                    return;
+                }
+                let slug = cmsfields::slugify(&label);
+                let mut ids: Vec<String> = site_ids.get_value();
+                ids.extend(existing.iter().map(|c| c.id.clone()));
+                ids.extend(existing.iter().filter_map(|c| c.schema.clone()));
+                let base_id = slug.replace('-', "_");
+                let mut id = base_id.clone();
+                let mut n = 2;
+                while ids.contains(&id) {
+                    id = format!("{base_id}_{n}");
+                    n += 1;
+                }
+                // Dossier parent commun des collections (`src/content`), sinon `content`.
+                let parents: Vec<String> = existing
+                    .iter()
+                    .filter_map(|c| c.folder.rsplit_once('/').map(|(p, _)| p.to_string()))
+                    .collect();
+                let base = parents
+                    .first()
+                    .filter(|p| parents.iter().all(|x| x == *p))
+                    .or(parents.first())
+                    .cloned()
+                    .unwrap_or_else(|| "content".into());
+                let mut folder = format!("{base}/{slug}");
+                let mut n = 2;
+                while existing.iter().any(|c| c.folder == folder) {
+                    folder = format!("{base}/{slug}-{n}");
+                    n += 1;
+                }
+                let fields = serde_json::json!([
+                    { "name": "title", "label": ui.now("cms-new-title", &[]), "type": "string", "required": true },
+                    {
+                        "name": "slug",
+                        "label": ui.now("cms-new-slug", &[]),
+                        "type": "string",
+                        "required": true,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                        "description": ui.now("cms-new-slug-help", &[]),
+                    }
+                ]);
+                apply.run(Command::CreateCmsCollection {
+                    id: id.clone(),
+                    label,
+                    folder,
+                    fields,
+                });
+                current.set(Some(id));
+                fields_mode.set(true);
+            },
+        )));
+    };
     let delete = Callback::new(move |(folder, file, title): (String, String, String)| {
         ui.ask.set(Some(
             Ask::confirm(
@@ -481,7 +556,8 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     });
 
     view! {
-        <div class="cms" class:has-item=move || open.get().is_some()>
+        <div class="cms" class:has-item=move || if fields_mode.get() { sel_field.get().is_some() } else { open.get().is_some() }
+            class:is-fields=move || fields_mode.get()>
             <aside class="cms-cols">
                 <p class="cms-cols-title">{ui.t("cms-collections")}</p>
                 <div class="cms-cols-list">
@@ -505,7 +581,8 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 </div>
                 <footer class="panel-foot">
                     <span class="panel-foot-text muted"></span>
-                    <PlannedButton key="cms-collection-new" step=3 icon=icons::plus/>
+                    <button class="icon-btn icon-btn--small cms-col-new" title=ui.t("cms-collection-new")
+                        aria-label=ui.t("cms-collection-new") on:click=new_collection>{icons::plus()}</button>
                 </footer>
             </aside>
             <section class="cms-main">
@@ -515,25 +592,38 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                             <h1 title=c.folder.clone()>{col_label(&c)}</h1>
                             <span class="muted path" title=c.folder.clone()>{c.folder.clone()}</span>
                         </div>
-                        <label class="panel-search cms-search">
-                            {icons::search()}
-                            <input type="search" placeholder=ui.t("cms-search") aria-label=ui.t("cms-search")
-                                prop:value=move || query.get() on:input=move |e| query.set(event_target_value(&e))/>
-                        </label>
+                        <Show when=move || !fields_mode.get()>
+                            <label class="panel-search cms-search">
+                                {icons::search()}
+                                <input type="search" placeholder=ui.t("cms-search") aria-label=ui.t("cms-search")
+                                    prop:value=move || query.get() on:input=move |e| query.set(event_target_value(&e))/>
+                            </label>
+                        </Show>
                         <button class="icon-btn" title=ui.t("editor-undo") aria-label=ui.t("editor-undo")
                             prop:disabled=move || !can_undo() on:click=move |_| undo()>{icons::undo()}</button>
                         <button class="icon-btn" title=ui.t("editor-redo") aria-label=ui.t("editor-redo")
                             prop:disabled=move || !can_redo() on:click=move |_| redo()>{icons::redo()}</button>
-                        <button class="btn" disabled=true title=move || ui.tx("planned-step", &[("step", "3".to_string())])>
+                        <button class="btn cms-fields-btn" class:is-on=move || fields_mode.get()
+                            aria-pressed=move || fields_mode.get().to_string() title=ui.t("cms-fields-help")
+                            on:click=move |_| fields_mode.update(|m| *m = !*m)>
                             {icons::database()}{ui.t("cms-fields-edit")}
                         </button>
-                        <button class="btn btn--primary cms-new" on:click=new_entry>
-                            {icons::plus()}{ui.t("cms-entry-new")}
-                        </button>
+                        {move || if fields_mode.get() {
+                            view! { <NewField col=col cols=Signal::derive(move || cols.get()) apply=apply selected=sel_field/> }.into_any()
+                        } else {
+                            view! {
+                                <button class="btn btn--primary cms-new" on:click=new_entry>
+                                    {icons::plus()}{ui.t("cms-entry-new")}
+                                </button>
+                            }.into_any()
+                        }}
                     </header>
                 })}
                 <div class="cms-table-wrap">
                     {move || match (cols.get().is_none(), layout.get()) {
+                        (false, Some(_)) if fields_mode.get() => view! {
+                            <SchemaList col=col selected=sel_field apply=apply/>
+                        }.into_any(),
                         (true, _) => view! { <p class="muted cms-wait">{ui.t("editor-loading")}</p> }.into_any(),
                         (false, None) => ().into_any(),
                         (false, Some((title, columns))) => {
@@ -606,6 +696,9 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 </div>
                 <footer class="cms-foot muted">
                     {move || col.get().map(|c| {
+                        if fields_mode.get() {
+                            return ui.tx("cms-fields-count", &[("count", c.fields.len().to_string())]);
+                        }
                         let shown = rows.with(|r| r.len());
                         let total = c.entries.len();
                         if shown == total {
@@ -616,10 +709,17 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                     })}
                 </footer>
             </section>
-            {move || open.get().map(|file| view! {
-                <EntryForm file=file col=col cols=Signal::derive(move || cols.get()) title=Signal::derive(move || layout.get().and_then(|l| l.0))
-                    apply=apply delete=delete close=Callback::new(move |()| open.set(None)) goto=Callback::new(goto)/>
-            })}
+            {move || if fields_mode.get() {
+                sel_field.get().map(|name| view! {
+                    <FieldSettings col=col cols=Signal::derive(move || cols.get()) name=name apply=apply
+                        close=Callback::new(move |()| sel_field.set(None))/>
+                }.into_any())
+            } else {
+                open.get().map(|file| view! {
+                    <EntryForm file=file col=col cols=Signal::derive(move || cols.get()) title=Signal::derive(move || layout.get().and_then(|l| l.0))
+                        apply=apply delete=delete close=Callback::new(move |()| open.set(None)) goto=Callback::new(goto)/>
+                }.into_any())
+            }}
         </div>
     }
 }
@@ -693,11 +793,41 @@ fn EntryForm(
                     .and_then(|e| e.data.get(key.get_value()).cloned())
             })
         });
+        // Valeur absente du schéma : avertissement (Pages CMS la retirerait) et ajout au schéma.
+        let undeclared = col.with_untracked(|c| {
+            c.as_ref()
+                .is_some_and(|c| !c.fields.iter().any(|x| x.name == f.name))
+        });
+        let aside = undeclared.then(|| {
+            let (schema, merge) = col.with_untracked(|c| {
+                c.as_ref()
+                    .map_or((false, true), |c| (c.schema.is_some(), c.merge))
+            });
+            let valid = !f.name.is_empty()
+                && f.name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'));
+            view! {
+                {(schema && !merge).then(|| view! {
+                    <span class="cms-warn" title=ui.t("cms-undeclared")>{icons::warning()}</span>
+                })}
+                <button type="button" class="icon-btn icon-btn--small cms-declare" disabled=!valid
+                    title=move || if valid { ui.tx("cms-undeclared-add", &[]) } else { ui.tx("cms-undeclared-name", &[]) }
+                    aria-label=ui.t("cms-undeclared-add")
+                    on:click=move |_| apply.run(Command::AddCmsField {
+                        folder: folder(),
+                        def: serde_json::json!({ "name": key.get_value() }),
+                        index: None,
+                    })>{icons::plus()}</button>
+            }
+            .into_any()
+        });
         field_row(
             f,
             value,
             Callback::new(move |v| set(key.get_value(), v)),
             cols,
+            aside,
         )
     };
     let heading = move || {

@@ -158,6 +158,56 @@ pub enum Command {
         #[serde(default)]
         text: Option<String>,
     },
+    /// Champ d'une collection dans `.pages.yml`, le schéma partagé avec Pages CMS (D-27) :
+    /// modification fusionnée (objets fusionnés clé par clé, `null` : clé retirée) ; le nom du
+    /// champ ne change pas. Appliquée par le cœur, qui
+    /// ajoute au besoin la collection au fichier (ou le crée) ; inverse : `WriteCmsConfig` (texte
+    /// exact du fichier avant la modification).
+    SetCmsField {
+        folder: String,
+        field: String,
+        patch: Value,
+    },
+    /// Nouveau champ (définition de Pages CMS) à la position donnée, sinon à la fin.
+    AddCmsField {
+        folder: String,
+        def: Value,
+        #[serde(default)]
+        index: Option<usize>,
+    },
+    /// Champ retiré du schéma ; les valeurs restent dans les contenus.
+    RemoveCmsField { folder: String, field: String },
+    /// Champ déplacé à la position donnée de la liste.
+    MoveCmsField {
+        folder: String,
+        field: String,
+        index: usize,
+    },
+    /// Réglages d'une collection (libellé, colonnes et tri du tableau…) : modification fusionnée
+    /// comme pour `SetCmsField`.
+    SetCmsCollection { folder: String, patch: Value },
+    /// Nouvelle collection de contenus : collection du site (dossier `folder`, sans page par
+    /// contenu) et sa description dans `.pages.yml` (libellé, champs). Appliquée par le cœur ;
+    /// inverse : `RemoveCmsCollection`.
+    CreateCmsCollection {
+        id: String,
+        label: String,
+        folder: String,
+        fields: Value,
+    },
+    /// Collection retirée du site (ses contenus restent sur le disque) et `.pages.yml` remplacé
+    /// par un texte exact (`None` : supprimé) : inverse de `CreateCmsCollection`.
+    RemoveCmsCollection {
+        id: String,
+        #[serde(default)]
+        config: Option<String>,
+    },
+    /// `.pages.yml` remplacé par un texte exact (`None` : supprimé) : inverse des commandes de
+    /// schéma. Appliquée par le cœur.
+    WriteCmsConfig {
+        #[serde(default)]
+        text: Option<String>,
+    },
     /// Remplace la liste des points de rupture du site (la base `desktop` reste la première).
     SetBreakpoints { breakpoints: Vec<Breakpoint> },
     /// Nouvelle règle pour `selector` et `media`, placée dans la cascade (après les règles du même
@@ -584,7 +634,15 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         | Command::SetEntryField { .. }
         | Command::SetEntryBody { .. }
         | Command::CreateEntry { .. }
-        | Command::WriteEntry { .. } => Err(EditError::External),
+        | Command::WriteEntry { .. }
+        | Command::SetCmsField { .. }
+        | Command::AddCmsField { .. }
+        | Command::RemoveCmsField { .. }
+        | Command::MoveCmsField { .. }
+        | Command::SetCmsCollection { .. }
+        | Command::CreateCmsCollection { .. }
+        | Command::RemoveCmsCollection { .. }
+        | Command::WriteCmsConfig { .. } => Err(EditError::External),
         Command::SetBreakpoints { breakpoints } => {
             check_breakpoints(breakpoints)?;
             Ok(Command::SetBreakpoints {

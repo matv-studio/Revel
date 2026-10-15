@@ -326,9 +326,24 @@ impl Ed {
                     | Command::SetEntryBody { .. }
                     | Command::CreateEntry { .. }
                     | Command::WriteEntry { .. }
+                    | Command::CreateCmsCollection { .. }
+                    | Command::RemoveCmsCollection { .. }
             ) {
                 self.reopen(ui);
                 self.load.update(|n| *n += 1);
+                self.state.set(Some(st));
+                return;
+            }
+            // Schéma des collections (`.pages.yml`) : sans effet sur les pages.
+            if matches!(
+                cmd,
+                Command::SetCmsField { .. }
+                    | Command::AddCmsField { .. }
+                    | Command::RemoveCmsField { .. }
+                    | Command::MoveCmsField { .. }
+                    | Command::SetCmsCollection { .. }
+                    | Command::WriteCmsConfig { .. }
+            ) {
                 self.state.set(Some(st));
                 return;
             }

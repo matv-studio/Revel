@@ -191,7 +191,13 @@ décrivent toujours les mêmes contenus. Sans `.pages.yml`, les champs sont déd
 créé à la première modification de champs. Dates écrites au format déclaré (`options.format`, jetons de date-fns
 comme Pages CMS) ; références résolues par le nom de collection de `.pages.yml` et ses modèles (`{fields.slug}`) ;
 nom d'un nouveau contenu tiré du modèle `filename`. Les collections d'Eleventy qui lisent un même dossier
-(`offres`, `toutesOffres`) apparaissent une seule fois dans la vue CMS.
+(`offres`, `toutesOffres`) apparaissent une seule fois dans la vue CMS. Une collection décrite par Revel l'est
+d'après ses contenus : types déduits des valeurs, format des dates existantes repris, variables d'Eleventy
+(`layout`, `permalink`…) déclarées masquées, noms refusés par Pages CMS laissés hors du schéma ; un fichier créé
+par Revel porte `settings.content.merge: true`, sans quoi Pages CMS retire d'un contenu qu'il enregistre les
+valeurs absentes du schéma (vérifié dans son code, `app/api/.../files/[path]/route.ts`). Le nom d'un champ (clé
+écrite dans les contenus) ne change pas après sa création, comme le nom d'API d'un champ Webflow ; retirer un
+champ du schéma laisse ses valeurs dans les contenus.
 
 ## Décisions ouvertes
 

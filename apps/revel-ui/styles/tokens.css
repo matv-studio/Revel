@@ -121,6 +121,7 @@
   --set-text: var(--blue-text-dark);
   --set-bg: rgb(64 132 255 / .2);
   --inherit-text: var(--orange-text-dark);
+  --warning-text: var(--orange-text-dark);
   --inherit-bg: rgb(243 160 64 / .14);
   --overlay: rgb(0 0 0 / .55);      /* fond derrière une boîte de dialogue */
   --shadow-dialog: 0 16px 40px rgb(0 0 0 / .45), 0 0 0 1px var(--line-strong);
@@ -149,6 +150,7 @@
   --set-text: var(--blue-text-light);
   --set-bg: rgb(64 132 255 / .14);
   --inherit-text: var(--orange-text-light);
+  --warning-text: var(--orange-text-light);
   --inherit-bg: rgb(243 160 64 / .16);
   --overlay: rgb(0 0 0 / .28);
   --shadow-dialog: 0 16px 40px rgb(0 0 0 / .18), 0 0 0 1px var(--line);
@@ -176,6 +178,7 @@
     --set-text: var(--blue-text-light);
     --set-bg: rgb(64 132 255 / .14);
     --inherit-text: var(--orange-text-light);
+    --warning-text: var(--orange-text-light);
     --inherit-bg: rgb(243 160 64 / .16);
     --overlay: rgb(0 0 0 / .28);
     --shadow-dialog: 0 16px 40px rgb(0 0 0 / .18), 0 0 0 1px var(--line);

@@ -728,6 +728,188 @@ fn schema_des_collections_lu_dans_pages_cms() {
 }
 
 #[test]
+fn schema_modifie_dans_pages_cms_et_annule() {
+    use revel_edit::Command;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.collections.push(revel_model::Collection {
+            id: "projets".into(),
+            source: revel_model::CollectionSource::Folder,
+            folder: "contenus/projets".into(),
+            path: None,
+            layout: None,
+            props: Default::default(),
+            filter: None,
+            sort: None,
+            fields: vec![],
+        });
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("contenus/projets")).unwrap();
+        std::fs::write(
+            site.join("contenus/projets/oka.md"),
+            "---\ntitle: Oka\nlayout: projet.njk\ndate: 2026-03-19T09:29:24\nville: Lyon\n---\n",
+        )
+        .unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    let config = || std::fs::read_to_string(site.join(".pages.yml")).ok();
+    let folder = || "contenus/projets".to_string();
+    // Sans `.pages.yml` : fichier créé, collection décrite d'après ses contenus.
+    c.edit_apply(
+        &site,
+        Command::SetCmsField {
+            folder: folder(),
+            field: "title".into(),
+            patch: serde_json::json!({ "label": "Titre du projet", "required": true }),
+        },
+        false,
+    )
+    .unwrap();
+    let t = config().unwrap();
+    assert!(t.contains("merge: true"), "{t}");
+    let cms = c.cms(&site).unwrap();
+    let p = &cms[0];
+    assert_eq!(p.schema.as_deref(), Some("projets"));
+    assert!(p.merge);
+    assert_eq!(p.fields[0].label.as_deref(), Some("Titre du projet"));
+    assert!(p.fields[0].required);
+    let f = |n: &str| p.fields.iter().find(|f| f.name == n).unwrap().clone();
+    assert!(f("layout").hidden);
+    assert_eq!(f("date").options["format"], "yyyy-MM-dd'T'HH:mm:ss");
+    // Champ retiré puis rajouté sans type (déduit des contenus), déplacé ; réglages.
+    c.edit_apply(
+        &site,
+        Command::RemoveCmsField {
+            folder: folder(),
+            field: "ville".into(),
+        },
+        false,
+    )
+    .unwrap();
+    assert!(
+        c.cms(&site).unwrap()[0]
+            .fields
+            .iter()
+            .all(|f| f.name != "ville")
+    );
+    c.edit_apply(
+        &site,
+        Command::AddCmsField {
+            folder: folder(),
+            def: serde_json::json!({ "name": "ville" }),
+            index: Some(0),
+        },
+        false,
+    )
+    .unwrap();
+    c.edit_apply(
+        &site,
+        Command::MoveCmsField {
+            folder: folder(),
+            field: "ville".into(),
+            index: 3,
+        },
+        false,
+    )
+    .unwrap();
+    c.edit_apply(
+        &site,
+        Command::SetCmsCollection {
+            folder: folder(),
+            patch: serde_json::json!({ "label": "Réalisations" }),
+        },
+        false,
+    )
+    .unwrap();
+    let cms = c.cms(&site).unwrap();
+    assert_eq!(cms[0].label.as_deref(), Some("Réalisations"));
+    let names: Vec<&str> = cms[0].fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["title", "layout", "date", "ville"]);
+    assert_eq!(cms[0].fields[3].kind.as_deref(), Some("string"));
+    assert!(
+        c.edit_apply(
+            &site,
+            Command::SetCmsField {
+                folder: folder(),
+                field: "title".into(),
+                patch: serde_json::json!({ "name": "nom" })
+            },
+            false
+        )
+        .is_err()
+    );
+    // Tout annulé : plus de fichier ; rétabli : identique.
+    let last = config();
+    for _ in 0..5 {
+        c.edit_undo(&site).unwrap();
+    }
+    assert_eq!(config(), None);
+    for _ in 0..5 {
+        c.edit_redo(&site).unwrap();
+    }
+    assert_eq!(config(), last);
+    // Nouvelle collection : site et `.pages.yml` ; un contenu y est créé ; annulée, rétablie.
+    let fields = serde_json::json!([
+        { "name": "title", "label": "Titre", "type": "string", "required": true },
+        { "name": "slug", "label": "Adresse", "type": "string" }
+    ]);
+    let create = Command::CreateCmsCollection {
+        id: "offres".into(),
+        label: "Offres d'emploi".into(),
+        folder: "contenus/offres".into(),
+        fields: fields.clone(),
+    };
+    c.edit_apply(&site, create, false).unwrap();
+    let cms = c.cms(&site).unwrap();
+    let o = cms.iter().find(|x| x.id == "offres").unwrap();
+    assert_eq!(o.label.as_deref(), Some("Offres d'emploi"));
+    assert_eq!(o.filename.as_deref(), Some("{fields.slug}.md"));
+    assert!(o.fields[0].required);
+    c.edit_apply(
+        &site,
+        Command::CreateEntry {
+            folder: "contenus/offres".into(),
+            file: "stage".into(),
+            data: serde_json::json!({ "title": "Stage", "slug": "stage" }),
+            body: String::new(),
+        },
+        false,
+    )
+    .unwrap();
+    assert!(site.join("contenus/offres/stage.md").is_file());
+    let with = config();
+    c.edit_undo(&site).unwrap();
+    c.edit_undo(&site).unwrap();
+    assert_eq!(config(), last);
+    assert!(c.cms(&site).unwrap().iter().all(|x| x.id != "offres"));
+    assert!(!site.join("contenus/offres/stage.md").exists());
+    c.edit_redo(&site).unwrap();
+    assert_eq!(config(), with);
+    // Noms refusés.
+    for (id, folder) in [
+        ("x y", "contenus/xy"),
+        ("ok", "../ailleurs"),
+        ("projets", "contenus/autre"),
+        ("autre", "contenus/projets"),
+    ] {
+        let r = c.edit_apply(
+            &site,
+            Command::CreateCmsCollection {
+                id: id.into(),
+                label: "X".into(),
+                folder: folder.into(),
+                fields: fields.clone(),
+            },
+            false,
+        );
+        assert!(r.is_err(), "{id} {folder}");
+    }
+}
+
+#[test]
 fn apercu_sans_generation_et_export() {
     let d = tempfile::tempdir().unwrap();
     let c = core(d.path());

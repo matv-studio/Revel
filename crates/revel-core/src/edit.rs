@@ -7,6 +7,7 @@
 use crate::{Core, CoreError, Result};
 use revel_edit::{Command, EditState, History, Opened};
 use revel_project::Project;
+use revel_project::pagesyml::{self, FieldOp};
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -104,8 +105,310 @@ fn exec(
                 .map_err(revel_edit::EditError::Bound)?;
             write_entry(project, folder, file, text.as_deref(), old)
         }
+        Command::SetCmsField {
+            folder,
+            field,
+            patch,
+        } => schema_edit(project, folder, |text, name| {
+            pagesyml::edit_fields(
+                text,
+                name,
+                &FieldOp::Set {
+                    field: field.clone(),
+                    patch: object(patch)?,
+                },
+            )
+        }),
+        Command::AddCmsField { folder, def, index } => {
+            let def = complete_field(project, folder, def)?;
+            schema_edit(project, folder, |text, name| {
+                pagesyml::edit_fields(
+                    text,
+                    name,
+                    &FieldOp::Add {
+                        def: def.clone(),
+                        index: *index,
+                    },
+                )
+            })
+        }
+        Command::RemoveCmsField { folder, field } => schema_edit(project, folder, |text, name| {
+            pagesyml::edit_fields(
+                text,
+                name,
+                &FieldOp::Remove {
+                    field: field.clone(),
+                },
+            )
+        }),
+        Command::MoveCmsField {
+            folder,
+            field,
+            index,
+        } => schema_edit(project, folder, |text, name| {
+            pagesyml::edit_fields(
+                text,
+                name,
+                &FieldOp::Move {
+                    field: field.clone(),
+                    index: *index,
+                },
+            )
+        }),
+        Command::SetCmsCollection { folder, patch } => {
+            schema_edit(project, folder, |text, name| {
+                pagesyml::set_collection(text, name, &object(patch)?)
+            })
+        }
+        Command::CreateCmsCollection {
+            id,
+            label,
+            folder,
+            fields,
+        } => create_collection(project, site, id, label, folder, fields),
+        Command::RemoveCmsCollection { id, config } => {
+            use revel_edit::EditError::Bound;
+            let i = site
+                .collections
+                .iter()
+                .position(|c| c.id == *id)
+                .ok_or_else(|| Bound(format!("collection inconnue : {id}")))?;
+            let c = site.collections.remove(i);
+            // Libellé et champs relus pour la recréer à l'identique (rétablir).
+            let current = pagesyml::read(&project.dir)
+                .map_err(Bound)?
+                .unwrap_or_default();
+            let doc = revel_project::parse_yaml(&current).unwrap_or_default();
+            let path = crate::pagescms::norm_path(&c.folder);
+            let item = doc
+                .get("content")
+                .and_then(serde_json::Value::as_array)
+                .and_then(|l| {
+                    l.iter().find(|x| {
+                        x.get("path")
+                            .and_then(|p| p.as_str())
+                            .is_some_and(|p| crate::pagescms::norm_path(p) == path)
+                    })
+                })
+                .cloned()
+                .unwrap_or_default();
+            pagesyml::write(&project.dir, config.as_deref()).map_err(Bound)?;
+            Ok(Command::CreateCmsCollection {
+                id: c.id,
+                label: item
+                    .get("label")
+                    .and_then(|l| l.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                folder: c.folder,
+                fields: item.get("fields").cloned().unwrap_or(serde_json::json!([])),
+            })
+        }
+        Command::WriteCmsConfig { text } => {
+            let old = pagesyml::read(&project.dir).map_err(revel_edit::EditError::Bound)?;
+            pagesyml::write(&project.dir, text.as_deref()).map_err(revel_edit::EditError::Bound)?;
+            Ok(Command::WriteCmsConfig { text: old })
+        }
         other => revel_edit::apply(site, other),
     }
+}
+
+/// Nouvelle collection : nom et dossier vérifiés, collection ajoutée au site et décrite dans
+/// `.pages.yml` (créé au besoin avec `settings.content.merge`).
+fn create_collection(
+    project: &Project,
+    site: &mut revel_model::Site,
+    id: &str,
+    label: &str,
+    folder: &str,
+    fields: &serde_json::Value,
+) -> std::result::Result<Command, revel_edit::EditError> {
+    use revel_edit::EditError::Bound;
+    let ok_name = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+    };
+    let folder = crate::pagescms::norm_path(folder);
+    if !ok_name(id) {
+        return Err(Bound(format!("nom de collection refusé : {id}")));
+    }
+    if folder.is_empty()
+        || folder.starts_with('/')
+        || folder
+            .split('/')
+            .any(|p| p == "." || p == ".." || !ok_name(p))
+    {
+        return Err(Bound(format!("dossier refusé : {folder}")));
+    }
+    if site.collections.iter().any(|c| c.id == id) {
+        return Err(Bound(format!("collection déjà présente : {id}")));
+    }
+    if site
+        .collections
+        .iter()
+        .any(|c| crate::pagescms::norm_path(&c.folder) == folder)
+    {
+        return Err(Bound(format!("dossier déjà utilisé : {folder}")));
+    }
+    let old = pagesyml::read(&project.dir).map_err(Bound)?;
+    let mut text = old.clone().unwrap_or_default();
+    let created = text.trim().is_empty();
+    let names: Vec<&str> = fields
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|f| f.get("name").and_then(|n| n.as_str()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut def = serde_json::json!({
+        "name": id,
+        "label": label,
+        "type": "collection",
+        "path": folder,
+        "filename": if names.contains(&"slug") { "{fields.slug}.md" } else { "{primary}.md" },
+    });
+    if let Some(p) = names.first() {
+        def["view"] = serde_json::json!({ "primary": p });
+    }
+    def["fields"] = fields.clone();
+    text = pagesyml::add_collection(&text, &def).map_err(Bound)?;
+    if created {
+        text = pagesyml::set_top(
+            &text,
+            "settings",
+            &serde_json::json!({ "content": { "merge": true } }),
+        )
+        .map_err(Bound)?;
+    }
+    pagesyml::write(&project.dir, Some(&text)).map_err(Bound)?;
+    site.collections.push(revel_model::Collection {
+        id: id.to_string(),
+        source: revel_model::CollectionSource::Folder,
+        folder,
+        path: None,
+        layout: None,
+        props: Default::default(),
+        filter: None,
+        sort: None,
+        fields: vec![],
+    });
+    Ok(Command::RemoveCmsCollection {
+        id: id.to_string(),
+        config: old,
+    })
+}
+
+fn object(
+    v: &serde_json::Value,
+) -> std::result::Result<serde_json::Map<String, serde_json::Value>, String> {
+    v.as_object()
+        .cloned()
+        .ok_or_else(|| "modification attendue : objet".to_string())
+}
+
+/// En-têtes des contenus d'un dossier.
+fn entries_data(project: &Project, folder: &str) -> Vec<serde_json::Value> {
+    project
+        .load_entries()
+        .map(|list| {
+            list.into_iter()
+                .filter(|e| e.folder == folder)
+                .map(|e| e.data)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Nouveau champ sans type : type, libellé et options déduits des valeurs des contenus (valeur
+/// présente dans les contenus mais absente du schéma).
+fn complete_field(
+    project: &Project,
+    folder: &str,
+    def: &serde_json::Value,
+) -> std::result::Result<serde_json::Value, revel_edit::EditError> {
+    if def.get("type").is_some() {
+        return Ok(def.clone());
+    }
+    let name = def
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| revel_edit::EditError::Bound("champ sans nom".into()))?;
+    let data = entries_data(project, folder);
+    let values: Vec<&serde_json::Value> = data.iter().filter_map(|d| d.get(name)).collect();
+    let mut inferred = crate::pagescms::infer_field(name, &values, 0);
+    if let (Some(o), Some(extra)) = (inferred.as_object_mut(), def.as_object()) {
+        for (k, v) in extra {
+            o.insert(k.clone(), v.clone());
+        }
+    }
+    Ok(inferred)
+}
+
+/// Modification du schéma d'une collection dans `.pages.yml` : la collection y est d'abord décrite
+/// d'après ses contenus si elle n'y est pas (fichier créé au besoin, avec
+/// `settings.content.merge` pour que Pages CMS garde les valeurs non déclarées) ; inverse : texte
+/// exact du fichier d'avant.
+fn schema_edit(
+    project: &Project,
+    folder: &str,
+    edit: impl FnOnce(&str, &str) -> std::result::Result<String, String>,
+) -> std::result::Result<Command, revel_edit::EditError> {
+    use revel_edit::EditError::Bound;
+    let old = pagesyml::read(&project.dir).map_err(Bound)?;
+    let mut text = old.clone().unwrap_or_default();
+    let config = crate::pagescms::parse(&text);
+    let path = crate::pagescms::norm_path(folder);
+    let name = match config.collections.iter().find(|c| c.path == path) {
+        Some(c) => c.name.clone(),
+        None => {
+            let c = project
+                .site
+                .collections
+                .iter()
+                .find(|c| !c.folder.is_empty() && c.folder == folder)
+                .ok_or_else(|| Bound(format!("collection inconnue : {folder}")))?;
+            // Nom unique parmi les contenus du fichier.
+            let doc = revel_project::parse_yaml(&text).unwrap_or_default();
+            let taken = |n: &str| {
+                doc.get("content")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|l| {
+                        l.iter()
+                            .any(|x| x.get("name").and_then(|v| v.as_str()) == Some(n))
+                    })
+            };
+            let mut name = c.id.clone();
+            let mut n = 2;
+            while taken(&name) {
+                name = format!("{}-{n}", c.id);
+                n += 1;
+            }
+            let data = entries_data(project, folder);
+            let refs: Vec<&serde_json::Value> = data.iter().collect();
+            let def = crate::pagescms::collection_def(
+                &name,
+                &crate::pagescms::humanize(&c.id),
+                folder,
+                &refs,
+            );
+            let created = text.trim().is_empty();
+            text = pagesyml::add_collection(&text, &def).map_err(Bound)?;
+            if created {
+                text = pagesyml::set_top(
+                    &text,
+                    "settings",
+                    &serde_json::json!({ "content": { "merge": true } }),
+                )
+                .map_err(Bound)?;
+            }
+            name
+        }
+    };
+    let new = edit(&text, &name).map_err(Bound)?;
+    pagesyml::write(&project.dir, Some(&new)).map_err(Bound)?;
+    Ok(Command::WriteCmsConfig { text: old })
 }
 
 /// Écrit le fichier d'un contenu ; inverse : son texte d'avant (`None` : il n'existait pas).

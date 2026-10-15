@@ -131,6 +131,8 @@ pub(crate) fn special(v: &str) -> bool {
             | "no"
             | "on"
             | "off"
+            | "y"
+            | "n"
             | ".inf"
             | "-.inf"
             | ".nan"

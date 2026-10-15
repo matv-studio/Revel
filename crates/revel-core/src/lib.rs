@@ -643,7 +643,8 @@ impl Core {
             .into_iter()
             .filter_map(|r| Some(((r.collection?, r.file?), r.url)))
             .collect();
-        let pages_cms = pagescms::load(&p.dir);
+        let config = pagescms::load(&p.dir);
+        let pages_cms = &config.collections;
         // Un dossier lu par plusieurs collections d'Eleventy (`offres`, `toutesOffres`) : une
         // seule collection affichée, celle qui porte le nom donné par Pages CMS, sinon la
         // première.
@@ -717,6 +718,7 @@ impl Core {
                     folder: c.folder.clone(),
                     fields,
                     schema: pages.map(|x| x.name.clone()),
+                    merge: config.merge,
                     view: pages.and_then(|x| x.view.clone()),
                     filename: pages.and_then(|x| x.filename.clone()),
                     entries: list,

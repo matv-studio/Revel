@@ -902,6 +902,96 @@ try {
     await page.keyboard.press('Control+z');
     await until(() => !fs.existsSync(created) && listing() === list0, 'création annulée');
     check('CMS : Ctrl+Z rétablit puis retire le contenu, dossier identique', true);
+
+    // ---------------------------------------------------------------- Champs de la collection (3.3)
+    const cfgPath = path.join(siteDir, '.pages.yml');
+    const cfg0 = fs.readFileSync(cfgPath, 'utf8');
+    const cfg = () => fs.readFileSync(cfgPath, 'utf8');
+    const lineDiff = (a, b) => { const x = a.split('\n'), y = b.split('\n'); return y.filter((l, i) => l !== x[i]); };
+    await page.click('.cms-fields-btn');
+    await page.waitForSelector('.schema-row[data-field="client"]');
+    const rows0 = await page.$$eval('.schema-row', (rs) => rs.map((r) => r.dataset.field));
+    check('champs : liste du schéma', rows0.length === 17 && rows0[0] === 'title', rows0.join(','));
+    await page.click('.schema-row[data-field="client"]');
+    await page.waitForSelector('.schema-item[data-field="client"]');
+    await page.fill('.schema-item [data-setting="label"] input', 'Client (marque)');
+    await page.keyboard.press('Tab');
+    await until(() => cfg().includes('label: Client (marque)'), 'libellé écrit');
+    check('champs : libellé modifié, seule sa ligne change dans .pages.yml', lineDiff(cfg0, cfg()).length === 1, lineDiff(cfg0, cfg()).join(' | '));
+    await page.click('.schema-item [data-setting="required"] .switch');
+    await until(() => /- name: client\n {8}label: Client \(marque\)\n {8}type: string\n {8}required: true\n/.test(cfg()), 'obligatoire');
+    check('champs : rendu obligatoire', true);
+    // Ordre : flèche, puis glisser la poignée au-dessus du premier champ.
+    await page.click('.schema-item .icon-btn[title="Monter"]');
+    await until(() => cfg().indexOf('- name: client') < cfg().indexOf('- name: date'), 'monté');
+    const uiOrder = () => page.$$eval('.schema-row', (rs) => rs.map((r) => r.dataset.field).join(','));
+    await page.waitForFunction(() => [...document.querySelectorAll('.schema-row')].map((r) => r.dataset.field).indexOf('client') === 3);
+    const grip = await page.$('.schema-row[data-field="client"] .schema-grip');
+    const gb = await grip.boundingBox();
+    const top = await (await page.$('.schema-row[data-field="title"]')).boundingBox();
+    await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(gb.x + gb.width / 2, top.y + 10, { steps: 8 });
+    await page.waitForSelector('.schema-row.is-drop-before[data-field="title"]');
+    await page.mouse.up();
+    await until(() => /fields:\n {6}- name: client\n/.test(cfg()), 'glissé en tête');
+    await page.waitForFunction(() => document.querySelector('.schema-row')?.dataset.field === 'client');
+    const rows1 = (await uiOrder()).split(',');
+    check('champs : ordre changé (flèche, glisser)', rows1[0] === 'client' && rows1[1] === 'title', rows1.slice(0, 3).join(','));
+    // Nouveau champ (choix), un choix ajouté, puis retiré.
+    await page.click('.new-field .btn');
+    await page.click('.new-field-menu [data-type="select"]');
+    await page.fill('.dialog input', 'Couleur dominante');
+    await page.press('.dialog input', 'Enter');
+    await until(() => cfg().includes('- name: couleur_dominante\n'), 'nouveau champ');
+    await page.waitForSelector('.schema-item[data-field="couleur_dominante"]');
+    await page.fill('.schema-item [data-setting="values"] .tags-add', 'Bleu nuit');
+    await page.press('.schema-item [data-setting="values"] .tags-add', 'Enter');
+    await until(() => /options:\n {10}values:\n {12}- name: bleu-nuit\n {14}label: Bleu nuit\n/.test(cfg()), 'choix ajouté');
+    check('champs : nouveau champ « Choix » et sa valeur', true);
+    await page.click('.schema-item .cms-item-foot .btn--danger-ghost');
+    await page.click('.dialog .btn--danger');
+    await until(() => !cfg().includes('couleur_dominante'), 'champ retiré');
+    check('champs : champ retiré', true);
+    if (shots) await page.screenshot({ path: `${shots}/cms-champs.png` });
+    // Fiche d'un contenu : le nouveau libellé et l'ordre du schéma.
+    await page.click('.cms-fields-btn');
+    await page.click(`.cms-table tbody tr[data-entry="${first}"]`);
+    await page.waitForSelector('.cms-item-body > [data-field="client"] .cms-req');
+    const formOrder = await page.$$eval('.cms-item-body > [data-field]', (fs) => fs.slice(0, 2).map((f) => f.dataset.field));
+    check('champs : fiche d\'un contenu dans l\'ordre et avec les réglages du schéma', formOrder[0] === 'client', formOrder.join(','));
+    await page.click('.cms-item-head h2');
+    for (let i = 0; i < 7; i++) {
+      await page.click('.cms-head .icon-btn[title^="Annuler"]');
+      await page.waitForTimeout(250);
+    }
+    await until(() => cfg() === cfg0, 'annulation du schéma');
+    check('champs : tout annulé, .pages.yml identique octet pour octet', true);
+
+    // ---------------------------------------------------------------- Nouvelle collection (3.3)
+    const doc0 = fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
+    await page.click('.cms-col-new');
+    await page.fill('.dialog input', 'Offres de stage');
+    await page.press('.dialog input', 'Enter');
+    await until(() => cfg().includes('- name: offres_de_stage\n    label: Offres de stage\n    type: collection\n    path: src/content/offres-de-stage\n'), 'collection décrite');
+    await page.waitForSelector('.cms-col.is-on[data-collection="offres_de_stage"]');
+    await page.waitForSelector('.schema-row[data-field="slug"]');
+    check('collection : créée (site, .pages.yml), ouverte dans « Champs »', fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8').includes('"offres_de_stage"'));
+    await page.click('.cms-fields-btn');
+    await page.click('.cms-new');
+    await page.fill('.dialog input', 'Stage design graphique');
+    await page.press('.dialog input', 'Enter');
+    const stage = path.join(siteDir, 'src/content/offres-de-stage/stage-design-graphique.md');
+    await until(() => fs.existsSync(stage), 'premier contenu');
+    check('collection : premier contenu (titre, adresse)', fs.readFileSync(stage, 'utf8') === '---\ntitle: Stage design graphique\nslug: stage-design-graphique\n---\n', fs.readFileSync(stage, 'utf8').replace(/\n/g, ' | '));
+    if (shots) await page.screenshot({ path: `${shots}/cms-collection.png` });
+    await page.click('.cms-item-head h2');
+    for (let i = 0; i < 2; i++) {
+      await page.click('.cms-head .icon-btn[title^="Annuler"]');
+      await page.waitForTimeout(300);
+    }
+    await until(() => cfg() === cfg0 && fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8') === doc0 && !fs.existsSync(path.dirname(stage)), 'collection annulée');
+    check('collection : annulée, fichiers identiques', true);
     await page.click('.view-tab[data-view="view-editor"]');
   }
 

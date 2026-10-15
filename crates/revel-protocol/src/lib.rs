@@ -79,6 +79,10 @@ pub struct CmsCollection {
     /// désignent une collection par ce nom).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
+    /// Pages CMS garde les valeurs absentes du schéma en enregistrant un contenu
+    /// (`settings.content.merge`) ; sinon il les retire.
+    #[serde(default)]
+    pub merge: bool,
     /// Tableau : champ principal, colonnes, tri (`view` de Pages CMS).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<CmsTableView>,
@@ -136,6 +140,9 @@ pub struct CmsField {
     /// Champs d'un objet.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fields: Vec<CmsField>,
+    /// Composant de `.pages.yml` dont le champ reprend la définition (partagée).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub component: Option<String>,
 }
 
 /// Contenu d'une collection : en-tête du fichier Markdown et page publiée.

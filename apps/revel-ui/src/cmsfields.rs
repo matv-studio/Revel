@@ -553,6 +553,7 @@ pub fn field_row(
     value: Signal<Option<Value>>,
     set: Callback<Option<Value>>,
     cols: Cols,
+    aside: Option<AnyView>,
 ) -> AnyView {
     let ui = expect_context::<Ui>();
     let kind = kind_of(&f, value.get_untracked().as_ref());
@@ -582,7 +583,7 @@ pub fn field_row(
                         }
                         set.run(Some(Value::Object(o)));
                     });
-                    field_row(s, sub_value, sub_set, cols)
+                    field_row(s, sub_value, sub_set, cols, None)
                 }).collect_view()}
             </fieldset>
         }
@@ -607,13 +608,19 @@ pub fn field_row(
     };
     // Contrôle composé (texte riche, pastilles) : pas dans un `<label>`, qui renverrait chaque
     // clic vers son premier bouton.
-    let composite = matches!(
-        kind,
-        Kind::Rich
-            | Kind::List
-            | Kind::Select { multiple: true }
-            | Kind::Reference { multiple: true }
-    );
+    let composite = aside.is_some()
+        || matches!(
+            kind,
+            Kind::Rich
+                | Kind::List
+                | Kind::Select { multiple: true }
+                | Kind::Reference { multiple: true }
+        );
+    // Actions à droite du libellé (valeur hors schéma : avertissement, ajout au schéma).
+    let head = match aside {
+        Some(a) => view! { <div class="cms-field-head">{head}{a}</div> }.into_any(),
+        None => head.into_any(),
+    };
     if composite {
         view! {
             <div class="cms-item-field" class:is-inline=inline class:is-invalid=move || error.with(Option::is_some) data-field=name>

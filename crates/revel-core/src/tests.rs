@@ -1032,3 +1032,125 @@ fn medias_du_site() {
     );
     assert!(m.iter().all(|f| f.modified.is_some()));
 }
+
+#[test]
+fn design_propre_a_un_contenu() {
+    use revel_edit::Command;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let entry = "---\ntitle: Wattr\n---\n\nCorps\n";
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.layouts.push(revel_model::Layout {
+            id: "projet".into(),
+            parent: None,
+            props: Default::default(),
+            body: vec![
+                Node::Html {
+                    html: "<!doctype html>".into(),
+                },
+                el("article", &[("class", "modele")], vec![out("title")]),
+            ],
+        });
+        p.site.collections.push(revel_model::Collection {
+            id: "projets".into(),
+            source: revel_model::CollectionSource::Folder,
+            folder: "contenus/projets".into(),
+            path: Some("/projet/{{ fileSlug }}/".into()),
+            layout: Some("projet".into()),
+            props: Default::default(),
+            filter: None,
+            sort: None,
+            fields: vec![],
+        });
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("contenus/projets")).unwrap();
+        std::fs::write(site.join("contenus/projets/wattr.md"), entry).unwrap();
+    }
+    let opened = c.edit_open(&site).unwrap();
+    let id = revel_edit::make::own_layout_id(&opened.site, "projet", "wattr");
+    let mut copy = revel_edit::make::layout_copy(&opened.site, "projet", &id).unwrap();
+    // Le design propre se modifie sans toucher au modèle.
+    if let Node::Element { attrs, .. } = &mut copy.body[1] {
+        attrs[0].value = Some("propre".into());
+    }
+    let field = |v: Option<serde_json::Value>| Command::SetEntryField {
+        folder: "contenus/projets".into(),
+        file: "wattr".into(),
+        key: "layout".into(),
+        value: v,
+    };
+    c.edit_apply(
+        &site,
+        Command::Batch {
+            commands: vec![
+                Command::AddLayout {
+                    layout: copy,
+                    index: None,
+                },
+                field(Some(serde_json::json!(id))),
+            ],
+        },
+        false,
+    )
+    .unwrap();
+    let file = site.join("contenus/projets/wattr.md");
+    assert!(
+        std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("layout: projet--wattr")
+    );
+    let pages = c.edit_pages(&site).unwrap();
+    let p = pages
+        .iter()
+        .find(|p| p.file.as_deref() == Some("wattr"))
+        .unwrap();
+    assert_eq!(p.layout.as_deref(), Some("projet--wattr"));
+    c.build(&site, "production", false, &|_| {}).unwrap();
+    let out = revel_render::output_path(&p.url).unwrap();
+    let html = std::fs::read_to_string(out_dir(&site, "production").join(&out))
+        .unwrap_or_else(|e| panic!("{out} : {e}"));
+    assert!(
+        html.contains(r#"<article class="propre">Wattr</article>"#),
+        "{html}"
+    );
+    // Échec au milieu d'une suite : rien n'est gardé (gabarit retiré, fichier intact).
+    let bad = Command::Batch {
+        commands: vec![
+            Command::AddLayout {
+                layout: revel_model::Layout {
+                    id: "autre".into(),
+                    parent: None,
+                    props: Default::default(),
+                    body: vec![],
+                },
+                index: None,
+            },
+            Command::SetEntryField {
+                folder: "contenus/absent".into(),
+                file: "x".into(),
+                key: "layout".into(),
+                value: Some(serde_json::json!("autre")),
+            },
+        ],
+    };
+    assert!(c.edit_apply(&site, bad, false).is_err());
+    assert!(c.edit_open(&site).unwrap().site.layout("autre").is_none());
+    // Une seule annulation : modèle rétabli, fichiers identiques.
+    c.edit_undo(&site).unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), entry);
+    assert_eq!(c.edit_open(&site).unwrap().site, opened.site);
+    // Gabarit introuvable : celui de la collection, avec un avertissement.
+    std::fs::write(
+        &file,
+        entry.replace("title: Wattr", "title: Wattr\nlayout: disparu"),
+    )
+    .unwrap();
+    let r = c.build(&site, "production", false, &|_| {}).unwrap();
+    assert!(
+        r.warnings.iter().any(|w| w.contains("disparu")),
+        "{:?}",
+        r.warnings
+    );
+}

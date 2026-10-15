@@ -108,7 +108,6 @@ nav-publish = Publier
 editor-loading = Ouverture du site dans l'éditeur…
 editor-canvas = Canevas de la page
 editor-page = Page affichée
-editor-pages-fixed = Pages
 editor-breakpoints = Points de rupture
 editor-bp-desktop = Ordinateur (base)
 editor-bp-max = Jusqu'à { $width } px
@@ -589,7 +588,18 @@ pages-count = { $count ->
        *[other] { $count } pages
     }
 pages-new = Nouvelle page
-pages-folder-new = Nouveau dossier
+pages-toggle = Déplier ou replier
+design-template = Modèle · { $collection }
+design-template-help = Modèle de la collection (gabarit « { $layout } ») : les modifications s'appliquent à tous ses contenus, sauf ceux qui ont un design propre
+design-no-template = Contenus sans page
+design-own = Design propre
+design-own-help = Design propre à ce contenu : les modifications du modèle ne s'y appliquent plus
+design-detach = Créer un design propre
+design-detach-help = Créer un design propre à ce contenu (copie du modèle, qui reste inchangé)
+design-attach = Revenir au modèle
+design-orphan-help = Design propre dont le contenu n'existe plus
+design-orphan-delete = Supprimer ce design
+design-field-label = Design propre (Revel)
 cms-none = Aucune collection dans ce site.
 cms-entry-new = Nouveau contenu
 cms-collection-new = Nouvelle collection

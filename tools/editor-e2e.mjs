@@ -516,6 +516,58 @@ try {
     }
     await page.waitForFunction(async () => true);
     check('rangement : tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === docV);
+    // Pages : pages fixes et collections (modèle) ; contenu affiché sous sa collection repliée ;
+    // design propre créé puis retiré (fichier du contenu, .pages.yml), annulé ; menu des pages
+    // dans la barre d'outils quand le panneau Pages est fermé.
+    await page.click('.dock-tab[data-panel="pages"]');
+    await page.waitForSelector('.pages .collection-row[data-collection="projets"]');
+    const entriesListed = await page.$$eval('.pages .entry-row', (r) => r.length);
+    await page.click('.pages .collection-row[data-collection="projets"]');
+    await page.waitForSelector('.pages .collection-row[data-collection="projets"].is-current');
+    const entryUrl0 = await page.$eval('.pages .entry-row.is-on', (r) => r.dataset.url);
+    const shownRows = await page.$$eval('.pages .entry-row', (r) => r.length);
+    check('pages : collections (modèles) sans leurs contenus ; contenu affiché sous sa collection repliée', entriesListed === 0 && shownRows === 1 && !(await page.$('.page-pick')), entryUrl0);
+    await waitFrame(() => document.readyState === 'complete' && !!document.querySelector('[data-rv]'), 'contenu');
+    const pinfo = (await invoke('edit_pages')).find((p) => p.url === entryUrl0);
+    const colFolder = (await invoke('edit_open')).site.collections.find((c) => c.id === pinfo.collection).folder;
+    const entryFile = path.join(siteDir, colFolder, pinfo.file + '.md');
+    const entry0 = fs.readFileSync(entryFile, 'utf8');
+    const pagesYml = path.join(siteDir, '.pages.yml');
+    const yml0 = fs.existsSync(pagesYml) ? fs.readFileSync(pagesYml, 'utf8') : null;
+    const docP = JSON.stringify((await invoke('edit_open')).site);
+    check('pages : modèle de la collection signalé dans la barre d\'outils', !!(await page.$('.design-chip:not(.is-own)')));
+    await page.click('.design-chip .icon-btn');
+    await page.waitForSelector('.design-chip.is-own', { timeout: 15000 });
+    const own = (await invoke('edit_pages')).find((p) => p.url === entryUrl0).layout;
+    const entry1 = fs.readFileSync(entryFile, 'utf8');
+    const yml1 = yml0 === null ? null : fs.readFileSync(pagesYml, 'utf8');
+    check('pages : design propre (copie du modèle, clé layout du contenu, champ caché dans .pages.yml)',
+      /--/.test(own) && entry1.includes('layout: ' + own) && !!(await invoke('edit_open')).site.layouts.find((l) => l.id === own)
+        && (yml0 === null || yml1.includes('name: layout')) && !!(await page.$('.pages .entry-row.is-on .list-badge')), own);
+    await page.click('.design-chip .icon-btn');
+    await page.waitForSelector('.design-chip:not(.is-own)', { timeout: 15000 });
+    check('pages : retour au modèle (clé et gabarit retirés)', !fs.readFileSync(entryFile, 'utf8').includes('layout:') && !(await invoke('edit_open')).site.layouts.find((l) => l.id === own));
+    for (let i = 0; i < 2; i++) {
+      await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+      await page.keyboard.press('Control+z');
+      await page.waitForTimeout(400);
+    }
+    await page.waitForFunction(() => !!document.querySelector('.design-chip:not(.is-own)'));
+    check('pages : annulé, contenu, .pages.yml et document identiques', fs.readFileSync(entryFile, 'utf8') === entry0
+      && (yml0 === null || fs.readFileSync(pagesYml, 'utf8') === yml0) && JSON.stringify((await invoke('edit_open')).site) === docP);
+    await page.click('.dock-tab[data-panel="pages"]', { button: 'right' });
+    await page.click('.ctx-menu .menu-item:has-text("Fermer")');
+    await page.click('.page-pick > summary');
+    await page.waitForSelector('.page-pop .page-row');
+    await page.click('.page-pop .page-row[data-url="/"]');
+    await page.waitForFunction(() => !document.querySelector('.page-pick[open]'));
+    await waitFrame(() => document.readyState === 'complete' && location.pathname === '/', 'accueil');
+    check('pages : menu des pages dans la barre d\'outils (panneau fermé)', !(await page.$('.design-chip')));
+    if (shots) await page.screenshot({ path: `${shots}/editeur-pages-menu.png` });
+    await page.click('.panels-menu > summary');
+    await page.click('.panels-pop .menu-item--check:has-text("Pages")');
+    await page.click('.panels-menu > summary');
+    await page.waitForFunction(() => !document.querySelector('.page-pick'));
     await page.click('.dock-tab[data-panel="layers"]');
     await page.keyboard.press('Control+0');
     await page.waitForFunction(() => document.querySelector('iframe.canvas-frame').style.transform === 'scale(1)');
@@ -705,10 +757,11 @@ try {
     await page.click('.view-tab[data-view="view-cms"]');
     await page.click('.cms-table tbody tr[data-entry] .icon-btn');
     await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
-    const entryUrl = await page.$eval('.editor-page select', (s) => s.value);
+    await page.click('.dock-tab[data-panel="pages"]');
+    const entryUrl = await (await page.waitForSelector('.pages .entry-row.is-on')).getAttribute('data-url');
     f = await waitFrame((u) => location.pathname === u && !!window.__revelSlot, 'page du contenu', entryUrl);
     check('vue CMS : « Ouvrir la page » affiche le contenu dans l\'éditeur', entryUrl !== '/', entryUrl);
-    await page.selectOption('.editor-page select', '/');
+    await page.click('.pages .page-row[data-url="/"]');
     f = await waitFrame(() => location.pathname === '/' && !!window.__revelSlot, 'retour à l\'accueil');
 
     check('canevas : tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base212.site));

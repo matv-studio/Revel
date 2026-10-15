@@ -179,7 +179,18 @@
   border: var(--border) solid var(--line-strong); border-radius: var(--radius-md); background: var(--bg); color: var(--text);
   font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.5; outline: none;
 }
-.var-expr:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.var-expr:focus { border-color: var(--focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 25%, transparent); }
+
+/* --- Pages : pages fixes, collections (modèle, contenu affiché, design propre) ------------- */
+.page-row { padding-left: calc(4px + var(--depth, 0) * 14px); }
+.list-folder.is-current { background: var(--selection); }
+.list-folder.is-current .list-icon { color: var(--text); }
+.collection-row .list-chevron { border: 0; background: none; padding: 0; height: 100%; color: var(--text-faint); cursor: default; }
+.collection-row .list-chevron:hover { color: var(--text); }
+.list-badge { flex: none; display: grid; place-items: center; color: var(--set-text); }
+.list-badge svg.icon { width: 12px; height: 12px; }
+.entry-row.is-orphan { color: var(--warning-text); font-style: italic; }
+.entry-row.is-orphan .list-icon { color: var(--warning-text); }
 
 /* --- Médias et composants rangés en dossiers ------------------------------------------- */
 .media-tools { flex: none; display: flex; gap: 6px; padding: 0 8px 4px; }
@@ -205,11 +216,11 @@
 .media-crumb.is-last { color: var(--text); font-weight: var(--weight-medium); }
 .media-crumb-sep { color: var(--text-faint); font-size: var(--text-xs); }
 .list-folder, .component-row { padding-left: calc(4px + var(--depth, 0) * 14px); }
-.list-row.is-drop, .media-crumb.is-drop, .list-scroll.is-drop { background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: inset 0 0 0 1px var(--accent); }
+.list-row.is-drop, .media-crumb.is-drop, .list-scroll.is-drop { background: color-mix(in srgb, var(--accent, var(--set-text)) 18%, transparent); box-shadow: inset 0 0 0 1px var(--accent, var(--set-text)); }
 .list-row.is-dragging, .asset.is-dragging { opacity: .45; }
 .list-row.is-editing { background: var(--surface-active); }
 .folder-input {
-  flex: 1; min-width: 0; height: 22px; padding: 0 6px; border: var(--border) solid var(--accent); border-radius: var(--radius-sm);
+  flex: 1; min-width: 0; height: 22px; padding: 0 6px; border: var(--border) solid var(--focus); border-radius: var(--radius-sm);
   background: var(--bg); color: var(--text); font: inherit; font-size: var(--text-sm); outline: none;
 }
 .folder-input.is-bad { border-color: var(--danger-text); }

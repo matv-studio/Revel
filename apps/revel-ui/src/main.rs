@@ -16,6 +16,7 @@ mod insert;
 mod inspector;
 mod layers;
 mod library;
+mod pagetree;
 mod panels;
 mod publish;
 mod richtext;

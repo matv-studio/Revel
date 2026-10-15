@@ -159,3 +159,35 @@ impl Preset {
         }
     }
 }
+
+/// Identifiant libre pour le design propre d'un contenu : `<gabarit>--<fichier>` (suffixe
+/// `-2`, `-3`… si pris).
+pub fn own_layout_id(site: &Site, template: &str, file: &str) -> String {
+    let base = format!("{template}--{file}");
+    let mut id = base.clone();
+    let mut n = 2;
+    while site.layouts.iter().any(|l| l.id == id) {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    id
+}
+
+/// Copie du gabarit `from` sous l'identifiant `id` (même parent, mêmes variables), avec de
+/// nouveaux identifiants de nœuds.
+pub fn layout_copy(site: &Site, from: &str, id: &str) -> Result<revel_model::Layout, EditError> {
+    let src = site
+        .layout(from)
+        .ok_or_else(|| EditError::NotFound(from.to_string()))?;
+    let mut taken = site.node_ids();
+    let mut body = src.body.clone();
+    for n in body.iter_mut() {
+        refresh_ids(n, &mut taken);
+    }
+    Ok(revel_model::Layout {
+        id: id.to_string(),
+        parent: src.parent.clone(),
+        props: src.props.clone(),
+        body,
+    })
+}

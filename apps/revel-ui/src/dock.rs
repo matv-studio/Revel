@@ -72,14 +72,6 @@ impl PanelId {
         }
     }
 
-    /// Panneau à côté duquel celui-ci s'ouvre (variables avec les calques).
-    fn beside(self) -> Option<PanelId> {
-        match self {
-            PanelId::Variables => Some(PanelId::Layers),
-            _ => None,
-        }
-    }
-
     /// Côté où le panneau revient quand on le rouvre.
     fn home(self) -> Side {
         match self {
@@ -375,18 +367,10 @@ impl Layout {
             self.activate(p);
             return;
         }
-        let near = p.beside().and_then(|n| {
-            self.groups()
-                .find_map(|g| Some((g.id, g.tabs.iter().position(|t| *t == n)?)))
-        });
-        if let Some((group, i)) = near {
-            self.put(
-                p,
-                Drop::Join {
-                    group,
-                    index: i + 1,
-                },
-            );
+        // À côté de ses voisins de la disposition par défaut (Pages avec Composants et Médias,
+        // Variables après Calques), sinon dans une colonne de son côté.
+        if let Some((group, index)) = self.default_spot(p) {
+            self.put(p, Drop::Join { group, index });
             return;
         }
         let side = p.home();
@@ -408,6 +392,23 @@ impl Layout {
                 self.put(p, Drop::Column { side });
             }
         }
+    }
+
+    /// Place d'un panneau d'après la disposition par défaut : après le voisin qui le précède
+    /// (sinon avant celui qui le suit) dans le groupe où ce voisin se trouve.
+    fn default_spot(&self, p: PanelId) -> Option<(u32, usize)> {
+        let def = Layout::default();
+        let tabs = &def.groups().find(|g| g.tabs.contains(&p))?.tabs;
+        let at = tabs.iter().position(|t| *t == p)?;
+        let find = |n: PanelId| {
+            self.groups()
+                .find_map(|g| Some((g.id, g.tabs.iter().position(|t| *t == n)?)))
+        };
+        tabs[..at]
+            .iter()
+            .rev()
+            .find_map(|n| find(*n).map(|(g, i)| (g, i + 1)))
+            .or_else(|| tabs[at + 1..].iter().find_map(|n| find(*n)))
     }
 
     /// Disposition relue (fichier d'une version précédente, modifiée à la main) : chaque panneau
@@ -1248,6 +1249,12 @@ mod tests {
         l.open(PanelId::Cms);
         assert!(l.group_of(PanelId::Insert).is_some() && l.group_of(PanelId::Cms).is_some());
         assert!(all_once(&l));
+        // Rouvert à sa place : Pages en tête du groupe des composants et médias.
+        let mut r = Layout::default();
+        r.close(PanelId::Pages);
+        r.open(PanelId::Pages);
+        assert_eq!(r.left[0].tabs[0], PanelId::Pages);
+        assert_eq!(r.left[1].active, PanelId::Layers);
         // Disposition d'une version sans « Variables » : ajouté à côté des calques.
         let mut old = Layout::default();
         old.left[1].tabs = vec![PanelId::Layers, PanelId::Cms, PanelId::Insert];

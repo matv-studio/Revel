@@ -105,7 +105,6 @@ nav-publish = Publish
 editor-loading = Opening the site in the editor…
 editor-canvas = Page canvas
 editor-page = Displayed page
-editor-pages-fixed = Pages
 editor-breakpoints = Breakpoints
 editor-bp-desktop = Desktop (base)
 editor-bp-max = Up to { $width } px
@@ -586,7 +585,18 @@ pages-count = { $count ->
        *[other] { $count } pages
     }
 pages-new = New page
-pages-folder-new = New folder
+pages-toggle = Expand or collapse
+design-template = Template · { $collection }
+design-template-help = Collection template (layout “{ $layout }”): changes apply to all its items, except those with their own design
+design-no-template = Items without a page
+design-own = Own design
+design-own-help = This item has its own design: template changes no longer apply to it
+design-detach = Create own design
+design-detach-help = Create a design for this item only (a copy of the template, which stays unchanged)
+design-attach = Back to template
+design-orphan-help = Own design whose item no longer exists
+design-orphan-delete = Delete this design
+design-field-label = Own design (Revel)
 cms-none = No collection in this site.
 cms-entry-new = New content
 cms-collection-new = New collection

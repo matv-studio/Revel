@@ -366,7 +366,7 @@ impl<'a> Builder<'a> {
         std::mem::take(&mut self.warnings.borrow_mut())
     }
 
-    fn warn(&self, w: String) {
+    pub(crate) fn warn(&self, w: String) {
         let mut ws = self.warnings.borrow_mut();
         if !ws.contains(&w) {
             ws.push(w);

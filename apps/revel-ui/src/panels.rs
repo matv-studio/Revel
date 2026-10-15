@@ -1,11 +1,10 @@
-//! Panneaux de l'éditeur autres que calques, ajouter, styles et réglages : pages, CMS, composants,
-//! médias, interactions. Les fonctions prévues aux étapes suivantes sont déjà en place, désactivées,
-//! avec l'étape indiquée en info-bulle.
+//! Éléments communs des panneaux (recherche, fonctions prévues) et panneau CMS (collections et
+//! contenus, fermé par défaut). Les fonctions prévues aux étapes suivantes sont déjà en place,
+//! désactivées, avec l'étape indiquée en info-bulle.
 
 use crate::editor::Ed;
 use crate::{Ui, icons};
 use leptos::prelude::*;
-use std::collections::BTreeMap;
 
 /// Bouton d'une fonction prévue (désactivé, étape en info-bulle).
 #[component]
@@ -44,106 +43,12 @@ pub(crate) fn Search(value: RwSignal<String>, key: &'static str) -> impl IntoVie
     }
 }
 
-fn matches(q: &str, texts: &[&str]) -> bool {
-    let q = q.trim().to_lowercase();
-    q.is_empty() || texts.iter().any(|t| t.to_lowercase().contains(&q))
-}
-
 /// Ouvre une page dans le canevas.
 fn open_page(ed: Ed, url: String) {
     if ed.page.get_untracked() != url {
         ed.page.set(url);
         ed.scroll.set((0.0, 0.0));
         ed.selected.set(None);
-    }
-}
-
-/// Pages fixes et contenus de collections (dossiers repliables), avec recherche.
-#[component]
-pub fn Pages() -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let ed = expect_context::<Ed>();
-    let q = RwSignal::new(String::new());
-    let open = RwSignal::new(Vec::<String>::new());
-    let fixed = move || {
-        ed.pages.with(|ps| {
-            ps.iter()
-                .filter(|p| p.page.is_some())
-                .filter(|p| q.with(|q| matches(q, &[&p.title, &p.url])))
-                .cloned()
-                .collect::<Vec<_>>()
-        })
-    };
-    let collections = move || {
-        let mut m: BTreeMap<String, Vec<revel_protocol::EditorPageInfo>> = BTreeMap::new();
-        ed.pages.with(|ps| {
-            for p in ps.iter().filter(|p| p.collection.is_some()) {
-                if q.with(|q| {
-                    matches(
-                        q,
-                        &[
-                            &p.title,
-                            &p.url,
-                            p.collection.as_deref().unwrap_or_default(),
-                        ],
-                    )
-                }) {
-                    m.entry(p.collection.clone().unwrap_or_default())
-                        .or_default()
-                        .push(p.clone());
-                }
-            }
-        });
-        m.into_iter().collect::<Vec<_>>()
-    };
-    let row = move |p: revel_protocol::EditorPageInfo, nested: bool| {
-        let url = p.url.clone();
-        let u2 = url.clone();
-        let title = if p.title.is_empty() {
-            p.url.clone()
-        } else {
-            p.title.clone()
-        };
-        view! {
-            <button class="list-row" class:is-on=move || ed.page.get() == u2 class:is-nested=nested
-                title=p.url.clone() on:click=move |_| open_page(ed, url.clone())>
-                <span class="list-icon">{if nested { icons::text() } else { icons::page() }}</span>
-                <span class="list-label">{title}</span>
-                <span class="list-meta">{p.url.clone()}</span>
-            </button>
-        }
-    };
-    view! {
-        <div class="panel-list">
-            <Search value=q key="pages-search"/>
-            <div class="list-scroll">
-                {move || fixed().into_iter().map(|p| row(p, false)).collect_view()}
-                {move || collections().into_iter().map(|(c, items)| {
-                    let c2 = c.clone();
-                    let c3 = c.clone();
-                    let is_open = Memo::new(move |_| !q.with(|q| q.is_empty()) || open.with(|o| o.contains(&c2)));
-                    let n = items.len();
-                    view! {
-                        <button class="list-row list-folder" on:click=move |_| open.update(|o| {
-                            if let Some(i) = o.iter().position(|x| *x == c3) { o.remove(i); } else { o.push(c3.clone()); }
-                        })>
-                            <span class="list-chevron">{move || if is_open.get() { icons::chevron_down() } else { icons::chevron_right() }}</span>
-                            <span class="list-icon">{icons::folder()}</span>
-                            <span class="list-label">{c.clone()}</span>
-                            <span class="list-count">{n}</span>
-                        </button>
-                        <Show when=move || is_open.get()>
-                            {items.clone().into_iter().map(|p| row(p, true)).collect_view()}
-                        </Show>
-                    }
-                }).collect_view()}
-            </div>
-            <footer class="panel-foot">
-                <span class="panel-foot-text muted">{move || ui.tx("pages-count", &[("count", ed.pages.with(|p| p.len()).to_string())])}</span>
-                <PlannedButton key="pages-new" step=3 icon=icons::plus/>
-                <PlannedButton key="pages-folder-new" step=3 icon=icons::folder/>
-            </footer>
-        </div>
     }
 }
 

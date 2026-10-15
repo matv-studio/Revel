@@ -951,3 +951,67 @@ fn rangement_des_medias_et_composants() {
     // Rangement vide : rien n'est écrit dans le document.
     assert_eq!(serde_json::to_string(&s).unwrap(), before);
 }
+
+#[test]
+fn gabarit_copie_puis_retire() {
+    let mut s = sample();
+    s.layouts.push(revel_model::Layout {
+        id: "layouts/base".into(),
+        parent: None,
+        props: Default::default(),
+        body: vec![el("main", &[], vec![Node::Slot])],
+    });
+    s.layouts.push(revel_model::Layout {
+        id: "layouts/projet".into(),
+        parent: Some("layouts/base".into()),
+        props: Default::default(),
+        body: vec![el("article", &[("class", "projet")], vec![Node::Slot])],
+    });
+    s.ensure_ids();
+    let before = s.clone();
+    let id = make::own_layout_id(&s, "layouts/projet", "wattr");
+    assert_eq!(id, "layouts/projet--wattr");
+    let copy = make::layout_copy(&s, "layouts/projet", &id).unwrap();
+    assert_eq!(copy.parent.as_deref(), Some("layouts/base"));
+    let src_id = node_id(&s.layouts[1].body[0]).unwrap().to_string();
+    assert_ne!(
+        node_id(&copy.body[0]).unwrap(),
+        src_id,
+        "nouveaux identifiants"
+    );
+    let inv = apply(
+        &mut s,
+        &Command::AddLayout {
+            layout: copy.clone(),
+            index: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        make::own_layout_id(&s, "layouts/projet", "wattr"),
+        "layouts/projet--wattr-2"
+    );
+    // Même identifiant : refusé.
+    assert!(
+        apply(
+            &mut s,
+            &Command::AddLayout {
+                layout: copy,
+                index: None
+            }
+        )
+        .is_err()
+    );
+    // Gabarit parent d'un autre : retrait refusé.
+    assert!(matches!(
+        apply(
+            &mut s,
+            &Command::RemoveLayout {
+                id: "layouts/base".into()
+            }
+        ),
+        Err(EditError::WrongKind(_))
+    ));
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(s, before);
+}

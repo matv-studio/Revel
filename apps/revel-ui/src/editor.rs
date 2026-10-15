@@ -356,17 +356,9 @@ impl Ed {
                 self.state.set(Some(st));
                 return;
             }
-            // Contenu de collection écrit par le cœur (vue CMS, annulation) : document, pages et
-            // canevas relus.
-            if matches!(
-                cmd,
-                Command::SetEntryField { .. }
-                    | Command::SetEntryBody { .. }
-                    | Command::CreateEntry { .. }
-                    | Command::WriteEntry { .. }
-                    | Command::CreateCmsCollection { .. }
-                    | Command::RemoveCmsCollection { .. }
-            ) {
+            // Contenu de collection écrit par le cœur (vue CMS, design propre, annulation) :
+            // document, pages et canevas relus.
+            if writes_entries(cmd) {
                 self.reopen(ui);
                 self.load.update(|n| *n += 1);
                 self.state.set(Some(st));
@@ -975,6 +967,20 @@ impl Ed {
     }
 }
 
+/// Commande (ou suite) qui écrit des contenus de collection ou crée, retire une collection.
+fn writes_entries(c: &Command) -> bool {
+    match c {
+        Command::Batch { commands } => commands.iter().any(writes_entries),
+        Command::SetEntryField { .. }
+        | Command::SetEntryBody { .. }
+        | Command::CreateEntry { .. }
+        | Command::WriteEntry { .. }
+        | Command::CreateCmsCollection { .. }
+        | Command::RemoveCmsCollection { .. } => true,
+        _ => false,
+    }
+}
+
 /// Nœud inséré par une commande (première insertion d'une suite).
 fn inserted(c: &Command) -> Option<&revel_model::Node> {
     match c {
@@ -1356,7 +1362,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
 fn panel_view(p: crate::dock::PanelId) -> AnyView {
     use crate::dock::PanelId;
     match p {
-        PanelId::Pages => view! { <crate::panels::Pages/> }.into_any(),
+        PanelId::Pages => view! { <crate::pagetree::Pages/> }.into_any(),
         PanelId::Layers => view! { <crate::layers::Layers/> }.into_any(),
         PanelId::Variables => view! { <crate::variables::Variables/> }.into_any(),
         PanelId::Cms => view! { <crate::panels::Cms/> }.into_any(),
@@ -1413,38 +1419,7 @@ fn Toolbar() -> impl IntoView {
     };
     view! {
         <div class="editor-toolbar">
-            <div class="select editor-page">
-                <select class="input" aria-label=ui.t("editor-page")
-                    prop:value=move || ed.page.get()
-                    on:change=move |e| {
-                        ed.page.set(event_target_value(&e));
-                        ed.scroll.set((0.0, 0.0));
-                        ed.selected.set(None);
-                    }>
-                    <optgroup label=ui.t("editor-pages-fixed")>
-                        {move || ed.pages.get().into_iter().filter(|p| p.page.is_some()).map(|p| {
-                            let label = if p.title.is_empty() { p.url.clone() } else { format!("{} — {}", p.title, p.url) };
-                            view! { <option value=p.url.clone()>{label}</option> }
-                        }).collect_view()}
-                    </optgroup>
-                    {move || {
-                        let pages = ed.pages.get();
-                        let mut cols: Vec<String> = pages.iter().filter_map(|p| p.collection.clone()).collect();
-                        cols.dedup();
-                        cols.into_iter().map(|c| {
-                            let items: Vec<_> = pages.iter().filter(|p| p.collection.as_deref() == Some(c.as_str())).cloned().collect();
-                            view! {
-                                <optgroup label=c.clone()>
-                                    {items.into_iter().map(|p| {
-                                        let label = if p.title.is_empty() { p.url.clone() } else { format!("{} — {}", p.title, p.url) };
-                                        view! { <option value=p.url.clone()>{label}</option> }
-                                    }).collect_view()}
-                                </optgroup>
-                            }
-                        }).collect_view()
-                    }}
-                </select>
-            </div>
+            <crate::pagetree::PageContext/>
             <div class="segmented" role="group" aria-label=ui.t("editor-breakpoints")>
                 {move || breakpoints().into_iter().map(|b| {
                     let id = b.id.clone();

@@ -21,7 +21,25 @@
   min-width: 0;
 }
 .editor-toolbar .select select.input { height: var(--control-md); }
-.editor-page { width: 220px; max-width: 26vw; }
+/* Page affichée (menu des pages quand le panneau Pages n'est pas visible), modèle ou design
+   propre d'un contenu de collection. */
+.page-pick > summary.page-pick-btn {
+  display: flex; align-items: center; gap: 6px; height: var(--control-md); max-width: 240px; padding: 0 8px;
+  border-radius: var(--radius-md); background: var(--surface-raised); color: var(--text); font-size: var(--text-sm);
+}
+.page-pick > summary.page-pick-btn:hover { background: var(--surface-hover); }
+.page-pick-btn .list-icon { color: var(--text-faint); }
+.page-pick-btn svg.icon { width: 14px; height: 14px; flex: none; }
+.page-pick-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page-pop { width: 300px; padding: 0 0 4px; gap: 0; }
+.page-pop-list { max-height: min(60vh, 520px); overflow: auto; }
+.design-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: var(--control-md); padding: 0 2px 0 10px;
+  border-radius: 999px; background: var(--surface-raised); color: var(--text-muted); font-size: var(--text-xs); white-space: nowrap;
+}
+.design-chip-icon { display: grid; place-items: center; }
+.design-chip-icon svg.icon { width: 13px; height: 13px; }
+.design-chip.is-own { color: var(--set-text); background: color-mix(in srgb, var(--set-text) 14%, transparent); }
 .editor-zoom { width: 116px; }
 .editor-toolbar .tool-toggle { width: var(--control-md); height: var(--control-md); }
 .editor-toolbar .segmented button { display: inline-flex; align-items: center; gap: var(--s-1); }

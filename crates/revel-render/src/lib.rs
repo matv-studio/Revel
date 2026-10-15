@@ -349,6 +349,32 @@ fn normalize_url(u: &str) -> String {
 }
 
 /// Collections et pages à produire.
+/// Gabarit d'un contenu : `layout` de son en-tête (design propre au contenu), sinon celui de la
+/// collection. Vide : celui de la collection ; introuvable : celui de la collection, signalé.
+fn entry_layout(
+    b: &eval::Builder,
+    site: &Site,
+    col: &revel_model::Collection,
+    data: &BTreeMap<String, Value>,
+    folder: &str,
+    file: &str,
+) -> Option<String> {
+    let own = data
+        .get("layout")
+        .and_then(|v| v.as_str().map(|s| s.trim().to_string()))
+        .filter(|l| !l.is_empty());
+    match own {
+        Some(l) if site.layout(&l).is_some() => Some(l),
+        Some(l) => {
+            b.warn(format!(
+                "contenu {folder}/{file} : gabarit « {l} » introuvable, gabarit de la collection utilisé"
+            ));
+            col.layout.clone()
+        }
+        None => col.layout.clone(),
+    }
+}
+
 fn prepare<'s>(b: &eval::Builder<'s>, input: &'s BuildInput) -> Result<Prepared<'s>, RenderError> {
     let site = input.site;
     let mut entries_index: std::collections::HashMap<String, Vec<(String, String, Value)>> =
@@ -423,14 +449,7 @@ fn prepare<'s>(b: &eval::Builder<'s>, input: &'s BuildInput) -> Result<Prepared<
             };
             let job = url.map(|url| Job {
                 url,
-                // Gabarit propre au contenu (`layout` de l'en-tête, vide : celui de la collection).
-                layout: data
-                    .get("layout")
-                    .and_then(|v| v.as_str())
-                    .map(str::trim)
-                    .filter(|l| !l.is_empty())
-                    .map(str::to_string)
-                    .or_else(|| col.layout.clone()),
+                layout: entry_layout(b, site, col, &data, &e.folder, &e.file_stem),
                 data: data.clone(),
                 origins,
                 body: None,

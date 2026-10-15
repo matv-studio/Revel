@@ -12,6 +12,7 @@ default = ["keyring"]
 keyring = ["dep:keyring"]
 
 [dependencies]
+base64 = "0.22.1"
 revel-model.workspace = true
 revel-markup.workspace = true
 revel-project.workspace = true

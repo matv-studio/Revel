@@ -409,6 +409,37 @@ pub async fn edit_redo(path: &str) -> Res<revel_edit::EditState> {
     call("edit_redo", &PathArg { path }).await
 }
 
+/// Importe un média dans le dossier des médias du site.
+pub async fn edit_import_media(
+    path: &str,
+    name: &str,
+    data: &[u8],
+) -> Res<revel_protocol::MediaFile> {
+    use base64::Engine;
+    let data = base64::engine::general_purpose::STANDARD.encode(data);
+    call(
+        "edit_import_media",
+        &serde_json::json!({ "path": path, "name": name, "data": data }),
+    )
+    .await
+}
+
+/// Remplace le contenu d'un média (même adresse).
+pub async fn edit_replace_media(
+    path: &str,
+    url: &str,
+    name: &str,
+    data: &[u8],
+) -> Res<revel_protocol::MediaFile> {
+    use base64::Engine;
+    let data = base64::engine::general_purpose::STANDARD.encode(data);
+    call(
+        "edit_replace_media",
+        &serde_json::json!({ "path": path, "url": url, "name": name, "data": data }),
+    )
+    .await
+}
+
 /// Médias du site ouvert dans l'éditeur.
 pub async fn edit_media(path: &str) -> Res<Vec<revel_protocol::MediaFile>> {
     call("edit_media", &PathArg { path }).await

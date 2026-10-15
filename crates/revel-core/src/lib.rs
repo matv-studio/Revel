@@ -64,6 +64,9 @@ pub enum CoreError {
     Edit(revel_edit::EditError),
     #[error("site non ouvert dans l'éditeur")]
     NotOpen,
+    /// Import ou remplacement d'un média refusé.
+    #[error("{0}")]
+    Media(String),
     #[error("{0}")]
     Other(String),
 }
@@ -109,6 +112,7 @@ impl CoreError {
             Self::GithubCancelled => Failure::new("error-github-cancelled"),
             Self::Edit(e) => Failure::new(e.key()).arg("detail", e.to_string()),
             Self::NotOpen => Failure::new("error-edit-not-open"),
+            Self::Media(detail) => Failure::new("error-media").arg("detail", detail.clone()),
             Self::Other(detail) => Failure::detail(detail.clone()),
         }
     }

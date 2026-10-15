@@ -319,6 +319,117 @@ impl Core {
         Ok(out)
     }
 
+    /// Dossier des médias du site : dossier copié tel quel publié sous `/media` (sinon le premier
+    /// dossier copié tel quel) ; sans dossier copié, `media/` est créé et déclaré.
+    fn media_dir(&self, path: &Path) -> Result<(PathBuf, String)> {
+        let found = self.with_project(path, |p| {
+            let pick = p
+                .site
+                .passthrough
+                .iter()
+                .find(|x| x.to.trim_matches('/') == "media")
+                .or_else(|| {
+                    p.site.passthrough.iter().find(|x| {
+                        p.dir.join(&x.from).is_dir() && !x.to.trim_matches('/').is_empty()
+                    })
+                })
+                .map(|x| (p.dir.join(&x.from), format!("/{}", x.to.trim_matches('/'))));
+            Ok(pick)
+        })?;
+        if let Some(f) = found {
+            std::fs::create_dir_all(&f.0)?;
+            return Ok(f);
+        }
+        self.with_session_mut(path, |p| {
+            p.site.passthrough.push(revel_model::Passthrough {
+                from: "media".into(),
+                to: "media".into(),
+            });
+            Ok(())
+        })?;
+        let dir = path.join("media");
+        std::fs::create_dir_all(&dir)?;
+        Ok((dir, "/media".into()))
+    }
+
+    /// Importe un fichier média (`name` : nom d'origine, `data` : contenu) dans le dossier des
+    /// médias (`folder` : sous-dossier sur le disque, facultatif) ; nom en minuscules sans accent,
+    /// numéroté s'il est pris. Refusé si ce n'est pas un média.
+    pub fn edit_import_media(
+        &self,
+        path: &Path,
+        name: &str,
+        data: &[u8],
+    ) -> Result<revel_protocol::MediaFile> {
+        let (stem, ext) = match name.rsplit_once('.') {
+            Some((s, e)) => (s, e.to_ascii_lowercase()),
+            None => (name, String::new()),
+        };
+        let kind = revel_protocol::MediaKind::of(&format!("x.{ext}"))
+            .ok_or_else(|| CoreError::Media(format!("type de fichier refusé : {name}")))?;
+        let (dir, prefix) = self.media_dir(path)?;
+        let base = {
+            let s = revel_model::slugify(stem);
+            if s.is_empty() { "media".to_string() } else { s }
+        };
+        let mut file = format!("{base}.{ext}");
+        let mut n = 2;
+        while dir.join(&file).exists() {
+            file = format!("{base}-{n}.{ext}");
+            n += 1;
+        }
+        let target = dir.join(&file);
+        std::fs::write(&target, data)?;
+        let url = format!("{prefix}/{file}");
+        let mut out = Vec::new();
+        media_entry(&target, &url, &mut out);
+        out.pop()
+            .filter(|m| m.kind == kind)
+            .ok_or_else(|| CoreError::Media(format!("import impossible : {name}")))
+    }
+
+    /// Remplace le contenu d'un média (même adresse, donc toutes ses utilisations suivent) ; même
+    /// extension exigée ; l'ancien fichier est gardé dans `.revel/corbeille/`.
+    pub fn edit_replace_media(
+        &self,
+        path: &Path,
+        url: &str,
+        name: &str,
+        data: &[u8],
+    ) -> Result<revel_protocol::MediaFile> {
+        let ext_of = |s: &str| {
+            s.rsplit_once('.')
+                .map(|(_, e)| e.to_ascii_lowercase())
+                .unwrap_or_default()
+        };
+        if ext_of(url) != ext_of(name) {
+            return Err(CoreError::Media(format!(
+                "même format exigé : {} attendu",
+                ext_of(url)
+            )));
+        }
+        let file = self
+            .with_project(path, |p| Ok(p.source_of_url(url)))?
+            .filter(|f| f.is_file())
+            .ok_or_else(|| CoreError::Media(format!("média introuvable : {url}")))?;
+        let trash = path.join(".revel").join("corbeille");
+        std::fs::create_dir_all(&trash)?;
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let fname = file
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        std::fs::copy(&file, trash.join(format!("{stamp}-{fname}")))?;
+        std::fs::write(&file, data)?;
+        let mut out = Vec::new();
+        media_entry(&file, url, &mut out);
+        out.pop()
+            .ok_or_else(|| CoreError::Media(format!("remplacement impossible : {url}")))
+    }
+
     /// Réglages du canevas ouvert.
     pub fn canvas_options(&self) -> Option<CanvasOptions> {
         let c = self.canvas.lock().unwrap_or_else(|e| e.into_inner());

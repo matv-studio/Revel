@@ -327,73 +327,18 @@ pub fn Insert() -> impl IntoView {
         insert_at(ui, ed, preset, text_key, parent, index);
     };
 
-    // Glisser vers la page : appui, puis déplacement de plus de 4 px. Le pointeur est capturé par
-    // l'élément du panneau ; au-dessus du cadre, sa position (pixels de la page) est transmise au
-    // canevas, qui montre l'emplacement et le renvoie (`ed.drop`).
-    let press = StoredValue::new(None::<(f64, f64)>);
-    let frame_point = move |cx: f64, cy: f64| -> Option<(f64, f64)> {
-        let f = ed.frame.get_untracked()?;
-        let r = f.get_bounding_client_rect();
-        let inside = cx >= r.left() && cx <= r.right() && cy >= r.top() && cy <= r.bottom();
-        let s = ed.scale();
-        inside.then(|| ((cx - r.left()) / s, (cy - r.top()) / s))
-    };
-    let on_down = move |e: ev::PointerEvent| {
-        if e.button() != 0 {
-            return;
-        }
-        if let Some(t) = e
-            .current_target()
-            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-        {
-            let _ = t.set_pointer_capture(e.pointer_id());
-        }
-        press.set_value(Some((f64::from(e.client_x()), f64::from(e.client_y()))));
-    };
+    let drag = CanvasDrag::new(ui, ed);
+    let on_down = move |e: ev::PointerEvent| drag.down(&e);
     let on_move = move |e: ev::PointerEvent, it: DragItem| {
-        let Some((sx, sy)) = press.get_value() else {
-            return;
-        };
-        let (cx, cy) = (f64::from(e.client_x()), f64::from(e.client_y()));
-        if ed.drag.get_untracked().is_none() {
-            if (cx - sx).hypot(cy - sy) < 4.0 {
-                return;
-            }
-            ed.drop.set(None);
-            ed.post(serde_json::json!({ "type": "drag", "phase": "start", "tag": it.tag, "block": it.block }));
-            ed.drag.set(Some(it));
-        }
-        ed.drag_pos.set((cx, cy));
-        match frame_point(cx, cy) {
-            Some((x, y)) => {
-                ed.post(serde_json::json!({ "type": "drag", "phase": "move", "x": x, "y": y }))
-            }
-            None => {
-                // Hors du cadre : plus d'emplacement.
-                if ed.drop.get_untracked().is_some() {
-                    ed.post(serde_json::json!({ "type": "drag", "phase": "out" }));
-                    ed.drop.set(None);
-                }
-            }
-        }
+        drag.moved(&e, it);
     };
-    let finish = move |e: Option<ev::PointerEvent>| {
-        press.set_value(None);
-        let Some(it) = ed.drag.get_untracked() else {
-            return false;
-        };
-        ed.drag.set(None);
-        ed.post(serde_json::json!({ "type": "drag", "phase": "end" }));
-        let over = e.is_some_and(|e| {
-            frame_point(f64::from(e.client_x()), f64::from(e.client_y())).is_some()
-        });
-        if let (true, Some(t)) = (over, ed.drop.get_untracked())
-            && let Some((parent, index)) = drop_point(ed, &t)
-        {
-            insert_at(ui, ed, it.preset, it.text_key, parent, index);
+    let finish = move |e: Option<ev::PointerEvent>| match drag.finish(e.as_ref()) {
+        Some((it, Some((parent, index)))) => {
+            insert_item(ui, ed, &it, parent, index);
+            true
         }
-        ed.drop.set(None);
-        true
+        Some((_, None)) => true,
+        None => false,
     };
     // Échap : glisser annulé.
     let on_key = window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
@@ -423,7 +368,7 @@ pub fn Insert() -> impl IntoView {
                             }
                             Some(preset) => {
                                 let (key, help, text_key, tag, block) = (it.key, it.help, it.text, it.tag, it.block);
-                                let drag_item = move || DragItem { preset, text_key, label: ui.now(key, &[]), tag, block };
+                                let drag_item = move || DragItem { preset, text_key, label: ui.now(key, &[]), tag, block, node: None };
                                 view! {
                                     <button class="insert-item" data-item=key
                                         title=move || ui.tx(help, &[])
@@ -444,6 +389,126 @@ pub fn Insert() -> impl IntoView {
                 </section>
             }).collect_view()}
         </div>
+    }
+}
+
+/// Glisser vers la page depuis un panneau (Ajouter, Médias) : appui, puis déplacement de plus de
+/// 4 px. Le pointeur est capturé par l'élément du panneau ; au-dessus du cadre, sa position
+/// (pixels de la page) est transmise au canevas, qui montre l'emplacement (`ed.drop`).
+#[derive(Clone, Copy)]
+pub struct CanvasDrag {
+    ed: Ed,
+    press: StoredValue<Option<(f64, f64)>>,
+}
+
+impl CanvasDrag {
+    pub fn new(_ui: Ui, ed: Ed) -> Self {
+        Self {
+            ed,
+            press: StoredValue::new(None),
+        }
+    }
+
+    /// Point de la page sous le pointeur (coordonnées de la fenêtre), s'il est sur le cadre.
+    pub fn frame_point(self, cx: f64, cy: f64) -> Option<(f64, f64)> {
+        let f = self.ed.frame.get_untracked()?;
+        let r = f.get_bounding_client_rect();
+        let inside = cx >= r.left() && cx <= r.right() && cy >= r.top() && cy <= r.bottom();
+        let s = self.ed.scale();
+        inside.then(|| ((cx - r.left()) / s, (cy - r.top()) / s))
+    }
+
+    pub fn down(self, e: &ev::PointerEvent) {
+        if e.button() != 0 {
+            return;
+        }
+        if let Some(t) = e
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        {
+            let _ = t.set_pointer_capture(e.pointer_id());
+        }
+        self.press
+            .set_value(Some((f64::from(e.client_x()), f64::from(e.client_y()))));
+    }
+
+    /// Déplacement : glisser commencé après 4 px ; `true` pendant un glisser.
+    pub fn moved(self, e: &ev::PointerEvent, it: DragItem) -> bool {
+        let ed = self.ed;
+        let Some((sx, sy)) = self.press.get_value() else {
+            return false;
+        };
+        let (cx, cy) = (f64::from(e.client_x()), f64::from(e.client_y()));
+        if ed.drag.get_untracked().is_none() {
+            if (cx - sx).hypot(cy - sy) < 4.0 {
+                return false;
+            }
+            ed.drop.set(None);
+            ed.post(serde_json::json!({ "type": "drag", "phase": "start", "tag": it.tag, "block": it.block }));
+            ed.drag.set(Some(it));
+        }
+        ed.drag_pos.set((cx, cy));
+        match self.frame_point(cx, cy) {
+            Some((x, y)) => {
+                ed.post(serde_json::json!({ "type": "drag", "phase": "move", "x": x, "y": y }))
+            }
+            None => {
+                // Hors du cadre : plus d'emplacement.
+                if ed.drop.get_untracked().is_some() {
+                    ed.post(serde_json::json!({ "type": "drag", "phase": "out" }));
+                    ed.drop.set(None);
+                }
+            }
+        }
+        true
+    }
+
+    /// Fin : `None` sans glisser (simple clic) ; sinon l'élément glissé et l'emplacement dans la
+    /// page s'il a été relâché sur le cadre.
+    pub fn finish(
+        self,
+        e: Option<&ev::PointerEvent>,
+    ) -> Option<(DragItem, Option<(Parent, usize)>)> {
+        let ed = self.ed;
+        self.press.set_value(None);
+        let it = ed.drag.get_untracked()?;
+        ed.drag.set(None);
+        ed.post(serde_json::json!({ "type": "drag", "phase": "end" }));
+        let over = e.is_some_and(|e| {
+            self.frame_point(f64::from(e.client_x()), f64::from(e.client_y()))
+                .is_some()
+        });
+        let at = if over {
+            ed.drop.get_untracked().and_then(|t| drop_point(ed, &t))
+        } else {
+            None
+        };
+        ed.drop.set(None);
+        Some((it, at))
+    }
+}
+
+/// Insère l'élément glissé (prédéfini ou nœud fourni) à un emplacement.
+pub fn insert_item(ui: Ui, ed: Ed, it: &DragItem, parent: Parent, index: usize) {
+    match &it.node {
+        Some(n) => {
+            let mut node = n.clone();
+            let mut taken = ed
+                .doc
+                .with_untracked(|d| d.as_ref().map(|d| d.node_ids()))
+                .unwrap_or_default();
+            revel_edit::make::refresh_ids(&mut node, &mut taken);
+            ed.apply(
+                ui,
+                Command::Insert {
+                    parent,
+                    index,
+                    node,
+                },
+                false,
+            );
+        }
+        None => insert_at(ui, ed, it.preset, it.text_key, parent, index),
     }
 }
 

@@ -350,6 +350,7 @@ error-edit-move = An element cannot be placed inside itself.
 error-edit-tag = Invalid tag name: letters, digits and hyphens only. ({ $detail })
 error-edit-not-open = This site is not open in the editor.
 error-edit-css = CSS refused: a single declaration, with no semicolon or brace outside quotes, and no “!important” in the value (separate checkbox). ({ $detail })
+error-media = Media not imported: { $detail }
 error-edit-expr = Invalid expression, nothing was changed. ({ $detail })
 error-edit-path = Address refused: it starts with “/” and only contains lowercase letters without accents, digits and hyphens. ({ $detail })
 error-edit-path-taken = This address is already used by another page. ({ $detail })
@@ -667,6 +668,15 @@ media-sort-name-desc = Name (Z → A)
 media-sort-type = Type
 media-sort-size = Size
 media-thumb-size = Thumbnail size
+media-details = Details
+media-insert = Place in page
+media-insert-short = Place
+media-url = Address
+media-size = Size
+media-alt = Default alternative text
+media-alt-help = What the image shows, for screen readers
+media-replace = Replace
+media-replace-help = Replacing keeps the address: every page using this media follows. The old file is kept in .revel/corbeille.
 media-copy-url = Copy address
 media-none = No media in the site's folders
 media-no-match = No media found
@@ -674,6 +684,17 @@ media-count = { $count ->
         [0] no media
         [one] 1 media file
        *[other] { $count } media files
+    }
+picker-image-title = Choose an image
+picker-media-title = Choose a file
+picker-folder = Folder
+picker-all-folders = All folders
+picker-choose-image = Choose an image from media
+picker-choose-media = Choose a file from media
+picker-count-images = { $count ->
+        [0] no images
+        [one] 1 image
+       *[other] { $count } images
     }
 size-kb = { $n } KB
 size-mb = { $n } MB

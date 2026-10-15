@@ -4733,6 +4733,7 @@ dependencies = [
 name = "revel-app"
 version = "0.2.2"
 dependencies = [
+ "base64 0.22.1",
  "revel-core",
  "revel-edit",
  "revel-model",
@@ -4792,6 +4793,7 @@ name = "revel-core"
 version = "0.2.2"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "chrono",
  "keyring",
  "revel-assets",

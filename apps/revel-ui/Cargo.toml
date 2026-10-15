@@ -26,13 +26,14 @@ web-sys = { version = "0.3", features = [
     "HtmlInputElement", "ResizeObserver", "Storage", "NodeList", "WheelEvent",
     "Node", "Text", "Document", "ClipboardEvent", "Selection", "Range", "HtmlDocument",
     "FocusEvent", "InputEvent", "HtmlCanvasElement", "CanvasRenderingContext2d",
-    "AddEventListenerOptions", "HtmlTextAreaElement", "HtmlDetailsElement",
+    "AddEventListenerOptions", "HtmlTextAreaElement", "HtmlDetailsElement", "File", "FileList", "Blob", "HtmlImageElement",
 ] }
 # Texte riche en Markdown (vue CMS) : Markdown -> HTML dans l'éditeur visuel (même lecteur que
 # la génération du site).
 pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1"
+base64 = "0.22.1"
 serde-wasm-bindgen = "0.6.5"
 console_error_panic_hook = "0.1.7"
 

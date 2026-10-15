@@ -155,6 +155,8 @@ pub struct DragItem {
     /// Balise produite et nature (bloc ou en ligne) : règles de dépôt du canevas.
     pub tag: &'static str,
     pub block: bool,
+    /// Nœud à insérer à la place de l'élément prédéfini (média, composant).
+    pub node: Option<revel_model::Node>,
 }
 
 /// Touche (interface ou canevas).
@@ -1118,6 +1120,16 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     provide_context(ed);
     let dock = crate::dock::Dock::provide();
     let failed = RwSignal::new(false);
+    // Adresse du canevas partagée (vignettes des médias dans les autres vues).
+    {
+        let site_path = site.path.clone();
+        Effect::new(move |_| {
+            if let Some(b) = ed.base.get() {
+                ui.canvas_base.set(Some((site_path.clone(), b)));
+            }
+        });
+        on_cleanup(move || ui.canvas_base.set(None));
+    }
 
     // Ouverture : document, pages, canevas.
     let path = site.path.clone();

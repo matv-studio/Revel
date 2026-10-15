@@ -180,7 +180,17 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                             </label>
                             <Field label=ui.t("pages-seo-image") value=Signal::derive({ let t = seo.image.clone(); move || t.clone() })
                                 placeholder="/media/partage.jpg"
-                                on_commit=move |v: String| write_seo(ui, ed, &p6, &data_path.get_value(), "image", v)/>
+                                on_commit={ let p = p6.clone(); move |v: String| write_seo(ui, ed, &p, &data_path.get_value(), "image", v) }>
+                                <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
+                                    on:click={ let p = p6.clone(); move |_| {
+                                        let p = p.clone();
+                                        crate::library::pick_image(ui, crate::library::media_shelf(ed), move |url| {
+                                            if let Some(dp) = data_path.try_get_value() {
+                                                write_seo(ui, ed, &p, &dp, "image", url)
+                                            }
+                                        })
+                                    } }>{icons::image()}</button>
+                            </Field>
                         </fieldset>
                         <label class="view-line" title=ui.t("pages-index-help")>
                             <span>{ui.t("pages-index")}</span>

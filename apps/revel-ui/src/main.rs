@@ -10,6 +10,7 @@ mod ctxmenu;
 mod dialog;
 mod dock;
 mod editor;
+mod files;
 mod home;
 mod icons;
 mod insert;
@@ -127,6 +128,13 @@ pub struct Ui {
     pub context: RwSignal<Option<ctxmenu::CtxMenu>>,
     /// Aperçu affiché dans l'espace de travail : adresse de base, page.
     pub preview: RwSignal<Option<(String, String)>>,
+    /// Adresse de base du canevas du site ouvert (dossier du site, adresse) : vignettes des médias
+    /// hors de l'éditeur.
+    pub canvas_base: RwSignal<Option<(String, String)>>,
+    /// Choix d'un média en cours (fenêtre « Choisir un média »).
+    pub pick_media: RwSignal<Option<library::MediaPick>>,
+    /// Médias du site changés (import) : listes à relire.
+    pub media_rev: RwSignal<u32>,
 }
 
 impl Ui {
@@ -181,6 +189,13 @@ impl Ui {
     pub fn tab(self, tab: Tab) {
         if let Route::Site { site, .. } = self.route.get_untracked() {
             self.route.set(Route::Site { site, tab });
+        }
+    }
+    /// Dossier du site ouvert.
+    pub fn site_path(self) -> Option<String> {
+        match self.route.get_untracked() {
+            Route::Site { site, .. } => Some(site.path),
+            _ => None,
         }
     }
     /// Ouvre un site par son dossier (vue donnée).
@@ -285,6 +300,9 @@ fn App() -> impl IntoView {
         current_page: RwSignal::new(None),
         context: RwSignal::new(None),
         preview: RwSignal::new(None),
+        canvas_base: RwSignal::new(None),
+        pick_media: RwSignal::new(None),
+        media_rev: RwSignal::new(0),
     };
     provide_context(ui);
     spawn_local(async move {
@@ -399,6 +417,7 @@ fn App() -> impl IntoView {
                     },
                 }}
             </main>
+            <library::MediaPicker/>
             <dialog::Dialog/>
             <ctxmenu::ContextLayer/>
         </div>

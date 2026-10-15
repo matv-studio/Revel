@@ -19,6 +19,7 @@ tauri-build.workspace = true
 revel-core.workspace = true
 revel-model.workspace = true
 revel-protocol.workspace = true
+base64 = "0.22.1"
 revel-edit.workspace = true
 serde.workspace = true
 tauri.workspace = true

@@ -500,6 +500,86 @@ try {
     await page.click('.ctx-menu .menu-item:has-text("Supprimer le dossier")');
     await page.waitForSelector(`.media .asset[data-url="${firstUrl}"]`);
     check('médias : dossier supprimé, média revenu à la racine', !(await lib()).media);
+    // Médias : import (sélecteur, dépôt de fichiers du système), détails (texte alternatif par
+    // défaut, remplacement), placement dans la page, choix d'une image dans les réglages.
+    if (siteDir) {
+      const until = async (fn, ms = 8000) => {
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+          if (await fn()) return true;
+          await page.waitForTimeout(100);
+        }
+        return false;
+      };
+      const PNG_A = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
+      const PNG_B = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+      const mediaDir = path.join(siteDir, 'src/media');
+      const essais = ['essai-import.png', 'essai-depot.png', 'essai-choix.png'];
+      const docM = JSON.stringify((await invoke('edit_open')).site);
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.media .panel-foot .icon-btn >> nth=1')]);
+      await chooser.setFiles({ name: 'Essai Import.png', mimeType: 'image/png', buffer: PNG_A });
+      await page.waitForSelector('.media .asset[data-url="/media/essai-import.png"]');
+      check('médias : fichier importé par le sélecteur (nom simplifié, document inchangé)',
+        fs.existsSync(path.join(mediaDir, 'essai-import.png')) && JSON.stringify((await invoke('edit_open')).site) === docM);
+      await page.evaluate((b64) => {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const dt = new DataTransfer();
+        dt.items.add(new File([bytes], 'essai-depot.png', { type: 'image/png' }));
+        const el = document.querySelector('.media .list-scroll');
+        el.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+        el.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+      }, PNG_A.toString('base64'));
+      await page.waitForSelector('.media .asset[data-url="/media/essai-depot.png"]');
+      check('médias : fichier déposé depuis le système', fs.existsSync(path.join(mediaDir, 'essai-depot.png')));
+      // Détails : texte alternatif par défaut, remplacement (même adresse, ancien à la corbeille).
+      await page.click('.media .asset[data-url="/media/essai-import.png"]');
+      await page.waitForSelector('.media-details .media-facts');
+      await page.fill('.media-details .field input', 'Carré rouge');
+      await page.keyboard.press('Enter');
+      const altOk = await until(async () => (await lib()).alt?.['/media/essai-import.png'] === 'Carré rouge');
+      if (shots) await page.screenshot({ path: `${shots}/editeur-media-details.png` });
+      check('médias : texte alternatif par défaut enregistré', altOk);
+      const [ch2] = await Promise.all([page.waitForEvent('filechooser'), page.click('.media-details .page-settings-foot .btn >> nth=0')]);
+      await ch2.setFiles({ name: 'autre.png', mimeType: 'image/png', buffer: PNG_B });
+      const replaced = await until(() => fs.readFileSync(path.join(mediaDir, 'essai-import.png')).equals(PNG_B));
+      const trash = path.join(siteDir, '.revel/corbeille');
+      check('médias : fichier remplacé (même adresse, ancien gardé à la corbeille)',
+        replaced && fs.existsSync(trash) && fs.readdirSync(trash).some((f) => f.endsWith('-essai-import.png')));
+      await page.click('.media-details .page-settings-head .icon-btn');
+      await page.waitForFunction(() => !document.querySelector('.media-details'));
+      // Glisser la vignette sur la page : image placée avec le texte alternatif par défaut.
+      const tileBox = await page.locator('.media .asset[data-url="/media/essai-import.png"]').boundingBox();
+      const frameBox = await page.locator('iframe.canvas-frame').boundingBox();
+      await page.mouse.move(tileBox.x + tileBox.width / 2, tileBox.y + tileBox.height / 2);
+      await page.mouse.down();
+      for (let i = 1; i <= 12; i++) {
+        await page.mouse.move(tileBox.x + (frameBox.x + frameBox.width / 2 - tileBox.x) * i / 12, tileBox.y + (frameBox.y + 300 - tileBox.y) * i / 12);
+      }
+      await page.mouse.up();
+      const placed = () => invoke('edit_open').then((o) => JSON.stringify(o.site));
+      const inserted = await until(async () => (await placed()).includes('"src":"\\"/media/essai-import.png\\"","alt":"\\"Carré rouge\\""'));
+      check('médias : vignette glissée sur la page (image et texte alternatif par défaut)', inserted);
+      // Réglages de l'image : choix parmi les médias, puis import depuis la fenêtre (choisi aussitôt).
+      await page.click('.dock-tab[data-panel="settings"]');
+      await page.click('.dock-panel[data-panel="settings"] .field-line .icon-btn');
+      await page.waitForSelector('.picker .asset[data-url="/media/essai-depot.png"]');
+      const onlyImages = await page.$$eval('.picker .asset', (a) => a.every((x) => /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(x.dataset.url)));
+      if (shots) await page.screenshot({ path: `${shots}/editeur-choix-image.png` });
+      await page.click('.picker .asset[data-url="/media/essai-depot.png"]');
+      const picked = await until(async () => (await placed()).includes('"src":"\\"/media/essai-depot.png\\""'));
+      check('choix d\'une image : fenêtre (images seulement), image choisie, fenêtre fermée', onlyImages && picked && !(await page.$('.picker')));
+      await page.click('.dock-panel[data-panel="settings"] .field-line .icon-btn');
+      await page.waitForSelector('.picker .asset');
+      const [ch3] = await Promise.all([page.waitForEvent('filechooser'), page.click('.picker-foot .btn')]);
+      await ch3.setFiles({ name: 'essai-choix.png', mimeType: 'image/png', buffer: PNG_A });
+      const pickedNew = await until(async () => (await placed()).includes('"src":"\\"/media/essai-choix.png\\""'));
+      check('choix d\'une image : fichier importé depuis la fenêtre et choisi', pickedNew && fs.existsSync(path.join(mediaDir, 'essai-choix.png')) && !(await page.$('.picker')));
+      await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+      for (let i = 0; i < 4; i++) await page.keyboard.press('Control+z');
+      const back = await until(async () => (await placed()) === docM);
+      check('médias : Ctrl+Z (choix, placement, texte alternatif), document identique', back);
+      for (const f of essais) fs.rmSync(path.join(mediaDir, f), { force: true });
+    }
     // Composants : dossier, rangement par le menu contextuel.
     await page.click('.dock-tab[data-panel="components"]');
     await page.waitForSelector('.components .component-row');

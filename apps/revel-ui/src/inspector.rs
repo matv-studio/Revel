@@ -75,6 +75,9 @@ pub(crate) fn Field(
     on_commit: impl Fn(String) + Send + Sync + Clone + 'static,
     #[prop(optional)] mono: bool,
     #[prop(optional, into)] placeholder: MaybeProp<String>,
+    /// Boutons à droite du champ (choisir un média…).
+    #[prop(optional)]
+    children: Option<Children>,
 ) -> impl IntoView {
     // Valeur validée une seule fois (Entrée puis sortie du champ : une seule modification).
     let last = StoredValue::new(None::<String>);
@@ -86,17 +89,30 @@ pub(crate) fn Field(
         on_commit(v);
     };
     let c2 = commit.clone();
-    view! {
-        <label class="field">
-            <span class="label">{label}</span>
-            <input class="input" class:input--mono=mono prop:value=value placeholder=placeholder
-                on:change=move |e| c2(event_target_value(&e))
-                on:keydown=move |e: leptos::ev::KeyboardEvent| {
-                    if e.key() == "Enter" {
-                        commit(event_target_value(&e));
-                    }
-                }/>
-        </label>
+    let input = view! {
+        <input class="input" class:input--mono=mono prop:value=value placeholder=placeholder
+            on:change=move |e| c2(event_target_value(&e))
+            on:keydown=move |e: leptos::ev::KeyboardEvent| {
+                if e.key() == "Enter" {
+                    commit(event_target_value(&e));
+                }
+            }/>
+    };
+    match children {
+        None => view! {
+            <label class="field">
+                <span class="label">{label}</span>
+                {input}
+            </label>
+        }
+        .into_any(),
+        Some(extra) => view! {
+            <div class="field">
+                <span class="label">{label}</span>
+                <span class="field-line">{input}{extra()}</span>
+            </div>
+        }
+        .into_any(),
     }
 }
 
@@ -123,7 +139,7 @@ pub fn ElementSettings() -> impl IntoView {
                     None => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
                     Some((at, node)) => match node {
                         Node::Element { tag, attrs, .. } => element(ui, ed, apply, at, tag, attrs).into_any(),
-                        Node::Image(img) => image(ui, apply, at, img).into_any(),
+                        Node::Image(img) => image(ui, ed, apply, at, img).into_any(),
                         Node::If { cond, .. } => {
                             let at2 = at.clone();
                             view! {
@@ -248,7 +264,12 @@ fn element(
         apply(cmd);
     };
     let new_attr_at = at.clone();
-    let _ = ed;
+    let lower = tag.to_ascii_lowercase();
+    let is_img = lower == "img";
+    let media_tag = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
+    let alt_empty = attr(&attrs, "alt")
+        .and_then(|a| a.value.as_deref())
+        .is_none_or(|v| v.trim().is_empty());
     view! {
         <div class="stack">
             <label class="field">
@@ -319,15 +340,44 @@ fn element(
                     let at_set = at.clone();
                     let at_rm = at.clone();
                     let conditional = a.when.clone();
+                    let input = view! {
+                        <input class="input input--mono" prop:value=a.value.clone().unwrap_or_default()
+                            placeholder=ui.t("inspector-attr-boolean")
+                            on:change=move |e| {
+                                let v = event_target_value(&e);
+                                apply(Command::SetAttr { at: at_set.clone(), name: name.clone(), value: (!v.is_empty()).then_some(v) });
+                            }/>
+                    };
+                    // Source d'un média : choix parmi les médias du site (pas pour une valeur calculée).
+                    let value_cell = if media_tag && a.name == "src" {
+                        let dynamic = a.value.as_deref().is_some_and(|v| v.contains("{{") || v.contains("{%"));
+                        let at_pick = at.clone();
+                        let key = if is_img { "picker-choose-image" } else { "picker-choose-media" };
+                        view! {
+                            <span class="field-line">
+                                {input}
+                                <button class="icon-btn" title=ui.t(key) aria-label=ui.t(key) disabled=dynamic
+                                    on:click=move |_| {
+                                        let at = at_pick.clone();
+                                        crate::library::pick_media(ui, is_img, crate::library::media_shelf(ed), move |url| {
+                                            let mut commands = vec![Command::SetAttr { at: at.clone(), name: "src".into(), value: Some(url.clone()) }];
+                                            if is_img && alt_empty
+                                                && let Some(alt) = ed.doc.with_untracked(|d| d.as_ref().and_then(|d| d.library.alt.get(&url).cloned()))
+                                            {
+                                                commands.push(Command::SetAttr { at: at.clone(), name: "alt".into(), value: Some(alt) });
+                                            }
+                                            apply(if commands.len() == 1 { commands.remove(0) } else { Command::Batch { commands } });
+                                        });
+                                    }>{icons::image()}</button>
+                            </span>
+                        }.into_any()
+                    } else {
+                        input.into_any()
+                    };
                     view! {
                         <div class="attr-row">
                             <span class="attr-name" title=conditional.clone().map(|w| ui.tx("inspector-attr-when", &[("cond", w)]))>{a.name.clone()}{conditional.is_some().then_some(" ?")}</span>
-                            <input class="input input--mono" prop:value=a.value.clone().unwrap_or_default()
-                                placeholder=ui.t("inspector-attr-boolean")
-                                on:change=move |e| {
-                                    let v = event_target_value(&e);
-                                    apply(Command::SetAttr { at: at_set.clone(), name: name.clone(), value: (!v.is_empty()).then_some(v) });
-                                }/>
+                            {value_cell}
                             <button class="icon-btn" title=ui.t("inspector-attr-remove") aria-label=ui.t("inspector-attr-remove")
                                 on:click=move |_| apply(Command::RemoveAttr { at: at_rm.clone(), name: name_rm.clone() })>{icons::trash()}</button>
                         </div>
@@ -352,6 +402,7 @@ fn element(
 
 fn image(
     ui: Ui,
+    ed: Ed,
     apply: impl Fn(Command) + Copy + Send + Sync + 'static,
     at: Target,
     img: ImageNode,
@@ -362,8 +413,31 @@ fn image(
     let alt_expr = img.alt.as_deref().is_some_and(|a| literal(a).is_none());
     let src = show(&img.src);
     let alt = img.alt.as_deref().map(show).unwrap_or_default();
-    let (img1, img2) = (img.clone(), img.clone());
-    let (at1, at2) = (at.clone(), at.clone());
+    let (img1, img2, img3) = (img.clone(), img.clone(), img.clone());
+    let (at1, at2, at3) = (at.clone(), at.clone(), at.clone());
+    // Image choisie parmi les médias : texte alternatif par défaut du média si l'image n'en a pas.
+    let choose = move || {
+        let (img, at) = (img3.clone(), at3.clone());
+        crate::library::pick_image(ui, crate::library::media_shelf(ed), move |url| {
+            let mut i = img.clone();
+            i.src = quote(&url);
+            let empty_alt = i
+                .alt
+                .as_deref()
+                .is_none_or(|a| literal(a).is_some_and(|t| t.trim().is_empty()));
+            if empty_alt
+                && let Some(a) = ed
+                    .doc
+                    .with_untracked(|d| d.as_ref().and_then(|d| d.library.alt.get(&url).cloned()))
+            {
+                i.alt = Some(quote(&a));
+            }
+            apply(Command::SetImage {
+                at: at.clone(),
+                image: i,
+            });
+        });
+    };
     view! {
         <div class="stack">
             <Field label=Signal::derive(move || ui.tx(if src_expr { "inspector-src-expr" } else { "inspector-src" }, &[]))
@@ -372,7 +446,10 @@ fn image(
                     let mut i = img1.clone();
                     i.src = if src_expr { v } else { quote(&v) };
                     apply(Command::SetImage { at: at1.clone(), image: i });
-                }/>
+                }>
+                <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
+                    disabled=src_expr on:click=move |_| choose()>{icons::image()}</button>
+            </Field>
             <Field label=Signal::derive(move || ui.tx(if alt_expr { "inspector-alt-expr" } else { "inspector-alt" }, &[]))
                 value=alt mono=alt_expr
                 on_commit=move |v| {

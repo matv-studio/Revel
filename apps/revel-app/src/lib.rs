@@ -367,6 +367,42 @@ fn edit_media(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::Media
     s.core.edit_media(std::path::Path::new(&path)).map_err(err)
 }
 
+/// Importe un média (contenu en base64) dans le dossier des médias du site.
+#[tauri::command]
+fn edit_import_media(
+    s: State<AppState>,
+    path: String,
+    name: String,
+    data: String,
+) -> Res<revel_protocol::MediaFile> {
+    let bytes = decode_b64(&data)?;
+    s.core
+        .edit_import_media(std::path::Path::new(&path), &name, &bytes)
+        .map_err(err)
+}
+
+/// Remplace le contenu d'un média (même adresse).
+#[tauri::command]
+fn edit_replace_media(
+    s: State<AppState>,
+    path: String,
+    url: String,
+    name: String,
+    data: String,
+) -> Res<revel_protocol::MediaFile> {
+    let bytes = decode_b64(&data)?;
+    s.core
+        .edit_replace_media(std::path::Path::new(&path), &url, &name, &bytes)
+        .map_err(err)
+}
+
+fn decode_b64(data: &str) -> Res<Vec<u8>> {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .map_err(|e| Failure::detail(format!("base64 : {e}")))
+}
+
 /// Empreinte des fichiers du site (rechargement après une modification hors de Revel).
 #[tauri::command]
 fn edit_stamp(s: State<AppState>, path: String) -> Res<String> {
@@ -488,6 +524,8 @@ pub fn run() {
             edit_pages,
             edit_stamp,
             edit_media,
+            edit_import_media,
+            edit_replace_media,
             canvas_open,
             startup_site
         ])

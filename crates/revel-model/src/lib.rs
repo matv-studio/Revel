@@ -84,11 +84,17 @@ pub struct Library {
     /// dossier par son adresse.
     #[serde(default, skip_serializing_if = "Shelf::is_empty")]
     pub pages: Shelf,
+    /// Texte alternatif par défaut d'un média (adresse -> texte), repris quand l'image est placée.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub alt: BTreeMap<String, String>,
 }
 
 impl Library {
     pub fn is_empty(&self) -> bool {
-        self.media.is_empty() && self.components.is_empty() && self.pages.is_empty()
+        self.media.is_empty()
+            && self.components.is_empty()
+            && self.pages.is_empty()
+            && self.alt.is_empty()
     }
 }
 

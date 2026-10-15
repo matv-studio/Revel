@@ -1332,3 +1332,51 @@ fn nouveau_site_pret_a_modifier() {
     assert!(out.join("assets/site.css").is_file());
     assert!(out.join("robots.txt").is_file());
 }
+
+#[test]
+fn medias_importes_et_remplaces() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = d.path().join("atelier");
+    c.new_site(&site, "Atelier", "fr").unwrap();
+    c.edit_open(&site).unwrap();
+    let m = c.edit_import_media(&site, "Photo Été.JPG", b"abc").unwrap();
+    assert_eq!(m.url, "/media/photo-ete.jpg");
+    assert_eq!((m.kind, m.size), (revel_protocol::MediaKind::Image, 3));
+    let m2 = c.edit_import_media(&site, "photo-ete.jpg", b"x").unwrap();
+    assert_eq!(m2.url, "/media/photo-ete-2.jpg");
+    assert!(c.edit_import_media(&site, "script.php", b"<?php").is_err());
+    assert_eq!(c.edit_media(&site).unwrap().len(), 2);
+    // Remplacement : même adresse, ancien fichier gardé, format identique exigé.
+    let r = c
+        .edit_replace_media(&site, "/media/photo-ete.jpg", "nouvelle.jpg", b"abcdef")
+        .unwrap();
+    assert_eq!((r.url.as_str(), r.size), ("/media/photo-ete.jpg", 6));
+    assert_eq!(
+        std::fs::read(site.join("media/photo-ete.jpg")).unwrap(),
+        b"abcdef"
+    );
+    assert_eq!(
+        std::fs::read_dir(site.join(".revel/corbeille"))
+            .unwrap()
+            .count(),
+        1
+    );
+    assert!(
+        c.edit_replace_media(&site, "/media/photo-ete.jpg", "autre.png", b"z")
+            .is_err()
+    );
+    // Site sans dossier copié : `media/` créé et déclaré.
+    let site2 = sample_site(d.path(), &c);
+    c.edit_open(&site2).unwrap();
+    let m3 = c.edit_import_media(&site2, "logo.svg", b"<svg/>").unwrap();
+    assert_eq!(m3.url, "/media/logo.svg");
+    assert!(
+        c.edit_open(&site2)
+            .unwrap()
+            .site
+            .passthrough
+            .iter()
+            .any(|p| p.from == "media")
+    );
+}

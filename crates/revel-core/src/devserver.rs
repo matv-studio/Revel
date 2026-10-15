@@ -22,6 +22,14 @@ pub const INVOKE_PREFIX: &str = "/__revel/invoke/";
 /// Aperçu du site (pont des essais).
 pub const PREVIEW_PREFIX: &str = "/__preview/";
 
+/// Contenu d'un fichier transmis en base64.
+fn b64(s: &str) -> Result<Vec<u8>, Failure> {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(s)
+        .map_err(|e| Failure::detail(format!("base64 : {e}")))
+}
+
 fn arg<T: serde::de::DeserializeOwned>(args: &Value, name: &str) -> Result<T, Failure> {
     serde_json::from_value(args.get(name).cloned().unwrap_or(Value::Null))
         .map_err(|e| Failure::detail(format!("{name} : {e}")))
@@ -54,6 +62,25 @@ impl Core {
             "edit_seal" => json(self.edit_seal(site).map_err(f)?),
             "edit_pages" => json(self.edit_pages(site).map_err(f)?),
             "edit_media" => json(self.edit_media(site).map_err(f)?),
+            "edit_import_media" => {
+                let data = b64(&arg::<String>(args, "data")?)?;
+                json(
+                    self.edit_import_media(site, &arg::<String>(args, "name")?, &data)
+                        .map_err(f)?,
+                )
+            }
+            "edit_replace_media" => {
+                let data = b64(&arg::<String>(args, "data")?)?;
+                json(
+                    self.edit_replace_media(
+                        site,
+                        &arg::<String>(args, "url")?,
+                        &arg::<String>(args, "name")?,
+                        &data,
+                    )
+                    .map_err(f)?,
+                )
+            }
             "edit_stamp" => json(self.edit_stamp(site).map_err(f)?),
             "edit_undo" => json(self.edit_undo(site).map_err(f)?),
             "edit_redo" => json(self.edit_redo(site).map_err(f)?),

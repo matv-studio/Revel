@@ -353,6 +353,7 @@ error-edit-move = Un élément ne peut pas être placé à l'intérieur de lui-m
 error-edit-tag = Nom de balise invalide : lettres, chiffres et tirets uniquement. ({ $detail })
 error-edit-not-open = Ce site n'est pas ouvert dans l'éditeur.
 error-edit-css = CSS refusé : une seule déclaration, sans point-virgule ni accolade en dehors des guillemets, et sans « !important » dans la valeur (case à cocher séparée). ({ $detail })
+error-media = Média non importé : { $detail }
 error-edit-expr = Expression invalide, rien n'a été modifié. ({ $detail })
 error-edit-path = Adresse refusée : elle commence par « / » et ne contient que des minuscules sans accent, des chiffres et des tirets. ({ $detail })
 error-edit-path-taken = Cette adresse est déjà celle d'une autre page. ({ $detail })
@@ -670,6 +671,15 @@ media-sort-name-desc = Nom (Z → A)
 media-sort-type = Type
 media-sort-size = Taille
 media-thumb-size = Taille des vignettes
+media-details = Détails
+media-insert = Placer dans la page
+media-insert-short = Placer
+media-url = Adresse
+media-size = Taille
+media-alt = Texte alternatif par défaut
+media-alt-help = Ce que montre l'image, pour les lecteurs d'écran
+media-replace = Remplacer
+media-replace-help = Remplacer garde l'adresse : toutes les pages qui utilisent ce média suivent. L'ancien fichier est gardé dans .revel/corbeille.
 media-copy-url = Copier l'adresse
 media-none = Aucun média dans les dossiers du site
 media-no-match = Aucun média trouvé
@@ -677,6 +687,17 @@ media-count = { $count ->
         [0] aucun média
         [one] 1 média
        *[other] { $count } médias
+    }
+picker-image-title = Choisir une image
+picker-media-title = Choisir un fichier
+picker-folder = Dossier
+picker-all-folders = Tous les dossiers
+picker-choose-image = Choisir une image parmi les médias
+picker-choose-media = Choisir un fichier parmi les médias
+picker-count-images = { $count ->
+        [0] aucune image
+        [one] 1 image
+       *[other] { $count } images
     }
 size-kb = { $n } Ko
 size-mb = { $n } Mo

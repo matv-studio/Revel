@@ -258,6 +258,8 @@ pub enum Command {
     },
     /// Gabarit retiré ; refusé s'il sert de parent à un autre gabarit ou à une page.
     RemoveLayout { id: String },
+    /// Texte alternatif par défaut d'un média (`None` ou vide : retiré).
+    SetMediaAlt { url: String, alt: Option<String> },
     /// Rangement de l'éditeur remplacé (dossiers et éléments rangés des médias ou des composants).
     SetShelf {
         kind: ShelfKind,
@@ -901,6 +903,16 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             Ok(Command::AddLayout {
                 layout,
                 index: Some(i),
+            })
+        }
+        Command::SetMediaAlt { url, alt } => {
+            let old = match alt.as_ref().map(|a| a.trim()).filter(|a| !a.is_empty()) {
+                Some(a) => site.library.alt.insert(url.clone(), a.to_string()),
+                None => site.library.alt.remove(url),
+            };
+            Ok(Command::SetMediaAlt {
+                url: url.clone(),
+                alt: old,
             })
         }
         Command::SetShelf { kind, shelf } => {

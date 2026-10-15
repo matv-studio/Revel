@@ -753,8 +753,33 @@ fn control(
             <TagsInput items=Signal::derive(strings) set=Callback::new(write_strings)/>
         }
         .into_any(),
-        Kind::Image | Kind::Text => view! {
-            <input class="input" type="text" spellcheck=if kind == Kind::Image { "false" } else { "true" } prop:value=text
+        Kind::Image => {
+            // Fichier du site : aperçu, adresse, choix parmi les médias.
+            let images = f.with_value(|f| f.kind.as_deref() != Some("file"));
+            let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
+            let thumb = move || {
+                let t = text();
+                let image = images || is_image(&t);
+                (image && !t.trim().is_empty())
+                    .then(|| base.get().map(|b| crate::library::thumb_src(&b, t.trim())))
+                    .flatten()
+            };
+            view! {
+                <span class="field-line cms-media">
+                    {move || thumb().map(|src| view! { <img class="cms-thumb" src=src alt=""/> })}
+                    <input class="input" type="text" spellcheck="false" prop:value=text
+                        on:change=move |e| commit_text(event_target_value(&e))/>
+                    <button type="button" class="icon-btn icon-btn--small"
+                        title=ui.t(if images { "picker-choose-image" } else { "picker-choose-media" })
+                        aria-label=ui.t(if images { "picker-choose-image" } else { "picker-choose-media" })
+                        on:click=move |_| crate::library::pick_media(ui, images, None, commit_text)>
+                        {crate::icons::image()}</button>
+                </span>
+            }
+            .into_any()
+        }
+        Kind::Text => view! {
+            <input class="input" type="text" spellcheck="true" prop:value=text
                 on:change=move |e| commit_text(event_target_value(&e))/>
         }
         .into_any(),

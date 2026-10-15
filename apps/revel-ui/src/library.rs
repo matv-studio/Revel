@@ -432,6 +432,7 @@ fn folder_row(
         <div class="list-row list-folder" role="button" tabindex="0"
             style=format!("--depth:{depth}")
             data-folder=path.get_value()
+            data-drop-folder=path.get_value()
             title=path.get_value()
             class:is-drop=move || sh.drop_on.get().as_deref() == Some(path.get_value().as_str())
             on:click=move |_| if !renaming() { open() }
@@ -577,8 +578,14 @@ pub fn Media() -> impl IntoView {
     );
     // Liste relue à l'ouverture du panneau et après une modification de fichiers hors de Revel.
     let path = ed.path.get_value();
+    let refresh = RwSignal::new(0u32);
+    // Média ouvert dans le volet de détails ; dépôt de fichiers du système en cours.
+    let details = RwSignal::new(None::<String>);
+    let dropping = RwSignal::new(false);
     Effect::new(move |_| {
         ed.load.track();
+        refresh.track();
+        ui.media_rev.track();
         let path = path.clone();
         spawn_local(async move {
             if let Ok(m) = api::edit_media(&path).await
@@ -658,6 +665,16 @@ pub fn Media() -> impl IntoView {
         })
     });
     let base = move || ed.base.get().unwrap_or_default();
+    // Glisser une vignette : sur un dossier (ou le fil d'Ariane) pour la ranger, sur la page pour
+    // l'y placer ; un clic ouvre ses détails.
+    let drag = crate::insert::CanvasDrag::new(ui, ed);
+    let folder_under = |cx: f64, cy: f64| -> Option<String> {
+        document()
+            .element_from_point(cx as f32, cy as f32)?
+            .closest("[data-drop-folder]")
+            .ok()??
+            .get_attribute("data-drop-folder")
+    };
     let tile = move |f: MediaFile| {
         let url = StoredValue::new(f.url.clone());
         let name = file_name(&f.url);
@@ -671,28 +688,53 @@ pub fn Media() -> impl IntoView {
         } else {
             format!("{}{}", base(), f.url.trim_start_matches('/'))
         };
+        let kind = f.kind;
         let menu = move |e: leptos::ev::MouseEvent| {
             use crate::ctxmenu::{CtxItem, open};
-            let u = url.get_value();
+            let (u1, u2, u3) = (url.get_value(), url.get_value(), url.get_value());
             let mut items = vec![
-                CtxItem::new(ui.now("media-copy-url", &[]), move || api::copy_text(&u))
+                CtxItem::new(ui.now("media-details", &[]), move || {
+                    details.set(Some(u1.clone()))
+                })
+                .icon(icons::info),
+                CtxItem::new(ui.now("media-insert", &[]), move || {
+                    insert_media(ui, ed, &u2, kind)
+                })
+                .icon(icons::plus),
+                CtxItem::new(ui.now("media-copy-url", &[]), move || api::copy_text(&u3))
                     .icon(icons::link),
             ];
             items.extend(sh.move_items(&url.get_value()));
             open(ui, &e, items);
         };
+        let item = move || media_drag_item(ed, &url.get_value(), kind);
         view! {
-            <figure class="asset" title=tip draggable="true" data-url=f.url.clone()
+            <figure class="asset" title=tip data-url=f.url.clone()
                 class:is-dragging=move || sh.dragging.get().as_deref() == Some(url.get_value().as_str())
                 on:contextmenu=menu
-                on:dragstart=move |e: leptos::ev::DragEvent| {
-                    if let Some(dt) = e.data_transfer() {
-                        let _ = dt.set_data("text/plain", &url.get_value());
-                        dt.set_effect_allowed("move");
+                on:pointerdown=move |e: leptos::ev::PointerEvent| drag.down(&e)
+                on:pointermove=move |e: leptos::ev::PointerEvent| {
+                    if drag.moved(&e, item()) {
+                        if sh.dragging.get_untracked().is_none() {
+                            sh.dragging.set(Some(url.get_value()));
+                        }
+                        let f = folder_under(f64::from(e.client_x()), f64::from(e.client_y()));
+                        if sh.drop_on.get_untracked() != f {
+                            sh.drop_on.set(f);
+                        }
                     }
-                    sh.dragging.set(Some(url.get_value()));
                 }
-                on:dragend=move |_| { sh.dragging.set(None); sh.drop_on.set(None); }>
+                on:pointerup=move |e: leptos::ev::PointerEvent| {
+                    let over = folder_under(f64::from(e.client_x()), f64::from(e.client_y()));
+                    sh.dragging.set(None);
+                    sh.drop_on.set(None);
+                    match drag.finish(Some(&e)) {
+                        None => details.set(Some(url.get_value())),
+                        Some((it, Some((parent, index)))) => crate::insert::insert_item(ui, ed, &it, parent, index),
+                        Some((_, None)) => if let Some(f) = over { sh.put(&url.get_value(), &f) },
+                    }
+                }
+                on:pointercancel=move |_| { drag.finish(None); sh.dragging.set(None); sh.drop_on.set(None); }>
                 <div class="asset-thumb" class:is-file=f.kind != MediaKind::Image>
                     {if f.kind == MediaKind::Image {
                         view! { <img src=src alt="" loading="lazy" decoding="async" draggable="false"/> }.into_any()
@@ -703,6 +745,35 @@ pub fn Media() -> impl IntoView {
                 <figcaption>{name}</figcaption>
             </figure>
         }
+    };
+    // Import : sélecteur ou fichiers glissés depuis le système, dans le dossier affiché.
+    let import = move |fs: Vec<web_sys::File>| {
+        if fs.is_empty() {
+            return;
+        }
+        let path = ed.path.get_value();
+        let target = folder.get_untracked();
+        spawn_local(async move {
+            let mut urls = Vec::new();
+            for f in fs {
+                let Ok(bytes) = crate::files::read(&f).await else {
+                    continue;
+                };
+                match api::edit_import_media(&path, &f.name(), &bytes).await {
+                    Ok(m) => urls.push(m.url),
+                    Err(e) => ui.fail(e),
+                }
+            }
+            if !urls.is_empty() && !target.is_empty() {
+                let s = sh.shelf.with_untracked(|s| {
+                    urls.iter().fold(s.clone(), |acc, u| put(&acc, u, &target))
+                });
+                sh.set(s);
+            }
+            if !urls.is_empty() {
+                refresh.update(|n| *n += 1);
+            }
+        });
     };
     let crumbs = move || {
         let cur = folder.get();
@@ -716,7 +787,7 @@ pub fn Media() -> impl IntoView {
             let drop = sh.drop_zone(target.clone());
             let t2 = target.clone();
             view! {
-                <button class="media-crumb" class:is-last=last
+                <button class="media-crumb" class:is-last=last data-drop-folder=t2.clone()
                     class:is-drop=move || sh.drop_on.get().as_deref() == Some(t2.as_str())
                     on:click=move |_| folder.set(target.clone())
                     on:dragover=move |e: leptos::ev::DragEvent| drop(e, false)
@@ -738,7 +809,28 @@ pub fn Media() -> impl IntoView {
         })
     };
     view! {
-        <div class="panel-list media">
+        <div class="panel-list media" class:is-dropping=move || dropping.get()
+            on:dragover=move |e: leptos::ev::DragEvent| {
+                if crate::files::has_files(&e) {
+                    e.prevent_default();
+                    dropping.set(true);
+                }
+            }
+            on:dragleave=move |e: leptos::ev::DragEvent| {
+                // Sortie du panneau (pas d'un de ses enfants).
+                let inside = e.related_target()
+                    .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Node>(t).ok())
+                    .zip(e.current_target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Node>(t).ok()))
+                    .is_some_and(|(r, c)| c.contains(Some(&r)));
+                if !inside { dropping.set(false) }
+            }
+            on:drop=move |e: leptos::ev::DragEvent| {
+                if crate::files::has_files(&e) {
+                    e.prevent_default();
+                    dropping.set(false);
+                    import(crate::files::list(e.data_transfer().and_then(|dt| dt.files())));
+                }
+            }>
             <Search value=q key="assets-search"/>
             <div class="media-tools">
                 <label class="mini-select" title=ui.t("media-type-filter")>
@@ -826,9 +918,435 @@ pub fn Media() -> impl IntoView {
                     }/>
                 <button class="icon-btn icon-btn--small" title=ui.t("library-new-folder") aria-label=ui.t("library-new-folder")
                     on:click=move |_| { q.set(String::new()); sh.creating.set(Some(folder.get_untracked())) }>{icons::folder_plus()}</button>
-                <PlannedButton key="assets-import" step=3 icon=icons::upload/>
+                <button class="icon-btn icon-btn--small" title=ui.t("assets-import") aria-label=ui.t("assets-import")
+                    on:click=move |_| crate::files::pick(crate::files::MEDIA_ACCEPT, true, import)>{icons::upload()}</button>
             </footer>
+            {move || details.get().map(|u| view! {
+                <MediaDetails url=u files=files on_close=Callback::new(move |_| details.set(None))
+                    on_replaced=Callback::new(move |_| { refresh.update(|n| *n += 1); ed.load.update(|n| *n += 1); })/>
+            })}
         </div>
+    }
+}
+
+/// Élément glissé pour un média : image (texte alternatif par défaut) ou lien vers le fichier.
+fn media_drag_item(ed: Ed, url: &str, kind: MediaKind) -> crate::editor::DragItem {
+    let name = file_name(url);
+    let q = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
+    let node = if kind == MediaKind::Image {
+        let alt = ed
+            .doc
+            .with_untracked(|d| d.as_ref().and_then(|d| d.library.alt.get(url).cloned()))
+            .unwrap_or_default();
+        revel_model::Node::Image(revel_model::ImageNode {
+            src: q(url),
+            alt: Some(q(&alt)),
+            ..Default::default()
+        })
+    } else {
+        revel_model::Node::Element {
+            id: None,
+            tag: "a".into(),
+            attrs: vec![revel_model::Attr {
+                name: "href".into(),
+                value: Some(url.to_string()),
+                when: None,
+            }],
+            children: vec![revel_model::Node::Text { text: name.clone() }],
+        }
+    };
+    crate::editor::DragItem {
+        preset: revel_edit::make::Preset::Image,
+        text_key: "",
+        label: name,
+        tag: if kind == MediaKind::Image { "img" } else { "a" },
+        block: false,
+        node: Some(node),
+    }
+}
+
+/// Place un média dans la page, à l'emplacement de la sélection.
+fn insert_media(ui: Ui, ed: Ed, url: &str, kind: MediaKind) {
+    let Some((parent, index)) = crate::insert::insertion_point(ed) else {
+        ui.fail(revel_protocol::Failure::new("insert-no-place"));
+        return;
+    };
+    crate::insert::insert_item(ui, ed, &media_drag_item(ed, url, kind), parent, index);
+}
+
+/// Détails d'un média, par-dessus la colonne du panneau : aperçu, adresse, taille, dimensions,
+/// texte alternatif par défaut, remplacement du fichier (même adresse), placement dans la page.
+#[component]
+fn MediaDetails(
+    url: String,
+    files: RwSignal<Vec<MediaFile>>,
+    on_close: Callback<()>,
+    on_replaced: Callback<()>,
+) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let url = StoredValue::new(url);
+    let file = Memo::new(move |_| {
+        files.with(|fs| fs.iter().find(|f| url.with_value(|u| f.url == *u)).cloned())
+    });
+    let dims = RwSignal::new(None::<(u32, u32)>);
+    let stamp = RwSignal::new(0u32);
+    let root = NodeRef::<leptos::html::Div>::new();
+    let rect = RwSignal::new(None::<(f64, f64, f64, f64)>);
+    Effect::new(move |_| {
+        if let Some(el) = root.get() {
+            let host = el
+                .parent_element()
+                .and_then(|p| p.closest(".dock-col, .dock-float").ok().flatten());
+            if let Some(h) = host {
+                let b = h.get_bounding_client_rect();
+                rect.set(Some((b.left(), b.top(), b.width(), b.height())));
+            }
+        }
+    });
+    let src = move || {
+        let base = ed.base.get().unwrap_or_default();
+        format!(
+            "{}{}?v={}",
+            base,
+            url.get_value().trim_start_matches('/'),
+            stamp.get()
+        )
+    };
+    let alt = Signal::derive(move || {
+        ed.doc.with(|d| {
+            d.as_ref()
+                .and_then(|d| url.with_value(|u| d.library.alt.get(u).cloned()))
+                .unwrap_or_default()
+        })
+    });
+    let replace = move || {
+        let u = url.get_value();
+        let ext = u
+            .rsplit_once('.')
+            .map(|(_, e)| format!(".{e}"))
+            .unwrap_or_default();
+        crate::files::pick(&ext, false, move |fs| {
+            let Some(f) = fs.into_iter().next() else {
+                return;
+            };
+            let path = ed.path.get_value();
+            let u = u.clone();
+            spawn_local(async move {
+                let Ok(bytes) = crate::files::read(&f).await else {
+                    return;
+                };
+                match api::edit_replace_media(&path, &u, &f.name(), &bytes).await {
+                    Ok(_) => {
+                        stamp.update(|n| *n += 1);
+                        on_replaced.run(());
+                    }
+                    Err(e) => ui.fail(e),
+                }
+            });
+        });
+    };
+    view! {
+        <div class="page-settings-overlay media-details" node_ref=root
+            style=move || rect.get().map(|(x, y, w, h)| format!("left:{x}px;top:{y}px;width:{w}px;height:{h}px")).unwrap_or_else(|| "visibility:hidden".into())>
+            <div class="page-settings">
+                <header class="page-settings-head">
+                    <button class="icon-btn icon-btn--small" title=ui.t("action-back") aria-label=ui.t("action-back")
+                        on:click=move |_| on_close.run(())>{icons::back()}</button>
+                    <span class="page-settings-title">{move || file_name(&url.get_value())}</span>
+                </header>
+                {move || file.get().map(|f| {
+                    let image = f.kind == MediaKind::Image;
+                    view! {
+                        <div class="page-settings-body">
+                            <div class="media-preview" class:is-file=!image>
+                                {if image {
+                                    view! { <img src=src alt="" on:load=move |e| {
+                                        if let Some(img) = e.target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlImageElement>(t).ok()) {
+                                            dims.set(Some((img.natural_width(), img.natural_height())));
+                                        }
+                                    }/> }.into_any()
+                                } else {
+                                    view! { <span class="asset-icon">{kind_icon(f.kind)}</span> }.into_any()
+                                }}
+                            </div>
+                            <dl class="media-facts">
+                                <dt>{ui.t("media-url")}</dt>
+                                <dd class="path">{f.url.clone()}
+                                    <button class="icon-btn icon-btn--small" title=ui.t("media-copy-url") aria-label=ui.t("media-copy-url")
+                                        on:click=move |_| api::copy_text(&url.get_value())>{icons::copy()}</button></dd>
+                                <dt>{ui.t("media-size")}</dt>
+                                <dd>{human_size(ui, f.size)}{move || dims.get().map(|(w, h)| format!(" · {w} × {h} px"))}</dd>
+                            </dl>
+                            {image.then(|| view! {
+                                <crate::inspector::Field label=ui.t("media-alt") value=alt
+                                    placeholder=ui.now("media-alt-help", &[])
+                                    on_commit=move |v: String| ed.apply(ui, revel_edit::Command::SetMediaAlt { url: url.get_value(), alt: Some(v) }, false)/>
+                            })}
+                            <p class="page-settings-note muted">{ui.t("media-replace-help")}</p>
+                        </div>
+                        <footer class="panel-foot page-settings-foot">
+                            <button class="btn btn--small" on:click=move |_| replace()>{icons::upload()}{ui.t("media-replace")}</button>
+                            <span class="toolbar-spacer"></span>
+                            <button class="btn btn--small" title=ui.t("media-insert") on:click=move |_| insert_media(ui, ed, &url.get_value(), f.kind)>{icons::plus()}{ui.t("media-insert-short")}</button>
+                        </footer>
+                    }
+                })}
+            </div>
+        </div>
+    }
+}
+
+// ------------------------------------------------------------------ choix d'un média
+
+/// Demande de choix d'un média (fenêtre « Choisir une image »).
+#[derive(Clone)]
+pub struct MediaPick {
+    /// Dossier du site.
+    pub site: String,
+    /// Images seulement.
+    pub images: bool,
+    /// Rangement des médias (dossiers), quand il est connu (éditeur).
+    pub shelf: Option<Shelf>,
+    /// Adresse choisie.
+    pub on_pick: std::sync::Arc<dyn Fn(String) + Send + Sync>,
+}
+
+/// Ouvre le choix d'un média du site ouvert (`images` : images seulement ; `shelf` : dossiers
+/// du rangement, dans l'éditeur).
+pub fn pick_media(
+    ui: Ui,
+    images: bool,
+    shelf: Option<Shelf>,
+    on_pick: impl Fn(String) + Send + Sync + 'static,
+) {
+    let Some(site) = ui.site_path() else {
+        return;
+    };
+    ui.pick_media.set(Some(MediaPick {
+        site,
+        images,
+        shelf,
+        on_pick: std::sync::Arc::new(on_pick),
+    }));
+}
+
+/// Ouvre le choix d'une image du site ouvert.
+pub fn pick_image(ui: Ui, shelf: Option<Shelf>, on_pick: impl Fn(String) + Send + Sync + 'static) {
+    pick_media(ui, true, shelf, on_pick);
+}
+
+/// Rangement des médias du document ouvert dans l'éditeur.
+pub fn media_shelf(ed: Ed) -> Option<Shelf> {
+    ed.doc
+        .with_untracked(|d| d.as_ref().map(|d| d.library.media.clone()))
+}
+
+/// Adresse d'une vignette (`base` : adresse du canevas).
+pub fn thumb_src(base: &str, url: &str) -> String {
+    if url.starts_with("http") || url.starts_with("data:") {
+        url.to_string()
+    } else {
+        format!("{base}{}", url.trim_start_matches('/'))
+    }
+}
+
+/// Adresse du canevas du site `site` (vignettes) : celle de l'éditeur, sinon un canevas ouvert
+/// pour l'occasion.
+pub fn canvas_base(ui: Ui, site: &str) -> Signal<Option<String>> {
+    let site = site.to_string();
+    let s2 = site.clone();
+    if ui
+        .canvas_base
+        .with_untracked(|b| b.as_ref().is_none_or(|(p, _)| *p != site))
+    {
+        spawn_local(async move {
+            if let Ok(b) = api::canvas_open(&s2, false).await
+                && ui
+                    .canvas_base
+                    .with_untracked(|c| c.as_ref().is_none_or(|(p, _)| *p != s2))
+            {
+                ui.canvas_base.set(Some((s2, b)));
+            }
+        });
+    }
+    Signal::derive(move || {
+        ui.canvas_base.with(|b| {
+            b.as_ref()
+                .filter(|(p, _)| *p == site)
+                .map(|(_, b)| b.clone())
+        })
+    })
+}
+
+/// Fenêtre de choix d'un média : recherche, dossier, vignettes ; un clic choisit, « Importer »
+/// ajoute des fichiers au site (un seul fichier importé est choisi aussitôt).
+#[component]
+pub fn MediaPicker() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let close = move || ui.pick_media.set(None);
+    let _esc = window_event_listener(leptos::ev::keydown, move |e| {
+        if e.key() == "Escape" && ui.pick_media.with_untracked(Option::is_some) {
+            e.prevent_default();
+            e.stop_propagation();
+            close();
+        }
+    });
+    move || {
+        ui.pick_media.get().map(|req| {
+            let req = StoredValue::new(req);
+            let site = req.with_value(|r| r.site.clone());
+            let images = req.with_value(|r| r.images);
+            let files = RwSignal::new(Vec::<MediaFile>::new());
+            let loaded = RwSignal::new(false);
+            let q = RwSignal::new(String::new());
+            // `None` : tous les dossiers.
+            let folder = RwSignal::new(None::<String>);
+            let base = canvas_base(ui, &site);
+            let path = StoredValue::new(site);
+            Effect::new(move |_| {
+                ui.media_rev.track();
+                let p = path.get_value();
+                spawn_local(async move {
+                    match api::edit_media(&p).await {
+                        Ok(m) => files.set(m),
+                        Err(e) => ui.fail(e),
+                    }
+                    loaded.set(true);
+                });
+            });
+            let choose = move |url: String| {
+                let f = req.with_value(|r| r.on_pick.clone());
+                close();
+                f(url);
+            };
+            let shown = Memo::new(move |_| {
+                let ql = q.get().trim().to_lowercase();
+                let cur = folder.get();
+                let mut v: Vec<MediaFile> = req.with_value(|r| {
+                    files.with(|fs| {
+                        fs.iter()
+                            .filter(|f| !images || f.kind == MediaKind::Image)
+                            .filter(|f| ql.is_empty() || file_name(&f.url).to_lowercase().contains(&ql))
+                            .filter(|f| match (&cur, &r.shelf) {
+                                (Some(c), Some(s)) => within(folder_of(s, &f.url), c),
+                                _ => true,
+                            })
+                            .cloned()
+                            .collect()
+                    })
+                });
+                v.sort_by(|a, b| b.modified.cmp(&a.modified).then(a.url.cmp(&b.url)));
+                v
+            });
+            let folders = req.with_value(|r| r.shelf.as_ref().map(|s| {
+                let mut f = s.folders.clone();
+                f.sort();
+                f
+            }).unwrap_or_default());
+            let import = move |fs: Vec<web_sys::File>| {
+                if fs.is_empty() {
+                    return;
+                }
+                let p = path.get_value();
+                spawn_local(async move {
+                    let mut urls = Vec::new();
+                    for f in fs {
+                        let Ok(bytes) = crate::files::read(&f).await else { continue };
+                        match api::edit_import_media(&p, &f.name(), &bytes).await {
+                            Ok(m) => urls.push(m.url),
+                            Err(e) => ui.fail(e),
+                        }
+                    }
+                    if urls.is_empty() {
+                        return;
+                    }
+                    ui.media_rev.update(|n| *n += 1);
+                    if urls.len() == 1 && ui.pick_media.with_untracked(Option::is_some) {
+                        choose(urls.remove(0));
+                    }
+                });
+            };
+            let accept = if images { "image/*" } else { crate::files::MEDIA_ACCEPT };
+            let tile = move |f: MediaFile| {
+                let url = f.url.clone();
+                let name = file_name(&f.url);
+                let src = {
+                    let u = f.url.clone();
+                    move || base.get().map(|b| thumb_src(&b, &u))
+                };
+                let kind = f.kind;
+                view! {
+                    <button type="button" class="asset picker-tile" title=format!("{}\n{}", f.url, human_size(ui, f.size))
+                        data-url=f.url.clone() on:click=move |_| choose(url.clone())>
+                        <div class="asset-thumb" class:is-file=kind != MediaKind::Image>
+                            {if kind == MediaKind::Image {
+                                view! { <img src=src alt="" loading="lazy" decoding="async" draggable="false"/> }.into_any()
+                            } else {
+                                view! { <span class="asset-icon">{kind_icon(kind)}</span> }.into_any()
+                            }}
+                        </div>
+                        <span class="picker-name">{name}</span>
+                    </button>
+                }
+            };
+            let has_folders = !folders.is_empty();
+            view! {
+                <div class="overlay picker-overlay" on:mousedown=move |e| { if e.target() == e.current_target() { close() } }
+                    on:dragover=move |e: leptos::ev::DragEvent| { if crate::files::has_files(&e) { e.prevent_default() } }
+                    on:drop=move |e: leptos::ev::DragEvent| {
+                        if crate::files::has_files(&e) {
+                            e.prevent_default();
+                            import(crate::files::list(e.data_transfer().and_then(|dt| dt.files())));
+                        }
+                    }>
+                    <div class="dialog picker" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+                        <header class="picker-head">
+                            <h2 id="picker-title">{ui.t(if images { "picker-image-title" } else { "picker-media-title" })}</h2>
+                            <button class="icon-btn icon-btn--small" title=ui.t("action-close") aria-label=ui.t("action-close")
+                                on:click=move |_| close()>{icons::close()}</button>
+                        </header>
+                        <div class="picker-tools">
+                            <Search value=q key="assets-search"/>
+                            {has_folders.then(|| view! {
+                                <label class="mini-select" title=ui.t("picker-folder")>
+                                    {icons::folder()}
+                                    <select aria-label=ui.t("picker-folder")
+                                        on:change=move |e| {
+                                            let v = event_target_value(&e);
+                                            folder.set((!v.is_empty()).then_some(v));
+                                        }>
+                                        <option value="">{ui.t("picker-all-folders")}</option>
+                                        {folders.iter().map(|f| {
+                                            let depth = f.matches('/').count();
+                                            let label = format!("{}{}", "\u{a0}\u{a0}".repeat(depth), name_of(f));
+                                            view! { <option value=f.clone()>{label}</option> }
+                                        }).collect_view()}
+                                    </select>
+                                </label>
+                            })}
+                        </div>
+                        <div class="picker-scroll">
+                            {move || {
+                                let v = shown.get();
+                                if v.is_empty() {
+                                    return loaded.get().then(|| view! {
+                                        <p class="panel-empty muted">{ui.t(if files.with(Vec::is_empty) { "media-none" } else { "media-no-match" })}</p>
+                                    }).into_any();
+                                }
+                                view! { <div class="asset-grid picker-grid">{v.into_iter().map(tile).collect_view()}</div> }.into_any()
+                            }}
+                        </div>
+                        <footer class="picker-foot">
+                            <span class="muted">{move || ui.tx(if images { "picker-count-images" } else { "media-count" }, &[("count", shown.with(Vec::len).to_string())])}</span>
+                            <span class="toolbar-spacer"></span>
+                            <button type="button" class="btn btn--small" on:click=move |_| crate::files::pick(accept, true, import)>
+                                {icons::upload()}{ui.t("assets-import")}</button>
+                        </footer>
+                    </div>
+                </div>
+            }
+        })
     }
 }
 

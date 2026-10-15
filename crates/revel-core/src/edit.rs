@@ -564,6 +564,19 @@ impl Core {
         self.with_session(path, |s| f(&s.project))
     }
 
+    /// Modifie le projet d'un site ouvert hors de l'historique (réglage technique, comme le
+    /// dossier des médias déclaré au premier import) et l'enregistre.
+    pub(crate) fn with_session_mut(
+        &self,
+        path: &Path,
+        f: impl FnOnce(&mut Project) -> Result<()>,
+    ) -> Result<()> {
+        self.with_session(path, |s| {
+            f(&mut s.project)?;
+            s.save()
+        })
+    }
+
     fn with_session<T>(&self, path: &Path, f: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get_mut(&key(path)).ok_or(CoreError::NotOpen)?;

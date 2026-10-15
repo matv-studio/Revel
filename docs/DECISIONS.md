@@ -199,6 +199,39 @@ valeurs absentes du schéma (vérifié dans son code, `app/api/.../files/[path]/
 écrite dans les contenus) ne change pas après sa création, comme le nom d'API d'un champ Webflow ; retirer un
 champ du schéma laisse ses valeurs dans les contenus.
 
+**D-28 — 15/10/2026 — prise (demande de l'utilisateur).** **Panneau Variables.** Les affectations `{% set %}`
+(variables de travail des gabarits, de la page et des composants : titre de la page pour le référencement, liste de
+projets mis en avant…) quittent les calques, où elles n'ont pas de place visible, pour un panneau à part. La valeur
+affichée est celle du rendu du canevas (relevée par le moteur, première exécution, signalée quand elle change d'un
+passage de boucle à l'autre). L'expression se modifie sur place ; le cœur vérifie sa syntaxe avant de l'appliquer
+(aussi pour les conditions et les boucles), pour que la page reste affichable ; les variables et filtres inconnus
+restent acceptés (résolus au rendu).
+
+**D-29 — 15/10/2026 — prise (demande de l'utilisateur).** **Dossiers des médias et des composants : rangement de
+l'éditeur.** Comme les dossiers de médias et les groupes de composants de Webflow
+(https://help.webflow.com/hc/en-us/articles/33961269934227, https://webflow.com/updates/component-groups), les
+dossiers rangent sans déplacer : ils sont enregistrés dans `site.revel.json` (`library`), aucun fichier ne bouge et
+aucune adresse ne change, donc aucun lien de page, de feuille de style ou de contenu du CMS ne casse. Les médias
+listés sont les fichiers des dossiers copiés tels quels (hors code), filtrables par type (images, vidéos, sons,
+documents, polices, animations) et triables. Ranger les fichiers sur le disque (et réécrire les liens) reste
+possible plus tard avec l'import de médias (étape 3).
+
+**D-30 — 15/10/2026 — prise (demande de l'utilisateur).** **Modèle de collection et design propre à un contenu.**
+Les contenus d'une collection utilisent le gabarit de la collection (le modèle, comme le « Collection template » de
+Webflow) : le modifier en affichant n'importe quel contenu change tous les contenus, ce que la barre d'outils
+indique. Un contenu peut recevoir un design propre : copie du modèle (nouveaux identifiants, même gabarit parent,
+donc l'en-tête et le pied du site restent partagés) enregistrée comme gabarit du site, et clé `layout` dans
+l'en-tête du contenu (mécanisme d'Eleventy, déjà lu par Revel). Création et retour au modèle sont annulables en une
+étape (suite de commandes appliquée par le cœur, fichiers compris, atomique). Problèmes traités : avec un schéma
+Pages CMS qui ne garde pas les clés non déclarées, la clé `layout` y est déclarée en champ caché (Pages CMS garde
+les valeurs des champs cachés : son formulaire part de tous les champs du schéma, `initializeState` dans
+`lib/schema.ts`, et react-hook-form inclut ces valeurs dans les données enregistrées,
+https://www.react-hook-form.com/api/useform ; un contenu sans design propre peut y recevoir `layout: ""`) ; une
+clé vide reprend le modèle ; un gabarit introuvable reprend le modèle avec un avertissement à la génération ; un
+design propre dont le contenu a disparu est signalé dans le panneau Pages et supprimable ; le gabarit n'est retiré
+au retour au modèle que s'il ne sert à aucun autre contenu. Les modifications du modèle ne s'appliquent plus au
+design propre (c'est son rôle) ; il n'y a pas de fusion automatique.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

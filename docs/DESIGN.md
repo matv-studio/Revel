@@ -129,23 +129,32 @@ Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arr
 ## Espace de travail de l'éditeur (D-21)
 
 ```
-┌ barre d'outils : page · points de rupture · zoom · scripts ········· panneaux ? annuler rétablir ┐
-├ colonne gauche ────────┬ canevas (fixe) ────────────────────────────┬ colonne droite ───────────┤
-│ Pages Composants Médias │                                            │ Styles Réglages Interactions│
-│ ─────────────────────── │        page à la largeur du point          │                            │
-│ Calques CMS Ajouter     │        de rupture, zoom                    │                            │
-│   (recherche, arbre,    │                                            │                            │
-│    actions en bas)      │   [fenêtre flottante possible]             │                            │
+┌ barre d'outils : [page ▾]¹ [modèle ou design propre]² · points de rupture · zoom · affichage · scripts ··· panneaux ? annuler rétablir ┐
+├ colonne gauche ──────────┬ canevas (fixe) ────────────────────────────┬ colonne droite ───────────┤
+│ Pages Composants Médias   │                                            │ Styles Réglages Interactions│
+│ ───────────────────────── │        page à la largeur du point          │                            │
+│ Calques Variables Ajouter │        de rupture, zoom                    │                            │
+│   (recherche, arbre,      │                                            │                            │
+│    actions en bas)        │   [fenêtre flottante possible]             │                            │
 └ fil d'Ariane de l'élément sélectionné · propriétaire ········· enregistrement · largeur ──────────┘
+¹ seulement quand le panneau Pages n'est pas visible ; ² seulement pour un contenu de collection
 ```
 
 | Élément | Règles |
 |---|---|
-| Onglet (`.dock-tab`) | Texte seul ; actif en relief (fond, contour) ; glisser pour déplacer, clic pour afficher |
+| Onglet (`.dock-tab`) | Texte seul ; actif en relief (fond, contour) ; glisser pour déplacer, clic pour afficher ; clic droit : détacher (ou ancrer), fermer |
+| Fenêtre flottante | Déplacée par tout son bandeau (onglet seul compris) ; Maj pendant le déplacement : zone d'ancrage montrée, la fenêtre s'y range au relâchement |
+| Menu contextuel (`.ctx-menu`) | Un par zone (onglet, calque, page, média, composant, dossier, variable, canevas) ; une ligne par action : icône, libellé, raccourci à droite (jamais répété dans le libellé) ; fermé par un clic ailleurs, Échap. Menu du navigateur désactivé hors des champs de saisie |
 | Dépôt | Bande d'onglets : rejoint le groupe ; haut ou bas d'un panneau : nouveau groupe au-dessus ou au-dessous ; colonne vide : nouveau groupe ; canevas : fenêtre flottante. Zone de dépôt en bleu |
 | Groupe | Menu ⋯ : liste des onglets, détacher, fermer ; poignée de hauteur entre deux groupes |
 | Colonne | Poignée de largeur côté canevas (200 à 520 px) ; se vide sans disparaître pendant un déplacement |
-| Panneaux | Tous montés (l'état de chaque onglet est gardé) ; pied de panneau (`.panel-foot`) pour les actions et le compte ; recherche en tête (`.panel-search`) |
+| Panneaux | Tous montés (l'état de chaque onglet est gardé) ; pied de panneau (`.panel-foot`) pour les actions et le compte ; recherche en tête (`.panel-search`). Panneau CMS fermé par défaut (vue CMS et panneau Pages) ; un panneau rouvert reprend sa place auprès de ses voisins de la disposition par défaut |
+| Pages | Arbre (`PageTree`, aussi dans le menu de la barre d'outils) : pages fixes (dossiers d'après l'adresse), une ligne par collection (le modèle, icône base de données). Repliée, la collection du contenu affiché est en évidence (`--selection`) et ne montre que ce contenu ; dépliée, tous ses contenus ; design propre marqué d'une icône bleue (`--set-text`) ; design sans contenu en orange, supprimable |
+| Modèle, design propre | Pastille de la barre d'outils : « Modèle · Projets » (les modifications valent pour tous les contenus) + bouton « Créer un design propre » ; « Design propre » (bleu) + bouton « Revenir au modèle ». Annulable en une étape |
+| Variables | Affectations `{% set %}` de la page, de ses gabarits et de ses composants, rangées par propriétaire (dossiers repliables) : nom en chasse fixe, valeur calculée à droite (atténuée : vide, liste, objet, non calculée), icône de boucle ou de condition à gauche, icône « varie » à droite ; clic : expression modifiable (Entrée applique, Échap abandonne), syntaxe vérifiée avant l'application |
+| Médias | Filtre par type et tri (récents, anciens, nom, type, taille) en deux petites listes sous la recherche ; dossiers en lignes puis grille de vignettes (icône et extension pour les fichiers non image) ; fil d'Ariane dans un dossier ; glisser une vignette sur un dossier ou le fil d'Ariane pour la ranger |
+| Composants | Arbre de dossiers repliables, nombre d'utilisations ; glisser sur un dossier ou menu contextuel « Déplacer dans … » |
+| Dossiers (médias, composants) | Rangement de l'éditeur (`Site::library`) : aucun fichier déplacé, aucune adresse changée ; nouveau dossier (pied du panneau, menu d'un dossier), renommer, supprimer (le contenu remonte d'un niveau) ; nom saisi sur place, refusé (bordure rouge) s'il est vide ou déjà pris |
 | Fonction prévue | Bouton désactivé (`.is-planned`), étape en info-bulle ; panneau prévu : `Planned` |
 | Raccourcis | Ctrl+\ panneaux ; ↑ ↓ ← → dans les calques ; clic droit : menu contextuel ; voir aussi *Canevas* |
 | Ajouter | Familles (Structure, Texte, Médias, CMS, Formulaires, Code) ; tuiles icône + nom, aide en info-bulle ; glisser sur la page ou cliquer ; éléments prévus en pointillés, désactivés |
@@ -162,7 +171,9 @@ https://www.framer.com/help/articles/how-to-use-the-canvas).
 | Molette sur la page | La page défile (comme Webflow) |
 | Molette autour du cadre, Maj+molette | La vue se déplace |
 | Espace maintenue + glisser, bouton du milieu | La vue se déplace (curseur main) |
-| Ctrl+molette, pincement | Zoom autour du pointeur (10 à 400 %) ; la hauteur du cadre ne change pas, la page n'est pas remise en page |
+| Alt+molette (aussi Ctrl+molette, pincement) | Zoom autour du pointeur (10 à 400 %), sur la page comme autour du cadre ; la hauteur du cadre ne change pas, la page n'est pas remise en page |
+| Ctrl+R | Règles en pixels (haut et gauche du canevas) ; menu « Affichage » : règles, guides de colonnes (nombre, gouttière, marge, largeur maximale) en surimpression |
+| Changement de point de rupture | Largeur du cadre animée ; contour de l'espace à la couleur d'accentuation choisie |
 | Maj+1 / Ctrl+1 | Zoom ajusté ; Maj+0 / Ctrl+0 : 100 % ; Maj+2 / Ctrl+2 : zoom sur la sélection ; Ctrl+plus, Ctrl+moins : paliers. Chiffres lus par touche physique (claviers AZERTY) |
 | Clic dans le vide autour du cadre | Plus de sélection |
 | Glisser un élément de la page | Déplacement ; Alt : copie. Élément estompé, étiquette qui suit le pointeur |

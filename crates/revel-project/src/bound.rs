@@ -289,13 +289,17 @@ fn scalar_text(v: &Value) -> Option<String> {
 impl crate::Project {
     fn source_file(&self, b: &Binding) -> Result<(PathBuf, Vec<Seg>, bool), BoundError> {
         match &b.source {
-            Source::Data => {
+            Source::Data | Source::LocaleData { .. } => {
                 let dir = self
                     .site
                     .data_dir
                     .as_ref()
                     .ok_or_else(|| "pas de dossier de données".to_string())?;
-                let (file, used) = data_file(&self.dir.join(dir), &b.path)
+                let mut base = self.dir.join(dir);
+                if let Source::LocaleData { locale } = &b.source {
+                    base = base.join(self.locale_code(locale)?);
+                }
+                let (file, used) = data_file(&base, &b.path)
                     .ok_or_else(|| "fichier de données introuvable (YAML seulement)".to_string())?;
                 Ok((file, b.path[used..].to_vec(), false))
             }
@@ -325,7 +329,7 @@ impl crate::Project {
         b: &Binding,
         value: Option<&serde_json::Value>,
     ) -> Result<(String, String), BoundError> {
-        if !matches!(b.source, Source::Data) {
+        if !matches!(b.source, Source::Data | Source::LocaleData { .. }) {
             return Err("pas un fichier de données".into());
         }
         let (file, inner, _) = self.source_file(b)?;
@@ -349,8 +353,181 @@ impl crate::Project {
         Ok((rel, old))
     }
 
-    /// Fichier de données (relatif au projet, dans le dossier de données) remplacé par `text`.
-    pub fn write_data_file(&self, file: &str, text: &str) -> Result<String, BoundError> {
+    /// Code d'une autre langue du site (refusé s'il n'en est pas une).
+    fn locale_code<'c>(&self, code: &'c str) -> Result<&'c str, BoundError> {
+        if self.site.locale(code).is_some() && revel_model::valid_locale_code(code) {
+            Ok(code)
+        } else {
+            Err(format!("langue inconnue : {code}"))
+        }
+    }
+
+    /// Dossier de la langue principale d'un dossier de contenus d'une autre langue
+    /// (`src/content/en/projets` -> `src/content/projets`).
+    pub fn primary_folder(&self, folder: &str) -> Option<String> {
+        self.site.collections.iter().find_map(|c| {
+            (!c.folder.is_empty()
+                && self
+                    .site
+                    .locales
+                    .iter()
+                    .any(|l| revel_model::locale_folder(&c.folder, &l.code) == folder))
+            .then(|| c.folder.clone())
+        })
+    }
+
+    /// Contenu d'une autre langue créé, avant d'y écrire, en copiant celui de la langue
+    /// principale. Renvoie la commande qui le retire (annuler), `None` s'il existait déjà ou si le
+    /// dossier n'est pas celui d'une autre langue.
+    pub fn ensure_locale_entry(
+        &self,
+        folder: &str,
+        file: &str,
+    ) -> Result<Option<revel_edit::Command>, BoundError> {
+        let Some(primary) = self.primary_folder(folder) else {
+            return Ok(None);
+        };
+        if self.entry_text(folder, file)?.is_some() {
+            return Ok(None);
+        }
+        let text = self
+            .entry_text(&primary, file)?
+            .ok_or_else(|| format!("contenu introuvable : {primary}/{file}"))?;
+        self.write_entry(folder, file, Some(&text))?;
+        let undo = revel_edit::Command::WriteEntry {
+            folder: folder.to_string(),
+            file: file.to_string(),
+            text: None,
+        };
+        let code = self
+            .site
+            .locales
+            .iter()
+            .find(|l| revel_model::locale_folder(&primary, &l.code) == folder)
+            .map(|l| l.code.clone())
+            .unwrap_or_default();
+        Ok(Some(self.with_pages_cms(undo, &primary, folder, &code)))
+    }
+
+    /// Premier fichier d'une autre langue créé : entrée de Pages CMS de la langue (copie de celle
+    /// de la langue principale, `projets-en`, « Projets (EN) ») ajoutée à `.pages.yml` s'il décrit
+    /// le dossier ou le fichier de la langue principale et pas encore celui de la langue (D-23 :
+    /// les langues restent modifiables dans Pages CMS). Renvoie la commande d'annulation complétée.
+    fn with_pages_cms(
+        &self,
+        undo: revel_edit::Command,
+        primary: &str,
+        local: &str,
+        code: &str,
+    ) -> revel_edit::Command {
+        let added = (|| -> Option<String> {
+            let text = crate::pagesyml::read(&self.dir).ok()??;
+            let doc = crate::parse_yaml(&text).ok()?;
+            let list = doc.get("content")?.as_array()?;
+            let norm = |p: &str| p.trim_matches('/').to_string();
+            let path_of = |x: &Value| x.get("path").and_then(Value::as_str).map(norm);
+            if list.iter().any(|x| path_of(x) == Some(norm(local))) {
+                return None;
+            }
+            let src = list.iter().find(|x| path_of(x) == Some(norm(primary)))?;
+            let name = src.get("name")?.as_str()?;
+            let taken = |n: &str| {
+                list.iter()
+                    .any(|x| x.get("name").and_then(Value::as_str) == Some(n))
+            };
+            let mut new_name = format!("{name}-{code}");
+            let mut n = 2;
+            while taken(&new_name) {
+                new_name = format!("{name}-{code}-{n}");
+                n += 1;
+            }
+            let label = src
+                .get("label")
+                .and_then(Value::as_str)
+                .unwrap_or(name)
+                .to_string();
+            let mut def = src.clone();
+            let o = def.as_object_mut()?;
+            o.insert("name".into(), Value::String(new_name));
+            o.insert(
+                "label".into(),
+                Value::String(format!("{label} ({})", code.to_uppercase())),
+            );
+            o.insert("path".into(), Value::String(local.to_string()));
+            let new = crate::pagesyml::add_collection(&text, &def).ok()?;
+            crate::pagesyml::write(&self.dir, Some(&new)).ok()?;
+            Some(text)
+        })();
+        match added {
+            Some(old) => revel_edit::Command::Batch {
+                commands: vec![
+                    undo,
+                    revel_edit::Command::WriteCmsConfig { text: Some(old) },
+                ],
+            },
+            None => undo,
+        }
+    }
+
+    /// Fichier d'une autre langue créé avant d'y écrire une valeur liée, copie de celui de la
+    /// langue principale (fichier de données, contenu). Renvoie la commande qui le retire.
+    pub fn ensure_locale_file(
+        &self,
+        b: &Binding,
+    ) -> Result<Option<revel_edit::Command>, BoundError> {
+        match &b.source {
+            Source::LocaleData { locale } => {
+                let code = self.locale_code(locale)?;
+                let dir = self
+                    .site
+                    .data_dir
+                    .as_ref()
+                    .ok_or_else(|| "pas de dossier de données".to_string())?;
+                let base = self.dir.join(dir);
+                if data_file(&base.join(code), &b.path).is_some() {
+                    return Ok(None);
+                }
+                let (primary, _) = data_file(&base, &b.path)
+                    .ok_or_else(|| "fichier de données introuvable (YAML seulement)".to_string())?;
+                let rel = primary
+                    .strip_prefix(&base)
+                    .map_err(|_| "fichier hors du dossier de données".to_string())?;
+                let target = base.join(code).join(rel);
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| format!("{} : {e}", parent.display()))?;
+                }
+                let text = std::fs::read_to_string(&primary).map_err(|e| e.to_string())?;
+                write_atomic(&target, &text)?;
+                let file = target
+                    .strip_prefix(&self.dir)
+                    .map_err(|_| "fichier hors du projet".to_string())?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let primary_rel = primary
+                    .strip_prefix(&self.dir)
+                    .map_err(|_| "fichier hors du projet".to_string())?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let undo = revel_edit::Command::WriteDataFile {
+                    file: file.clone(),
+                    text: None,
+                };
+                Ok(Some(self.with_pages_cms(undo, &primary_rel, &file, code)))
+            }
+            Source::Entry { folder, file } => self.ensure_locale_entry(folder, file),
+            _ => Ok(None),
+        }
+    }
+
+    /// Fichier de données (relatif au projet, dans le dossier de données) remplacé par `text`
+    /// (`None` : retiré, avec les dossiers restés vides) ; renvoie son texte d'avant (`None` : il
+    /// n'existait pas).
+    pub fn write_data_file(
+        &self,
+        file: &str,
+        text: Option<&str>,
+    ) -> Result<Option<String>, BoundError> {
         let dir = self
             .site
             .data_dir
@@ -364,8 +541,34 @@ impl crate::Project {
             return Err(format!("fichier refusé : {file}"));
         }
         let path = self.dir.join(file);
-        let old = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        write_atomic(&path, text)?;
+        let old = std::fs::read_to_string(&path).ok();
+        match text {
+            Some(t) => {
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| format!("{} : {e}", parent.display()))?;
+                }
+                write_atomic(&path, t)?;
+            }
+            None => {
+                if path.is_file() {
+                    std::fs::remove_file(&path).map_err(|e| format!("{} : {e}", path.display()))?;
+                }
+                // Dossiers restés vides (créés pour ce fichier), jusqu'au dossier de données.
+                let root = self.dir.join(dir);
+                let mut d = path.parent().map(Path::to_path_buf);
+                while let Some(x) = d {
+                    if x == root
+                        || !x.starts_with(&root)
+                        || std::fs::read_dir(&x).map_or(true, |mut r| r.next().is_some())
+                    {
+                        break;
+                    }
+                    let _ = std::fs::remove_dir(&x);
+                    d = x.parent().map(Path::to_path_buf);
+                }
+            }
+        }
         Ok(old)
     }
 
@@ -380,6 +583,26 @@ impl crate::Project {
             Source::EntryItem { .. } => Err("valeur calculée".into()),
             // Écrite dans l'utilisation du composant (commande `SetUseArg`), pas dans un fichier.
             Source::Prop { .. } => Err("propriété de composant".into()),
+            Source::LocaleData { .. } if self.source_file(b).is_err() => {
+                // Pas encore traduit : valeur de la langue principale.
+                self.bound_value(&Binding {
+                    source: Source::Data,
+                    path: b.path.clone(),
+                })
+            }
+            Source::Entry { folder, file }
+                if self.primary_folder(folder).is_some()
+                    && self.entry_text(folder, file).ok().flatten().is_none() =>
+            {
+                let primary = self.primary_folder(folder).unwrap_or_default();
+                self.bound_value(&Binding {
+                    source: Source::Entry {
+                        folder: primary,
+                        file: file.clone(),
+                    },
+                    path: b.path.clone(),
+                })
+            }
             _ => {
                 let (file, inner, front) = self.source_file(b)?;
                 let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;

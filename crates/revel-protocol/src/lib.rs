@@ -180,6 +180,9 @@ pub struct CmsCollection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
     pub entries: Vec<CmsEntry>,
+    /// Contenus traduits, par langue (fichiers du dossier de chaque autre langue du site, 3.8).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub locales: std::collections::BTreeMap<String, Vec<CmsEntry>>,
 }
 
 /// Présentation du tableau d'une collection.

@@ -19,6 +19,7 @@ mod insert;
 mod inspector;
 mod layers;
 mod library;
+mod locales;
 mod pageops;
 mod pagesettings;
 mod pagetree;
@@ -137,6 +138,11 @@ pub struct Ui {
     pub pick_media: RwSignal<Option<library::MediaPick>>,
     /// Médias du site changés (import) : listes à relire.
     pub media_rev: RwSignal<u32>,
+    /// Langue de travail du site ouvert (3.8) : autre langue affichée et modifiée dans l'éditeur
+    /// et le CMS ; `None` : langue principale.
+    pub locale: RwSignal<Option<String>>,
+    /// Contenu à ouvrir dans la vue CMS (collection, fichier), demandé par une autre vue.
+    pub goto_entry: RwSignal<Option<(String, String)>>,
 }
 
 impl Ui {
@@ -184,6 +190,7 @@ impl Ui {
         self.open_at(site, Tab::Editor);
     }
     pub fn open_at(self, site: SiteSummary, tab: Tab) {
+        self.locale.set(None);
         self.route.set(Route::Site { site, tab });
         self.reload_recents();
     }
@@ -305,6 +312,8 @@ fn App() -> impl IntoView {
         canvas_base: RwSignal::new(None),
         pick_media: RwSignal::new(None),
         media_rev: RwSignal::new(0),
+        locale: RwSignal::new(None),
+        goto_entry: RwSignal::new(None),
     };
     provide_context(ui);
     spawn_local(async move {

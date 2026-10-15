@@ -361,6 +361,7 @@ impl crate::Project {
             .collections
             .iter()
             .any(|c| !c.folder.is_empty() && c.folder == folder)
+            && self.primary_folder(folder).is_none()
         {
             return Err(format!("collection inconnue : {folder}"));
         }
@@ -410,6 +411,13 @@ impl crate::Project {
                         && std::fs::read_dir(dir).is_ok_and(|mut d| d.next().is_none())
                     {
                         let _ = std::fs::remove_dir(dir);
+                        // Dossier d'une autre langue (`content/en`) resté vide aussi.
+                        if self.primary_folder(folder).is_some()
+                            && let Some(up) = dir.parent()
+                            && std::fs::read_dir(up).is_ok_and(|mut d| d.next().is_none())
+                        {
+                            let _ = std::fs::remove_dir(up);
+                        }
                     }
                 }
             }

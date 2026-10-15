@@ -235,11 +235,36 @@ pub fn instance_settings(
             .map(|(q, item)| (q.collection, item))
     });
     let cols = list.as_ref().map(|_| crate::blocks::collections(ed));
+    let lang = ed.lang();
     let rows = c
         .props
         .iter()
         .map(|p| {
             let arg = args.get(&p.name).cloned();
+            // Autre langue : texte de la propriété traduit (valeur de l'utilisation, sinon
+            // valeur par défaut).
+            if let Some(code) = lang.clone()
+                && p.kind == PropKind::Text
+                && let Some(src) = match &arg {
+                    Some(a) => literal(a),
+                    None => p.default.as_ref().and_then(|v| v.as_str()).map(str::to_string),
+                }
+                .filter(|t| revel_edit::locale::translatable(t))
+            {
+                let name = p.name.clone();
+                return view! {
+                    <div class="prop-row" data-prop=p.name.clone()>
+                        <Field label=p.label().to_string() value=ed.translation(&code, &src).unwrap_or_default()
+                            placeholder=src.clone()
+                            on_commit=move |v: String| ed.apply(ui, Command::Translate {
+                                locale: code.clone(),
+                                place: revel_edit::locale::TextPlace::Arg { at: at.get_value(), name: name.clone() },
+                                text: v,
+                            }, false)/>
+                    </div>
+                }
+                .into_any();
+            }
             let bind = list.clone().zip(cols);
             prop_value_row(ui, ed, p.clone(), arg, set, bind)
         })

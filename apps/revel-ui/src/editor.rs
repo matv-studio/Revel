@@ -289,6 +289,8 @@ pub struct Ed {
     pub own_change: RwSignal<f64>,
     /// Composant ouvert (modification isolée) : celui qui contient l'élément sélectionné.
     pub isolated: RwSignal<Option<String>>,
+    /// Langue de travail (celle de l'interface du site ouvert, `Ui::locale`).
+    pub locale: RwSignal<Option<String>>,
     pub frame: NodeRef<html::Iframe>,
 }
 
@@ -330,10 +332,28 @@ impl Ed {
         }
     }
 
+    /// Autre langue affichée (langue de travail, si le site l'a encore).
+    pub fn lang(self) -> Option<String> {
+        let code = self.locale.get()?;
+        self.doc
+            .with(|d| d.as_ref()?.locale(&code).map(|l| l.code.clone()))
+    }
+
+    /// Adresse d'une page dans la langue affichée (`/agence/` -> `/en/agence/`), sauf pour une
+    /// page qui n'existe que dans la langue principale (404).
+    pub fn localized(self, page: &str) -> String {
+        match self.lang() {
+            Some(code) if page.starts_with('/') && revel_model::localizable_path(page) => {
+                format!("/{code}{page}")
+            }
+            _ => page.to_string(),
+        }
+    }
+
     /// Adresse du canevas pour la page affichée.
     pub fn src(self) -> Option<String> {
         let base = self.base.get()?;
-        let page = self.page.get();
+        let page = self.localized(&self.page.get());
         Some(format!(
             "{}{}?rv={}",
             base,
@@ -927,6 +947,41 @@ impl Ed {
     /// (`SetBound`, même traitement par le cœur).
     fn text_command(self, slot: &revel_edit::canvas::Slot, text: String) -> Option<Command> {
         use revel_edit::canvas::Slot;
+        use revel_edit::locale::TextPlace;
+        // Autre langue : texte écrit et propriété de composant traduits (les valeurs liées
+        // s'écrivent dans les fichiers de la langue).
+        if let Some(locale) = self.lang_untracked() {
+            let place = match slot {
+                Slot::Text { parent, index } => Some(TextPlace::Text {
+                    parent: parent.clone(),
+                    index: *index,
+                }),
+                Slot::Expr {
+                    binding:
+                        Some(revel_edit::canvas::Binding {
+                            source: revel_edit::canvas::Source::Prop { owner, node, name },
+                            path,
+                        }),
+                    transformed: false,
+                    html: false,
+                    ..
+                } if path.is_empty() => Some(TextPlace::Arg {
+                    at: revel_edit::Target {
+                        owner: owner.clone(),
+                        node: node.clone(),
+                    },
+                    name: name.clone(),
+                }),
+                _ => None,
+            };
+            if let Some(place) = place {
+                return Some(Command::Translate {
+                    locale,
+                    place,
+                    text,
+                });
+            }
+        }
         match slot {
             Slot::Text { parent, index } => self.doc.with_untracked(|d| {
                 let d = d.as_ref()?;
@@ -996,6 +1051,21 @@ impl Ed {
             }),
             _ => None,
         }
+    }
+
+    /// Traduction, dans la langue `code`, d'un texte de la langue principale (`None` : pas
+    /// encore traduit).
+    pub fn translation(self, code: &str, source: &str) -> Option<String> {
+        let key = revel_edit::locale::normalize(source);
+        self.doc
+            .with_untracked(|d| d.as_ref()?.locale(code)?.texts.get(&key).cloned())
+    }
+
+    /// Autre langue affichée, hors suivi réactif.
+    pub fn lang_untracked(self) -> Option<String> {
+        let code = self.locale.get_untracked()?;
+        self.doc
+            .with_untracked(|d| d.as_ref()?.locale(&code).map(|l| l.code.clone()))
     }
 
     /// Composant ouvert et noms des composants, transmis au canevas.
@@ -1183,6 +1253,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         pending: RwSignal::new(0),
         saved_at: RwSignal::new(None),
         isolated: RwSignal::new(None),
+        locale: ui.locale,
         frame: NodeRef::new(),
     };
     provide_context(ed);
@@ -1243,14 +1314,26 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     });
 
     // Page affichée, connue de la barre supérieure (l'aperçu s'ouvre sur elle).
-    Effect::new(move |_| ui.current_page.set(Some(ed.page.get())));
+    Effect::new(move |_| ui.current_page.set(Some(ed.localized(&ed.page.get()))));
     on_cleanup(move || ui.current_page.set(None));
 
     // Page demandée par une autre vue (vue CMS) : affichée dès que la liste des pages est connue.
     Effect::new(move |_| {
-        let Some(url) = ui.goto_page.get() else {
+        let Some(mut url) = ui.goto_page.get() else {
             return;
         };
+        // Page d'une autre langue (`/en/projets/wattr/`) : langue de travail choisie.
+        let lang = ed.doc.with(|d| {
+            let d = d.as_ref()?;
+            d.locale_of_url(&url)
+                .map(|(l, rest)| (l.code.clone(), rest.to_string()))
+        });
+        if let Some((code, rest)) = lang {
+            if ui.locale.get_untracked().as_deref() != Some(code.as_str()) {
+                ui.locale.set(Some(code));
+            }
+            url = rest;
+        }
         if ed.pages.with(|p| p.iter().any(|x| x.url == url)) {
             ui.goto_page.set(None);
             if ed.page.get_untracked() != url {
@@ -1502,6 +1585,46 @@ fn panel_view(p: crate::dock::PanelId) -> AnyView {
     }
 }
 
+/// Langue affichée dans le canevas (sites à plusieurs langues) : les textes modifiés sont écrits
+/// dans cette langue ; la structure et les styles restent communs à toutes les langues.
+#[component]
+fn LocaleSwitch() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let langs = Memo::new(move |_| {
+        ed.doc.with(|d| {
+            let d = d.as_ref()?;
+            (!d.locales.is_empty()).then(|| {
+                let mut v = vec![(String::new(), revel_model::language_name(&d.default_locale))];
+                v.extend(d.locales.iter().map(|l| (l.code.clone(), l.label())));
+                v
+            })
+        })
+    });
+    move || {
+        langs.get().map(|list| {
+            view! {
+                <div class="select editor-locale" class:is-other=move || ed.lang().is_some()
+                    title=move || ui.tx(if ed.lang().is_some() { "editor-locale-other-help" } else { "editor-locale-help" }, &[])>
+                    {icons::globe()}
+                    <select class="input" aria-label=ui.t("editor-locale")
+                        on:change=move |e| {
+                            let v = event_target_value(&e);
+                            ui.locale.set((!v.is_empty()).then_some(v));
+                        }>
+                        {list.into_iter().map(|(code, label)| {
+                            let c2 = code.clone();
+                            view! {
+                                <option value=code selected=move || ed.lang().unwrap_or_default() == c2>{label}</option>
+                            }
+                        }).collect_view()}
+                    </select>
+                </div>
+            }
+        })
+    }
+}
+
 #[component]
 fn Toolbar() -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -1542,6 +1665,7 @@ fn Toolbar() -> impl IntoView {
     view! {
         <div class="editor-toolbar">
             <crate::pagetree::PageContext/>
+            <LocaleSwitch/>
             <div class="segmented" role="group" aria-label=ui.t("editor-breakpoints")>
                 {move || breakpoints().into_iter().map(|b| {
                     let id = b.id.clone();

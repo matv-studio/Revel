@@ -31,8 +31,47 @@ const TITLES: &[&str] = &["title", "titre", "name", "nom"];
 /// Colonnes affichées en plus du titre (sans colonnes déclarées par le schéma).
 const MAX_COLUMNS: usize = 5;
 
+/// Fusion d'un en-tête traduit sur celui de la langue principale (objets clé par clé).
+pub(crate) fn merge_json(base: &mut Value, over: &Value) {
+    match (base, over) {
+        (Value::Object(b), Value::Object(o)) => {
+            for (k, v) in o {
+                match b.get_mut(k) {
+                    Some(x) => merge_json(x, v),
+                    None => {
+                        b.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (b, o) => *b = o.clone(),
+    }
+}
+
+/// Collection vue dans une autre langue (3.8) : dossier de la langue (les modifications y sont
+/// écrites, le contenu copié au besoin par le cœur), contenus traduits ou, à défaut, ceux de la
+/// langue principale ; noms des fichiers traduits.
+pub(crate) fn localized(c: &CmsCollection, code: &str) -> Option<(CmsCollection, Vec<String>)> {
+    let own = c.locales.get(code)?;
+    let mut l = c.clone();
+    l.folder = revel_model::locale_folder(&c.folder, code);
+    l.locales.clear();
+    let mut done = Vec::new();
+    for e in &mut l.entries {
+        e.url = e.url.as_ref().map(|u| format!("/{code}{u}"));
+        if let Some(t) = own.iter().find(|t| t.file == e.file) {
+            merge_json(&mut e.data, &t.data);
+            if !t.body.trim().is_empty() {
+                e.body = t.body.clone();
+            }
+            done.push(e.file.clone());
+        }
+    }
+    Some((l, done))
+}
+
 /// Nom affiché d'une collection.
-fn col_label(c: &CmsCollection) -> String {
+pub(crate) fn col_label(c: &CmsCollection) -> String {
     c.label.clone().unwrap_or_else(|| capitalize(&c.id))
 }
 
@@ -245,6 +284,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     let sort = RwSignal::new(None::<Option<(String, bool)>>);
     let state = RwSignal::new(None::<EditState>);
     let path = StoredValue::new(site.path.clone());
+    let site_locale = StoredValue::new(site.locale.clone());
     // Identifiants de toutes les collections du site (y compris sans dossier).
     let site_ids = StoredValue::new(
         site.collections
@@ -360,16 +400,62 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         e.prevent_default();
     });
     on_cleanup(move || on_key.remove());
-    Effect::new(move |_| {
-        let _ = current.get();
-        open.set(None);
-        sel_field.set(None);
-        query.set(String::new());
-        sort.set(None);
+    Effect::new(move |prev: Option<Option<String>>| {
+        let now = current.get();
+        // Collection changée (pas à la première lecture : une fiche demandée reste ouverte).
+        if prev.is_some_and(|p| p != now) {
+            open.set(None);
+            sel_field.set(None);
+            query.set(String::new());
+            sort.set(None);
+        }
+        now
     });
-    let col = Memo::new(move |_| {
+    // Langue de travail (3.8) : collection vue dans cette langue.
+    let lang = Memo::new(move |_| {
+        let code = ui.locale.get()?;
+        cols.with(|c| {
+            c.as_ref()?
+                .iter()
+                .any(|c| c.locales.contains_key(&code))
+                .then_some(code)
+        })
+    });
+    Effect::new(move |_| {
+        if lang.get().is_some() {
+            fields_mode.set(false);
+        }
+    });
+    let shown = Memo::new(move |_| {
         let id = current.get()?;
-        cols.with(|c| c.as_ref()?.iter().find(|c| c.id == id).cloned())
+        let c = cols.with(|c| c.as_ref()?.iter().find(|c| c.id == id).cloned())?;
+        Some(
+            lang.get()
+                .and_then(|code| localized(&c, &code))
+                .unwrap_or((c, Vec::new())),
+        )
+    });
+    let col = Memo::new(move |_| shown.get().map(|s| s.0));
+    let translated = Memo::new(move |_| shown.get().map(|s| s.1).unwrap_or_default());
+    let langs = Memo::new(move |_| {
+        cols.with(|c| {
+            c.as_ref()
+                .and_then(|c| c.first())
+                .map(|c| c.locales.keys().cloned().collect::<Vec<_>>())
+                .unwrap_or_default()
+        })
+    });
+    // Contenu demandé par une autre vue (Localisation) : collection et fiche ouvertes.
+    Effect::new(move |_| {
+        let Some((id, file)) = ui.goto_entry.get() else {
+            return;
+        };
+        if cols.with(|c| c.as_ref().is_some_and(|c| c.iter().any(|c| c.id == id))) {
+            ui.goto_entry.set(None);
+            fields_mode.set(false);
+            current.set(Some(id));
+            open.set(Some(file));
+        }
     });
     // Champ titre et colonnes affichées.
     let layout = Memo::new(move |_| {
@@ -651,12 +737,31 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                     prop:value=move || query.get() on:input=move |e| query.set(event_target_value(&e))/>
                             </label>
                         </Show>
+                        {move || (!langs.get().is_empty()).then(|| view! {
+                            <div class="select cms-locale" class:is-other=move || lang.get().is_some() title=ui.t("cms-locale-help")>
+                                {icons::globe()}
+                                <select class="input" aria-label=ui.t("editor-locale")
+                                    on:change=move |e| {
+                                        let v = event_target_value(&e);
+                                        ui.locale.set((!v.is_empty()).then_some(v));
+                                    }>
+                                    <option value="" selected=move || lang.get().is_none()>{move || revel_model::language_name(&site_locale.get_value())}</option>
+                                    {langs.get().into_iter().map(|code| {
+                                        let c2 = code.clone();
+                                        let label = revel_model::language_name(&code);
+                                        view! { <option value=code selected=move || lang.get().as_deref() == Some(c2.as_str())>{label}</option> }
+                                    }).collect_view()}
+                                </select>
+                            </div>
+                        })}
                         <button class="icon-btn" title=ui.t("editor-undo") aria-label=ui.t("editor-undo")
                             prop:disabled=move || !can_undo() on:click=move |_| undo()>{icons::undo()}</button>
                         <button class="icon-btn" title=ui.t("editor-redo") aria-label=ui.t("editor-redo")
                             prop:disabled=move || !can_redo() on:click=move |_| redo()>{icons::redo()}</button>
                         <button class="btn cms-fields-btn" class:is-on=move || fields_mode.get()
-                            aria-pressed=move || fields_mode.get().to_string() title=ui.t("cms-fields-help")
+                            aria-pressed=move || fields_mode.get().to_string()
+                            title=move || ui.tx(if lang.get().is_some() { "cms-locale-shared" } else { "cms-fields-help" }, &[])
+                            prop:disabled=move || lang.get().is_some()
                             on:click=move |_| fields_mode.update(|m| *m = !*m)>
                             {icons::database()}{ui.t("cms-fields-edit")}
                         </button>
@@ -664,7 +769,9 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                             view! { <NewField col=col cols=Signal::derive(move || cols.get()) apply=apply selected=sel_field/> }.into_any()
                         } else {
                             view! {
-                                <button class="btn btn--primary cms-new" on:click=new_entry>
+                                <button class="btn btn--primary cms-new" on:click=new_entry
+                                    prop:disabled=move || lang.get().is_some()
+                                    title=move || lang.get().map(|_| ui.tx("cms-locale-shared", &[]))>
                                     {icons::plus()}{ui.t("cms-entry-new")}
                                 </button>
                             }.into_any()
@@ -730,6 +837,18 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                         <td class="strong cms-td-title"><div class="cms-title-cell">
                                                             <span class="cms-cell">{entry_title(&e, &title)}</span>
                                                             {draft.then(|| view! { <span class="chip chip--draft">{ui.t("cms-draft")}</span> })}
+                                                            {
+                                                                // Autre langue : point bleu (traduit) ou orange (contenu de la
+                                                                // langue principale), comme les valeurs propres et héritées.
+                                                                let f3 = e.file.clone();
+                                                                move || lang.get().map(|_| {
+                                                                    let done = translated.with(|t| t.contains(&f3));
+                                                                    view! {
+                                                                        <span class="loc-dot" class:is-done=done
+                                                                            title=ui.t(if done { "cms-translated-help" } else { "cms-untranslated-help" })></span>
+                                                                    }
+                                                                })
+                                                            }
                                                         </div></td>
                                                         {columns.iter().zip(&labels).map(|(f, l)| view! {
                                                             <td class="muted"><span class="cms-cell">{cell(ui, f, e.data.get(&f.name), l.as_ref())}</span></td>

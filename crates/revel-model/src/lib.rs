@@ -36,6 +36,10 @@ pub struct Site {
     /// URL publique du site (ex. `https://alunites.com`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
+    /// Autres langues du site (3.8, D-23) : adresses préfixées (`/en/…`), textes des pages
+    /// traduits ici, données et contenus dans un dossier par langue (`_data/en/`, `content/en/…`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locales: Vec<Locale>,
     #[serde(default)]
     pub settings: Settings,
     /// Données globales accessibles dans les expressions par leur nom (ex. `site.title`).
@@ -121,6 +125,7 @@ impl Site {
             name: name.into(),
             default_locale: default_locale.into(),
             base_url: None,
+            locales: Vec::new(),
             settings: Settings::default(),
             data: BTreeMap::new(),
             data_dir: None,
@@ -166,6 +171,138 @@ impl Site {
     pub fn page(&self, id: &str) -> Option<&Page> {
         self.pages.iter().find(|p| p.id == id)
     }
+
+    /// Autre langue du site.
+    pub fn locale(&self, code: &str) -> Option<&Locale> {
+        self.locales.iter().find(|l| l.code == code)
+    }
+
+    /// Langue d'une adresse : `/en/agence/` -> `("en", "/agence/")` ; langue principale : `None`.
+    pub fn locale_of_url<'u>(&self, url: &'u str) -> Option<(&Locale, &'u str)> {
+        self.locales.iter().find_map(|l| {
+            let rest = url.strip_prefix('/')?.strip_prefix(l.code.as_str())?;
+            match rest {
+                "" => Some((l, "/")),
+                r if r.starts_with('/') => Some((l, r)),
+                _ => None,
+            }
+        })
+    }
+}
+
+/// Autre langue du site (3.8).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Locale {
+    /// Code de langue BCP 47 (`en`, `de`, `pt-BR`) ; préfixe des adresses (`/en/`).
+    pub code: String,
+    /// Nom affiché (sélecteur de langue) ; par défaut, le nom de la langue dans cette langue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Langue en préparation : visible dans l'éditeur et l'aperçu, pas publiée.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub draft: bool,
+    /// Textes écrits dans les pages, gabarits et composants (texte de la langue principale,
+    /// espaces regroupés -> traduction).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub texts: BTreeMap<String, String>,
+}
+
+impl Locale {
+    pub fn new(code: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Nom affiché.
+    pub fn label(&self) -> String {
+        self.name
+            .clone()
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| language_name(&self.code))
+    }
+}
+
+/// Page qui existe dans chaque langue du site : page HTML (`/agence/`, `/a.html`), sauf la page
+/// d'erreur 404 (plan du site, flux, `robots.txt` : langue principale seulement).
+pub fn localizable_path(path: &str) -> bool {
+    let last = path.rsplit('/').next().unwrap_or("");
+    (path.ends_with('/') || last.ends_with(".html") || last.ends_with(".htm"))
+        && !path.ends_with("404.html")
+        && !path.ends_with("/404/")
+}
+
+/// Dossier des contenus d'une collection dans une autre langue (D-23) : le code de langue avant
+/// le dossier (`src/content/projets` -> `src/content/en/projets`).
+pub fn locale_folder(folder: &str, code: &str) -> String {
+    let f = folder.trim_end_matches('/');
+    match f.rsplit_once('/') {
+        Some((parent, name)) => format!("{parent}/{code}/{name}"),
+        None => format!("{code}/{f}"),
+    }
+}
+
+/// Code de langue accepté : `en`, `fr-CA`, `pt-BR`, `zh-Hant` (lettres minuscules, puis
+/// sous-étiquettes de 2 à 8 lettres ou chiffres).
+pub fn valid_locale_code(code: &str) -> bool {
+    let mut parts = code.split('-');
+    parts
+        .next()
+        .is_some_and(|p| (2..=3).contains(&p.len()) && p.chars().all(|c| c.is_ascii_lowercase()))
+        && parts.all(|p| (2..=8).contains(&p.len()) && p.chars().all(|c| c.is_ascii_alphanumeric()))
+}
+
+/// Nom d'une langue dans cette langue (`en` -> `English`) ; sinon le code en majuscules.
+pub fn language_name(code: &str) -> String {
+    let base = code.split('-').next().unwrap_or(code).to_ascii_lowercase();
+    let name = match base.as_str() {
+        "fr" => "Français",
+        "en" => "English",
+        "de" => "Deutsch",
+        "es" => "Español",
+        "it" => "Italiano",
+        "pt" => "Português",
+        "nl" => "Nederlands",
+        "ca" => "Català",
+        "eu" => "Euskara",
+        "br" => "Brezhoneg",
+        "oc" => "Occitan",
+        "co" => "Corsu",
+        "pl" => "Polski",
+        "cs" => "Čeština",
+        "sk" => "Slovenčina",
+        "sl" => "Slovenščina",
+        "hr" => "Hrvatski",
+        "hu" => "Magyar",
+        "ro" => "Română",
+        "bg" => "Български",
+        "el" => "Ελληνικά",
+        "ru" => "Русский",
+        "uk" => "Українська",
+        "sv" => "Svenska",
+        "da" => "Dansk",
+        "nb" | "no" => "Norsk",
+        "fi" => "Suomi",
+        "et" => "Eesti",
+        "lv" => "Latviešu",
+        "lt" => "Lietuvių",
+        "ga" => "Gaeilge",
+        "tr" => "Türkçe",
+        "ar" => "العربية",
+        "he" => "עברית",
+        "fa" => "فارسی",
+        "hi" => "हिन्दी",
+        "zh" => "中文",
+        "ja" => "日本語",
+        "ko" => "한국어",
+        "vi" => "Tiếng Việt",
+        "th" => "ไทย",
+        "id" => "Bahasa Indonesia",
+        "ms" => "Bahasa Melayu",
+        _ => return code.to_ascii_uppercase(),
+    };
+    name.to_string()
 }
 
 /// Réglages de génération.

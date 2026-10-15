@@ -455,6 +455,22 @@ pub async fn edit_replace_media(
     .await
 }
 
+/// Textes des fichiers de données à traduire dans une autre langue (vue Localisation).
+pub async fn edit_locale_data(path: &str, code: &str) -> Res<Vec<revel_edit::locale::DataText>> {
+    // Chemins mêlant clés et positions (énumération sans étiquette) : relus depuis le JSON, les
+    // nombres JavaScript n'étant pas reconnus comme positions par `serde_wasm_bindgen`.
+    let v = tauri_invoke(
+        "edit_locale_data",
+        to_js(&serde_json::json!({ "path": path, "code": code })),
+    )
+    .await?;
+    let text = js_sys::JSON::stringify(&v)
+        .ok()
+        .and_then(|s| s.as_string())
+        .unwrap_or_default();
+    serde_json::from_str(&text).map_err(|e| Failure::detail(e.to_string()))
+}
+
 /// Médias du site ouvert dans l'éditeur.
 pub async fn edit_media(path: &str) -> Res<Vec<revel_protocol::MediaFile>> {
     call("edit_media", &PathArg { path }).await

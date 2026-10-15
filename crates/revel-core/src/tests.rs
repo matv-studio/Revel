@@ -1433,3 +1433,155 @@ fn modeles_de_site() {
     assert_eq!(a.entries.len(), 2);
     assert!(a.fields.iter().any(|f| f.name == "description"));
 }
+
+const PAGES_YML: &str = "# Contenus\ncontent:\n  - name: projets\n    label: Projets\n    type: collection\n    path: contenus/projets\n    fields:\n      - name: title\n        type: string\n  - name: accueil\n    label: Accueil\n    type: file\n    path: donnees/pages/accueil.yml\n    fields:\n      - name: hero\n        type: object\n        fields:\n          - name: title\n            type: string\n";
+
+#[test]
+fn langues_fichiers_et_generation() {
+    use revel_edit::Command;
+    use revel_edit::canvas::{Binding, Seg, Source};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let data = "hero:\n  title: L'agence   # titre\n  lien: /contact/\n";
+    let entry = "---\ntitle: 'Wattr'\n---\n\nCorps\n";
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.base_url = Some("https://exemple.fr".into());
+        p.site.data_dir = Some("donnees".into());
+        p.site.settings.typography = Some("fr".into());
+        p.site.collections.push(revel_model::Collection {
+            id: "projets".into(),
+            source: revel_model::CollectionSource::Folder,
+            folder: "contenus/projets".into(),
+            path: Some("/projets/{{ title | lower }}/".into()),
+            layout: None,
+            props: Default::default(),
+            filter: None,
+            sort: None,
+            fields: vec![],
+        });
+        p.site.pages[0].body.insert(1, el("head", &[], vec![]));
+        p.site.pages[0]
+            .body
+            .push(el("p", &[], vec![out("pages.accueil.hero.title")]));
+        p.save().unwrap();
+        std::fs::create_dir_all(site.join("donnees/pages")).unwrap();
+        std::fs::write(site.join("donnees/pages/accueil.yml"), data).unwrap();
+        std::fs::create_dir_all(site.join("contenus/projets")).unwrap();
+        std::fs::write(site.join("contenus/projets/wattr.md"), entry).unwrap();
+        std::fs::write(site.join(".pages.yml"), PAGES_YML).unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    c.edit_apply(
+        &site,
+        Command::AddLocale {
+            locale: revel_model::Locale::new("en"),
+            index: None,
+        },
+        false,
+    )
+    .unwrap();
+    let k = |s: &str| Seg::Key(s.into());
+    let title = Binding {
+        source: Source::LocaleData {
+            locale: "en".into(),
+        },
+        path: vec![k("pages"), k("accueil"), k("hero"), k("title")],
+    };
+    // Texte à traduire : la langue n'a pas encore de fichier.
+    let texts = c.edit_locale_data(&site, "en").unwrap();
+    assert_eq!(texts.len(), 1, "{texts:?}");
+    assert_eq!(texts[0].source, "L'agence");
+    assert_eq!(texts[0].text, None);
+    // Écriture dans la langue : fichier copié puis modifié (typographie française non retirée
+    // en anglais), annuler le retire avec son dossier.
+    c.edit_apply(
+        &site,
+        Command::SetBound {
+            binding: title.clone(),
+            value: "The agency’s".into(),
+        },
+        false,
+    )
+    .unwrap();
+    let en = site.join("donnees/en/pages/accueil.yml");
+    assert_eq!(
+        std::fs::read_to_string(&en).unwrap(),
+        data.replace("title: L'agence", "title: The agency’s")
+    );
+    // Pages CMS : entrée du fichier de la langue ajoutée (copie de celle de la langue principale).
+    let cfg = || std::fs::read_to_string(site.join(".pages.yml")).unwrap();
+    assert!(
+        cfg().contains("  - name: accueil-en\n    label: Accueil (EN)\n    type: file\n    path: donnees/en/pages/accueil.yml\n"),
+        "{}",
+        cfg()
+    );
+    assert_eq!(
+        std::fs::read_to_string(site.join("donnees/pages/accueil.yml")).unwrap(),
+        data
+    );
+    assert_eq!(
+        c.edit_locale_data(&site, "en").unwrap()[0].text.as_deref(),
+        Some("The agency’s")
+    );
+    // Contenu d'une langue : copié depuis la langue principale.
+    c.edit_apply(
+        &site,
+        Command::SetEntryField {
+            folder: "contenus/en/projets".into(),
+            file: "wattr".into(),
+            key: "title".into(),
+            value: Some(serde_json::json!("Wattr EN")),
+        },
+        false,
+    )
+    .unwrap();
+    let md = site.join("contenus/en/projets/wattr.md");
+    assert!(std::fs::read_to_string(&md).unwrap().contains("Wattr EN"));
+    assert!(cfg().contains("  - name: projets-en\n    label: Projets (EN)\n    type: collection\n    path: contenus/en/projets\n"), "{}", cfg());
+    let cms = c.cms(&site).unwrap();
+    assert_eq!(cms[0].entries.len(), 1);
+    assert_eq!(cms[0].locales["en"][0].data["title"], "Wattr EN");
+    assert_eq!(
+        cms[0].locales["en"][0].url.as_deref(),
+        Some("/en/projets/wattr/")
+    );
+
+    // Génération : pages de la langue préfixées, fichiers de la langue lus, `hreflang`.
+    let out = d.path().join("sortie");
+    let p = revel_project::Project::open(&site).unwrap();
+    p.build(&out, &revel_project::BuildOptions::default())
+        .unwrap();
+    let home = std::fs::read_to_string(out.join("en/index.html")).unwrap();
+    assert!(home.contains("<p>The agency’s</p>"), "{home}");
+    assert!(
+        home.contains(r#"hreflang="en" href="https://exemple.fr/en/""#),
+        "{home}"
+    );
+    assert!(std::fs::read_to_string(out.join("en/projets/wattr/index.html")).is_ok());
+    let fr = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(fr.contains("<p>L&#39;agence</p>"), "{fr}");
+    let sitemap = std::fs::read_to_string(out.join("sitemap.xml")).unwrap();
+    assert!(
+        sitemap.contains("https://exemple.fr/en/projets/wattr/"),
+        "{sitemap}"
+    );
+    // Le dossier de la langue n'est pas une donnée de la langue principale.
+    assert!(!p.load_data().unwrap().contains_key("en"));
+
+    // Tout annuler : fichiers de la langue retirés, langue retirée.
+    for _ in 0..3 {
+        c.edit_undo(&site).unwrap();
+    }
+    assert!(!md.exists() && !site.join("contenus/en").exists());
+    assert!(!en.exists() && !site.join("donnees/en").exists());
+    assert_eq!(cfg(), PAGES_YML);
+    assert!(
+        revel_project::Project::open(&site)
+            .unwrap()
+            .site
+            .locales
+            .is_empty()
+    );
+}

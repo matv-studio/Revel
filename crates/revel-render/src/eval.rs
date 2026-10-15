@@ -189,8 +189,51 @@ enum Mode {
     Attr,
 }
 
+/// Langues du rendu (3.8).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Lang {
+    /// Autre langue rendue (`None` : langue principale).
+    pub(crate) current: Option<String>,
+    /// Langues des pages : (code, nom affiché, préfixe d'adresse `""` ou `/en`), la principale
+    /// d'abord. Vide ou une seule : site sans autre langue.
+    pub(crate) all: Vec<(String, String, String)>,
+    /// Autre langue : en-tête de la langue principale de chaque contenu (dossier de la langue,
+    /// fichier). L'adresse d'un contenu en est calculée : même adresse dans chaque langue,
+    /// préfixe mis à part.
+    pub(crate) primary_data: HashMap<(String, String), serde_json::Value>,
+}
+
+impl Lang {
+    /// Préfixe des adresses de la langue rendue (`/en`), vide pour la langue principale.
+    pub(crate) fn prefix(&self) -> String {
+        self.current
+            .as_ref()
+            .map(|c| format!("/{c}"))
+            .unwrap_or_default()
+    }
+
+    /// Code de la langue rendue.
+    pub(crate) fn code<'s>(&'s self, site: &'s Site) -> &'s str {
+        self.current.as_deref().unwrap_or(&site.default_locale)
+    }
+
+    /// Adresse de la langue principale d'une page de la langue rendue.
+    pub(crate) fn primary_url<'u>(&self, url: &'u str) -> &'u str {
+        match &self.current {
+            Some(c) => url
+                .strip_prefix('/')
+                .and_then(|r| r.strip_prefix(c.as_str()))
+                .filter(|r| r.is_empty() || r.starts_with('/'))
+                .map(|r| if r.is_empty() { "/" } else { r })
+                .unwrap_or(url),
+            None => url,
+        }
+    }
+}
+
 pub(crate) struct Builder<'a> {
     site: &'a Site,
+    pub(crate) lang: Lang,
     env: Environment<'static>,
     input: &'a BuildInput<'a>,
     warnings: RefCell<Vec<String>>,
@@ -232,6 +275,15 @@ impl<'a> Builder<'a> {
             attr_cache: RefCell::new(HashMap::new()),
             using: RefCell::new(Vec::new()),
             editor: None,
+            lang: Lang::default(),
+        }
+    }
+
+    /// Source des données globales : dossier de données, ou celui de la langue rendue.
+    fn data_source(&self) -> Source {
+        match &self.lang.current {
+            Some(c) => Source::LocaleData { locale: c.clone() },
+            None => Source::Data,
         }
     }
 
@@ -341,7 +393,7 @@ impl<'a> Builder<'a> {
         }
         match found.as_slice() {
             [one] => Some(Binding {
-                source: Source::Data,
+                source: self.data_source(),
                 path: one.clone(),
             }),
             _ => None,
@@ -357,7 +409,7 @@ impl<'a> Builder<'a> {
                 (
                     k.clone(),
                     Binding {
-                        source: Source::Data,
+                        source: self.data_source(),
                         path: vec![Seg::Key(k.clone())],
                     },
                 )
@@ -408,7 +460,33 @@ impl<'a> Builder<'a> {
         env.insert("name".into(), Value::from(self.input.environment.clone()));
         g.insert("env".into(), Value::from(env));
         g.insert("version".into(), Value::from(self.input.version.clone()));
+        // Langue de la page rendue (3.8).
+        g.entry("locale".into())
+            .or_insert_with(|| Value::from(self.lang.code(self.site).to_string()));
         g
+    }
+
+    /// Langues de la page (sélecteur de langue) : `{ code, name, url, current }`, la principale
+    /// d'abord ; vide sans autre langue ou pour une page qui n'existe que dans la langue
+    /// principale.
+    fn page_locales(&self, url: &str) -> Vec<Value> {
+        if self.lang.all.len() < 2 || !crate::localizable(url) {
+            return Vec::new();
+        }
+        let primary = self.lang.primary_url(url);
+        let current = self.lang.code(self.site);
+        self.lang
+            .all
+            .iter()
+            .map(|(code, name, prefix)| {
+                let mut m: BTreeMap<String, Value> = BTreeMap::new();
+                m.insert("code".into(), Value::from(code.clone()));
+                m.insert("name".into(), Value::from(name.clone()));
+                m.insert("url".into(), Value::from(format!("{prefix}{primary}")));
+                m.insert("current".into(), Value::from(code == current));
+                Value::from(m)
+            })
+            .collect()
     }
 
     pub(crate) fn eval(&self, scope: &Scope, expr: &str, ctx: &str) -> Result<Value, RenderError> {
@@ -521,6 +599,13 @@ impl<'a> Builder<'a> {
         );
         data.insert("page".into(), Value::from(page));
         origins.remove("page");
+        // Langues de la page, sauf si le site a déjà une variable de ce nom.
+        if self.lang.all.len() > 1
+            && !data.contains_key("locales")
+            && !self.site.data.contains_key("locales")
+        {
+            data.insert("locales".into(), Value::from(self.page_locales(&j.url)));
+        }
         let global_origins = if self.editor.is_some() {
             self.global_origins()
         } else {

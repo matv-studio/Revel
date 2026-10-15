@@ -102,6 +102,8 @@ pub enum Preset {
     Embed,
     /// Liste de collection : un élément par contenu.
     CollectionList,
+    /// Sélecteur de langue : un lien par langue du site vers la même page (3.8).
+    LocaleSwitch,
     /// Blocs prêts à l'emploi (sections complètes, [`crate::ready`]).
     BlockHero,
     BlockFeatures,
@@ -128,7 +130,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 22] = [
+    pub const ALL: [Preset; 23] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -144,6 +146,7 @@ impl Preset {
         Preset::Icon,
         Preset::Embed,
         Preset::CollectionList,
+        Preset::LocaleSwitch,
         Preset::BlockHero,
         Preset::BlockFeatures,
         Preset::BlockTextImage,
@@ -197,6 +200,28 @@ impl Preset {
                     ("vertical-align", "middle"),
                 ],
             )],
+            Preset::LocaleSwitch => vec![
+                (
+                    ".langues",
+                    vec![
+                        ("display", "flex"),
+                        ("align-items", "center"),
+                        ("gap", "12px"),
+                    ],
+                ),
+                (
+                    ".langue",
+                    vec![
+                        ("color", "inherit"),
+                        ("text-decoration", "none"),
+                        ("opacity", "0.6"),
+                    ],
+                ),
+                (
+                    ".langue[aria-current=\"page\"]",
+                    vec![("opacity", "1"), ("font-weight", "600")],
+                ),
+            ],
             Preset::CollectionList => vec![(
                 ".liste-collection",
                 vec![
@@ -348,6 +373,41 @@ impl Preset {
                     html: format!("<p>{}</p>", html_escape(text)),
                 }],
             ),
+            Preset::LocaleSwitch => {
+                // `text` : nom du menu pour les lecteurs d'écran (« Langues »).
+                let nav = id();
+                let each = id();
+                let a = id();
+                el(
+                    nav,
+                    "nav",
+                    vec![attr("class", "langues"), attr("aria-label", text)],
+                    vec![Node::Each {
+                        id: each,
+                        expr: "locales".into(),
+                        item: "l".into(),
+                        children: vec![el(
+                            a,
+                            "a",
+                            vec![
+                                attr("class", "langue"),
+                                attr("href", "{{ l.url }}"),
+                                attr("hreflang", "{{ l.code }}"),
+                                attr("lang", "{{ l.code }}"),
+                                Attr {
+                                    name: "aria-current".into(),
+                                    value: Some("page".into()),
+                                    when: Some("l.current".into()),
+                                },
+                            ],
+                            vec![Node::Out {
+                                expr: "l.name".into(),
+                            }],
+                        )],
+                        empty: vec![],
+                    }],
+                )
+            }
             Preset::CollectionList => {
                 let col = site
                     .collections

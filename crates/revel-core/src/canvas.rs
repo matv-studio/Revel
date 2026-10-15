@@ -263,6 +263,15 @@ impl Core {
             .collect())
     }
 
+    /// Textes des fichiers de données à traduire dans une autre langue (vue Localisation, 3.8).
+    pub fn edit_locale_data(
+        &self,
+        path: &Path,
+        code: &str,
+    ) -> Result<Vec<revel_edit::locale::DataText>> {
+        self.with_project(path, |p| Ok(p.locale_data_texts(code)?))
+    }
+
     /// Médias du site : fichiers des dossiers copiés tels quels (`passthrough`), hors code et
     /// fichiers cachés, triés par adresse.
     pub fn edit_media(&self, path: &Path) -> Result<Vec<revel_protocol::MediaFile>> {

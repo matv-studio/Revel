@@ -589,3 +589,31 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .schema-block-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .schema-block-name { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--weight-medium); font-size: var(--text-sm); }
 .schema-block-name svg.icon { width: 14px; height: 14px; color: var(--text-muted); }
+
+/* --- Localisation (3.8) -------------------------------------------------------- */
+.locales-add > summary.btn { display: inline-flex; }
+.locales-menu { left: auto; right: 0; max-height: min(60vh, 460px); overflow: auto; }
+.locales-menu .menu-item .path { margin-left: auto; font-size: var(--text-xs); }
+.locales-table tr.row-link { cursor: default; }
+.locales-table .col-actions { white-space: nowrap; width: 1%; }
+.locales-table tr.is-on td { background: var(--surface-active); }
+.meter { display: flex; align-items: center; gap: var(--s-2); min-width: 140px; }
+.meter-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.meter-fill { display: block; height: 100%; background: var(--success-text); transition: width var(--normal) var(--ease); }
+.meter-num { width: 40px; text-align: right; font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.locales-texts { gap: var(--s-2); }
+.locales-texts .section-head .toolbar { display: flex; align-items: center; gap: var(--s-2); }
+.loc-table td { vertical-align: top; }
+.loc-table td.loc-source { width: 50%; padding-top: 10px; font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.loc-key { display: block; font-size: var(--text-xs); margin-bottom: 2px; }
+.loc-input { width: 100%; }
+textarea.loc-input { resize: vertical; min-height: 64px; }
+.loc-table tr:not(.is-done) .loc-input { border-color: color-mix(in srgb, var(--warning-text) 45%, transparent); }
+.loc-empty { text-align: center; padding: var(--s-6) 0; }
+.loc-state { width: 1%; white-space: nowrap; }
+.chip--todo { background: var(--inherit-bg); color: var(--inherit-text); margin-left: var(--s-2); }
+.loc-table .chip--todo, .loc-table .chip--ok { margin-left: 0; }
+.chip--todo { white-space: nowrap; flex: none; }
+/* Contenu dans une autre langue : traduit (bleu) ou repris de la langue principale (orange). */
+.loc-dot { order: -1; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--inherit-text); margin-right: var(--s-2); }
+.loc-dot.is-done { background: var(--set-text); }

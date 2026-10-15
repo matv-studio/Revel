@@ -1409,3 +1409,174 @@ fn blocs_prets_a_l_emploi() {
             .contains("Frequently asked questions")
     );
 }
+
+#[test]
+fn langues_et_traductions() {
+    // Langue ajoutée, réglée, retirée : chaque inverse rend le document identique.
+    round_trip(
+        Command::AddLocale {
+            locale: revel_model::Locale::new("en"),
+            index: None,
+        },
+        |s| assert_eq!(s.locales[0].code, "en"),
+    );
+    let mut s = sample();
+    for bad in ["fr", "EN", "e", "en_US", "english"] {
+        assert!(
+            matches!(
+                apply(
+                    &mut s,
+                    &Command::AddLocale {
+                        locale: revel_model::Locale::new(bad),
+                        index: None,
+                    }
+                ),
+                Err(EditError::InvalidLocale(_))
+            ),
+            "{bad}"
+        );
+    }
+    apply(
+        &mut s,
+        &Command::AddLocale {
+            locale: revel_model::Locale::new("en"),
+            index: None,
+        },
+    )
+    .unwrap();
+    assert!(
+        apply(
+            &mut s,
+            &Command::AddLocale {
+                locale: revel_model::Locale::new("en"),
+                index: None,
+            }
+        )
+        .is_err()
+    );
+    // Adresses de la langue réservées.
+    assert!(matches!(
+        apply(
+            &mut s,
+            &Command::SetPagePath {
+                id: "accueil".into(),
+                path: "/en/x/".into()
+            }
+        ),
+        Err(EditError::PathTaken(_))
+    ));
+    let before = json(&s);
+    let inv = apply(
+        &mut s,
+        &Command::SetLocale {
+            code: "en".into(),
+            name: Some(" Anglais ".into()),
+            draft: true,
+        },
+    )
+    .unwrap();
+    assert_eq!(s.locales[0].label(), "Anglais");
+    assert!(s.locales[0].draft);
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+    assert_eq!(s.locales[0].label(), "English");
+
+    // Traduction depuis le canevas : texte écrit, clé = texte de la langue principale regroupé.
+    let h1 = at(&s, "h1");
+    let t = expand(
+        &s,
+        &Command::Translate {
+            locale: "en".into(),
+            place: crate::locale::TextPlace::Text {
+                parent: Parent::of(&h1, Branch::Children),
+                index: 0,
+            },
+            text: " Hello ".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        t,
+        Command::SetTranslation {
+            locale: "en".into(),
+            source: "Bonjour".into(),
+            text: Some(" Hello ".into()),
+        }
+    );
+    let inv = apply(&mut s, &t).unwrap();
+    assert_eq!(
+        s.locales[0].texts.get("Bonjour").map(String::as_str),
+        Some("Hello")
+    );
+    let texts = crate::locale::texts(&s);
+    assert!(
+        texts
+            .iter()
+            .any(|x| x.source == "Bonjour" && x.places == vec![page()])
+    );
+    assert!(texts.iter().any(|x| x.source == "Carte"));
+    assert!(
+        !texts
+            .iter()
+            .any(|x| x.source.trim() == "fin" && x.source != "fin")
+    );
+    // Site vu en anglais : même structure, texte traduit.
+    let en = crate::locale::translate_site(&s, &s.locales[0].texts);
+    assert!(json(&en).contains("\"Hello\""));
+    assert_eq!(
+        revel_model::ids::node_id(&en.pages[0].body[0]),
+        revel_model::ids::node_id(&s.pages[0].body[0])
+    );
+    apply(&mut s, &inv).unwrap();
+    assert!(s.locales[0].texts.is_empty());
+    // Langue inconnue ; endroit sans texte.
+    assert!(
+        expand(
+            &s,
+            &Command::Translate {
+                locale: "de".into(),
+                place: crate::locale::TextPlace::Text {
+                    parent: Parent::of(&h1, Branch::Children),
+                    index: 0,
+                },
+                text: "Hallo".into(),
+            }
+        )
+        .is_err()
+    );
+    // Retrait : la langue revient à sa place avec ses textes.
+    apply(
+        &mut s,
+        &Command::SetTranslation {
+            locale: "en".into(),
+            source: "Carte".into(),
+            text: Some("Card".into()),
+        },
+    )
+    .unwrap();
+    let before = json(&s);
+    let inv = apply(&mut s, &Command::RemoveLocale { code: "en".into() }).unwrap();
+    assert!(s.locales.is_empty());
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+}
+
+#[test]
+fn selecteur_de_langue() {
+    let mut s = sample();
+    let main = at(&s, "main");
+    let cmd = expand(
+        &s,
+        &Command::InsertPreset {
+            parent: Parent::of(&main, Branch::Children),
+            index: 0,
+            preset: crate::make::Preset::LocaleSwitch,
+            text: "Langues".into(),
+        },
+    )
+    .unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let c = css(&s);
+    assert!(c.contains(".langue[aria-current=\"page\"]"), "{c}");
+    assert!(json(&s).contains("\"locales\""));
+}

@@ -164,6 +164,9 @@ Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arr
 | Liste de collection | Réglages : collection, filtre (champ, valeur), tri (champ, ordre), nombre ; éléments de la liste : « Relié au contenu » (texte, image, lien : champ du contenu ou page du contenu) |
 | Nouveau site | Nom, langue, modèle (trois cartes : Vide, Vitrine, Blog), emplacement |
 | Blocs du CMS | Une carte par élément d'une liste d'objets ou de blocs : type en titre, monter, descendre, supprimer, champs dessous ; « Ajouter un bloc » propose les types ; schéma : champs du groupe ou de chaque type de bloc sur une ligne (libellé, type, retirer) |
+| Localisation | Tableau des langues (nom, code, adresse, avancement en barre fine, interrupteur « Publiée », renommer, retirer) ; « Ajouter une langue » : langues courantes en menu, « Autre langue… » pour un code ; textes en trois onglets texte (Pages, Données, Contenus), recherche, filtre « À traduire » (icône) ; texte d'origine à gauche, traduction à droite (texte d'origine en indication, contour orange tant que non traduit) ; un contenu s'ouvre dans le CMS dans la langue |
+| Langue affichée | Liste à globe dans la barre de l'éditeur et l'en-tête du CMS (sites à plusieurs langues) ; autre langue en bleu (valeurs propres à la langue, D-21) ; textes, `alt`, `title`, propriétés texte des composants, titre et description de la page écrits dans la langue ; structure et styles communs ; CMS : point bleu (traduit) ou orange (contenu de la langue principale), « Nouveau contenu » et « Champs » désactivés |
+| Sélecteur de langue | Élément (famille CMS) : un lien par langue vers la même page, langue affichée en gras (`aria-current`), `hreflang` et `lang` sur chaque lien |
 
 ### Canevas (D-22)
 

@@ -18,6 +18,7 @@ fn input(site: &Site, entries: Vec<Entry>) -> BuildInput<'_> {
     BuildInput {
         site,
         entries,
+        locales: Vec::new(),
         environment: "production".into(),
         version: "v1".into(),
         hooks: Arc::new(PlainAssets),
@@ -657,4 +658,109 @@ fn liste_de_collection() {
         "{home}"
     );
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+}
+
+#[test]
+fn langues() {
+    let mut s = site();
+    s.base_url = Some("https://alunites.com".into());
+    let mut en = revel_model::Locale::new("en");
+    en.texts = [
+        ("Accueil".to_string(), "Home".to_string()),
+        (
+            "L'agence : « oui » !".to_string(),
+            "The agency: “yes”!".to_string(),
+        ),
+    ]
+    .into();
+    let mut de = revel_model::Locale::new("de");
+    de.draft = true;
+    s.locales = vec![en, de];
+    s.pages.push(Page {
+        id: "langues".into(),
+        path: "/langues/".into(),
+        layout: None,
+        props: Default::default(),
+        body: parse(
+            r#"<html><head></head><body>{% for l in locales %}<a href="{{ l.url }}" hreflang="{{ l.code }}">{{ l.name }}</a>{% endfor %}<a href="/project/a/#x">a</a><a href="/media/f.pdf">f</a><p>{{ locale }}</p></body></html>"#,
+        ),
+        computed: Default::default(),
+        draft: false,
+        name: None,
+    });
+    s.ensure_ids();
+    let entries = vec![
+        entry(
+            "a",
+            json!({"slug": "a", "title": "Projet <A>", "date": "2026-01-02"}),
+        ),
+        entry(
+            "b",
+            json!({"slug": "b", "title": "Projet B", "date": "2026-03-01"}),
+        ),
+    ];
+    let mut inp = input(&s, entries);
+    inp.locales = vec![LocaleInput {
+        code: "en".into(),
+        data: [("site".to_string(), json!({"title": "Alunites EN"}))].into(),
+        entries: vec![Entry {
+            folder: "content/en/projets".into(),
+            file_stem: "b".into(),
+            data: json!({"title": "Project B"}),
+            body: String::new(),
+        }],
+    }];
+    let out = build(&inp).unwrap();
+    let paths: Vec<&str> = out.files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(
+        paths,
+        vec![
+            "en/index.html",
+            "en/langues/index.html",
+            "en/project/a/index.html",
+            "en/project/b/index.html",
+            "index.html",
+            "langues/index.html",
+            "project/a/index.html",
+            "project/b/index.html",
+            "robots.txt",
+            "sitemap.xml"
+        ],
+        "langue en préparation (de) non publiée, plan du site seulement dans la langue principale"
+    );
+    let home = file(&out, "index.html");
+    assert!(home.contains(r#"<link rel="alternate" hreflang="fr" href="https://alunites.com/"><link rel="alternate" hreflang="en" href="https://alunites.com/en/"><link rel="alternate" hreflang="x-default" href="https://alunites.com/"></head>"#), "{home}");
+    assert!(home.contains("<title>Accueil | Alunites</title>"));
+    let en = file(&out, "en/index.html");
+    assert!(en.starts_with("<!doctype html><html lang=\"en\">"), "{en}");
+    // Textes traduits (titre de la page compris), données de la langue, typographie française
+    // seulement en français.
+    assert!(en.contains("<title>Home | Alunites EN</title>"), "{en}");
+    assert!(en.contains(r#"<a href="/en/">Home</a>"#), "{en}");
+    assert!(en.contains("The agency: “yes”!"), "{en}");
+    // Contenus : traduit (b), sinon celui de la langue principale (a) ; adresses préfixées.
+    assert!(en.contains(r#"<a href="/en/project/b/">Project B</a></li><li class="i"><a href="/en/project/a/">Projet &lt;A&gt;</a>"#), "{en}");
+    assert!(file(&out, "en/project/a/index.html").contains("<h1>Projet &lt;A&gt;</h1>"));
+    let l = file(&out, "en/langues/index.html");
+    assert!(l.contains(r#"<a href="/langues/" hreflang="fr">Français</a><a href="/en/langues/" hreflang="en">English</a><a href="/en/project/a/#x">a</a><a href="/media/f.pdf">f</a><p>en</p>"#), "{l}");
+    assert!(file(&out, "langues/index.html").contains("<p>fr</p>"));
+
+    // Éditeur : page d'une langue en préparation, valeurs reliées aux fichiers de la langue.
+    let p = render_editor(&inp, "/de/langues/", &EditorOptions::default())
+        .unwrap()
+        .unwrap();
+    assert!(
+        p.html.contains(r#"hreflang="de""#) && p.html.contains("<html lang=\"de\""),
+        "{}",
+        p.html
+    );
+    let p = render_editor(&inp, "/en/project/b/", &EditorOptions::default())
+        .unwrap()
+        .unwrap();
+    assert!(p.slots.iter().any(|x| matches!(x, Slot::Expr { binding: Some(Binding { source: Source::Entry { folder, file }, .. }), .. } if folder == "content/en/projets" && file == "b")), "{:?} {}", p.slots, p.html);
+    assert!(
+        render_editor(&inp, "/en/sitemap.xml", &EditorOptions::default())
+            .unwrap()
+            .is_none()
+    );
 }

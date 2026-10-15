@@ -372,6 +372,18 @@ fn edit_pages(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::Edito
     s.core.edit_pages(std::path::Path::new(&path)).map_err(err)
 }
 
+/// Textes des fichiers de données à traduire dans une autre langue (vue Localisation).
+#[tauri::command]
+fn edit_locale_data(
+    s: State<AppState>,
+    path: String,
+    code: String,
+) -> Res<Vec<revel_edit::locale::DataText>> {
+    s.core
+        .edit_locale_data(std::path::Path::new(&path), &code)
+        .map_err(err)
+}
+
 /// Médias d'un site ouvert pour l'édition (dossiers copiés tels quels).
 #[tauri::command]
 fn edit_media(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::MediaFile>> {
@@ -535,6 +547,7 @@ pub fn run() {
             edit_pages,
             edit_stamp,
             edit_media,
+            edit_locale_data,
             edit_import_media,
             edit_replace_media,
             canvas_open,

@@ -445,6 +445,11 @@ pub fn sort() -> AnyView {
     svg(r#"<path d="M5 3v10M2.5 10.5 5 13l2.5-2.5M11 13V3M8.5 5.5 11 3l2.5 2.5"/>"#)
 }
 
+/// Filtre (entonnoir).
+pub fn filter() -> AnyView {
+    svg(r#"<path d="M2.5 3.5h11L9.5 8.5v4l-3 1.5V8.5z"/>"#)
+}
+
 /// Retour (chevron vers la gauche).
 pub fn back() -> AnyView {
     svg(r#"<path d="M10 3.5 5.5 8l4.5 4.5"/>"#)

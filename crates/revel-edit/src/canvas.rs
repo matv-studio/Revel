@@ -59,6 +59,9 @@ pub enum Source {
     /// Données globales (dossier de données : `pages.accueil.hero.title` = fichier
     /// `pages/accueil.yml`, clé `hero.title`, selon l'organisation du dossier).
     Data,
+    /// Données globales vues dans une autre langue du site (3.8) : même chemin, écrit dans le
+    /// dossier de la langue (`_data/en/pages/accueil.yml`), créé au besoin.
+    LocaleData { locale: String },
     /// Variable d'une page du site (`site.revel.json`).
     Page { page: String },
     /// Variable d'un gabarit.

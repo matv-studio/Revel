@@ -677,6 +677,7 @@ impl Core {
     pub fn cms(&self, path: &Path) -> Result<Vec<revel_protocol::CmsCollection>> {
         let p = revel_project::Project::open(path)?;
         let entries = p.load_entries()?;
+        let locales = p.load_locales()?;
         let urls: std::collections::HashMap<(String, String), String> = p
             .list_pages()?
             .into_iter()
@@ -760,6 +761,26 @@ impl Core {
                     merge: config.merge,
                     view: pages.and_then(|x| x.view.clone()),
                     filename: pages.and_then(|x| x.filename.clone()),
+                    locales: locales
+                        .iter()
+                        .map(|l| {
+                            let folder = revel_model::locale_folder(&c.folder, &l.code);
+                            let list = l
+                                .entries
+                                .iter()
+                                .filter(|e| e.folder == folder)
+                                .map(|e| revel_protocol::CmsEntry {
+                                    file: e.file_stem.clone(),
+                                    data: e.data.clone(),
+                                    body: e.body.clone(),
+                                    url: urls
+                                        .get(&(c.id.clone(), e.file_stem.clone()))
+                                        .map(|u| format!("/{}{u}", l.code)),
+                                })
+                                .collect();
+                            (l.code.clone(), list)
+                        })
+                        .collect(),
                     entries: list,
                 }
             })

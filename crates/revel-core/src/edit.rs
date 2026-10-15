@@ -92,13 +92,22 @@ fn exec(
             },
         ),
         Command::SetBound { binding, value } => {
-            let old = project
-                .set_bound(site, binding, value)
+            // Autre langue : fichier de la langue créé au besoin (copie) ; annuler le retire.
+            let created = project
+                .ensure_locale_file(binding)
                 .map_err(revel_edit::EditError::Bound)?;
-            Ok(Command::SetBound {
-                binding: binding.clone(),
-                value: old,
-            })
+            match project.set_bound(site, binding, value) {
+                Ok(old) => Ok(created.unwrap_or(Command::SetBound {
+                    binding: binding.clone(),
+                    value: old,
+                })),
+                Err(e) => {
+                    if let Some(c) = created {
+                        let _ = exec(project, site, &c);
+                    }
+                    Err(revel_edit::EditError::Bound(e))
+                }
+            }
         }
         Command::SetEntryField {
             folder,
@@ -106,21 +115,29 @@ fn exec(
             key,
             value,
         } => {
+            let created = project
+                .ensure_locale_entry(folder, file)
+                .map_err(revel_edit::EditError::Bound)?;
             let old = project
                 .entry_text(folder, file)
                 .map_err(revel_edit::EditError::Bound)?
                 .ok_or_else(|| revel_edit::EditError::Bound(format!("{folder}/{file}")))?;
             let new = revel_project::entries::set_field(&old, key, value.as_ref())
                 .map_err(revel_edit::EditError::Bound)?;
-            write_entry(project, folder, file, Some(&new), Some(old))
+            let inv = write_entry(project, folder, file, Some(&new), Some(old))?;
+            Ok(created.unwrap_or(inv))
         }
         Command::SetEntryBody { folder, file, body } => {
+            let created = project
+                .ensure_locale_entry(folder, file)
+                .map_err(revel_edit::EditError::Bound)?;
             let old = project
                 .entry_text(folder, file)
                 .map_err(revel_edit::EditError::Bound)?
                 .ok_or_else(|| revel_edit::EditError::Bound(format!("{folder}/{file}")))?;
             let new = revel_project::entries::set_body(&old, body);
-            write_entry(project, folder, file, Some(&new), Some(old))
+            let inv = write_entry(project, folder, file, Some(&new), Some(old))?;
+            Ok(created.unwrap_or(inv))
         }
         Command::CreateEntry {
             folder,
@@ -246,14 +263,25 @@ fn exec(
             })
         }
         Command::SetDataValue { binding, value } => {
-            let (file, old) = project
-                .set_data_value(binding, value.as_ref())
+            let created = project
+                .ensure_locale_file(binding)
                 .map_err(revel_edit::EditError::Bound)?;
-            Ok(Command::WriteDataFile { file, text: old })
+            match project.set_data_value(binding, value.as_ref()) {
+                Ok((file, old)) => Ok(created.unwrap_or(Command::WriteDataFile {
+                    file,
+                    text: Some(old),
+                })),
+                Err(e) => {
+                    if let Some(c) = created {
+                        let _ = exec(project, site, &c);
+                    }
+                    Err(revel_edit::EditError::Bound(e))
+                }
+            }
         }
         Command::WriteDataFile { file, text } => {
             let old = project
-                .write_data_file(file, text)
+                .write_data_file(file, text.as_deref())
                 .map_err(revel_edit::EditError::Bound)?;
             Ok(Command::WriteDataFile {
                 file: file.clone(),
@@ -284,6 +312,25 @@ fn exec(
             Ok(Command::Batch { commands: inverses })
         }
         other => revel_edit::apply(site, other),
+    }
+}
+
+/// Autre langue d'une valeur liée (fichier de données ou contenu d'une langue), `None` : langue
+/// principale.
+fn binding_locale(project: &Project, b: &revel_edit::canvas::Binding) -> Option<String> {
+    use revel_edit::canvas::Source;
+    match &b.source {
+        Source::LocaleData { locale } => Some(locale.clone()),
+        Source::Entry { folder, .. } | Source::EntryItem { folder, .. } => {
+            let primary = project.primary_folder(folder)?;
+            project
+                .site
+                .locales
+                .iter()
+                .find(|l| revel_model::locale_folder(&primary, &l.code) == *folder)
+                .map(|l| l.code.clone())
+        }
+        _ => None,
     }
 }
 
@@ -538,6 +585,14 @@ fn files_stamp(project: &Project) -> String {
     for c in &project.site.collections {
         if !c.folder.is_empty() {
             dirs.push(project.dir.join(&c.folder));
+            // Contenus des autres langues (3.8).
+            for l in &project.site.locales {
+                dirs.push(
+                    project
+                        .dir
+                        .join(revel_model::locale_folder(&c.folder, &l.code)),
+                );
+            }
         }
     }
     dirs.sort();
@@ -638,7 +693,9 @@ impl Core {
             // l'utilisait pas.
             let cmd = match cmd {
                 Command::SetBound { binding, value }
-                    if s.project.site.settings.typography.as_deref() == Some("fr") =>
+                    if s.project.site.settings.typography.as_deref() == Some("fr")
+                        && binding_locale(&s.project, &binding)
+                            .is_none_or(|l| l.starts_with("fr")) =>
                 {
                     let old = s.project.bound_value(&binding).unwrap_or_default();
                     Command::SetBound {

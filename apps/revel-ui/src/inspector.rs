@@ -283,6 +283,7 @@ fn element(
     let alt_empty = attr(&attrs, "alt")
         .and_then(|a| a.value.as_deref())
         .is_none_or(|v| v.trim().is_empty());
+    let lang = ed.lang();
     view! {
         <div class="stack">
             <label class="field">
@@ -353,13 +354,36 @@ fn element(
                     let at_set = at.clone();
                     let at_rm = at.clone();
                     let conditional = a.when.clone();
-                    let input = view! {
-                        <input class="input input--mono" prop:value=a.value.clone().unwrap_or_default()
-                            placeholder=ui.t("inspector-attr-boolean")
-                            on:change=move |e| {
-                                let v = event_target_value(&e);
-                                apply(Command::SetAttr { at: at_set.clone(), name: name.clone(), value: (!v.is_empty()).then_some(v) });
-                            }/>
+                    // Autre langue : texte lu par les visiteurs (`alt`, `title`…) traduit.
+                    let source = a.value.clone().unwrap_or_default();
+                    let translate = lang.clone().filter(|_| {
+                        revel_edit::locale::TEXT_ATTRS.contains(&a.name.as_str())
+                            && revel_edit::locale::translatable(&source)
+                    });
+                    let input = match translate {
+                        Some(code) => {
+                            let at_tr = at.clone();
+                            let n_tr = a.name.clone();
+                            view! {
+                                <input class="input input--locale" prop:value=ed.translation(&code, &source).unwrap_or_default()
+                                    placeholder=source.clone() title=ui.t("inspector-locale-help")
+                                    on:change=move |e| {
+                                        apply(Command::Translate {
+                                            locale: code.clone(),
+                                            place: revel_edit::locale::TextPlace::Attr { at: at_tr.clone(), name: n_tr.clone() },
+                                            text: event_target_value(&e),
+                                        });
+                                    }/>
+                            }.into_any()
+                        }
+                        None => view! {
+                            <input class="input input--mono" prop:value=a.value.clone().unwrap_or_default()
+                                placeholder=ui.t("inspector-attr-boolean")
+                                on:change=move |e| {
+                                    let v = event_target_value(&e);
+                                    apply(Command::SetAttr { at: at_set.clone(), name: name.clone(), value: (!v.is_empty()).then_some(v) });
+                                }/>
+                        }.into_any(),
                     };
                     // Source d'un média : choix parmi les médias du site (pas pour une valeur calculée).
                     let value_cell = if media_tag && a.name == "src" {
@@ -427,6 +451,7 @@ fn image(
     let src = show(&img.src);
     let alt = img.alt.as_deref().map(show).unwrap_or_default();
     let (img1, img2, img3) = (img.clone(), img.clone(), img.clone());
+    let lang = ed.lang();
     let (at1, at2, at3) = (at.clone(), at.clone(), at.clone());
     // Image choisie parmi les médias : texte alternatif par défaut du média si l'image n'en a pas.
     let choose = move || {
@@ -463,13 +488,29 @@ fn image(
                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
                     disabled=src_expr on:click=move |_| choose()>{icons::image()}</button>
             </Field>
-            <Field label=Signal::derive(move || ui.tx(if alt_expr { "inspector-alt-expr" } else { "inspector-alt" }, &[]))
-                value=alt mono=alt_expr
-                on_commit=move |v| {
-                    let mut i = img2.clone();
-                    i.alt = Some(if alt_expr { v } else { quote(&v) });
-                    apply(Command::SetImage { at: at2.clone(), image: i });
-                }/>
+            {match lang.filter(|_| !alt_expr && revel_edit::locale::translatable(&alt)) {
+                // Autre langue : texte alternatif traduit.
+                Some(code) => {
+                    let value = ed.translation(&code, &alt).unwrap_or_default();
+                    view! {
+                        <Field label=ui.t("inspector-alt") value=value placeholder=alt.clone()
+                            on_commit=move |v| apply(Command::Translate {
+                                locale: code.clone(),
+                                place: revel_edit::locale::TextPlace::Attr { at: at2.clone(), name: "alt".into() },
+                                text: v,
+                            })/>
+                    }.into_any()
+                }
+                None => view! {
+                    <Field label=Signal::derive(move || ui.tx(if alt_expr { "inspector-alt-expr" } else { "inspector-alt" }, &[]))
+                        value=alt mono=alt_expr
+                        on_commit=move |v| {
+                            let mut i = img2.clone();
+                            i.alt = Some(if alt_expr { v } else { quote(&v) });
+                            apply(Command::SetImage { at: at2.clone(), image: i });
+                        }/>
+                }.into_any(),
+            }}
         </div>
     }
 }

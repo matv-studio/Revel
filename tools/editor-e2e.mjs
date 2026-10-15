@@ -1524,6 +1524,8 @@ try {
     await page.click('.schema-item .cms-item-foot .btn--danger-ghost');
     await page.click('.dialog .btn--danger');
     await until(() => !cfg().includes('couleur_dominante'), 'champ retiré');
+    // Collection relue (en-tête redessiné) avant d'ouvrir le menu « Nouveau champ ».
+    await page.waitForFunction(() => !document.querySelector('.schema-row[data-field="couleur_dominante"]'));
     check('champs : champ retiré', true);
     // Groupe de champs (3.7) : créé avec un premier champ, un champ ajouté, puis retiré.
     await page.click('.new-field .btn');
@@ -1579,7 +1581,73 @@ try {
     }
     await until(() => cfg() === cfg0 && fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8') === doc0 && !fs.existsSync(path.dirname(stage)), 'collection annulée');
     check('collection : annulée, fichiers identiques', true);
+
+    // ---------------------------------------------------------------- Langues (3.8)
+    const docL = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
+    const dataEn = path.join(siteDir, 'src/_data/en');
+    await page.click('.view-tab[data-view="view-locales"]');
+    await page.click('.locales-add > summary');
+    await page.click('.locales-menu .menu-item[data-code="en"]');
+    await page.waitForSelector('.locales-table tr[data-locale="en"]');
+    await until(() => /"locales": \[\s*\{\s*"code": "en"/.test(docL()), 'langue ajoutée');
+    check('langues : anglais ajouté (adresse /en/, avancement)', (await page.textContent('.locales-table tr[data-locale="en"]')).includes('/en/'),
+      (await page.textContent('.locales-table tr[data-locale="en"] .meter-num')).trim());
+    // Textes des pages : traduction saisie dans le tableau.
+    await page.fill('.locales-texts input[type="search"]', 'Faire rayonner');
+    await page.waitForFunction(() => document.querySelectorAll('.loc-table tbody tr').length === 1);
+    await page.fill('.loc-table .loc-input', 'Make it shine');
+    await page.press('.loc-table .loc-input', 'Tab');
+    await until(() => docL().includes('"Faire rayonner": "Make it shine"'), 'traduction enregistrée');
+    check('langues : texte de page traduit (document du site)', true);
+    // Données : écrites dans le dossier de la langue (copie du fichier).
+    await page.fill('.locales-texts input[type="search"]', '');
+    await page.click('.locales-texts .segmented button:nth-child(2)');
+    await page.waitForSelector('.loc-table .loc-key');
+    const dataKey = (await page.textContent('.loc-table tbody tr:first-child .loc-key')).trim();
+    await page.fill('.loc-table tbody tr:first-child .loc-input', 'Data in English');
+    await page.press('.loc-table tbody tr:first-child .loc-input', 'Tab');
+    await until(() => fs.existsSync(dataEn), 'fichier de données de la langue');
+    const enFiles = fs.readdirSync(dataEn, { recursive: true }).filter((f) => /\.ya?ml$/.test(f));
+    check('langues : donnée traduite dans src/_data/en (copie du fichier)', enFiles.length === 1
+      && fs.readFileSync(path.join(dataEn, enFiles[0]), 'utf8').includes('Data in English'), `${dataKey} → ${enFiles.join(',')}`);
+    if (shots) await page.screenshot({ path: `${shots}/localisation.png` });
+    // Contenus : ouverture dans le CMS, langue choisie.
+    await page.click('.locales-texts .segmented button:nth-child(3)');
+    await page.waitForSelector('.loc-table tr[data-entry]');
+    await page.click('.loc-table tr[data-entry]');
+    await page.waitForSelector('.cms-locale.is-other');
+    await page.waitForSelector('.cms-item-body');
+    check('langues : contenu ouvert dans le CMS en anglais (à traduire)', (await page.$$('.cms-table .loc-dot:not(.is-done)')).length > 0
+      && await page.$eval('.cms-new', (b) => b.disabled));
+    if (shots) await page.screenshot({ path: `${shots}/cms-langue.png` });
+    // Éditeur : page en anglais (adresse, lang, texte traduit).
     await page.click('.view-tab[data-view="view-editor"]');
+    f = await waitFrame(() => location.pathname.startsWith('/en/') && document.body.textContent.includes('Make it shine'), 'page en anglais');
+    check('langues : canevas en anglais (/en/, <html lang="en">, texte traduit)', await f.evaluate(() => document.documentElement.lang === 'en'), f.url());
+    check('langues : langue affichée dans la barre de l\'éditeur', (await page.$eval('.editor-locale select', (s) => s.value)) === 'en'
+      && !!(await page.$('.editor-locale.is-other')));
+    if (shots) await page.screenshot({ path: `${shots}/editeur-anglais.png` });
+    // Texte écrit modifié sur place en anglais : traduction (le texte français ne change pas).
+    const tL = await slotPoint("s.slot === 'text' && s.parent.owner.kind === 'page'");
+    if (tL) {
+      const before = tL.text.trim();
+      await page.mouse.dblclick(tL.px, tL.py);
+      f = await waitFrame(() => !!document.querySelector('[data-rv-edit]'), 'mode édition (anglais)');
+      await page.keyboard.press('Control+a');
+      await page.keyboard.type('Typed in English');
+      await page.keyboard.press('Enter');
+      await until(() => docL().includes(': "Typed in English"'), 'traduction depuis le canevas');
+      check('langues : texte modifié dans le canevas → traduction', !JSON.parse(docL()).pages.some((p) => JSON.stringify(p.body).includes('Typed in English')), before);
+    }
+    // Langue principale, puis tout annuler : fichiers identiques.
+    await page.selectOption('.editor-locale select', '');
+    f = await waitFrame(() => !location.pathname.startsWith('/en/'), 'retour en français');
+    for (let i = 0; i < 6 && (docL() !== doc0 || fs.existsSync(dataEn)); i++) {
+      await page.click('.editor-toolbar .btn-undo');
+      await page.waitForTimeout(400);
+    }
+    await until(() => docL() === doc0 && !fs.existsSync(dataEn), 'langue annulée');
+    check('langues : tout annulé (document, dossier de la langue retiré)', true);
   }
 
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));

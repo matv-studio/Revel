@@ -395,3 +395,8 @@
 .insp-attrs > * + * { margin-top: var(--s-2); }
 .prop-chip--field { background: var(--set-bg); color: var(--set-text); }
 .prop-chip--field .chip-x:hover { background: color-mix(in srgb, var(--set-text) 20%, transparent); }
+
+/* Autre langue (3.8) : champ de traduction en bleu (valeur propre à la langue). */
+.input--locale, .page-settings-locale .input { border-color: color-mix(in srgb, var(--set-text) 40%, transparent); }
+.input--locale:focus-visible, .page-settings-locale .input:focus-visible { border-color: transparent; }
+.page-settings-seo.is-hidden { display: none; }

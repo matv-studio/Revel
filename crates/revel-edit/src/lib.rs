@@ -14,6 +14,7 @@ pub mod collection;
 pub mod command;
 pub mod history;
 pub mod icons;
+pub mod locale;
 pub mod make;
 pub mod ready;
 pub mod style;
@@ -70,6 +71,9 @@ pub enum EditError {
     /// Composant placé dans lui-même (directement ou par un autre composant).
     #[error("composant placé dans lui-même : {0}")]
     SelfUse(String),
+    /// Code de langue invalide, déjà présent ou langue inconnue.
+    #[error("langue refusée : {0}")]
+    InvalidLocale(String),
 }
 
 impl EditError {
@@ -96,6 +100,7 @@ impl EditError {
             Self::InUse(_) => "error-edit-in-use",
             Self::InvalidProp(_) => "error-edit-prop",
             Self::SelfUse(_) => "error-edit-self-use",
+            Self::InvalidLocale(_) => "error-edit-locale",
         }
     }
 }

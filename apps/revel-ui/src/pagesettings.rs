@@ -108,6 +108,7 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                 <span class="page-settings-title">{ui.t("pages-settings")}</span>
             </header>
             {move || page.get().map(|p| {
+                let lang = ed.lang();
                 let home = p.path == "/";
                 let pid = p.id.clone();
                 let folder = pageops::folder_of(&p.path);
@@ -170,7 +171,27 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                             </span>
                         </label>
                         <h3 class="page-settings-section">{ui.t("pages-seo")}</h3>
-                        <fieldset class="page-settings-seo" disabled=computed>
+                        {lang.clone().map(|code| {
+                            // Autre langue : titre et description traduits (variable de la page) ; ceux
+                            // d'un fichier de données se traduisent dans la vue Localisation.
+                            let (t_src, d_src) = (seo.title.clone(), seo.description.clone());
+                            let from_page = seo.data_path.is_empty() && !computed;
+                            let (c1, c2) = (code.clone(), code.clone());
+                            let (t2, d2) = (t_src.clone(), d_src.clone());
+                            view! {
+                                <fieldset class="page-settings-seo page-settings-locale" disabled=!from_page
+                                    title=move || if from_page { ui.now("pages-seo-locale", &[]) } else { ui.now("pages-seo-locale-data", &[]) }>
+                                    <Field label=ui.t("pages-seo-title") value=ed.translation(&code, &t_src).unwrap_or_default() placeholder=t_src.clone()
+                                        on_commit=move |v: String| ed.apply(ui, Command::SetTranslation { locale: c1.clone(), source: t2.clone(), text: Some(v) }, false)/>
+                                    <label class="field">
+                                        <span class="label">{ui.t("pages-seo-description")}</span>
+                                        <textarea class="input" rows="3" prop:value=ed.translation(&code, &d_src).unwrap_or_default() placeholder=d_src.clone()
+                                            on:change=move |e| ed.apply(ui, Command::SetTranslation { locale: c2.clone(), source: d2.clone(), text: Some(event_target_value(&e)) }, false)></textarea>
+                                    </label>
+                                </fieldset>
+                            }
+                        })}
+                        <fieldset class="page-settings-seo" disabled=computed class:is-hidden=lang.is_some()>
                             <Field label=ui.t("pages-seo-title") value=Signal::derive({ let t = seo.title.clone(); move || t.clone() })
                                 on_commit=move |v: String| write_seo(ui, ed, &p4, &data_path.get_value(), "title", v)/>
                             <label class="field">

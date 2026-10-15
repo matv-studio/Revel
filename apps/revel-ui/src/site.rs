@@ -59,7 +59,7 @@ pub fn SiteView(site: SiteSummary) -> impl IntoView {
             {move || match tab.get() {
                 Tab::Editor => ().into_any(),
                 Tab::Cms => view! { <div class="view-pane"><crate::cms::CmsView site=site.get_value()/></div> }.into_any(),
-                Tab::Locales => view! { <div class="view-pane view-pane--scroll"><Locales site=site.get_value()/></div> }.into_any(),
+                Tab::Locales => view! { <div class="view-pane view-pane--scroll"><crate::locales::Locales site=site.get_value()/></div> }.into_any(),
                 Tab::Settings(sec) => view! { <div class="view-pane" class:is-quiet=quiet()><SiteSettings site=site.get_value() section=sec/></div> }.into_any(),
             }}
         </div>
@@ -455,45 +455,6 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                 <p class="muted help">{move || ui.tx(if own("/robots.txt") { "seo-robots-own" } else { "seo-robots-help" }, &[])}</p>
             </div>
             <p class="muted help">{ui.t("seo-pages-help")}</p>
-        </section>
-    }
-}
-
-/// Localisation : langues du site (traduction prévue à l'étape 3).
-#[component]
-fn Locales(site: SiteSummary) -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let code = site.locale.clone();
-    let code2 = code.clone();
-    view! {
-        <section class="page">
-            <header class="page-head">
-                <h1>{ui.t("view-locales")}</h1>
-                <div class="toolbar">
-                    <button class="btn" disabled=true title=move || ui.tx("planned-step", &[("step", "3".to_string())])>
-                        {icons::plus()}{ui.t("locales-add")}
-                    </button>
-                </div>
-            </header>
-            <div class="section section--flush">
-                <table class="table">
-                    <thead><tr>
-                        <th>{ui.t("locales-lang")}</th>
-                        <th>{ui.t("locales-code")}</th>
-                        <th>{ui.t("locales-prefix")}</th>
-                        <th>{ui.t("locales-status")}</th>
-                    </tr></thead>
-                    <tbody>
-                        <tr>
-                            <td class="strong">{move || language_name(ui, &code)}</td>
-                            <td class="muted path">{code2.clone()}</td>
-                            <td class="muted path">"/"</td>
-                            <td><span class="chip chip--ok">{ui.t("locales-primary")}</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <Planned key="locales-planned" step=3 icon=icons::globe/>
         </section>
     }
 }

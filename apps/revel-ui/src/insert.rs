@@ -410,15 +410,26 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
         ),
         (
             "insert-group-cms",
-            vec![item(
-                Preset::CollectionList,
-                "insert-collection-list",
-                "insert-help-collection-list",
-                "insert-text-collection",
-                icons::database,
-                "div",
-                true,
-            )],
+            vec![
+                item(
+                    Preset::CollectionList,
+                    "insert-collection-list",
+                    "insert-help-collection-list",
+                    "insert-text-collection",
+                    icons::database,
+                    "div",
+                    true,
+                ),
+                item(
+                    Preset::LocaleSwitch,
+                    "insert-locale-switch",
+                    "insert-help-locale-switch",
+                    "insert-text-locale-switch",
+                    icons::globe,
+                    "nav",
+                    true,
+                ),
+            ],
         ),
         (
             "insert-group-forms",

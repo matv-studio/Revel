@@ -299,3 +299,21 @@ de Webflow (texte, texte riche, image, lien, vidéo, nombre, interrupteur, liste
 référence pour l'import de l'étape 7 ; la liaison d'une propriété à un champ de collection est faite (3.7),
 les propriétés texte riche, vidéo et nombre viendront plus tard. Source : [Component properties — Webflow Help
 Center](https://help.webflow.com/hc/en-us/articles/33961219350547).
+
+**D-35 — 15/10/2026 — prise.** **Langues (3.8), comme la localisation de Webflow.** Langue principale sans
+préfixe, autres langues sous `/<code>/` (`Site::locales` : code BCP 47, nom affiché, publiée ou en préparation).
+Les textes écrits dans les pages, gabarits et composants (textes, `alt`, `title`, `placeholder`, `aria-label`,
+propriétés texte des composants, variables texte des pages) se traduisent par leur texte d'origine
+(`Locale::texts`, espaces regroupés) : un même texte n'est traduit qu'une fois et la traduction ne dépend pas de
+la place de l'élément ; un texte non traduit reste dans la langue principale. Données et contenus : dossier de la
+langue (`_data/en/…`, `content/en/projets`), fusionnés sur ceux de la langue principale (clé par clé ; un
+contenu non traduit reprend celui de la langue principale) ; le fichier de la langue est une copie créée à la
+première traduction (annulable), et `.pages.yml` reçoit alors l'entrée de la langue (« Projets (EN) ») pour que
+Pages CMS la modifie. L'adresse d'un contenu est calculée avec l'en-tête de la langue principale (même adresse
+dans chaque langue, préfixe mis à part). Pages des autres langues : pages HTML seulement (plan du site, flux,
+`robots.txt`, 404 : langue principale), `<html lang>` de la langue, liens internes `/…` préfixés (sauf fichiers
+copiés et liens portant `hreflang`), liens `hreflang` vers chaque version (elle-même comprise) et `x-default`,
+en adresses complètes (adresse du site requise), plan du site de Revel avec les pages de chaque langue publiée.
+Typographie française seulement pour le français. Structure et styles sont communs à toutes les langues.
+Sources : [Localization overview — Webflow Help Center](https://help.webflow.com/hc/en-us/articles/33961235675155),
+[Localized versions of your pages — Google Search Central](https://developers.google.com/search/docs/specialty/international/localized-versions).

@@ -246,9 +246,13 @@ pub enum Command {
         #[serde(default)]
         value: Option<Value>,
     },
-    /// Fichier de données (chemin relatif au projet) remplacé par un texte exact. Appliquée par
-    /// le cœur.
-    WriteDataFile { file: String, text: String },
+    /// Fichier de données (chemin relatif au projet) remplacé par un texte exact (`None` : fichier
+    /// retiré). Appliquée par le cœur.
+    WriteDataFile {
+        file: String,
+        #[serde(default)]
+        text: Option<String>,
+    },
     /// Nouveau gabarit, inséré à la position `index` de la liste (à la fin si elle est plus
     /// courte). Refusé si l'identifiant est pris.
     AddLayout {
@@ -316,6 +320,38 @@ pub enum Command {
         #[serde(default)]
         decls: Vec<Decl>,
     },
+    /// Nouvelle langue du site (3.8), insérée à la position `index` (à la fin par défaut). Code
+    /// valide, différent de la langue principale et des autres langues.
+    AddLocale {
+        locale: revel_model::Locale,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        index: Option<usize>,
+    },
+    /// Langue retirée, avec ses textes traduits (les fichiers de la langue restent sur le disque).
+    RemoveLocale { code: String },
+    /// Nom affiché et état d'une langue (`draft` : non publiée).
+    SetLocale {
+        code: String,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        draft: bool,
+    },
+    /// Traduction d'un texte écrit dans les pages (`source` : texte de la langue principale) ;
+    /// `None` ou vide : traduction retirée.
+    SetTranslation {
+        locale: String,
+        source: String,
+        #[serde(default)]
+        text: Option<String>,
+    },
+    /// Traduction du texte écrit à un endroit (canevas, inspecteur), remplacée par
+    /// `SetTranslation` avec le texte de la langue principale.
+    Translate {
+        locale: String,
+        place: crate::locale::TextPlace,
+        text: String,
+    },
 }
 
 /// Remplace une commande « d'intention » (dupliquer, envelopper, ajouter un élément ou une règle) par les commandes
@@ -328,6 +364,20 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
             crate::make::make_component(site, at, id, name.clone())?.0
         }
         Command::Detach { at } => crate::make::detach(site, at)?,
+        Command::Translate {
+            locale,
+            place,
+            text,
+        } => {
+            if site.locale(locale).is_none() {
+                return Err(EditError::InvalidLocale(locale.clone()));
+            }
+            Command::SetTranslation {
+                locale: locale.clone(),
+                source: crate::locale::source_at(site, place)?,
+                text: Some(text.clone()),
+            }
+        }
         Command::Wrap { at, tag } => {
             if !valid_tag(tag) {
                 return Err(EditError::InvalidTag(tag.clone()));
@@ -426,6 +476,10 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
 fn check_page_path(site: &Site, path: &str, except: Option<&String>) -> Result<(), EditError> {
     if !revel_model::valid_page_path(path) {
         return Err(EditError::InvalidPath(path.to_string()));
+    }
+    // Adresses des autres langues réservées (`/en/…`).
+    if site.locale_of_url(path).is_some() {
+        return Err(EditError::PathTaken(path.to_string()));
     }
     if site
         .pages
@@ -1012,6 +1066,71 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 index: Some(i),
             })
         }
+        Command::AddLocale { locale, index } => {
+            crate::locale::check_new_locale(site, &locale.code)?;
+            let i = index.unwrap_or(site.locales.len()).min(site.locales.len());
+            site.locales.insert(i, locale.clone());
+            Ok(Command::RemoveLocale {
+                code: locale.code.clone(),
+            })
+        }
+        Command::RemoveLocale { code } => {
+            let i = site
+                .locales
+                .iter()
+                .position(|l| l.code == *code)
+                .ok_or_else(|| EditError::InvalidLocale(code.clone()))?;
+            let locale = site.locales.remove(i);
+            Ok(Command::AddLocale {
+                locale,
+                index: Some(i),
+            })
+        }
+        Command::SetLocale { code, name, draft } => {
+            let l = site
+                .locales
+                .iter_mut()
+                .find(|l| l.code == *code)
+                .ok_or_else(|| EditError::InvalidLocale(code.clone()))?;
+            let name = name
+                .as_deref()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .map(str::to_string);
+            Ok(Command::SetLocale {
+                code: code.clone(),
+                name: std::mem::replace(&mut l.name, name),
+                draft: std::mem::replace(&mut l.draft, *draft),
+            })
+        }
+        Command::SetTranslation {
+            locale,
+            source,
+            text,
+        } => {
+            let l = site
+                .locales
+                .iter_mut()
+                .find(|l| l.code == *locale)
+                .ok_or_else(|| EditError::InvalidLocale(locale.clone()))?;
+            let key = crate::locale::normalize(source);
+            if key.is_empty() {
+                return Err(EditError::Bound(source.clone()));
+            }
+            let text = text
+                .as_deref()
+                .map(crate::locale::normalize)
+                .filter(|t| !t.is_empty());
+            let old = match text {
+                Some(t) => l.texts.insert(key.clone(), t),
+                None => l.texts.remove(&key),
+            };
+            Ok(Command::SetTranslation {
+                locale: locale.clone(),
+                source: key,
+                text: old,
+            })
+        }
         Command::SetMediaAlt { url, alt } => {
             let old = match alt.as_ref().map(|a| a.trim()).filter(|a| !a.is_empty()) {
                 Some(a) => site.library.alt.insert(url.clone(), a.to_string()),
@@ -1158,6 +1277,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         | Command::InsertPreset { .. }
         | Command::MakeComponent { .. }
         | Command::Detach { .. }
+        | Command::Translate { .. }
         | Command::AddRule { .. } => {
             let concrete = expand(site, cmd)?;
             apply(site, &concrete)

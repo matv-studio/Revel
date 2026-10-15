@@ -125,15 +125,20 @@ impl Project {
 
     /// Lit les entrées de toutes les collections (une fois par dossier).
     pub fn load_entries(&self) -> Result<Vec<Entry>, ProjectError> {
-        let mut folders: Vec<&str> = self
+        let mut folders: Vec<String> = self
             .site
             .collections
             .iter()
             .filter(|c| !c.folder.is_empty())
-            .map(|c| c.folder.as_str())
+            .map(|c| c.folder.clone())
             .collect();
         folders.sort();
         folders.dedup();
+        self.entries_in(&folders)
+    }
+
+    /// Contenus (fichiers Markdown) de dossiers du projet.
+    fn entries_in(&self, folders: &[String]) -> Result<Vec<Entry>, ProjectError> {
         let mut out = Vec::new();
         for folder in folders {
             let dir = self.dir.join(folder);
@@ -153,7 +158,7 @@ impl Project {
                     msg,
                 })?;
                 out.push(Entry {
-                    folder: folder.to_string(),
+                    folder: folder.clone(),
                     file_stem: f
                         .file_stem()
                         .map(|s| s.to_string_lossy().into_owned())
@@ -166,11 +171,128 @@ impl Project {
         Ok(out)
     }
 
-    /// Variables issues du dossier de données.
+    /// Variables issues du dossier de données (sans les dossiers des autres langues).
     pub fn load_data(&self) -> Result<BTreeMap<String, Value>, ProjectError> {
         let mut out = BTreeMap::new();
         if let Some(d) = &self.site.data_dir {
             load_data_dir(&self.dir.join(d), &mut out)?;
+            for l in &self.site.locales {
+                out.remove(&l.code);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Textes des fichiers de données (YAML) à traduire dans la langue `code`, dans l'ordre des
+    /// fichiers, avec leur valeur dans le fichier de la langue.
+    pub fn locale_data_texts(
+        &self,
+        code: &str,
+    ) -> Result<Vec<revel_edit::locale::DataText>, ProjectError> {
+        use revel_edit::canvas::Seg;
+        let mut out = Vec::new();
+        let Some(d) = &self.site.data_dir else {
+            return Ok(out);
+        };
+        let root = self.dir.join(d);
+        let skip: Vec<PathBuf> = self
+            .site
+            .locales
+            .iter()
+            .map(|l| root.join(&l.code))
+            .collect();
+        fn files(dir: &Path, skip: &[PathBuf], out: &mut Vec<PathBuf>) {
+            let Ok(rd) = std::fs::read_dir(dir) else {
+                return;
+            };
+            let mut list: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+            list.sort();
+            for p in list {
+                if p.is_dir() {
+                    if !skip.contains(&p) {
+                        files(&p, skip, out);
+                    }
+                } else if p.extension().is_some_and(|e| e == "yml" || e == "yaml") {
+                    out.push(p);
+                }
+            }
+        }
+        fn leaves(
+            v: &Value,
+            other: Option<&Value>,
+            path: &mut Vec<Seg>,
+            out: &mut Vec<revel_edit::locale::DataText>,
+        ) {
+            match v {
+                Value::String(s) if revel_edit::locale::text_like(s) => {
+                    out.push(revel_edit::locale::DataText {
+                        path: path.clone(),
+                        source: s.clone(),
+                        text: other.and_then(|o| o.as_str()).map(str::to_string),
+                    });
+                }
+                Value::Array(a) => {
+                    for (i, x) in a.iter().enumerate() {
+                        path.push(Seg::Index(i));
+                        leaves(x, other.and_then(|o| o.get(i)), path, out);
+                        path.pop();
+                    }
+                }
+                Value::Object(m) => {
+                    for (k, x) in m {
+                        path.push(Seg::Key(k.clone()));
+                        leaves(x, other.and_then(|o| o.get(k)), path, out);
+                        path.pop();
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut list = Vec::new();
+        files(&root, &skip, &mut list);
+        for f in list {
+            let Ok(rel) = f.strip_prefix(&root) else {
+                continue;
+            };
+            let read = |p: &Path| {
+                std::fs::read_to_string(p)
+                    .ok()
+                    .and_then(|t| parse_yaml(&t).ok())
+            };
+            let Some(v) = read(&f) else { continue };
+            let other = read(&root.join(code).join(rel));
+            let mut path: Vec<Seg> = rel
+                .with_extension("")
+                .components()
+                .map(|c| Seg::Key(c.as_os_str().to_string_lossy().into_owned()))
+                .collect();
+            leaves(&v, other.as_ref(), &mut path, &mut out);
+        }
+        Ok(out)
+    }
+
+    /// Données et contenus des autres langues (dossiers de chaque langue, D-23).
+    pub fn load_locales(&self) -> Result<Vec<revel_render::LocaleInput>, ProjectError> {
+        let mut out = Vec::new();
+        for l in &self.site.locales {
+            let mut data = BTreeMap::new();
+            if let Some(d) = &self.site.data_dir {
+                load_data_dir(&self.dir.join(d).join(&l.code), &mut data)?;
+            }
+            let mut folders: Vec<String> = self
+                .site
+                .collections
+                .iter()
+                .filter(|c| !c.folder.is_empty())
+                .map(|c| revel_model::locale_folder(&c.folder, &l.code))
+                .collect();
+            folders.sort();
+            folders.dedup();
+            out.push(revel_render::LocaleInput {
+                code: l.code.clone(),
+                data,
+                entries: self.entries_in(&folders)?,
+            });
         }
         Ok(out)
     }
@@ -201,6 +323,7 @@ impl Project {
         let input = BuildInput {
             site: &site,
             entries: self.load_entries()?,
+            locales: self.load_locales()?,
             environment: opts.environment.clone(),
             version: self.version_tag(&site),
             hooks,
@@ -289,6 +412,7 @@ impl Project {
         let input = BuildInput {
             site: &site,
             entries: self.load_entries()?,
+            locales: self.load_locales()?,
             environment: environment.to_string(),
             version: self.version_tag(&site),
             hooks,
@@ -303,6 +427,7 @@ impl Project {
         let input = BuildInput {
             site: &site,
             entries: self.load_entries()?,
+            locales: self.load_locales()?,
             environment: "production".into(),
             version: String::new(),
             hooks: Arc::new(ProjectAssets::new(self)),
@@ -318,6 +443,7 @@ impl Project {
         let input = BuildInput {
             site: &site,
             entries: self.load_entries()?,
+            locales: self.load_locales()?,
             environment: environment.to_string(),
             version: self.version_tag(&site),
             hooks: Arc::new(ProjectAssets::new(self)),

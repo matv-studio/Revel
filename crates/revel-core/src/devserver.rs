@@ -62,6 +62,10 @@ impl Core {
             "edit_seal" => json(self.edit_seal(site).map_err(f)?),
             "edit_pages" => json(self.edit_pages(site).map_err(f)?),
             "edit_media" => json(self.edit_media(site).map_err(f)?),
+            "edit_locale_data" => json(
+                self.edit_locale_data(site, &arg::<String>(args, "code")?)
+                    .map_err(f)?,
+            ),
             "edit_import_media" => {
                 let data = b64(&arg::<String>(args, "data")?)?;
                 json(

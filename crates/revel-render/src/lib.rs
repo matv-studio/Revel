@@ -88,9 +88,21 @@ impl AssetHooks for PlainAssets {
     }
 }
 
+/// Données et contenus d'une autre langue du site (3.8), lus dans les dossiers de la langue.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LocaleInput {
+    pub code: String,
+    /// Fichiers du dossier de données de la langue (`_data/en/`), par nom (comme `Site::data`).
+    pub data: BTreeMap<String, serde_json::Value>,
+    /// Contenus des dossiers de la langue ; `folder` : dossier du fichier (`content/en/projets`).
+    pub entries: Vec<Entry>,
+}
+
 pub struct BuildInput<'a> {
     pub site: &'a Site,
     pub entries: Vec<Entry>,
+    /// Données et contenus des autres langues (vide sans autre langue).
+    pub locales: Vec<LocaleInput>,
     /// Nom de l'environnement (`production`, `staging`…), clé de `settings.environments`.
     pub environment: String,
     /// Identifiant de version (paramètre de cache des CSS/JS).
@@ -211,23 +223,74 @@ pub struct EditorPage {
     pub warnings: Vec<String>,
 }
 
-/// Génère tout le site.
+/// Génère tout le site : langue principale, puis chaque autre langue publiée (adresses
+/// préfixées, 3.8).
 pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let site = input.site;
-    let b = eval::Builder::new(input);
+    let all = languages(site, false);
     let mut warnings = Vec::new();
-    let prepared = prepare(&b, input, false)?;
     let mut files = Vec::new();
+    let mut pages: Vec<(String, bool)> = Vec::new();
+    {
+        let mut b = eval::Builder::new(input);
+        b.lang = eval::Lang {
+            current: None,
+            all: all.clone(),
+            ..Default::default()
+        };
+        build_pages(&b, input, &mut files, &mut pages, &mut warnings)?;
+    }
+    for l in site.locales.iter().filter(|l| !l.draft) {
+        let (lsite, entries, primary_data) = localize(input, l);
+        let linput = BuildInput {
+            site: &lsite,
+            entries,
+            locales: Vec::new(),
+            environment: input.environment.clone(),
+            version: input.version.clone(),
+            hooks: input.hooks.clone(),
+            now: input.now,
+        };
+        let mut b = eval::Builder::new(&linput);
+        b.lang = eval::Lang {
+            current: Some(l.code.clone()),
+            all: all.clone(),
+            primary_data,
+        };
+        build_pages(&b, &linput, &mut files, &mut pages, &mut warnings)?;
+    }
+    if all.len() > 1 && site.pages.iter().any(|p| p.path == "/sitemap.xml") {
+        warnings.push(
+            "plan du site propre au site : les pages des autres langues n'y sont pas (les liens hreflang des pages les signalent aux moteurs de recherche)"
+                .into(),
+        );
+    }
+    if all.len() > 1 && site.base_url.is_none() {
+        warnings.push(
+            "liens entre les langues (hreflang) non produits : adresse du site absente (paramètres du site)"
+                .into(),
+        );
+    }
+    seo_files(site, &pages, &mut files, &mut warnings);
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(BuildOutput { files, warnings })
+}
+
+/// Pages d'une langue : fichiers produits, adresses HTML (adresse, `noindex`) pour le plan du site.
+fn build_pages(
+    b: &eval::Builder,
+    input: &BuildInput,
+    files: &mut Vec<OutputFile>,
+    pages: &mut Vec<(String, bool)>,
+    warnings: &mut Vec<String>,
+) -> Result<(), RenderError> {
+    let prepared = prepare(b, input, false)?;
     for j in &prepared.jobs {
         let kind = DocKind::of_path(&j.url);
-        let html = b.render_job(&prepared.globals, j, kind, &mut warnings)?;
+        let html = b.render_job(&prepared.globals, j, kind, warnings)?;
         let html = if kind == DocKind::Html {
-            noindex_meta(j, html)
-        } else {
-            html
-        };
-        let html = if kind == DocKind::Html && site.settings.typography.as_deref() == Some("fr") {
-            typography::french(&html)
+            pages.push((j.url.clone(), truthy(&j.data, "noindex")));
+            finish_html(b, input.site, j, html)
         } else {
             html
         };
@@ -237,9 +300,234 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
         });
     }
     warnings.extend(b.take_warnings());
-    seo_files(site, &prepared.jobs, &mut files, &mut warnings);
-    files.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(BuildOutput { files, warnings })
+    Ok(())
+}
+
+/// Dernières retouches d'une page HTML : `noindex`, typographie, langues.
+fn finish_html(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String {
+    let html = noindex_meta(j, html);
+    // Typographie française : pour la langue principale et les autres langues françaises.
+    let html = if site.settings.typography.as_deref() == Some("fr")
+        && b.lang
+            .current
+            .as_deref()
+            .is_none_or(|c| c.starts_with("fr"))
+    {
+        typography::french(&html)
+    } else {
+        html
+    };
+    localize_html(b, site, &j.url, html)
+}
+
+/// Page qui existe dans chaque langue : page HTML, sauf la page d'erreur 404.
+pub fn localizable(url: &str) -> bool {
+    revel_model::localizable_path(url)
+}
+
+/// Langues des pages : (code, nom, préfixe), la principale d'abord ; `drafts` : langues en
+/// préparation comprises (éditeur, aperçu).
+fn languages(site: &Site, drafts: bool) -> Vec<(String, String, String)> {
+    if site.locales.is_empty() {
+        return Vec::new();
+    }
+    let mut v = vec![(
+        site.default_locale.clone(),
+        revel_model::language_name(&site.default_locale),
+        String::new(),
+    )];
+    v.extend(
+        site.locales
+            .iter()
+            .filter(|l| drafts || !l.draft)
+            .map(|l| (l.code.clone(), l.label(), format!("/{}", l.code))),
+    );
+    v
+}
+
+/// Fusion d'une valeur de la langue sur celle de la langue principale (objets fusionnés clé par
+/// clé ; le reste remplacé).
+fn deep_merge(base: &mut serde_json::Value, over: &serde_json::Value) {
+    match (base, over) {
+        (serde_json::Value::Object(b), serde_json::Value::Object(o)) => {
+            for (k, v) in o {
+                match b.get_mut(k) {
+                    Some(x) => deep_merge(x, v),
+                    None => {
+                        b.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (b, o) => *b = o.clone(),
+    }
+}
+
+/// Site et contenus vus dans une autre langue : textes traduits, données de la langue fusionnées
+/// sur celles de la langue principale, contenus de la langue (ou ceux de la langue principale,
+/// placés dans le dossier de la langue où ils seront écrits une fois traduits).
+fn localize(input: &BuildInput, l: &revel_model::Locale) -> (Site, Vec<Entry>, PrimaryData) {
+    let site = input.site;
+    let mut s = revel_edit::locale::translate_site(site, &l.texts);
+    let li = input.locales.iter().find(|x| x.code == l.code);
+    if let Some(li) = li {
+        for (k, v) in &li.data {
+            match s.data.get_mut(k) {
+                Some(b) => deep_merge(b, v),
+                None => {
+                    s.data.insert(k.clone(), v.clone());
+                }
+            }
+        }
+    }
+    let mut folders: Vec<&str> = site
+        .collections
+        .iter()
+        .filter(|c| !c.folder.is_empty())
+        .map(|c| c.folder.as_str())
+        .collect();
+    folders.sort();
+    folders.dedup();
+    let mut entries = Vec::new();
+    let mut primary = PrimaryData::new();
+    for f in folders {
+        let lf = revel_model::locale_folder(f, &l.code);
+        let own: Vec<&Entry> = li
+            .map(|li| li.entries.iter().filter(|e| e.folder == lf).collect())
+            .unwrap_or_default();
+        for e in input.entries.iter().filter(|e| e.folder == f) {
+            primary.insert((lf.clone(), e.file_stem.clone()), e.data.clone());
+            let mut x = Entry {
+                folder: lf.clone(),
+                ..e.clone()
+            };
+            if let Some(o) = own.iter().find(|o| o.file_stem == e.file_stem) {
+                deep_merge(&mut x.data, &o.data);
+                if !o.body.trim().is_empty() {
+                    x.body = o.body.clone();
+                }
+            }
+            entries.push(x);
+        }
+        for o in own {
+            if !input
+                .entries
+                .iter()
+                .any(|e| e.folder == f && e.file_stem == o.file_stem)
+            {
+                entries.push(o.clone());
+            }
+        }
+    }
+    for c in &mut s.collections {
+        if !c.folder.is_empty() {
+            c.folder = revel_model::locale_folder(&c.folder, &l.code);
+        }
+    }
+    (s, entries, primary)
+}
+
+/// En-têtes de la langue principale des contenus d'une autre langue.
+type PrimaryData = std::collections::HashMap<(String, String), serde_json::Value>;
+
+/// Page d'une autre langue : `<html lang>` de la langue, liens vers les pages du site préfixés ;
+/// toute page d'un site à plusieurs langues : liens `hreflang` vers ses versions.
+fn localize_html(b: &eval::Builder, site: &Site, url: &str, html: String) -> String {
+    if b.lang.all.len() < 2 {
+        return html;
+    }
+    let mut html = html;
+    if let Some(code) = &b.lang.current {
+        html = set_html_lang(&html, code);
+        html = prefix_links(&html, &format!("/{code}"), site);
+    }
+    if localizable(url)
+        && let Some(base) = site.base_url.as_deref().map(|b| b.trim_end_matches('/'))
+    {
+        let primary = b.lang.primary_url(url);
+        let mut links = String::new();
+        for (code, _, prefix) in &b.lang.all {
+            links.push_str(&format!(
+                "<link rel=\"alternate\" hreflang=\"{}\" href=\"{}\">",
+                html::escape(code),
+                html::escape(&format!("{base}{prefix}{primary}"))
+            ));
+        }
+        links.push_str(&format!(
+            "<link rel=\"alternate\" hreflang=\"x-default\" href=\"{}\">",
+            html::escape(&format!("{base}{primary}"))
+        ));
+        let lower = html.to_ascii_lowercase();
+        if let Some(i) = lower.find("</head")
+            && !lower[..i].contains("hreflang=")
+        {
+            html = format!("{}{links}{}", &html[..i], &html[i..]);
+        }
+    }
+    html
+}
+
+/// `<html lang="…">` réglé sur la langue de la page.
+fn set_html_lang(html: &str, code: &str) -> String {
+    let re = regex::Regex::new(r#"(?i)<html\b[^>]*>"#).expect("regex");
+    let Some(m) = re.find(html) else {
+        return html.to_string();
+    };
+    let tag = m.as_str();
+    let lang = regex::Regex::new(r#"(?i)(\slang\s*=\s*)("[^"]*"|'[^']*'|[^\s>]+)"#).expect("regex");
+    let new = if lang.is_match(tag) {
+        lang.replace(tag, |c: &regex::Captures| format!("{}\"{code}\"", &c[1]))
+            .into_owned()
+    } else {
+        format!("{} lang=\"{code}\"{}", &tag[..5], &tag[5..])
+    };
+    format!("{}{new}{}", &html[..m.start()], &html[m.end()..])
+}
+
+/// Liens `<a href="/…">` vers une page du site (adresse sans extension ou `.html`, hors fichiers
+/// copiés et autres langues) préfixés par la langue ; un lien qui porte `hreflang` (sélecteur de
+/// langue) est gardé.
+fn prefix_links(html: &str, prefix: &str, site: &Site) -> String {
+    let tag = regex::Regex::new(r#"(?i)<a\b[^>]*>"#).expect("regex");
+    let href = regex::Regex::new(r#"(\shref\s*=\s*)"(/[^"]*)""#).expect("regex");
+    let copied: Vec<String> = site
+        .passthrough
+        .iter()
+        .map(|p| format!("/{}", p.to.trim_matches('/')))
+        .filter(|p| p.len() > 1)
+        .collect();
+    let locales: Vec<String> = site
+        .locales
+        .iter()
+        .map(|l| format!("/{}", l.code))
+        .collect();
+    let page_link = |u: &str| {
+        let path = u.split(['?', '#']).next().unwrap_or(u);
+        if path.starts_with("//") {
+            return false;
+        }
+        let under = |p: &String| path == p || path.starts_with(&format!("{p}/"));
+        if locales.iter().any(under) || copied.iter().any(under) {
+            return false;
+        }
+        let last = path.rsplit('/').next().unwrap_or("");
+        !last.contains('.') || last.ends_with(".html") || last.ends_with(".htm")
+    };
+    tag.replace_all(html, |c: &regex::Captures| {
+        let t = &c[0];
+        if t.to_ascii_lowercase().contains("hreflang") {
+            return t.to_string();
+        }
+        href.replace(t, |h: &regex::Captures| {
+            if page_link(&h[2]) {
+                format!("{}\"{prefix}{}\"", &h[1], &h[2])
+            } else {
+                h[0].to_string()
+            }
+        })
+        .into_owned()
+    })
+    .into_owned()
 }
 
 /// Variable de page vraie (`noindex: true`, `"true"`, `1`).
@@ -269,7 +557,12 @@ fn noindex_meta(j: &Job, html: String) -> String {
 
 /// Plan du site (`sitemap.xml`) et `robots.txt` produits quand aucune page du site n'a déjà ces
 /// adresses (réglages de référencement du site).
-fn seo_files(site: &Site, jobs: &[Job], files: &mut Vec<OutputFile>, warnings: &mut Vec<String>) {
+fn seo_files(
+    site: &Site,
+    pages: &[(String, bool)],
+    files: &mut Vec<OutputFile>,
+    warnings: &mut Vec<String>,
+) {
     let has_sitemap = files.iter().any(|f| f.path == "sitemap.xml");
     let has_robots = files.iter().any(|f| f.path == "robots.txt");
     let base = site
@@ -283,12 +576,11 @@ fn seo_files(site: &Site, jobs: &[Job], files: &mut Vec<OutputFile>, warnings: &
                 let mut xml = String::from(
                     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
                 );
-                let mut urls: Vec<&str> = jobs
+                let mut urls: Vec<&str> = pages
                     .iter()
-                    .filter(|j| DocKind::of_path(&j.url) == DocKind::Html)
-                    .filter(|j| !truthy(&j.data, "noindex"))
-                    .filter(|j| !j.url.ends_with("404.html") && !j.url.ends_with("/404/"))
-                    .map(|j| j.url.as_str())
+                    .filter(|(_, noindex)| !noindex)
+                    .filter(|(u, _)| !u.ends_with("404.html") && !u.ends_with("/404/"))
+                    .map(|(u, _)| u.as_str())
                     .collect();
                 urls.sort();
                 urls.dedup();
@@ -342,9 +634,44 @@ pub fn render_editor(
     opts: &EditorOptions,
 ) -> Result<Option<EditorPage>, RenderError> {
     let site = input.site;
-    let mut b = eval::Builder::new(input);
-    let prepared = prepare(&b, input, true)?;
     let wanted = normalize_url(url);
+    let all = languages(site, true);
+    // Page d'une autre langue (`/en/agence/`) : site vu dans cette langue.
+    if let Some((l, _)) = site.locale_of_url(&wanted) {
+        let (lsite, entries, primary_data) = localize(input, l);
+        let linput = BuildInput {
+            site: &lsite,
+            entries,
+            locales: Vec::new(),
+            environment: input.environment.clone(),
+            version: input.version.clone(),
+            hooks: input.hooks.clone(),
+            now: input.now,
+        };
+        let mut b = eval::Builder::new(&linput);
+        b.lang = eval::Lang {
+            current: Some(l.code.clone()),
+            all,
+            primary_data,
+        };
+        return editor_page(b, &linput, &wanted, opts);
+    }
+    let mut b = eval::Builder::new(input);
+    b.lang = eval::Lang {
+        current: None,
+        all,
+        ..Default::default()
+    };
+    editor_page(b, input, &wanted, opts)
+}
+
+fn editor_page(
+    mut b: eval::Builder,
+    input: &BuildInput,
+    wanted: &str,
+    opts: &EditorOptions,
+) -> Result<Option<EditorPage>, RenderError> {
+    let prepared = prepare(&b, input, true)?;
     let Some(job) = prepared
         .jobs
         .iter()
@@ -360,12 +687,7 @@ pub fn render_editor(
     });
     let mut warnings = Vec::new();
     let html = b.render_job(&prepared.globals, job, DocKind::Html, &mut warnings)?;
-    let html = noindex_meta(job, html);
-    let html = if site.settings.typography.as_deref() == Some("fr") {
-        typography::french(&html)
-    } else {
-        html
-    };
+    let html = finish_html(&b, input.site, job, html);
     warnings.extend(b.take_warnings());
     let (slots, vars) = b
         .editor
@@ -583,9 +905,32 @@ fn prepare<'s>(
                 continue;
             }
             let url = match &col.path {
-                Some(p) => Some(b.render_inline(&scope, p, &format!("chemin de {}", col.id))?),
+                Some(p) => {
+                    // Autre langue : adresse calculée avec l'en-tête de la langue principale.
+                    let primary = b
+                        .lang
+                        .primary_data
+                        .get(&(e.folder.clone(), e.file_stem.clone()));
+                    let pscope = match primary {
+                        Some(serde_json::Value::Object(m)) => {
+                            let mut d: BTreeMap<String, Value> = col
+                                .props
+                                .iter()
+                                .map(|(k, v)| (k.clone(), crate::eval::from_json(v)))
+                                .collect();
+                            for (k, v) in m {
+                                d.insert(k.clone(), crate::eval::from_json(v));
+                            }
+                            eval::Scope::new(base_globals.clone(), d)
+                        }
+                        _ => scope.clone(),
+                    };
+                    Some(b.render_inline(&pscope, p, &format!("chemin de {}", col.id))?)
+                }
                 None => None,
             };
+            // Autre langue : adresse préfixée (`/en/projets/wattr/`).
+            let url = url.map(|u| localized_url(b, u));
             let content = markdown(&e.body);
             let date = data.get("date").cloned().unwrap_or(Value::UNDEFINED);
             let mut item_map: BTreeMap<String, Value> = BTreeMap::new();
@@ -670,6 +1015,10 @@ fn prepare<'s>(
     // 2. Pages fixes.
     let partial_globals = b.globals(collections.clone());
     for p in site.pages.iter().filter(|p| drafts || !p.draft) {
+        // Autre langue : pages HTML seulement (plan du site, flux, 404 : langue principale).
+        if b.lang.current.is_some() && !localizable(&p.path) {
+            continue;
+        }
         let mut data: BTreeMap<String, Value> = BTreeMap::new();
         let mut origins: BTreeMap<String, Binding> = BTreeMap::new();
         let key = |source: Source, k: &str| Binding {
@@ -701,7 +1050,7 @@ fn prepare<'s>(
             origins.remove(k);
         }
         jobs.push(Job {
-            url: p.path.clone(),
+            url: localized_url(b, p.path.clone()),
             layout: p.layout.clone(),
             data,
             origins,
@@ -751,6 +1100,16 @@ fn prepare<'s>(
         globals,
         entries: entries_index,
     })
+}
+
+/// Adresse d'une page dans la langue rendue (`/agence/` -> `/en/agence/`).
+fn localized_url(b: &eval::Builder, url: String) -> String {
+    let prefix = b.lang.prefix();
+    if prefix.is_empty() || !url.starts_with('/') || url.starts_with(&format!("{prefix}/")) {
+        url
+    } else {
+        format!("{prefix}{url}")
+    }
 }
 
 fn compare(a: Option<&Value>, b: Option<&Value>, kind: SortKind) -> std::cmp::Ordering {

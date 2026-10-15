@@ -454,3 +454,22 @@ pub fn back() -> AnyView {
 pub fn draft() -> AnyView {
     svg(r#"<path d="M3 13h3l7-7-3-3-7 7z"/><path d="M8.5 4.5l3 3"/>"#)
 }
+
+/// Visible (propriété de visibilité).
+pub fn eye() -> AnyView {
+    svg(
+        r#"<path d="M2 8s2.25-4.25 6-4.25S14 8 14 8s-2.25 4.25-6 4.25S2 8 2 8z"/><circle cx="8" cy="8" r="1.75"/>"#,
+    )
+}
+
+/// Détacher (une utilisation de composant).
+pub fn unlink() -> AnyView {
+    svg(
+        r#"<path d="M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1M2.5 2.5l2 2M13.5 13.5l-2-2"/>"#,
+    )
+}
+
+/// Relier à une propriété de composant (point, comme Webflow).
+pub fn prop_dot() -> AnyView {
+    svg(r#"<circle cx="8" cy="8" r="5.25"/><circle cx="8" cy="8" r="1.75" fill="currentColor"/>"#)
+}

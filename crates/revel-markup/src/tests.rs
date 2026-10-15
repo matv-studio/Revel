@@ -123,7 +123,8 @@ fn set_include_image() {
         n[1],
         Node::Use {
             id: None,
-            component: "partials/header".into()
+            component: "partials/header".into(),
+            args: Default::default(),
         }
     );
     let Node::Image(img) = &n[2] else { panic!() };

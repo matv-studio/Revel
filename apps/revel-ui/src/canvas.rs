@@ -181,6 +181,16 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
             <Show when=move || ed.rulers.get()>
                 <Rulers/>
             </Show>
+            // Composant ouvert (modification isolée) : son nom, « Terminer ».
+            {move || ed.isolated.get().map(|c| {
+                let name = ed.doc.with(|d| d.as_ref().and_then(|d| d.component(&c).map(|c| c.label()))).unwrap_or(c);
+                view! {
+                    <div class="iso-bar" role="status">
+                        <span class="iso-name">{crate::icons::component()}{name}</span>
+                        <button class="btn btn--small iso-done" on:click=move |_| ed.close_component()>{ui.t("component-done")}</button>
+                    </div>
+                }
+            })}
             // Écran transparent au-dessus du cadre pendant un déplacement de la vue ou un glisser
             // depuis le panneau « Ajouter » : le pointeur reste dans l'interface.
             <Show when=shield>
@@ -445,5 +455,46 @@ pub fn open_canvas_menu(ui: Ui, ed: Ed, x: f64, y: f64) {
         .danger()
         .sep(),
     ];
+    let mut items = items;
+    // Composants : créer à partir de l'élément ; ouvrir ou détacher une utilisation.
+    let target = ed.selected_target();
+    let is_use = target.as_ref().is_some_and(|at| {
+        ed.doc.with_untracked(|d| {
+            d.as_ref()
+                .and_then(|d| revel_edit::address::node(d, at).ok())
+                .is_some_and(|n| matches!(n, revel_model::Node::Use { .. }))
+        })
+    });
+    let at = StoredValue::new(target);
+    let delete = items.pop();
+    if is_use {
+        items.push(
+            CtxItem::new(k("component-edit"), move || {
+                if let Some(at) = at.get_value() {
+                    crate::components::open_component(ed, &at)
+                }
+            })
+            .icon(icons::edit)
+            .sep(),
+        );
+        items.push(
+            CtxItem::new(k("component-detach"), move || {
+                if let Some(at) = at.get_value() {
+                    crate::components::detach(ui, ed, at)
+                }
+            })
+            .icon(icons::unlink),
+        );
+    } else {
+        items.push(
+            CtxItem::new(k("component-make"), move || {
+                crate::components::make_from_selection(ui, ed)
+            })
+            .icon(icons::component)
+            .disabled(sel)
+            .sep(),
+        );
+    }
+    items.extend(delete);
     open_at(ui, x, y, items, true);
 }

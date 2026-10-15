@@ -38,10 +38,10 @@ fn sample() -> Site {
         draft: false,
         name: None,
     });
-    s.components.push(Component {
-        id: "carte".into(),
-        body: vec![el("article", &[], vec![el("h3", &[], vec![text("Carte")])])],
-    });
+    s.components.push(Component::new(
+        "carte",
+        vec![el("article", &[], vec![el("h3", &[], vec![text("Carte")])])],
+    ));
     s.stylesheet = Some(revel_model::Stylesheet {
         url: "/assets/site.css".into(),
         source: None,
@@ -1059,4 +1059,231 @@ fn nouvelle_page_et_copie() {
         revel_model::slugify("  Été 2026 : l'œuvre !"),
         "ete-2026-l-oeuvre"
     );
+}
+
+#[test]
+fn composants_creer_proprietes_detacher() {
+    let mut s = sample();
+    let before = json(&s);
+    // Créer un composant à partir du titre : une utilisation prend sa place.
+    let h1 = at(&s, "h1");
+    let id = make::free_component_id(&s, "Grand titre");
+    assert_eq!(id, "grand-titre");
+    let inv = apply(
+        &mut s,
+        &Command::MakeComponent {
+            at: h1.clone(),
+            id: id.clone(),
+            name: Some("Grand titre".into()),
+        },
+    )
+    .unwrap();
+    let c = s.component(&id).unwrap().clone();
+    assert_eq!(c.label(), "Grand titre");
+    assert_eq!(node_id(&c.body[0]), Some(h1.node.as_str()));
+    let Node::Element { children, .. } = &s.pages[0].body[0] else {
+        panic!()
+    };
+    let Node::Use {
+        id: Some(_),
+        component,
+        ..
+    } = children[0].clone()
+    else {
+        panic!("{:?}", children[0])
+    };
+    assert_eq!(component, id);
+    assert_eq!(make::uses_of(&s, &id), 1);
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before, "annulation");
+    apply(
+        &mut s,
+        &Command::MakeComponent {
+            at: h1.clone(),
+            id: id.clone(),
+            name: None,
+        },
+    )
+    .unwrap();
+    // Propriété « titre » : le texte du composant la lit ; valeur par défaut, puis valeur de
+    // l'utilisation.
+    let comp = Owner::Component(id.clone());
+    let h1_in = Target {
+        owner: comp.clone(),
+        node: h1.node.clone(),
+    };
+    apply(
+        &mut s,
+        &Command::SetComponentProps {
+            id: id.clone(),
+            props: vec![
+                revel_model::PropDef {
+                    name: "titre".into(),
+                    label: Some("Titre".into()),
+                    kind: revel_model::PropKind::Text,
+                    default: Some(serde_json::json!("Bonjour")),
+                },
+                revel_model::PropDef {
+                    name: "visible".into(),
+                    label: None,
+                    kind: revel_model::PropKind::Switch,
+                    default: Some(serde_json::json!(true)),
+                },
+            ],
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        apply(
+            &mut s,
+            &Command::SetComponentProps {
+                id: id.clone(),
+                props: vec![revel_model::PropDef {
+                    name: "page".into(),
+                    label: None,
+                    kind: revel_model::PropKind::Text,
+                    default: None,
+                }],
+            },
+        ),
+        Err(EditError::InvalidProp(_))
+    ));
+    apply(
+        &mut s,
+        &Command::Replace {
+            parent: Parent::of(&h1_in, Branch::Children),
+            index: 0,
+            node: out("titre"),
+        },
+    )
+    .unwrap();
+    // Nouvelle utilisation (nouvel identifiant après l'annulation).
+    let Node::Element { children, .. } = &s.pages[0].body[0] else {
+        panic!()
+    };
+    let use_id = revel_model::ids::node_id(&children[0]).unwrap().to_string();
+    assert_ne!(use_id, h1.node);
+    let use_at = Target {
+        owner: page(),
+        node: use_id.clone(),
+    };
+    let inv_arg = apply(
+        &mut s,
+        &Command::SetUseArg {
+            at: use_at.clone(),
+            name: "titre".into(),
+            value: Some("\"Salut\"".into()),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        inv_arg,
+        Command::SetUseArg {
+            at: use_at.clone(),
+            name: "titre".into(),
+            value: None
+        }
+    );
+    // Retrait refusé tant que le composant est utilisé ; placé dans lui-même : refusé.
+    assert!(matches!(
+        apply(&mut s, &Command::RemoveComponent { id: id.clone() }),
+        Err(EditError::InUse(_))
+    ));
+    assert!(matches!(
+        apply(
+            &mut s,
+            &Command::Insert {
+                parent: Parent::of(&h1_in, Branch::Children),
+                index: 0,
+                node: Node::Use {
+                    id: None,
+                    component: id.clone(),
+                    args: Default::default(),
+                },
+            },
+        ),
+        Err(EditError::SelfUse(_))
+    ));
+    // Détacher : copie du contenu, valeur de la propriété écrite à la place.
+    let doc = json(&s);
+    let inv_d = apply(&mut s, &Command::Detach { at: use_at.clone() }).unwrap();
+    let Node::Element { children, .. } = &s.pages[0].body[0] else {
+        panic!()
+    };
+    let Node::Element {
+        tag,
+        id: copy_id,
+        children: inner,
+        ..
+    } = &children[0]
+    else {
+        panic!("{:?}", children[0])
+    };
+    assert_eq!(tag, "h1");
+    assert_ne!(copy_id.as_deref(), Some(h1.node.as_str()));
+    assert_eq!(inner, &vec![text("Salut")]);
+    assert_eq!(make::uses_of(&s, &id), 0);
+    apply(&mut s, &inv_d).unwrap();
+    assert_eq!(json(&s), doc, "annulation du détachement");
+}
+
+#[test]
+fn detacher_condition_et_expression() {
+    let mut s = sample();
+    let body = vec![Node::If {
+        id: None,
+        cond: "visible".into(),
+        then: vec![el(
+            "a",
+            &[("href", "{{ lien }}")],
+            vec![out("titre | upper")],
+        )],
+        otherwise: vec![],
+    }];
+    let mut c = Component::new("bouton", body);
+    c.props = vec![
+        revel_model::PropDef {
+            name: "visible".into(),
+            label: None,
+            kind: revel_model::PropKind::Switch,
+            default: Some(serde_json::json!(true)),
+        },
+        revel_model::PropDef {
+            name: "lien".into(),
+            label: None,
+            kind: revel_model::PropKind::Link,
+            default: None,
+        },
+        revel_model::PropDef {
+            name: "titre".into(),
+            label: None,
+            kind: revel_model::PropKind::Text,
+            default: Some(serde_json::json!("Voir")),
+        },
+    ];
+    s.components.push(c);
+    s.pages[0].body.push(Node::Use {
+        id: Some("u1".into()),
+        component: "bouton".into(),
+        args: [("lien".to_string(), "p.url".to_string())].into(),
+    });
+    s.ensure_ids();
+    let at = Target {
+        owner: page(),
+        node: "u1".into(),
+    };
+    apply(&mut s, &Command::Detach { at }).unwrap();
+    let n = s.pages[0].body.len();
+    // `titre` lu dans une expression plus complexe : affectation gardée avant la copie.
+    assert_eq!(
+        s.pages[0].body[n - 2],
+        Node::Set {
+            name: "titre".into(),
+            expr: "\"Voir\"".into()
+        }
+    );
+    let Node::Element { attrs, .. } = &s.pages[0].body[n - 1] else {
+        panic!("{:?}", s.pages[0].body[n - 1])
+    };
+    assert_eq!(attrs[0].value.as_deref(), Some("{{ p.url }}"));
 }

@@ -287,6 +287,8 @@ pub struct Ed {
     /// Heure de la dernière modification faite dans Revel (ms) : les fichiers changés juste après
     /// ne sont pas pris pour une modification extérieure.
     pub own_change: RwSignal<f64>,
+    /// Composant ouvert (modification isolée) : celui qui contient l'élément sélectionné.
+    pub isolated: RwSignal<Option<String>>,
     pub frame: NodeRef<html::Iframe>,
 }
 
@@ -943,6 +945,46 @@ impl Ed {
                     text: new,
                 })
             }),
+            // Texte d'une propriété de composant : dans le composant ouvert, sa valeur par défaut ;
+            // sinon la valeur de cette utilisation.
+            Slot::Expr {
+                binding:
+                    Some(revel_edit::canvas::Binding {
+                        source: revel_edit::canvas::Source::Prop { owner, node, name },
+                        path,
+                    }),
+                transformed: false,
+                html: false,
+                ..
+            } if path.is_empty() => {
+                let at = revel_edit::Target {
+                    owner: owner.clone(),
+                    node: node.clone(),
+                };
+                let component = self.doc.with_untracked(|d| {
+                    match revel_edit::address::node(d.as_ref()?, &at).ok()? {
+                        revel_model::Node::Use { component, .. } => Some(component.clone()),
+                        _ => None,
+                    }
+                })?;
+                if self.isolated.get_untracked().as_deref() == Some(component.as_str()) {
+                    let mut props = self.doc.with_untracked(|d| {
+                        d.as_ref()?.component(&component).map(|c| c.props.clone())
+                    })?;
+                    let p = props.iter_mut().find(|p| &p.name == name)?;
+                    p.default = Some(serde_json::Value::String(text));
+                    Some(Command::SetComponentProps {
+                        id: component,
+                        props,
+                    })
+                } else {
+                    Some(Command::SetUseArg {
+                        at,
+                        name: name.clone(),
+                        value: Some(revel_edit::canvas::quote(&text)),
+                    })
+                }
+            }
             Slot::Expr {
                 binding: Some(binding),
                 transformed: false,
@@ -954,6 +996,31 @@ impl Ed {
             }),
             _ => None,
         }
+    }
+
+    /// Composant ouvert et noms des composants, transmis au canevas.
+    pub fn post_isolation(self) {
+        let names: serde_json::Map<String, serde_json::Value> = self.doc.with_untracked(|d| {
+            d.as_ref()
+                .map(|d| {
+                    d.components
+                        .iter()
+                        .map(|c| (c.id.clone(), serde_json::Value::String(c.label())))
+                        .collect()
+                })
+                .unwrap_or_default()
+        });
+        self.post(serde_json::json!({
+            "type": "isolate",
+            "component": self.isolated.get_untracked(),
+            "names": names,
+        }));
+    }
+
+    /// Ferme le composant ouvert (plus de sélection).
+    pub fn close_component(self) {
+        self.selected.set(None);
+        self.post(serde_json::json!({ "type": "select", "id": null }));
     }
 
     /// Adresse du nœud sélectionné (son propriétaire est retrouvé dans le document).
@@ -1115,11 +1182,30 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         own_change: RwSignal::new(0.0),
         pending: RwSignal::new(0),
         saved_at: RwSignal::new(None),
+        isolated: RwSignal::new(None),
         frame: NodeRef::new(),
     };
     provide_context(ed);
     let dock = crate::dock::Dock::provide();
     let failed = RwSignal::new(false);
+    // Modification isolée d'un composant : ouverte quand la sélection est dans un composant,
+    // fermée quand elle le quitte ; le canevas estompe le reste de la page.
+    Effect::new(move |_| {
+        let iso = ed.selected.with(|s| {
+            let s = s.as_ref()?;
+            ed.doc.with(|d| match owner_of(d.as_ref()?, &s.id)? {
+                (revel_model::ids::OwnerKind::Component, c) => Some(c),
+                _ => None,
+            })
+        });
+        if ed.isolated.get_untracked() != iso {
+            ed.isolated.set(iso);
+        }
+    });
+    Effect::new(move |_| {
+        ed.isolated.track();
+        ed.post_isolation();
+    });
     // Adresse du canevas partagée (vignettes des médias dans les autres vues).
     {
         let site_path = site.path.clone();
@@ -1206,6 +1292,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 if x != 0.0 || y != 0.0 {
                     ed.post(serde_json::json!({ "type": "scroll", "x": x, "y": y }));
                 }
+                ed.post_isolation();
                 if let Some(s) = ed.selected.get_untracked() {
                     ed.post(serde_json::json!({ "type": "select", "id": s.id }));
                 }
@@ -1741,7 +1828,15 @@ fn StatusBar() -> impl IntoView {
                 revel_model::ids::OwnerKind::Layout => "editor-owner-layout",
                 revel_model::ids::OwnerKind::Component => "editor-owner-component",
             };
-            Some(ui.tx(key, &[("name", id)]))
+            let name = match kind {
+                revel_model::ids::OwnerKind::Component => d
+                    .as_ref()?
+                    .component(&id)
+                    .map(|c| c.label())
+                    .unwrap_or(id),
+                _ => id,
+            };
+            Some(ui.tx(key, &[("name", name)]))
         })
     };
     let width = move || {

@@ -35,8 +35,14 @@ pub enum Slot {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         transformed: bool,
     },
-    /// Composant utilisé (`Use`) ou image remplacée par le composant `image-placeholder`.
-    Block { owner: Owner, node: String },
+    /// Composant utilisé (`Use`, `component` : son identifiant) ou image remplacée par le
+    /// composant `image-placeholder`.
+    Block {
+        owner: Owner,
+        node: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        component: Option<String>,
+    },
 }
 
 /// Origine d'une valeur affichée.
@@ -62,6 +68,13 @@ pub enum Source {
     /// Élément de collection (`{ url, data, content, fileSlug, date }`) : seul `data.…` est relié
     /// à l'en-tête du contenu.
     EntryItem { folder: String, file: String },
+    /// Propriété `name` d'une utilisation de composant (nœud `node` de `owner`) : valeur écrite
+    /// dans l'utilisation.
+    Prop {
+        owner: Owner,
+        node: String,
+        name: String,
+    },
 }
 
 /// Valeur d'une affectation `{% set %}` au rendu de la page affichée (panneau Variables).
@@ -252,6 +265,32 @@ pub fn untypo(new: &str, old: &str) -> String {
         s = s.replace('’', "'");
     }
     s
+}
+
+/// Texte d'une expression littérale (`"/media/a.jpg"` -> `/media/a.jpg`) ; `None` si c'est une
+/// vraie expression (variable, filtre…).
+pub fn literal(expr: &str) -> Option<String> {
+    let e = expr.trim();
+    let q = e.chars().next()?;
+    if (q != '"' && q != '\'') || e.len() < 2 || !e.ends_with(q) {
+        return None;
+    }
+    let inner = &e[1..e.len() - 1];
+    let mut out = String::new();
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => out.push(chars.next()?),
+            c if c == q => return None,
+            c => out.push(c),
+        }
+    }
+    Some(out)
+}
+
+/// Expression littérale d'un texte.
+pub fn quote(text: &str) -> String {
+    format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 #[cfg(test)]

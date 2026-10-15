@@ -195,6 +195,8 @@ pub(crate) struct Builder<'a> {
     input: &'a BuildInput<'a>,
     warnings: RefCell<Vec<String>>,
     attr_cache: RefCell<HashMap<String, Vec<Node>>>,
+    /// Composants en cours de rendu (un composant utilisé dans lui-même est ignoré).
+    using: RefCell<Vec<String>>,
     pub(crate) editor: Option<Editor>,
 }
 
@@ -228,6 +230,7 @@ impl<'a> Builder<'a> {
             input,
             warnings: RefCell::new(Vec::new()),
             attr_cache: RefCell::new(HashMap::new()),
+            using: RefCell::new(Vec::new()),
             editor: None,
         }
     }
@@ -838,16 +841,56 @@ impl<'a> Builder<'a> {
                     out.push_str(&display(&c, false));
                 }
             }
-            Node::Use { id, component } => match self.site.component(component) {
+            Node::Use {
+                id,
+                component,
+                args,
+            } => match self.site.component(component) {
+                Some(_) if self.using.borrow().contains(component) => self.warn(format!(
+                    "{ctx} : composant « {component} » utilisé dans lui-même, ignoré"
+                )),
                 Some(c) => {
                     let ctx = format!("{ctx} (composant {component})");
-                    let mut body = |out: &mut String| {
-                        scope.push(BTreeMap::new());
+                    // Propriétés : valeur de l'utilisation (évaluée ici), sinon par défaut. Dans
+                    // l'éditeur, une valeur écrite (texte) est reliée à l'utilisation, une valeur
+                    // lue ailleurs (contenu, données) à sa source.
+                    let mut values = BTreeMap::new();
+                    let mut origins = BTreeMap::new();
+                    for p in &c.props {
+                        let here = match (&at.owner, id) {
+                            (Some(owner), Some(id)) => Some(Binding::new(Source::Prop {
+                                owner: owner.clone(),
+                                node: id.clone(),
+                                name: p.name.clone(),
+                            })),
+                            _ => None,
+                        };
+                        let (v, origin) = match args.get(&p.name) {
+                            Some(e) => {
+                                let v = self.eval(scope, e, &ctx)?;
+                                let o = if revel_edit::canvas::literal(e).is_some() {
+                                    here
+                                } else {
+                                    self.origin_of(scope, e)
+                                };
+                                (v, o)
+                            }
+                            None => (prop_default(p), here),
+                        };
+                        if let Some(o) = origin.filter(|_| self.editor.is_some()) {
+                            origins.insert(p.name.clone(), o);
+                        }
+                        values.insert(p.name.clone(), v);
+                    }
+                    let body = |out: &mut String| {
+                        scope.push_with(values, origins);
+                        self.using.borrow_mut().push(c.id.clone());
                         let inner = At {
                             mark: at.mark,
                             ..At::root(Owner::Component(c.id.clone()))
                         };
                         let r = self.nodes(&c.body, scope, out, mode, &ctx, &inner);
+                        self.using.borrow_mut().pop();
                         scope.pop();
                         r
                     };
@@ -857,6 +900,7 @@ impl<'a> Builder<'a> {
                             Slot::Block {
                                 owner: owner.clone(),
                                 node: id.clone(),
+                                component: Some(c.id.clone()),
                             },
                             body,
                         )?,
@@ -915,6 +959,7 @@ impl<'a> Builder<'a> {
                                     Slot::Block {
                                         owner: owner.clone(),
                                         node: id.clone(),
+                                        component: None,
                                     },
                                     body,
                                 )?,
@@ -1229,4 +1274,14 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
 /// Valeur JSON -> valeur d'expression.
 pub(crate) fn from_json(v: &serde_json::Value) -> Value {
     Value::from(minijinja::value::Serde(v))
+}
+
+/// Valeur d'une propriété sans valeur à l'utilisation : sa valeur par défaut, sinon vide (texte,
+/// image, lien) ou faux (visibilité).
+fn prop_default(p: &revel_model::PropDef) -> Value {
+    match &p.default {
+        Some(d) => from_json(d),
+        None if p.kind == revel_model::PropKind::Switch => Value::from(false),
+        None => Value::from(""),
+    }
 }

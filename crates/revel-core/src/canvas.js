@@ -76,38 +76,116 @@
     ".line{background:#3d7eff;border-radius:2px;box-shadow:0 0 0 1px #fff}" +
     ".into{background:#1f1f1f;color:#fff}" +
     ".ghost{background:#3d7eff;box-shadow:0 4px 12px rgba(0,0,0,.25)}" +
-    "</style><div class='box hover'></div><div class='box sel'></div><div class='box drop'></div>" +
+    // Utilisation de composant (vert, comme Webflow) ; modification isolée : le reste estompé.
+    ".hover.comp{outline-color:#2fb67c}.sel.comp{outline-color:#2fb67c}.tag.comp{background:#2fb67c}" +
+    ".dim{position:fixed;inset:0;pointer-events:none;display:none;z-index:2147483645;background:rgba(20,20,24,.5)}" +
+    "</style><div class='dim'></div><div class='box hover'></div><div class='box sel'></div><div class='box drop'></div>" +
     "<div class='box line'></div><div class='tag'></div><div class='into'></div><div class='ghost'></div>";
-  const [hoverBox, selBox, dropBox, lineBox, tagBox, intoBox, ghostBox] =
-    root.querySelectorAll(".hover, .sel, .drop, .line, .tag, .into, .ghost");
+  const [dimBox, hoverBox, selBox, dropBox, lineBox, tagBox, intoBox, ghostBox] =
+    root.querySelectorAll(".dim, .hover, .sel, .drop, .line, .tag, .into, .ghost");
   document.documentElement.appendChild(host);
 
   let hovered = null;
+  let hoveredInst = null;
   let selected = null;
+  let selectedInst = null;
 
-  const label = (el) => {
+  // ---------------------------------------------------------------- composants
+  // Utilisations de composants (repères de bloc avec `component`) : un clic dans une utilisation
+  // la sélectionne en entière ; un double-clic ouvre le composant (modification isolée, le reste
+  // de la page estompé), ou modifie sur place le texte d'une de ses propriétés.
+  const instances = [];
+  for (let n = 0; n < slots.length; n++) {
+    const sl = slots[n];
+    if (sl && sl.slot === "block" && sl.component && ranges[n]) instances.push({ n, node: sl.node, component: sl.component });
+  }
+  let isolated = null;
+  let names = {};
+  const rangeOfInst = (i) => ranges[i.n];
+  const depth = (node) => { let d = 0; for (let x = node; x; x = x.parentNode) d++; return d; };
+  for (const i of instances) i.depth = depth(rangeOfInst(i).startContainer);
+  // `el` est dans l'utilisation `i` (pas un de ses ancêtres).
+  const within = (i, el) => {
+    const r = rangeOfInst(i);
+    try { return r.isPointInRange(el, 0) && !el.contains(r.startContainer); } catch (_) { return false; }
+  };
+  // Premier élément repéré d'une utilisation (sa racine, qui la représente).
+  const rootOf = (i) => {
+    const r = rangeOfInst(i);
+    const walker = document.createTreeWalker(r.commonAncestorContainer, NodeFilter.SHOW_ELEMENT);
+    for (let el = walker.nextNode(); el; el = walker.nextNode()) {
+      if (el.hasAttribute("data-rv") && within(i, el)) return el;
+    }
+    return null;
+  };
+  const roots = new Map();
+  for (const i of instances) { i.root = rootOf(i); if (i.root && !roots.has(i.root)) roots.set(i.root, i); }
+  const instName = (i) => names[i.component] || i.component.split("/").pop();
+  const isOpen = (i) => !!isolated && i.component === isolated;
+  // Utilisations qui contiennent `el`, de la plus externe à la plus interne.
+  const around = (el) => instances.filter((i) => within(i, el)).sort((a, b) => a.depth - b.depth);
+  // Élément sélectionnable sous le pointeur, ou utilisation de composant (fermée) qui le contient.
+  // Composant ouvert : ses utilisations sont ouvertes ; celles qu'il contient restent fermées.
+  const pick = (node) => {
+    const t = targetOf(node);
+    if (!t) return null;
+    let list = around(t);
+    if (isolated) {
+      const k = list.map((i) => i.component).lastIndexOf(isolated);
+      list = k < 0 ? list : list.slice(k + 1);
+    }
+    const inst = list[0];
+    return inst && inst.root ? { el: inst.root, inst } : { el: t, inst: null };
+  };
+  // Dans le composant ouvert (une de ses utilisations).
+  const inIsolated = (el) => !isolated || around(el).some((i) => i.component === isolated);
+  const idOf = (el, inst) => (inst ? inst.node : el.getAttribute("data-rv"));
+
+  const label = (el, inst) => {
+    if (inst) return "\u25C6 " + instName(inst);
     const cls = typeof el.className === "string" && el.className.trim()
       ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
       : "";
     return el.tagName.toLowerCase() + cls;
   };
 
-  const place = (box, el) => {
+  const boxOf = (el, inst) => (inst ? rangeOfInst(inst).getBoundingClientRect() : el.getBoundingClientRect());
+  const place = (box, el, inst) => {
     if (!el || !el.isConnected) { box.style.display = "none"; return null; }
-    const r = el.getBoundingClientRect();
+    const r = boxOf(el, inst);
     box.style.display = "block";
     box.style.left = r.left + "px";
     box.style.top = r.top + "px";
     box.style.width = r.width + "px";
     box.style.height = r.height + "px";
+    box.classList.toggle("comp", !!inst);
     return r;
   };
 
+  // Modification isolée : voile sur la page, percé aux utilisations du composant ouvert.
+  const drawDim = () => {
+    if (!isolated) { dimBox.style.display = "none"; return; }
+    const W = innerWidth;
+    const H = innerHeight;
+    let d = "M0 0H" + W + "V" + H + "H0Z";
+    for (const i of instances) {
+      if (i.component !== isolated) continue;
+      for (const b of rangeOfInst(i).getClientRects()) {
+        if (b.width && b.height) d += "M" + b.left + " " + b.top + "H" + b.right + "V" + b.bottom + "H" + b.left + "Z";
+      }
+    }
+    dimBox.style.clipPath = "path(evenodd, '" + d + "')";
+    dimBox.style.display = "block";
+  };
+
   const draw = () => {
-    place(hoverBox, hovered && hovered !== selected ? hovered : null);
-    const r = place(selBox, selected);
+    drawDim();
+    const same = hovered === selected && hoveredInst === selectedInst;
+    place(hoverBox, hovered && !same ? hovered : null, hoveredInst);
+    const r = place(selBox, selected, selectedInst);
     if (r && selected) {
-      tagBox.textContent = label(selected);
+      tagBox.textContent = label(selected, selectedInst);
+      tagBox.classList.toggle("comp", !!selectedInst);
       tagBox.style.display = "block";
       tagBox.style.left = Math.max(0, r.left) + "px";
       tagBox.style.top = (r.top >= 20 ? r.top - 20 : r.bottom + 2) + "px";
@@ -159,29 +237,36 @@
     }, 30);
   };
 
-  const select = (el, notify) => {
+  const select = (el, notify, inst) => {
     selected = el;
+    selectedInst = el ? inst || null : null;
     sendComputed();
     redraw();
     if (notify) {
       post(el
-        ? { type: "select", id: el.getAttribute("data-rv"), tag: el.tagName.toLowerCase(), label: label(el), rect: rectOf(el) }
+        ? { type: "select", id: idOf(el, selectedInst), tag: selectedInst ? "" : el.tagName.toLowerCase(), label: label(el, selectedInst),
+            rect: selectedInst ? rectOf({ getBoundingClientRect: () => boxOf(el, selectedInst) }) : rectOf(el),
+            component: selectedInst ? selectedInst.component : undefined }
         : { type: "select", id: null });
     }
   };
 
   // ---------------------------------------------------------------- événements de la page
   document.addEventListener("mousemove", (e) => {
-    const t = targetOf(e.target);
-    if (t !== hovered) {
+    const p = pick(e.target);
+    const t = p ? p.el : null;
+    const inst = p ? p.inst : null;
+    if (t !== hovered || inst !== hoveredInst) {
       hovered = t;
+      hoveredInst = inst;
       redraw();
-      post({ type: "hover", id: t ? t.getAttribute("data-rv") : null });
+      post({ type: "hover", id: t ? idOf(t, inst) : null });
     }
   }, true);
 
   document.addEventListener("mouseleave", () => {
     hovered = null;
+    hoveredInst = null;
     redraw();
     post({ type: "hover", id: null });
   });
@@ -254,6 +339,8 @@
   const BLOCK = new Set(["section", "div", "header", "footer", "main", "nav", "article", "aside", "h1", "h2", "h3",
     "h4", "h5", "h6", "p", "ul", "ol", "li", "figure", "form", "blockquote", "table", "hr", "details", "dl"]);
   const rvOf = (el) => (el && el.getAttribute ? el.getAttribute("data-rv") : null);
+  // Repère d'un élément pour un dépôt : l'utilisation pour la racine d'une utilisation fermée.
+  const refOf = (el) => { const i = roots.get(el); return i && !isOpen(i) ? i.node : rvOf(el); };
   const parentRv = (el) => (el && el.parentElement ? el.parentElement.closest("[data-rv]") : null);
   const inDrag = (el, d) => !!d.el && (el === d.el || d.el.contains(el));
   const accepts = (c, d) => {
@@ -304,20 +391,27 @@
       hit = e;
       break;
     }
-    let t = targetOf(hit);
+    // Dans une utilisation fermée : elle compte comme un seul élément (sa racine).
+    const hp = hit ? pick(hit) : null;
+    let t = hp ? hp.el : null;
     while (t && inDrag(t, d)) t = parentRv(t);
     for (; t; t = parentRv(t)) {
+      // Composant ouvert : dépôt seulement à l'intérieur.
+      if (!inIsolated(t)) return null;
       const r = t.getBoundingClientRect();
       const parent = parentRv(t);
-      const canIn = accepts(t, d);
-      const canSib = !!parent && accepts(parent, d);
+      const ci = roots.get(t);
+      const closed = !!ci && !isOpen(ci) && inIsolated(parent || t);
+      const openRoot = !!ci && isOpen(ci);
+      const canIn = !closed && accepts(t, d);
+      const canSib = !!parent && !openRoot && accepts(parent, d);
       let axis = "y";
       if (canSib) axis = axisAmong(kidsOf(parent, NONE), t);
       const pos = axis === "x" ? x - r.left : y - r.top;
       const size = axis === "x" ? r.width : r.height;
       const band = canIn ? Math.min(12, size * 0.25) : size / 2;
       if (canSib && (!canIn || pos < band || pos > size - band)) {
-        return { ref: rvOf(t), where: pos < size / 2 ? "before" : "after", axis, container: parent, el: t };
+        return { ref: refOf(t), where: pos < size / 2 ? "before" : "after", axis, container: parent, el: t };
       }
       if (canIn) {
         const kids = kidsOf(t, d);
@@ -331,7 +425,7 @@
         const ax = axisAmong(kidsOf(t, NONE), k);
         const kr = k.getBoundingClientRect();
         const before = ax === "x" ? x < kr.left + kr.width / 2 : y < kr.top + kr.height / 2;
-        return { ref: rvOf(k), where: before ? "before" : "after", axis: ax, container: t, el: k };
+        return { ref: refOf(k), where: before ? "before" : "after", axis: ax, container: t, el: k };
       }
     }
     return null;
@@ -410,23 +504,24 @@
   let dragged = false;
   document.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || editing || inEdit(e.target)) return;
-    const t = targetOf(e.target);
-    if (t) press = { el: t, x: e.clientX, y: e.clientY, id: e.pointerId };
+    const p = pick(e.target);
+    if (p) press = { el: p.el, inst: p.inst, x: e.clientX, y: e.clientY, id: e.pointerId };
   }, true);
   document.addEventListener("pointermove", (e) => {
     if (press && !drag && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) {
       const el = press.el;
+      const inst = press.inst;
       try { document.documentElement.setPointerCapture(press.id); } catch (_) { /* pointeur relâché */ }
-      select(el, true);
+      select(el, true, inst);
       const tag = el.tagName.toLowerCase();
-      startDrag({ el, tag, block: blockTag(tag), move: true,
+      startDrag({ el, inst, id: idOf(el, inst), tag, block: inst ? true : blockTag(tag), move: true,
         opacity: el.style.getPropertyValue("opacity"), prio: el.style.getPropertyPriority("opacity") });
       // Élément déplacé estompé (prioritaire sur les animations du site).
       el.style.setProperty("opacity", "0.35", "important");
-      ghostBox.textContent = label(el);
+      ghostBox.textContent = label(el, inst);
     }
     if (drag && drag.move) {
-      ghostBox.textContent = (e.altKey ? "+ " : "") + label(drag.el);
+      ghostBox.textContent = (e.altKey ? "+ " : "") + label(drag.el, drag.inst);
       ghostBox.style.display = "block";
       ghostBox.style.left = (e.clientX + 12) + "px";
       ghostBox.style.top = (e.clientY + 14) + "px";
@@ -436,7 +531,7 @@
   const release = (e, cancel) => {
     if (drag && drag.move) {
       const t = cancel ? null : findDrop(e.clientX, e.clientY, drag);
-      const id = rvOf(drag.el);
+      const id = drag.id || rvOf(drag.el);
       endDrag();
       dragged = true;
       setTimeout(() => { dragged = false; }, 0);
@@ -455,20 +550,35 @@
     if (editing) finishEdit(true);
     block(e);
     if (dragged) return;
-    select(targetOf(e.target), true);
+    const p = pick(e.target);
+    select(p ? p.el : null, true, p ? p.inst : null);
   }, true);
   // Clic droit : élément sélectionné, menu de l'éditeur (pas celui du navigateur).
   document.addEventListener("contextmenu", (e) => {
     if (inEdit(e.target)) return;
     block(e);
-    const t = targetOf(e.target);
-    if (t && t !== selected) select(t, true);
+    const p = pick(e.target);
+    if (p && (p.el !== selected || p.inst !== selectedInst)) select(p.el, true, p.inst);
     post({ type: "context", x: e.clientX, y: e.clientY });
   }, true);
+  const propOf = (sl, inst) => !!sl && sl.slot === "expr" && !!sl.binding && !!sl.binding.source &&
+    sl.binding.source.kind === "prop" && sl.binding.source.node === inst.node;
   document.addEventListener("dblclick", (e) => {
     if (inEdit(e.target)) return;
     block(e);
     const n = slotAt(e.clientX, e.clientY);
+    const p = pick(e.target);
+    if (p && p.inst) {
+      // Texte d'une propriété de cette utilisation : modifié sur place (valeur de l'utilisation).
+      if (n !== null && propOf(slots[n], p.inst)) { startEdit(n); return; }
+      // Sinon : le composant s'ouvre, l'élément sous le pointeur est sélectionné.
+      const inner = targetOf(e.target);
+      if (inner) {
+        isolated = p.inst.component;
+        select(inner, true, null);
+      }
+      return;
+    }
     if (n !== null) startEdit(n);
   }, true);
   for (const type of ["auxclick", "submit", "mouseup", "pointerup"]) {
@@ -578,19 +688,35 @@
 
   // ---------------------------------------------------------------- messages de l'interface
   const byId = (id) => (id ? document.querySelector('[data-rv="' + CSS.escape(id) + '"]') : null);
+  // Élément (ou utilisation de composant) désigné par l'interface.
+  const findId = (id) => {
+    if (!id) return { el: null, inst: null };
+    const inst = instances.find((i) => i.node === id && i.root);
+    if (inst) return { el: inst.root, inst };
+    return { el: byId(id), inst: null };
+  };
 
   window.addEventListener("message", (e) => {
     const m = e.data;
     if (!m || m.revel !== 1 || e.source !== window.parent) return;
     switch (m.type) {
       case "select": {
-        const el = byId(m.id);
-        select(el, false);
+        const { el, inst } = findId(m.id);
+        select(el, false, inst);
         if (el && m.reveal) el.scrollIntoView({ block: "nearest", inline: "nearest" });
         break;
       }
-      case "hover":
-        hovered = byId(m.id);
+      case "hover": {
+        const { el, inst } = findId(m.id);
+        hovered = el;
+        hoveredInst = inst;
+        redraw();
+        break;
+      }
+      case "isolate":
+        // Composant ouvert (modification isolée) ou fermé ; noms des composants.
+        isolated = m.component || null;
+        if (m.names) names = m.names;
         redraw();
         break;
       case "watch":
@@ -653,7 +779,7 @@
       }
       case "measure": {
         // Position de la sélection (zoom sur la sélection), après l'avoir montrée.
-        const el = byId(m.id) || selected;
+        const el = findId(m.id).el || selected;
         if (el) el.scrollIntoView({ block: "nearest", inline: "nearest" });
         post({ type: "measure", rect: el ? rectOf(el) : null });
         break;

@@ -326,6 +326,7 @@ impl<'a> Parser<'a> {
                 Node::Use {
                     id: None,
                     component: component_id(name),
+                    args: Default::default(),
                 }
             }
             "raw" => {

@@ -355,6 +355,9 @@ error-edit-expr = Invalid expression, nothing was changed. ({ $detail })
 error-edit-path = Address refused: it starts with “/” and only contains lowercase letters without accents, digits and hyphens. ({ $detail })
 error-edit-path-taken = This address is already used by another page. ({ $detail })
 error-edit-redirect = Redirect refused: the old address starts with “/” and differs from the new one. ({ $detail })
+error-edit-in-use = This component is still used: detach or delete its instances first. ({ $detail })
+error-edit-prop = Property name refused: unaccented letters, digits and "_", one per component. ({ $detail })
+error-edit-self-use = A component cannot be placed inside itself. ({ $detail })
 error-edit-no-stylesheet = This site does not have a stylesheet yet.
 error-edit-breakpoints = Invalid breakpoints: each width can be used only once and must be a positive number of pixels. ({ $detail })
 error-edit-bound = This text comes from a file that cannot be modified here. ({ $detail })
@@ -635,12 +638,53 @@ design-field-label = Own design (Revel)
 cms-none = No collection in this site.
 cms-entry-new = New content
 cms-collection-new = New collection
+component-make = Create component
+component-make-name = Component name
+component-make-confirm = Create
+component-make-none = First select the element to turn into a component.
+component-missing = Component not found: { $name }
+component-edit = Edit component
+component-detach = Detach
+component-detach-help = Replaces this instance with a copy of its content that can be edited separately
+component-props = Properties
+component-no-props = No properties: edit the component to create some.
+component-props-empty = Link a text, an image, a link or the visibility of an element to set each instance separately.
+component-prop-add = Add a property
+component-prop-remove = Delete property (its elements keep the default value)
+component-prop-default = Default value
+component-prop-label = Property name
+component-prop-reset = Reset to default value
+component-prop-computed = { $label } (computed)
+prop-kind-text = Text
+prop-kind-image = Image
+prop-kind-link = Link
+prop-kind-switch = Visibility
+component-bindings = Linked to properties
+component-bind = Link to a property
+component-bind-new = New property "{ $label }"
+component-unbind = Unlink (the default value is written)
+component-bind-text = Text
+component-bind-image = Image
+component-bind-link = Link
+component-bind-visibility = Visibility
+component-done = Done
+component-rename = Rename
+component-delete = Delete component
+component-delete-title = Delete the component "{ $name }"?
+component-unused = Place this component on a page to edit it.
+component-empty = This component has no element to edit.
+components-none = No components: select an element, then "+" to create one.
+components-count = { $count ->
+        [0] no components
+        [one] 1 component
+       *[other] { $count } components
+    }
 components-search = Search components
 components-uses = { $count ->
         [one] Used once
        *[other] Used { $count } times
     }
-components-new = New component
+components-new = Create a component from the selection
 assets-search = Search assets
 assets-import = Import assets
 library-new-folder = New folder

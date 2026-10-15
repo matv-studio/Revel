@@ -283,3 +283,19 @@ Basé sur le domaine `revel-studio.app`, libre mais non enregistré.
 versions déjà publiées sous cette licence.
 
 **D-09 — ouverte (étape 6).** Signature de code : certificat Windows (sinon avertissement SmartScreen), compte Apple Developer (sinon blocage Gatekeeper).
+
+**D-34 — 15/10/2026 — prise.** **Composants à propriétés, modification isolée (comme Webflow).** Un composant
+porte un nom affiché et des propriétés (`props` : nom d'expression, libellé, type texte, image, lien ou
+visibilité, valeur par défaut) ; chaque utilisation (`Use`) donne ses valeurs en expressions (`args` : `"Titre"`,
+`p.data.title`, `true`), évaluées là où le composant est utilisé, la valeur par défaut sinon ; dans le composant,
+une propriété se lit comme une variable (les variables de l'endroit d'utilisation restent visibles, comme un
+`include` de Nunjucks). Un clic dans une utilisation la sélectionne en entier (cadre vert) ; un double-clic ouvre
+le composant (le reste de la page est estompé, « Terminer » le referme) ou modifie sur place le texte d'une de
+ses propriétés pour cette utilisation. Dans le composant ouvert, un texte, une image, un lien ou la visibilité
+d'un élément se relie à une propriété (nouvelle, valeur par défaut : la valeur écrite, ou existante) ; délier
+réécrit la valeur par défaut. Détacher une utilisation la remplace par une copie de son contenu, valeurs écrites
+dedans. Un composant ne peut pas être placé dans lui-même (refusé à l'édition, ignoré au rendu). Les propriétés
+de Webflow (texte, texte riche, image, lien, vidéo, nombre, interrupteur, liste de collection) servent de
+référence pour l'import de l'étape 7 ; texte riche, vidéo, nombre et liaison à un champ de collection depuis le
+panneau viendront avec 3.7 (listes de collection). Source : [Component properties — Webflow Help
+Center](https://help.webflow.com/hc/en-us/articles/33961219350547).

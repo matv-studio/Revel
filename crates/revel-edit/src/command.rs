@@ -260,6 +260,42 @@ pub enum Command {
     RemoveLayout { id: String },
     /// Texte alternatif par défaut d'un média (`None` ou vide : retiré).
     SetMediaAlt { url: String, alt: Option<String> },
+    /// Nouveau composant, inséré à la position `index` de la liste (à la fin si elle est plus
+    /// courte). Refusé si l'identifiant est pris ou si un nœud reprend un identifiant existant.
+    AddComponent {
+        component: revel_model::Component,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        index: Option<usize>,
+    },
+    /// Composant retiré ; refusé s'il est encore utilisé.
+    RemoveComponent { id: String },
+    /// Nom d'un composant dans Revel (`None` : fin de l'identifiant).
+    SetComponentName { id: String, name: Option<String> },
+    /// Contenu d'un composant remplacé (mêmes identifiants pour les nœuds gardés).
+    SetComponentBody { id: String, body: Vec<Node> },
+    /// Propriétés d'un composant remplacées (noms valides, chacun une seule fois).
+    SetComponentProps {
+        id: String,
+        props: Vec<revel_model::PropDef>,
+    },
+    /// Valeur d'une propriété pour une utilisation de composant (expression : `"Titre"`,
+    /// `p.data.title`, `true`) ; `None` : valeur par défaut du composant.
+    SetUseArg {
+        at: Target,
+        name: String,
+        value: Option<String>,
+    },
+    /// Crée le composant `id` à partir d'un nœud : le nœud devient son contenu et une utilisation
+    /// du composant prend sa place.
+    MakeComponent {
+        at: Target,
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+    },
+    /// Utilisation de composant remplacée par une copie de son contenu (nouveaux identifiants),
+    /// valeurs des propriétés écrites dedans.
+    Detach { at: Target },
     /// Rangement de l'éditeur remplacé (dossiers et éléments rangés des médias ou des composants).
     SetShelf {
         kind: ShelfKind,
@@ -288,6 +324,10 @@ pub enum Command {
 pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
     Ok(match cmd {
         Command::Duplicate { at } => crate::make::duplicate(site, at)?.0,
+        Command::MakeComponent { at, id, name } => {
+            crate::make::make_component(site, at, id, name.clone())?.0
+        }
+        Command::Detach { at } => crate::make::detach(site, at)?,
         Command::Wrap { at, tag } => {
             if !valid_tag(tag) {
                 return Err(EditError::InvalidTag(tag.clone()));
@@ -357,6 +397,33 @@ fn check_page_path(site: &Site, path: &str, except: Option<&String>) -> Result<(
         .any(|p| p.path == path && Some(&p.id) != except)
     {
         return Err(EditError::PathTaken(path.to_string()));
+    }
+    Ok(())
+}
+
+/// Un composant ne peut pas être placé dans lui-même (ni dans un composant qu'il utilise).
+fn check_self_use(site: &Site, owner: &crate::Owner, n: &Node) -> Result<(), EditError> {
+    let mut bad = None;
+    walk(std::slice::from_ref(n), &mut |x| {
+        if let Node::Use { component, .. } = x
+            && !crate::make::can_use_in(site, owner, component)
+        {
+            bad.get_or_insert_with(|| component.clone());
+        }
+    });
+    match bad {
+        Some(c) => Err(EditError::SelfUse(c)),
+        None => Ok(()),
+    }
+}
+
+/// Propriétés d'un composant : noms valides, chacun une seule fois.
+fn check_props(props: &[revel_model::PropDef]) -> Result<(), EditError> {
+    let mut seen = std::collections::HashSet::new();
+    for p in props {
+        if !revel_model::valid_prop_name(&p.name) || !seen.insert(p.name.as_str()) {
+            return Err(EditError::InvalidProp(p.name.clone()));
+        }
     }
     Ok(())
 }
@@ -554,6 +621,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             node,
         } => {
             check_new_ids(site, node)?;
+            check_self_use(site, &parent.owner, node)?;
             let list = address::list_mut(site, parent)?;
             if *index > list.len() {
                 return Err(EditError::Index(*index));
@@ -590,6 +658,9 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 }
             }
             address::list(site, to)?; // destination valide avant toute modification
+            if to.owner != at.owner {
+                check_self_use(site, &to.owner, address::node(site, at)?)?;
+            }
             let node = address::list_mut(site, &from)?.remove(from_index);
             let dest = match address::list_mut(site, to) {
                 Ok(d) if *index <= d.len() => d,
@@ -932,9 +1003,125 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 breakpoints: std::mem::replace(&mut site.breakpoints, breakpoints.clone()),
             })
         }
+        Command::AddComponent { component, index } => {
+            if site.components.iter().any(|c| c.id == component.id) {
+                return Err(EditError::DuplicateId(component.id.clone()));
+            }
+            let used = site.node_ids();
+            let mut seen = std::collections::HashSet::new();
+            let mut dup = None;
+            walk(&component.body, &mut |n| {
+                if let Some(id) = node_id(n)
+                    && (used.contains(id) || !seen.insert(id.to_string()))
+                {
+                    dup.get_or_insert_with(|| id.to_string());
+                }
+            });
+            if let Some(id) = dup {
+                return Err(EditError::DuplicateId(id));
+            }
+            check_props(&component.props)?;
+            let i = index.unwrap_or(usize::MAX).min(site.components.len());
+            site.components.insert(i, component.clone());
+            Ok(Command::RemoveComponent {
+                id: component.id.clone(),
+            })
+        }
+        Command::RemoveComponent { id } => {
+            let i = site
+                .components
+                .iter()
+                .position(|c| &c.id == id)
+                .ok_or_else(|| EditError::NotFound(id.clone()))?;
+            if crate::make::uses_of(site, id) > 0 {
+                return Err(EditError::InUse(id.clone()));
+            }
+            let component = site.components.remove(i);
+            Ok(Command::AddComponent {
+                component,
+                index: Some(i),
+            })
+        }
+        Command::SetComponentName { id, name } => {
+            let c = site
+                .components
+                .iter_mut()
+                .find(|c| &c.id == id)
+                .ok_or_else(|| EditError::NotFound(id.clone()))?;
+            let name = name
+                .as_ref()
+                .map(|n| n.trim().to_string())
+                .filter(|n| !n.is_empty());
+            Ok(Command::SetComponentName {
+                id: id.clone(),
+                name: std::mem::replace(&mut c.name, name),
+            })
+        }
+        Command::SetComponentBody { id, body } => {
+            let i = site
+                .components
+                .iter()
+                .position(|c| &c.id == id)
+                .ok_or_else(|| EditError::NotFound(id.clone()))?;
+            // Identifiants nouveaux du contenu : pas déjà pris ailleurs dans le site.
+            let old_ids: std::collections::HashSet<String> = {
+                let mut v = std::collections::HashSet::new();
+                walk(&site.components[i].body, &mut |n| {
+                    if let Some(x) = node_id(n) {
+                        v.insert(x.to_string());
+                    }
+                });
+                v
+            };
+            let taken = site.node_ids();
+            let mut dup = None;
+            walk(body, &mut |n| {
+                if let Some(x) = node_id(n)
+                    && !old_ids.contains(x)
+                    && taken.contains(x)
+                {
+                    dup.get_or_insert_with(|| x.to_string());
+                }
+            });
+            if let Some(x) = dup {
+                return Err(EditError::DuplicateId(x));
+            }
+            Ok(Command::SetComponentBody {
+                id: id.clone(),
+                body: std::mem::replace(&mut site.components[i].body, body.clone()),
+            })
+        }
+        Command::SetComponentProps { id, props } => {
+            check_props(props)?;
+            let c = site
+                .components
+                .iter_mut()
+                .find(|c| &c.id == id)
+                .ok_or_else(|| EditError::NotFound(id.clone()))?;
+            Ok(Command::SetComponentProps {
+                id: id.clone(),
+                props: std::mem::replace(&mut c.props, props.clone()),
+            })
+        }
+        Command::SetUseArg { at, name, value } => match address::node_mut(site, at)? {
+            Node::Use { args, .. } => {
+                let old = match value {
+                    Some(v) => args.insert(name.clone(), v.clone()),
+                    None => args.remove(name),
+                };
+                Ok(Command::SetUseArg {
+                    at: at.clone(),
+                    name: name.clone(),
+                    value: old,
+                })
+            }
+            _ => Err(EditError::WrongKind(at.node.clone())),
+        },
         Command::Duplicate { .. }
         | Command::Wrap { .. }
         | Command::InsertPreset { .. }
+        | Command::MakeComponent { .. }
+        | Command::Detach { .. }
         | Command::AddRule { .. } => {
             let concrete = expand(site, cmd)?;
             apply(site, &concrete)
@@ -1053,6 +1240,9 @@ impl Command {
             ) => a == b && p == q,
             (Self::SetSelector { rule: a, .. }, Self::SetSelector { rule: b, .. }) => a == b,
             (Self::SetBound { binding: a, .. }, Self::SetBound { binding: b, .. }) => a == b,
+            (Self::SetUseArg { at: a, name: m, .. }, Self::SetUseArg { at: b, name: n, .. }) => {
+                a == b && m == n
+            }
             (
                 Self::SetEntryBody {
                     folder: a, file: f, ..

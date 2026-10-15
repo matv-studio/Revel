@@ -208,16 +208,13 @@ pub fn import(root: &Path, profile: &Profile) -> Result<(Site, Report), ImportEr
             });
             report.layouts += 1;
         } else {
-            site.components.push(Component { id, body: nodes });
+            site.components.push(Component::new(id, nodes));
             report.components += 1;
         }
     }
     for (id, src) in &profile.components {
         let nodes = conv.parse(src, Mode::Html, Path::new(id), &mut report)?;
-        site.components.push(Component {
-            id: id.clone(),
-            body: nodes,
-        });
+        site.components.push(Component::new(id.clone(), nodes));
         report.components += 1;
     }
 

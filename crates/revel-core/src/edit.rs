@@ -59,6 +59,7 @@ fn check_exprs(c: &Command) -> std::result::Result<(), revel_edit::EditError> {
         Command::SetLogic { cond, expr, .. } => {
             cond.iter().chain(expr.iter()).try_for_each(|e| check(e))
         }
+        Command::SetUseArg { value: Some(v), .. } => check(v),
         Command::Batch { commands } => commands.iter().try_for_each(check_exprs),
         _ => Ok(()),
     }
@@ -71,6 +72,25 @@ fn exec(
 ) -> std::result::Result<Command, revel_edit::EditError> {
     check_exprs(c)?;
     match c {
+        // Texte d'une propriété de composant : écrit dans l'utilisation.
+        Command::SetBound {
+            binding:
+                revel_edit::canvas::Binding {
+                    source: revel_edit::canvas::Source::Prop { owner, node, name },
+                    path,
+                },
+            value,
+        } if path.is_empty() => revel_edit::apply(
+            site,
+            &Command::SetUseArg {
+                at: revel_edit::Target {
+                    owner: owner.clone(),
+                    node: node.clone(),
+                },
+                name: name.clone(),
+                value: Some(revel_edit::canvas::quote(value)),
+            },
+        ),
         Command::SetBound { binding, value } => {
             let old = project
                 .set_bound(site, binding, value)

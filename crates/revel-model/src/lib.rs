@@ -316,7 +316,102 @@ pub struct Layout {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Component {
     pub id: String,
+    /// Nom affiché (panneau Composants) ; sinon la fin de l'identifiant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Propriétés : valeurs choisies à chaque utilisation (texte, image, lien, visibilité),
+    /// lues dans le composant comme des variables.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub props: Vec<PropDef>,
     pub body: Vec<Node>,
+}
+
+impl Component {
+    pub fn new(id: impl Into<String>, body: Vec<Node>) -> Self {
+        Self {
+            id: id.into(),
+            name: None,
+            props: Vec::new(),
+            body,
+        }
+    }
+
+    /// Nom affiché : le nom donné, sinon la fin de l'identifiant (`partials/card` -> `card`).
+    pub fn label(&self) -> String {
+        self.name
+            .clone()
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| self.id.rsplit('/').next().unwrap_or(&self.id).to_string())
+    }
+
+    pub fn prop(&self, name: &str) -> Option<&PropDef> {
+        self.props.iter().find(|p| p.name == name)
+    }
+}
+
+/// Propriété d'un composant (comme les propriétés de composant de Webflow et Framer).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PropDef {
+    /// Nom dans les expressions du composant (`titre`) : lettres, chiffres, `_`.
+    pub name: String,
+    /// Libellé affiché ; sinon le nom.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(rename = "type")]
+    pub kind: PropKind,
+    /// Valeur par défaut (texte, adresse, booléen), prise quand une utilisation n'en donne pas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<Value>,
+}
+
+impl PropDef {
+    pub fn label(&self) -> &str {
+        self.label
+            .as_deref()
+            .filter(|l| !l.trim().is_empty())
+            .unwrap_or(&self.name)
+    }
+}
+
+/// Type d'une propriété de composant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PropKind {
+    /// Texte d'un élément.
+    Text,
+    /// Adresse d'une image.
+    Image,
+    /// Adresse d'un lien.
+    Link,
+    /// Élément affiché ou masqué.
+    Switch,
+}
+
+/// Nom de propriété valide (identifiant d'expression, pas un mot réservé).
+pub fn valid_prop_name(name: &str) -> bool {
+    let mut cs = name.chars();
+    cs.next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && cs.all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !matches!(
+            name,
+            "true"
+                | "false"
+                | "none"
+                | "and"
+                | "or"
+                | "not"
+                | "in"
+                | "is"
+                | "if"
+                | "else"
+                | "loop"
+                | "page"
+                | "site"
+                | "collections"
+                | "super"
+                | "self"
+        )
 }
 
 /// Collection de contenus structurés.
@@ -488,6 +583,10 @@ pub enum Node {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         id: Option<String>,
         component: String,
+        /// Valeurs des propriétés du composant pour cette utilisation (expressions évaluées là
+        /// où le composant est utilisé : `"Titre"`, `p.data.title`, `true`).
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        args: BTreeMap<String, String>,
     },
     /// Image responsive (variantes AVIF/WebP/JPEG générées).
     Image(ImageNode),

@@ -267,3 +267,9 @@ kbd {
   border: var(--border) solid var(--line-strong); color: var(--text-muted);
 }
 .save-state { font-size: var(--text-xs); }
+
+/* Composant ouvert (modification isolée) : nom et « Terminer » au-dessus du canevas. */
+.iso-bar { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px;
+  padding: 4px 4px 4px 10px; border-radius: 999px; background: var(--surface-raised); box-shadow: var(--shadow-dialog), inset 0 0 0 1px #2fb67c; }
+.iso-name { display: inline-flex; align-items: center; gap: 6px; color: #2fb67c; font-size: var(--text-sm); font-weight: var(--weight-medium); white-space: nowrap; }
+.iso-name svg.icon { width: 14px; height: 14px; }

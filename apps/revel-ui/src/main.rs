@@ -6,6 +6,7 @@ mod canvas;
 mod cms;
 mod cmsfields;
 mod cmsschema;
+mod components;
 mod ctxmenu;
 mod dialog;
 mod dock;

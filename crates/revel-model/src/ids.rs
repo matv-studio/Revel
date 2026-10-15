@@ -293,10 +293,8 @@ mod tests {
             draft: false,
             name: None,
         });
-        s.components.push(Component {
-            id: "carte".into(),
-            body: vec![el("div", &[], vec![])],
-        });
+        s.components
+            .push(Component::new("carte", vec![el("div", &[], vec![])]));
         s
     }
 

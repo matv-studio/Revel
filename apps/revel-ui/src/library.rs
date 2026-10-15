@@ -10,7 +10,7 @@
 //! contextuel ; un dossier se crée, se renomme, se supprime (ses éléments remontent d'un niveau).
 
 use crate::editor::Ed;
-use crate::panels::{PlannedButton, Search};
+use crate::panels::Search;
 use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -1360,7 +1360,7 @@ pub fn Components() -> impl IntoView {
     let sh = Shelves::new(ui, ed, ShelfKind::Components);
     let q = RwSignal::new(String::new());
     let closed = RwSignal::new(Vec::<String>::new());
-    // Composants (identifiant, utilisations), par nom.
+    // Composants (identifiant, utilisations, nom), par nom.
     let all = Memo::new(move |_| {
         ed.doc.with(|d| {
             let Some(d) = d.as_ref() else {
@@ -1374,12 +1374,18 @@ pub fn Components() -> impl IntoView {
                     }
                 });
             }
-            let mut v: Vec<(String, usize)> = d
+            let mut v: Vec<(String, usize, String)> = d
                 .components
                 .iter()
-                .map(|c| (c.id.clone(), uses.get(&c.id).copied().unwrap_or(0)))
+                .map(|c| {
+                    (
+                        c.id.clone(),
+                        uses.get(&c.id).copied().unwrap_or(0),
+                        c.label(),
+                    )
+                })
                 .collect();
-            v.sort_by_key(|(id, _)| name_of(id).to_lowercase());
+            v.sort_by_key(|(_, _, l)| l.to_lowercase());
             v
         })
     });
@@ -1387,36 +1393,89 @@ pub fn Components() -> impl IntoView {
         sh.shelf.with(|s| {
             all.with(|a| {
                 a.iter()
-                    .filter(|(id, _)| {
+                    .filter(|(id, _, _)| {
                         within(folder_of(s, id), folder) && !folder_of(s, id).is_empty()
                     })
                     .count()
             })
         })
     };
-    let row = move |(id, n): (String, usize), depth: usize| {
+    // Glisser une ligne : sur un dossier pour la ranger, sur la page pour y placer le composant.
+    let drag = crate::insert::CanvasDrag::new(ui, ed);
+    let folder_under = |cx: f64, cy: f64| -> Option<String> {
+        let el = document().element_from_point(cx as f32, cy as f32)?;
+        if el.closest(".component-row").ok().flatten().is_some() {
+            return None;
+        }
+        el.closest("[data-drop-folder]")
+            .ok()??
+            .get_attribute("data-drop-folder")
+    };
+    let row = move |(id, n, label): (String, usize, String), depth: usize| {
         let item = StoredValue::new(id.clone());
+        let name = StoredValue::new(label.clone());
         let menu = move |e: leptos::ev::MouseEvent| {
-            use crate::ctxmenu::open;
-            open(ui, &e, sh.move_items(&item.get_value()));
+            use crate::ctxmenu::{CtxItem, open};
+            let mut items = vec![
+                CtxItem::new(ui.now("component-edit", &[]), move || {
+                    crate::components::edit_component(ui, ed, &item.get_value())
+                })
+                .icon(icons::edit),
+                CtxItem::new(ui.now("media-insert", &[]), move || {
+                    insert_component(ui, ed, &item.get_value(), &name.get_value())
+                })
+                .icon(icons::plus),
+                CtxItem::new(ui.now("component-rename", &[]), move || {
+                    crate::components::rename(ui, ed, &item.get_value())
+                })
+                .icon(icons::text),
+            ];
+            items.extend(sh.move_items(&item.get_value()));
+            items.push(
+                CtxItem::new(ui.now("component-delete", &[]), move || {
+                    crate::components::delete(ui, ed, &item.get_value())
+                })
+                .icon(icons::trash)
+                .danger()
+                .disabled(n > 0)
+                .sep(),
+            );
+            open(ui, &e, items);
         };
+        let drag_item = move || component_drag_item(&item.get_value(), &name.get_value());
         view! {
-            <div class="list-row component-row" draggable="true" data-component=id.clone()
+            <div class="list-row component-row" data-component=id.clone()
                 style=format!("--depth:{depth}")
                 title=move || format!("{}\n{}", item.get_value(), ui.tx("components-uses", &[("count", n.to_string())]))
                 class:is-dragging=move || sh.dragging.get().as_deref() == Some(item.get_value().as_str())
                 on:contextmenu=menu
-                on:dragstart=move |e: leptos::ev::DragEvent| {
-                    if let Some(dt) = e.data_transfer() {
-                        let _ = dt.set_data("text/plain", &item.get_value());
-                        dt.set_effect_allowed("move");
+                on:dblclick=move |_| crate::components::edit_component(ui, ed, &item.get_value())
+                on:pointerdown=move |e: leptos::ev::PointerEvent| drag.down(&e)
+                on:pointermove=move |e: leptos::ev::PointerEvent| {
+                    if drag.moved(&e, drag_item()) {
+                        if sh.dragging.get_untracked().is_none() {
+                            sh.dragging.set(Some(item.get_value()));
+                        }
+                        let f = folder_under(f64::from(e.client_x()), f64::from(e.client_y()));
+                        if sh.drop_on.get_untracked() != f {
+                            sh.drop_on.set(f);
+                        }
                     }
-                    sh.dragging.set(Some(item.get_value()));
                 }
-                on:dragend=move |_| { sh.dragging.set(None); sh.drop_on.set(None); }>
+                on:pointerup=move |e: leptos::ev::PointerEvent| {
+                    let over = folder_under(f64::from(e.client_x()), f64::from(e.client_y()));
+                    sh.dragging.set(None);
+                    sh.drop_on.set(None);
+                    match drag.finish(Some(&e)) {
+                        None => {}
+                        Some((it, Some((parent, index)))) => crate::insert::insert_item(ui, ed, &it, parent, index),
+                        Some((_, None)) => if let Some(f) = over { sh.put(&item.get_value(), &f) },
+                    }
+                }
+                on:pointercancel=move |_| { drag.finish(None); sh.dragging.set(None); sh.drop_on.set(None); }>
                 <span class="list-chevron"></span>
                 <span class="list-icon">{icons::component()}</span>
-                <span class="list-label">{name_of(&id).to_string()}</span>
+                <span class="list-label">{label}</span>
                 <span class="list-count">{n}</span>
             </div>
         }
@@ -1427,15 +1486,15 @@ pub fn Components() -> impl IntoView {
         folder: String,
         depth: usize,
         closed: RwSignal<Vec<String>>,
-        all: Memo<Vec<(String, usize)>>,
+        all: Memo<Vec<(String, usize, String)>>,
         count_in: impl Fn(&str) -> usize + Copy + Send + Sync + 'static,
-        row: impl Fn((String, usize), usize) -> AnyView + Copy + Send + Sync + 'static,
+        row: impl Fn((String, usize, String), usize) -> AnyView + Copy + Send + Sync + 'static,
     ) -> AnyView {
         let subs = sh.shelf.with(|s| children(s, &folder));
-        let items: Vec<(String, usize)> = sh.shelf.with(|s| {
+        let items: Vec<(String, usize, String)> = sh.shelf.with(|s| {
             all.with(|a| {
                 a.iter()
-                    .filter(|(id, _)| folder_of(s, id) == folder)
+                    .filter(|(id, _, _)| folder_of(s, id) == folder)
                     .cloned()
                     .collect()
             })
@@ -1460,21 +1519,33 @@ pub fn Components() -> impl IntoView {
         }
         .into_any()
     }
-    let row_any = move |it: (String, usize), depth: usize| row(it, depth).into_any();
+    let row_any = move |it: (String, usize, String), depth: usize| row(it, depth).into_any();
     let found = move || {
         let ql = q.get().trim().to_lowercase();
         all.with(|a| {
             a.iter()
-                .filter(|(id, _)| id.to_lowercase().contains(&ql))
+                .filter(|(id, _, l)| {
+                    id.to_lowercase().contains(&ql) || l.to_lowercase().contains(&ql)
+                })
                 .cloned()
                 .collect::<Vec<_>>()
         })
     };
     let root_drop = sh.drop_zone(String::new());
+    // Composant à partir de la sélection : un élément (pas déjà une utilisation).
+    let can_make = move || {
+        ed.selected_target().is_some_and(|at| {
+            ed.doc.with(|d| {
+                d.as_ref()
+                    .and_then(|d| revel_edit::address::node(d, &at).ok())
+                    .is_some_and(|n| !matches!(n, Node::Use { .. }))
+            })
+        })
+    };
     view! {
         <div class="panel-list components">
             <Search value=q key="components-search"/>
-            <div class="list-scroll"
+            <div class="list-scroll" data-drop-folder=""
                 class:is-drop=move || sh.drop_on.get().as_deref() == Some("")
                 on:dragover=move |e: leptos::ev::DragEvent| root_drop(e, false)
                 on:drop=move |e: leptos::ev::DragEvent| root_drop(e, true)>
@@ -1483,15 +1554,45 @@ pub fn Components() -> impl IntoView {
                 } else {
                     found().into_iter().map(|it| row(it, 0)).collect_view().into_any()
                 }}
+                {move || all.with(Vec::is_empty).then(|| view! {
+                    <p class="panel-empty muted">{ui.t("components-none")}</p>
+                })}
             </div>
             <footer class="panel-foot">
-                <span class="panel-foot-text muted">{move || ui.tx("planned-edit", &[("step", "3".to_string())])}</span>
+                <span class="panel-foot-text muted">{move || ui.tx("components-count", &[("count", all.with(Vec::len).to_string())])}</span>
                 <button class="icon-btn icon-btn--small" title=ui.t("library-new-folder") aria-label=ui.t("library-new-folder")
                     on:click=move |_| { q.set(String::new()); sh.creating.set(Some(String::new())) }>{icons::folder_plus()}</button>
-                <PlannedButton key="components-new" step=3 icon=icons::plus/>
+                <button class="icon-btn icon-btn--small" title=ui.t("components-new") aria-label=ui.t("components-new")
+                    disabled=move || !can_make()
+                    on:click=move |_| crate::components::make_from_selection(ui, ed)>{icons::plus()}</button>
             </footer>
         </div>
     }
+}
+
+/// Élément glissé pour un composant : une utilisation.
+fn component_drag_item(id: &str, label: &str) -> crate::editor::DragItem {
+    crate::editor::DragItem {
+        preset: revel_edit::make::Preset::Container,
+        text_key: "",
+        label: label.to_string(),
+        tag: "div",
+        block: true,
+        node: Some(Node::Use {
+            id: None,
+            component: id.to_string(),
+            args: Default::default(),
+        }),
+    }
+}
+
+/// Place une utilisation du composant à l'emplacement de la sélection.
+fn insert_component(ui: Ui, ed: Ed, id: &str, label: &str) {
+    let Some((parent, index)) = crate::insert::insertion_point(ed) else {
+        ui.fail(revel_protocol::Failure::new("insert-no-place"));
+        return;
+    };
+    crate::insert::insert_item(ui, ed, &component_drag_item(id, label), parent, index);
 }
 
 #[cfg(test)]

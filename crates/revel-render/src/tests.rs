@@ -70,10 +70,10 @@ fn site() -> Site {
         props: [("bodyClass".to_string(), json!("page-entry"))].into(),
         body: parse(r#"<article><h1>{{ title }}</h1>{{ content | safe }}</article>"#),
     });
-    s.components.push(Component {
-        id: "header".into(),
-        body: parse(r#"<header><a href="/"{% if page.url == "/" %} aria-current="page"{% endif %}>Accueil</a></header>"#),
-    });
+    s.components.push(Component::new(
+        "header",
+        parse(r#"<header><a href="/"{% if page.url == "/" %} aria-current="page"{% endif %}>Accueil</a></header>"#),
+    ));
     s.collections.push(Collection {
         id: "projets".into(),
         source: CollectionSource::Folder,
@@ -507,4 +507,96 @@ fn pages_brouillon_indexation_et_plan_du_site() {
         SeoSource::Data(vec!["pages".into(), "liee".into(), "seo".into()])
     );
     assert_eq!(get("/liee/").seo.as_ref().unwrap().title, "Liée");
+}
+
+#[test]
+fn proprietes_de_composant() {
+    use revel_edit::Owner;
+    use revel_edit::canvas::{Slot, Source};
+    let mut s = site();
+    let mut carte = Component::new(
+        "carte",
+        parse(
+            r#"<article>{% if visible %}<h3>{{ titre }}</h3>{% endif %}<a href="{{ lien }}">Voir</a></article>"#,
+        ),
+    );
+    carte.props = vec![
+        revel_model::PropDef {
+            name: "titre".into(),
+            label: None,
+            kind: revel_model::PropKind::Text,
+            default: Some(json!("Sans titre")),
+        },
+        revel_model::PropDef {
+            name: "lien".into(),
+            label: None,
+            kind: revel_model::PropKind::Link,
+            default: None,
+        },
+        revel_model::PropDef {
+            name: "visible".into(),
+            label: None,
+            kind: revel_model::PropKind::Switch,
+            default: Some(json!(true)),
+        },
+    ];
+    s.components.push(carte);
+    // Composant utilisé dans lui-même : ignoré, avec un avertissement.
+    s.components.push(Component::new(
+        "boucle",
+        parse(r#"<i>{% include "boucle" %}</i>"#),
+    ));
+    let use_ = |id: &str, args: &[(&str, &str)]| Node::Use {
+        id: Some(id.into()),
+        component: "carte".into(),
+        args: args
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+    };
+    s.pages[0].body.push(use_("u1", &[]));
+    s.pages[0]
+        .body
+        .push(use_("u2", &[("titre", "\"Projet\""), ("lien", "site.url")]));
+    s.pages[0]
+        .body
+        .push(use_("u3", &[("visible", "false"), ("lien", "\"/a/\"")]));
+    s.pages[0].body.extend(parse(r#"{% include "boucle" %}"#));
+    s.ensure_ids();
+    let inp = input(&s, Vec::new());
+    let out = build(&inp).unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains(r#"<article><h3>Sans titre</h3><a href="">Voir</a></article><article><h3>Projet</h3><a href="https://alunites.com">Voir</a></article><article><a href="/a/">Voir</a></article><i></i>"#),
+        "{home}"
+    );
+    assert!(
+        out.warnings.iter().any(|w| w.contains("boucle")),
+        "{:?}",
+        out.warnings
+    );
+    // Éditeur : texte d'une propriété relié à l'utilisation ; utilisation repérée avec son
+    // composant.
+    let ed = render_editor(&inp, "/", &EditorOptions { scripts: false })
+        .unwrap()
+        .unwrap();
+    let props: Vec<(String, String)> = ed
+        .slots
+        .iter()
+        .filter_map(|sl| match sl {
+            Slot::Expr {
+                binding: Some(b), ..
+            } => match &b.source {
+                Source::Prop { node, name, .. } => Some((node.clone(), name.clone())),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        props,
+        vec![("u1".into(), "titre".into()), ("u2".into(), "titre".into())]
+    );
+    assert!(ed.slots.iter().any(|sl| matches!(sl,
+        Slot::Block { owner: Owner::Page(_), node, component: Some(c) } if node == "u2" && c == "carte")));
 }

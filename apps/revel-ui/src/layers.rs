@@ -159,7 +159,12 @@ impl<'a> Builder<'a> {
                 Node::Slot => Kind::Slot {
                     markdown: self.markdown && slot_level + 1 >= self.inner.len(),
                 },
-                Node::Use { component, .. } => Kind::Use(component.clone()),
+                Node::Use { component, .. } => Kind::Use(
+                    self.doc
+                        .component(component)
+                        .map(|c| c.label())
+                        .unwrap_or_else(|| component.clone()),
+                ),
                 Node::Image(img) => Kind::Image(short(&img.src, 32)),
             };
             let inside = match n {

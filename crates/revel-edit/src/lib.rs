@@ -58,6 +58,15 @@ pub enum EditError {
     /// Expression dont la syntaxe est invalide : l'expression et le message du moteur.
     #[error("{0}")]
     InvalidExpr(String),
+    /// Composant encore utilisé (retrait refusé).
+    #[error("composant encore utilisé : {0}")]
+    InUse(String),
+    /// Nom de propriété invalide ou déjà pris.
+    #[error("nom de propriété refusé : {0}")]
+    InvalidProp(String),
+    /// Composant placé dans lui-même (directement ou par un autre composant).
+    #[error("composant placé dans lui-même : {0}")]
+    SelfUse(String),
 }
 
 impl EditError {
@@ -81,6 +90,9 @@ impl EditError {
             Self::InvalidPath(_) => "error-edit-path",
             Self::PathTaken(_) => "error-edit-path-taken",
             Self::InvalidRedirect(_) => "error-edit-redirect",
+            Self::InUse(_) => "error-edit-in-use",
+            Self::InvalidProp(_) => "error-edit-prop",
+            Self::SelfUse(_) => "error-edit-self-use",
         }
     }
 }

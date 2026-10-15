@@ -270,8 +270,12 @@ try {
   check('ajouter : titre inséré dans la section, sélectionné', true);
   await page.click('.dock-tab[data-panel="layers"]');
 
-  // Lien : nouvel onglet (target + rel).
+  // Lien : nouvel onglet (target + rel). Le lien est dans le composant de l'en-tête : un clic
+  // sélectionne l'utilisation, un double-clic ouvre le composant sur le lien.
   await page.frameLocator('iframe.canvas-frame').locator('header nav a', { hasText: 'Agence' }).first().click();
+  await page.waitForSelector('.dock-panel[data-panel="settings"] .instance-name');
+  check('composant : un clic sélectionne l\'utilisation entière', (await page.textContent('.dock-panel[data-panel="settings"] .instance-name')).trim() === 'header');
+  await page.frameLocator('iframe.canvas-frame').locator('header nav a', { hasText: 'Agence' }).first().dblclick();
   await page.waitForSelector('.dock-panel[data-panel="settings"] .row-switch');
   await page.click('.dock-panel[data-panel="settings"] .row-switch .switch');
   f = await waitFrame(() => [...document.querySelectorAll('header nav a')].some((a) => a.textContent.trim() === 'Agence' && a.target === '_blank' && a.rel === 'noopener'), 'nouvel onglet');
@@ -579,6 +583,85 @@ try {
       const back = await until(async () => (await placed()) === docM);
       check('médias : Ctrl+Z (choix, placement, texte alternatif), document identique', back);
       for (const f of essais) fs.rmSync(path.join(mediaDir, f), { force: true });
+    }
+    // Composants : créer à partir de la sélection, ouvrir (modification isolée), relier un texte
+    // à une propriété, valeur propre à une utilisation, glisser depuis le panneau, détacher, tout
+    // annuler.
+    {
+      const frame = page.frameLocator('iframe.canvas-frame');
+      const untilC = async (fn, ms = 8000) => {
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+          if (await fn()) return true;
+          await page.waitForTimeout(100);
+        }
+        return false;
+      };
+      const docC = JSON.stringify((await invoke('edit_open')).site);
+      const site = async () => (await invoke('edit_open')).site;
+      const comp = async () => (await site()).components.find((c) => c.id === 'bouton-pause');
+      const usesOf = async () => JSON.stringify((await site()).pages).split('"component":"bouton-pause"').length - 1;
+      await frame.locator('.hero__pause').click();
+      await frame.locator('.hero__pause').click({ button: 'right' });
+      await page.click('.ctx-menu .menu-item:has-text("Créer un composant")');
+      await page.waitForSelector('.dialog input');
+      await page.fill('.dialog input', 'Bouton pause');
+      await page.keyboard.press('Enter');
+      await untilC(async () => !!(await comp()));
+      await page.click('.dock-tab[data-panel="settings"]');
+      await page.waitForSelector('.instance-name');
+      const made = await comp();
+      check('composants : créé à partir de la sélection, son utilisation sélectionnée',
+        made && made.name === 'Bouton pause' && made.body[0].tag === 'button' && (await usesOf()) === 1
+          && (await page.textContent('.instance-name')).trim() === 'Bouton pause');
+      await frame.locator('.hero__pause').dblclick();
+      await page.waitForSelector('.iso-bar');
+      await page.click('.bind-row[data-bind="component-bind-text"] .bind-btn');
+      await page.click('.ctx-menu .menu-item >> nth=0');
+      await untilC(async () => ((await comp()).props || []).length === 1);
+      const bound = await comp();
+      if (shots) await page.screenshot({ path: `${shots}/editeur-composant-ouvert.png` });
+      check('composants : ouvert (reste estompé), texte relié à une nouvelle propriété (valeur par défaut : le texte)',
+        bound.props[0].name === 'texte' && bound.props[0].default === 'Mettre la vidéo en pause'
+          && bound.body[0].children[0].expr === 'texte' && !!(await page.$('.iso-bar')));
+      await page.click('.iso-bar .iso-done');
+      await page.waitForFunction(() => !document.querySelector('.iso-bar'));
+      await frame.locator('.hero__pause').click();
+      await page.waitForSelector('.prop-row[data-prop="texte"] input');
+      await page.fill('.prop-row[data-prop="texte"] input', 'Pause');
+      await page.keyboard.press('Enter');
+      const own = await untilC(async () => ((await frame.locator('.hero__pause').first().textContent()) || '').trim() === 'Pause');
+      check('composants : valeur propre à une utilisation', own);
+      // Glisser depuis le panneau Composants : nouvelle utilisation, valeur par défaut.
+      await page.click('.dock-tab[data-panel="components"]');
+      const rowSel = '.components .component-row[data-component="bouton-pause"]';
+      await page.waitForSelector(rowSel);
+      const rb = await page.locator(rowSel).boundingBox();
+      const fb = await page.locator('iframe.canvas-frame').boundingBox();
+      await page.mouse.move(rb.x + 30, rb.y + rb.height / 2);
+      await page.mouse.down();
+      for (let i = 1; i <= 12; i++) {
+        await page.mouse.move(rb.x + 30 + (fb.x + fb.width / 2 - rb.x - 30) * i / 12, rb.y + (fb.y + 320 - rb.y) * i / 12);
+      }
+      await page.mouse.up();
+      const two = await untilC(async () => (await usesOf()) === 2 && (await frame.locator('.hero__pause').count()) === 2);
+      const texts = await frame.locator('.hero__pause').allTextContents();
+      check('composants : glissé depuis le panneau, deuxième utilisation (valeur par défaut)',
+        two && texts.map((t) => t.trim()).sort().join('|') === 'Mettre la vidéo en pause|Pause', texts.join(' | '));
+      // Détacher la première : copie modifiable séparément, valeur écrite.
+      await frame.locator('.hero__pause', { hasText: /^\s*Pause\s*$/ }).click({ button: 'right' });
+      await page.click('.ctx-menu .menu-item:has-text("Détacher")');
+      const detached = await untilC(async () => (await usesOf()) === 1);
+      check('composants : utilisation détachée (copie avec sa valeur)', detached
+        && JSON.stringify((await site()).pages).includes('"text":"Pause"'));
+      if (shots) await page.locator('.dock-col--left').screenshot({ path: `${shots}/editeur-composants-panneau.png` });
+      await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+      for (let i = 0; i < 5; i++) {
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(250);
+      }
+      const backC = await untilC(async () => JSON.stringify(await site()) === docC);
+      check('composants : Ctrl+Z (détacher, glisser, valeur, propriété, création), document identique', backC);
     }
     // Composants : dossier, rangement par le menu contextuel.
     await page.click('.dock-tab[data-panel="components"]');

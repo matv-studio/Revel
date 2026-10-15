@@ -358,6 +358,9 @@ error-edit-expr = Expression invalide, rien n'a été modifié. ({ $detail })
 error-edit-path = Adresse refusée : elle commence par « / » et ne contient que des minuscules sans accent, des chiffres et des tirets. ({ $detail })
 error-edit-path-taken = Cette adresse est déjà celle d'une autre page. ({ $detail })
 error-edit-redirect = Redirection refusée : l'ancienne adresse commence par « / » et diffère de la nouvelle. ({ $detail })
+error-edit-in-use = Ce composant est encore utilisé : détachez ou supprimez d'abord ses utilisations. ({ $detail })
+error-edit-prop = Nom de propriété refusé : lettres sans accent, chiffres et « _ », un seul par composant. ({ $detail })
+error-edit-self-use = Un composant ne peut pas être placé dans lui-même. ({ $detail })
 error-edit-no-stylesheet = Ce site n'a pas encore de feuille de style.
 error-edit-breakpoints = Points de rupture invalides : chaque largeur ne peut servir qu'une fois et doit être un nombre de pixels positif. ({ $detail })
 error-edit-bound = Ce texte vient d'un fichier qui ne peut pas être modifié ici. ({ $detail })
@@ -638,12 +641,53 @@ design-field-label = Design propre (Revel)
 cms-none = Aucune collection dans ce site.
 cms-entry-new = Nouveau contenu
 cms-collection-new = Nouvelle collection
+component-make = Créer un composant
+component-make-name = Nom du composant
+component-make-confirm = Créer
+component-make-none = Sélectionnez d'abord l'élément à transformer en composant.
+component-missing = Composant introuvable : { $name }
+component-edit = Modifier le composant
+component-detach = Détacher
+component-detach-help = Remplace cette utilisation par une copie de son contenu, modifiable séparément
+component-props = Propriétés
+component-no-props = Aucune propriété : modifiez le composant pour en créer.
+component-props-empty = Reliez un texte, une image, un lien ou la visibilité d'un élément pour régler chaque utilisation séparément.
+component-prop-add = Ajouter une propriété
+component-prop-remove = Supprimer la propriété (ses éléments gardent la valeur par défaut)
+component-prop-default = Valeur par défaut
+component-prop-label = Nom de la propriété
+component-prop-reset = Revenir à la valeur par défaut
+component-prop-computed = { $label } (calculé)
+prop-kind-text = Texte
+prop-kind-image = Image
+prop-kind-link = Lien
+prop-kind-switch = Visibilité
+component-bindings = Relié aux propriétés
+component-bind = Relier à une propriété
+component-bind-new = Nouvelle propriété « { $label } »
+component-unbind = Délier (la valeur par défaut est écrite)
+component-bind-text = Texte
+component-bind-image = Image
+component-bind-link = Lien
+component-bind-visibility = Visibilité
+component-done = Terminer
+component-rename = Renommer
+component-delete = Supprimer le composant
+component-delete-title = Supprimer le composant « { $name } » ?
+component-unused = Placez ce composant dans une page pour le modifier.
+component-empty = Ce composant n'a aucun élément à modifier.
+components-none = Aucun composant : sélectionnez un élément puis « + » pour en créer un.
+components-count = { $count ->
+        [0] aucun composant
+        [one] 1 composant
+       *[other] { $count } composants
+    }
 components-search = Rechercher un composant
 components-uses = { $count ->
         [one] Utilisé { $count } fois
        *[other] Utilisé { $count } fois
     }
-components-new = Nouveau composant
+components-new = Créer un composant à partir de la sélection
 assets-search = Rechercher un média
 assets-import = Importer des médias
 library-new-folder = Nouveau dossier

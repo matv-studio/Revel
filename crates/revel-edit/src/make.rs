@@ -5,7 +5,7 @@ use revel_model::{Attr, ImageNode, Node, Site};
 use std::collections::HashSet;
 
 use crate::EditError;
-use crate::address::{self, Branch, Parent, Target};
+use crate::address::{self, Branch, Owner, Parent, Target};
 use crate::command::Command;
 
 /// Donne de nouveaux identifiants à tous les nœuds structurels d'un sous-arbre.
@@ -360,4 +360,363 @@ pub fn duplicate_page(
         src.name.clone().unwrap_or_else(|| last.to_string())
     ));
     Ok(p)
+}
+
+// ------------------------------------------------------------------ composants
+
+/// Nombre d'utilisations du composant `id` dans le site (pages, gabarits, composants).
+pub fn uses_of(site: &Site, id: &str) -> usize {
+    let mut n = 0;
+    for (_, _, body) in site.owners() {
+        revel_model::ids::walk(body, &mut |x| {
+            if matches!(x, Node::Use { component, .. } if component == id) {
+                n += 1;
+            }
+        });
+    }
+    n
+}
+
+/// Identifiant libre pour un nouveau composant nommé `name` (`carte-projet`, `-2`, `-3`…).
+pub fn free_component_id(site: &Site, name: &str) -> String {
+    let base = match revel_model::slugify(name) {
+        s if s.is_empty() => "composant".to_string(),
+        s => s,
+    };
+    let mut id = base.clone();
+    let mut n = 2;
+    while site.components.iter().any(|c| c.id == id) {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    id
+}
+
+/// Composants utilisés (directement ou non) par le composant `id`, lui compris.
+fn reach(site: &Site, id: &str) -> HashSet<String> {
+    let mut seen = HashSet::new();
+    let mut todo = vec![id.to_string()];
+    while let Some(c) = todo.pop() {
+        if !seen.insert(c.clone()) {
+            continue;
+        }
+        if let Some(comp) = site.component(&c) {
+            revel_model::ids::walk(&comp.body, &mut |x| {
+                if let Node::Use { component, .. } = x {
+                    todo.push(component.clone());
+                }
+            });
+        }
+    }
+    seen
+}
+
+/// Le composant `component` peut être placé dans l'arbre de `owner` (pas dans lui-même, ni
+/// dans un composant qu'il utilise).
+pub fn can_use_in(site: &Site, owner: &Owner, component: &str) -> bool {
+    match owner {
+        Owner::Component(c) => !reach(site, component).contains(c),
+        _ => true,
+    }
+}
+
+/// Crée le composant `id` à partir du nœud `at` : le nœud devient son contenu (mêmes
+/// identifiants), une utilisation prend sa place. Renvoie la commande et l'identifiant de
+/// l'utilisation.
+pub fn make_component(
+    site: &Site,
+    at: &Target,
+    id: &str,
+    name: Option<String>,
+) -> Result<(Command, String), EditError> {
+    if id.trim().is_empty() || site.components.iter().any(|c| c.id == id) {
+        return Err(EditError::DuplicateId(id.to_string()));
+    }
+    let (parent, index) = address::locate(site, at)?;
+    let node = address::node(site, at)?.clone();
+    // L'emplacement du contenu d'un gabarit ne peut pas entrer dans un composant.
+    let mut has_slot = false;
+    revel_model::ids::walk(std::slice::from_ref(&node), &mut |x| {
+        has_slot |= matches!(x, Node::Slot);
+    });
+    if has_slot {
+        return Err(EditError::WrongKind(at.node.clone()));
+    }
+    let use_id = fresh(&site.node_ids());
+    let component = revel_model::Component {
+        id: id.to_string(),
+        name: name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()),
+        props: Vec::new(),
+        body: vec![node],
+    };
+    Ok((
+        Command::Batch {
+            commands: vec![
+                Command::Remove { at: at.clone() },
+                Command::AddComponent {
+                    component,
+                    index: None,
+                },
+                Command::Insert {
+                    parent,
+                    index,
+                    node: Node::Use {
+                        id: Some(use_id.clone()),
+                        component: id.to_string(),
+                        args: Default::default(),
+                    },
+                },
+            ],
+        },
+        use_id,
+    ))
+}
+
+/// Le texte `expr` mentionne la variable `name` (mot entier, pas un attribut `x.name`).
+fn mentions(expr: &str, name: &str) -> bool {
+    let b = expr.as_bytes();
+    let word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+    expr.match_indices(name).any(|(i, _)| {
+        let before = i.checked_sub(1).map(|j| b[j]);
+        let after = b.get(i + name.len()).copied();
+        !before.is_some_and(|c| word(c) || c == b'.') && !after.is_some_and(word)
+    })
+}
+
+/// `{{ name }}` seul (espaces de bord permis).
+fn only_var(text: &str, name: &str) -> bool {
+    text.trim()
+        .strip_prefix("{{")
+        .and_then(|t| t.strip_suffix("}}"))
+        .is_some_and(|t| t.trim() == name)
+}
+
+/// Valeur d'une propriété pour une utilisation : son expression, sinon la valeur par défaut
+/// écrite en expression.
+fn prop_expr(
+    p: &revel_model::PropDef,
+    args: &std::collections::BTreeMap<String, String>,
+) -> String {
+    if let Some(e) = args.get(&p.name) {
+        return e.clone();
+    }
+    match &p.default {
+        Some(serde_json::Value::String(s)) => crate::canvas::quote(s),
+        Some(serde_json::Value::Bool(b)) => b.to_string(),
+        Some(v @ serde_json::Value::Number(_)) => v.to_string(),
+        Some(v) => v.to_string(),
+        None if p.kind == revel_model::PropKind::Switch => "false".into(),
+        None => "\"\"".into(),
+    }
+}
+
+/// Remplace dans `nodes` les usages directs de la propriété `name` par sa valeur `expr`
+/// (texte écrit si c'est un texte littéral) ; renvoie `true` s'il reste des usages indirects.
+fn substitute(nodes: &mut Vec<Node>, name: &str, expr: &str) -> bool {
+    let lit = crate::canvas::literal(expr);
+    let mut rest = false;
+    let mut i = 0;
+    while i < nodes.len() {
+        // Condition sur la propriété avec une valeur connue : branche gardée à la place.
+        if let Node::If {
+            cond,
+            then,
+            otherwise,
+            ..
+        } = &nodes[i]
+            && cond.trim() == name
+            && matches!(expr.trim(), "true" | "false")
+        {
+            let keep = if expr.trim() == "true" {
+                then.clone()
+            } else {
+                otherwise.clone()
+            };
+            // Les nœuds gardés sont examinés à leur tour.
+            nodes.splice(i..=i, keep);
+            continue;
+        }
+        let n = &mut nodes[i];
+        match n {
+            Node::Out { expr: e } if e.trim() == name => {
+                *n = match &lit {
+                    Some(t) => Node::Text { text: t.clone() },
+                    None => Node::Out {
+                        expr: expr.to_string(),
+                    },
+                };
+            }
+            Node::Out { expr: e } | Node::Set { expr: e, .. } => rest |= mentions(e, name),
+            Node::If { cond, .. } => {
+                if cond.trim() == name {
+                    *cond = expr.to_string();
+                } else {
+                    rest |= mentions(cond, name);
+                }
+            }
+            Node::Each { expr: e, .. } => {
+                if e.trim() == name {
+                    *e = expr.to_string();
+                } else {
+                    rest |= mentions(e, name);
+                }
+            }
+            Node::Element { attrs, .. } => {
+                for a in attrs.iter_mut() {
+                    if let Some(v) = a.value.as_mut() {
+                        if only_var(v, name) {
+                            *v = match &lit {
+                                Some(t) => t.clone(),
+                                None => format!("{{{{ {expr} }}}}"),
+                            };
+                        } else {
+                            rest |= v.contains("{{") && mentions(v, name);
+                        }
+                    }
+                    if let Some(w) = a.when.as_mut() {
+                        if w.trim() == name {
+                            *w = expr.to_string();
+                        } else {
+                            rest |= mentions(w, name);
+                        }
+                    }
+                }
+            }
+            Node::Image(img) => {
+                for f in [
+                    Some(&mut img.src),
+                    img.alt.as_mut(),
+                    img.sizes.as_mut(),
+                    img.class.as_mut(),
+                    img.ratio.as_mut(),
+                    img.loading.as_mut(),
+                    img.widths.as_mut(),
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    if f.trim() == name {
+                        *f = expr.to_string();
+                    } else {
+                        rest |= mentions(f, name);
+                    }
+                }
+            }
+            Node::Use { args, .. } => {
+                for v in args.values_mut() {
+                    if v.trim() == name {
+                        *v = expr.to_string();
+                    } else {
+                        rest |= mentions(v, name);
+                    }
+                }
+            }
+            _ => {}
+        }
+        for list in child_lists_mut(&mut nodes[i]) {
+            rest |= substitute(list, name, expr);
+        }
+        i += 1;
+    }
+    rest
+}
+
+/// Utilisation de composant remplacée par une copie de son contenu (nouveaux identifiants),
+/// les valeurs des propriétés écrites dedans (une affectation au début si une propriété est
+/// lue dans une expression plus complexe).
+pub fn detach(site: &Site, at: &Target) -> Result<Command, EditError> {
+    let (parent, index) = address::locate(site, at)?;
+    let Node::Use {
+        component, args, ..
+    } = address::node(site, at)?
+    else {
+        return Err(EditError::WrongKind(at.node.clone()));
+    };
+    let c = site
+        .component(component)
+        .ok_or_else(|| EditError::NotFound(component.clone()))?;
+    let mut body = c.body.clone();
+    let mut sets = Vec::new();
+    for p in &c.props {
+        let e = prop_expr(p, args);
+        if substitute(&mut body, &p.name, &e) {
+            sets.push(Node::Set {
+                name: p.name.clone(),
+                expr: e,
+            });
+        }
+    }
+    sets.extend(body);
+    let mut taken = site.node_ids();
+    let mut commands = vec![Command::Remove { at: at.clone() }];
+    for (i, mut n) in sets.into_iter().enumerate() {
+        refresh_ids(&mut n, &mut taken);
+        commands.push(Command::Insert {
+            parent: parent.clone(),
+            index: index + i,
+            node: n,
+        });
+    }
+    Ok(Command::Batch { commands })
+}
+
+/// Propriété `name` du composant `id` retirée : ses usages reçoivent sa valeur par défaut (texte
+/// écrit, condition résolue), les utilisations perdent leur valeur.
+pub fn remove_prop(site: &Site, id: &str, name: &str) -> Result<Command, EditError> {
+    let c = site
+        .component(id)
+        .ok_or_else(|| EditError::NotFound(id.to_string()))?;
+    let p = c
+        .prop(name)
+        .ok_or_else(|| EditError::NotFound(format!("propriété {name}")))?;
+    let mut body = c.body.clone();
+    substitute(&mut body, name, &prop_expr(p, &Default::default()));
+    let mut commands = vec![
+        Command::SetComponentBody {
+            id: id.to_string(),
+            body,
+        },
+        Command::SetComponentProps {
+            id: id.to_string(),
+            props: c.props.iter().filter(|p| p.name != name).cloned().collect(),
+        },
+    ];
+    for (kind, owner, nodes) in site.owners() {
+        revel_model::ids::walk(nodes, &mut |n| {
+            if let Node::Use {
+                id: Some(uid),
+                component,
+                args,
+            } = n
+                && component == id
+                && args.contains_key(name)
+            {
+                let owner = match kind {
+                    revel_model::ids::OwnerKind::Page => Owner::Page(owner.to_string()),
+                    revel_model::ids::OwnerKind::Layout => Owner::Layout(owner.to_string()),
+                    revel_model::ids::OwnerKind::Component => Owner::Component(owner.to_string()),
+                };
+                commands.push(Command::SetUseArg {
+                    at: Target {
+                        owner,
+                        node: uid.clone(),
+                    },
+                    name: name.to_string(),
+                    value: None,
+                });
+            }
+        });
+    }
+    Ok(Command::Batch { commands })
+}
+
+/// Nom libre pour une nouvelle propriété (`texte`, `texte_2`…).
+pub fn free_prop_name(c: &revel_model::Component, base: &str) -> String {
+    let mut name = base.to_string();
+    let mut n = 2;
+    while c.prop(&name).is_some() {
+        name = format!("{base}_{n}");
+        n += 1;
+    }
+    name
 }

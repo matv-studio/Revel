@@ -133,6 +133,18 @@ pub fn ElementSettings() -> impl IntoView {
     });
     let apply = move |cmd: Command| ed.apply(ui, cmd, false);
 
+    // Élément d'un composant ouvert : propriétés du composant, liaisons de l'élément.
+    let in_component = move || {
+        current.get().and_then(|(at, node)| {
+            let c = crate::components::owner_component(&at)?;
+            let bind = (!matches!(node, Node::Use { .. }))
+                .then(|| crate::components::bindings(ui, ed, c.clone(), at.clone()));
+            Some(view! {
+                {bind}
+                {crate::components::props_section(ui, ed, c)}
+            })
+        })
+    };
     view! {
         <div class="element-settings panel-pad">
                 {move || match current.get() {
@@ -160,12 +172,11 @@ pub fn ElementSettings() -> impl IntoView {
                                 </div>
                             }.into_any()
                         }
-                        Node::Use { component, .. } => view! {
-                            <p class="muted">{ui.tx("inspector-component", &[("name", component)])}</p>
-                        }.into_any(),
+                        Node::Use { component, args, .. } => crate::components::instance_settings(ui, ed, at, component, args),
                         _ => view! { <p class="muted">{ui.t("inspector-none")}</p> }.into_any(),
                     },
                 }}
+                {in_component}
         </div>
     }
 }

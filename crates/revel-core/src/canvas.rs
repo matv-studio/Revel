@@ -547,6 +547,7 @@ mod tests {
         let slots = vec![Slot::Block {
             owner: revel_edit::Owner::Page("a".into()),
             node: "x</script>".into(),
+            component: None,
         }];
         let h = inject("<html><body><p>a</p></BODY></html>", &slots, &[]);
         assert!(

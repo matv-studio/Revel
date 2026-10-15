@@ -378,6 +378,8 @@ impl crate::Project {
                 scalar_text(v).ok_or_else(|| "pas un texte".into())
             }
             Source::EntryItem { .. } => Err("valeur calculée".into()),
+            // Écrite dans l'utilisation du composant (commande `SetUseArg`), pas dans un fichier.
+            Source::Prop { .. } => Err("propriété de composant".into()),
             _ => {
                 let (file, inner, front) = self.source_file(b)?;
                 let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
@@ -416,6 +418,8 @@ impl crate::Project {
                 Ok(old)
             }
             Source::EntryItem { .. } => Err("valeur calculée".into()),
+            // Écrite dans l'utilisation du composant (commande `SetUseArg`), pas dans un fichier.
+            Source::Prop { .. } => Err("propriété de composant".into()),
             _ => {
                 let (file, inner, front) = self.source_file(b)?;
                 let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;

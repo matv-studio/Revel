@@ -44,7 +44,9 @@ fn recents_generation_et_hebergements() {
             events.lock().unwrap().push(e)
         })
         .unwrap();
-    assert_eq!(b.generated, 1);
+    // La page et le robots.txt produit par Revel (pas d'adresse du site : pas de plan du site).
+    assert_eq!(b.generated, 2);
+    assert!(out_dir(&site, "production").join("robots.txt").is_file());
     let html = std::fs::read_to_string(out_dir(&site, "production").join("index.html")).unwrap();
     assert!(html.contains("<h1>Accueil</h1>"));
     assert!(matches!(

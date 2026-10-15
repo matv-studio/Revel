@@ -686,6 +686,7 @@ mod tests {
             ],
             computed: Default::default(),
             draft: false,
+            name: None,
         });
         site.layouts.push(Layout {
             id: "base".into(),

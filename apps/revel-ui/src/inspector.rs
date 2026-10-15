@@ -147,6 +147,7 @@ pub fn ElementSettings() -> impl IntoView {
     };
     view! {
         <div class="element-settings panel-pad">
+                {move || current.get().and_then(|(at, node)| crate::blocks::extra_settings(ui, ed, at, node))}
                 {move || match current.get() {
                     None => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
                     Some((at, node)) => match node {
@@ -275,6 +276,7 @@ fn element(
         apply(cmd);
     };
     let new_attr_at = at.clone();
+    let n_attrs = others.len();
     let lower = tag.to_ascii_lowercase();
     let is_img = lower == "img";
     let media_tag = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
@@ -343,8 +345,8 @@ fn element(
                     </label>
                 </div>
             })}
-            <div class="insp-group">
-                <p class="panel-title">{ui.t("inspector-attributes")}</p>
+            <details class="insp-group insp-attrs" open=n_attrs <= 4>
+                <summary class="panel-title">{ui.t("inspector-attributes")}<span class="list-count">{n_attrs}</span></summary>
                 {others.into_iter().map(|a| {
                     let name = a.name.clone();
                     let name_rm = a.name.clone();
@@ -406,7 +408,7 @@ fn element(
                             apply(Command::SetAttr { at: new_attr_at.clone(), name: n, value: val });
                         }
                     }/>
-            </div>
+            </details>
         </div>
     }
 }

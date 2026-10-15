@@ -1829,11 +1829,9 @@ fn StatusBar() -> impl IntoView {
                 revel_model::ids::OwnerKind::Component => "editor-owner-component",
             };
             let name = match kind {
-                revel_model::ids::OwnerKind::Component => d
-                    .as_ref()?
-                    .component(&id)
-                    .map(|c| c.label())
-                    .unwrap_or(id),
+                revel_model::ids::OwnerKind::Component => {
+                    d.as_ref()?.component(&id).map(|c| c.label()).unwrap_or(id)
+                }
                 _ => id,
             };
             Some(ui.tx(key, &[("name", name)]))

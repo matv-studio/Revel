@@ -663,6 +663,77 @@ try {
       const backC = await untilC(async () => JSON.stringify(await site()) === docC);
       check('composants : Ctrl+Z (détacher, glisser, valeur, propriété, création), document identique', backC);
     }
+    // Éléments (3.7) : liste de collection (tri, nombre, texte relié à un champ), grille avec ses
+    // styles, icône, code HTML ; tout annulé.
+    {
+      const frame = page.frameLocator('iframe.canvas-frame');
+      const untilE = async (fn, ms = 8000) => {
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+          if (await fn()) return true;
+          await page.waitForTimeout(100);
+        }
+        return false;
+      };
+      const siteE = async () => (await invoke('edit_open')).site;
+      const docE = JSON.stringify(await siteE());
+      const pageJson = async () => JSON.stringify((await siteE()).pages);
+      await page.click('.dock-tab[data-panel="layers"]');
+      await page.click('.layers .layer-label:has-text("section.intro-agency")');
+      await page.click('.dock-tab[data-panel="insert"]');
+      await page.click('.insert-item[data-item="insert-collection-list"]');
+      const listed = await untilE(async () => (await frame.locator('.liste-collection__element').count()) > 2);
+      await page.click('.dock-tab[data-panel="settings"]');
+      await page.waitForSelector('.collection-list select');
+      await page.selectOption('.collection-list select >> nth=2', 'date');
+      await untilE(async () => (await pageJson()).includes('sort(attribute=\\"date\\", reverse=true)'));
+      await page.fill('.collection-list input[type=number]', '2');
+      await page.keyboard.press('Tab');
+      const two = await untilE(async () => (await frame.locator('.liste-collection__element').count()) === 2);
+      check('éléments : liste de collection (collection, tri par date décroissante, 2 contenus)', listed && two
+        && (await pageJson()).includes('[:2]'));
+      await frame.locator('.liste-collection__element h3').first().click();
+      await page.waitForSelector('[data-bound="block-bound-text-label"] select');
+      await page.waitForFunction(() => document.querySelectorAll('[data-bound="block-bound-text-label"] select option').length > 2);
+      const boundTitle = await page.inputValue('[data-bound="block-bound-text-label"] select');
+      const opts = await page.$$eval('[data-bound="block-bound-text-label"] select option', (o) => o.map((x) => x.value));
+      const other = opts.find((v) => v && v !== 'title');
+      await page.selectOption('[data-bound="block-bound-text-label"] select', other);
+      const rebound = await untilE(async () => (await pageJson()).includes(`"expr":"item.data.${other}"`));
+      check('éléments : texte d\'un élément de la liste relié à un champ du contenu', boundTitle === 'title' && rebound, `${boundTitle} -> ${other}`);
+      if (shots) await page.screenshot({ path: `${shots}/editeur-liste-collection.png` });
+      // Grille : élément et ses règles de style.
+      await page.click('.dock-tab[data-panel="layers"]');
+      await page.click('.layers .layer-label:has-text("section.intro-agency")');
+      await page.click('.dock-tab[data-panel="insert"]');
+      await page.click('.insert-item[data-item="insert-grid"]');
+      const grid = await untilE(async () => (await frame.locator('.grille .grille__cellule').count()) === 2);
+      const gridCss = await frame.locator('.grille').evaluate((g) => getComputedStyle(g).display);
+      check('éléments : grille insérée avec ses styles', grid && gridCss === 'grid', gridCss);
+      // Icône : dessin choisi dans les réglages.
+      await page.click('.insert-item[data-item="insert-icon"]');
+      await page.click('.dock-tab[data-panel="settings"]');
+      await page.waitForSelector('.icon-choice[data-icon="coeur"]');
+      await page.click('.icon-choice[data-icon="coeur"]');
+      const heart = await untilE(async () => (await frame.locator('svg.icone[data-icon="coeur"]').count()) === 1);
+      check('éléments : icône insérée, dessin changé', heart);
+      // Code HTML écrit tel quel.
+      await page.click('.dock-tab[data-panel="insert"]');
+      await page.click('.insert-item[data-item="insert-embed"]');
+      await page.click('.dock-tab[data-panel="settings"]');
+      await page.waitForSelector('.embed-code');
+      await page.fill('.embed-code', '<p class="essai-code">Bonjour</p>');
+      await page.click('.dock-panel[data-panel="settings"] .panel-title >> nth=0');
+      const embed = await untilE(async () => (await frame.locator('.code-html .essai-code').count()) === 1);
+      check('éléments : code HTML écrit tel quel', embed);
+      await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+      for (let i = 0; i < 10; i++) {
+        if (JSON.stringify(await siteE()) === docE) break;
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(300);
+      }
+      check('éléments : Ctrl+Z, document identique', await untilE(async () => JSON.stringify(await siteE()) === docE));
+    }
     // Composants : dossier, rangement par le menu contextuel.
     await page.click('.dock-tab[data-panel="components"]');
     await page.waitForSelector('.components .component-row');
@@ -828,6 +899,7 @@ try {
 
     // Glisser « Paragraphe » du panneau « Ajouter » au-dessus des liens de la présentation.
     await page.click('.dock-tab[data-panel="insert"]');
+    await page.locator('.insert-item[data-item="insert-paragraph"]').scrollIntoViewIfNeeded();
     const tile = await page.locator('.insert-item[data-item="insert-paragraph"]').boundingBox();
     const lp = await boxOf('.intro-agency__links');
     await page.mouse.move(tile.x + tile.width / 2, tile.y + tile.height / 2);

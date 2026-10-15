@@ -10,8 +10,10 @@
 
 pub mod address;
 pub mod canvas;
+pub mod collection;
 pub mod command;
 pub mod history;
+pub mod icons;
 pub mod make;
 pub mod style;
 

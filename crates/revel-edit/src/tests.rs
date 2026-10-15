@@ -1287,3 +1287,71 @@ fn detacher_condition_et_expression() {
     };
     assert_eq!(attrs[0].value.as_deref(), Some("{{ p.url }}"));
 }
+
+#[test]
+fn elements_avec_leurs_styles() {
+    let mut s = sample();
+    let before = json(&s);
+    let parent = Parent::of(&at(&s, "main"), Branch::Children);
+    let inv = apply(
+        &mut s,
+        &Command::InsertPreset {
+            parent: parent.clone(),
+            index: 0,
+            preset: make::Preset::Grid,
+            text: String::new(),
+        },
+    )
+    .unwrap();
+    assert!(
+        css(&s).contains(".grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }"),
+        "{}",
+        css(&s)
+    );
+    assert!(css(&s).contains(".grille__cellule { min-height: 80px; }"));
+    // Deuxième grille : règles déjà là, pas de doublon.
+    let n = s.style_rules().count();
+    apply(
+        &mut s,
+        &Command::InsertPreset {
+            parent: parent.clone(),
+            index: 0,
+            preset: make::Preset::Grid,
+            text: String::new(),
+        },
+    )
+    .unwrap();
+    assert_eq!(s.style_rules().count(), n);
+    let _ = inv;
+    // Annulation de la première insertion sur un site neuf : identique.
+    let mut s3 = sample();
+    let main3 = Parent::of(&at(&s3, "main"), Branch::Children);
+    let inv3 = apply(
+        &mut s3,
+        &Command::InsertPreset {
+            parent: main3,
+            index: 0,
+            preset: make::Preset::Icon,
+            text: String::new(),
+        },
+    )
+    .unwrap();
+    let Node::Element { children, .. } = &s3.pages[0].body[0] else {
+        panic!()
+    };
+    let Node::Element {
+        tag,
+        children: inner,
+        ..
+    } = &children[0]
+    else {
+        panic!()
+    };
+    assert_eq!(tag, "svg");
+    assert!(matches!(&inner[0], Node::Html { html } if html.contains("<path")));
+    apply(&mut s3, &inv3).unwrap();
+    assert_eq!(json(&s3), before);
+    // Toutes les icônes sont dessinées.
+    assert!(icons::ICONS.iter().all(|(_, p)| p.starts_with('<')));
+    assert!(icons::ICONS.len() >= 30);
+}

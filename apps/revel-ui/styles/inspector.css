@@ -373,3 +373,23 @@
 .prop-chip .chip-x { display: grid; place-items: center; width: 18px; height: 18px; border: 0; padding: 0; border-radius: 9px; background: none; color: inherit; }
 .prop-chip .chip-x:hover { background: rgb(47 182 124 / .25); }
 .small { font-size: var(--text-xs); }
+
+/* --- Éléments de 3.7 : icône, code HTML, liste de collection ------------------------- */
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 4px; }
+.icon-choice { display: grid; place-items: center; height: 32px; border: var(--border) solid transparent; border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--text-muted); cursor: pointer; padding: 0; }
+.icon-choice:hover { color: var(--text); background: var(--surface-hover); }
+.icon-choice.is-on { color: var(--set-text); background: var(--set-bg); border-color: color-mix(in srgb, var(--set-text) 40%, transparent); }
+.icon-choice svg { width: 18px; height: 18px; }
+.embed-code { font-family: var(--font-mono); font-size: var(--text-xs); resize: vertical; min-height: 96px; padding: 6px 8px; line-height: 1.5; }
+.field-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.collection-list .field, .insp-group > .field { display: flex; flex-direction: column; gap: 4px; }
+/* Autres attributs : repliés quand ils sont nombreux (icône, vidéo…). */
+.insp-attrs > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; }
+.insp-attrs > summary::-webkit-details-marker { display: none; }
+.insp-attrs > summary::after { content: ""; width: 5px; height: 5px; margin-left: auto; border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform var(--fast) var(--ease); }
+.insp-attrs[open] > summary::after { transform: rotate(45deg); }
+.insp-attrs[open] > summary { margin-bottom: 4px; }
+.insp-attrs:not([open]) { gap: 0; }
+.insp-attrs { display: block; }
+.insp-attrs > * + * { margin-top: var(--s-2); }

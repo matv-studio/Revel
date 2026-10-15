@@ -2,6 +2,7 @@
 
 mod account;
 mod api;
+mod blocks;
 mod canvas;
 mod cms;
 mod cmsfields;

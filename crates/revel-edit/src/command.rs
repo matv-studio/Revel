@@ -339,11 +339,47 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
             index,
             preset,
             text,
-        } => Command::Insert {
-            parent: parent.clone(),
-            index: *index,
-            node: preset.node(site, text),
-        },
+        } => {
+            let insert = Command::Insert {
+                parent: parent.clone(),
+                index: *index,
+                node: preset.node(site, text),
+            };
+            // Règles de style de l'élément que le site n'a pas encore (après l'insertion : leurs
+            // identifiants tiennent compte des nouveaux nœuds).
+            let rules: Vec<Command> = if site.stylesheet.is_some() {
+                preset
+                    .rules()
+                    .into_iter()
+                    .filter(|(sel, _)| {
+                        !site
+                            .style_rules()
+                            .any(|r| r.selector == *sel && r.media.is_none())
+                    })
+                    .map(|(sel, decls)| Command::AddRule {
+                        selector: sel.to_string(),
+                        media: None,
+                        decls: decls
+                            .into_iter()
+                            .map(|(p, v)| Decl {
+                                prop: p.into(),
+                                value: v.into(),
+                                important: false,
+                            })
+                            .collect(),
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            if rules.is_empty() {
+                insert
+            } else {
+                let mut commands = vec![insert];
+                commands.extend(rules);
+                expand(site, &Command::Batch { commands })?
+            }
+        }
         Command::AddRule {
             selector,
             media,

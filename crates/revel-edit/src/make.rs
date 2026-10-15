@@ -88,10 +88,24 @@ pub enum Preset {
     Button,
     Image,
     List,
+    /// Grille de deux colonnes (cellules).
+    Grid,
+    /// Colonnes côte à côte, qui passent l'une sous l'autre quand la place manque.
+    Columns,
+    /// Texte riche : titre, paragraphe, liste.
+    RichText,
+    /// Vidéo (fichier du site).
+    Video,
+    /// Icône (dessin au trait, couleur du texte).
+    Icon,
+    /// Code HTML écrit tel quel.
+    Embed,
+    /// Liste de collection : un élément par contenu.
+    CollectionList,
 }
 
 impl Preset {
-    pub const ALL: [Preset; 8] = [
+    pub const ALL: [Preset; 15] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -100,7 +114,70 @@ impl Preset {
         Preset::Button,
         Preset::Image,
         Preset::List,
+        Preset::Grid,
+        Preset::Columns,
+        Preset::RichText,
+        Preset::Video,
+        Preset::Icon,
+        Preset::Embed,
+        Preset::CollectionList,
     ];
+
+    /// Règles de style dont l'élément a besoin (ajoutées si le site ne les a pas).
+    pub fn rules(self) -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+        match self {
+            Preset::Grid => vec![
+                (
+                    ".grille",
+                    vec![
+                        ("display", "grid"),
+                        ("grid-template-columns", "repeat(2, minmax(0, 1fr))"),
+                        ("gap", "24px"),
+                    ],
+                ),
+                (".grille__cellule", vec![("min-height", "80px")]),
+            ],
+            Preset::Columns => vec![
+                (
+                    ".colonnes",
+                    vec![("display", "flex"), ("flex-wrap", "wrap"), ("gap", "24px")],
+                ),
+                (
+                    ".colonne",
+                    vec![
+                        ("flex", "1 1 240px"),
+                        ("min-width", "0"),
+                        ("min-height", "80px"),
+                    ],
+                ),
+            ],
+            Preset::Video => vec![(
+                ".video",
+                vec![("display", "block"), ("width", "100%"), ("height", "auto")],
+            )],
+            Preset::Icon => vec![(
+                ".icone",
+                vec![
+                    ("display", "inline-block"),
+                    ("width", "24px"),
+                    ("height", "24px"),
+                    ("vertical-align", "middle"),
+                ],
+            )],
+            Preset::CollectionList => vec![(
+                ".liste-collection",
+                vec![
+                    ("display", "grid"),
+                    (
+                        "grid-template-columns",
+                        "repeat(auto-fill, minmax(240px, 1fr))",
+                    ),
+                    ("gap", "24px"),
+                ],
+            )],
+            _ => Vec::new(),
+        }
+    }
 
     /// Nouveau nœud (identifiants libres dans `site`). Les textes par défaut sont fournis par
     /// l'appelant (traduits dans la langue de l'interface).
@@ -156,8 +233,162 @@ impl Preset {
                     ],
                 )
             }
+            Preset::Grid => {
+                let g = id();
+                let cells: Vec<Node> = (0..2)
+                    .map(|_| el(id(), "div", vec![attr("class", "grille__cellule")], vec![]))
+                    .collect();
+                el(g, "div", vec![attr("class", "grille")], cells)
+            }
+            Preset::Columns => {
+                let g = id();
+                let cols: Vec<Node> = (0..2)
+                    .map(|_| el(id(), "div", vec![attr("class", "colonne")], vec![]))
+                    .collect();
+                el(g, "div", vec![attr("class", "colonnes")], cols)
+            }
+            Preset::RichText => {
+                // `text` : titre, puis paragraphe (une ligne chacun).
+                let (title, para) = text.split_once('\n').unwrap_or((text, text));
+                let w = id();
+                let h = id();
+                let p = id();
+                let ul = id();
+                let li1 = id();
+                let li2 = id();
+                el(
+                    w,
+                    "div",
+                    vec![attr("class", "texte-riche")],
+                    vec![
+                        el(h, "h2", vec![], vec![txt(title)]),
+                        el(p, "p", vec![], vec![txt(para)]),
+                        el(
+                            ul,
+                            "ul",
+                            vec![],
+                            vec![
+                                el(li1, "li", vec![], vec![txt(para)]),
+                                el(li2, "li", vec![], vec![txt(para)]),
+                            ],
+                        ),
+                    ],
+                )
+            }
+            Preset::Video => el(
+                id(),
+                "video",
+                vec![
+                    attr("class", "video"),
+                    attr("src", ""),
+                    Attr {
+                        name: "controls".into(),
+                        value: None,
+                        when: None,
+                    },
+                    Attr {
+                        name: "playsinline".into(),
+                        value: None,
+                        when: None,
+                    },
+                    attr("preload", "metadata"),
+                ],
+                vec![],
+            ),
+            Preset::Icon => icon_node(id(), "etoile"),
+            Preset::Embed => el(
+                id(),
+                "div",
+                vec![attr("class", "code-html")],
+                vec![Node::Html {
+                    html: format!("<p>{}</p>", html_escape(text)),
+                }],
+            ),
+            Preset::CollectionList => {
+                let col = site
+                    .collections
+                    .first()
+                    .map(|c| c.id.clone())
+                    .unwrap_or_else(|| "all".into());
+                let q = crate::collection::Query {
+                    collection: col,
+                    ..Default::default()
+                };
+                let w = id();
+                let each = id();
+                let card = id();
+                let h = id();
+                let a = id();
+                el(
+                    w,
+                    "div",
+                    vec![attr("class", "liste-collection")],
+                    vec![Node::Each {
+                        id: each,
+                        expr: q.to_expr(),
+                        item: "item".into(),
+                        children: vec![el(
+                            card,
+                            "article",
+                            vec![attr("class", "liste-collection__element")],
+                            vec![
+                                el(
+                                    h,
+                                    "h3",
+                                    vec![],
+                                    vec![Node::Out {
+                                        expr: "item.data.title".into(),
+                                    }],
+                                ),
+                                el(
+                                    a,
+                                    "a",
+                                    vec![attr("href", "{{ item.url }}")],
+                                    vec![txt(text)],
+                                ),
+                            ],
+                        )],
+                        empty: vec![],
+                    }],
+                )
+            }
         }
     }
+}
+
+/// Icône `name` en `<svg>` (dessin au trait, couleur du texte).
+pub fn icon_node(id: Option<String>, name: &str) -> Node {
+    let a = |n: &str, v: &str| Attr {
+        name: n.into(),
+        value: Some(v.into()),
+        when: None,
+    };
+    Node::Element {
+        id,
+        tag: "svg".into(),
+        attrs: vec![
+            a("class", "icone"),
+            a("data-icon", name),
+            a("viewBox", "0 0 24 24"),
+            a("width", "24"),
+            a("height", "24"),
+            a("fill", "none"),
+            a("stroke", "currentColor"),
+            a("stroke-width", "2"),
+            a("stroke-linecap", "round"),
+            a("stroke-linejoin", "round"),
+            a("aria-hidden", "true"),
+        ],
+        children: vec![Node::Html {
+            html: crate::icons::icon(name).unwrap_or_default().to_string(),
+        }],
+    }
+}
+
+fn html_escape(t: &str) -> String {
+    t.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Identifiant libre pour le design propre d'un contenu : `<gabarit>--<fichier>` (suffixe

@@ -600,3 +600,61 @@ fn proprietes_de_composant() {
     assert!(ed.slots.iter().any(|sl| matches!(sl,
         Slot::Block { owner: Owner::Page(_), node, component: Some(c) } if node == "u2" && c == "carte")));
 }
+
+#[test]
+fn liste_de_collection() {
+    use revel_edit::collection::Query;
+    let mut s = site();
+    let q = |filter, sort, limit| {
+        Query {
+            collection: "projets".into(),
+            filter,
+            sort,
+            limit,
+        }
+        .to_expr()
+    };
+    let lists = [
+        q(None, Some(("data.title".to_string(), false)), None),
+        q(None, Some(("date".to_string(), true)), Some(1)),
+        q(Some(("data.une".to_string(), None)), None, None),
+        q(
+            Some(("data.client".to_string(), Some("\"Volvo\"".to_string()))),
+            None,
+            None,
+        ),
+    ];
+    let mut src = String::new();
+    for (i, e) in lists.iter().enumerate() {
+        src.push_str(&format!(
+            "<ul id=\"l{i}\">{{% for item in {e} %}}<li>{{{{ item.data.title }}}}</li>{{% endfor %}}</ul>"
+        ));
+    }
+    s.pages[0].body.extend(parse(&src));
+    let out = build(&input(
+        &s,
+        vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "Alpha", "date": "2026-01-02", "client": "Volvo"}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "Bêta", "date": "2026-03-01", "une": true}),
+            ),
+        ],
+    ))
+    .unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains(r#"<ul id="l0"><li>Alpha</li><li>Bêta</li></ul>"#),
+        "{home}"
+    );
+    assert!(home.contains(r#"<ul id="l1"><li>Bêta</li></ul>"#), "{home}");
+    assert!(home.contains(r#"<ul id="l2"><li>Bêta</li></ul>"#), "{home}");
+    assert!(
+        home.contains(r#"<ul id="l3"><li>Alpha</li></ul>"#),
+        "{home}"
+    );
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+}

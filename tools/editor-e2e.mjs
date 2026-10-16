@@ -1945,9 +1945,15 @@ try {
       const outline = await mcp('get_page', { url: '/' });
       const line = outline.split('\n').find((l) => l.includes('« Faire rayonner »')) || '';
       const id = (/#(\S+)/.exec(line) || [])[1];
+      // Dernière action relevée par l'application (simulée ici) : signalée dans la barre d'état.
+      await page.evaluate((target) => { window.__revelMcpActs = [{ at: Date.now() + 500, client: 'claude-ai', tool: 'set_text', target }]; }, id);
       await mcp('set_text', { id, text: 'Rayonner avec un assistant' });
       await waitFrame(() => document.body.textContent.includes('Rayonner avec un assistant'), 'texte de l\'assistant affiché');
-      check('assistants (MCP) : texte de la page modifié par un assistant, affiché aussitôt dans l\'éditeur', !!id, `#${id}`);
+      await page.waitForSelector('.assistant-note');
+      const note = (await page.textContent('.assistant-note')).trim();
+      if (shots) await page.screenshot({ path: `${shots}/assistant-barre.png` });
+      check('assistants (MCP) : texte de la page modifié par un assistant, affiché aussitôt dans l\'éditeur, signalé', !!id && note === 'Claude · Texte modifié', `#${id} — ${note}`);
+      await page.evaluate(() => { delete window.__revelMcpActs; });
       await mcp('set_data', { path: 'pages.accueil.news_title', value: 'Les nouvelles vues par un assistant' });
       await until(() => fs.readFileSync(homeM, 'utf8') !== home4, 'donnée écrite');
       await waitFrame(() => document.body.textContent.includes('Les nouvelles vues par un assistant'), 'donnée affichée');

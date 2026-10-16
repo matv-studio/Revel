@@ -63,6 +63,16 @@ fn client_name(raw: &str) -> String {
         .unwrap_or_else(|| raw.to_string())
 }
 
+/// Action d'un assistant en clair : « Claude · Texte modifié ».
+pub(crate) fn activity_label(ui: Ui, a: &McpActivity) -> String {
+    let name = if a.client.trim().is_empty() {
+        ui.now("mcp-client-unknown", &[])
+    } else {
+        client_name(&a.client)
+    };
+    format!("{name} · {}", ui.now(&format!("mcp-tool-{}", a.tool), &[]))
+}
+
 /// Heure d'une action (`14:32`, précédée du jour dans la langue de l'interface un autre jour).
 fn when(at: u64, lang: &str) -> String {
     let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(at as f64));

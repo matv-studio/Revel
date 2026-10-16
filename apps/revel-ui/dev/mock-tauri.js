@@ -103,7 +103,8 @@
       case "mcp_status": return mcpStatus();
       case "mcp_set": mcp.enabled = args.enabled; mcp.port = args.port || 47520; return mcpStatus();
       case "mcp_new_token": mcp.token = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join(""); return mcpStatus();
-      case "mcp_activity": return mcp.enabled && params.get("mcpacts") ? [
+      case "mcp_activity": if (window.__revelMcpActs) return window.__revelMcpActs;
+        return mcp.enabled && params.get("mcpacts") ? [
         { at: Date.now() - 60_000, client: "claude-ai", tool: "set_text", target: "xg2whxr8" },
         { at: Date.now() - 240_000, client: "claude-ai", tool: "set_styles", target: ".hero__title" },
         { at: Date.now() - 900_000, client: "codex-mcp-client", tool: "set_data", target: "pages.accueil.news_title" },

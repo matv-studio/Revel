@@ -143,6 +143,20 @@ async fn assistant_de_bout_en_bout() {
         assert_eq!(s, 403);
         let (s, _) = c.post(json!({}), &[("Host", "exemple.com")]);
         assert_eq!(s, 403);
+        // Assistant dans Docker Desktop (Open WebUI) : hôte accepté jusqu'au service MCP.
+        let mut docker = Client {
+            url: url.clone(),
+            token: token.clone(),
+            session: None,
+            agent: agent(),
+        };
+        let (s, v) = docker.post(
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "protocolVersion": "2025-06-18", "capabilities": {},
+                "clientInfo": { "name": "open-webui", "version": "1" } } }),
+            &[("Host", "host.docker.internal:47520")],
+        );
+        assert_eq!(s, 200, "{v}");
 
         // Protocole 2025 : ouverture, liste des outils.
         let (s, v) = c.post(

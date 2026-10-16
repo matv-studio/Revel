@@ -339,6 +339,9 @@ pub struct Ed {
     pub pending: RwSignal<u32>,
     /// Heure (ms) du dernier enregistrement confirmé.
     pub saved_at: RwSignal<Option<f64>>,
+    /// Dernière modification faite par un assistant (« Claude · Texte modifié »), affichée
+    /// quelques secondes dans la barre d'état.
+    pub assistant: RwSignal<Option<String>>,
     /// Composant ouvert (modification isolée) : celui qui contient l'élément sélectionné.
     pub isolated: RwSignal<Option<String>>,
     /// Langue de travail (celle de l'interface du site ouvert, `Ui::locale`).
@@ -1820,6 +1823,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         count: RwSignal::new(None),
         pending: RwSignal::new(0),
         saved_at: RwSignal::new(None),
+        assistant: RwSignal::new(None),
         isolated: RwSignal::new(None),
         locale: ui.locale,
         side: RwSignal::new(crate::pref_get("side").as_deref() == Some("1")),
@@ -2188,6 +2192,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     // en cours d'envoi ; stable sur deux relevés, ou dès le retour dans l'éditeur). Hors de Revel
     // (Pages CMS, éditeur de texte) : même révision, fichiers différents.
     let stamp = StoredValue::new(None::<revel_edit::EditStamp>);
+    let act_seen = StoredValue::new(js_sys::Date::now());
     let path_poll = StoredValue::new(site.path.clone());
     let check = move |shown: bool| {
         let path = path_poll.get_value();
@@ -2209,6 +2214,24 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             if elsewhere || outside {
                 ed.reopen(ui);
                 ed.load.update(|n| *n += 1);
+            }
+            // Modification d'un assistant : signalée dans la barre d'état.
+            if elsewhere && let Ok(list) = api::mcp_activity().await {
+                let since = act_seen.get_value();
+                if let Some(a) = list.first().filter(|a| a.at as f64 > since) {
+                    act_seen.set_value(a.at as f64);
+                    ed.assistant
+                        .set(Some(crate::assistants::activity_label(ui, a)));
+                    let at = a.at;
+                    set_timeout(
+                        move || {
+                            if !ed.assistant.is_disposed() && act_seen.get_value() == at as f64 {
+                                ed.assistant.set(None);
+                            }
+                        },
+                        std::time::Duration::from_millis(6000),
+                    );
+                }
             }
         });
     };
@@ -2700,6 +2723,9 @@ fn StatusBar() -> impl IntoView {
             </nav>
             <span class="muted">{owner}</span>
             <span class="toolbar-spacer"></span>
+            {move || ed.assistant.get().map(|t| view! {
+                <span class="assistant-note" aria-live="polite">{icons::sparkle()}{t}</span>
+            })}
             <span class="muted save-state" aria-live="polite">{move || {
                 if ed.pending.get() > 0 {
                     ui.tx("editor-saving", &[])

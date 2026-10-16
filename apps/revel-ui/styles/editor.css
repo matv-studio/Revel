@@ -218,6 +218,9 @@
 /* Base nulle : le nom garde toute sa place, le texte prend ce qui reste. */
 .layer-preview { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-faint); }
 .layer-preview::before { content: "·"; margin: 0 5px 0 1px; }
+/* Élément animé (panneau Interactions). */
+.layer-anim { flex: none; display: grid; place-items: center; margin-left: auto; padding-left: 4px; color: var(--set-text); }
+.layer-anim svg.icon { width: 12px; height: 12px; }
 /* Composant utilisé : vert, comme Webflow. */
 .layer.is-component .layer-icon, .layer.is-component .layer-label { color: var(--comp); }
 .layers-foot .icon-btn:disabled { opacity: .3; }

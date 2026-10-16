@@ -226,6 +226,12 @@ fn element(
     let others: Vec<Attr> = attrs
         .iter()
         .filter(|a| !matches!(a.name.as_str(), "id" | "class" | "href" | "target"))
+        // Animations : réglées dans le panneau Interactions.
+        .filter(|a| {
+            !crate::interactions::FAMILIES
+                .iter()
+                .any(|f| a.name == f.attr())
+        })
         .cloned()
         .collect();
     let set_id = set.clone();

@@ -437,6 +437,33 @@ try {
     await page.click('.node-path .node-crumb[data-tech*="section.hero"]');
     await page.waitForTimeout(200);
     check('fil d\'Ariane : parent sélectionné', (await page.getAttribute('.layers .layer.is-selected', 'data-tech')).startsWith('section.hero'));
+    // Interactions (6.1) : animation prête à l'emploi ajoutée, changée, réglée, essayée dans le
+    // canevas, retirée ; document identique après annulation.
+    {
+      const docA = JSON.stringify((await invoke('edit_open')).site);
+      await page.click('.dock-tab[data-panel="interactions"]');
+      await page.click('.anim-family[data-family="appear"] .anim-add');
+      f = await waitFrame((v) => document.querySelector('section.hero')?.getAttribute('data-revel-appear') === v, 'apparition ajoutée', 'fade');
+      await page.click('.anim-family[data-family="appear"] .anim-tile[data-preset="up"]');
+      f = await waitFrame((v) => document.querySelector('section.hero')?.getAttribute('data-revel-appear') === v, 'animation changée', 'up');
+      const dur = page.locator('.anim-family[data-family="appear"] [data-setting="dur"] input');
+      await dur.fill('1.2');
+      await dur.press('Enter');
+      f = await waitFrame((v) => document.querySelector('section.hero')?.getAttribute('data-revel-appear') === v, 'durée réglée', 'up dur=1.2');
+      check('interactions : apparition ajoutée, changée, durée réglée', true);
+      await page.click('.anim-family[data-family="appear"] .anim-play');
+      f = await waitFrame(() => (document.querySelector('section.hero')?.getAnimations().length || 0) > 0, 'aperçu de l\'animation');
+      check('interactions : aperçu joué dans le canevas', true);
+      if (shots) await page.screenshot({ path: `${shots}/editeur-interactions.png` });
+      await page.click('.anim-family[data-family="appear"] .anim-remove');
+      f = await waitFrame(() => !document.querySelector('section.hero')?.hasAttribute('data-revel-appear'), 'animation retirée');
+      for (let i = 0; i < 6 && JSON.stringify((await invoke('edit_open')).site) !== docA; i++) {
+        await page.click('.editor-toolbar .btn-undo');
+        await page.waitForTimeout(400);
+      }
+      check('interactions : retirée puis tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === docA);
+      await page.click('.dock-tab[data-panel="styles"]');
+    }
     // Variables : affectations de la page (plus dans les calques), valeur calculée au rendu ;
     // expression modifiée sur place, refusée si sa syntaxe est fausse, annulée par Ctrl+Z.
     const varLayers = await page.$$eval('.layers .layer', (r) => r.filter((e) => /^variable /.test(e.textContent.trim())).length);

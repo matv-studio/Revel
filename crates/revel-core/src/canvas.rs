@@ -464,6 +464,14 @@ impl Core {
                 CANVAS_JS.as_bytes().to_vec(),
             )));
         }
+        // Script des animations (6.1) : site animé (aperçu, canevas avec scripts) et aperçu d'une
+        // animation dans le canevas.
+        if path == revel_render::animations::URL {
+            return Ok(Some(CanvasResponse::ok(
+                "text/javascript; charset=utf-8",
+                revel_render::animations::script().into_bytes(),
+            )));
+        }
         let (site, pipeline, opts, environment) = {
             let slot = if preview { &self.preview } else { &self.canvas };
             let c = slot.lock().unwrap_or_else(|e| e.into_inner());

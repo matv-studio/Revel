@@ -312,6 +312,22 @@ sélectionne la source de saisie précédente quand plusieurs sont installées e
 texte lié à une donnée dans un composant (titre du site, lien du menu) se modifie au double-clic ; un texte fixe
 d'un composant ouvre le composant et passe en modification du texte au même double-clic.
 
+**D-59 — 16/10/2026 — prise.** **Animations prêtes à l'emploi (6.1), à l'image des effets de Framer.** Six
+moments (apparition, texte, survol, appui, boucle, défilement), 44 animations, quelques réglages chacune
+(catalogue : `docs/ETAPE-6.md`). Un attribut par moment sur l'élément, `data-revel-appear="up dur=0.8 replay"`
+(l'animation puis les réglages qui diffèrent des valeurs par défaut) : lisible dans le code exporté, sans
+changement du modèle, modifié par les commandes d'édition existantes (annulation, assistants). Script du site
+`/assets/revel-animations.js` (19 Ko, 6 Ko compressé), produit seulement si une page est animée : Web
+Animations, transformations et filtres ajoutés à ceux de l'élément (`composite: "add"`, disponible partout
+depuis 2022, [MDN](https://developer.mozilla.org/en-US/docs/Web/API/KeyframeEffect/composite)),
+IntersectionObserver pour l'arrivée à l'écran et la pause des boucles hors de l'écran. Animations CSS liées au
+défilement (`animation-timeline`) écartées : pas encore disponibles dans tous les navigateurs
+([MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timeline)). Contenu visible sans JavaScript
+et si le script ne se charge pas (3 s) ; rien n'est animé pour `prefers-reduced-motion`. Texte découpé en
+lettres ou mots au chargement de la page (pas dans la source), texte complet gardé pour les lecteurs d'écran.
+Images et composants animés par un bloc qui les entoure (« Envelopper pour animer »). Aperçu : le même script,
+chargé sans démarrage automatique, joue l'animation dans le canevas et sur les vignettes du panneau.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

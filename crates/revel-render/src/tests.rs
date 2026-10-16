@@ -862,3 +862,41 @@ fn feuille_de_style_reliee() {
     let out2 = build(&input(&s, vec![])).unwrap();
     assert_eq!(file(&out2, "index.html"), home);
 }
+
+#[test]
+fn animations_produites_si_utilisees() {
+    let page = |body: &str| Page {
+        id: "index".into(),
+        path: "/".into(),
+        layout: None,
+        props: Default::default(),
+        computed: Default::default(),
+        body: parse(body),
+        draft: false,
+        code: Default::default(),
+        name: None,
+    };
+    let mut s = Site::new("Essai", "fr");
+    s.pages.push(page(
+        "<!doctype html><html><head><title>A</title></head><body><h1>A</h1></body></html>",
+    ));
+    let out = build(&input(&s, vec![])).unwrap();
+    assert!(
+        !out.files
+            .iter()
+            .any(|f| f.path == "assets/revel-animations.js")
+    );
+    assert!(!file(&out, "index.html").contains("revel-animations"));
+    s.pages[0] = page(
+        "<!doctype html><html><head><title>A</title></head><body><h1 data-revel-appear=\"up dur=0.8\">A</h1></body></html>",
+    );
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains("<script src=\"/assets/revel-animations.js\" defer></script>"),
+        "{home}"
+    );
+    assert!(home.contains("data-revel-appear=\"up dur=0.8\""));
+    let js = file(&out, "assets/revel-animations.js");
+    assert!(js.contains("RevelAnimations") && !js.contains("/*"));
+}

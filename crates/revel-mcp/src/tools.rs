@@ -31,8 +31,15 @@ href, src, alt…) with `set_attributes`, CSS with `set_styles` (styles belong t
 add markup with `insert_html`, remove with `remove_node`. Texts shown as {{ expressions }} come from the \
 site's data files or CMS entries: resolve the variables set by {% set … %} (e.g. `{% set a = pages.agence %}` \
 then `{{ a.title }}` is the data path `pages.agence.title`), read them with `get_data` and change them with \
-`set_data`; CMS entries (`list_collections`) with `get_entry` and `set_entry_field`. Keep the site's \
-language and tone.";
+`set_data`; CMS entries (`list_collections`) with `get_entry` and `set_entry_field`. Animations are \
+attributes set with `set_attributes`: `data-revel-appear` (fade, up, down, left, right, zoom-in, zoom-out, blur, \
+pop, flip, rotate, reveal), `data-revel-text` (fade, up, blur, pop, flip, typewriter), `data-revel-hover` (grow, \
+shrink, lift, shadow, dim, tilt, brighten, underline), `data-revel-press` (press, squish, push), \
+`data-revel-loop` (spin, pulse, float, swing, shake, blink, bounce, heartbeat, ticker) and \
+`data-revel-scroll` (parallax, fade-in, zoom-in, rotate, slide-x, fade-out); value: the animation, then optional \
+settings such as `dur=0.8 delay=0.2 ease=smooth|bounce|ease|linear dist=32 stagger=0.1 trigger=view|load \
+replay split=chars|words|lines amount=100 mirror=on|off dir=left|right pause` (e.g. `up dur=0.8`). Keep the \
+site's language and tone.";
 
 /// Assistant et outil d'une modification (dernières actions des assistants).
 #[derive(Debug, Clone, serde::Serialize)]

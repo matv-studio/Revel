@@ -392,7 +392,17 @@ impl Ed {
     pub fn post(self, msg: serde_json::Value) {
         let only_active = matches!(
             msg.get("type").and_then(|t| t.as_str()),
-            Some("preview" | "count" | "nav" | "measure" | "drag" | "watch" | "scroll" | "spacing")
+            Some(
+                "preview"
+                    | "count"
+                    | "nav"
+                    | "measure"
+                    | "drag"
+                    | "watch"
+                    | "scroll"
+                    | "spacing"
+                    | "animate"
+            )
         );
         if only_active {
             if let Some(f) = self.frame_el() {
@@ -2355,10 +2365,7 @@ fn panel_view(p: crate::dock::PanelId) -> AnyView {
             view! { <div class="panel-pad"><crate::styles::Styles/></div> }.into_any()
         }
         PanelId::Settings => view! { <crate::inspector::ElementSettings/> }.into_any(),
-        PanelId::Interactions => view! {
-            <crate::panels::Planned key="panel-interactions-planned" step=6 icon=icons::bolt/>
-        }
-        .into_any(),
+        PanelId::Interactions => view! { <crate::interactions::Interactions/> }.into_any(),
     }
 }
 

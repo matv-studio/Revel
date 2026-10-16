@@ -615,8 +615,18 @@ impl Remote {
     }
 
     async fn probe_replace(&self, posix: bool) -> Replace {
-        let probe = ".deploy/probe";
-        let tmp = ".deploy/.in.probe";
+        // Noms propres à cette publication : deux publications simultanées vers le même compte ne
+        // se gênent pas.
+        let unique = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        );
+        let probe = &format!(".deploy/probe-{unique}");
+        let tmp = &format!(".deploy/.in.probe-{unique}");
         if self.put(probe, b"ok\n").await.is_err() {
             return Replace::Direct;
         }

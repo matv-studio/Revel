@@ -13,6 +13,7 @@ use revel_model::{CollectionSource, Node, Site, SortKind};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+pub mod animations;
 mod eval;
 mod forms;
 mod html;
@@ -232,8 +233,9 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let mut warnings = Vec::new();
     let mut files = Vec::new();
     let mut pages: Vec<(String, bool)> = Vec::new();
-    // Formulaires reçus par l'hébergement (5.8) trouvés dans les pages.
+    // Formulaires reçus par l'hébergement (5.8) trouvés dans les pages ; pages animées (6.1).
     let mut forms = 0usize;
+    let mut animated = false;
     {
         let mut b = eval::Builder::new(input);
         b.lang = eval::Lang {
@@ -241,7 +243,15 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
             all: all.clone(),
             ..Default::default()
         };
-        build_pages(&b, input, &mut files, &mut pages, &mut forms, &mut warnings)?;
+        build_pages(
+            &b,
+            input,
+            &mut files,
+            &mut pages,
+            &mut forms,
+            &mut animated,
+            &mut warnings,
+        )?;
     }
     for l in site.locales.iter().filter(|l| !l.draft) {
         let (lsite, entries, primary_data) = localize(input, l);
@@ -266,6 +276,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
             &mut files,
             &mut pages,
             &mut forms,
+            &mut animated,
             &mut warnings,
         )?;
     }
@@ -283,6 +294,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     }
     seo_files(site, &pages, &mut files, &mut warnings);
     forms::handler_file(site, forms, &mut files, &mut warnings);
+    animations::script_file(animated, &mut files);
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(BuildOutput { files, warnings })
 }
@@ -294,6 +306,7 @@ fn build_pages(
     files: &mut Vec<OutputFile>,
     pages: &mut Vec<(String, bool)>,
     forms: &mut usize,
+    animated: &mut bool,
     warnings: &mut Vec<String>,
 ) -> Result<(), RenderError> {
     let prepared = prepare(b, input, false)?;
@@ -305,6 +318,8 @@ fn build_pages(
             let scripts = b.editor.as_ref().is_none_or(|e| e.scripts);
             let (html, n) = forms::wire(input.site, finish_html(b, input.site, j, html), scripts);
             *forms += n;
+            let (html, a) = animations::wire(html, scripts);
+            *animated |= a;
             html
         } else {
             html

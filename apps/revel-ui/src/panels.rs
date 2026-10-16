@@ -1,23 +1,9 @@
-//! Éléments communs des panneaux (recherche, fonctions prévues) et panneau CMS (collections et
-//! contenus, fermé par défaut). Les fonctions prévues aux étapes suivantes sont déjà en place,
-//! désactivées, avec l'étape indiquée en info-bulle.
+//! Éléments communs des panneaux (recherche) et panneau CMS (collections et contenus, fermé par
+//! défaut).
 
 use crate::editor::Ed;
 use crate::{Ui, icons};
 use leptos::prelude::*;
-
-/// Panneau entièrement prévu pour une étape suivante.
-#[component]
-pub fn Planned(key: &'static str, step: u8, icon: fn() -> AnyView) -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    view! {
-        <div class="planned">
-            <span class="planned-icon">{icon()}</span>
-            <p>{ui.t(key)}</p>
-            <span class="chip">{move || ui.tx("planned-step", &[("step", step.to_string())])}</span>
-        </div>
-    }
-}
 
 /// Champ de recherche d'un panneau.
 #[component]

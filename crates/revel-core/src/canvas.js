@@ -1103,6 +1103,22 @@
         if (m.names) names = m.names;
         redraw();
         break;
+      case "animate": {
+        // Aperçu d'une animation du panneau Interactions (6.1) : script d'animation chargé à la
+        // demande, sans rien lancer d'autre (`RevelAnimationsManual`).
+        const { el } = findId(m.id);
+        if (!el || editing) break;
+        const go = () => window.RevelAnimations && window.RevelAnimations.preview(el, m.family, m.value);
+        if (window.RevelAnimations) go();
+        else {
+          window.RevelAnimationsManual = true;
+          const sc = document.createElement("script");
+          sc.src = "/assets/revel-animations.js";
+          sc.onload = go;
+          document.head.appendChild(sc);
+        }
+        break;
+      }
       case "labels":
         tagNames = m.tags || null;
         otherName = m.other || "";

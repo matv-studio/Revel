@@ -344,6 +344,14 @@ fn canevas_par_le_protocole() {
     let js = c.canvas_respond("/__revel/canvas.js");
     assert_eq!(js.content_type, "text/javascript; charset=utf-8");
     assert!(String::from_utf8(js.body).unwrap().contains("rv-slots"));
+    // Script des animations (aperçu dans le canevas, 6.1).
+    let anim = c.canvas_respond("/assets/revel-animations.js");
+    assert_eq!(anim.content_type, "text/javascript; charset=utf-8");
+    assert!(
+        String::from_utf8(anim.body)
+            .unwrap()
+            .contains("RevelAnimations")
+    );
     assert_eq!(
         c.canvas_respond("/m%C3%A9dia/a.txt").body,
         b"fichier".to_vec(),

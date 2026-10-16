@@ -20,6 +20,7 @@ mod home;
 mod icons;
 mod insert;
 mod inspector;
+mod interactions;
 mod layers;
 mod library;
 mod locales;

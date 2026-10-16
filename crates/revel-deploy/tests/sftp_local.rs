@@ -57,6 +57,14 @@ async fn publication_incrementale() {
     );
     let manifest = std::fs::read_to_string(home.join(".deploy/revel-essai.manifest")).unwrap();
     assert_eq!(manifest.lines().count(), 3);
+    // Fichiers d'essai du remplacement atomique retirés.
+    let left: Vec<String> = std::fs::read_dir(home.join(".deploy"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.contains("probe"))
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
 
     // 2. Modification, ajout, suppression ; clé désormais vérifiée.
     t.known_host_key = Some(r.server_key.clone());
@@ -137,7 +145,6 @@ async fn connexion_d_essai() {
     if let (Some(a), Some(b)) = (first_domain, first_root) {
         assert!(a < b, "{:?}", p.folders);
     }
-    assert!(!home.join(".deploy/probe").exists());
 
     // Mauvais mot de passe.
     let mut bad = t.clone();

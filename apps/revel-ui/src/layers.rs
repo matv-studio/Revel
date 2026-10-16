@@ -59,6 +59,8 @@ pub struct Row {
     pub inside: Option<(Branch, usize)>,
     /// Texte de l'élément, montré sur sa ligne (texte et expressions qu'il contient).
     pub preview: Option<String>,
+    /// Élément animé (panneau Interactions).
+    pub animated: bool,
 }
 
 /// Affichage d'une ligne dans l'arbre simplifié.
@@ -238,6 +240,8 @@ impl<'a> Builder<'a> {
                 has_children: false,
                 inside: inside.filter(|_| id.is_some()),
                 preview: None,
+                animated: matches!(n, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name.starts_with("data-revel-")
+                    && crate::interactions::FAMILIES.iter().any(|f| a.name == f.attr()))),
             });
             self.vis.push(vis);
             let mut anc = ancestors.to_vec();
@@ -334,6 +338,7 @@ impl<'a> Builder<'a> {
             has_children: false,
             inside: id.as_ref().map(|_| (b, nodes.len())),
             preview: None,
+            animated: false,
         });
         self.vis.push(Vis::Show);
         let mut anc = ancestors.to_vec();
@@ -870,7 +875,7 @@ pub fn Layers() -> impl IntoView {
             </label>
             <div class="layers-tree" role="tree" tabindex="0" on:keydown=on_key>
                 <For each=move || visible.get()
-                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}", r.kind, r.has_children, open, r.id))
+                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated))
                     let:item>
                     {
                         let (r, open) = item;
@@ -884,6 +889,7 @@ pub fn Layers() -> impl IntoView {
                         let has_children = r.with_value(|r| r.has_children);
                         let kind = r.with_value(|r| r.kind.clone());
                         let preview = r.with_value(|r| r.preview.clone());
+                        let animated = r.with_value(|r| r.animated);
                         // Nom technique (`section.hero`) : info-bulle, recherche, essais.
                         let tech = r.with_value(|r| match &r.kind {
                             Kind::Element { tag, class } => crate::names::technical(tag, class),
@@ -997,6 +1003,7 @@ pub fn Layers() -> impl IntoView {
                                 <span class="layer-icon">{icon(&kind)}</span>
                                 <span class="layer-label">{label(ui, &kind)}</span>
                                 {preview.map(|p| view! { <span class="layer-preview">{p}</span> })}
+                                {animated.then(|| view! { <span class="layer-anim" title=ui.t("layers-animated")>{icons::bolt()}</span> })}
                             </div>
                         }
                     }

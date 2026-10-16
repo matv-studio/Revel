@@ -1,5 +1,6 @@
 //! Serveur HTTP local des assistants : MCP en HTTP en flux (`/mcp`, protocoles 2025 et
-//! 2026-07-28) et commandes simples pour le relais stdio (`POST /invoke/<commande>`, corps JSON).
+//! 2026-07-28), mêmes outils en HTTP simple décrits en OpenAPI (`POST /api/<outil>`,
+//! `GET /openapi.json`, 4.3) et commandes du relais stdio (`POST /invoke/<commande>`).
 //! N'écoute que sur 127.0.0.1 ; chaque requête doit porter le jeton (`Authorization: Bearer …`) ;
 //! les en-têtes `Host` et `Origin` sont vérifiés (pas de requête venue d'une page web).
 
@@ -86,7 +87,45 @@ async fn invoke(State(s): State<Shared>, Path(cmd): Path<String>, body: String) 
     }
 }
 
-/// Routes du serveur : `/mcp` et `/invoke/<commande>`, jeton exigé.
+/// Outil appelé sans MCP (`POST /api/<outil>`, corps : arguments) : `{"result"}` ou
+/// `{"error"}` (422).
+async fn api(State(s): State<Shared>, Path(tool): Path<String>, body: String) -> Response {
+    let args: Value = if body.trim().is_empty() {
+        Value::Object(Default::default())
+    } else {
+        match serde_json::from_str(&body) {
+            Ok(v) => v,
+            Err(e) => return (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
+        }
+    };
+    match Revel::new(s.inv.clone()).run(&tool, args, "OpenAPI").await {
+        None => (
+            StatusCode::NOT_FOUND,
+            axum::Json(serde_json::json!({ "error": format!("No tool {tool}.") })),
+        )
+            .into_response(),
+        Some(r) if r.is_error == Some(true) => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            axum::Json(serde_json::json!({ "error": crate::tools::text_of(&r) })),
+        )
+            .into_response(),
+        Some(r) => {
+            axum::Json(serde_json::json!({ "result": crate::tools::text_of(&r) })).into_response()
+        }
+    }
+}
+
+/// Description OpenAPI des outils, adresse du serveur reprise de la requête.
+async fn openapi(h: HeaderMap) -> Response {
+    let host = h
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("127.0.0.1");
+    axum::Json(Revel::openapi(&format!("http://{host}"))).into_response()
+}
+
+/// Routes du serveur : `/mcp`, `/invoke/<commande>`, `/api/<outil>` et `/openapi.json`, jeton
+/// exigé.
 pub fn router(inv: Arc<dyn Invoke>, token: String, ct: CancellationToken) -> axum::Router {
     let factory = inv.clone();
     let config = StreamableHttpServerConfig::default()
@@ -105,6 +144,8 @@ pub fn router(inv: Arc<dyn Invoke>, token: String, ct: CancellationToken) -> axu
     axum::Router::new()
         .nest_service("/mcp", mcp)
         .route("/invoke/{cmd}", axum::routing::post(invoke))
+        .route("/api/{tool}", axum::routing::post(api))
+        .route("/openapi.json", axum::routing::get(openapi))
         .layer(axum::middleware::from_fn_with_state(shared.clone(), guard))
         .with_state(shared)
 }

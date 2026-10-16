@@ -173,6 +173,7 @@ pub fn Assistants() -> impl IntoView {
         status.with(|s| s.as_ref().map(|s| s.url.clone()).unwrap_or_default())
     });
     let docker_url = Signal::derive(move || format!("http://host.docker.internal:{}/mcp", port()));
+    let spec_url = Signal::derive(move || format!("http://127.0.0.1:{}/openapi.json", port()));
     let code = Signal::derive(move || snippet(client.get(), &program()));
     // Emplacement de la configuration (chemin du fichier de Codex selon le système).
     let place = move || match client.get() {
@@ -265,6 +266,11 @@ pub fn Assistants() -> impl IntoView {
                     <CopyBtn text=token label="mcp-key-copy"/>
                     <button class="icon-btn icon-btn--small mcp-key-renew" title=ui.t("mcp-key-renew-help")
                         aria-label=ui.t("mcp-key-renew") on:click=move |_| renew()>{icons::reset()}</button>
+                </div>
+                <span class="label" title=ui.t("mcp-openapi-help")>"OpenAPI"</span>
+                <div class="mcp-key mcp-openapi">
+                    <code class="code mcp-key-value">{move || spec_url.get()}</code>
+                    <CopyBtn text=spec_url label="action-copy"/>
                 </div>
             </div>
             <div class="mcp-connect" class:is-off=move || !running()

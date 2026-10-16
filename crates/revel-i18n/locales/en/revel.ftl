@@ -1382,6 +1382,7 @@ mcp-how-claude-code = Run the command once in a terminal: Revel is then availabl
 mcp-how-codex = Add at the end of the file (create it if missing), then restart: the file is shared by the ChatGPT app, the Codex command line and the code editor extension.
 mcp-how-lm-studio = Paste into mcp.json (only add “revel” inside “mcpServers” if it already has servers), then save.
 mcp-how-open-webui = Open WebUI 0.6.31 or later: copy the type, address, authentication and key into the new connection. Open WebUI installed with Docker: Docker address.
+mcp-openapi-help = OpenAPI description of the same actions, for tools without MCP (scripts, automations, OpenAPI tool servers): POST /api/<tool>, Bearer authentication with the access key.
 mcp-field-type = Type
 mcp-field-url = Address
 mcp-field-url-docker = Address (Docker)

@@ -454,3 +454,12 @@ s'exécute dans l'application (HTTP) ou dans le relais (assistant et outil trans
 [MCP in LM Studio](https://lmstudio.ai/docs/app/mcp),
 [Model Context Protocol — Open WebUI](https://docs.openwebui.com/features/extensibility/mcp.md),
 [Claude Code MCP setup (guide tiers)](https://mcpplaygroundonline.com/blog/claude-code-mcp-setup-best-servers-guide.md).
+
+**D-43 — 16/10/2026 — prise.** **Mêmes actions en HTTP simple, décrites en OpenAPI (4.3).** Pour les outils qui
+ne parlent pas MCP (scripts, automatisations, serveurs d'outils OpenAPI comme ceux d'Open WebUI), le serveur local
+expose chaque outil en `POST /api/<outil>` avec les mêmes arguments et le même texte de résultat, et sa
+description OpenAPI 3.1 en `GET /openapi.json`, générée à partir de la liste des outils (aucune seconde définition
+à tenir à jour ; un essai vérifie que chaque outil du protocole y est appelable). Même serveur, même clé
+(`Authorization: Bearer`), mêmes contrôles d'origine et d'hôte. Sources :
+[OpenAPI Specification 3.1.0](https://spec.openapis.org/oas/v3.1.0),
+[Model Context Protocol — Open WebUI](https://docs.openwebui.com/features/extensibility/mcp.md).

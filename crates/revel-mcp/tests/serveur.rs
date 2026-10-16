@@ -222,6 +222,51 @@ async fn assistant_de_bout_en_bout() {
     })
     .await;
     res.unwrap();
+    // Mêmes outils sans MCP (OpenAPI) : description, appel, erreur lisible, outil inconnu.
+    let base = format!("http://127.0.0.1:{}", server.port);
+    let tok = "jeton-essai-0123456789abcdef0123456789abcdef".to_string();
+    let res = tokio::task::spawn_blocking(move || {
+        let a = agent();
+        let mut r = a
+            .get(&format!("{base}/openapi.json"))
+            .header("Authorization", &format!("Bearer {tok}"))
+            .call()
+            .unwrap();
+        let doc: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        assert_eq!(doc["openapi"], "3.1.0");
+        assert_eq!(doc["servers"][0]["url"], base.as_str());
+        let set = &doc["paths"]["/api/set_text"]["post"];
+        assert_eq!(set["operationId"], "set_text");
+        assert!(
+            set["requestBody"]["content"]["application/json"]["schema"]["properties"]["text"]
+                .is_object()
+        );
+        let post = |tool: &str, body: Value| {
+            let mut r = a
+                .post(&format!("{base}/api/{tool}"))
+                .header("Authorization", &format!("Bearer {tok}"))
+                .header("Content-Type", "application/json")
+                .send(body.to_string())
+                .unwrap();
+            let status = r.status().as_u16();
+            let v: Value =
+                serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap_or_default();
+            (status, v)
+        };
+        let (st, v) = post("get_site", json!({}));
+        assert_eq!(st, 200);
+        assert!(v["result"].as_str().unwrap().contains("Atelier"));
+        let (st, v) = post("set_text", json!({ "id": "inconnu", "text": "x" }));
+        assert_eq!(st, 422);
+        assert!(v["error"].as_str().unwrap().contains("inconnu"), "{v}");
+        let body = json!({ "selector": ".essai-api", "properties": { "color": "red" } });
+        assert_eq!(post("set_styles", body).0, 200);
+        assert_eq!(post("undo", json!({})).0, 200);
+        assert_eq!(post("inexistant", json!({})).0, 404);
+        assert_eq!(post("set_text", json!({ "text": 3 })).0, 422);
+    })
+    .await;
+    res.unwrap();
     // Dernières actions : chaque modification (assistant, outil, cible), la plus récente d'abord ;
     // l'erreur (élément inconnu) n'y est pas.
     let acts = log.list();
@@ -229,6 +274,8 @@ async fn assistant_de_bout_en_bout() {
     assert_eq!(
         tools,
         [
+            "undo",
+            "set_styles",
             "undo",
             "undo",
             "undo",
@@ -238,8 +285,9 @@ async fn assistant_de_bout_en_bout() {
         ],
         "{acts:?}"
     );
-    assert!(acts.iter().all(|a| a.client == "essai"), "{acts:?}");
-    assert_eq!(acts[4].target.as_deref(), Some(".essai-mcp"));
+    assert!(acts[..2].iter().all(|a| a.client == "OpenAPI"), "{acts:?}");
+    assert!(acts[2..].iter().all(|a| a.client == "essai"), "{acts:?}");
+    assert_eq!(acts[6].target.as_deref(), Some(".essai-mcp"));
     // Le site sur le disque : retour à l'état d'origine.
     let doc = std::fs::read_to_string(path.join("site.revel.json")).unwrap();
     assert!(!doc.contains("essai-mcp"));

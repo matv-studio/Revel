@@ -317,6 +317,110 @@ impl Revel {
     }
 }
 
+/// Arguments d'un outil appelé sans MCP.
+fn args_of<T: serde::de::DeserializeOwned>(v: Value) -> Result<Parameters<T>, String> {
+    serde_json::from_value(v)
+        .map(Parameters)
+        .map_err(|e| format!("Arguments not understood: {e}"))
+}
+
+impl Revel {
+    /// Outil appelé sans MCP (interface HTTP décrite en OpenAPI) : mêmes outils, mêmes résultats,
+    /// modifications relevées pour `client`. `None` : outil inconnu.
+    pub async fn run(&self, name: &str, args: Value, client: &str) -> Option<CallToolResult> {
+        let args = if args.is_null() { json!({}) } else { args };
+        let via = Via {
+            client: client.to_string(),
+            tool: name.to_string(),
+            target: ["id", "selector", "path", "url", "page", "file"]
+                .iter()
+                .find_map(|k| args.get(*k).and_then(Value::as_str).map(str::to_string)),
+        };
+        macro_rules! go {
+            ($f:ident) => {
+                match args_of(args) {
+                    Ok(a) => self.$f(a).await,
+                    Err(e) => fail(e),
+                }
+            };
+        }
+        let run = async move {
+            Some(match name {
+                "get_site" => go!(get_site),
+                "get_page" => go!(get_page),
+                "get_node" => go!(get_node),
+                "get_styles" => go!(get_styles),
+                "get_page_html" => go!(get_page_html),
+                "set_text" => go!(set_text),
+                "set_attributes" => go!(set_attributes),
+                "set_styles" => go!(set_styles),
+                "insert_html" => go!(insert_html),
+                "remove_node" => go!(remove_node),
+                "apply_commands" => go!(apply_commands),
+                "undo" => go!(undo),
+                "redo" => go!(redo),
+                "get_data" => go!(get_data),
+                "set_data" => go!(set_data),
+                "list_collections" => go!(list_collections),
+                "get_entry" => go!(get_entry),
+                "set_entry_field" => go!(set_entry_field),
+                _ => return None,
+            })
+        };
+        VIA.scope(via, run).await
+    }
+
+    /// Description OpenAPI 3.1 des outils (`POST /api/<outil>`, corps : arguments de l'outil).
+    pub fn openapi(server: &str) -> Value {
+        let mut paths = serde_json::Map::new();
+        for t in Self::tool_router().list_all() {
+            let mut schema = Value::Object((*t.input_schema).clone());
+            if let Some(o) = schema.as_object_mut() {
+                o.remove("$schema");
+            }
+            let description = t.description.as_deref().unwrap_or_default();
+            let summary = description
+                .split(". ")
+                .next()
+                .unwrap_or_default()
+                .trim_end_matches('.');
+            paths.insert(
+                format!("/api/{}", t.name),
+                json!({ "post": {
+                    "operationId": t.name,
+                    "summary": summary,
+                    "description": description,
+                    "requestBody": { "required": true, "content": { "application/json": { "schema": schema } } },
+                    "responses": {
+                        "200": { "description": "Result (text for the model)", "content": { "application/json": { "schema": {
+                            "type": "object", "properties": { "result": { "type": "string" } }, "required": ["result"] } } } },
+                        "422": { "description": "The tool could not do it (readable reason)", "content": { "application/json": { "schema": {
+                            "type": "object", "properties": { "error": { "type": "string" } }, "required": ["error"] } } } },
+                        "401": { "description": "Missing or wrong access key" }
+                    }
+                } }),
+            );
+        }
+        json!({
+            "openapi": "3.1.0",
+            "info": { "title": "Revel", "version": env!("CARGO_PKG_VERSION"), "description": INSTRUCTIONS },
+            "servers": [{ "url": server }],
+            "components": { "securitySchemes": { "bearer": { "type": "http", "scheme": "bearer" } } },
+            "security": [{ "bearer": [] }],
+            "paths": paths,
+        })
+    }
+}
+
+/// Texte d'un résultat d'outil.
+pub(crate) fn text_of(r: &CallToolResult) -> String {
+    r.content
+        .iter()
+        .filter_map(|c| c.as_text().map(|t| t.text.clone()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[tool_router]
 impl Revel {
     #[tool(
@@ -1003,5 +1107,32 @@ impl ServerHandler for Revel {
                 Implementation::new("revel", env!("CARGO_PKG_VERSION")).with_title("Revel"),
             )
             .with_instructions(INSTRUCTIONS)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Reply;
+    use revel_protocol::Failure;
+
+    struct Nothing;
+
+    impl Invoke for Nothing {
+        fn invoke(&self, _: &str, _: Value) -> Reply {
+            Box::pin(async { Err(Failure::new("error-mcp-no-site")) })
+        }
+    }
+
+    /// Chaque outil du protocole est aussi appelable sans MCP, et décrit sans référence externe.
+    #[tokio::test]
+    async fn outils_sans_mcp() {
+        let r = Revel::new(Arc::new(Nothing));
+        for t in Revel::tool_router().list_all() {
+            assert!(r.run(&t.name, json!({}), "t").await.is_some(), "{}", t.name);
+        }
+        assert!(r.run("inconnu", json!({}), "t").await.is_none());
+        let doc = Revel::openapi("http://127.0.0.1:1").to_string();
+        assert!(!doc.contains("\"$ref\""), "{doc}");
     }
 }

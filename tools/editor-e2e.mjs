@@ -2118,7 +2118,8 @@ try {
     await page.fill('.mcp-port', '80');
     await page.press('.mcp-port', 'Enter');
     await page.waitForTimeout(200);
-    check('assistants : port changé, port réservé refusé', await page.inputValue('.mcp-port') === '47600');
+    check('assistants : port changé (adresses suivies), port réservé refusé', await page.inputValue('.mcp-port') === '47600'
+      && (await page.textContent('.mcp-openapi .mcp-key-value')) === 'http://127.0.0.1:47600/openapi.json');
     const snip = () => page.textContent('.snippet-code');
     const desktop = JSON.parse(await snip());
     await page.click('.mcp-clients [data-client="claude-code"]');

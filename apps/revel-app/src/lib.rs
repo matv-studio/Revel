@@ -692,7 +692,7 @@ fn decode_b64(data: &str) -> Res<Vec<u8>> {
 
 /// Empreinte des fichiers du site (rechargement après une modification hors de Revel).
 #[tauri::command]
-fn edit_stamp(s: State<AppState>, path: String) -> Res<String> {
+fn edit_stamp(s: State<AppState>, path: String) -> Res<revel_edit::EditStamp> {
     s.core.edit_stamp(std::path::Path::new(&path)).map_err(err)
 }
 

@@ -339,9 +339,6 @@ pub struct Ed {
     pub pending: RwSignal<u32>,
     /// Heure (ms) du dernier enregistrement confirmé.
     pub saved_at: RwSignal<Option<f64>>,
-    /// Heure de la dernière modification faite dans Revel (ms) : les fichiers changés juste après
-    /// ne sont pas pris pour une modification extérieure.
-    pub own_change: RwSignal<f64>,
     /// Composant ouvert (modification isolée) : celui qui contient l'élément sélectionné.
     pub isolated: RwSignal<Option<String>>,
     /// Langue de travail (celle de l'interface du site ouvert, `Ui::locale`).
@@ -523,7 +520,6 @@ impl Ed {
     /// Après une modification, une annulation ou un rétablissement : copie locale et canevas.
     pub fn after(self, ui: Ui, st: EditState) {
         if let Some(cmd) = &st.applied {
-            self.own_change.set(js_sys::Date::now());
             // Valeur liée : écrite dans un fichier par le cœur ; variable de page ou de gabarit :
             // document relu.
             if let Command::SetBound { binding, .. } = cmd {
@@ -1822,7 +1818,6 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         ),
         computed: RwSignal::new(Default::default()),
         count: RwSignal::new(None),
-        own_change: RwSignal::new(0.0),
         pending: RwSignal::new(0),
         saved_at: RwSignal::new(None),
         isolated: RwSignal::new(None),
@@ -2188,29 +2183,56 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     });
     install_test_hook(ed, ui);
 
-    // Fichiers modifiés hors de Revel (Pages CMS, éditeur de texte…) : page et document relus.
-    let stamp = StoredValue::new(None::<String>);
-    let path_poll = site.path.clone();
-    if let Ok(h) = set_interval_with_handle(
-        move || {
-            let path = path_poll.clone();
-            spawn_local(async move {
-                let Ok(now) = api::edit_stamp(&path).await else {
-                    return;
-                };
-                let before = stamp.get_value();
-                stamp.set_value(Some(now.clone()));
-                let recent = js_sys::Date::now() - ed.own_change.get_untracked() < 2500.0;
-                if before.is_some_and(|b| b != now) && !recent {
-                    ed.reopen(ui);
-                    ed.load.update(|n| *n += 1);
-                }
-            });
-        },
-        std::time::Duration::from_millis(2000),
-    ) {
+    // Document modifié ailleurs : page et document relus. Par une autre vue ou un assistant :
+    // révision de la session différente de celle de l'éditeur (aucune modification de l'éditeur
+    // en cours d'envoi ; stable sur deux relevés, ou dès le retour dans l'éditeur). Hors de Revel
+    // (Pages CMS, éditeur de texte) : même révision, fichiers différents.
+    let stamp = StoredValue::new(None::<revel_edit::EditStamp>);
+    let path_poll = StoredValue::new(site.path.clone());
+    let check = move |shown: bool| {
+        let path = path_poll.get_value();
+        spawn_local(async move {
+            let Ok(now) = api::edit_stamp(&path).await else {
+                return;
+            };
+            let before = stamp.get_value();
+            stamp.set_value(Some(now.clone()));
+            let Some(before) = before else {
+                return;
+            };
+            let same = before.revision == now.revision;
+            let mine = ed.state.with_untracked(|s| s.as_ref().map(|s| s.revision));
+            let elsewhere = (shown || same)
+                && mine.is_some_and(|r| r != now.revision)
+                && ed.pending.get_untracked() == 0;
+            let outside = same && before.files != now.files;
+            if elsewhere || outside {
+                ed.reopen(ui);
+                ed.load.update(|n| *n += 1);
+            }
+        });
+    };
+    if let Ok(h) =
+        set_interval_with_handle(move || check(false), std::time::Duration::from_millis(1000))
+    {
         on_cleanup(move || h.clear());
     }
+    let shown = Memo::new(move |_| {
+        matches!(
+            ui.route.get(),
+            crate::Route::Site {
+                tab: crate::Tab::Editor,
+                ..
+            }
+        )
+    });
+    Effect::new(move |prev: Option<bool>| {
+        let now = shown.get();
+        if prev == Some(false) && now {
+            check(true);
+        }
+        now
+    });
 
     // Échelle du zoom ajusté (affichée dans la liste des zooms).
     Effect::new(move |_| ed.fit.set(ed.geo().fit));

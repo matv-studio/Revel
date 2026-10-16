@@ -838,10 +838,16 @@ impl Core {
         })
     }
 
-    /// Empreinte des fichiers du site lus par le canevas : l'interface la compare régulièrement
-    /// pour recharger la page quand un fichier a été modifié hors de Revel (Pages CMS…).
-    pub fn edit_stamp(&self, path: &Path) -> Result<String> {
-        self.with_project(path, |p| Ok(files_stamp(p)))
+    /// Empreinte du site ouvert : révision de la session (modifications des autres vues et des
+    /// assistants) et fichiers lus par le canevas (modifiés hors de Revel : Pages CMS…).
+    /// L'interface la compare régulièrement pour relire le document et recharger la page.
+    pub fn edit_stamp(&self, path: &Path) -> Result<revel_edit::EditStamp> {
+        self.with_session(path, |s| {
+            Ok(revel_edit::EditStamp {
+                revision: s.revision,
+                files: files_stamp(&s.project),
+            })
+        })
     }
 
     /// Termine une saisie continue (la prochaine commande ouvre une nouvelle étape).

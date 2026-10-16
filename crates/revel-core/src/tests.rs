@@ -445,11 +445,12 @@ fn textes_lies_ecrits_dans_leur_source() {
         written,
         data.replace("title: L'agence", "title: L'atelier !")
     );
+    let after = c.edit_stamp(&site).unwrap();
     assert_ne!(
-        c.edit_stamp(&site).unwrap(),
-        stamp,
+        after.files, stamp.files,
         "fichier modifié : empreinte changée"
     );
+    assert_eq!(after.revision, stamp.revision + 1, "révision suivante");
     // En-tête d'un contenu (style entre guillemets simples gardé).
     c.edit_apply(
         &site,

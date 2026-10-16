@@ -723,8 +723,8 @@ pub async fn canvas_open(path: &str, scripts: bool) -> Res<String> {
     call("canvas_open", &A { path, scripts }).await
 }
 
-/// Empreinte des fichiers du site (modifications hors de Revel).
-pub async fn edit_stamp(path: &str) -> Res<String> {
+/// Empreinte du site ouvert (révision de la session, fichiers modifiés hors de Revel).
+pub async fn edit_stamp(path: &str) -> Res<revel_edit::EditStamp> {
     call("edit_stamp", &PathArg { path }).await
 }
 

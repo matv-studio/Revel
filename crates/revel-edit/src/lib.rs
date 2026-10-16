@@ -123,6 +123,15 @@ pub struct EditState {
     pub applied: Option<Command>,
 }
 
+/// Empreinte d'un site ouvert, comparée régulièrement par l'éditeur : `revision` change quand une
+/// autre vue ou un assistant (même session du cœur) modifie le document, `files` quand un fichier
+/// lu par le canevas change hors de Revel (Pages CMS, éditeur de texte).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EditStamp {
+    pub revision: u64,
+    pub files: String,
+}
+
 /// Document ouvert pour l'édition.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Opened {

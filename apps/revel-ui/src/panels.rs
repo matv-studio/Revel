@@ -6,17 +6,6 @@ use crate::editor::Ed;
 use crate::{Ui, icons};
 use leptos::prelude::*;
 
-/// Bouton d'une fonction prévue (désactivé, étape en info-bulle).
-#[component]
-pub fn PlannedButton(key: &'static str, step: u8, icon: fn() -> AnyView) -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    view! {
-        <button class="icon-btn icon-btn--small is-planned" disabled=true
-            title=move || format!("{} — {}", ui.tx(key, &[]), ui.tx("planned-step", &[("step", step.to_string())]))
-            aria-label=ui.t(key)>{icon()}</button>
-    }
-}
-
 /// Panneau entièrement prévu pour une étape suivante.
 #[component]
 pub fn Planned(key: &'static str, step: u8, icon: fn() -> AnyView) -> impl IntoView {
@@ -108,9 +97,10 @@ pub fn Cms() -> impl IntoView {
                 }}
             </div>
             <footer class="panel-foot">
-                <span class="panel-foot-text muted">{move || ui.tx("planned-edit", &[("step", "3".to_string())])}</span>
-                <PlannedButton key="cms-entry-new" step=3 icon=icons::plus/>
-                <PlannedButton key="cms-collection-new" step=3 icon=icons::database/>
+                <span class="panel-foot-text muted"></span>
+                // Contenus créés et modifiés dans la vue CMS.
+                <button class="icon-btn icon-btn--small" title=ui.t("cms-open-view") aria-label=ui.t("cms-open-view")
+                    on:click=move |_| ui.tab(crate::Tab::Cms)>{icons::database()}</button>
             </footer>
         </div>
     }

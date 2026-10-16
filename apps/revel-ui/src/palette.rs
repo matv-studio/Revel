@@ -449,7 +449,12 @@ pub fn Palette() -> impl IntoView {
         }
     });
     let on_key = window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
-        if !(e.ctrl_key() || e.meta_key()) || e.key().to_lowercase() != "k" || e.shift_key() {
+        // Ctrl+K ou Ctrl+Espace.
+        let space = e.key() == " " || e.code() == "Space";
+        if !(e.ctrl_key() || e.meta_key())
+            || !(e.key().to_lowercase() == "k" || space)
+            || e.shift_key()
+        {
             return;
         }
         if !matches!(ui.route.get_untracked(), crate::Route::Site { .. }) {

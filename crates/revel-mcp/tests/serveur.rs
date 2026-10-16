@@ -36,6 +36,7 @@ fn site() -> (tempfile::TempDir, Arc<Core>, std::path::PathBuf) {
         "Atelier",
         "fr",
         revel_protocol::SiteTemplate::Showcase,
+        false,
     )
     .unwrap();
     core.edit_open(&path).unwrap();

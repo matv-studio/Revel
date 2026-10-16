@@ -298,7 +298,7 @@ impl Block {
                     vec![
                         ("width", "100%"),
                         ("padding", "12px 14px"),
-                        ("border", "1px solid rgba(0, 0, 0, 0.2)"),
+                        ("border", "1px solid rgba(127, 127, 127, 0.35)"),
                         ("border-radius", "8px"),
                         ("background", "transparent"),
                         ("color", "inherit"),

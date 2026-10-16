@@ -1,5 +1,6 @@
-//! Réglages de l'application : langue, thème, couleur d'accent et son étendue, langues de
-//! traduction automatique (D-36), assistants IA (D-41).
+//! Réglages de l'application, par rubrique (navigation à gauche) : général (langue, dossier des
+//! projets), apparence (thème, couleur d'accent et son étendue), langues de traduction
+//! automatique (D-36), assistants IA (D-41), comptes.
 
 use crate::dialog::Ask;
 use crate::{Ui, api, icons};
@@ -10,39 +11,147 @@ use revel_protocol::{AppSettings, PackState, TranslateEvent, TranslatePack};
 /// Couleurs proposées (une seule est utilisée à la fois).
 const PRESETS: &[&str] = &["#3D7EFF", "#7C5CFF", "#1F9D6B", "#E8890C", "#E5487A"];
 
+/// Rubriques des réglages de l'application (navigation à gauche, comme les paramètres du site).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Part {
+    General,
+    Appearance,
+    Translate,
+    Assistants,
+    Accounts,
+}
+
+const PARTS: &[(Part, &str, &str)] = &[
+    (Part::General, "settings-general", "general"),
+    (Part::Appearance, "settings-appearance", "appearance"),
+    (Part::Translate, "settings-translate", "translate"),
+    (Part::Assistants, "settings-mcp", "assistants"),
+    (Part::Accounts, "settings-accounts", "accounts"),
+];
+
+/// Rubrique ouverte (gardée pendant la session).
+fn last_part() -> Part {
+    let v = web_sys::window()
+        .and_then(|w| w.session_storage().ok().flatten())
+        .and_then(|s| s.get_item("revel-settings-part").ok().flatten())
+        .unwrap_or_default();
+    PARTS
+        .iter()
+        .find(|(_, _, id)| *id == v)
+        .map(|(p, _, _)| *p)
+        .unwrap_or(Part::General)
+}
+
+fn keep_part(p: Part) {
+    if let Some((_, _, id)) = PARTS.iter().find(|(x, _, _)| *x == p)
+        && let Some(s) = web_sys::window().and_then(|w| w.session_storage().ok().flatten())
+    {
+        let _ = s.set_item("revel-settings-part", id);
+    }
+}
+
 #[component]
 pub fn Settings() -> impl IntoView {
     let ui = expect_context::<Ui>();
-    let update = move |f: &dyn Fn(&mut AppSettings)| {
-        ui.settings.update(|s| f(s));
-        let s = ui.settings.get_untracked();
-        spawn_local(async move {
-            if let Err(e) = api::set_settings(&s).await {
-                ui.fail(e);
-            }
-        });
-    };
-    let theme_btn = move |value: &'static str, key: &'static str| {
-        view! {
-            <button role="radio" class:is-on=move || ui.settings.with(|s| s.theme == value)
-                aria-checked=move || ui.settings.with(|s| (s.theme == value).to_string())
-                on:click=move |_| update(&|s| s.theme = value.to_string())>{ui.t(key)}</button>
+    let part = RwSignal::new(last_part());
+    view! {
+        <div class="settings-layout app-settings">
+            <nav class="settings-nav" aria-label=ui.t("nav-settings")>
+                {PARTS.iter().map(|(p, key, id)| {
+                    let p = *p;
+                    view! {
+                        <button class="settings-nav-item" class:is-on=move || part.get() == p data-section=*id
+                            on:click=move |_| { part.set(p); keep_part(p) }>
+                            <span>{ui.t(key)}</span>
+                        </button>
+                    }
+                }).collect_view()}
+            </nav>
+            <div class="settings-content">
+                {move || match part.get() {
+                    Part::General => view! { <General/> }.into_any(),
+                    Part::Appearance => view! { <Appearance/> }.into_any(),
+                    Part::Translate => view! { <TranslatePacks/> }.into_any(),
+                    Part::Assistants => view! {
+                        <section class="page settings-page">
+                            <header class="page-head"><h1 title=ui.t("settings-mcp-help")>{ui.t("settings-mcp")}</h1></header>
+                            <crate::assistants::Assistants/>
+                        </section>
+                    }.into_any(),
+                    Part::Accounts => view! {
+                        <section class="page settings-page">
+                            <header class="page-head"><h1>{ui.t("settings-accounts")}</h1></header>
+                            <div class="section">
+                                <div class="form-grid">
+                                    <span class="label" title=ui.t("settings-github-help")>"GitHub"</span>
+                                    <crate::account::GithubAccount/>
+                                </div>
+                            </div>
+                        </section>
+                    }.into_any(),
+                }}
+            </div>
+        </div>
+    }
+}
+
+/// Réglages enregistrés (interface mise à jour aussitôt, fichier ensuite).
+fn update(ui: Ui, f: &dyn Fn(&mut AppSettings)) {
+    ui.settings.update(|s| f(s));
+    let s = ui.settings.get_untracked();
+    spawn_local(async move {
+        if let Err(e) = api::set_settings(&s).await {
+            ui.fail(e);
         }
-    };
+    });
+}
+
+/// Général : langue de l'interface, dossier des nouveaux sites.
+#[component]
+fn General() -> impl IntoView {
+    let ui = expect_context::<Ui>();
     // Noms des langues dans leur propre langue, quelle que soit celle de l'interface.
     let lang_btn = move |value: &'static str, label: &'static str| {
         view! {
             <button role="radio" lang=value class:is-on=move || ui.settings.with(|s| s.lang == value)
                 aria-checked=move || ui.settings.with(|s| (s.lang == value).to_string())
-                on:click=move |_| update(&|s| s.lang = value.to_string())>{label}</button>
+                on:click=move |_| update(ui, &|s| s.lang = value.to_string())>{label}</button>
         }
     };
-    let accent = move || ui.settings.with(|s| s.accent.clone());
+    // Dossier des projets en vigueur (choisi, sinon celui proposé par l'application).
+    let dir = RwSignal::new(String::new());
+    let reload = move || {
+        spawn_local(async move {
+            if let Ok(d) = api::default_sites_dir().await
+                && !dir.is_disposed()
+            {
+                dir.set(d);
+            }
+        })
+    };
+    reload();
+    let custom = move || ui.settings.with(|s| s.projects_dir.is_some());
+    let change = move |_| {
+        let start = dir.get_untracked();
+        spawn_local(async move {
+            match api::pick_folder_at(Some(&start)).await {
+                Ok(Some(d)) => {
+                    update(ui, &|s| s.projects_dir = Some(d.clone()));
+                    // Après l'enregistrement des réglages.
+                    set_timeout(reload, std::time::Duration::from_millis(150));
+                }
+                Ok(None) => {}
+                Err(e) => ui.fail(e),
+            }
+        });
+    };
+    let reset = move |_| {
+        update(ui, &|s| s.projects_dir = None);
+        set_timeout(reload, std::time::Duration::from_millis(150));
+    };
     view! {
-        <section class="page page--narrow">
-            <header class="page-head">
-                <h1>{ui.t("nav-settings")}</h1>
-            </header>
+        <section class="page settings-page">
+            <header class="page-head"><h1>{ui.t("settings-general")}</h1></header>
             <div class="section">
                 <div class="form-grid">
                     <span class="label">{ui.t("settings-lang")}</span>
@@ -50,6 +159,38 @@ pub fn Settings() -> impl IntoView {
                         {lang_btn("fr", "Français")}
                         {lang_btn("en", "English")}
                     </div>
+                    <span class="label" title=ui.t("settings-projects-help")>{ui.t("settings-projects")}</span>
+                    <div class="path-field projects-dir">
+                        <span class="path-value" title=move || dir.get()>{move || dir.get()}</span>
+                        <Show when=custom>
+                            <button type="button" class="icon-btn icon-btn--small" title=ui.t("settings-projects-reset")
+                                aria-label=ui.t("settings-projects-reset") on:click=reset>{icons::reset()}</button>
+                        </Show>
+                        <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    }
+}
+
+/// Apparence : thème, couleur d'accent et son étendue.
+#[component]
+fn Appearance() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let theme_btn = move |value: &'static str, key: &'static str| {
+        view! {
+            <button role="radio" class:is-on=move || ui.settings.with(|s| s.theme == value)
+                aria-checked=move || ui.settings.with(|s| (s.theme == value).to_string())
+                on:click=move |_| update(ui, &|s| s.theme = value.to_string())>{ui.t(key)}</button>
+        }
+    };
+    let accent = move || ui.settings.with(|s| s.accent.clone());
+    view! {
+        <section class="page settings-page">
+            <header class="page-head"><h1>{ui.t("settings-appearance")}</h1></header>
+            <div class="section">
+                <div class="form-grid">
                     <span class="label">{ui.t("settings-theme")}</span>
                     <div class="segmented" role="radiogroup">
                         {theme_btn("system", "theme-system")}
@@ -60,19 +201,19 @@ pub fn Settings() -> impl IntoView {
                     <div class="swatches" role="radiogroup">
                         <button role="radio" class="swatch swatch--none" class:is-on=move || accent().is_none()
                             title=ui.t("accent-none") aria-label=ui.t("accent-none")
-                            on:click=move |_| update(&|s| s.accent = None)></button>
+                            on:click=move |_| update(ui, &|s| s.accent = None)></button>
                         {PRESETS.iter().map(|c| {
                             let c: &'static str = c;
                             view! {
                                 <button role="radio" class="swatch" class:is-on=move || accent().as_deref() == Some(c)
                                     style:background=c aria-label=c title=c
-                                    on:click=move |_| update(&|s| s.accent = Some(c.to_string()))></button>
+                                    on:click=move |_| update(ui, &|s| s.accent = Some(c.to_string()))></button>
                             }
                         }).collect_view()}
                         <label class="swatch swatch--custom" title=ui.t("accent-custom")>
                             <input type="color" aria-label=ui.t("accent-custom")
                                 prop:value=move || accent().unwrap_or_else(|| "#808080".into())
-                                on:change=move |ev| { let v = event_target_value(&ev); update(&|s| s.accent = Some(v.clone())) }/>
+                                on:change=move |ev| { let v = event_target_value(&ev); update(ui, &|s| s.accent = Some(v.clone())) }/>
                         </label>
                     </div>
                     <span class="label" title=ui.t("settings-accent-scope-help")>{ui.t("settings-accent-scope")}</span>
@@ -87,18 +228,9 @@ pub fn Settings() -> impl IntoView {
                                     aria-checked=move || ui.settings.with(|s| (s.accent_scope == value).to_string())
                                     prop:disabled=move || accent().is_none()
                                     title=ui.t(help)
-                                    on:click=move |_| update(&|s| s.accent_scope = value.to_string())>{ui.t(key)}</button>
+                                    on:click=move |_| update(ui, &|s| s.accent_scope = value.to_string())>{ui.t(key)}</button>
                             }).collect_view()}
                     </div>
-                </div>
-            </div>
-            <TranslatePacks/>
-            <crate::assistants::Assistants/>
-            <div class="section">
-                <h2>{ui.t("settings-accounts")}</h2>
-                <div class="form-grid">
-                    <span class="label" title=ui.t("settings-github-help")>"GitHub"</span>
-                    <crate::account::GithubAccount/>
                 </div>
             </div>
         </section>
@@ -247,8 +379,9 @@ fn TranslatePacks() -> impl IntoView {
         }
     };
     view! {
-        <div class="section">
-            <h2 title=ui.t("settings-translate-help")>{ui.t("settings-translate")}</h2>
+        <section class="page settings-page">
+            <header class="page-head"><h1 title=ui.t("settings-translate-help")>{ui.t("settings-translate")}</h1></header>
+            <div class="section">
             <ul class="packs">
                 {move || packs.get().map(|mut list| {
                     list.sort_by_key(|p| match p.state {
@@ -259,6 +392,7 @@ fn TranslatePacks() -> impl IntoView {
                     list.into_iter().map(row).collect_view()
                 })}
             </ul>
-        </div>
+            </div>
+        </section>
     }
 }

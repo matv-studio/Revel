@@ -34,21 +34,27 @@ const BASE: &str = r#"<!doctype html>
 
 const HOME: &str = r#"<main class="page">
 <section class="section">
-<h1 class="title">{{ site.title }}</h1>
-<p class="lead">Première page du site.</p>
+<h1 class="titre">{{ site.title }}</h1>
+<p class="intro">Première page du site.</p>
 </section>
 </main>"#;
 
+/// Couleurs du site (fond sombre par défaut, ou clair), réglables dans le panneau de styles.
+const DARK: &str =
+    ":root { color-scheme: dark; --fond: #0f0f10; --texte: #f2f2f2; --texte-doux: #a3a3a3; }\n";
+const LIGHT: &str =
+    ":root { color-scheme: light; --fond: #ffffff; --texte: #1b1b1b; --texte-doux: #555555; }\n";
+
 const CSS: &str = r#"*, *::before, *::after { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, sans-serif; line-height: 1.5; color: #1b1b1b; background: #ffffff; }
+body { margin: 0; font-family: system-ui, sans-serif; line-height: 1.5; color: var(--texte); background: var(--fond); }
 img { max-width: 100%; height: auto; }
 .page { min-height: 100vh; }
 .section { max-width: 1120px; margin: 0 auto; padding: 96px 24px; }
-.title { margin: 0 0 16px; font-size: 48px; line-height: 1.1; }
-.lead { margin: 0; font-size: 20px; color: #555555; }
+.titre { margin: 0 0 16px; font-size: 48px; line-height: 1.1; }
+.intro { margin: 0; font-size: 20px; color: var(--texte-doux); }
 @media (max-width: 767px) {
   .section { padding: 64px 20px; }
-  .title { font-size: 36px; }
+  .titre { font-size: 36px; }
 }
 "#;
 
@@ -251,13 +257,14 @@ fn page_of(
 
 /// Nouveau site prêt à modifier.
 pub fn starter_site(name: &str, lang: &str) -> Site {
-    starter_from(name, lang, SiteTemplate::Blank)
+    starter_from(name, lang, SiteTemplate::Blank, false)
 }
 
 /// Nouveau site d'après un modèle.
-pub fn starter_from(name: &str, lang: &str, template: SiteTemplate) -> Site {
+pub fn starter_from(name: &str, lang: &str, template: SiteTemplate, light: bool) -> Site {
+    let colors = if light { LIGHT } else { DARK };
     if template != SiteTemplate::Blank {
-        return template_site(name, lang, template);
+        return template_site(name, lang, template, colors);
     }
     let mut s = Site::new(name, lang);
     s.data.insert(
@@ -295,14 +302,14 @@ pub fn starter_from(name: &str, lang: &str, template: SiteTemplate) -> Site {
     s.stylesheet = Some(Stylesheet {
         url: "/assets/site.css".into(),
         source: None,
-        items: revel_style::parse(CSS).unwrap_or_default(),
+        items: revel_style::parse(&format!("{colors}{CSS}")).unwrap_or_default(),
     });
     s.ensure_ids();
     s
 }
 
 /// Site vitrine ou blog.
-fn template_site(name: &str, lang: &str, template: SiteTemplate) -> Site {
+fn template_site(name: &str, lang: &str, template: SiteTemplate, colors: &str) -> Site {
     let fr = lang.to_ascii_lowercase().starts_with("fr");
     let t = |a: &'static str, b: &'static str| if fr { a } else { b };
     let mut s = Site::new(name, lang);
@@ -331,7 +338,7 @@ fn template_site(name: &str, lang: &str, template: SiteTemplate) -> Site {
         props: Default::default(),
         body: parse(BASE_MENU),
     });
-    let mut css = String::from(CSS);
+    let mut css = format!("{colors}{CSS}");
     css.push_str(MENU_CSS);
     if template == SiteTemplate::Blog {
         css.push_str(ARTICLE_CSS);

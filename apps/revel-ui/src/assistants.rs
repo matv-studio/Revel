@@ -233,7 +233,6 @@ pub fn Assistants() -> impl IntoView {
     };
     view! {
         <div class="section mcp">
-            <h2 title=ui.t("settings-mcp-help")>{ui.t("settings-mcp")}</h2>
             <div class="form-grid">
                 <span class="label" title=ui.t("mcp-server-help")>{ui.t("mcp-server")}</span>
                 <div class="mcp-server">

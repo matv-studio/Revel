@@ -1,6 +1,11 @@
 //! Calques (étape 2.4) : arbre de la page affichée — gabarits emboîtés, page, composants utilisés,
 //! blocs logiques — avec sélection synchronisée avec le canevas, glisser-déposer, dupliquer,
 //! envelopper, supprimer, monter et descendre.
+//!
+//! L'arbre montre ce que l'on voit sur la page, comme Webflow et Framer : pas de `html`, `head`,
+//! `meta`, scripts ni doctype ; la page (`body`) à la racine ; le texte d'un élément affiché sur sa
+//! ligne plutôt qu'en ligne à part ; des noms simples (classe rendue lisible ou nature de
+//! l'élément), la balise en info-bulle.
 
 use crate::editor::{Ed, Selection};
 use crate::{Ui, icons};
@@ -52,7 +57,28 @@ pub struct Row {
     pub has_children: bool,
     /// Peut recevoir des enfants (glisser-déposer « dans ») : branche et nombre d'enfants.
     pub inside: Option<(Branch, usize)>,
+    /// Texte de l'élément, montré sur sa ligne (texte et expressions qu'il contient).
+    pub preview: Option<String>,
 }
+
+/// Affichage d'une ligne dans l'arbre simplifié.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Vis {
+    Show,
+    /// Montrée sans ses descendants (icône SVG).
+    Leaf,
+    /// Pas de ligne, enfants remontés d'un niveau (`html`, contenu de la page seul dans la page).
+    Through,
+    /// Masquée avec ses descendants (`head`, scripts, doctype…).
+    Hide,
+    /// Texte fondu dans la ligne de l'élément qui le contient.
+    Merge,
+}
+
+/// Éléments sans rendu visible (ou techniques) : jamais dans les calques.
+const HIDDEN: &[&str] = &[
+    "head", "script", "style", "link", "meta", "noscript", "template", "base", "title", "br", "wbr",
+];
 
 fn class_of(attrs: &[revel_model::Attr]) -> String {
     attrs
@@ -60,8 +86,7 @@ fn class_of(attrs: &[revel_model::Attr]) -> String {
         .find(|a| a.name == "class")
         .and_then(|a| a.value.as_deref())
         .filter(|v| !v.contains("{{") && !v.contains("{%"))
-        .and_then(|v| v.split_whitespace().next())
-        .map(str::to_string)
+        .map(|v| v.split_whitespace().collect::<Vec<_>>().join(" "))
         .unwrap_or_default()
 }
 
@@ -103,6 +128,8 @@ struct Builder<'a> {
     inner: Vec<(Owner, &'a [Node])>,
     markdown: bool,
     rows: Vec<Row>,
+    /// Affichage de chaque ligne (même ordre que `rows`).
+    vis: Vec<Vis>,
     /// Composants en cours de parcours (garde contre un composant qui s'utilise lui-même).
     stack: Vec<String>,
 }
@@ -177,6 +204,27 @@ impl<'a> Builder<'a> {
                 Node::If { then, .. } => Some((Branch::Then, then.len())),
                 _ => None,
             };
+            let in_element = ancestors
+                .last()
+                .and_then(|a| self.rows.iter().rev().find(|r| &r.key == a))
+                .is_some_and(|r| matches!(r.kind, Kind::Element { .. }));
+            let vis = match n {
+                Node::Element { tag, .. } => {
+                    let t = tag.to_ascii_lowercase();
+                    if t == "html" {
+                        Vis::Through
+                    } else if HIDDEN.contains(&t.as_str()) {
+                        Vis::Hide
+                    } else if t == "svg" {
+                        Vis::Leaf
+                    } else {
+                        Vis::Show
+                    }
+                }
+                Node::Html { html } if html.trim_start().starts_with("<!") => Vis::Hide,
+                Node::Text { .. } | Node::Out { .. } if in_element => Vis::Merge,
+                _ => Vis::Show,
+            };
             let at = self.rows.len();
             self.rows.push(Row {
                 key: k.clone(),
@@ -189,7 +237,9 @@ impl<'a> Builder<'a> {
                 kind,
                 has_children: false,
                 inside: inside.filter(|_| id.is_some()),
+                preview: None,
             });
+            self.vis.push(vis);
             let mut anc = ancestors.to_vec();
             anc.push(k.clone());
             let before = self.rows.len();
@@ -283,7 +333,9 @@ impl<'a> Builder<'a> {
             kind: Kind::Branch(b),
             has_children: false,
             inside: id.as_ref().map(|_| (b, nodes.len())),
+            preview: None,
         });
+        self.vis.push(Vis::Show);
         let mut anc = ancestors.to_vec();
         anc.push(k.clone());
         let before = self.rows.len();
@@ -334,12 +386,99 @@ fn tree(doc: &Site, page: &revel_protocol::EditorPageInfo) -> (Vec<Row>, Vec<Var
         inner: inner.clone(),
         markdown: fixed.is_none(),
         rows: Vec::new(),
+        vis: Vec::new(),
         stack: Vec::new(),
     };
     if let Some((o, body)) = inner.first().cloned() {
         b.list(body, &o, Parent::root(o.clone()), "", &[], 0);
     }
-    (b.rows, b.vars)
+    (simplify(b.rows, b.vis), b.vars)
+}
+
+/// Arbre affiché : lignes masquées retirées, textes fondus dans leur élément, niveaux recalculés.
+fn simplify(mut rows: Vec<Row>, mut vis: Vec<Vis>) -> Vec<Row> {
+    use std::collections::HashMap;
+    let pos: HashMap<String, usize> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (r.key.clone(), i))
+        .collect();
+    let parent_of =
+        |rows: &[Row], i: usize| rows[i].ancestors.last().and_then(|a| pos.get(a).copied());
+    // Descendants d'une ligne masquée ou d'une icône : masqués (parcours dans l'ordre de l'arbre).
+    for i in 0..rows.len() {
+        if let Some(p) = parent_of(&rows, i)
+            && matches!(vis[p], Vis::Hide | Vis::Leaf)
+        {
+            vis[i] = Vis::Hide;
+        }
+    }
+    // Textes fondus : aperçu sur la ligne de l'élément.
+    for i in 0..rows.len() {
+        if vis[i] != Vis::Merge {
+            continue;
+        }
+        let Some(p) = parent_of(&rows, i) else {
+            continue;
+        };
+        let part = match &rows[i].kind {
+            Kind::Text(t) => t.clone(),
+            Kind::Expr(e) => format!("{{{{ {e} }}}}"),
+            _ => continue,
+        };
+        let prev = rows[p].preview.take().unwrap_or_default();
+        rows[p].preview = Some(short(&format!("{prev} {part}"), 48));
+    }
+    let shown = |v: Vis| matches!(v, Vis::Show | Vis::Leaf);
+    // Parent affiché le plus proche.
+    let shown_parent = |rows: &[Row], vis: &[Vis], i: usize| {
+        rows[i]
+            .ancestors
+            .iter()
+            .rev()
+            .filter_map(|a| pos.get(a).copied())
+            .find(|&p| shown(vis[p]))
+    };
+    // Contenu de la page seul dans la page (`body` réduit à l'emplacement, site vierge) : ses
+    // lignes directement sous la page.
+    for i in 0..rows.len() {
+        if !matches!(rows[i].kind, Kind::Slot { .. }) || !shown(vis[i]) {
+            continue;
+        }
+        let p = shown_parent(&rows, &vis, i);
+        let body = p.is_none_or(|p| {
+            matches!(&rows[p].kind, Kind::Element { tag, .. } if tag.eq_ignore_ascii_case("body"))
+        });
+        let alone = (0..rows.len())
+            .filter(|&j| j != i && shown(vis[j]) && shown_parent(&rows, &vis, j) == p)
+            .count()
+            == 0;
+        if body && alone {
+            vis[i] = Vis::Through;
+        }
+    }
+    let keep: Vec<bool> = vis.iter().map(|v| shown(*v)).collect();
+    let mut out: Vec<Row> = Vec::new();
+    for (i, mut r) in rows.into_iter().enumerate() {
+        if !keep[i] {
+            continue;
+        }
+        r.ancestors.retain(|a| pos.get(a).is_some_and(|&p| keep[p]));
+        r.depth = r.ancestors.len();
+        r.has_children = false;
+        if vis[i] == Vis::Leaf {
+            r.inside = None;
+        }
+        out.push(r);
+    }
+    let parents: HashSet<String> = out
+        .iter()
+        .filter_map(|r| r.ancestors.last().cloned())
+        .collect();
+    for r in &mut out {
+        r.has_children = parents.contains(&r.key);
+    }
+    out
 }
 
 /// Commande de déplacement d'une ligne vers une autre (`zone` : avant, après, dans).
@@ -409,8 +548,7 @@ pub enum Zone {
 
 pub fn label(ui: Ui, k: &Kind) -> String {
     match k {
-        Kind::Element { tag, class } if class.is_empty() => tag.clone(),
-        Kind::Element { tag, class } => format!("{tag}.{class}"),
+        Kind::Element { tag, class } => crate::names::element_name(ui, tag, class),
         Kind::Text(t) => format!("« {t} »"),
         Kind::Expr(e) => format!("{{{{ {e} }}}}"),
         Kind::If(c) => ui.tx("layers-if", &[("cond", c.clone())]),
@@ -428,9 +566,17 @@ pub fn label(ui: Ui, k: &Kind) -> String {
     }
 }
 
+/// Info-bulle d'une ligne : nature et nom technique d'un élément.
+fn tooltip(ui: Ui, k: &Kind) -> String {
+    match k {
+        Kind::Element { tag, class } => crate::names::tooltip(ui, tag, class),
+        _ => label(ui, k),
+    }
+}
+
 fn icon(k: &Kind) -> AnyView {
     match k {
-        Kind::Element { .. } => icons::box_(),
+        Kind::Element { tag, .. } => crate::names::icon(tag),
         Kind::Text(_) => icons::text(),
         Kind::Expr(_) => icons::braces(),
         Kind::If(_) | Kind::Branch(_) => icons::branch(),
@@ -483,7 +629,13 @@ pub fn Layers() -> impl IntoView {
             if !q.is_empty() {
                 let hits: Vec<&Row> = rows
                     .iter()
-                    .filter(|r| label(ui, &r.kind).to_lowercase().contains(&q))
+                    .filter(|r| {
+                        label(ui, &r.kind).to_lowercase().contains(&q)
+                            || tooltip(ui, &r.kind).to_lowercase().contains(&q)
+                            || r.preview
+                                .as_deref()
+                                .is_some_and(|p| p.to_lowercase().contains(&q))
+                    })
                     .collect();
                 let keep: HashSet<&str> = hits
                     .iter()
@@ -731,9 +883,15 @@ pub fn Layers() -> impl IntoView {
                         let depth = r.with_value(|r| r.depth);
                         let has_children = r.with_value(|r| r.has_children);
                         let kind = r.with_value(|r| r.kind.clone());
-                        let owner_badge = r.with_value(|r| match (&r.kind, &r.owner) {
-                            (Kind::Use(_), _) => Some("layers-badge-component"),
-                            _ => None,
+                        let preview = r.with_value(|r| r.preview.clone());
+                        // Nom technique (`section.hero`) : info-bulle, recherche, essais.
+                        let tech = r.with_value(|r| match &r.kind {
+                            Kind::Element { tag, class } => crate::names::technical(tag, class),
+                            k => label(ui, k),
+                        });
+                        let title = r.with_value(|r| match &r.kind {
+                            Kind::Use(_) => format!("{} · {}", label(ui, &r.kind), ui.tx("layers-badge-component", &[])),
+                            k => tooltip(ui, k),
                         });
                         let toggle = move |e: leptos::ev::MouseEvent| {
                             e.stop_propagation();
@@ -760,7 +918,8 @@ pub fn Layers() -> impl IntoView {
                         };
                         let draggable = r.with_value(|r| r.id.is_some()).to_string();
                         view! {
-                            <div class="layer" role="treeitem" class:is-selected=is_selected class:is-multi=in_multi
+                            <div class="layer" role="treeitem" title=title data-tech=tech class:is-selected=is_selected class:is-multi=in_multi
+                                class:is-component=matches!(kind, Kind::Use(_))
                                 class:is-logic=matches!(kind, Kind::If(_) | Kind::Each { .. } | Kind::Branch(_))
                                 class:is-text=matches!(kind, Kind::Text(_) | Kind::Expr(_) | Kind::Html)
                                 class:drop-before=zone_class(Zone::Before)
@@ -837,7 +996,7 @@ pub fn Layers() -> impl IntoView {
                                 </button>
                                 <span class="layer-icon">{icon(&kind)}</span>
                                 <span class="layer-label">{label(ui, &kind)}</span>
-                                {owner_badge.map(|k| view! { <span class="layer-badge">{ui.t(k)}</span> })}
+                                {preview.map(|p| view! { <span class="layer-preview">{p}</span> })}
                             </div>
                         }
                     }
@@ -867,5 +1026,92 @@ pub fn Layers() -> impl IntoView {
                     on:click=move |_| { ed.remove_selection(ui); }>{icons::trash()}</button>
             </footer>
         </aside>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use revel_model::Attr;
+
+    fn el(id: &str, tag: &str, class: &str, children: Vec<Node>) -> Node {
+        Node::Element {
+            id: Some(id.into()),
+            tag: tag.into(),
+            attrs: if class.is_empty() {
+                vec![]
+            } else {
+                vec![Attr {
+                    name: "class".into(),
+                    value: Some(class.into()),
+                    when: None,
+                }]
+            },
+            children,
+        }
+    }
+
+    fn text(t: &str) -> Node {
+        Node::Text { text: t.into() }
+    }
+
+    #[test]
+    fn arbre_sans_en_tete_ni_textes_a_part() {
+        let mut site = Site::new("Essai", "fr");
+        let layout = revel_edit::make::base_layout(&site);
+        let lid = layout.id.clone();
+        site.layouts.push(layout);
+        let mut page: revel_model::Page = serde_json::from_value(serde_json::json!({
+            "id": "index", "path": "/", "layout": lid
+        }))
+        .unwrap();
+        page.body = vec![el(
+            "s1",
+            "section",
+            "bloc bloc-hero",
+            vec![
+                el("t1", "h1", "", vec![text("Bonjour")]),
+                text("seul"),
+                el("b1", "br", "", vec![]),
+            ],
+        )];
+        site.pages.push(page);
+        let info: revel_protocol::EditorPageInfo = serde_json::from_value(serde_json::json!({
+            "url": "/", "page": "index", "layout": lid
+        }))
+        .unwrap();
+        let rows = rows(&site, &info);
+        let shown: Vec<(usize, String, Option<String>)> = rows
+            .iter()
+            .map(|r| {
+                let t = match &r.kind {
+                    Kind::Element { tag, class } => crate::names::technical(tag, class),
+                    k => format!("{k:?}"),
+                };
+                (r.depth, t, r.preview.clone())
+            })
+            .collect();
+        // Ni doctype, `html`, `head`, `meta`, `title`, `link`, `br` ; `body` à la racine, contenu de
+        // la page (seul dans `body`) directement dessous ; textes sur la ligne de leur élément.
+        assert_eq!(
+            shown,
+            vec![
+                (0, "body".to_string(), None),
+                (
+                    1,
+                    "section.bloc.bloc-hero".to_string(),
+                    Some("seul".to_string())
+                ),
+                (2, "h1".to_string(), Some("Bonjour".to_string())),
+            ]
+        );
+        assert!(rows[0].has_children && rows[1].has_children && !rows[2].has_children);
+        assert_eq!(
+            rows[2].ancestors,
+            vec![rows[0].key.clone(), rows[1].key.clone()]
+        );
+        // Le titre se déplace dans la section (même propriétaire : la page).
+        let up = step_command(&rows, &rows[2], -1);
+        assert!(up.is_none());
     }
 }

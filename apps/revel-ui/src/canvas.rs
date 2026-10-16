@@ -187,6 +187,10 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
                     }}
                     <ColumnGuides/>
                     <FrameGrow/>
+                    <Show when=move || !ed.side.get()>
+                        <FrameWidth side=-1.0/>
+                        <FrameWidth side=1.0/>
+                    </Show>
                 </Show>
             </div>
             <Show when=move || ed.rulers.get()>
@@ -348,6 +352,80 @@ fn FrameGrow() -> impl IntoView {
             aria-label=ui.t("editor-frame-height")
             on:pointerdown=down on:pointermove=mv on:pointerup=up on:pointercancel=up
             on:dblclick=move |_| ed.frame_h.set(None)></div>
+    }
+}
+
+/// Poignées sur les bords gauche et droit du cadre (vue simple, comme Webflow) : glisser
+/// élargit ou rétrécit la page des deux côtés pour voir le site à toutes les largeurs ; l'écran
+/// réglé suit la largeur. Double-clic : largeur de l'écran.
+#[component]
+fn FrameWidth(side: f64) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let start = StoredValue::new(None::<(f64, f64)>);
+    let dragging = RwSignal::new(false);
+    let style = move || {
+        let g = ed.geo();
+        let x = if side < 0.0 {
+            g.x - 14.0
+        } else {
+            g.x + g.w * g.s + 6.0
+        };
+        // Au milieu de la partie visible du cadre.
+        let (_, ah) = ed.area.get();
+        let visible = (g.h * g.s).min(ah - g.y).max(48.0);
+        let h = 48.0;
+        format!(
+            "left:{x}px;top:{}px;height:{h}px",
+            g.y + visible / 2.0 - h / 2.0
+        )
+    };
+    let down = move |e: ev::PointerEvent| {
+        if e.button() != 0 {
+            return;
+        }
+        e.prevent_default();
+        e.stop_propagation();
+        if let Some(t) = e
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        {
+            let _ = t.set_pointer_capture(e.pointer_id());
+        }
+        let w = untrack(|| ed.geo().w);
+        start.set_value(Some((w, f64::from(e.client_x()))));
+        dragging.set(true);
+    };
+    let mv = move |e: ev::PointerEvent| {
+        let Some((w0, x0)) = start.get_value() else {
+            return;
+        };
+        let s = ed.scale();
+        let w = (w0 + side * 2.0 * (f64::from(e.client_x()) - x0) / s)
+            .round()
+            .clamp(240.0, 3840.0);
+        ed.frame_w.set(Some(w));
+        if let Some(bp) = ed.bp_for_width(w)
+            && bp != ed.breakpoint.get_untracked()
+        {
+            ed.breakpoint.set(bp);
+        }
+    };
+    let up = move |_| {
+        start.set_value(None);
+        dragging.set(false);
+    };
+    view! {
+        <div class="frame-width" class:is-left=side < 0.0 class:is-on=move || dragging.get() style=style
+            role="separator" aria-orientation="vertical"
+            title=move || ui.tx("editor-frame-width-help", &[("width", format!("{}", ed.geo().w.round()))])
+            aria-label=ui.t("editor-frame-width")
+            on:pointerdown=down on:pointermove=mv on:pointerup=up on:pointercancel=up
+            on:dblclick=move |_| ed.frame_w.set(None)>
+            <Show when=move || dragging.get()>
+                <span class="frame-width-value">{move || format!("{} px", ed.geo().w.round())}</span>
+            </Show>
+        </div>
     }
 }
 

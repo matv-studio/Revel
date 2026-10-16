@@ -149,7 +149,7 @@
 @media (prefers-reduced-motion: reduce) { .view-pane { animation: none; } }
 .view-pane.is-hidden { display: none; }
 .view-pane--scroll { overflow-y: auto; }
-.main:has(.site-view) { overflow: hidden; }
+.main:has(.site-view), .main:has(.app-settings) { overflow: hidden; }
 
 @media (max-width: 900px) {
   .topbar { grid-template-columns: auto minmax(0, 1fr) auto; }

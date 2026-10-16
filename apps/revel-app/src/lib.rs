@@ -191,14 +191,47 @@ fn open_site(s: State<AppState>, path: String) -> Res<SiteSummary> {
     s.core.open_site(&PathBuf::from(path)).map_err(err)
 }
 
-/// Dossier proposé pour les nouveaux sites : `Documents/Revel` (dossier personnel à défaut).
+/// Dossier proposé pour les nouveaux sites : celui choisi dans les réglages, sinon `Projects` à
+/// côté de l'application quand il est modifiable (Windows : installation dans « Programmes »,
+/// dossier ouvert aux utilisateurs par l'installateur ; Linux : à côté de l'AppImage), sinon
+/// `Documents/Revel` (dossier personnel à défaut). Jamais dans l'application sur macOS (paquet
+/// signé, non modifiable).
 #[tauri::command]
-fn default_sites_dir(app: tauri::AppHandle) -> String {
+fn default_sites_dir(app: tauri::AppHandle, s: State<AppState>) -> String {
+    if let Some(d) = s
+        .core
+        .settings()
+        .projects_dir
+        .filter(|d| !d.trim().is_empty())
+    {
+        return d;
+    }
+    if let Some(d) = install_projects_dir() {
+        return d.display().to_string();
+    }
     app.path()
         .document_dir()
         .or_else(|_| app.path().home_dir())
         .map(|d| d.join("Revel").display().to_string())
         .unwrap_or_default()
+}
+
+/// Dossier `Projects` à côté de l'application, s'il est utilisable.
+fn install_projects_dir() -> Option<PathBuf> {
+    // Version de développement (`target/debug`) et macOS : jamais.
+    if cfg!(debug_assertions) || cfg!(target_os = "macos") {
+        return None;
+    }
+    let base = if cfg!(target_os = "linux") {
+        // Paquets `.deb`/`.rpm` dans `/usr` : non modifiable ; AppImage : son dossier.
+        PathBuf::from(std::env::var_os("APPIMAGE")?)
+            .parent()?
+            .to_path_buf()
+    } else {
+        std::env::current_exe().ok()?.parent()?.to_path_buf()
+    };
+    let dir = base.join("Projects");
+    revel_core::usable_dir(&dir).then_some(dir)
 }
 
 /// Dossier qui sera créé pour un nouveau site nommé `name` dans `parent`.
@@ -217,6 +250,7 @@ fn create_site(
     name: String,
     lang: String,
     template: Option<revel_protocol::SiteTemplate>,
+    light: Option<bool>,
 ) -> Res<SiteSummary> {
     s.core
         .create_site_from(
@@ -224,6 +258,7 @@ fn create_site(
             &name,
             &lang,
             template.unwrap_or_default(),
+            light.unwrap_or(false),
         )
         .map_err(err)
 }

@@ -675,20 +675,21 @@ fn styles_regles_et_declarations() {
     assert!(matches!(e, Err(EditError::DuplicateId(_))));
     assert_eq!(json(&s), before);
 
-    // Sans feuille de style.
+    // Sans feuille de style : créée à la première règle.
     let mut s = sample();
     s.stylesheet = None;
-    assert_eq!(
-        apply(
-            &mut s,
-            &Command::AddRule {
-                selector: ".a".into(),
-                media: None,
-                decls: vec![]
-            }
-        ),
-        Err(EditError::NoStylesheet)
-    );
+    apply(
+        &mut s,
+        &Command::AddRule {
+            selector: ".a".into(),
+            media: None,
+            decls: vec![],
+        },
+    )
+    .unwrap();
+    let sheet = s.stylesheet.as_ref().unwrap();
+    assert_eq!(sheet.url, crate::style::DEFAULT_URL);
+    assert_eq!(sheet.items.len(), 1);
 }
 
 #[test]
@@ -1060,6 +1061,34 @@ fn nouvelle_page_et_copie() {
         revel_model::slugify("  Été 2026 : l'œuvre !"),
         "ete-2026-l-oeuvre"
     );
+    // Site sans gabarit : gabarit de base (document, feuille de style, emplacement), page sans
+    // en-tête de document.
+    let mut bare = revel_model::Site::new("Atelier \"A\"", "fr");
+    let l = make::base_layout(&bare);
+    assert_eq!(l.id, "base");
+    let text = serde_json::to_string(&l.body).unwrap();
+    assert!(
+        text.contains("\"tag\":\"head\"")
+            && text.contains("/assets/site.css")
+            && text.contains("\"node\":\"slot\""),
+        "{text}"
+    );
+    apply(
+        &mut bare,
+        &Command::AddLayout {
+            layout: l,
+            index: None,
+        },
+    )
+    .unwrap();
+    let p = make::new_page(&bare, "Accueil", "");
+    assert_eq!(p.layout.as_deref(), Some("base"));
+    assert!(
+        !serde_json::to_string(&p.body)
+            .unwrap()
+            .contains("\"tag\":\"head\"")
+    );
+    assert_eq!(make::base_layout(&bare).id, "base-2");
 }
 
 #[test]

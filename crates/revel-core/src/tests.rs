@@ -1340,7 +1340,7 @@ fn nouveau_site_pret_a_modifier() {
     let html = std::fs::read_to_string(out.join("index.html")).unwrap();
     assert!(html.contains("<title>Atelier Lumière</title>"), "{html}");
     assert!(
-        html.contains(r#"<h1 class="title">Atelier Lumière</h1>"#),
+        html.contains(r#"<h1 class="titre">Atelier Lumière</h1>"#),
         "{html}"
     );
     assert!(out.join("assets/site.css").is_file());
@@ -1403,7 +1403,7 @@ fn modeles_de_site() {
     // Vitrine : trois pages faites de blocs, menu dans l'en-tête.
     let v = d.path().join("vitrine");
     let s = c
-        .new_site_from(&v, "Atelier", "fr", SiteTemplate::Showcase)
+        .new_site_from(&v, "Atelier", "fr", SiteTemplate::Showcase, false)
         .unwrap();
     assert_eq!(s.pages, 3);
     c.build(&v, "production", false, &|_| {}).unwrap();
@@ -1424,7 +1424,7 @@ fn modeles_de_site() {
     assert!(css.contains(".bloc-hero .bloc-titre") && css.contains(".entete__nav"));
     // Blog : collection d'articles (fichiers et .pages.yml), liste des trois plus récents.
     let b = d.path().join("blog");
-    c.new_site_from(&b, "Carnet", "fr", SiteTemplate::Blog)
+    c.new_site_from(&b, "Carnet", "fr", SiteTemplate::Blog, false)
         .unwrap();
     assert!(b.join(".pages.yml").is_file());
     assert!(b.join("content/articles/bienvenue.md").is_file());
@@ -1854,7 +1854,7 @@ fn pages_modifiees_depuis_la_publication() {
     let d = tempfile::tempdir().unwrap();
     let c = core(d.path());
     let v = d.path().join("vitrine");
-    c.new_site_from(&v, "Atelier", "fr", SiteTemplate::Showcase)
+    c.new_site_from(&v, "Atelier", "fr", SiteTemplate::Showcase, false)
         .unwrap();
     c.edit_open(&v).unwrap();
     let key = v.display().to_string();
@@ -2086,4 +2086,17 @@ async fn revenir_a_la_publication_precedente() {
     c.rollback(&site, &p.id, &|_| {}).await.unwrap();
     assert!(home_page().contains("<h1>Bienvenue</h1>"));
     assert!(c.publish_state(&site).unwrap()[0].changes.is_empty());
+}
+
+#[test]
+fn dossier_des_projets_utilisable() {
+    let d = tempfile::tempdir().unwrap();
+    let dir = d.path().join("Projects");
+    assert!(crate::usable_dir(&dir));
+    assert!(dir.is_dir());
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    // Un fichier à la place du dossier : inutilisable.
+    let f = d.path().join("fichier");
+    std::fs::write(&f, "x").unwrap();
+    assert!(!crate::usable_dir(&f));
 }

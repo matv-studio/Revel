@@ -163,11 +163,6 @@ pub fn Styles() -> impl IntoView {
             ed.post(serde_json::json!({ "type": "count", "selector": sel }));
         }
     });
-    // Mémorisé : le panneau n'est pas reconstruit à chaque modification du document.
-    let has_sheet = Memo::new(move |_| {
-        ed.doc
-            .with(|d| d.as_ref().is_some_and(|d| d.stylesheet.is_some()))
-    });
     // Nom court du point de rupture (« Ordinateur », « ≤ 900 px »), le nom complet en info-bulle.
     let bp_label = move || {
         let id = ed.breakpoint.get();
@@ -193,7 +188,6 @@ pub fn Styles() -> impl IntoView {
     let kind = Memo::new(move |_| match node.get() {
         None => 0u8,
         Some(n) if !matches!(n, Node::Element { .. } | Node::Image(_)) => 1,
-        Some(_) if !has_sheet.get() => 2,
         Some(_) => 3,
     });
 
@@ -263,7 +257,6 @@ pub fn Styles() -> impl IntoView {
             {move || match kind.get() {
                 0 => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
                 1 => view! { <p class="muted inspector-empty">{ui.t("styles-elements-only")}</p> }.into_any(),
-                2 => view! { <p class="muted inspector-empty">{ui.t("error-edit-no-stylesheet")}</p> }.into_any(),
                 _ => view! {
                     <div class="style-target">
                         // Classes de l'élément (pastilles, comme le champ de sélecteur de Webflow) :

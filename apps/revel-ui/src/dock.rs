@@ -130,7 +130,14 @@ pub struct Layout {
     pub hidden: bool,
     #[serde(default)]
     pub next: u32,
+    /// Révision de la disposition par défaut appliquée (mises à jour des panneaux fermés).
+    #[serde(default)]
+    pub revision: u32,
 }
+
+/// Révision actuelle : 1 = panneaux CMS et Variables fermés par défaut (0.5, la vue CMS
+/// remplace le panneau CMS).
+const REVISION: u32 = 1;
 
 /// Emplacement de dépôt d'un onglet.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -181,6 +188,7 @@ impl Default for Layout {
             closed: vec![PanelId::Cms, PanelId::Variables],
             hidden: false,
             next: 4,
+            revision: REVISION,
         }
     }
 }
@@ -461,6 +469,16 @@ impl Layout {
             {
                 g.active = *a;
             }
+        }
+        // Disposition d'une version précédente : panneaux fermés par défaut depuis (CMS,
+        // Variables) fermés une fois ; l'utilisateur peut les rouvrir (menu « Panneaux »).
+        if self.revision < REVISION {
+            for p in [PanelId::Cms, PanelId::Variables] {
+                if self.group_of(p).is_some() {
+                    self.close(p);
+                }
+            }
+            self.revision = REVISION;
         }
         self.hidden = false;
         self.left_w = self.left_w.clamp(MIN_COL, MAX_COL);
@@ -1283,6 +1301,22 @@ mod tests {
                 PanelId::Insert
             ]
         );
+        // Disposition d'une version antérieure à la révision 1 : CMS et Variables fermés une fois.
+        let mut v0 = Layout::default();
+        v0.left[1].tabs = vec![
+            PanelId::Layers,
+            PanelId::Variables,
+            PanelId::Cms,
+            PanelId::Insert,
+        ];
+        v0.closed.clear();
+        v0.revision = 0;
+        let n0 = v0.normalize();
+        assert!(n0.group_of(PanelId::Cms).is_none() && n0.group_of(PanelId::Variables).is_none());
+        assert_eq!(n0.revision, REVISION);
+        let mut reopened = n0.clone();
+        reopened.open(PanelId::Cms);
+        assert!(reopened.normalize().group_of(PanelId::Cms).is_some());
         // Disposition abîmée : doublons retirés, panneaux manquants ajoutés, largeurs bornées.
         let mut bad = Layout::default();
         bad.left[0].tabs.push(PanelId::Layers);

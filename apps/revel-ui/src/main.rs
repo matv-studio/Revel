@@ -23,6 +23,7 @@ mod inspector;
 mod layers;
 mod library;
 mod locales;
+mod names;
 mod pageops;
 mod pagesettings;
 mod pagetree;

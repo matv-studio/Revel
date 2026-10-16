@@ -308,6 +308,8 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
     let folder = RwSignal::new(String::new());
     let busy = RwSignal::new(false);
     let template = RwSignal::new(revel_protocol::SiteTemplate::Blank);
+    // Fond du site : sombre par défaut.
+    let light = RwSignal::new(false);
     let input = NodeRef::<leptos::html::Input>::new();
     spawn_local(async move {
         if let Ok(d) = api::default_sites_dir().await {
@@ -353,7 +355,15 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
         }
         busy.set(true);
         spawn_local(async move {
-            match api::create_site(&p, &n, &lang.get_untracked(), template.get_untracked()).await {
+            match api::create_site(
+                &p,
+                &n,
+                &lang.get_untracked(),
+                template.get_untracked(),
+                light.get_untracked(),
+            )
+            .await
+            {
                 Ok(s) => {
                     close.run(());
                     ui.open(s);
@@ -405,6 +415,18 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                                 title=ui.t(help)
                                 on:click=move |_| template.set(t)>
                                 {icon()}<span>{ui.t(key)}</span>
+                            </button>
+                        }).collect_view()}
+                    </div>
+                </div>
+                <div class="field">
+                    <span class="label">{ui.t("new-site-background")}</span>
+                    <div class="segmented site-bg" role="radiogroup" aria-label=ui.t("new-site-background")>
+                        {[(false, "new-site-dark"), (true, "new-site-light")].into_iter().map(|(v, key)| view! {
+                            <button type="button" role="radio" data-bg=key class:is-on=move || light.get() == v
+                                aria-checked=move || (light.get() == v).to_string()
+                                on:click=move |_| light.set(v)>
+                                <span class="bg-swatch" class:bg-swatch--light=v></span>{ui.t(key)}
                             </button>
                         }).collect_view()}
                     </div>

@@ -62,19 +62,85 @@ pub fn insertion_point(ed: Ed) -> Option<(Parent, usize)> {
     })
 }
 
-/// Liste d'un gabarit qui contient l'emplacement du contenu (`Slot`) : ce qui est déposé autour
-/// va dans la page affichée (au début avant l'emplacement, à la fin après), pas dans le gabarit
-/// partagé par toutes les pages.
+/// Emplacement d'insertion corrigé pour qu'un ajout arrive là où on l'attend :
+/// - autour de l'emplacement du contenu d'un gabarit (dans la liste qui le contient, ou dans
+///   `html`, `body`, `main`… qui le contiennent) : dans la page affichée (au début avant
+///   l'emplacement, à la fin après), pas dans le gabarit partagé par toutes les pages ;
+/// - dans l'en-tête du document (`head` et ses éléments, invisibles) : à la fin de la page (ou du
+///   `body` d'une page sans gabarit).
 fn into_page(d: &revel_model::Site, page: Option<&str>, p: Parent, i: usize) -> (Parent, usize) {
+    let page_end = |page: &str| {
+        d.pages
+            .iter()
+            .find(|x| x.id == page)
+            .map(|x| (Parent::root(Owner::Page(page.to_string())), x.body.len()))
+    };
+    let Ok(list) = revel_edit::address::list(d, &p) else {
+        return (p, i);
+    };
     if let (Owner::Layout(_), Some(page)) = (&p.owner, page)
-        && let Ok(list) = revel_edit::address::list(d, &p)
-        && let Some(slot) = list.iter().position(|n| matches!(n, Node::Slot))
-        && let Some(body) = d.pages.iter().find(|x| x.id == page).map(|x| x.body.len())
+        && let Some(slot) = list.iter().position(has_slot)
+        && let Some((to, end)) = page_end(page)
     {
-        let at = if i <= slot { 0 } else { body };
-        return (Parent::root(Owner::Page(page.to_string())), at);
+        return (to, if i <= slot { 0 } else { end });
+    }
+    let root = revel_edit::address::list(d, &Parent::root(p.owner.clone()));
+    if let (Some(id), Ok(root)) = (&p.node, root)
+        && in_head(root, id, false) == Some(true)
+    {
+        if let (Owner::Layout(_), Some(page)) = (&p.owner, page)
+            && let Some(end) = page_end(page)
+        {
+            return end;
+        }
+        if let Some((body, n)) = find_body(root) {
+            return (
+                Parent {
+                    owner: p.owner.clone(),
+                    node: Some(body),
+                    branch: Branch::Children,
+                },
+                n,
+            );
+        }
     }
     (p, i)
+}
+
+/// Le nœud est ou contient l'emplacement du contenu.
+fn has_slot(n: &Node) -> bool {
+    matches!(n, Node::Slot)
+        || revel_model::ids::child_lists(n)
+            .into_iter()
+            .any(|l| l.iter().any(has_slot))
+}
+
+/// Le nœud `id` est dans l'en-tête du document (`head`) : `None` s'il n'est pas dans la liste.
+fn in_head(nodes: &[Node], id: &str, head: bool) -> Option<bool> {
+    for n in nodes {
+        let h = head || matches!(n, Node::Element { tag, .. } if tag.eq_ignore_ascii_case("head"));
+        if revel_model::ids::node_id(n) == Some(id) {
+            return Some(h);
+        }
+        for l in revel_model::ids::child_lists(n) {
+            if let Some(r) = in_head(l, id, h) {
+                return Some(r);
+            }
+        }
+    }
+    None
+}
+
+/// Élément `body` (identifiant, nombre d'enfants).
+fn find_body(nodes: &[Node]) -> Option<(String, usize)> {
+    nodes.iter().find_map(|n| match n {
+        Node::Element {
+            tag, children, id, ..
+        } if tag.eq_ignore_ascii_case("body") => id.clone().map(|i| (i, children.len())),
+        _ => revel_model::ids::child_lists(n)
+            .into_iter()
+            .find_map(|l| find_body(l)),
+    })
 }
 
 /// Adresse d'un nœud (son propriétaire retrouvé dans le document).

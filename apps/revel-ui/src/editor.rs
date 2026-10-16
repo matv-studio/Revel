@@ -61,6 +61,11 @@ enum FromCanvas {
         #[serde(default)]
         reset: Option<String>,
     },
+    /// Espacements réglés sur le canevas (propriété -> valeur, `None` : retirée).
+    Spacing {
+        id: String,
+        values: std::collections::BTreeMap<String, Option<String>>,
+    },
     Key {
         key: String,
         #[serde(default)]
@@ -351,6 +356,9 @@ pub struct Ed {
     /// Hauteur des cadres réglée à la poignée du bas (pixels de la page) ; `None` : la place
     /// disponible (un écran : zone du canevas ; côte à côte : 900 px).
     pub frame_h: RwSignal<Option<f64>>,
+    /// Largeur de la page choisie en glissant le bord du cadre (vue simple) ; `None` : celle de
+    /// l'écran affiché.
+    pub frame_w: RwSignal<Option<f64>>,
     /// Vue côte à côte : écrans masqués (boutons des écrans de la barre d'outils).
     pub hidden_bps: RwSignal<Vec<String>>,
     /// Palette de commandes ouverte (Ctrl+K).
@@ -568,7 +576,7 @@ impl Ed {
                         revel_model::Node::Element { tag, .. } => tag.clone(),
                         _ => String::new(),
                     },
-                    label: node_label(n),
+                    label: node_label(ui, n),
                 }));
             }
             let mut ok = true;
@@ -1074,6 +1082,21 @@ impl Ed {
                 .filter_map(|(p, v)| v.map(|v| (p.to_string(), Some(v))))
                 .collect(),
         };
+        self.set_props(ui, at, node, list);
+    }
+
+    /// Propriétés de l'élément `at` écrites dans sa classe (point de rupture et état affichés) ;
+    /// élément sans classe : classe créée d'après sa nature. Taille et espacements réglés sur le
+    /// canevas.
+    pub fn set_props(
+        self,
+        ui: Ui,
+        at: revel_edit::Target,
+        node: revel_model::Node,
+        list: Vec<(String, Option<String>)>,
+    ) {
+        let release = move || self.post(serde_json::json!({ "type": "preview", "css": "" }));
+        let removing = list.iter().all(|(_, v)| v.is_none());
         let bp = self.breakpoint.get_untracked();
         let media = self.doc.with_untracked(|d| {
             d.as_ref()?
@@ -1090,7 +1113,7 @@ impl Ed {
             (c.clone(), String::new())
         } else {
             // Élément sans classe : classe créée d'après sa nature, réglée avec la taille.
-            if reset.is_some() || list.is_empty() {
+            if removing || list.is_empty() {
                 return release();
             }
             let Some(name) = self
@@ -1208,12 +1231,13 @@ impl Ed {
             let min_min = bps.iter().filter_map(|b| b.min_width).min();
             let desktop_min = max_max.map(|w| f64::from(w) + 1.0).unwrap_or(320.0);
             if !side {
-                let w = bps
-                    .iter()
-                    .find(|b| b.id == active)
-                    .and_then(|b| b.max_width.or(b.min_width))
-                    .map(f64::from)
-                    .unwrap_or_else(|| (aw - GUTTER).max(desktop_min));
+                let w = self.frame_w.get().unwrap_or_else(|| {
+                    bps.iter()
+                        .find(|b| b.id == active)
+                        .and_then(|b| b.max_width.or(b.min_width))
+                        .map(f64::from)
+                        .unwrap_or_else(|| (aw - GUTTER).max(desktop_min))
+                });
                 return vec![FrameBox {
                     bp: active.clone(),
                     w,
@@ -1652,6 +1676,28 @@ impl Ed {
         self.doc.with(|d| target_of(d.as_ref()?, &sel.id))
     }
 
+    /// Écran dont la plage contient la largeur `w` (comme Webflow : glisser le bord du cadre
+    /// passe d'un écran à l'autre) : plus petit « jusqu'à » qui la contient, sinon plus grand « à
+    /// partir de », sinon l'écran de base.
+    pub fn bp_for_width(self, w: f64) -> Option<String> {
+        self.doc.with_untracked(|d| {
+            let bps = &d.as_ref()?.breakpoints;
+            bps.iter()
+                .filter(|b| b.max_width.is_some_and(|m| f64::from(m) >= w))
+                .min_by_key(|b| b.max_width)
+                .or_else(|| {
+                    bps.iter()
+                        .filter(|b| b.min_width.is_some_and(|m| f64::from(m) <= w))
+                        .max_by_key(|b| b.min_width)
+                })
+                .or_else(|| {
+                    bps.iter()
+                        .find(|b| b.max_width.is_none() && b.min_width.is_none())
+                })
+                .map(|b| b.id.clone())
+        })
+    }
+
     /// Largeur du cadre pour le point de rupture affiché ; `None` : toute la place.
     pub fn frame_width(self) -> Option<f64> {
         let id = self.breakpoint.get();
@@ -1694,33 +1740,43 @@ fn inserted(c: &Command) -> Option<&revel_model::Node> {
     }
 }
 
-/// Libellé d'un nœud (`div.hero`).
-pub fn node_label(n: &revel_model::Node) -> String {
+/// Libellé d'un nœud : nom simple (classe lisible ou nature de l'élément).
+pub fn node_label(ui: Ui, n: &revel_model::Node) -> String {
+    let (tag, class) = node_tag_class(n);
+    if tag.is_empty() {
+        return String::new();
+    }
+    crate::names::element_name(ui, &tag, &class)
+}
+
+/// Balise et classes (hors expressions) d'un nœud.
+fn node_tag_class(n: &revel_model::Node) -> (String, String) {
     match n {
         revel_model::Node::Element { tag, attrs, .. } => {
             let class = attrs
                 .iter()
                 .find(|a| a.name == "class")
                 .and_then(|a| a.value.as_deref())
-                .and_then(|v| v.split_whitespace().next())
-                .filter(|c| !c.contains("{{"));
-            match class {
-                Some(c) => format!("{tag}.{c}"),
-                None => tag.clone(),
-            }
+                .filter(|c| !c.contains("{{") && !c.contains("{%"))
+                .unwrap_or_default();
+            (tag.clone(), class.to_string())
         }
-        revel_model::Node::Image(_) => "img".into(),
-        _ => String::new(),
+        revel_model::Node::Image(_) => ("img".into(), String::new()),
+        _ => (String::new(), String::new()),
     }
 }
 
-/// Chemin jusqu'au nœud `id` : éléments (identifiant, libellé) de la racine au nœud.
-fn path_to(nodes: &[revel_model::Node], id: &str, stack: &mut Vec<(String, String)>) -> bool {
+/// Élément du fil d'Ariane : identifiant, balise, classes.
+type Crumb = (String, String, String);
+
+/// Chemin jusqu'au nœud `id` : éléments de la racine au nœud (sans `html`, absent des calques).
+fn path_to(nodes: &[revel_model::Node], id: &str, stack: &mut Vec<Crumb>) -> bool {
     for n in nodes {
         let nid = revel_model::ids::node_id(n);
-        let pushed = match (nid, n) {
-            (Some(i), revel_model::Node::Element { .. } | revel_model::Node::Image(_)) => {
-                stack.push((i.to_string(), node_label(n)));
+        let (tag, class) = node_tag_class(n);
+        let pushed = match nid {
+            Some(i) if !tag.is_empty() && !tag.eq_ignore_ascii_case("html") => {
+                stack.push((i.to_string(), tag, class));
                 true
             }
             _ => false,
@@ -1829,6 +1885,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         locale: ui.locale,
         side: RwSignal::new(crate::pref_get("side").as_deref() == Some("1")),
         frame_h: RwSignal::new(None),
+        frame_w: RwSignal::new(None),
         hidden_bps: RwSignal::new(
             crate::pref_get("side_hidden")
                 .and_then(|v| serde_json::from_str(&v).ok())
@@ -2018,6 +2075,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                     &from_frame,
                     serde_json::json!({ "type": "active", "on": active }),
                 );
+                post_to(&from_frame, crate::names::canvas_labels(ui));
                 if active {
                     ed.vars.set(vars);
                     ed.live_scroll.set((0.0, 0.0));
@@ -2076,6 +2134,15 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 height,
                 reset,
             } => ed.resize(ui, &id, width, height, reset),
+            FromCanvas::Spacing { id, values } => {
+                if let Some(at) = ed.selected_target().filter(|t| t.node == id)
+                    && let Some(node) = ed.doc.with_untracked(|d| {
+                        revel_edit::address::node(d.as_ref()?, &at).ok().cloned()
+                    })
+                {
+                    ed.set_props(ui, at, node, values.into_iter().collect());
+                }
+            }
             FromCanvas::Key {
                 key,
                 code,
@@ -2378,7 +2445,7 @@ fn Toolbar() -> impl IntoView {
                             class:is-current=move || ed.side.get() && ed.breakpoint.get() == cur
                             title=move || if ed.side.get() { ui.tx("editor-bp-toggle", &[("name", title2.clone())]) } else { title2.clone() }
                             aria-label=title.clone()
-                            on:click=move |_| if ed.side.get_untracked() { ed.toggle_bp(&id) } else { ed.breakpoint.set(id.clone()); ed.recenter(); }>
+                            on:click=move |_| if ed.side.get_untracked() { ed.toggle_bp(&id) } else { ed.frame_w.set(None); ed.breakpoint.set(id.clone()); ed.recenter(); }>
                             {bp_icon(&b)}
                             <span class="bp-width">{b.max_width.or(b.min_width).map(|w| w.to_string()).unwrap_or_default()}</span>
                         </button>
@@ -2673,9 +2740,13 @@ fn StatusBar() -> impl IntoView {
         })
     };
     let width = move || {
-        ed.frame_width()
-            .map(|w| format!("{w} px"))
-            .unwrap_or_default()
+        if ed.side.get() {
+            ed.frame_width()
+                .map(|w| format!("{w} px"))
+                .unwrap_or_default()
+        } else {
+            format!("{} px", ed.geo().w.round())
+        }
     };
     // Fil d'Ariane (comme Webflow) : éléments parents de la sélection, cliquables.
     let crumbs = move || {
@@ -2688,10 +2759,10 @@ fn StatusBar() -> impl IntoView {
             })
         })
     };
-    let pick = move |id: String, label: String| {
+    let pick = move |id: String, tag: String, label: String| {
         ed.selected.set(Some(Selection {
             id: id.clone(),
-            tag: label.split('.').next().unwrap_or_default().to_string(),
+            tag,
             label,
         }));
         ed.post(serde_json::json!({ "type": "select", "id": id, "reveal": true }));
@@ -2709,13 +2780,16 @@ fn StatusBar() -> impl IntoView {
                         let skip = n.saturating_sub(6);
                         view! {
                             {(skip > 0).then(|| view! { <span class="node-sep">"…"</span> })}
-                            {list.into_iter().enumerate().skip(skip).map(|(i, (id, label))| {
+                            {list.into_iter().enumerate().skip(skip).map(|(i, (id, tag, class))| {
                                 let last = i + 1 == n;
+                                let label = crate::names::element_name(ui, &tag, &class);
+                                let title = crate::names::tooltip(ui, &tag, &class);
+                                let tech = crate::names::technical(&tag, &class);
                                 let l2 = label.clone();
                                 view! {
                                     {(i > skip || skip > 0).then(|| view! { <span class="node-sep">"›"</span> })}
-                                    <button class="node-crumb" class:is-on=last title=label.clone()
-                                        on:click=move |_| pick(id.clone(), l2.clone())>{label.clone()}</button>
+                                    <button class="node-crumb" class:is-on=last title=title data-tech=tech
+                                        on:click=move |_| pick(id.clone(), tag.clone(), l2.clone())>{label}</button>
                                 }
                             }).collect_view()}
                         }.into_any()

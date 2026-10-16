@@ -825,3 +825,40 @@ fn formulaires_du_site() {
             && php.contains("const FROM = 'site@alunites.com';")
     );
 }
+
+/// Feuille de style reliée aux pages qui ne la relient pas (page sans gabarit, feuille créée au
+/// premier style), une seule fois.
+#[test]
+fn feuille_de_style_reliee() {
+    let mut s = Site::new("Essai", "fr");
+    s.pages.push(Page {
+        id: "index".into(),
+        path: "/".into(),
+        layout: None,
+        props: Default::default(),
+        computed: Default::default(),
+        body: parse(
+            "<!doctype html><html><head><title>A</title></head><body><h1>A</h1></body></html>",
+        ),
+        draft: false,
+        code: Default::default(),
+        name: None,
+    });
+    let out = build(&input(&s, vec![])).unwrap();
+    assert!(!file(&out, "index.html").contains("stylesheet"));
+    s.stylesheet = Some(revel_model::Stylesheet {
+        url: "/assets/site.css".into(),
+        source: None,
+        items: vec![],
+    });
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    assert_eq!(
+        home.matches(r#"<link rel="stylesheet" href="/assets/site.css">"#)
+            .count(),
+        1,
+        "{home}"
+    );
+    let out2 = build(&input(&s, vec![])).unwrap();
+    assert_eq!(file(&out2, "index.html"), home);
+}

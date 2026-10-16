@@ -364,6 +364,7 @@ pub(crate) fn insert_before(html: &str, tag: &str, code: &str, at_end: bool) -> 
 /// Dernières retouches d'une page HTML : `noindex`, typographie, langues, code ajouté.
 fn finish_html(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String {
     let html = noindex_meta(j, html);
+    let html = stylesheet_link(site, html);
     // Typographie française : pour la langue principale et les autres langues françaises.
     let html = if site.settings.typography.as_deref() == Some("fr")
         && b.lang
@@ -593,6 +594,23 @@ fn prefix_links(html: &str, prefix: &str, site: &Site) -> String {
 /// Variable de page vraie (`noindex: true`, `"true"`, `1`).
 fn truthy(data: &BTreeMap<String, Value>, key: &str) -> bool {
     data.get(key).is_some_and(|v| v.is_true())
+}
+
+/// Feuille de style du site reliée à la page si son gabarit (ou la page elle-même) ne la relie
+/// pas : un site créé sans gabarit, ou dont la feuille a été créée au premier style, l'applique.
+fn stylesheet_link(site: &Site, html: String) -> String {
+    let Some(sheet) = &site.stylesheet else {
+        return html;
+    };
+    let lower = html.to_ascii_lowercase();
+    if !lower.contains("</head") || html.contains(&format!("href=\"{}", sheet.url)) {
+        return html;
+    }
+    let link = format!(
+        "<link rel=\"stylesheet\" href=\"{}\">",
+        html::escape(&sheet.url)
+    );
+    insert_before(&html, "</head>", &link, false)
 }
 
 /// Page `noindex` : balise `<meta name="robots" content="noindex">` ajoutée dans `<head>` si le

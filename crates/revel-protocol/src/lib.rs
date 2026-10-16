@@ -556,6 +556,10 @@ pub struct AppSettings {
     /// choix et éléments actifs).
     #[serde(default = "default_accent_scope")]
     pub accent_scope: String,
+    /// Dossier où sont créés les nouveaux sites ; `None` : dossier `Projects` à côté de
+    /// l'application quand il est modifiable (Windows, AppImage), sinon `Documents/Revel`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projects_dir: Option<String>,
 }
 
 fn default_theme() -> String {
@@ -573,6 +577,7 @@ impl Default for AppSettings {
             theme: default_theme(),
             accent: None,
             accent_scope: default_accent_scope(),
+            projects_dir: None,
         }
     }
 }

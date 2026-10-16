@@ -173,6 +173,7 @@ pub async fn create_site(
     name: &str,
     lang: &str,
     template: revel_protocol::SiteTemplate,
+    light: bool,
 ) -> Res<SiteSummary> {
     #[derive(Serialize)]
     struct A<'a> {
@@ -180,6 +181,7 @@ pub async fn create_site(
         name: &'a str,
         lang: &'a str,
         template: revel_protocol::SiteTemplate,
+        light: bool,
     }
     call(
         "create_site",
@@ -188,6 +190,7 @@ pub async fn create_site(
             name,
             lang,
             template,
+            light,
         },
     )
     .await

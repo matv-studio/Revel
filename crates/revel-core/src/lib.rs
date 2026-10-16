@@ -330,22 +330,24 @@ impl Core {
         name: &str,
         lang: &str,
         template: revel_protocol::SiteTemplate,
+        light: bool,
     ) -> Result<SiteSummary> {
-        self.new_site_from(&site_folder(parent, name), name, lang, template)
+        self.new_site_from(&site_folder(parent, name), name, lang, template, light)
     }
 
     /// Crée un site vide.
     pub fn new_site(&self, path: &Path, name: &str, lang: &str) -> Result<SiteSummary> {
-        self.new_site_from(path, name, lang, revel_protocol::SiteTemplate::Blank)
+        self.new_site_from(path, name, lang, revel_protocol::SiteTemplate::Blank, false)
     }
 
-    /// Crée un site d'après un modèle (vide, vitrine, blog).
+    /// Crée un site d'après un modèle (vide, vitrine, blog), fond sombre ou clair (`light`).
     pub fn new_site_from(
         &self,
         path: &Path,
         name: &str,
         lang: &str,
         template: revel_protocol::SiteTemplate,
+        light: bool,
     ) -> Result<SiteSummary> {
         if path.join(revel_project::SITE_FILE).exists() {
             return Err(CoreError::AlreadyImported);
@@ -360,7 +362,10 @@ impl Core {
                 std::fs::write(&f, text)?;
             }
         }
-        let p = revel_project::Project::create(path, starter::starter_from(name, lang, template))?;
+        let p = revel_project::Project::create(
+            path,
+            starter::starter_from(name, lang, template, light),
+        )?;
         // Dossier des médias (copié tel quel à la publication).
         let _ = std::fs::create_dir_all(path.join("media"));
         let summary = summarize(&p)?;
@@ -748,6 +753,20 @@ fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Dossier utilisable pour y créer des sites : créé s'il manque, et modifiable (un fichier
+/// d'essai y est écrit puis retiré). Sert à choisir le dossier `Projects` à côté de l'application
+/// (installation dans « Programmes » : modifiable seulement si l'installateur l'a ouvert aux
+/// utilisateurs).
+pub fn usable_dir(dir: &Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = dir.join(format!(".revel-essai-{}", std::process::id()));
+    let ok = std::fs::write(&probe, b"").is_ok();
+    let _ = std::fs::remove_file(&probe);
+    ok
 }
 
 /// Dossier d'un nouveau site dans `parent` : nom du site en minuscules, sans accents ni espaces

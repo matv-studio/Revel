@@ -273,6 +273,45 @@ code d'un site et son API de données lit collections, champs et contenus
 son adresse ; Figma donne le document en JSON et des rendus d'images par son API
 (https://developers.figma.com/docs/rest-api/file-endpoints).
 
+**D-55 — 16/10/2026 — prise.** **Calques et noms pour les non-techniciens.** Les calques montrent ce que l'on voit
+sur la page, comme Webflow (Navigator) et Framer : ni `html`, `head`, `meta`, `link`, `script`, `style`, `title`,
+`br` ni doctype ; `body` à la racine (« Corps de page ») ; contenu de la page directement sous `body` quand le
+gabarit n'ajoute rien autour ; descendants d'un SVG masqués. Le texte d'un élément est montré sur sa ligne, plus
+discret, au lieu d'une ligne « texte » à part (un texte seul dans un bloc se déplace avec son bloc). Nom d'un
+élément : sa classe principale rendue lisible (la dernière qui prolonge la première : `bloc bloc-hero` →
+« Bloc hero », `hero__media` → « Hero media »), sinon sa nature dans la langue de l'interface (« Titre 1 »,
+« Paragraphe », « Bloc »…) ; balise et classes en info-bulle ; icône selon la nature ; composants en vert. Mêmes
+noms dans le fil d'Ariane et les étiquettes du canevas. Ajouter un élément quand `html`, `head` ou `body` est
+sélectionné le place dans la page (au début ou à la fin selon la position de l'emplacement du contenu), jamais
+dans l'en-tête du document ni dans le gabarit partagé.
+
+**D-56 — 16/10/2026 — prise.** **Pas d'étape « feuille de style ».** Une feuille de style (`/assets/site.css`)
+est créée au premier style posé, sans message ni bouton ; la génération ajoute son lien dans `<head>` s'il manque.
+Une page créée dans un site sans gabarit reçoit un gabarit de base (doctype, `html` dans la langue du site,
+`meta charset` et `viewport`, titre de la page, lien de la feuille de style, `body` avec l'emplacement du contenu).
+Nouveau site : fond sombre (par défaut) ou clair, réglé par des variables CSS (`--fond`, `--texte`,
+`--texte-doux`) modifiables ensuite.
+
+**D-57 — 16/10/2026 — prise.** **Dossier des projets et installation dans « Programmes ».** L'installateur
+Windows (NSIS) installe Revel pour tous les utilisateurs dans `C:\Program Files\Revel` (`installMode:
+perMachine`, droits d'administrateur demandés une fois) et crée `Projects` à côté de l'application, ouvert en
+modification au groupe « Utilisateurs » (`icacls … /grant *S-1-5-32-545:(OI)(CI)M`) ; la désinstallation ne
+retire ce dossier que s'il est vide. Nouveaux sites créés par défaut dans `<dossier de Revel>\Projects\<nom>` quand
+ce dossier est modifiable, sinon dans `Documents/Revel` (installation MSI, paquets Linux dans `/usr`) ; jamais dans
+l'application sur macOS (paquet signé) ; AppImage : à côté du fichier. Dossier modifiable dans Réglages › Général.
+Sources : [installateur Windows de Tauri](https://v2.tauri.app/distribute/windows-installer/),
+[icacls](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls).
+
+**D-58 — 16/10/2026 — prise.** **Canevas : réglages directs.** Marges et espacements intérieurs survolés en
+hachures dans la couleur de sélection de Revel ; sur l'élément sélectionné, un côté se règle en le glissant
+(valeur affichée, Maj : les quatre côtés, Alt : le côté opposé, double-clic : valeur retirée), comme Framer.
+Largeur du cadre réglable par des poignées sur ses bords (responsive horizontal, point de rupture suivi,
+double-clic : largeur du point de rupture). Ctrl+Espace ouvre la palette de commandes comme Ctrl+K (sur macOS, Contrôle-Espace
+sélectionne la source de saisie précédente quand plusieurs sont installées et n'atteint alors pas Revel :
+[Apple](https://support.apple.com/guide/mac-help/mchlp1406) ; Ctrl+K reste). Un
+texte lié à une donnée dans un composant (titre du site, lien du menu) se modifie au double-clic ; un texte fixe
+d'un composant ouvre le composant et passe en modification du texte au même double-clic.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

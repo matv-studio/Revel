@@ -40,7 +40,7 @@
 .design-chip-icon { display: grid; place-items: center; }
 .design-chip-icon svg.icon { width: 13px; height: 13px; }
 .design-chip.is-own { color: var(--set-text); background: color-mix(in srgb, var(--set-text) 14%, transparent); }
-.editor-zoom { width: 116px; }
+.editor-zoom { width: 128px; }
 /* Langue affichée (sites à plusieurs langues) : icône dans le champ ; autre langue en bleu. */
 .editor-locale, .cms-locale { flex: none; width: 132px; }
 .editor-locale > svg.icon, .cms-locale > svg.icon {
@@ -213,12 +213,13 @@
 .layer-toggle svg.icon { width: 12px; height: 12px; }
 .layer-icon { display: grid; place-items: center; color: var(--text-faint); }
 .layer-icon svg.icon { width: 13px; height: 13px; }
-.layer-label { overflow: hidden; text-overflow: ellipsis; }
-.layer-badge {
-  margin-left: auto;
-  font-size: var(--text-xs);
-  color: var(--text-faint);
-}
+.layer-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Texte de l'élément sur sa ligne (comme Framer) : à la suite du nom, plus discret. */
+/* Base nulle : le nom garde toute sa place, le texte prend ce qui reste. */
+.layer-preview { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-faint); }
+.layer-preview::before { content: "·"; margin: 0 5px 0 1px; }
+/* Composant utilisé : vert, comme Webflow. */
+.layer.is-component .layer-icon, .layer.is-component .layer-label { color: var(--comp); }
 .layers-foot .icon-btn:disabled { opacity: .3; }
 .context-menu { z-index: 80; width: auto; min-width: 220px; padding: 4px; gap: 0; }
 .context-item { display: flex; align-items: center; gap: 8px; height: 28px; font-weight: var(--weight-regular); font-size: var(--text-sm); }
@@ -352,3 +353,15 @@ kbd {
 }
 .assistant-note svg.icon { width: 12px; height: 12px; }
 @keyframes assistant-note-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+/* Poignées des bords du cadre : largeur de la page (vue simple, comme Webflow). */
+.frame-width {
+  position: absolute; z-index: 2; width: 6px; border-radius: 3px;
+  background: var(--line-strong); cursor: ew-resize; touch-action: none;
+}
+.frame-width::before { content: ""; position: absolute; inset: -4px -6px; }
+.frame-width:hover, .frame-width.is-on { background: var(--set-text); }
+.frame-width-value {
+  position: absolute; top: -26px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+  padding: 2px 6px; border-radius: var(--radius-sm); background: var(--surface-raised); box-shadow: var(--shadow-dialog);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text); pointer-events: none;
+}

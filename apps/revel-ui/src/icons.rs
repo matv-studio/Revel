@@ -35,7 +35,7 @@ pub fn upload() -> AnyView {
 
 pub fn settings() -> AnyView {
     svg(
-        r#"<circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>"#,
+        r#"<path d="M6.79 3.15 L6.97 1.48 L9.03 1.48 L9.21 3.15 L10.58 3.71 L11.88 2.66 L13.34 4.12 L12.29 5.42 L12.85 6.79 L14.52 6.97 L14.52 9.03 L12.85 9.21 L12.29 10.58 L13.34 11.88 L11.88 13.34 L10.58 12.29 L9.21 12.85 L9.03 14.52 L6.97 14.52 L6.79 12.85 L5.42 12.29 L4.12 13.34 L2.66 11.88 L3.71 10.58 L3.15 9.21 L1.48 9.03 L1.48 6.97 L3.15 6.79 L3.71 5.42 L2.66 4.12 L4.12 2.66 L5.42 3.71Z"/><circle cx="8" cy="8" r="2"/>"#,
     )
 }
 
@@ -131,6 +131,31 @@ pub fn box_() -> AnyView {
 /// Texte (calques).
 pub fn text() -> AnyView {
     svg(r#"<path d="M3 3.5h10M8 3.5v9"/>"#)
+}
+
+/// Titre (calques).
+pub fn heading() -> AnyView {
+    svg(r#"<path d="M3.5 3v10M10.5 3v10M3.5 8h7"/>"#)
+}
+
+/// Bouton (calques).
+pub fn button() -> AnyView {
+    svg(r#"<rect x="1.5" y="4.5" width="13" height="7" rx="3.5"/><path d="M5.5 8h5"/>"#)
+}
+
+/// Champ de formulaire (calques).
+pub fn field() -> AnyView {
+    svg(r#"<rect x="1.5" y="4.5" width="13" height="7" rx="1.5"/><path d="M4.5 6.5v3"/>"#)
+}
+
+/// Menu de navigation (calques).
+pub fn menu() -> AnyView {
+    svg(r#"<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>"#)
+}
+
+/// Section (calques).
+pub fn section() -> AnyView {
+    svg(r#"<path d="M1.5 3h13M1.5 13h13"/><rect x="3.5" y="5.5" width="9" height="5" rx="1"/>"#)
 }
 
 /// Expression `{{ … }}` (calques).

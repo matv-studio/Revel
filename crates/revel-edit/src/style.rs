@@ -9,18 +9,26 @@ use revel_model::{Decl, Site, StyleItem, StyleRule};
 
 use crate::EditError;
 
+/// Adresse de la feuille de style créée pour un site qui n'en a pas.
+pub const DEFAULT_URL: &str = "/assets/site.css";
+
+/// Règles de la feuille ; un site sans feuille de style en reçoit une, vide, à la première règle
+/// (le style d'un élément ne demande aucune étape préalable).
 fn items_mut(site: &mut Site) -> Result<&mut Vec<StyleItem>, EditError> {
-    site.stylesheet
-        .as_mut()
-        .map(|s| &mut s.items)
-        .ok_or(EditError::NoStylesheet)
+    Ok(&mut site
+        .stylesheet
+        .get_or_insert_with(|| revel_model::Stylesheet {
+            url: DEFAULT_URL.into(),
+            source: None,
+            items: Vec::new(),
+        })
+        .items)
 }
 
+static NONE: Vec<StyleItem> = Vec::new();
+
 pub(crate) fn items(site: &Site) -> Result<&Vec<StyleItem>, EditError> {
-    site.stylesheet
-        .as_ref()
-        .map(|s| &s.items)
-        .ok_or(EditError::NoStylesheet)
+    Ok(site.stylesheet.as_ref().map(|s| &s.items).unwrap_or(&NONE))
 }
 
 /// Position d'une règle dans la feuille.

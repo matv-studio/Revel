@@ -576,13 +576,90 @@ pub fn usual_layout(site: &Site) -> Option<String> {
     counts.into_iter().max_by_key(|c| c.1).map(|c| c.0)
 }
 
+/// Gabarit de base pour un site qui n'en a pas : en-tête du document (langue, titre, feuille de
+/// style) et emplacement de la page. Les pages créées ensuite n'ont que leur contenu.
+pub fn base_layout(site: &Site) -> revel_model::Layout {
+    let el = |tag: &str, attrs: Vec<Attr>, children: Vec<Node>| Node::Element {
+        id: None,
+        tag: tag.into(),
+        attrs,
+        children,
+    };
+    let at = |name: &str, value: &str| Attr {
+        name: name.into(),
+        value: Some(value.into()),
+        when: None,
+    };
+    let sheet = site
+        .stylesheet
+        .as_ref()
+        .map(|s| s.url.clone())
+        .unwrap_or_else(|| crate::style::DEFAULT_URL.into());
+    let name = site.name.replace('\\', "").replace('"', "'");
+    let mut body = vec![
+        Node::Html {
+            html: "<!doctype html>".into(),
+        },
+        el(
+            "html",
+            vec![at("lang", &site.default_locale)],
+            vec![
+                el(
+                    "head",
+                    vec![],
+                    vec![
+                        el("meta", vec![at("charset", "utf-8")], vec![]),
+                        el(
+                            "meta",
+                            vec![
+                                at("name", "viewport"),
+                                at("content", "width=device-width, initial-scale=1"),
+                            ],
+                            vec![],
+                        ),
+                        el(
+                            "title",
+                            vec![],
+                            vec![Node::Out {
+                                expr: format!("seo.title if seo and seo.title else \"{name}\""),
+                            }],
+                        ),
+                        el(
+                            "link",
+                            vec![at("rel", "stylesheet"), at("href", &sheet)],
+                            vec![],
+                        ),
+                    ],
+                ),
+                el("body", vec![], vec![Node::Slot]),
+            ],
+        ),
+    ];
+    let mut taken = site.node_ids();
+    for n in body.iter_mut() {
+        refresh_ids(n, &mut taken);
+    }
+    let mut id = "base".to_string();
+    let mut k = 2;
+    while site.layouts.iter().any(|l| l.id == id) {
+        id = format!("base-{k}");
+        k += 1;
+    }
+    revel_model::Layout {
+        id,
+        parent: None,
+        props: Default::default(),
+        body,
+    }
+}
+
 /// Nouvelle page `name` dans le dossier `folder` (chemin d'adresse, `""` : racine) : gabarit le
-/// plus utilisé, titre de référencement, un titre dans une section.
+/// plus utilisé (sinon le premier), titre de référencement, un titre dans une section.
 pub fn new_page(site: &Site, name: &str, folder: &str) -> revel_model::Page {
     let slug = revel_model::slugify(name);
     let path = free_page_path(site, folder, &slug);
     let id = free_page_id(site, &path.trim_matches('/').replace('/', "-"));
-    let layout = usual_layout(site);
+    let layout = usual_layout(site).or_else(|| site.layouts.first().map(|l| l.id.clone()));
     let mut taken = site.node_ids();
     let heading = Node::Element {
         id: None,

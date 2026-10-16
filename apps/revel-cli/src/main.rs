@@ -28,9 +28,12 @@ enum Command {
         dir: PathBuf,
         #[arg(long, default_value = "Nouveau site")]
         name: String,
-        /// Modèle : `vitrine` ou `blog` (sans modèle : projet vide).
+        /// Modèle : `vide`, `vitrine` ou `blog` (sans modèle : projet sans page).
         #[arg(long)]
         template: Option<String>,
+        /// Fond clair (sombre par défaut).
+        #[arg(long)]
+        light: bool,
     },
     /// Importe un projet Eleventy : écrit `site.revel.json` à sa racine.
     ImportEleventy {
@@ -162,6 +165,7 @@ fn main() -> Result<()> {
             dir,
             name,
             template,
+            light,
         } => {
             match template.as_deref() {
                 None => {
@@ -180,7 +184,7 @@ fn main() -> Result<()> {
                         &config,
                         Box::new(revel_core::secrets::Memory::default()),
                     );
-                    core.new_site_from(&dir, &name, &cli.lang, template)
+                    core.new_site_from(&dir, &name, &cli.lang, template, light)
                         .map_err(|e| anyhow::anyhow!("{e}"))?;
                 }
             }

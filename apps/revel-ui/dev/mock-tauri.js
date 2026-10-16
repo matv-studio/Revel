@@ -132,7 +132,7 @@
       case "set_settings": state.settings = args.settings; return null;
       case "recent_sites": return state.recents;
       case "open_site": return site;
-      case "default_sites_dir": return "C:\\Users\\vous\\Documents\\Revel";
+      case "default_sites_dir": return state.settings.projects_dir || "C:\\Program Files\\Revel\\Projects";
       case "site_folder": return args.parent + "\\" + slug(args.name || "");
       case "create_site": return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
       case "cms_collections": return cms;

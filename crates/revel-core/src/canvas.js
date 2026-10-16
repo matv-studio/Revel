@@ -72,11 +72,16 @@
     ".sel{outline:calc(2px*var(--k)) solid #6d8cff}" +
     // Autres éléments de la sélection multiple.
     ".sel2{outline:calc(1.5px*var(--k)) solid #6d8cff;background:rgba(109,140,255,.08)}" +
-    // Marges (orange) et espacements intérieurs (vert) de l'élément survolé, comme les outils de
-    // développement des navigateurs.
-    ".mar{border-style:solid;border-color:rgba(246,166,80,.32)}" +
-    ".pad{border-style:solid;border-color:rgba(110,190,110,.30)}" +
-    ".spacing .mar{border-color:rgba(246,166,80,.55)}.spacing .pad{border-color:rgba(110,190,110,.5)}" +
+    // Espacements intérieurs (hachures bleues) et marges (hachures plus légères) de l'élément
+    // survolé, dans la couleur de sélection de Revel ; côté sous le pointeur de l'élément
+    // sélectionné : réglable en glissant (comme Framer).
+    ".side{position:fixed;display:none;pointer-events:none;z-index:2147483645;box-sizing:border-box}" +
+    ".side.p{background:repeating-linear-gradient(-45deg,rgba(109,140,255,.34) 0 calc(1px*var(--k)),rgba(109,140,255,.07) 0 calc(5px*var(--k)))}" +
+    ".side.m{background:repeating-linear-gradient(-45deg,rgba(109,140,255,.2) 0 calc(1px*var(--k)),transparent 0 calc(5px*var(--k)))}" +
+    ".spacing .side.p{background-color:rgba(109,140,255,.14)}" +
+    ".side.hot{background-color:rgba(109,140,255,.26);outline:calc(1px*var(--k)) solid #6d8cff;outline-offset:calc(-1px*var(--k))}" +
+    ".sval{position:fixed;display:none;pointer-events:none;z-index:2147483647;font:600 calc(11px*var(--k))/calc(18px*var(--k)) system-ui,-apple-system,'Segoe UI',sans-serif;" +
+    "background:#6d8cff;color:#fff;padding:0 calc(5px*var(--k));border-radius:calc(3px*var(--k));font-variant-numeric:tabular-nums}" +
     ".tag,.ghost,.into,.size{position:fixed;pointer-events:none;display:none;z-index:2147483647;" +
     "font:600 calc(11px*var(--k))/calc(18px*var(--k)) system-ui,-apple-system,'Segoe UI',sans-serif;background:#6d8cff;color:#fff;" +
     "padding:0 calc(6px*var(--k));border-radius:calc(3px*var(--k));white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis}" +
@@ -93,15 +98,20 @@
     // Utilisation de composant (vert, comme Webflow) ; modification isolée : le reste estompé.
     ".hover.comp{outline-color:#2fb67c}.sel.comp{outline-color:#2fb67c}.tag.comp{background:#2fb67c}" +
     ".dim{position:fixed;inset:0;pointer-events:none;display:none;z-index:2147483645;background:rgba(20,20,24,.5)}" +
-    "</style><div class='dim'></div><div class='spc'><div class='box mar'></div><div class='box pad'></div></div>" +
+    "</style><div class='dim'></div><div class='spc'>" +
+    ["pt", "pr", "pb", "pl"].map((k) => "<div class='side p' data-side='" + k + "'></div>").join("") +
+    ["mt", "mr", "mb", "ml"].map((k) => "<div class='side m' data-side='" + k + "'></div>").join("") +
+    "</div><div class='sval'></div>" +
     "<div class='box hover'></div><div class='extra'></div><div class='box sel'></div><div class='box drop'></div>" +
     "<div class='box line'></div><div class='tag'></div><div class='into'></div><div class='ghost'></div><div class='size'></div>" +
     "<div class='h h-e' data-axis='e'></div><div class='h h-s' data-axis='s'></div><div class='h h-se' data-axis='se'></div>";
   const [dimBox, hoverBox, selBox, dropBox, lineBox, tagBox, intoBox, ghostBox] =
     root.querySelectorAll(".dim, .hover, .sel, .drop, .line, .tag, .into, .ghost");
   const spcBox = root.querySelector(".spc");
-  const marBox = root.querySelector(".mar");
-  const padBox = root.querySelector(".pad");
+  const sideBoxes = {};
+  for (const b of root.querySelectorAll(".side")) sideBoxes[b.dataset.side] = b;
+  const sides = Object.values(sideBoxes);
+  const svalBox = root.querySelector(".sval");
   const extraBox = root.querySelector(".extra");
   const sizeBox = root.querySelector(".size");
   const handles = [...root.querySelectorAll(".h")];
@@ -168,12 +178,21 @@
   const inIsolated = (el) => !isolated || around(el).some((i) => i.component === isolated);
   const idOf = (el, inst) => (inst ? inst.node : el.getAttribute("data-rv"));
 
+  // Nom simple d'un élément (comme dans les calques) : classe principale rendue lisible
+  // (`hero__media` -> « Hero media »), sinon sa nature dans la langue de l'interface (envoyée par
+  // l'interface : message `labels`).
+  let tagNames = null;
+  let otherName = "";
   const label = (el, inst) => {
     if (inst) return "\u25C6 " + instName(inst);
-    const cls = typeof el.className === "string" && el.className.trim()
-      ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
-      : "";
-    return el.tagName.toLowerCase() + cls;
+    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).filter(Boolean) : [];
+    if (cls.length) {
+      const main = cls.filter((c) => c.startsWith(cls[0])).pop() || cls[0];
+      const h = main.split(/[-_]+/).filter(Boolean).join(" ");
+      if (h) return h[0].toUpperCase() + h.slice(1);
+    }
+    const t = el.tagName.toLowerCase();
+    return tagNames ? tagNames[t] || otherName || t : t;
   };
 
   const boxOf = (el, inst) => (inst ? rangeOfInst(inst).getBoundingClientRect() : el.getBoundingClientRect());
@@ -205,25 +224,78 @@
     dimBox.style.display = "block";
   };
 
-  // Marges et espacements intérieurs d'un élément (bordures colorées de deux boîtes).
+  // Marges et espacements intérieurs d'un élément : une zone hachurée par côté.
   const px = (v) => Math.max(0, parseFloat(v) || 0);
-  const drawSpacing = () => {
-    const el = styled(spacingSel ? selected : hovered);
-    const show = !!el && el.isConnected && !drag && !editing && !resizing && (spacingSel || !hoveredInst);
-    if (!show) { hide(marBox, padBox); return; }
+  // Côtés : propriété CSS, sens du glissement qui augmente la valeur.
+  const SIDES = {
+    pt: { prop: "padding-top", axis: "y", sign: 1 }, pr: { prop: "padding-right", axis: "x", sign: -1 },
+    pb: { prop: "padding-bottom", axis: "y", sign: -1 }, pl: { prop: "padding-left", axis: "x", sign: 1 },
+    mt: { prop: "margin-top", axis: "y", sign: -1 }, mr: { prop: "margin-right", axis: "x", sign: 1 },
+    mb: { prop: "margin-bottom", axis: "y", sign: 1 }, ml: { prop: "margin-left", axis: "x", sign: -1 },
+  };
+  const OPPOSITE = { pt: "pb", pb: "pt", pl: "pr", pr: "pl", mt: "mb", mb: "mt", ml: "mr", mr: "ml" };
+  // Rectangles des côtés (zone affichée) ; `grab` : épaisseur minimale pour saisir un côté vide.
+  const sideRects = (el, grab) => {
     const cs = getComputedStyle(el);
     const r = el.getBoundingClientRect();
     const m = [cs.marginTop, cs.marginRight, cs.marginBottom, cs.marginLeft].map(px);
     const b = [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth].map(px);
     const p = [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map(px);
-    const set = (box, x, y, w, h, bw) => {
-      if (!bw.some((v) => v > 0) || w <= 0 || h <= 0) { box.style.display = "none"; return; }
-      Object.assign(box.style, { display: "block", left: x + "px", top: y + "px", width: w + "px", height: h + "px",
-        borderWidth: bw.map((v) => v + "px").join(" ") });
+    const g = (v) => Math.max(v, grab);
+    const il = r.left + b[3], ir = r.right - b[1], it = r.top + b[0], ib = r.bottom - b[2];
+    return {
+      pt: [il, it, ir - il, g(p[0]), p[0]],
+      pb: [il, ib - g(p[2]), ir - il, g(p[2]), p[2]],
+      pl: [il, it + p[0], g(p[3]), ib - it - p[0] - p[2], p[3]],
+      pr: [ir - g(p[1]), it + p[0], g(p[1]), ib - it - p[0] - p[2], p[1]],
+      mt: [r.left, r.top - m[0], r.width, m[0], m[0]],
+      mb: [r.left, r.bottom, r.width, m[2], m[2]],
+      ml: [r.left - m[3], r.top, m[3], r.height, m[3]],
+      mr: [r.right, r.top, m[1], r.height, m[1]],
     };
-    set(marBox, r.left - m[3], r.top - m[0], r.width + m[1] + m[3], r.height + m[0] + m[2], m);
-    set(padBox, r.left + b[3], r.top + b[0], r.width - b[1] - b[3], r.height - b[0] - b[2], p);
+  };
+  let hotSide = null;
+  let spacing = null;
+  const drawSpacing = () => {
+    const el = styled(spacing ? selected : (spacingSel || hotSide) ? selected : hovered);
+    const show = !!el && el.isConnected && !drag && !editing && !resizing &&
+      (spacing || spacingSel || hotSide || !hoveredInst);
+    if (!show) { hide(...sides); return; }
+    const rects = sideRects(el, 0);
+    for (const [k, box] of Object.entries(sideBoxes)) {
+      const [x, y, w, h] = rects[k];
+      if (w <= 0 || h <= 0) { box.style.display = "none"; continue; }
+      Object.assign(box.style, { display: "block", left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
+      box.classList.toggle("hot", k === (spacing ? spacing.side : hotSide));
+    }
     spcBox.classList.toggle("spacing", spacingSel);
+  };
+  // Côté de l'élément sélectionné sous le pointeur : espacement intérieur (saisissable même vide,
+  // bande de 6 px), marge non nulle.
+  const spacingAt = (x, y) => {
+    if (!active || !selected || selectedInst || !selected.isConnected || editing || drag || resizing) return null;
+    const el = styled(selected);
+    const d = getComputedStyle(el).display;
+    if (d === "inline" || d === "contents" || d === "none") return null;
+    const k = parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
+    const rects = sideRects(el, 6 * k);
+    for (const key of ["pt", "pb", "pl", "pr", "mt", "mb", "ml", "mr"]) {
+      const [rx, ry, w, h, v] = rects[key];
+      if (key[0] === "m" && v <= 0) continue;
+      if (w > 0 && h > 0 && x >= rx && x <= rx + w && y >= ry && y <= ry + h) return key;
+    }
+    return null;
+  };
+  // Pointeur de la page : flèche de redimensionnement sur un côté réglable.
+  const cursorStyle = document.createElement("style");
+  const setCursor = (side) => {
+    cursorStyle.textContent = side ? "*{cursor:" + (SIDES[side].axis === "y" ? "ns-resize" : "ew-resize") + "!important}" : "";
+    if (side && !cursorStyle.isConnected) document.documentElement.appendChild(cursorStyle);
+  };
+  const showValue = (text, x, y) => {
+    const k = parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
+    svalBox.textContent = text;
+    Object.assign(svalBox.style, { display: "block", left: (x + 12 * k) + "px", top: (y + 14 * k) + "px" });
   };
 
   // Poignées de taille : élément sélectionné (pas une utilisation de composant, pas un élément
@@ -676,7 +748,7 @@
     resizing = { el, axis, id: rvOf(selected), x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, padX, padY,
       ratio: r.height > 0 ? r.width / r.height : 1, w: null, h: null, saved: [keep(el, "width"), keep(el, "height")] };
     try { document.documentElement.setPointerCapture(e.pointerId); } catch (_) { /* relâché */ }
-    hide(hoverBox, marBox, padBox);
+    hide(hoverBox, ...sides);
   };
   const moveResize = (e) => {
     const rs = resizing;
@@ -726,6 +798,78 @@
   }, true);
   window.addEventListener("pointercancel", () => { if (resizing) endResize(true); }, true);
 
+  // Glisser un côté hachuré de l'élément sélectionné : espacement intérieur ou marge (px) ; Maj :
+  // les quatre côtés, Alt : le côté opposé aussi. L'élément suit en direct ; au relâchement,
+  // l'interface écrit les valeurs dans la classe. Double-clic : valeur retirée.
+  const startSpacing = (side, e) => {
+    release_held();
+    const el = styled(selected);
+    const kind = side[0];
+    const group = e.shiftKey ? Object.keys(SIDES).filter((k) => k[0] === kind)
+      : e.altKey ? [side, OPPOSITE[side]] : [side];
+    const rects = sideRects(el, 0);
+    spacing = { el, side, group, id: rvOf(selected), x0: e.clientX, y0: e.clientY, v0: rects[side][4], v: null,
+      saved: group.map((k) => keep(el, SIDES[k].prop)) };
+    try { document.documentElement.setPointerCapture(e.pointerId); } catch (_) { /* relâché */ }
+    hide(hoverBox);
+  };
+  const moveSpacing = (e) => {
+    const sp = spacing;
+    const def = SIDES[sp.side];
+    const d = def.axis === "y" ? e.clientY - sp.y0 : e.clientX - sp.x0;
+    const v = Math.max(0, Math.round(sp.v0 + def.sign * d));
+    sp.v = v;
+    for (const k of sp.group) sp.el.style.setProperty(SIDES[k].prop, v + "px", "important");
+    showValue(v + " px", e.clientX, e.clientY);
+    redraw();
+  };
+  const endSpacing = (cancel) => {
+    const sp = spacing;
+    spacing = null;
+    svalBox.style.display = "none";
+    resized = true;
+    setTimeout(() => { resized = false; }, 0);
+    if (cancel || sp.v === null || sp.v === Math.round(sp.v0)) { putBack(sp); redraw(); return; }
+    held = { el: sp.el, saved: sp.saved, timer: setTimeout(release_held, 6000) };
+    const values = {};
+    for (const k of sp.group) values[SIDES[k].prop] = sp.v + "px";
+    post({ type: "spacing", id: sp.id, values });
+    redraw();
+  };
+  window.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || onHandle(e)) return;
+    const side = spacingAt(e.clientX, e.clientY);
+    if (!side) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    startSpacing(side, e);
+  }, true);
+  window.addEventListener("pointermove", (e) => {
+    if (spacing) { e.stopImmediatePropagation(); moveSpacing(e); return; }
+    if (resizing) return;
+    const side = spacingAt(e.clientX, e.clientY);
+    if (side !== hotSide) {
+      hotSide = side;
+      setCursor(side);
+      if (!side) svalBox.style.display = "none";
+      redraw();
+    }
+    if (side) showValue(Math.round(sideRects(styled(selected), 0)[side][4]) + " px", e.clientX, e.clientY);
+  }, true);
+  window.addEventListener("pointerup", (e) => {
+    if (!spacing) return;
+    e.stopImmediatePropagation();
+    endSpacing(false);
+  }, true);
+  window.addEventListener("pointercancel", () => { if (spacing) endSpacing(true); }, true);
+  document.addEventListener("dblclick", (e) => {
+    const side = spacingAt(e.clientX, e.clientY);
+    if (!side || onHandle(e)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    post({ type: "spacing", id: rvOf(selected), values: { [SIDES[side].prop]: null } });
+  }, true);
+
   // Les clics sélectionnent : liens, boutons et formulaires du site ne réagissent pas.
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
   document.addEventListener("click", (e) => {
@@ -749,6 +893,10 @@
   }, true);
   const propOf = (sl, inst) => !!sl && sl.slot === "expr" && !!sl.binding && !!sl.binding.source &&
     sl.binding.source.kind === "prop" && sl.binding.source.node === inst.node;
+  // Texte venu des données du site (nom du site, menu, contenu) affiché dans un composant :
+  // modifié sur place comme ailleurs (la donnée change, pas le composant).
+  const dataOf = (sl) => !!sl && sl.slot === "expr" && !!sl.binding && !!sl.binding.source &&
+    sl.binding.source.kind !== "prop" && !sl.transformed && !sl.html;
   document.addEventListener("dblclick", (e) => {
     if (inEdit(e.target)) return;
     block(e);
@@ -761,12 +909,14 @@
     const p = pick(e.target);
     if (p && p.inst) {
       // Texte d'une propriété de cette utilisation : modifié sur place (valeur de l'utilisation).
-      if (n !== null && propOf(slots[n], p.inst)) { startEdit(n); return; }
-      // Sinon : le composant s'ouvre, l'élément sous le pointeur est sélectionné.
+      if (n !== null && (propOf(slots[n], p.inst) || dataOf(slots[n]))) { startEdit(n); return; }
+      // Sinon : le composant s'ouvre, l'élément sous le pointeur est sélectionné ; un texte écrit
+      // dans le composant se modifie aussitôt (un seul double-clic).
       const inner = targetOf(e.target);
       if (inner) {
         isolated = p.inst.component;
         select(inner, true, null);
+        if (n !== null && slots[n] && slots[n].slot === "text") startEdit(n);
       }
       return;
     }
@@ -800,6 +950,11 @@
     // Espace maintenue : déplacement de la vue (comme Figma), géré par l'interface.
     if (e.key === " " || e.code === "Space") {
       e.preventDefault();
+      // Ctrl+Espace : palette de commandes (comme Ctrl+K), transmise une fois par appui.
+      if ((e.ctrlKey || e.metaKey) && !e.repeat) {
+        post({ type: "key", key: "k", code: "KeyK", shift: false, alt: false, ctrl: true, meta: false });
+        return;
+      }
       if (!e.repeat) post({ type: "key", key: " ", code: "Space", shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey });
       return;
     }
@@ -946,6 +1101,11 @@
         // Composant ouvert (modification isolée) ou fermé ; noms des composants.
         isolated = m.component || null;
         if (m.names) names = m.names;
+        redraw();
+        break;
+      case "labels":
+        tagNames = m.tags || null;
+        otherName = m.other || "";
         redraw();
         break;
       case "watch":

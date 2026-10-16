@@ -47,3 +47,17 @@ l'utilisateur intervient.
 | 5.6 | Terminée : GitHub Pages choisi dans la liste : compte GitHub, dépôt proposé au nom du site (`compte/nom-du-site`), créé public à la première publication s'il n'existe pas (D-52) |
 | 5.7 | Terminée : fenêtre « Nom de domaine » (Paramètres › Publication, icône globe) : enregistrements A, CNAME et AAAA de GitHub Pages prêts à copier, chemins de l'espace client pour les autres hébergeurs ; « Vérifier » : adresses du domaine, HTTPS, page d'accueil identique à la publiée ; domaine enregistré comme adresse du site (et domaine personnalisé de GitHub Pages) (D-53) |
 | 5.8 | Terminée : bloc « Formulaire » (panneau Ajouter › Formulaires) ; Paramètres › Formulaires : adresse de réception, objet, message après l'envoi, hébergements qui reçoivent les formulaires ou non ; `revel-form.php` produit à la génération (champ piège, limite par adresse IP, envoi sans recharger la page, page de confirmation sans JavaScript) ; GitHub Pages signalé sans PHP (D-54) |
+
+## Passe d'ergonomie après la 0.4 (demande du 16/10/2026)
+
+Retours après installation de la 0.4 : rendre Revel évident pour une personne qui ne fait pas de sites
+(comparaison avec Webflow, Framer et Figma), sans étape intermédiaire évitable.
+
+| Sujet | Fait |
+|---|---|
+| Fonctions « prévues à l'étape 3 » encore affichées | Cause : bas du panneau CMS resté sur ses boutons prévus, panneaux CMS et Variables restés ouverts dans les dispositions enregistrées avant l'espace CMS. Bouton du panneau qui ouvre la vue CMS ; disposition mise à jour une fois (panneaux CMS et Variables fermés, rouvrables) |
+| Nouveau site | Page d'accueil créée, feuille de style créée au premier style sans message, lien ajouté à la génération, gabarit de base pour une page d'un site sans gabarit ; fond sombre (par défaut) ou clair (D-56) |
+| Calques | Ni `html`, `head`, `meta` ni scripts ; `body` à la racine ; texte sur la ligne de son élément ; noms simples (classe lisible ou nature de l'élément), balise en info-bulle ; mêmes noms dans le fil d'Ariane et le canevas ; ajout jamais dans `head` (D-55) |
+| Canevas | Double-clic sur un texte de composant ; poignées de largeur du cadre ; marges et espacements en hachures, réglables en glissant ; Ctrl+Espace (D-58) |
+| Interface | Icône des réglages en engrenage ; « Importer » au lieu de « Importer un projet Eleventy » ; listes déroulantes à la direction artistique de Revel (`appearance: base-select` là où le moteur la connaît, liste du système sinon) ; Réglages de l'application en rubriques (Général, Apparence, Traduction automatique, Assistants IA, Comptes) |
+| Dossier des projets | Installation Windows dans `C:\Program Files\Revel`, sites dans `Projects` à côté de l'application, dossier modifiable dans Réglages › Général (D-57) |

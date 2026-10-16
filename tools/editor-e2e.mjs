@@ -76,7 +76,8 @@ try {
   await h1.click();
   await page.waitForFunction(() => /(Page|Gabarit|Composant) /.test(document.querySelector('.editor-status')?.textContent || ''));
   const status = await page.textContent('.editor-status');
-  check('clic dans le canevas : élément et propriétaire affichés', /h1|span|strong/.test(status) && /(Page|Gabarit|Composant) /.test(status), status.trim().replace(/\s+/g, ' '));
+  const techs = await page.$$eval('.editor-status .node-crumb', (l) => l.map((c) => c.dataset.tech).join(' › '));
+  check('clic dans le canevas : élément et propriétaire affichés', /h1|span|strong/.test(techs) && /(Page|Gabarit|Composant) /.test(status), `${status.trim().replace(/\s+/g, ' ')} (${techs})`);
 
   // Points de rupture : largeur du cadre.
   const bps = await page.$$('.editor-toolbar .segmented button');
@@ -152,8 +153,8 @@ try {
   check('calques : élément cliqué sélectionné et visible dans l\'arbre', inView, selLabel);
 
   // Ligne cliquée -> sélection dans le canevas (barre d'état).
-  await page.click('.layers .layer:has-text("section.hero")');
-  await page.waitForFunction(() => document.querySelector('.editor-status')?.textContent.includes('section.hero'));
+  await page.click('.layers .layer[data-tech*="section.hero"]');
+  await page.waitForFunction(() => [...document.querySelectorAll('.editor-status .node-crumb')].some((c) => c.dataset.tech.startsWith('section.hero')));
   check('calques : ligne cliquée sélectionnée dans le canevas', true);
 
   const docBefore = await invoke('edit_open');
@@ -163,12 +164,12 @@ try {
   f = await waitFrame(() => document.querySelectorAll('section.hero').length === 2, 'section dupliquée');
   const dup = await invoke('edit_open');
   check('dupliquer : section copiée (nouveaux identifiants), sélectionnée', bodyOf(dup.site).length > bodyOf(docBefore.site).length
-    && (await page.textContent('.editor-status')).includes('section.hero'));
+    && (await page.$$eval('.editor-status .node-crumb', (l) => l.some((c) => c.dataset.tech.startsWith('section.hero')))));
   await page.click('.editor-toolbar .btn-undo');
   f = await waitFrame(() => document.querySelectorAll('section.hero').length === 1, 'annulation de la copie');
 
   // Descendre (bouton) : la section passe après sa voisine.
-  await page.click('.layers .layer:has-text("section.hero")');
+  await page.click('.layers .layer[data-tech*="section.hero"]');
   const orderBefore = await f.evaluate(() => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(','));
   await page.click('.layers .layers-foot .icon-btn >> nth=3');
   f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') !== ob, 'déplacement', orderBefore);
@@ -177,10 +178,10 @@ try {
   f = await waitFrame((ob) => [...document.querySelector('main').children].map((e) => e.tagName + '.' + e.className.split(' ')[0]).join(',') === ob, 'annulation du déplacement', orderBefore);
 
   // Glisser-déposer : section.hero (repliée) déposée après la section suivante.
-  await page.click('.layers .layer:has-text("section.hero") .layer-toggle');
+  await page.click('.layers .layer[data-tech*="section.hero"] .layer-toggle');
   await page.waitForTimeout(150);
-  const info = await page.$$eval('.layers .layer', (rs) => rs.map((e) => [e.textContent.trim(), parseInt(e.dataset.depth, 10)]));
-  const si = info.findIndex(([t]) => t === 'section.hero');
+  const info = await page.$$eval('.layers .layer', (rs) => rs.map((e) => [e.dataset.tech, parseInt(e.dataset.depth, 10)]));
+  const si = info.findIndex(([t]) => t === 'section.hero' || t.startsWith('section.hero.'));
   const di = info.findIndex(([t, pad], i) => i > si && t.startsWith('section') && pad === info[si][1]);
   if (si >= 0 && di >= 0) {
     const rowsL = page.locator('.layers .layer');
@@ -197,7 +198,7 @@ try {
   }
 
   // Supprimer (touche Suppr dans les calques), puis annuler.
-  await page.click('.layers .layer:has-text("section.hero")');
+  await page.click('.layers .layer[data-tech*="section.hero"]');
   await page.keyboard.press('Delete');
   f = await waitFrame(() => document.querySelectorAll('section.hero').length === 0, 'suppression');
   check('Suppr : section retirée, plus de sélection', !(await page.$('.layers .layer.is-selected')));
@@ -249,7 +250,7 @@ try {
     for (const o of [...site.pages, ...site.layouts, ...site.components]) walk(o.body);
     return found;
   };
-  await page.click('.layers .layer:has-text("section.hero")');
+  await page.click('.layers .layer[data-tech*="section.hero"]');
   await page.click('.dock-tab[data-panel="settings"]');
   await page.waitForFunction(() => document.querySelector('.dock-panel[data-panel="settings"] input')?.value === 'section');
   check('réglages : balise de l\'élément sélectionné', true);
@@ -274,7 +275,7 @@ try {
   await page.click('.dock-tab[data-panel="insert"]');
   await page.click('.insert-item:has-text("Titre")');
   f = await waitFrame(() => [...document.querySelectorAll('section.hero h2')].some((h) => h.textContent === 'Nouveau titre'), 'titre ajouté');
-  await page.waitForFunction(() => document.querySelector('.editor-status .node-crumb.is-on')?.textContent === 'h2');
+  await page.waitForFunction(() => document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech === 'h2');
   check('ajouter : titre inséré dans la section, sélectionné', true);
   await page.click('.dock-tab[data-panel="layers"]');
 
@@ -413,15 +414,15 @@ try {
     const n0 = await page.$$eval('.layers .layer', (r) => r.length);
     await page.fill('.layers .panel-search input', 'hero__title');
     await page.waitForTimeout(200);
-    const found = await page.$$eval('.layers .layer', (r) => r.map((e) => e.textContent.trim()));
-    check('calques : recherche (lignes trouvées et leurs parents)', found.length < n0 && found.some((t) => t === 'h1.hero__title'), `${n0} → ${found.length}`);
+    const found = await page.$$eval('.layers .layer', (r) => r.map((e) => e.dataset.tech));
+    check('calques : recherche (lignes trouvées et leurs parents)', found.length < n0 && found.some((t) => t.startsWith('h1.hero__title')), `${n0} → ${found.length}`);
     await page.fill('.layers .panel-search input', '');
-    await page.click('.layers .layer:has-text("h1.hero__title")');
+    await page.click('.layers .layer[data-tech*="h1.hero__title"]');
     await page.keyboard.press('ArrowDown');
     await page.waitForTimeout(200);
-    const after = (await page.textContent('.layers .layer.is-selected')).trim();
-    check('calques : flèche vers le bas, élément suivant', after !== 'h1.hero__title', after);
-    await page.click('.layers .layer:has-text("h1.hero__title")', { button: 'right' });
+    const after = await page.getAttribute('.layers .layer.is-selected', 'data-tech');
+    check('calques : flèche vers le bas, élément suivant', !after.startsWith('h1.hero__title'), after);
+    await page.click('.layers .layer[data-tech*="h1.hero__title"]', { button: 'right' });
     check('calques : menu contextuel', !!(await page.waitForSelector('.context-menu')));
     // Une ligne par action : icône et libellé alignés, raccourci à droite, sans répétition.
     const rowsOk = await page.$$eval('.context-menu .context-item', (items) => items.every((it) => {
@@ -432,10 +433,10 @@ try {
     await page.mouse.click(700, 400);
     await page.waitForTimeout(100);
     check('calques : menu contextuel fermé par un clic ailleurs', !(await page.$('.context-menu')));
-    await page.click('.layers .layer:has-text("h1.hero__title")');
-    await page.click('.node-path .node-crumb:has-text("section.hero")');
+    await page.click('.layers .layer[data-tech*="h1.hero__title"]');
+    await page.click('.node-path .node-crumb[data-tech*="section.hero"]');
     await page.waitForTimeout(200);
-    check('fil d\'Ariane : parent sélectionné', (await page.textContent('.layers .layer.is-selected')).trim() === 'section.hero');
+    check('fil d\'Ariane : parent sélectionné', (await page.getAttribute('.layers .layer.is-selected', 'data-tech')).startsWith('section.hero'));
     // Variables : affectations de la page (plus dans les calques), valeur calculée au rendu ;
     // expression modifiée sur place, refusée si sa syntaxe est fausse, annulée par Ctrl+Z.
     const varLayers = await page.$$eval('.layers .layer', (r) => r.filter((e) => /^variable /.test(e.textContent.trim())).length);
@@ -690,7 +691,7 @@ try {
       const docE = JSON.stringify(await siteE());
       const pageJson = async () => JSON.stringify((await siteE()).pages);
       await page.click('.dock-tab[data-panel="layers"]');
-      await page.click('.layers .layer-label:has-text("section.intro-agency")');
+      await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
       await page.click('.dock-tab[data-panel="insert"]');
       await page.click('.insert-item[data-item="insert-collection-list"]');
       const listed = await untilE(async () => (await frame.locator('.liste-collection__element').count()) > 2);
@@ -715,7 +716,7 @@ try {
       if (shots) await page.screenshot({ path: `${shots}/editeur-liste-collection.png` });
       // Grille : élément et ses règles de style.
       await page.click('.dock-tab[data-panel="layers"]');
-      await page.click('.layers .layer-label:has-text("section.intro-agency")');
+      await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
       await page.click('.dock-tab[data-panel="insert"]');
       await page.click('.insert-item[data-item="insert-grid"]');
       const grid = await untilE(async () => (await frame.locator('.grille .grille__cellule').count()) === 2);
@@ -739,7 +740,7 @@ try {
       check('éléments : code HTML écrit tel quel', embed);
       // Bloc prêt à l'emploi : section complète avec ses icônes et ses styles.
       await page.click('.dock-tab[data-panel="layers"]');
-      await page.click('.layers .layer-label:has-text("section.intro-agency")');
+      await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
       await page.click('.dock-tab[data-panel="insert"]');
       await page.locator('.insert-item[data-item="insert-block-features"]').scrollIntoViewIfNeeded();
       await page.click('.insert-item[data-item="insert-block-features"]');
@@ -967,17 +968,17 @@ try {
     f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && document.querySelectorAll('.intro-agency__links a').length === 2, 'annulation de la copie');
 
     // Parcours de la sélection au clavier (comme Figma).
-    const crumb = () => page.$eval('.editor-status .node-crumb.is-on', (e) => e.textContent);
+    const crumb = () => page.$eval('.editor-status .node-crumb.is-on', (e) => e.dataset.tech);
     await canvas.locator('.intro-agency__links a').first().click();
-    await page.waitForFunction(() => /^a\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.textContent || ''));
+    await page.waitForFunction(() => /^a\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech || ''));
     await page.keyboard.press('Tab');
-    await page.waitForFunction(() => /button--ghost|a\.button$/.test(document.querySelector('.editor-status .node-crumb.is-on')?.textContent || '') && document.querySelectorAll('.editor-status .node-crumb').length > 0);
+    await page.waitForFunction(() => /button--ghost|a\.button$/.test(document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech || '') && document.querySelectorAll('.editor-status .node-crumb').length > 0);
     const sib = await crumb();
     await page.keyboard.press('Shift+Enter');
-    await page.waitForFunction(() => /^p\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.textContent || ''));
+    await page.waitForFunction(() => /^p\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech || ''));
     const par = await crumb();
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => /^a\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.textContent || ''));
+    await page.waitForFunction(() => /^a\./.test(document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech || ''));
     check('clavier : Tab frère suivant, Maj+Entrée parent, Entrée enfant', true, `${sib} → ${par} → ${await crumb()}`);
 
     // Menu contextuel du canevas : copier, puis coller à côté (Ctrl+V).
@@ -998,7 +999,7 @@ try {
     await canvas.locator('.intro-agency__links a').first().click();
     await page.keyboard.press('Control+g');
     f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && !!document.querySelector('.intro-agency__links > span > a'), 'enveloppe');
-    await page.waitForFunction(() => document.querySelector('.editor-status .node-crumb.is-on')?.textContent === 'span');
+    await page.waitForFunction(() => document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech === 'span');
     await page.keyboard.press('Control+Shift+g');
     f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot && !document.querySelector('.intro-agency__links > span') && document.querySelectorAll('.intro-agency__links > a').length === 2, 'enveloppe retirée');
     check('Ctrl+G puis Ctrl+Maj+G : enveloppe (span dans un paragraphe) ajoutée puis retirée, document identique', JSON.stringify((await invoke('edit_open')).site) === wrapBase);
@@ -1099,7 +1100,7 @@ try {
   // ------------------------------------------------------------------ styles et points de rupture (2.6, 2.8)
   const base26 = await invoke('edit_open');
   const rulesOf = (site, sel) => site.stylesheet.items.map((it, i) => [it, i]).filter(([it]) => it.item === 'rule' && it.selector === sel);
-  await page.click('.layers .layer:has-text("h1.hero__title")');
+  await page.click('.layers .layer[data-tech*="h1.hero__title"]');
   await page.click('.dock-tab[data-panel="styles"]');
   await page.waitForFunction(() => document.querySelector('.styles .sel-chip.is-on')?.textContent.trim() === 'hero__title');
   check('styles : sélecteur de la classe de l\'élément', true);
@@ -1718,7 +1719,7 @@ try {
         const s = await scaleOf();
         return [box.x + x * s, box.y + y * s];
       };
-      const layer = (text) => page.locator('.layers .layer', { hasText: text }).first();
+      const layer = (tech) => page.locator(`.layers .layer[data-tech*="${tech}"]`).first();
       const undoAll = async (target, what) => {
         for (let i = 0; i < 6 && docC() !== target; i++) {
           await page.click('.editor-toolbar .btn-undo');
@@ -2142,6 +2143,7 @@ try {
   // ---------------------------------------------------------------- Langues de traduction (D-36)
   await page.click('.topbar button.logo');
   await page.click('.view-tab[data-view="nav-settings"]');
+  await page.click('.settings-nav-item[data-section="translate"]');
   await page.waitForSelector('.packs .pack');
   const packs = await page.$$eval('.pack', (l) => l.map((x) => [x.dataset.pack, x.querySelector('.pack-get') ? 'get' : x.querySelector('.pack-remove') ? 'rm' : '?']));
   const bundled = packs.filter(([, a]) => a === 'rm').map(([c]) => c);
@@ -2170,6 +2172,7 @@ try {
   // Réglages › Assistants IA (4.2, serveur simulé) : activation, port, clé, configurations.
   {
     const state = () => page.textContent('.mcp-state');
+    await page.click('.settings-nav-item[data-section="assistants"]');
     await page.locator('.mcp').scrollIntoViewIfNeeded();
     const off = (await state()).trim();
     await page.click('.mcp-server .switch');

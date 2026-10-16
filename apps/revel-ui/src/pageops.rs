@@ -59,11 +59,35 @@ pub fn create(ui: Ui, ed: Ed, name: &str, folder: &str) -> bool {
     if name.trim().is_empty() {
         return false;
     }
-    let Some(page) = doc(ed, |s| revel_edit::make::new_page(s, name, folder)) else {
+    // Site sans gabarit : gabarit de base créé avec la page (en-tête du document, feuille de
+    // style), la page n'a que son contenu.
+    let Some((layout, page)) = doc(ed, |s| {
+        if s.layouts.is_empty() {
+            let mut with = s.clone();
+            let l = revel_edit::make::base_layout(s);
+            with.layouts.push(l.clone());
+            (Some(l), revel_edit::make::new_page(&with, name, folder))
+        } else {
+            (None, revel_edit::make::new_page(s, name, folder))
+        }
+    }) else {
         return false;
     };
     let url = page.path.clone();
-    ed.apply(ui, Command::AddPage { page, index: None }, false);
+    let add = Command::AddPage { page, index: None };
+    let cmd = match layout {
+        Some(layout) => Command::Batch {
+            commands: vec![
+                Command::AddLayout {
+                    layout,
+                    index: None,
+                },
+                add,
+            ],
+        },
+        None => add,
+    };
+    ed.apply(ui, cmd, false);
     ui.goto_page.set(Some(url));
     true
 }

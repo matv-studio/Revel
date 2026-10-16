@@ -32,7 +32,8 @@
   const ghProfile = [{ id: "h2", name: "GitHub Pages", environment: "production", target: { kind: "github_pages", repo: "matv-studio/alunites-revel-lab", branch: "gh-pages", custom_domain: null } }, true];
   const profiles = params.get("noprofiles") ? [] : params.get("ghprofile") ? [ghProfile] : [[{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true]];
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const mcp = { enabled: false, port: 47520, token: "3f9a1c0e7b2d4a6f8e1c3b5d7f9a0c2e4b6d8f1a3c5e7b9d0f2a4c6e8b1d3f5a" };
+  let mcpDecided = null, mcpConns = [];
+  const mcp = { enabled: false, port: 47520, public_url: null, token: "3f9a1c0e7b2d4a6f8e1c3b5d7f9a0c2e4b6d8f1a3c5e7b9d0f2a4c6e8b1d3f5a" };
   const mcpStatus = () => {
     const busy = mcp.enabled && params.get("mcpbusy");
     return { ...mcp, url: `http://127.0.0.1:${mcp.port}/mcp`, running: mcp.enabled && !busy,
@@ -108,6 +109,17 @@
         { at: Date.now() - 900_000, client: "codex-mcp-client", tool: "set_data", target: "pages.accueil.news_title" },
         { at: Date.now() - 86_400_000 * 2, client: "", tool: "undo" },
       ] : [];
+      // Accès à distance (simulé) : `mcpreq=1` (ou `window.__revelMcpReq`) : une demande en attente.
+      case "mcp_set_public": {
+        const u = (args.url || "").trim();
+        if (u && !/^https:\/\/[a-z0-9.-]+(:\d+)?\/?$/i.test(u)) throw { key: "error-mcp-public-url", args: [["detail", u]] };
+        mcp.public_url = u ? u.replace(/\/$/, "").toLowerCase() : null;
+        return mcpStatus();
+      }
+      case "mcp_pending": return mcp.public_url && (params.get("mcpreq") || window.__revelMcpReq) && !mcpDecided ? [{ id: "req1", client: "Claude", host: "claude.ai", at: Date.now() }] : [];
+      case "mcp_decide": mcpDecided = args.allow ? "allow" : "deny"; if (args.allow) mcpConns.push({ id: "c1", client: "Claude", host: "claude.ai", since: Date.now(), used: Date.now() }); return true;
+      case "mcp_connections": return mcp.public_url ? mcpConns : [];
+      case "mcp_revoke": mcpConns = mcpConns.filter((c) => c.id !== args.id); return null;
       case "get_settings": return state.settings;
       case "set_settings": state.settings = args.settings; return null;
       case "recent_sites": return state.recents;

@@ -15,11 +15,14 @@ revel-i18n.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rmcp = { version = "3.5.1", default-features = false, features = ["server", "macros", "schemars", "transport-io", "transport-streamable-http-server"] }
-axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json"] }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json", "form", "query"] }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "macros", "io-std", "time"] }
 tokio-util = "0.7.20"
 ureq = "3.4.2"
 getrandom = "0.3.4"
+sha2 = "0.10.9"
+blake3 = "1.8.7"
+base64 = "0.22.1"
 revel-core = { workspace = true, optional = true, default-features = false }
 
 [features]

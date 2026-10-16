@@ -493,6 +493,7 @@ fn App() -> impl IntoView {
             </main>
             <library::MediaPicker/>
             <dialog::Dialog/>
+            <assistants::AccessRequests/>
             <ctxmenu::ContextLayer/>
         </div>
     }

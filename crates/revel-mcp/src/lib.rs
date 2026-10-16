@@ -12,6 +12,7 @@ pub mod config;
 #[cfg(feature = "core")]
 pub mod direct;
 pub mod http;
+pub mod oauth;
 mod outline;
 pub mod relay;
 mod tools;

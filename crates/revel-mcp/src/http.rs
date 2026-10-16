@@ -4,6 +4,7 @@
 //! N'écoute que sur 127.0.0.1 ; chaque requête doit porter le jeton (`Authorization: Bearer …`) ;
 //! les en-têtes `Host` et `Origin` sont vérifiés (pas de requête venue d'une page web).
 
+use crate::oauth::OAuth;
 use crate::{Invoke, Revel};
 use axum::body::Body;
 use axum::extract::{Path, State};
@@ -21,16 +22,20 @@ use tokio_util::sync::CancellationToken;
 struct Shared {
     inv: Arc<dyn Invoke>,
     token: Arc<String>,
+    /// Accès à distance (adresse publique, OAuth), s'il est réglé.
+    oauth: Option<Arc<OAuth>>,
 }
 
-/// Jeton présent et exact (comparaison en temps constant).
-fn authorized(h: &HeaderMap, token: &str) -> bool {
-    let Some(v) = h.get("authorization").and_then(|v| v.to_str().ok()) else {
-        return false;
-    };
-    let Some(given) = v.strip_prefix("Bearer ").map(str::trim) else {
-        return false;
-    };
+/// Jeton présenté (`Authorization: Bearer …`).
+fn bearer(h: &HeaderMap) -> Option<&str> {
+    h.get("authorization")
+        .and_then(|v| v.to_str().ok())?
+        .strip_prefix("Bearer ")
+        .map(str::trim)
+}
+
+/// Comparaison en temps constant.
+fn same(given: &str, token: &str) -> bool {
     given.len() == token.len()
         && given
             .bytes()
@@ -39,32 +44,68 @@ fn authorized(h: &HeaderMap, token: &str) -> bool {
             == 0
 }
 
-/// Hôte local (`127.0.0.1`, `localhost`, `[::1]`, `host.docker.internal` pour un assistant dans
-/// Docker Desktop, avec ou sans port) : un autre nom de domaine redirigé vers cette machine
-/// (« DNS rebinding ») est refusé.
-fn local_host(h: &HeaderMap) -> bool {
-    let Some(host) = h.get("host").and_then(|v| v.to_str().ok()) else {
-        return false;
-    };
-    let name = match host.strip_prefix('[') {
-        Some(rest) => rest.split(']').next().unwrap_or_default(),
-        None => host.split(':').next().unwrap_or_default(),
-    };
-    matches!(
-        name,
-        "127.0.0.1" | "localhost" | "::1" | "host.docker.internal"
+/// Nom d'hôte de l'en-tête `Host`, sans port.
+fn host_name(h: &HeaderMap) -> Option<String> {
+    let host = h.get("host").and_then(|v| v.to_str().ok())?;
+    Some(
+        match host.strip_prefix('[') {
+            Some(rest) => rest.split(']').next().unwrap_or_default(),
+            None => host.split(':').next().unwrap_or_default(),
+        }
+        .to_lowercase(),
     )
 }
 
-async fn guard(State(s): State<Shared>, req: Request<Body>, next: Next) -> Response {
-    // Requête d'une page web (navigateur) : refusée, quel que soit le jeton.
-    if req.headers().contains_key("origin") || !local_host(req.headers()) {
+/// Hôte accepté : local (`127.0.0.1`, `localhost`, `[::1]`, `host.docker.internal` pour un
+/// assistant dans Docker Desktop) ou l'adresse publique réglée. Un autre nom de domaine redirigé
+/// vers cette machine (« DNS rebinding ») est refusé.
+fn host_ok(h: &HeaderMap, oauth: Option<&OAuth>) -> bool {
+    let Some(name) = host_name(h) else {
+        return false;
+    };
+    matches!(
+        name.as_str(),
+        "127.0.0.1" | "localhost" | "::1" | "host.docker.internal"
+    ) || oauth.is_some_and(|o| o.host().split(':').next() == Some(name.as_str()))
+}
+
+/// Hôte et origine : toutes les routes. Seule la page d'autorisation, ouverte dans le navigateur
+/// à l'adresse publique, peut porter son propre en-tête `Origin`.
+async fn guard_host(State(s): State<Shared>, req: Request<Body>, next: Next) -> Response {
+    let h = req.headers();
+    let origin_ok = match h.get("origin").and_then(|v| v.to_str().ok()) {
+        None => true,
+        Some(o) => {
+            req.uri().path().starts_with("/oauth/authorize")
+                && s.oauth
+                    .as_ref()
+                    .is_some_and(|a| a.base() == o.trim_end_matches('/'))
+        }
+    };
+    if !origin_ok || !host_ok(h, s.oauth.as_deref()) {
         return (StatusCode::FORBIDDEN, "origin").into_response();
     }
-    if !authorized(req.headers(), &s.token) {
+    next.run(req).await
+}
+
+/// Clé locale ou jeton d'accès OAuth : routes des outils.
+async fn guard(State(s): State<Shared>, req: Request<Body>, next: Next) -> Response {
+    let ok = bearer(req.headers()).is_some_and(|t| {
+        same(t, &s.token) || s.oauth.as_ref().is_some_and(|o| o.check(t).is_some())
+    });
+    if !ok {
+        // Accès à distance : le client trouve le serveur d'autorisation (RFC 9728).
+        let challenge = match &s.oauth {
+            Some(o) => format!(
+                "Bearer resource_metadata=\"{}/.well-known/oauth-protected-resource\", scope=\"{}\"",
+                o.base(),
+                crate::oauth::SCOPE
+            ),
+            None => "Bearer".to_string(),
+        };
         return (
             StatusCode::UNAUTHORIZED,
-            [("www-authenticate", "Bearer")],
+            [("www-authenticate", challenge)],
             "token",
         )
             .into_response();
@@ -124,11 +165,27 @@ async fn openapi(h: HeaderMap) -> Response {
     axum::Json(Revel::openapi(&format!("http://{host}"))).into_response()
 }
 
-/// Routes du serveur : `/mcp`, `/invoke/<commande>`, `/api/<outil>` et `/openapi.json`, jeton
-/// exigé.
-pub fn router(inv: Arc<dyn Invoke>, token: String, ct: CancellationToken) -> axum::Router {
+/// Routes du serveur : `/mcp`, `/invoke/<commande>`, `/api/<outil>` et `/openapi.json` (clé ou
+/// jeton exigé) ; avec l'accès à distance, découverte et routes OAuth (sans clé).
+pub fn router(
+    inv: Arc<dyn Invoke>,
+    token: String,
+    oauth: Option<Arc<OAuth>>,
+    ct: CancellationToken,
+) -> axum::Router {
     let factory = inv.clone();
+    // Hôtes acceptés par le service MCP : les mêmes que le contrôle d'hôte de Revel.
+    let mut hosts = vec![
+        "localhost".to_string(),
+        "127.0.0.1".into(),
+        "::1".into(),
+        "host.docker.internal".into(),
+    ];
+    if let Some(o) = &oauth {
+        hosts.push(o.host());
+    }
     let config = StreamableHttpServerConfig::default()
+        .with_allowed_hosts(hosts)
         .with_json_response(true)
         .with_sse_keep_alive(None)
         .with_cancellation_token(ct);
@@ -140,14 +197,19 @@ pub fn router(inv: Arc<dyn Invoke>, token: String, ct: CancellationToken) -> axu
     let shared = Shared {
         inv,
         token: Arc::new(token),
+        oauth: oauth.clone(),
     };
-    axum::Router::new()
+    let mut app = axum::Router::new()
         .nest_service("/mcp", mcp)
         .route("/invoke/{cmd}", axum::routing::post(invoke))
         .route("/api/{tool}", axum::routing::post(api))
         .route("/openapi.json", axum::routing::get(openapi))
         .layer(axum::middleware::from_fn_with_state(shared.clone(), guard))
-        .with_state(shared)
+        .with_state(shared.clone());
+    if let Some(o) = oauth {
+        app = app.merge(crate::oauth::router(o));
+    }
+    app.layer(axum::middleware::from_fn_with_state(shared, guard_host))
 }
 
 /// Serveur en marche ; arrêté par [`Running::shutdown`] (ou à sa disparition, sans attendre).
@@ -179,10 +241,20 @@ impl Drop for Running {
 
 /// Démarre le serveur sur 127.0.0.1:`port` (0 : port libre choisi par le système).
 pub async fn start(inv: Arc<dyn Invoke>, token: String, port: u16) -> std::io::Result<Running> {
+    start_with(inv, token, port, None).await
+}
+
+/// Comme [`start`], avec l'accès à distance (adresse publique, OAuth).
+pub async fn start_with(
+    inv: Arc<dyn Invoke>,
+    token: String,
+    port: u16,
+    oauth: Option<Arc<OAuth>>,
+) -> std::io::Result<Running> {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     let port = listener.local_addr()?.port();
     let ct = CancellationToken::new();
-    let app = router(inv, token, ct.child_token());
+    let app = router(inv, token, oauth, ct.child_token());
     let stop = ct.clone();
     let task = tokio::spawn(async move {
         let _ = axum::serve(listener, app)

@@ -749,6 +749,47 @@ pub async fn mcp_new_token() -> Res<revel_protocol::McpStatus> {
     call("mcp_new_token", &NoArgs {}).await
 }
 
+#[derive(Serialize)]
+struct PublicArgs<'a> {
+    url: Option<&'a str>,
+}
+
+/// Adresse publique (tunnel) des assistants en ligne ; `None` : accès à distance coupé.
+pub async fn mcp_set_public(url: Option<&str>) -> Res<revel_protocol::McpStatus> {
+    call("mcp_set_public", &PublicArgs { url }).await
+}
+
+/// Demandes d'accès des assistants en ligne en attente.
+pub async fn mcp_pending() -> Res<Vec<revel_protocol::McpAuthRequest>> {
+    call("mcp_pending", &NoArgs {}).await
+}
+
+#[derive(Serialize)]
+struct DecideArgs<'a> {
+    id: &'a str,
+    allow: bool,
+}
+
+/// Accorde ou refuse une demande d'accès.
+pub async fn mcp_decide(id: &str, allow: bool) -> Res<bool> {
+    call("mcp_decide", &DecideArgs { id, allow }).await
+}
+
+/// Assistants en ligne autorisés.
+pub async fn mcp_connections() -> Res<Vec<revel_protocol::McpConnection>> {
+    call("mcp_connections", &NoArgs {}).await
+}
+
+#[derive(Serialize)]
+struct IdArgs<'a> {
+    id: &'a str,
+}
+
+/// Retire l'accès d'un assistant en ligne.
+pub async fn mcp_revoke(id: &str) -> Res<()> {
+    call("mcp_revoke", &IdArgs { id }).await
+}
+
 /// Dernières modifications faites par les assistants.
 pub async fn mcp_activity() -> Res<Vec<revel_protocol::McpActivity>> {
     call("mcp_activity", &NoArgs {}).await

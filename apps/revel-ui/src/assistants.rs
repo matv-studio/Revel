@@ -1,11 +1,12 @@
-//! Réglages › Assistants IA (4.2, D-41) : serveur local (activé, port, état), clé d'accès,
-//! configuration prête à copier pour chaque assistant, dernières actions des assistants.
+//! Réglages › Assistants IA (4.2 à 4.4, D-42 à D-44) : serveur local (activé, port, état), clé
+//! d'accès, configuration prête à copier pour chaque assistant, accès à distance (adresse
+//! publique, demandes d'accès, applications autorisées), dernières actions des assistants.
 
 use crate::dialog::Ask;
 use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use revel_protocol::{McpActivity, McpStatus};
+use revel_protocol::{McpActivity, McpConnection, McpStatus};
 
 /// Assistants proposés : identifiant, nom (marque, non traduit).
 const CLIENTS: &[(&str, &str)] = &[
@@ -310,6 +311,7 @@ pub fn Assistants() -> impl IntoView {
                     }.into_any()
                 }}
             </div>
+            <Remote status=status/>
             <div class="mcp-activity">
                 <h3>{ui.t("mcp-activity")}</h3>
                 {move || {
@@ -342,6 +344,164 @@ pub fn Assistants() -> impl IntoView {
                 }}
             </div>
         </div>
+    }
+}
+
+/// Accès à distance (4.4) : adresse publique (tunnel), adresse du connecteur, applications
+/// autorisées (retirables).
+#[component]
+fn Remote(status: RwSignal<Option<McpStatus>>) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let conns = RwSignal::new(Vec::<McpConnection>::new());
+    let load = move || {
+        spawn_local(async move {
+            if let Ok(c) = api::mcp_connections().await
+                && !conns.is_disposed()
+                && conns.with_untracked(|x| *x != c)
+            {
+                conns.set(c);
+            }
+        })
+    };
+    load();
+    if let Ok(h) = set_interval_with_handle(load, std::time::Duration::from_millis(3000)) {
+        on_cleanup(move || h.clear());
+    }
+    let public = move || status.with(|s| s.as_ref().and_then(|s| s.public_url.clone()));
+    let running = move || status.with(|s| s.as_ref().is_some_and(|s| s.running));
+    let connector =
+        Signal::derive(move || public().map(|b| format!("{b}/mcp")).unwrap_or_default());
+    let apply = move |v: String| {
+        spawn_local(async move {
+            let url = v.trim().to_string();
+            match api::mcp_set_public((!url.is_empty()).then_some(url.as_str())).await {
+                Ok(s) => status.set(Some(s)),
+                Err(e) => {
+                    ui.fail(e);
+                    // Adresse refusée : la valeur enregistrée reste affichée.
+                    status.update(|_| {});
+                }
+            }
+        })
+    };
+    let revoke = move |c: McpConnection| {
+        ui.ask.set(Some(
+            Ask::confirm(
+                ui.now("mcp-remote-revoke-title", &[("client", c.client.clone())]),
+                None,
+                ui.now("mcp-remote-revoke", &[]),
+                move || {
+                    let id = c.id.clone();
+                    spawn_local(async move {
+                        if let Err(e) = api::mcp_revoke(&id).await {
+                            ui.fail(e);
+                        }
+                        load();
+                    })
+                },
+            )
+            .danger(),
+        ));
+    };
+    view! {
+        <div class="mcp-remote">
+            <h3 title=ui.t("mcp-remote-help")>{ui.t("mcp-remote")}</h3>
+            <div class="form-grid">
+                <span class="label" title=ui.t("mcp-public-help")>{ui.t("mcp-public")}</span>
+                <input class="input mcp-public" type="url" spellcheck="false" autocomplete="off"
+                    placeholder="https://"
+                    prop:value=move || public().unwrap_or_default()
+                    on:change=move |e| apply(event_target_value(&e))/>
+                <Show when=move || public().is_some()>
+                    <span class="label" title=ui.t("mcp-connector-help")>{ui.t("mcp-connector")}</span>
+                    <div class="mcp-key" class:is-off=move || !running()
+                        title=move || (!running()).then(|| ui.tx("mcp-connect-off", &[]))>
+                        <code class="code mcp-key-value mcp-connector">{move || connector.get()}</code>
+                        <CopyBtn text=connector label="action-copy"/>
+                    </div>
+                </Show>
+                <Show when=move || conns.with(|c| !c.is_empty())>
+                    <span class="label">{ui.t("mcp-remote-apps")}</span>
+                    <ul class="mcp-conns">
+                        {move || conns.get().into_iter().map(|c| {
+                            let since = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(c.since as f64))
+                                .to_locale_date_string(&ui.lang(), &wasm_bindgen::JsValue::UNDEFINED);
+                            let c2 = c.clone();
+                            view! {
+                                <li class="mcp-conn" data-client=c.client.clone()>
+                                    <span class="mcp-conn-name">{client_name(&c.client)}</span>
+                                    <span class="mcp-conn-host muted">{c.host.clone()}</span>
+                                    <span class="mcp-conn-since faint">{String::from(since)}</span>
+                                    <button class="icon-btn icon-btn--small mcp-conn-revoke" title=ui.t("mcp-remote-revoke")
+                                        aria-label=ui.t("mcp-remote-revoke") on:click=move |_| revoke(c2.clone())>{icons::unlink()}</button>
+                                </li>
+                            }
+                        }).collect_view()}
+                    </ul>
+                </Show>
+            </div>
+        </div>
+    }
+}
+
+/// Demandes d'accès des assistants en ligne : une boîte de dialogue par demande, où que l'on soit
+/// dans Revel (accorder ou refuser).
+#[component]
+pub fn AccessRequests() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let seen = StoredValue::new(std::collections::HashSet::<String>::new());
+    let check = move || {
+        if ui.ask.with_untracked(Option::is_some) {
+            return;
+        }
+        spawn_local(async move {
+            let Ok(list) = api::mcp_pending().await else {
+                return;
+            };
+            let Some(r) = list
+                .into_iter()
+                .find(|r| !seen.with_value(|s| s.contains(&r.id)))
+            else {
+                return;
+            };
+            if ui.ask.with_untracked(Option::is_some) {
+                return;
+            }
+            seen.update_value(|s| {
+                s.insert(r.id.clone());
+            });
+            let name = if r.client.trim().is_empty() {
+                ui.now("mcp-client-unknown", &[])
+            } else {
+                client_name(&r.client)
+            };
+            let (id1, id2) = (r.id.clone(), r.id.clone());
+            ui.ask.set(Some(
+                Ask::confirm(
+                    ui.now(
+                        "mcp-auth-ask",
+                        &[("client", name), ("host", r.host.clone())],
+                    ),
+                    None,
+                    ui.now("mcp-auth-allow", &[]),
+                    move || {
+                        let id = id1.clone();
+                        spawn_local(async move {
+                            let _ = api::mcp_decide(&id, true).await;
+                        })
+                    },
+                )
+                .on_cancel(ui.now("mcp-auth-deny", &[]), move || {
+                    let id = id2.clone();
+                    spawn_local(async move {
+                        let _ = api::mcp_decide(&id, false).await;
+                    })
+                }),
+            ));
+        })
+    };
+    if let Ok(h) = set_interval_with_handle(check, std::time::Duration::from_millis(1500)) {
+        on_cleanup(move || h.clear());
     }
 }
 

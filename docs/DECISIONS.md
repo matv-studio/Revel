@@ -463,3 +463,27 @@ description OpenAPI 3.1 en `GET /openapi.json`, générée à partir de la liste
 (`Authorization: Bearer`), mêmes contrôles d'origine et d'hôte. Sources :
 [OpenAPI Specification 3.1.0](https://spec.openapis.org/oas/v3.1.0),
 [Model Context Protocol — Open WebUI](https://docs.openwebui.com/features/extensibility/mcp.md).
+
+**D-44 — 16/10/2026 — prise (partie Revel ; tunnel à choisir).** **Accès à distance (4.4).** claude.ai et
+ChatGPT en ligne n'atteignent un serveur MCP que par une adresse publique en HTTPS ; leurs connecteurs
+s'authentifient par OAuth (inscription dynamique ou document d'identité du client, PKCE S256, adresse de retour
+fixe sur claude.ai ou chatgpt.com). Revel est donc son propre serveur d'autorisation, sans compte ni service
+tiers : métadonnées RFC 9728 et RFC 8414, inscription dynamique RFC 7591 (clients publics, adresses de retour
+https ou boucle locale, port libre en boucle locale), code d'autorisation avec PKCE S256 obligatoire, ressource
+RFC 8707 liée au jeton, `iss` RFC 9207, `offline_access` annoncé pour obtenir un jeton de renouvellement, jetons
+d'accès d'une heure gardés en mémoire, renouvellement tournant (seules des empreintes sont enregistrées).
+**La décision appartient à l'utilisateur, sur son ordinateur** : une demande d'accès ne donne rien tant qu'elle
+n'est pas accordée dans Revel (boîte de dialogue, fenêtre signalée), la page du navigateur ne fait qu'attendre ;
+au plus trois demandes en attente, pour qu'une adresse publique visitée par un tiers ne submerge pas l'utilisateur.
+Applications autorisées listées et révocables. Le tunnel (qui expose 127.0.0.1:port à une adresse https) reste
+un choix de l'utilisateur, aucun n'étant installé ni contacté par Revel à ce stade : Cloudflare Tunnel (sans
+compte en mode rapide, adresse changeante ; adresse fixe avec un compte et un domaine), ngrok (compte, une adresse
+fixe gratuite), Tailscale Funnel (compte) ; les « MCP tunnels » d'Anthropic sont réservés aux organisations
+Enterprise et à un réseau d'entreprise. Écritures depuis ChatGPT : réservées aux offres Business, Enterprise et
+Edu selon un guide tiers (Pro : lecture). Sources :
+[Authentication for connectors — Claude](https://claude.com/docs/connectors/building/authentication),
+[Add a connector that isn't in the directory — Claude](https://claude.com/docs/connectors/custom/add-unlisted),
+[MCP tunnels — Claude](https://claude.com/docs/connectors/mcp-tunnels/overview.md),
+[Authorization, spécification MCP 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/index),
+[ChatGPT connectors and apps — Zuplo (guide tiers)](https://zuplo.com/learn/mcp/compatibility/clients/chatgpt-connectors.md),
+[Connect ChatGPT — Zuplo (guide tiers)](https://zuplo.com/docs/mcp-gateway/connect-clients/chatgpt).

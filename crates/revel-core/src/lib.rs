@@ -187,6 +187,8 @@ pub struct Core {
     config_dir: PathBuf,
     translate_busy: AtomicBool,
     translate_cancel: AtomicBool,
+    /// Dernier site ouvert pour l'édition : site des assistants (MCP) quand ils n'en nomment pas.
+    last_site: Mutex<Option<PathBuf>>,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -239,6 +241,7 @@ impl Core {
             config_dir: config_dir.to_path_buf(),
             translate_busy: AtomicBool::new(false),
             translate_cancel: AtomicBool::new(false),
+            last_site: Mutex::new(None),
         }
     }
 

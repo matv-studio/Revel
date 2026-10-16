@@ -21,6 +21,8 @@ revel-model.workspace = true
 revel-protocol.workspace = true
 base64 = "0.22.1"
 revel-edit.workspace = true
+# Serveur des assistants IA (MCP, étape 4) branché sur le cœur de l'application.
+revel-mcp = { workspace = true, features = ["core"] }
 serde.workspace = true
 tauri.workspace = true
 tauri-plugin-dialog = "2.8.2"

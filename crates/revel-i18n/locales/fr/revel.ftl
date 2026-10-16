@@ -413,6 +413,10 @@ error-edit-locale = Cette langue ne peut pas être ajoutée ou n’existe pas (c
 error-edit-no-stylesheet = Ce site n'a pas encore de feuille de style.
 error-edit-breakpoints = Points de rupture invalides : chaque largeur ne peut servir qu'une fois et doit être un nombre de pixels positif. ({ $detail })
 error-edit-bound = Ce texte vient d'un fichier qui ne peut pas être modifié ici. ({ $detail })
+error-mcp-no-site = Aucun site ouvert dans Revel : ouvrez-en un, ou indiquez le dossier du site.
+error-mcp-disabled = Le serveur des assistants IA est désactivé : activez-le dans Revel, Réglages › Assistants IA.
+error-mcp-unreachable = Revel ne répond pas : ouvrez Revel et vérifiez que le serveur des assistants IA est activé.
+error-mcp-token = Revel a refusé la clé d'accès : copiez la clé actuelle dans Réglages › Assistants IA.
 
 ## Panneau de styles (D-20)
 styles-count = { $count ->

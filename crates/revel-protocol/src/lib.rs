@@ -711,3 +711,21 @@ pub struct PickEntry {
     pub slug: String,
     pub title: String,
 }
+
+/// Serveur des assistants IA (étape 4) : réglages et état, pour Réglages › Assistants IA.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct McpStatus {
+    pub enabled: bool,
+    pub port: u16,
+    /// Clé d'accès exigée par le serveur HTTP (`Authorization: Bearer …`).
+    pub token: String,
+    /// Adresse MCP (HTTP en flux).
+    pub url: String,
+    pub running: bool,
+    /// Échec du dernier démarrage (port occupé…).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Programme à lancer par les assistants en stdio (`<programme> --mcp`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<String>,
+}

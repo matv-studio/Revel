@@ -40,6 +40,51 @@ fn json<T: serde::Serialize>(v: T) -> Result<Value, Failure> {
 }
 
 impl Core {
+    /// Site des assistants (MCP) : celui nommé (`site`), sinon le dernier ouvert pour l'édition.
+    pub fn current_site(&self, named: Option<&str>) -> Result<PathBuf, Failure> {
+        match named.filter(|s| !s.trim().is_empty()) {
+            Some(s) => Ok(PathBuf::from(s)),
+            None => self
+                .last_site
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+                .ok_or_else(|| Failure::new("error-mcp-no-site")),
+        }
+    }
+
+    /// Commande d'un assistant (MCP) : sur le site nommé (`args.site`) ou le site ouvert, ouvert
+    /// pour l'édition au besoin. Mêmes commandes que le pont, plus le rendu d'une page.
+    pub fn mcp_invoke(&self, cmd: &str, args: &Value) -> Result<Value, Failure> {
+        let site = self.current_site(args.get("site").and_then(Value::as_str))?;
+        let opened = self.open_session(&site).map_err(|e| e.failure())?;
+        match cmd {
+            "edit_open" => json(opened),
+            "site_path" => json(site.display().to_string()),
+            "page_html" => {
+                let url = arg::<String>(args, "url")?;
+                json(self.page_html(&site, &url).map_err(|e| e.failure())?)
+            }
+            _ => self.bridge_invoke(&site, "", cmd, args),
+        }
+    }
+
+    /// Page rendue telle qu'elle sera publiée (repères de l'éditeur retirés), `None` : adresse
+    /// inconnue.
+    pub fn page_html(&self, site: &Path, url: &str) -> crate::Result<Option<String>> {
+        self.with_project(site, |p| {
+            let hooks: Arc<dyn revel_render::AssetHooks> =
+                Arc::new(revel_project::ProjectAssets::new(p));
+            Ok(p.render_editor(
+                url,
+                hooks,
+                "production",
+                &revel_render::EditorOptions { scripts: false },
+            )?
+            .map(|page| revel_render::strip_editor_marks(&page.html)))
+        })
+    }
+
     /// Commande d'édition reçue par le pont (le site est celui du serveur, quel que soit `path`).
     pub fn bridge_invoke(
         &self,

@@ -416,3 +416,23 @@ d'identifiants lues dans les données (`for slug in home.featured` avec `collect
 `collections.x | by_slugs(home.news)`, alias `{% set home = pages.accueil %}` suivis), libellé repris de Pages
 CMS, contenus des collections proposés par leur titre (`data.slug`), ordre, ajout, retrait. Les listes écrites au
 même retrait que leur clé (`clé:` puis `- a`, style de Pages CMS) sont réécrites entières.
+
+**D-41 — 16/10/2026 — prise.** **Serveur MCP de Revel (4.1, D-13, D-31).** Les outils sont écrits une fois
+(`revel-mcp`, SDK officiel `rmcp`) et appellent une interface `Invoke` : soit le cœur directement (application,
+ligne de commande), soit l'application ouverte par HTTP local. **Un seul écrivain** : quand un assistant lance
+`revel --mcp` (stdio), ce relais n'ouvre pas le site lui-même ; il transmet chaque outil à l'application ouverte
+(`POST /invoke/<commande>` sur 127.0.0.1, clé lue dans `mcp.json` du dossier des réglages, aucune clé à recopier
+dans la configuration de l'assistant) et la lance si elle est fermée. Les modifications passent par les mêmes
+commandes que l'interface : historique commun (Ctrl+Z dans Revel annule un geste de l'assistant), enregistrement
+immédiat, affichage en direct (l'éditeur relit le document quand la révision de la session du cœur change).
+Le site visé est celui ouvert dans l'éditeur, ou celui nommé par l'argument `site` (sans changer celui de
+l'éditeur). HTTP en flux sur `/mcp` : protocoles 2025 (session) et 2026-07-28 (sans session, en-têtes
+`MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`), réponses JSON ; écoute sur 127.0.0.1 seulement, désactivé
+par défaut, clé exigée (`Authorization: Bearer`, comparaison en temps constant), requête refusée si elle porte un
+en-tête `Origin` ou un `Host` qui n'est pas local (rattachement DNS), comme l'exige la spécification. Sous
+Windows, l'exécutable sans console reçoit quand même les entrées et sorties fournies par l'assistant (poignées
+héritées) ; l'application lancée par le relais ne les hérite pas. Descriptions des outils en anglais (langue la
+mieux suivie des modèles), textes du site gardés dans leur langue. Sources :
+[Streamable HTTP, spécification MCP 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http),
+[rmcp — docs.rs](https://docs.rs/crate/rmcp/3.1.0/source/README.md),
+[GetStdHandle — Microsoft Learn](https://learn.microsoft.com/uk-ua/windows/console/getstdhandle).

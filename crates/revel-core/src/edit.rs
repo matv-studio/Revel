@@ -762,7 +762,14 @@ impl Core {
 
     /// Ouvre un site pour l'édition (ou reprend la session en cours). Si le fichier a été modifié
     /// hors de Revel depuis le dernier enregistrement, il est relu et l'historique repart de zéro.
+    /// Le site devient celui des assistants (MCP) quand ils n'en nomment pas.
     pub fn edit_open(&self, path: &Path) -> Result<Opened> {
+        *self.last_site.lock().unwrap_or_else(|e| e.into_inner()) = Some(path.to_path_buf());
+        self.open_session(path)
+    }
+
+    /// Comme [`Core::edit_open`], sans changer le site des assistants.
+    pub(crate) fn open_session(&self, path: &Path) -> Result<Opened> {
         let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let k = key(path);
         let stale = map

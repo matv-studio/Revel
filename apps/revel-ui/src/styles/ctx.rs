@@ -4,9 +4,8 @@
 use crate::Ui;
 use crate::editor::Ed;
 use leptos::prelude::*;
-use revel_edit::Command;
 use revel_model::{Breakpoint, Decl, StyleItem, StyleRule};
-use revel_style::values::{self, Edit};
+use revel_style::values;
 
 /// Propriétés dont le canevas renvoie la valeur effective pour l'élément sélectionné.
 const WATCHED: &[&str] = &[
@@ -166,104 +165,7 @@ fn wider<'a>(bps: &'a [Breakpoint], cur: &Breakpoint) -> Vec<&'a Breakpoint> {
     v
 }
 
-/// Applique une modification à une copie des déclarations, comme `SetDecl` ; `false` si elle
-/// ne change rien (retrait d'une propriété absente).
-fn simulate(decls: &mut Vec<Decl>, e: &Edit) -> bool {
-    let pos = decls.iter().rposition(|d| d.prop == e.prop);
-    match (pos, &e.value) {
-        (Some(i), Some(v)) => {
-            decls[i] = Decl {
-                prop: e.prop.clone(),
-                value: v.clone(),
-                important: e.important,
-            };
-            true
-        }
-        (Some(i), None) => {
-            decls.remove(i);
-            true
-        }
-        (None, Some(v)) => {
-            decls.push(Decl {
-                prop: e.prop.clone(),
-                value: v.clone(),
-                important: e.important,
-            });
-            true
-        }
-        (None, None) => false,
-    }
-}
-
-/// Commande qui règle des propriétés dans la règle `rule` (sélecteur complet `selector`, média
-/// `media`), créée si elle n'existe pas ; `None` si rien ne change.
-pub(crate) fn style_command(
-    rule: Option<StyleRule>,
-    selector: String,
-    media: Option<String>,
-    list: Vec<(String, Option<String>)>,
-) -> Option<Command> {
-    let before = rule.as_ref().map(|r| r.decls.clone()).unwrap_or_default();
-    let mut decls = before.clone();
-    let mut out: Vec<Edit> = Vec::new();
-    for (prop, value) in list {
-        let value = value
-            .map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty());
-        let Some(es) = values::edits(&decls, &prop, value.as_deref()) else {
-            continue;
-        };
-        for e in es {
-            if simulate(&mut decls, &e) {
-                out.push(e);
-            }
-        }
-    }
-    if decls == before {
-        return None;
-    }
-    Some(match rule {
-        Some(r) => {
-            let id = r.id.clone().unwrap_or_default();
-            let mut cmds: Vec<Command> = out
-                .into_iter()
-                .map(|e| Command::SetDecl {
-                    rule: id.clone(),
-                    prop: e.prop,
-                    value: e.value,
-                    important: e.important,
-                })
-                .collect();
-            if cmds.len() == 1 {
-                cmds.remove(0)
-            } else {
-                Command::Batch { commands: cmds }
-            }
-        }
-        None => Command::AddRule {
-            selector,
-            media,
-            decls,
-        },
-    })
-}
-
-/// Dernière règle d'un sélecteur complet (classe et état) pour un média.
-pub(crate) fn find_rule(
-    d: &revel_model::Site,
-    selector: &str,
-    media: &Option<String>,
-) -> Option<StyleRule> {
-    d.stylesheet
-        .as_ref()?
-        .items
-        .iter()
-        .rev()
-        .find_map(|i| match i {
-            StyleItem::Rule(r) if r.selector == selector && &r.media == media => Some(r.clone()),
-            _ => None,
-        })
-}
+pub(crate) use revel_edit::style::{find_rule, style_command};
 
 /// Contexte partagé par les contrôles du panneau.
 #[derive(Clone, Copy)]

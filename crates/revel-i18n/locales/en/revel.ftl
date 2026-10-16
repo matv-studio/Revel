@@ -410,6 +410,10 @@ error-edit-locale = This language cannot be added or does not exist (code: langu
 error-edit-no-stylesheet = This site does not have a stylesheet yet.
 error-edit-breakpoints = Invalid breakpoints: each width can be used only once and must be a positive number of pixels. ({ $detail })
 error-edit-bound = This text comes from a file that cannot be modified here. ({ $detail })
+error-mcp-no-site = No site is open in Revel: open one, or pass the site folder.
+error-mcp-disabled = The AI assistant server is off: turn it on in Revel, Settings › AI assistants.
+error-mcp-unreachable = Revel did not answer: open Revel and check that the AI assistant server is on.
+error-mcp-token = Revel refused the access key: copy the current key from Settings › AI assistants.
 
 ## Panneau de styles (D-20)
 styles-count = { $count ->

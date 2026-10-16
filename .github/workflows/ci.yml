@@ -236,7 +236,10 @@ jobs:
         run: |
           mkdir cobaye-essai
           tar --exclude=./node_modules --exclude=./_site --exclude=./.git -C cobaye -cf - . | tar -C cobaye-essai -xf -
-          target/release/revel canvas-serve cobaye-essai --port 8162 --bridge > pont.log 2>&1 &
+          # Serveur des assistants (MCP) du même cœur : clé d'essai, sans valeur hors de la CI.
+          export REVEL_MCP_TOKEN=essai-e2e-0123456789abcdef0123456789abcdef
+          export REVEL_E2E_MCP=http://127.0.0.1:8163/mcp
+          target/release/revel canvas-serve cobaye-essai --port 8162 --bridge --mcp-port 8163 > pont.log 2>&1 &
           python3 -m http.server 8170 --bind 127.0.0.1 --directory apps/revel-ui/dist > /dev/null 2>&1 &
           sleep 2
           export NODE_PATH="$RUNNER_TEMP/pw/node_modules"

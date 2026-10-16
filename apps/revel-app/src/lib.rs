@@ -13,6 +13,114 @@ use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 struct AppState {
     core: Arc<Core>,
+    /// Dossier des réglages de l'application.
+    config_dir: PathBuf,
+    /// Serveur des assistants IA (MCP en HTTP local), démarré si activé dans les réglages.
+    mcp: std::sync::Mutex<Mcp>,
+}
+
+#[derive(Default)]
+struct Mcp {
+    running: Option<revel_mcp::http::Running>,
+    /// Échec du dernier démarrage (port occupé…).
+    error: Option<String>,
+}
+
+/// Identifiant de l'application (`tauri.conf.json`) : dossier des réglages, lu aussi par le relais.
+const IDENTIFIER: &str = "app.revel-studio.desktop";
+
+/// Démarre le serveur des assistants sur le cœur de l'application.
+async fn start_mcp(core: &Arc<Core>, c: &revel_mcp::config::McpConfig) -> Mcp {
+    let inv: Arc<dyn revel_mcp::Invoke> = Arc::new(revel_mcp::direct::CoreInvoke(core.clone()));
+    match revel_mcp::http::start(inv, c.token.clone(), c.port).await {
+        Ok(r) => Mcp {
+            running: Some(r),
+            error: None,
+        },
+        Err(e) => Mcp {
+            running: None,
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+fn mcp_status_of(s: &AppState) -> revel_protocol::McpStatus {
+    let c = revel_mcp::config::McpConfig::load(&s.config_dir);
+    let m = s.mcp.lock().unwrap_or_else(|e| e.into_inner());
+    revel_protocol::McpStatus {
+        enabled: c.enabled,
+        port: c.port,
+        url: c.url(),
+        token: c.token,
+        running: m.running.is_some(),
+        error: m.error.clone(),
+        program: std::env::current_exe()
+            .ok()
+            .map(|p| p.display().to_string()),
+    }
+}
+
+/// Réglages et état du serveur des assistants IA.
+#[tauri::command]
+fn mcp_status(s: State<AppState>) -> revel_protocol::McpStatus {
+    mcp_status_of(&s)
+}
+
+/// Active ou désactive le serveur des assistants, change son port ; redémarré au besoin.
+#[tauri::command]
+async fn mcp_set(
+    s: State<'_, AppState>,
+    enabled: bool,
+    port: u16,
+) -> Res<revel_protocol::McpStatus> {
+    let mut c = revel_mcp::config::McpConfig::load(&s.config_dir);
+    c.enabled = enabled;
+    c.port = if port == 0 {
+        revel_mcp::config::DEFAULT_PORT
+    } else {
+        port
+    };
+    c.save(&s.config_dir).map_err(sys)?;
+    restart_mcp(&s, &c).await;
+    Ok(mcp_status_of(&s))
+}
+
+/// Nouvelle clé d'accès (l'ancienne ne fonctionne plus) ; serveur redémarré s'il tourne.
+#[tauri::command]
+async fn mcp_new_token(s: State<'_, AppState>) -> Res<revel_protocol::McpStatus> {
+    let mut c = revel_mcp::config::McpConfig::load(&s.config_dir);
+    c.token = revel_mcp::config::new_token();
+    c.save(&s.config_dir).map_err(sys)?;
+    restart_mcp(&s, &c).await;
+    Ok(mcp_status_of(&s))
+}
+
+async fn restart_mcp(s: &AppState, c: &revel_mcp::config::McpConfig) {
+    // Ancien serveur arrêté (port libéré) avant le nouveau.
+    let old = std::mem::take(&mut *s.mcp.lock().unwrap_or_else(|e| e.into_inner())).running;
+    if let Some(r) = old {
+        r.shutdown().await;
+    }
+    if c.enabled {
+        let m = start_mcp(&s.core, c).await;
+        *s.mcp.lock().unwrap_or_else(|e| e.into_inner()) = m;
+    }
+}
+
+/// Relais stdio des assistants (`revel --mcp`) : code de sortie du processus.
+pub fn mcp_relay() -> i32 {
+    let Some(dir) = revel_mcp::config::app_config_dir(IDENTIFIER) else {
+        eprintln!("revel --mcp : dossier des réglages introuvable");
+        return 2;
+    };
+    let exe = std::env::current_exe().ok();
+    match tauri::async_runtime::block_on(revel_mcp::relay::run(dir, exe)) {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("revel --mcp : {e}");
+            1
+        }
+    }
 }
 
 /// Les échecs sont transmis à l'interface sous forme de clé de traduction (`Failure`).
@@ -778,7 +886,18 @@ pub fn run() {
             {
                 core.set_models_dir(&models);
             }
-            app.manage(AppState { core });
+            // Serveur des assistants IA (étape 4), désactivé par défaut.
+            let mcp_config = revel_mcp::config::McpConfig::load(&dir);
+            let mcp = if mcp_config.enabled {
+                tauri::async_runtime::block_on(start_mcp(&core, &mcp_config))
+            } else {
+                Mcp::default()
+            };
+            app.manage(AppState {
+                core,
+                config_dir: dir,
+                mcp: std::sync::Mutex::new(mcp),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -823,6 +942,9 @@ pub fn run() {
             translate_packs,
             fonts,
             readable_data,
+            mcp_status,
+            mcp_set,
+            mcp_new_token,
             versions_status,
             versions_init,
             versions_list,

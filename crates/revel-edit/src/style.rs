@@ -161,3 +161,100 @@ pub(crate) fn remove_item(site: &mut Site, index: usize) -> Result<StyleItem, Ed
     }
     Ok(items.remove(index))
 }
+
+/// Applique une modification à une copie des déclarations, comme `SetDecl` ; `false` si elle
+/// ne change rien (retrait d'une propriété absente).
+fn simulate(decls: &mut Vec<Decl>, e: &revel_style::values::Edit) -> bool {
+    let pos = decls.iter().rposition(|d| d.prop == e.prop);
+    match (pos, &e.value) {
+        (Some(i), Some(v)) => {
+            decls[i] = Decl {
+                prop: e.prop.clone(),
+                value: v.clone(),
+                important: e.important,
+            };
+            true
+        }
+        (Some(i), None) => {
+            decls.remove(i);
+            true
+        }
+        (None, Some(v)) => {
+            decls.push(Decl {
+                prop: e.prop.clone(),
+                value: v.clone(),
+                important: e.important,
+            });
+            true
+        }
+        (None, None) => false,
+    }
+}
+
+/// Dernière règle d'un sélecteur complet (classe et état) pour un média.
+pub fn find_rule(site: &Site, selector: &str, media: &Option<String>) -> Option<StyleRule> {
+    site.stylesheet
+        .as_ref()?
+        .items
+        .iter()
+        .rev()
+        .find_map(|i| match i {
+            StyleItem::Rule(r) if r.selector == selector && &r.media == media => Some(r.clone()),
+            _ => None,
+        })
+}
+
+/// Commande qui règle des propriétés (`None` ou vide : retirée) dans la règle `rule` (sélecteur
+/// complet `selector`, média `media`), créée si elle n'existe pas ; raccourcis (`margin`…)
+/// respectés. `None` si rien ne change.
+pub fn style_command(
+    rule: Option<StyleRule>,
+    selector: String,
+    media: Option<String>,
+    list: Vec<(String, Option<String>)>,
+) -> Option<crate::Command> {
+    use crate::Command;
+    let before = rule.as_ref().map(|r| r.decls.clone()).unwrap_or_default();
+    let mut decls = before.clone();
+    let mut out: Vec<revel_style::values::Edit> = Vec::new();
+    for (prop, value) in list {
+        let value = value
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+        let Some(es) = revel_style::values::edits(&decls, &prop, value.as_deref()) else {
+            continue;
+        };
+        for e in es {
+            if simulate(&mut decls, &e) {
+                out.push(e);
+            }
+        }
+    }
+    if decls == before {
+        return None;
+    }
+    Some(match rule {
+        Some(r) => {
+            let id = r.id.clone().unwrap_or_default();
+            let mut cmds: Vec<Command> = out
+                .into_iter()
+                .map(|e| Command::SetDecl {
+                    rule: id.clone(),
+                    prop: e.prop,
+                    value: e.value,
+                    important: e.important,
+                })
+                .collect();
+            if cmds.len() == 1 {
+                cmds.remove(0)
+            } else {
+                Command::Batch { commands: cmds }
+            }
+        }
+        None => Command::AddRule {
+            selector,
+            media,
+            decls,
+        },
+    })
+}

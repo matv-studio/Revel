@@ -73,6 +73,17 @@ enum Command {
         /// ouverte dans un navigateur (essais) : modifie le site.
         #[arg(long)]
         bridge: bool,
+        /// Serveur MCP des assistants sur ce port (même cœur que le pont ; clé lue dans
+        /// REVEL_MCP_TOKEN, sinon créée et affichée).
+        #[arg(long)]
+        mcp_port: Option<u16>,
+    },
+    /// Serveur MCP des assistants IA sur un site, sans l'application : entrée et sortie standard,
+    /// ou HTTP local avec `--http PORT` (clé lue dans REVEL_MCP_TOKEN, sinon créée et affichée).
+    Mcp {
+        dir: PathBuf,
+        #[arg(long)]
+        http: Option<u16>,
     },
     /// Vérifie que chaque page du canevas, repères retirés, est identique à la page générée.
     CanvasCheck {
@@ -257,6 +268,7 @@ fn main() -> Result<()> {
             scripts,
             no_images,
             bridge,
+            mcp_port,
         } => {
             let config = std::env::temp_dir().join(format!("revel-canvas-{}", std::process::id()));
             let core = std::sync::Arc::new(revel_core::Core::new(
@@ -275,6 +287,10 @@ fn main() -> Result<()> {
             )
             .map_err(|e| anyhow::anyhow!("{e}"))?;
             let rt = tokio::runtime::Runtime::new()?;
+            let _mcp = match mcp_port {
+                Some(port) => Some(rt.block_on(start_mcp(core.clone(), port))?),
+                None => None,
+            };
             rt.block_on(revel_core::devserver::serve(
                 core,
                 dir,
@@ -285,6 +301,33 @@ fn main() -> Result<()> {
                     let _ = tokio::signal::ctrl_c().await;
                 },
             ))?;
+        }
+        Command::Mcp { dir, http } => {
+            let config = std::env::temp_dir().join(format!("revel-mcp-{}", std::process::id()));
+            let core = std::sync::Arc::new(revel_core::Core::new(
+                &config,
+                Box::new(revel_core::secrets::Memory::default()),
+            ));
+            core.edit_open(&dir)
+                .map_err(|e| anyhow::anyhow!("{e}"))
+                .with_context(|| format!("ouverture de {}", dir.display()))?;
+            let rt = tokio::runtime::Runtime::new()?;
+            match http {
+                // Entrée et sortie standard réservées au protocole : messages sur la sortie
+                // d'erreur.
+                None => {
+                    let inv: std::sync::Arc<dyn revel_mcp::Invoke> =
+                        std::sync::Arc::new(revel_mcp::direct::CoreInvoke(core));
+                    rt.block_on(revel_mcp::relay::serve_stdio(inv))
+                        .map_err(|e| anyhow::anyhow!("{e}"))?;
+                }
+                Some(port) => rt.block_on(async {
+                    let server = start_mcp(core, port).await?;
+                    let _ = tokio::signal::ctrl_c().await;
+                    server.shutdown().await;
+                    anyhow::Ok(())
+                })?,
+            }
         }
         Command::CanvasCheck { dir, env } => {
             let project =
@@ -429,4 +472,25 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Serveur MCP en HTTP local sur le cœur ; clé lue dans REVEL_MCP_TOKEN, sinon créée et affichée
+/// (sortie d'erreur).
+async fn start_mcp(
+    core: std::sync::Arc<revel_core::Core>,
+    port: u16,
+) -> Result<revel_mcp::http::Running> {
+    let token = std::env::var("REVEL_MCP_TOKEN")
+        .ok()
+        .filter(|t| !t.trim().is_empty());
+    let shown = token.is_none();
+    let token = token.unwrap_or_else(revel_mcp::config::new_token);
+    let inv: std::sync::Arc<dyn revel_mcp::Invoke> =
+        std::sync::Arc::new(revel_mcp::direct::CoreInvoke(core));
+    let server = revel_mcp::http::start(inv, token.clone(), port).await?;
+    eprintln!("MCP : http://127.0.0.1:{}/mcp", server.port);
+    if shown {
+        eprintln!("clé : {token}");
+    }
+    Ok(server)
 }

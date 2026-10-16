@@ -14,7 +14,11 @@ fn value_at(data: &std::collections::BTreeMap<String, Value>, path: &[String]) -
     let (first, rest) = path.split_first()?;
     let mut cur = data.get(first)?;
     for k in rest {
-        cur = cur.get(k)?;
+        // Élément d'une liste par son numéro (`nav.0.label`).
+        cur = match (cur, k.parse::<usize>()) {
+            (Value::Array(items), Ok(i)) => items.get(i)?,
+            _ => cur.get(k)?,
+        };
     }
     Some(cur.clone())
 }

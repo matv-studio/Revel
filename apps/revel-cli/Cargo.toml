@@ -23,6 +23,8 @@ revel-i18n.workspace = true
 # Canevas de l'éditeur servi en HTTP local (diagnostic, essais de bout en bout) ; sans trousseau.
 revel-core = { workspace = true, default-features = false }
 revel-protocol.workspace = true
+# Serveur MCP des assistants IA (stdio ou HTTP local) sur le cœur, sans l'application.
+revel-mcp = { workspace = true, features = ["core"] }
 anyhow.workspace = true
 clap.workspace = true
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "macros", "signal"] }

@@ -12,6 +12,9 @@ import path from 'node:path';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const [ui, bridge, shots, siteDir] = process.argv.slice(2);
+// Serveur des assistants (MCP) du même cœur (`canvas-serve --mcp-port`), facultatif.
+const mcpUrl = process.env.REVEL_E2E_MCP;
+const mcpToken = process.env.REVEL_MCP_TOKEN;
 if (!ui || !bridge) {
   console.error('usage : editor-e2e.mjs ADRESSE_INTERFACE ADRESSE_PONT [DOSSIER_CAPTURES] [DOSSIER_DU_SITE]');
   process.exit(2);
@@ -1903,6 +1906,62 @@ try {
       // Tout annulé : document et données identiques.
       await undoUntil(() => docR() === doc12 && fs.readFileSync(home, 'utf8') === home0 && fs.readFileSync(siteYml, 'utf8') === site0, 'réglages lisibles annulés');
       check('réglages lisibles : tout annulé (document, données)', true);
+    }
+
+    // ---------------------------------------------------------------- Assistants IA (4.1)
+    // Un assistant (MCP, même cœur) modifie un texte de la page et une donnée du site : l'éditeur
+    // les affiche aussitôt ; Ctrl+Z dans l'éditeur les annule (même historique).
+    if (mcpUrl && mcpToken) {
+      const docM = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
+      const homeM = path.join(siteDir, 'src/_data/pages/accueil.yml');
+      const doc4 = docM();
+      const home4 = fs.readFileSync(homeM, 'utf8');
+      let rpc = 0;
+      // Protocole 2026-07-28 : appel sans session, en-têtes du protocole.
+      const mcp = async (name, args) => {
+        const r = await fetch(mcpUrl, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json', accept: 'application/json, text/event-stream',
+            authorization: `Bearer ${mcpToken}`, 'mcp-protocol-version': '2026-07-28',
+            'mcp-method': 'tools/call', 'mcp-name': name,
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: ++rpc, method: 'tools/call', params: {
+            name, arguments: args,
+            _meta: {
+              'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+              'io.modelcontextprotocol/clientInfo': { name: 'editor-e2e', version: '1' },
+              'io.modelcontextprotocol/clientCapabilities': {},
+            },
+          } }),
+        });
+        const j = await r.json();
+        if (!j.result || j.result.isError) throw new Error(`MCP ${name} : ${JSON.stringify(j).slice(0, 300)}`);
+        return j.result.content[0].text;
+      };
+      await page.click('.view-tab[data-view="view-editor"]');
+      await page.click('.pages .page-row[data-url="/"]');
+      await waitFrame(() => location.pathname === '/' && document.body.textContent.includes('Faire rayonner'), 'accueil');
+      const outline = await mcp('get_page', { url: '/' });
+      const line = outline.split('\n').find((l) => l.includes('« Faire rayonner »')) || '';
+      const id = (/#(\S+)/.exec(line) || [])[1];
+      await mcp('set_text', { id, text: 'Rayonner avec un assistant' });
+      await waitFrame(() => document.body.textContent.includes('Rayonner avec un assistant'), 'texte de l\'assistant affiché');
+      check('assistants (MCP) : texte de la page modifié par un assistant, affiché aussitôt dans l\'éditeur', !!id, `#${id}`);
+      await mcp('set_data', { path: 'pages.accueil.news_title', value: 'Les nouvelles vues par un assistant' });
+      await until(() => fs.readFileSync(homeM, 'utf8') !== home4, 'donnée écrite');
+      await waitFrame(() => document.body.textContent.includes('Les nouvelles vues par un assistant'), 'donnée affichée');
+      const home4l = home4.split('\n');
+      const changed = fs.readFileSync(homeM, 'utf8').split('\n').filter((l, i) => l !== home4l[i]);
+      check('assistants (MCP) : donnée du site modifiée (seule sa ligne change), affichée', changed.length === 1, changed[0]);
+      if (shots) await page.screenshot({ path: `${shots}/assistant-mcp.png` });
+      for (let i = 0; i < 4 && (docM() !== doc4 || fs.readFileSync(homeM, 'utf8') !== home4); i++) {
+        await page.click('.editor-toolbar .btn-undo');
+        await page.waitForTimeout(500);
+      }
+      await until(() => docM() === doc4 && fs.readFileSync(homeM, 'utf8') === home4, 'modifications de l\'assistant annulées');
+      await waitFrame(() => document.body.textContent.includes('Faire rayonner'), 'texte d\'origine');
+      check('assistants (MCP) : annulé depuis l\'éditeur (document et données identiques)', true);
     }
 
     // ---------------------------------------------------------------- Langues (3.8)

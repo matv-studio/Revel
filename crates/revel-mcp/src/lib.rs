@@ -1,27 +1,43 @@
-//! `revel-mcp` : serveur MCP exposant l'édition à Claude (connecteur claude.ai) et tunnel.
+//! `revel-mcp` : serveur MCP de Revel (étape 4, D-13, D-31, D-41). Les outils lisent et
+//! modifient le site ouvert dans Revel avec les mêmes commandes que l'interface : chaque
+//! modification est visible en direct, annulable et présente dans l'historique.
 //!
-//! Interface posée à l'étape 0 ; implémentation prévue : Étape 4.
+//! Les outils sont définis une fois et appellent une [`Invoke`] : soit le cœur directement (dans
+//! l'application et la ligne de commande), soit l'application ouverte par HTTP local (relais
+//! stdio de `revel --mcp`, voir [`relay`]). Transports : stdio et HTTP en flux sur 127.0.0.1 avec
+//! jeton ([`http`]).
 
-/// Outils prévus pour le connecteur Claude. Chaque outil sera déclaré au
-/// serveur MCP ; la liste sert de contrat entre l'éditeur et Claude.
-pub const PLANNED_TOOLS: &[&str] = &[
-    "list_pages",
-    "get_page",
-    "update_element",
-    "add_section",
-    "list_styles",
-    "update_style",
-    "preview",
-    "publish_draft",
-];
+pub mod config;
+#[cfg(feature = "core")]
+pub mod direct;
+pub mod http;
+mod outline;
+pub mod relay;
+mod tools;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn noms_uniques() {
-        let mut v = super::PLANNED_TOOLS.to_vec();
-        v.sort();
-        v.dedup();
-        assert_eq!(v.len(), super::PLANNED_TOOLS.len());
-    }
+pub use tools::Revel;
+
+use revel_protocol::Failure;
+use serde_json::Value;
+use std::future::Future;
+use std::pin::Pin;
+
+/// Réponse d'une commande.
+pub type Reply = Pin<Box<dyn Future<Output = Result<Value, Failure>> + Send>>;
+
+/// Exécutant des commandes de Revel (`edit_open`, `edit_apply`, `edit_undo`, `cms_collections`,
+/// `page_html`…) sur le site nommé par `args.site` ou, à défaut, le site ouvert dans Revel.
+pub trait Invoke: Send + Sync + 'static {
+    fn invoke(&self, cmd: &str, args: Value) -> Reply;
+}
+
+/// Texte d'un échec, en anglais (langue des descriptions des outils).
+pub fn failure_text(f: &Failure) -> String {
+    let l = revel_i18n::Localizer::new("en");
+    let args: Vec<(&str, &str)> = f
+        .args
+        .iter()
+        .map(|(a, b)| (a.as_str(), b.as_str()))
+        .collect();
+    l.t(&f.key, &args)
 }

@@ -95,9 +95,7 @@ fn mcp_status_of(s: &AppState) -> revel_protocol::McpStatus {
         token: c.token,
         running: m.running.is_some(),
         error: m.error.clone(),
-        program: std::env::current_exe()
-            .ok()
-            .map(|p| p.display().to_string()),
+        program: program_path().map(|p| p.display().to_string()),
         public_url: c.public_url,
     }
 }
@@ -214,14 +212,21 @@ async fn restart_mcp(s: &AppState, c: &revel_mcp::config::McpConfig) {
     *s.mcp.lock().unwrap_or_else(|e| e.into_inner()) = m;
 }
 
+/// Programme de Revel à lancer par les assistants : l'AppImage elle-même sous Linux (le programme
+/// en cours d'exécution vit dans un montage temporaire), sinon l'exécutable.
+fn program_path() -> Option<PathBuf> {
+    std::env::var_os("APPIMAGE")
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_exe().ok())
+}
+
 /// Relais stdio des assistants (`revel --mcp`) : code de sortie du processus.
 pub fn mcp_relay() -> i32 {
     let Some(dir) = revel_mcp::config::app_config_dir(IDENTIFIER) else {
         eprintln!("revel --mcp : dossier des réglages introuvable");
         return 2;
     };
-    let exe = std::env::current_exe().ok();
-    match tauri::async_runtime::block_on(revel_mcp::relay::run(dir, exe)) {
+    match tauri::async_runtime::block_on(revel_mcp::relay::run(dir, program_path())) {
         Ok(()) => 0,
         Err(e) => {
             eprintln!("revel --mcp : {e}");

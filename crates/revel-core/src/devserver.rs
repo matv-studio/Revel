@@ -95,6 +95,14 @@ impl Core {
             "translate_can" => {
                 json(self.translate_can(&arg::<String>(args, "from")?, &arg::<String>(args, "to")?))
             }
+            "readable_data" => json(
+                self.readable_data(
+                    site,
+                    &arg::<Vec<Vec<String>>>(args, "paths")?,
+                    &arg::<Vec<String>>(args, "collections")?,
+                )
+                .map_err(f)?,
+            ),
             "versions_status" => json(self.versions_status(site).map_err(f)?),
             "versions_init" => json(
                 self.versions_init(site, &arg::<String>(args, "message")?)

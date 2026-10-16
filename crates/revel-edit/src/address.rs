@@ -141,7 +141,7 @@ pub(crate) fn find_mut<'a>(nodes: &'a mut [Node], id: &str) -> Option<&'a mut No
 }
 
 /// Branches disponibles d'un nœud, dans l'ordre de `child_lists`.
-fn branches(n: &Node) -> &'static [Branch] {
+pub(crate) fn branches(n: &Node) -> &'static [Branch] {
     match n {
         Node::Element { .. } | Node::SetBlock { .. } => &[Branch::Children],
         Node::If { .. } => &[Branch::Then, Branch::Otherwise],

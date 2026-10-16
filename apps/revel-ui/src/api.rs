@@ -352,6 +352,19 @@ pub async fn github_connect(on: impl Fn(GithubEvent) + 'static) -> Res<String> {
 }
 
 /// Versions du site (3.10) ; `None` : versions pas encore activées.
+/// Réglages lisibles (3.12) : valeurs et libellés des chemins de données, contenus proposés.
+pub async fn readable_data(
+    path: &str,
+    paths: &[Vec<String>],
+    collections: &[String],
+) -> Res<revel_protocol::ReadableData> {
+    call(
+        "readable_data",
+        &serde_json::json!({ "path": path, "paths": paths, "collections": collections }),
+    )
+    .await
+}
+
 pub async fn versions_status(path: &str) -> Res<Option<revel_protocol::VersionsStatus>> {
     call("versions_status", &serde_json::json!({ "path": path })).await
 }

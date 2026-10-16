@@ -399,3 +399,20 @@ défaut) pour voir plus de la page sans la faire défiler : la mise en page ne c
 `position: fixed` en bas de fenêtre suit le bas du cadre allongé. Page entièrement visible : la molette déplace
 la vue. Sources : [Automatic class name generation — Webflow](https://webflow.com/updates/automatic-class-name-generation),
 [Creating breakpoints in Framer — Framer Academy](https://www.framer.com/academy/lessons/framer-fundamentals-breakpoints).
+
+**D-40 — 16/10/2026 — prise.** **Réglages lisibles à la place des calculs des gabarits (3.12, D-28).** Revel
+reconnaît dans le document les calculs les plus utiles d'un site importé et les présente comme des réglages ;
+chaque choix réécrit l'endroit exact du calcul par une commande annulable, et un calcul qui ne suit pas une forme
+reconnue n'est pas proposé (il reste dans le panneau Variables, fermé par défaut). Titre de l'onglet
+(Paramètres › Référencement) : forme `(seo.title ~ " | " ~ site.title) if seo and seo.title else site.title`
+suivie depuis `<title>` (expression écrite dans la balise, affectation `{% set %}` ou filtre du site, nouvelle
+commande `SetFilter`) : « Page | Site », « Site | Page » ou « Page seule », séparateur au choix, exemple affiché.
+Image de partage par défaut et adresse officielle : clés des données du site reprises par le gabarit quand une
+page n'a pas d'image (`site.share_image`) et pour les adresses canoniques (`site.url`), écrites dans le fichier
+de données. Menus (Paramètres › Navigation) : listes de liens `{% set nav = [{ "url": …, "label": … }, …] %}`
+(clés `url`/`href`/`link`/`path` et `label`/`title`/`name`/`text`), texte, adresse (pages proposées), ordre,
+ajout, retrait ; les autres clés d'un lien le suivent. Contenus mis en avant (paramètres de la page) : listes
+d'identifiants lues dans les données (`for slug in home.featured` avec `collections.x | by_slug(slug)`, ou
+`collections.x | by_slugs(home.news)`, alias `{% set home = pages.accueil %}` suivis), libellé repris de Pages
+CMS, contenus des collections proposés par leur titre (`data.slug`), ordre, ajout, retrait. Les listes écrites au
+même retrait que leur clé (`clé:` puis `- a`, style de Pages CMS) sont réécrites entières.

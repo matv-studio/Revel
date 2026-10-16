@@ -231,6 +231,7 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                             <span class="serp-title">{shown_title}</span>
                             <span class="serp-desc">{seo.description.clone()}</span>
                         </div>
+                        <crate::readable::PagePicks page=pid.clone()/>
                         <h3 class="page-settings-section" title=ui.t("page-code-help")>{ui.t("page-code")}</h3>
                         {
                             let (c1, c2) = (p.code.clone(), p.code.clone());

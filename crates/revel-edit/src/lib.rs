@@ -16,6 +16,7 @@ pub mod history;
 pub mod icons;
 pub mod locale;
 pub mod make;
+pub mod readable;
 pub mod ready;
 pub mod style;
 

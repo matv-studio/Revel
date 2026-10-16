@@ -287,7 +287,8 @@ fn scalar_text(v: &Value) -> Option<String> {
 }
 
 impl crate::Project {
-    fn source_file(&self, b: &Binding) -> Result<(PathBuf, Vec<Seg>, bool), BoundError> {
+    /// Fichier d'une valeur liée, chemin dans le fichier, en-tête (front matter) ou non.
+    pub fn source_file(&self, b: &Binding) -> Result<(PathBuf, Vec<Seg>, bool), BoundError> {
         match &b.source {
             Source::Data | Source::LocaleData { .. } => {
                 let dir = self

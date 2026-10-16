@@ -412,6 +412,19 @@ async fn translate(
         .map_err(err)
 }
 
+/// Réglages lisibles (3.12) : valeurs et libellés des chemins de données, contenus proposés.
+#[tauri::command]
+fn readable_data(
+    s: State<AppState>,
+    path: String,
+    paths: Vec<Vec<String>>,
+    collections: Vec<String>,
+) -> Res<revel_protocol::ReadableData> {
+    s.core
+        .readable_data(&PathBuf::from(path), &paths, &collections)
+        .map_err(err)
+}
+
 /// Versions du site (3.10) : état ; `None` : versions pas encore activées.
 #[tauri::command]
 fn versions_status(
@@ -809,6 +822,7 @@ pub fn run() {
             translate,
             translate_packs,
             fonts,
+            readable_data,
             versions_status,
             versions_init,
             versions_list,

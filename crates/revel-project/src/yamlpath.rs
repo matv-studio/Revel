@@ -15,6 +15,8 @@ struct Line {
     indent: usize,
     key: Option<String>,
     blank: bool,
+    /// Élément de liste (`- …`).
+    dash: bool,
 }
 
 fn lines(text: &str) -> Vec<Line> {
@@ -35,6 +37,7 @@ fn lines(text: &str) -> Vec<Line> {
                 crate::entries::key_of(trimmed)
             },
             blank,
+            dash: !blank && (trimmed == "-" || trimmed.starts_with("- ")),
         });
         pos += l.len();
     }
@@ -42,14 +45,15 @@ fn lines(text: &str) -> Vec<Line> {
 }
 
 /// Fin (exclue) du bloc de la ligne `i` : première ligne significative suivante dont
-/// l'indentation est au plus la sienne (lignes vides et commentaires de fin exclus).
+/// l'indentation est au plus la sienne (lignes vides et commentaires de fin exclus). Les
+/// éléments d'une liste écrite au même retrait que sa clé (`clé:` puis `- a`) en font partie.
 fn block_end(ls: &[Line], i: usize) -> usize {
     let ind = ls[i].indent;
     let mut j = i + 1;
     let mut last = i + 1;
     while j < ls.len() {
         if !ls[j].blank {
-            if ls[j].indent <= ind {
+            if ls[j].indent < ind || (ls[j].indent == ind && !(ls[j].dash && !ls[i].dash)) {
                 break;
             }
             last = j + 1;
@@ -257,5 +261,14 @@ mod tests {
         assert_eq!(set_path("", &p(&["a"]), Some(&json!(1))).unwrap(), "a: 1\n");
         // Valeur simple à la place d'un objet : refusé.
         assert!(set_path("seo: x\n", &p(&["seo", "title"]), Some(&json!("A"))).is_err());
+        // Liste écrite au même retrait que sa clé (style de Pages CMS) : remplacée entière.
+        let src = "seo:\n  title: A\nfeatured:\n- un\n- deux\nnews:\n- trois\n";
+        let t = set_path(src, &p(&["featured"]), Some(&json!(["deux", "quatre"]))).unwrap();
+        assert_eq!(
+            crate::parse_yaml(&t).unwrap(),
+            json!({ "seo": { "title": "A" }, "featured": ["deux", "quatre"], "news": ["trois"] })
+        );
+        assert!(t.starts_with("seo:\n  title: A\nfeatured:\n"), "{t}");
+        assert!(t.ends_with("news:\n- trois\n"), "{t}");
     }
 }

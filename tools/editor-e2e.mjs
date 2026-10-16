@@ -1726,7 +1726,13 @@ try {
         return true;
       }, 'élément visible');
       await page.waitForTimeout(400);
-      const rect = await r.evaluate(() => {
+      // Poignée en place (calque du canevas sous le point) avant d'appuyer.
+      const rf = await waitFrame(() => {
+        const b = document.querySelector('.intro-agency__inner')?.getBoundingClientRect();
+        const el = b && document.elementFromPoint(b.right, b.top + b.height / 2);
+        return !!el && el.tagName === 'REVEL-OVERLAY';
+      }, 'poignée de taille affichée');
+      const rect = await rf.evaluate(() => {
         const b = document.querySelector('.intro-agency__inner').getBoundingClientRect();
         return { x: b.right, y: b.top + b.height / 2, w: b.width };
       });
@@ -1824,6 +1830,79 @@ try {
       await page.dblclick('.frame-grow');
       await waitFrame((h) => Math.abs(innerHeight - h) < 2, 'hauteur rétablie', ih0);
       check('cadre allongé : double-clic, hauteur par défaut', docC() === doc11);
+    }
+
+    // ---------------------------------------------------------------- Réglages lisibles (3.12)
+    {
+      const docR = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
+      const home = path.join(siteDir, 'src/_data/pages/accueil.yml');
+      const siteYml = path.join(siteDir, 'src/_data/site.yml');
+      const doc12 = docR();
+      const home0 = fs.readFileSync(home, 'utf8');
+      const site0 = fs.readFileSync(siteYml, 'utf8');
+      const undoUntil = async (pred, what) => {
+        await page.click('.view-tab[data-view="view-editor"]');
+        for (let i = 0; i < 6 && !pred(); i++) {
+          await page.click('.editor-toolbar .btn-undo');
+          await page.waitForTimeout(500);
+        }
+        await until(pred, what);
+      };
+      // Titre de l'onglet : « Site | Page », filtre du site réécrit, aperçu à jour.
+      await page.click('.view-tab[data-view="view-settings"]');
+      await page.click('.settings-nav-item[data-section="settings-seo"]');
+      await page.waitForSelector('.readable-title');
+      await page.click('.readable-title button[data-mode="site"]');
+      await until(() => JSON.parse(docR()).settings.filters.seo_title.expr.startsWith('(site.title ~'), 'format du titre');
+      await page.waitForFunction(() => document.querySelector('.readable-title button[data-mode="site"]')?.classList.contains('is-on'));
+      const sample = (await page.textContent('.readable-sample')).trim();
+      check('réglages lisibles : titre de l\'onglet « Site | Page » (filtre réécrit, aperçu)', /^Alunites.* \| /.test(sample), sample);
+      if (shots) await page.screenshot({ path: `${shots}/referencement-lisible.png` });
+      // Image de partage par défaut : donnée du site.
+      await page.fill('.readable .field >> nth=1 >> input', '/assets/img/essai.jpg');
+      await page.press('.readable .field >> nth=1 >> input', 'Enter');
+      await until(() => fs.readFileSync(siteYml, 'utf8').includes('share_image: /assets/img/essai.jpg'), 'image de partage');
+      check('réglages lisibles : image de partage par défaut écrite dans les données (site.yml)', true);
+      // Menu du site : texte d'un lien changé (affectation réécrite, canevas à jour).
+      await page.click('.settings-nav-item[data-section="settings-menus"]');
+      await page.waitForSelector('.navlist-link');
+      await page.fill('.navlist-link >> nth=0 >> .navlist-label', 'L’agence');
+      await page.press('.navlist-link >> nth=0 >> .navlist-label', 'Tab');
+      await until(() => docR().includes('L’agence'), 'lien renommé');
+      await page.click('.navlist-link >> nth=1 >> button >> nth=0');
+      const navExpr = () => {
+        const find = (nodes) => {
+          for (const n of nodes || []) {
+            if (n.node === 'set' && n.name === 'nav') return n.expr;
+            const r = find(n.children) || find(n.then) || find(n.otherwise);
+            if (r) return r;
+          }
+          return null;
+        };
+        return find(JSON.parse(docR()).components.find((c) => c.id === 'partials/header').body) || '';
+      };
+      await until(() => /"label": "Projets"[^\]]*"label": "L’agence"/s.test(navExpr()), 'lien monté');
+      if (shots) await page.screenshot({ path: `${shots}/navigation.png` });
+      check('réglages lisibles : menu du site (lien renommé, ordre changé)', true);
+      // Contenus mis en avant (paramètres de l'accueil) : un contenu retiré, un autre ajouté.
+      await page.click('.view-tab[data-view="view-editor"]');
+      await page.locator('.page-row', { has: page.locator('.list-meta', { hasText: /^\/$/ }) }).first().locator('.row-action').click();
+      await page.waitForSelector('.picks .pick-item');
+      const n0 = await page.locator('.pick[data-pick="pages.accueil.featured"] .pick-item').count();
+      await page.locator('.pick[data-pick="pages.accueil.featured"] .pick-item >> nth=1').hover();
+      await page.click('.pick[data-pick="pages.accueil.featured"] .pick-item >> nth=1 >> button >> nth=2');
+      await until(() => fs.readFileSync(home, 'utf8') !== home0, 'contenu retiré');
+      await page.waitForFunction((n) => document.querySelectorAll('.pick[data-pick="pages.accueil.featured"] .pick-item').length === n - 1, n0);
+      const opt = await page.$eval('.pick[data-pick="pages.accueil.featured"] select option:nth-child(2)', (o) => o.value);
+      await page.selectOption('.pick[data-pick="pages.accueil.featured"] select', opt);
+      await page.waitForFunction((n) => document.querySelectorAll('.pick[data-pick="pages.accueil.featured"] .pick-item').length === n, n0);
+      const featured = fs.readFileSync(home, 'utf8');
+      check('réglages lisibles : contenus mis en avant (retiré, ajouté, écrits dans les données)', featured.includes(`- ${opt}`), opt);
+      if (shots) await page.screenshot({ path: `${shots}/mis-en-avant.png` });
+      await page.click('.page-settings-head .icon-btn');
+      // Tout annulé : document et données identiques.
+      await undoUntil(() => docR() === doc12 && fs.readFileSync(home, 'utf8') === home0 && fs.readFileSync(siteYml, 'utf8') === site0, 'réglages lisibles annulés');
+      check('réglages lisibles : tout annulé (document, données)', true);
     }
 
     // ---------------------------------------------------------------- Langues (3.8)

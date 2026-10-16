@@ -5310,7 +5310,7 @@ dependencies = [
 
 [[package]]
 name = "revel-app"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "revel-core",
@@ -5326,7 +5326,7 @@ dependencies = [
 
 [[package]]
 name = "revel-assets"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -5346,7 +5346,7 @@ dependencies = [
 
 [[package]]
 name = "revel-cli"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5366,11 +5366,11 @@ dependencies = [
 
 [[package]]
 name = "revel-cms"
-version = "0.2.2"
+version = "0.3.0"
 
 [[package]]
 name = "revel-core"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -5399,7 +5399,7 @@ dependencies = [
 
 [[package]]
 name = "revel-deploy"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "russh",
  "russh-sftp",
@@ -5412,11 +5412,11 @@ dependencies = [
 
 [[package]]
 name = "revel-dns"
-version = "0.2.2"
+version = "0.3.0"
 
 [[package]]
 name = "revel-edit"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "revel-markup",
  "revel-model",
@@ -5428,7 +5428,7 @@ dependencies = [
 
 [[package]]
 name = "revel-git"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "git2",
  "openssl-sys",
@@ -5441,7 +5441,7 @@ dependencies = [
 
 [[package]]
 name = "revel-i18n"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "fluent-bundle",
  "unic-langid",
@@ -5449,7 +5449,7 @@ dependencies = [
 
 [[package]]
 name = "revel-import"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "regex",
  "revel-markup",
@@ -5464,7 +5464,7 @@ dependencies = [
 
 [[package]]
 name = "revel-markup"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "htmlize",
  "revel-model",
@@ -5473,11 +5473,11 @@ dependencies = [
 
 [[package]]
 name = "revel-mcp"
-version = "0.2.2"
+version = "0.3.0"
 
 [[package]]
 name = "revel-model"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5486,7 +5486,7 @@ dependencies = [
 
 [[package]]
 name = "revel-project"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "chrono",
@@ -5503,7 +5503,7 @@ dependencies = [
 
 [[package]]
 name = "revel-protocol"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5511,7 +5511,7 @@ dependencies = [
 
 [[package]]
 name = "revel-render"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "minijinja",
@@ -5527,7 +5527,7 @@ dependencies = [
 
 [[package]]
 name = "revel-style"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "revel-model",
  "thiserror 2.0.21",
@@ -5535,7 +5535,7 @@ dependencies = [
 
 [[package]]
 name = "revel-translate"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "candle-core",
  "candle-nn",

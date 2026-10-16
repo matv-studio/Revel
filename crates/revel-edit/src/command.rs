@@ -253,6 +253,13 @@ pub enum Command {
     /// Fichiers du site déplacés (chemins relatifs au dossier du site : de, vers). Appliquée par
     /// le cœur : polices mises en place ou rangées dans `.revel/`, de façon annulable.
     MoveFiles { moves: Vec<(String, String)> },
+    /// Filtre du site écrit dans `site.revel.json` (`None` : retiré) ; 3.12 : format du titre de
+    /// l'onglet.
+    SetFilter {
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        filter: Option<revel_model::CustomFilter>,
+    },
     /// Code ajouté (3.9) : au site (`page` absent) ou à une page.
     SetCode {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1092,6 +1099,16 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 base_url: std::mem::replace(&mut site.base_url, url),
                 default_locale: std::mem::replace(&mut site.default_locale, code.to_string()),
                 typography: std::mem::replace(&mut site.settings.typography, typo),
+            })
+        }
+        Command::SetFilter { name, filter } => {
+            let old = match filter {
+                Some(f) => site.settings.filters.insert(name.clone(), f.clone()),
+                None => site.settings.filters.remove(name),
+            };
+            Ok(Command::SetFilter {
+                name: name.clone(),
+                filter: old,
             })
         }
         Command::SetCode { page, code } => {

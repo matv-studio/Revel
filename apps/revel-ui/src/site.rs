@@ -146,6 +146,7 @@ pub(crate) const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::Publish, "settings-publish", None),
     (Section::Export, "settings-export", None),
     (Section::Seo, "settings-seo", None),
+    (Section::Menus, "settings-menus", None),
     (Section::Redirects, "settings-redirects", None),
     (Section::Fonts, "settings-fonts", None),
     (Section::Code, "settings-code", None),
@@ -166,6 +167,9 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         Section::Export => view! { <Export site=site.clone()/> }.into_any(),
         Section::Redirects => view! { <Redirects site=site.clone()/> }.into_any(),
         Section::Seo => view! { <Seo site=site.clone()/> }.into_any(),
+        Section::Menus => {
+            view! { <crate::readable::Menus s=doc_session(ui, site.path.clone())/> }.into_any()
+        }
         other => {
             let (key, step) = SECTIONS
                 .iter()
@@ -365,6 +369,7 @@ fn Seo(site: SiteSummary) -> impl IntoView {
     view! {
         <section class="page settings-page">
             <header class="page-head"><h1 title=ui.t("seo-pages-help")>{ui.t("settings-seo")}</h1></header>
+            <crate::readable::SeoReadable s=s path=site.path.clone()/>
             <div class="section">
                 <label class="view-line" title=move || ui.tx(if own("/sitemap.xml") { "seo-sitemap-own" } else if no_url() { "seo-sitemap-no-url" } else { "seo-sitemap-help" }, &[])>
                     <span>

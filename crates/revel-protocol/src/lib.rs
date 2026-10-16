@@ -692,3 +692,22 @@ mod tests {
         assert_eq!(serde_json::from_str::<DeployEvent>(&j).unwrap(), f);
     }
 }
+
+/// Données des réglages lisibles (3.12) : valeurs des chemins de données demandés (dans l'ordre),
+/// leur libellé dans Pages CMS, contenus des collections demandées.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ReadableData {
+    pub values: Vec<Option<serde_json::Value>>,
+    pub labels: Vec<Option<String>>,
+    pub entries: Vec<PickEntry>,
+}
+
+/// Contenu d'une collection proposé dans une liste de contenus mis en avant.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PickEntry {
+    /// Collection (`projets`).
+    pub collection: String,
+    /// Identifiant écrit dans la liste (`data.slug`).
+    pub slug: String,
+    pub title: String,
+}

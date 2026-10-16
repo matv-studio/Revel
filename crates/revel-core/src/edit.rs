@@ -60,6 +60,9 @@ fn check_exprs(c: &Command) -> std::result::Result<(), revel_edit::EditError> {
             cond.iter().chain(expr.iter()).try_for_each(|e| check(e))
         }
         Command::SetUseArg { value: Some(v), .. } => check(v),
+        Command::SetFilter {
+            filter: Some(f), ..
+        } => check(&f.expr),
         Command::Batch { commands } => commands.iter().try_for_each(check_exprs),
         _ => Ok(()),
     }

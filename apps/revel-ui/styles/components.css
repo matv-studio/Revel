@@ -856,3 +856,32 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .diff tr.is-add .diff-sign, .diff tr.is-add .diff-text { color: var(--success-text); }
 .diff tr.is-del { background: var(--danger-bg); }
 .diff tr.is-del .diff-sign, .diff tr.is-del .diff-text { color: var(--danger-text); }
+
+/* Réglages lisibles (3.12) : titre de l'onglet, menus, contenus mis en avant. */
+.readable { display: flex; flex-direction: column; gap: var(--s-4); }
+.readable-title { display: flex; flex-direction: column; gap: var(--s-2); }
+.readable-row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.readable-sep { width: 96px; }
+.readable-sep.is-disabled { opacity: .5; }
+.readable-sample {
+  align-self: flex-start; max-width: 100%; padding: 4px var(--s-2); border-radius: var(--radius-sm);
+  background: var(--surface); border: var(--border) solid var(--line); color: var(--text-muted);
+  font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.navlist { display: flex; flex-direction: column; gap: var(--s-2); }
+.navlist-head { display: flex; align-items: center; gap: var(--s-2); }
+.navlist-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.navlist-link { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto auto auto; gap: var(--s-1); align-items: center; }
+.navlist-add { align-self: flex-start; }
+.picks .pick { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.pick-add { width: 100%; }
+.pick-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pick-item {
+  display: flex; align-items: center; gap: var(--s-1); min-height: 28px; padding: 0 0 0 var(--s-2);
+  border-radius: var(--radius-sm); background: var(--surface);
+}
+.pick-item.is-missing .pick-title { color: var(--danger-text); }
+.pick-title { flex: 1; min-width: 0; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-item .icon-btn { opacity: 0; }
+.pick-item:hover .icon-btn, .pick-item:focus-within .icon-btn { opacity: 1; }
+@media (hover: none) { .pick-item .icon-btn { opacity: 1; } }

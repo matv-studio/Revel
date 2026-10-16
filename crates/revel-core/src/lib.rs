@@ -20,6 +20,7 @@ mod fonts;
 mod github;
 pub mod pagescms;
 pub mod preview;
+mod readable;
 pub mod secrets;
 pub mod starter;
 mod state;

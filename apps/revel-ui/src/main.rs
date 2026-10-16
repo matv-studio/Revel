@@ -27,6 +27,7 @@ mod pagetree;
 mod palette;
 mod panels;
 mod publish;
+mod readable;
 mod richtext;
 mod settings;
 mod site;
@@ -292,6 +293,7 @@ pub enum Section {
     Forms,
     Fonts,
     Code,
+    Menus,
     Versions,
 }
 

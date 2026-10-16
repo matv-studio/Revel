@@ -18,9 +18,6 @@ pub struct McpConfig {
     /// Jeton exigé par le serveur (`Authorization: Bearer …`).
     #[serde(default)]
     pub token: String,
-    /// Adresse publique (tunnel) pour les assistants en ligne, autorisés par OAuth (4.4).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub public_url: Option<String>,
 }
 
 fn default_port() -> u16 {
@@ -33,7 +30,6 @@ impl Default for McpConfig {
             enabled: false,
             port: DEFAULT_PORT,
             token: new_token(),
-            public_url: None,
         }
     }
 }

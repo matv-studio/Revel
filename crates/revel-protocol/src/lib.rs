@@ -728,33 +728,6 @@ pub struct McpStatus {
     /// Programme à lancer par les assistants en stdio (`<programme> --mcp`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub program: Option<String>,
-    /// Adresse publique (tunnel) pour les assistants en ligne (4.4).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub public_url: Option<String>,
-}
-
-/// Demande d'accès d'un assistant en ligne, à accorder ou refuser dans Revel (4.4).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct McpAuthRequest {
-    pub id: String,
-    /// Nom donné par l'application (« Claude », « ChatGPT »…).
-    pub client: String,
-    /// Hôte de retour (`claude.ai`, `chatgpt.com`…).
-    pub host: String,
-    /// Heure de la demande (millisecondes depuis 1970).
-    pub at: u64,
-}
-
-/// Application en ligne autorisée (4.4).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct McpConnection {
-    pub id: String,
-    pub client: String,
-    pub host: String,
-    /// Autorisée depuis (millisecondes depuis 1970).
-    pub since: u64,
-    /// Dernier renouvellement (millisecondes depuis 1970).
-    pub used: u64,
 }
 
 /// Modification faite par un assistant (dernières actions, Réglages › Assistants IA).

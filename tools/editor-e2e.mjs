@@ -2147,31 +2147,6 @@ try {
     check('assistants : Open WebUI (adresse, clé masquée), clé affichée puis renouvelée',
       fields[1] === 'http://127.0.0.1:47600/mcp' && /^•+$/.test(hidden) && /^[0-9a-f]{64}$/.test(key2) && key2 !== key1, fields[1]);
     if (shots) await page.locator('.mcp').screenshot({ path: `${shots}/reglages-assistants.png` });
-    // Accès à distance (4.4) : adresse publique refusée sans https, puis réglée ; demande d'accès
-    // accordée dans Revel ; application autorisée, puis accès retiré.
-    await page.fill('.mcp-public', 'http://pas-https.example.com');
-    await page.press('.mcp-public', 'Enter');
-    await page.waitForFunction(() => /https:\/\//.test(document.body.textContent) && document.querySelector('.mcp-public').value === '');
-    await page.fill('.mcp-public', 'https://Revel-Essai.trycloudflare.com/');
-    await page.press('.mcp-public', 'Enter');
-    await page.waitForSelector('.mcp-connector');
-    const connector = (await page.textContent('.mcp-connector')).trim();
-    await page.evaluate(() => { window.__revelMcpReq = true; });
-    await page.waitForSelector('.dialog');
-    const ask = (await page.textContent('.dialog h2')).trim();
-    if (shots) await page.screenshot({ path: `${shots}/assistants-demande.png` });
-    await page.click('.dialog .btn--primary');
-    await page.waitForSelector('.mcp-conn[data-client="Claude"]');
-    check('assistants : accès à distance (adresse publique, demande accordée dans Revel, application autorisée)',
-      connector === 'https://revel-essai.trycloudflare.com/mcp' && /Claude.*claude\.ai/.test(ask), `${connector} — ${ask}`);
-    await page.hover('.mcp-conn');
-    await page.click('.mcp-conn-revoke');
-    await page.click('.dialog .btn--danger');
-    await page.waitForSelector('.mcp-conn', { state: 'detached' });
-    await page.fill('.mcp-public', '');
-    await page.press('.mcp-public', 'Enter');
-    await page.waitForSelector('.mcp-connector', { state: 'detached' });
-    check('assistants : accès retiré, accès à distance coupé', true);
     await page.click('.mcp-server .switch');
     await page.waitForFunction(() => /Désactivé/.test(document.querySelector('.mcp-state')?.textContent || ''));
   }

@@ -13,8 +13,6 @@ use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 struct AppState {
     core: Arc<Core>,
-    /// Application (fenêtre signalée quand un assistant en ligne demande l'accès).
-    handle: tauri::AppHandle,
     /// Dossier des réglages de l'application.
     config_dir: PathBuf,
     /// Serveur des assistants IA (MCP en HTTP local), démarré si activé dans les réglages.
@@ -28,59 +26,29 @@ struct Mcp {
     running: Option<revel_mcp::http::Running>,
     /// Échec du dernier démarrage (port occupé…).
     error: Option<String>,
-    /// Accès à distance (adresse publique réglée) : autorisations OAuth.
-    oauth: Option<Arc<revel_mcp::oauth::OAuth>>,
 }
 
 /// Identifiant de l'application (`tauri.conf.json`) : dossier des réglages, lu aussi par le relais.
 const IDENTIFIER: &str = "app.revel-studio.desktop";
-
-/// Autorisations de l'accès à distance pour l'adresse publique réglée (reprises si l'adresse n'a
-/// pas changé) ; une nouvelle demande fait signaler la fenêtre de Revel.
-fn oauth_for(
-    handle: &tauri::AppHandle,
-    config_dir: &std::path::Path,
-    c: &revel_mcp::config::McpConfig,
-    previous: Option<Arc<revel_mcp::oauth::OAuth>>,
-) -> Option<Arc<revel_mcp::oauth::OAuth>> {
-    let base = c.public_url.as_deref()?;
-    if let Some(p) = previous.filter(|p| p.base() == base) {
-        return Some(p);
-    }
-    let h = handle.clone();
-    let notify: Box<dyn Fn() + Send + Sync> = Box::new(move || {
-        if let Some(w) = h.get_webview_window("main") {
-            let _ = w.request_user_attention(Some(tauri::UserAttentionType::Informational));
-        }
-    });
-    Some(Arc::new(revel_mcp::oauth::OAuth::new(
-        config_dir,
-        base,
-        Some(notify),
-    )))
-}
 
 /// Démarre le serveur des assistants sur le cœur de l'application.
 async fn start_mcp(
     core: &Arc<Core>,
     activity: &revel_mcp::activity::ActivityLog,
     c: &revel_mcp::config::McpConfig,
-    oauth: Option<Arc<revel_mcp::oauth::OAuth>>,
 ) -> Mcp {
     let inv: Arc<dyn revel_mcp::Invoke> = Arc::new(revel_mcp::activity::Logged {
         inner: Arc::new(revel_mcp::direct::CoreInvoke(core.clone())),
         log: activity.clone(),
     });
-    match revel_mcp::http::start_with(inv, c.token.clone(), c.port, oauth.clone()).await {
+    match revel_mcp::http::start(inv, c.token.clone(), c.port).await {
         Ok(r) => Mcp {
             running: Some(r),
             error: None,
-            oauth,
         },
         Err(e) => Mcp {
             running: None,
             error: Some(e.to_string()),
-            oauth,
         },
     }
 }
@@ -96,60 +64,6 @@ fn mcp_status_of(s: &AppState) -> revel_protocol::McpStatus {
         running: m.running.is_some(),
         error: m.error.clone(),
         program: program_path().map(|p| p.display().to_string()),
-        public_url: c.public_url,
-    }
-}
-
-fn oauth_of(s: &AppState) -> Option<Arc<revel_mcp::oauth::OAuth>> {
-    s.mcp
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .oauth
-        .clone()
-}
-
-/// Adresse publique (tunnel) des assistants en ligne ; vide : accès à distance coupé.
-#[tauri::command]
-async fn mcp_set_public(
-    s: State<'_, AppState>,
-    url: Option<String>,
-) -> Res<revel_protocol::McpStatus> {
-    let mut c = revel_mcp::config::McpConfig::load(&s.config_dir);
-    c.public_url = match url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
-        None => None,
-        Some(u) => Some(
-            revel_mcp::oauth::normalize_base(u)
-                .ok_or_else(|| Failure::new("error-mcp-public-url").arg("detail", u))?,
-        ),
-    };
-    c.save(&s.config_dir).map_err(sys)?;
-    restart_mcp(&s, &c).await;
-    Ok(mcp_status_of(&s))
-}
-
-/// Demandes d'accès des assistants en ligne, en attente de décision.
-#[tauri::command]
-fn mcp_pending(s: State<AppState>) -> Vec<revel_protocol::McpAuthRequest> {
-    oauth_of(&s).map(|o| o.pending()).unwrap_or_default()
-}
-
-/// Accorde ou refuse une demande d'accès.
-#[tauri::command]
-fn mcp_decide(s: State<AppState>, id: String, allow: bool) -> bool {
-    oauth_of(&s).is_some_and(|o| o.decide(&id, allow))
-}
-
-/// Assistants en ligne autorisés.
-#[tauri::command]
-fn mcp_connections(s: State<AppState>) -> Vec<revel_protocol::McpConnection> {
-    oauth_of(&s).map(|o| o.connections()).unwrap_or_default()
-}
-
-/// Retire l'accès d'un assistant en ligne.
-#[tauri::command]
-fn mcp_revoke(s: State<AppState>, id: String) {
-    if let Some(o) = oauth_of(&s) {
-        o.revoke(&id);
     }
 }
 
@@ -196,20 +110,14 @@ async fn mcp_new_token(s: State<'_, AppState>) -> Res<revel_protocol::McpStatus>
 
 async fn restart_mcp(s: &AppState, c: &revel_mcp::config::McpConfig) {
     // Ancien serveur arrêté (port libéré) avant le nouveau.
-    let old = std::mem::take(&mut *s.mcp.lock().unwrap_or_else(|e| e.into_inner()));
-    if let Some(r) = old.running {
+    let old = std::mem::take(&mut *s.mcp.lock().unwrap_or_else(|e| e.into_inner())).running;
+    if let Some(r) = old {
         r.shutdown().await;
     }
-    let oauth = oauth_for(&s.handle, &s.config_dir, c, old.oauth);
-    let m = if c.enabled {
-        start_mcp(&s.core, &s.activity, c, oauth).await
-    } else {
-        Mcp {
-            oauth,
-            ..Default::default()
-        }
-    };
-    *s.mcp.lock().unwrap_or_else(|e| e.into_inner()) = m;
+    if c.enabled {
+        let m = start_mcp(&s.core, &s.activity, c).await;
+        *s.mcp.lock().unwrap_or_else(|e| e.into_inner()) = m;
+    }
 }
 
 /// Programme de Revel à lancer par les assistants : l'AppImage elle-même sous Linux (le programme
@@ -1001,18 +909,13 @@ pub fn run() {
             // Serveur des assistants IA (étape 4), désactivé par défaut.
             let mcp_config = revel_mcp::config::McpConfig::load(&dir);
             let activity = revel_mcp::activity::ActivityLog::default();
-            let oauth = oauth_for(app.handle(), &dir, &mcp_config, None);
             let mcp = if mcp_config.enabled {
-                tauri::async_runtime::block_on(start_mcp(&core, &activity, &mcp_config, oauth))
+                tauri::async_runtime::block_on(start_mcp(&core, &activity, &mcp_config))
             } else {
-                Mcp {
-                    oauth,
-                    ..Default::default()
-                }
+                Mcp::default()
             };
             app.manage(AppState {
                 core,
-                handle: app.handle().clone(),
                 config_dir: dir,
                 mcp: std::sync::Mutex::new(mcp),
                 activity,
@@ -1065,11 +968,6 @@ pub fn run() {
             mcp_set,
             mcp_new_token,
             mcp_activity,
-            mcp_set_public,
-            mcp_pending,
-            mcp_decide,
-            mcp_connections,
-            mcp_revoke,
             versions_status,
             versions_init,
             versions_list,

@@ -246,7 +246,8 @@ machine directement) par tunnel avec authentification ; les mêmes commandes dé
 sans MCP. Les outils exposés sont les commandes de D-13 (annulables, visibles dans l'historique de Revel). Une
 discussion intégrée à Revel, avec le fournisseur choisi (Anthropic, OpenAI ou un modèle local par une API
 compatible OpenAI, comme celle d'Ollama, https://docs.ollama.com/api/openai-compatibility), reste à décider
-(D-13 : pas de panneau de discussion pour l'instant).
+(D-13 : pas de panneau de discussion pour l'instant). *Précisée le 16/10/2026 : ni accès à distance (D-44),
+ni discussion intégrée (D-45).*
 
 **D-32 — 15/10/2026 — prise.** **Pages : conventions de référencement et adresses.** Une page porte un nom dans
 Revel (`name`, sans effet sur le site), et son référencement dans `seo.title`, `seo.description`, `seo.image`
@@ -464,26 +465,27 @@ description OpenAPI 3.1 en `GET /openapi.json`, générée à partir de la liste
 [OpenAPI Specification 3.1.0](https://spec.openapis.org/oas/v3.1.0),
 [Model Context Protocol — Open WebUI](https://docs.openwebui.com/features/extensibility/mcp.md).
 
-**D-44 — 16/10/2026 — prise (partie Revel ; tunnel à choisir).** **Accès à distance (4.4).** claude.ai et
-ChatGPT en ligne n'atteignent un serveur MCP que par une adresse publique en HTTPS ; leurs connecteurs
-s'authentifient par OAuth (inscription dynamique ou document d'identité du client, PKCE S256, adresse de retour
-fixe sur claude.ai ou chatgpt.com). Revel est donc son propre serveur d'autorisation, sans compte ni service
-tiers : métadonnées RFC 9728 et RFC 8414, inscription dynamique RFC 7591 (clients publics, adresses de retour
-https ou boucle locale, port libre en boucle locale), code d'autorisation avec PKCE S256 obligatoire, ressource
-RFC 8707 liée au jeton, `iss` RFC 9207, `offline_access` annoncé pour obtenir un jeton de renouvellement, jetons
-d'accès d'une heure gardés en mémoire, renouvellement tournant (seules des empreintes sont enregistrées).
-**La décision appartient à l'utilisateur, sur son ordinateur** : une demande d'accès ne donne rien tant qu'elle
-n'est pas accordée dans Revel (boîte de dialogue, fenêtre signalée), la page du navigateur ne fait qu'attendre ;
-au plus trois demandes en attente, pour qu'une adresse publique visitée par un tiers ne submerge pas l'utilisateur.
-Applications autorisées listées et révocables. Le tunnel (qui expose 127.0.0.1:port à une adresse https) reste
-un choix de l'utilisateur, aucun n'étant installé ni contacté par Revel à ce stade : Cloudflare Tunnel (sans
-compte en mode rapide, adresse changeante ; adresse fixe avec un compte et un domaine), ngrok (compte, une adresse
-fixe gratuite), Tailscale Funnel (compte) ; les « MCP tunnels » d'Anthropic sont réservés aux organisations
-Enterprise et à un réseau d'entreprise. Écritures depuis ChatGPT : réservées aux offres Business, Enterprise et
-Edu selon un guide tiers (Pro : lecture). Sources :
-[Authentication for connectors — Claude](https://claude.com/docs/connectors/building/authentication),
+**D-44 — 16/10/2026 — prise (décision de l'utilisateur).** **Pas d'accès à distance (4.4 écarté).** Revel ne
+s'ouvre pas aux assistants utilisés dans une page web (claude.ai ou ChatGPT dans le navigateur, applications
+mobiles) : leurs serveurs ne peuvent joindre l'ordinateur que par une adresse publique, donc par un tunnel
+d'un prestataire (Cloudflare, ngrok, Tailscale…), contraire au principe d'indépendance (D-36). Seuls les
+assistants installés sur l'ordinateur se branchent : par la commande `revel --mcp` (Claude Desktop, Claude Code,
+ChatGPT de bureau, Codex, LM Studio) ou par l'adresse locale 127.0.0.1 (Open WebUI installé chez l'utilisateur,
+outils OpenAPI). Dans Claude Desktop, seul le fichier de configuration (Settings › Developer › Edit Config) donne
+un branchement local ; « Add custom connector » attend une adresse publique. Le code de l'accès à distance,
+écrit puis retiré le même jour (serveur d'autorisation OAuth, adresse publique, demandes d'accès), reste dans
+l'historique du dépôt (commit 61d227a). Rappel : avec un modèle en ligne (Claude, ChatGPT), ce que l'assistant
+lit du site part chez son fournisseur comme le reste de la conversation ; seul un modèle local garde tout sur
+l'ordinateur. Sources :
+[Connect to local MCP servers — modelcontextprotocol.io](https://modelcontextprotocol.io/docs/2026-07-28/develop/connect-local-servers.md),
 [Add a connector that isn't in the directory — Claude](https://claude.com/docs/connectors/custom/add-unlisted),
-[MCP tunnels — Claude](https://claude.com/docs/connectors/mcp-tunnels/overview.md),
-[Authorization, spécification MCP 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/index),
-[ChatGPT connectors and apps — Zuplo (guide tiers)](https://zuplo.com/learn/mcp/compatibility/clients/chatgpt-connectors.md),
-[Connect ChatGPT — Zuplo (guide tiers)](https://zuplo.com/docs/mcp-gateway/connect-clients/chatgpt).
+[Model Context Protocol — Codex](https://learn.chatgpt.com/docs/extend/mcp.md?surface=cli).
+
+**D-45 — 16/10/2026 — prise (décision de l'utilisateur).** **Pas de discussion intégrée (4.5 écartée, D-31
+précisée).** On discute avec l'assistant dans son application (téléchargée par l'utilisateur), qui pilote Revel
+par les outils de D-41 ; Revel n'a pas de panneau de discussion, son interface reste plus sobre.
+
+**D-46 — 16/10/2026 — prise (décision de l'utilisateur).** **Installateur.** Le modèle de traduction
+français ↔ anglais reste livré dans l'installateur jusqu'à la version 1.0 (D-36). La version 1.0 aura un
+installateur plus léger et plus soigné, au logo de Revel, sans langue de traduction livrée (toutes téléchargées
+depuis Réglages › Traduction automatique) ; à faire à l'étape 6 (empaquetage).

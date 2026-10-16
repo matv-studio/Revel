@@ -414,7 +414,6 @@ error-mcp-no-site = No site is open in Revel: open one, or pass the site folder.
 error-mcp-disabled = The AI assistant server is off: turn it on in Revel, Settings › AI assistants.
 error-mcp-unreachable = Revel did not answer: open Revel and check that the AI assistant server is on.
 error-mcp-token = Revel refused the access key: copy the current key from Settings › AI assistants.
-error-mcp-public-url = Public address refused: the tunnel’s https:// address, without a path. ({ $detail })
 
 ## Panneau de styles (D-20)
 styles-count = { $count ->
@@ -1389,18 +1388,6 @@ mcp-field-url = Address
 mcp-field-url-docker = Address (Docker)
 mcp-field-auth = Authentication
 mcp-field-key = Key
-mcp-remote = Remote access
-mcp-remote-help = For claude.ai and ChatGPT online: they reach Revel through the public address of a tunnel (Cloudflare Tunnel, ngrok, Tailscale Funnel…) pointing at 127.0.0.1 and the local server’s port. Each assistant asks for access once, and Revel asks you to allow it.
-mcp-public = Public address
-mcp-public-help = The tunnel’s https:// address, without a path, pointing at http://127.0.0.1 and the local server’s port. Empty: remote access off.
-mcp-connector = Connector address
-mcp-connector-help = Paste into claude.ai (Customize › Connectors › Add custom connector) or ChatGPT (Settings › Apps & Connectors, developer mode); access is requested on the first connection.
-mcp-remote-apps = Allowed
-mcp-remote-revoke = Remove access
-mcp-remote-revoke-title = Remove access for “{ $client }”?
-mcp-auth-ask = “{ $client }” ({ $host }) asks for access to Revel
-mcp-auth-allow = Allow
-mcp-auth-deny = Deny
 mcp-activity = Recent actions
 mcp-activity-empty = No action yet
 mcp-client-unknown = Assistant
@@ -1415,9 +1402,3 @@ mcp-tool-apply_commands = Changes
 mcp-tool-undo = Undo
 mcp-tool-redo = Redo
 action-copy = Copy
-
-# Remote access (4.4): waiting page in the browser
-mcp-auth-page-title = Revel
-mcp-auth-page-wait = { $client } asks for access to Revel. Allow or deny it in Revel, on your computer.
-mcp-auth-page-invalid = Invalid access request.
-mcp-auth-page-busy = Too many pending requests: decide in Revel first.

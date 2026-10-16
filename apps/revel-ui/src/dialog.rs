@@ -25,9 +25,6 @@ pub struct Ask {
     /// simple (pas un `Callback` réactif) : la vue qui a ouvert la boîte peut avoir été
     /// redessinée entre-temps sans que l'action soit perdue.
     pub on_confirm: Arc<dyn Fn(String) + Send + Sync>,
-    /// Bouton d'abandon : libellé (« Annuler » par défaut) et action (fermeture, Échap, clic
-    /// sur le fond compris).
-    pub cancel: Option<(String, Arc<dyn Fn() + Send + Sync>)>,
 }
 
 impl Ask {
@@ -44,18 +41,11 @@ impl Ask {
             confirm,
             danger: false,
             on_confirm: Arc::new(move |_: String| on_confirm()),
-            cancel: None,
         }
     }
 
     pub fn danger(mut self) -> Self {
         self.danger = true;
-        self
-    }
-
-    /// Abandon nommé, avec son action (refus d'une demande, par exemple).
-    pub fn on_cancel(mut self, label: String, f: impl Fn() + Send + Sync + 'static) -> Self {
-        self.cancel = Some((label, Arc::new(f)));
         self
     }
 
@@ -73,7 +63,6 @@ impl Ask {
             confirm,
             danger: false,
             on_confirm: Arc::new(on_confirm),
-            cancel: None,
         }
     }
 }
@@ -103,13 +92,7 @@ pub fn Dialog() -> impl IntoView {
         }
     });
 
-    let close = move || {
-        let a = ui.ask.get_untracked();
-        ui.ask.set(None);
-        if let Some((_, f)) = a.and_then(|a| a.cancel) {
-            f();
-        }
-    };
+    let close = move || ui.ask.set(None);
     let submit = move || {
         let Some(a) = ui.ask.get_untracked() else {
             return;
@@ -150,12 +133,7 @@ pub fn Dialog() -> impl IntoView {
                             </label>
                         </Show>
                         <div class="dialog-actions">
-                            <button type="button" class="btn" node_ref=cancel_ref on:click=move |_| close()>{
-                                match a.cancel.as_ref() {
-                                    Some((label, _)) => label.clone(),
-                                    None => ui.tx("action-cancel", &[]),
-                                }
-                            }</button>
+                            <button type="button" class="btn" node_ref=cancel_ref on:click=move |_| close()>{ui.t("action-cancel")}</button>
                             <button type="submit" node_ref=confirm_ref class="btn"
                                 class:btn--primary=!a.danger class:btn--danger=a.danger
                                 disabled=move || has_input && value.with(|v| v.trim().is_empty())>{a.confirm.clone()}</button>

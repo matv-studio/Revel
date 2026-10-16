@@ -57,8 +57,8 @@ try {
   await page.click('.site-open');
   await page.waitForSelector('iframe.canvas-frame');
   const frameOf = () => page.frames().find((f) => f.url().includes('rv='));
-  const waitFrame = async (pred, what, arg) => {
-    for (let i = 0; i < 150; i++) {
+  const waitFrame = async (pred, what, arg, tries = 150) => {
+    for (let i = 0; i < tries; i++) {
       const f = frameOf();
       if (f) {
         try { if (await f.evaluate(pred, arg)) return f; } catch { /* rechargement en cours */ }
@@ -1106,9 +1106,18 @@ try {
   const styleInput = (prop) => page.locator(`.style-row[data-prop="${prop}"]`).locator('input, select').first();
   f = frameOf();
   await f.evaluate(() => { window.__mark2 = 1; });
-  await styleInput('color').fill('rgb(10, 20, 30)');
-  await styleInput('color').press('Enter');
-  f = await waitFrame(() => getComputedStyle(document.querySelector('h1.hero__title')).color === 'rgb(10, 20, 30)', 'couleur du titre');
+  // Saisie refaite si le panneau a été redessiné pendant la frappe (éditeur relu après la
+  // lecture du document par l'essai juste avant).
+  for (let attempt = 0; ; attempt++) {
+    await styleInput('color').fill('rgb(10, 20, 30)');
+    await styleInput('color').press('Enter');
+    try {
+      f = await waitFrame(() => getComputedStyle(document.querySelector('h1.hero__title')).color === 'rgb(10, 20, 30)', 'couleur du titre', undefined, 50);
+      break;
+    } catch (e) {
+      if (attempt === 2) throw e;
+    }
+  }
   check('styles : couleur appliquée en direct (sans rechargement)', await f.evaluate(() => window.__mark2 === 1));
   const r1 = rulesOf((await invoke('edit_open')).site, '.hero__title').find(([it]) => !it.media);
   check('styles : déclaration écrite dans la règle de base', r1 && r1[0].decls.some((d) => d.prop === 'color' && d.value === 'rgb(10, 20, 30)'));

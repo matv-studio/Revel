@@ -331,9 +331,14 @@ pub async fn serve(
                     ),
                 };
             }
+            // Adresse avec sa requête (canevas des composants : `?component=…`).
+            let full = uri
+                .path_and_query()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_else(|| path.clone());
             let r = tokio::task::spawn_blocking(move || match path.strip_prefix(PREVIEW_PREFIX) {
                 Some(rest) if bridge => core.preview_respond(&format!("/{rest}")),
-                _ => core.canvas_respond(&path),
+                _ => core.canvas_respond(&full),
             })
             .await
             .unwrap_or_else(|e| CanvasResponse {

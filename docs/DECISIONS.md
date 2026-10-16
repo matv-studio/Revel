@@ -302,7 +302,7 @@ l'application sur macOS (paquet signé) ; AppImage : à côté du fichier. Dossi
 Sources : [installateur Windows de Tauri](https://v2.tauri.app/distribute/windows-installer/),
 [icacls](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls).
 
-**D-58 — 16/10/2026 — prise.** **Canevas : réglages directs.** Marges et espacements intérieurs survolés en
+**D-58 — 16/10/2026 — prise (espacements : remplacé par D-60).** **Canevas : réglages directs.** Marges et espacements intérieurs survolés en
 hachures dans la couleur de sélection de Revel ; sur l'élément sélectionné, un côté se règle en le glissant
 (valeur affichée, Maj : les quatre côtés, Alt : le côté opposé, double-clic : valeur retirée), comme Framer.
 Largeur du cadre réglable par des poignées sur ses bords (responsive horizontal, point de rupture suivi,
@@ -327,6 +327,104 @@ et si le script ne se charge pas (3 s) ; rien n'est animé pour `prefers-reduced
 lettres ou mots au chargement de la page (pas dans la source), texte complet gardé pour les lecteurs d'écran.
 Images et composants animés par un bloc qui les entoure (« Envelopper pour animer »). Aperçu : le même script,
 chargé sans démarrage automatique, joue l'animation dans le canevas et sur les vignettes du panneau.
+
+**D-60 — 16/10/2026 — prise.** **Espacements dans le canevas : poignées (remplace les hachures de D-58).** Quand
+le pointeur est au-dessus de l'élément sélectionné (marges comprises), ses espacements intérieurs et les écarts
+entre ses enfants (conteneur flex ou grille) apparaissent en teinte unie de la couleur de sélection, ses marges
+non nulles en teinte plus claire, sans hachures ; une poignée (pilule blanche bordée) au milieu de chaque côté,
+dans la partie visible de la page pour un élément plus haut que l'écran. Seule la poignée se glisse (valeur
+affichée ; Maj : les quatre côtés, Alt : le côté opposé, comme dans le panneau) ; un clic sur la poignée sans
+glisser met le champ correspondant du panneau de styles en saisie. Repères : poignées d'espacement de Figma
+(Alt : côtés opposés, [aide Figma](https://help.figma.com/hc/en-us/articles/360040451373)) et de Framer
+(intérieur et écarts réglés sur le canevas).
+
+**D-61 — 16/10/2026 — prise.** **Calques lisibles sans connaître le code.** Une boucle s'appelle « Liste · »
+suivi du dernier mot de sa source (`home.featured` → « Liste · Featured »), son expression en info-bulle ; une
+condition sans « sinon » n'a pas de ligne : ses éléments portent une marque de condition (comme la visibilité
+conditionnelle de Webflow) ; une condition avec « sinon » s'appelle « Condition · » suivi de la donnée testée.
+Boucles et conditions qui ne font que préparer des données (`{% set %}` seuls) absentes. Liens d'évitement et
+textes réservés aux lecteurs d'écran (`skip-link`, `sr-only`, `visually-hidden`…) absents : invisibles sur la
+page, ils restent dans le site. Un texte venu des données s'affiche tel que rendu dans la page (envoyé par le
+canevas), jamais son expression `{{ … }}`, avec une marque de liaison ; un bloc qui ne contient que du texte a
+l'icône de texte ; double-clic sur sa ligne : texte modifié dans la page. Composants sans nom : fin de
+l'identifiant rendue lisible ; images : nom du fichier, ou marque de liaison.
+
+**D-62 — 16/10/2026 — prise.** **Canevas sans rechargement pour les attributs ; scripts du site jamais dans le
+canevas.** Une classe, une animation, un lien ou tout attribut écrit (sans expression) est posé directement sur
+les éléments de la page affichée (message `attrs`) : la page n'est pas rechargée, les animations ne rejouent
+pas. Le bouton « scripts du site » est retiré : le canevas n'exécute jamais les scripts du site (sélection,
+modification et mesures fiables), l'aperçu les exécute toujours.
+
+**D-63 — 16/10/2026 — prise.** **Netteté du canevas dézoomé.** Position des cadres arrondie au pixel de l'écran,
+`will-change: transform` seulement pendant un zoom puis retiré 200 ms après, pour que le moteur redessine le
+texte à la taille affichée au lieu d'agrandir ou réduire une image figée (cause décrite dans
+[Monoka, PR #49](https://github.com/monoka-ai/monoka/pull/49)). Vérifié dans Chromium sans écran ; à confirmer
+dans WebView2 (Windows) et WKWebView (macOS).
+
+**D-64 — 16/10/2026 — prise.** **Ordre d'affichage des pages.** Les pages, dossiers et collections se rangent
+en les glissant dans le panneau Pages, à l'intérieur de leur dossier seulement : l'ordre est enregistré dans le
+rangement de l'éditeur (`library.pages.order`, clés `page:`, `folder:`, `collection:`), sans effet sur les
+adresses ni sur le site publié ; les éléments non rangés suivent dans l'ordre habituel.
+
+**D-65 — 16/10/2026 — prise.** **Réglages de l'application sur une page.** Général (langue, thème, accent et son
+étendue, dossier des projets), comptes, langues de traduction et assistants IA en cartes sur deux colonnes, sans
+navigation par rubriques.
+
+**D-66 — 16/10/2026 — prise.** **Sélection depuis les calques avec plusieurs écrans.** L'élément est sélectionné
+dans tous les écrans, montré dans l'écran actif (Ordinateur par défaut, sinon l'écran en cours de
+modification) : la page défile d'abord dans la partie visible du cadre, la vue ne se déplace que si l'élément
+reste hors de la zone. Le canevas ne fait plus défiler l'éditeur (`scrollIntoView` remplacé par un défilement
+de la page seule, sans l'animation `scroll-behavior: smooth` du site ; zone du canevas en `overflow: clip`).
+
+**D-67 — 16/10/2026 — prise.** **Aperçu intégré.** La politique de sécurité de l'interface autorise le
+protocole de l'aperçu dans les cadres (`frame-src revel-preview: http://revel-preview.localhost`) ; sans elle,
+WebView2 bloquait l'aperçu intégré (« Ce contenu a été bloqué »), l'aperçu en fenêtre restant possible
+([MDN, frame-src](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-src)).
+
+**D-68 — 16/10/2026 — prise.** **Canevas des composants et variantes, comme Framer.** « Modifier le composant »
+(réglages d'une utilisation, panneau Composants, double-clic dans une utilisation ailleurs que sur un texte
+écrit) ouvre le composant seul dans le canevas : un cadre par variante (principale, survol, appui,
+personnalisées), à la largeur de l'écran choisi, côte à côte pour un composant étroit, les uns sous les autres
+sinon ; « + » ajoute une variante, clic droit sur son nom pour la renommer ou la retirer ; une barre en bas
+ramène à la page et règle la transition. Les variantes sont décrites dans le composant (`variants`) et leurs
+styles sont des règles ordinaires de la feuille du site, préfixées par la classe de l'élément racine
+(`.carte:hover .titre`, `.carte:active`, `.carte.is-sombre .titre`) : rien n'est produit en JavaScript, le site
+publié reste du HTML et du CSS. L'élément racine reçoit une classe s'il n'en a pas (d'après le nom du
+composant). Dans le cadre d'une variante, le panneau de styles écrit pour elle (pastille verte) et montre en
+orange les valeurs héritées de la principale. Les cadres de survol et d'appui montrent l'état sans le pointeur :
+leurs règles `:hover` / `:active` sont recopiées sur une classe posée sur la racine (canevas seulement). Une
+utilisation choisit sa variante personnalisée (classe `is-<id>` posée sur la racine au rendu). Transition des
+variantes : règle `.racine, .racine *` (propriétés visuelles, 0,15, 0,3 ou 0,6 s, courbe douce). Passage
+d'une variante à l'autre au clic : interactions entre éléments (6.3). Repères :
+[Framer, variantes de composant](https://www.framer.com/academy/lessons/component-variants-in-framer),
+[Webflow, canevas des composants](https://help.webflow.com/hc/en-us/articles/49505240420755-Component-canvas),
+[Webflow, variantes](https://help.webflow.com/hc/en-us/articles/51307110086547-Component-variants).
+
+**D-69 — 16/10/2026 — prise.** **Animer un composant sans l'envelopper ; onglet Réglages fondu dans Styles.**
+Une utilisation de composant porte ses propres attributs (`attrs`), posés sur l'élément racine du composant au
+rendu : le panneau Interactions anime une utilisation directement (seule une image demande encore un bloc
+autour). L'onglet Réglages disparaît (deux boutons « Réglages » et « Paramètres » faisaient des choses
+différentes) : en tête de l'onglet Styles, le contenu de l'élément (textes, lien et nouvel onglet, image ou
+média, utilisation de composant avec sa variante et ses propriétés, condition, liste, réglages d'un bloc) ; en
+bas, la rubrique repliée « Paramètres avancés » (balise, identifiant, autres attributs).
+
+**D-70 — 16/10/2026 — prise.** **Canevas libre ou vue verrouillée, comme Webflow.** Un bouton de la barre de
+l'éditeur (et la palette de commandes) bascule entre le canevas libre (déplacer la vue, zoomer, régler la
+largeur et la hauteur du cadre, plusieurs écrans côte à côte) et la vue verrouillée : page calée sur la zone,
+zoom ajusté, la molette fait défiler la page où que soit le pointeur, ni déplacement ni zoom au pincement,
+poignées du cadre masquées. Choisir un zoom ou les écrans côte à côte repasse en canevas libre ; le canevas
+des composants reste toujours libre (ses variantes dépassent la zone). Choix gardé d'une session à l'autre ;
+canevas libre par défaut (comportement des versions précédentes). Repère :
+[Webflow, pan and zoom for pages](https://webflow.com/updates/page-pan-zoom) (« The canvas scrolls top to bottom
+by default » ; une icône de la barre du canevas active déplacement, zoom et largeur du cadre).
+
+**D-71 — 16/10/2026 — prise.** **Couleurs du site et paramètres regroupés.** Dans le sélecteur de couleur, « + »
+ajoute la couleur choisie aux couleurs du site : nom demandé, variable `--nom` déclarée dans `:root`, la
+propriété réglée la reprend (comme les styles de couleur de Framer et les variables de Webflow). Les champs de
+taille montrent une variable du site par son nom (« Step 3 » pour `var(--step-3)`) et l'acceptent écrite ainsi.
+Paramètres du site : six rubriques au lieu de dix (Général avec référencement et formulaires, Publication avec
+export, Navigation avec redirections, Polices, Code personnalisé, Versions), parties côte à côte sur un grand
+écran.
 
 ## Décisions ouvertes
 

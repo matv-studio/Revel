@@ -106,6 +106,15 @@ pub fn rename(s: &Shelf, path: &str, name: &str) -> Option<(Shelf, String)> {
     let t = Shelf {
         folders: s.folders.iter().map(|f| moved(f)).collect(),
         items: s.items.iter().map(|(k, f)| (k.clone(), moved(f))).collect(),
+        // Ordre d'affichage : dossiers renommés suivis.
+        order: s
+            .order
+            .iter()
+            .map(|k| match k.strip_prefix("folder:") {
+                Some(f) => format!("folder:{}", moved(f)),
+                None => k.clone(),
+            })
+            .collect(),
     };
     Some((t, new))
 }
@@ -128,6 +137,7 @@ pub fn remove(s: &Shelf, path: &str) -> Shelf {
                 (!f.is_empty()).then(|| (k.clone(), f.to_string()))
             })
             .collect(),
+        order: s.order.clone(),
     }
 }
 
@@ -1381,7 +1391,7 @@ pub fn Components() -> impl IntoView {
                     (
                         c.id.clone(),
                         uses.get(&c.id).copied().unwrap_or(0),
-                        c.label(),
+                        crate::names::component_name(c),
                     )
                 })
                 .collect();
@@ -1582,6 +1592,8 @@ fn component_drag_item(id: &str, label: &str) -> crate::editor::DragItem {
             id: None,
             component: id.to_string(),
             args: Default::default(),
+            variant: None,
+            attrs: Vec::new(),
         }),
     }
 }

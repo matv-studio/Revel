@@ -110,11 +110,27 @@ pub struct Shelf {
     pub folders: Vec<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub items: BTreeMap<String, String>,
+    /// Ordre d'affichage choisi dans l'éditeur (glisser dans le panneau) : clés des éléments et
+    /// dossiers, les autres à la suite dans l'ordre habituel. Sans effet sur le site publié.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub order: Vec<String>,
 }
 
 impl Shelf {
     pub fn is_empty(&self) -> bool {
-        self.folders.is_empty() && self.items.is_empty()
+        self.folders.is_empty() && self.items.is_empty() && self.order.is_empty()
+    }
+
+    /// Position d'affichage d'une clé (`None` : pas d'ordre choisi).
+    pub fn rank(&self, key: &str) -> Option<usize> {
+        self.order.iter().position(|k| k == key)
+    }
+
+    /// Range `keys` (éléments voisins, dans leur nouvel ordre) : leurs places précédentes retirées,
+    /// la suite ajoutée à la fin.
+    pub fn reorder(&mut self, keys: &[String]) {
+        self.order.retain(|k| !keys.contains(k));
+        self.order.extend(keys.iter().cloned());
     }
 }
 
@@ -516,6 +532,11 @@ pub struct Component {
     /// lues dans le composant comme des variables.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub props: Vec<PropDef>,
+    /// Variantes (comme Framer) : états du composant au survol, à l'appui, ou choisis à chaque
+    /// utilisation. Leurs styles sont des règles de la feuille du site préfixées par la classe de
+    /// l'élément racine du composant (`.carte:hover .titre`, `.carte.is-sombre .titre`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variants: Vec<Variant>,
     pub body: Vec<Node>,
 }
 
@@ -525,8 +546,74 @@ impl Component {
             id: id.into(),
             name: None,
             props: Vec::new(),
+            variants: Vec::new(),
             body,
         }
+    }
+
+    /// Élément racine (premier élément du contenu) : porte la classe des variantes.
+    pub fn root(&self) -> Option<&Node> {
+        self.body.iter().find(|n| matches!(n, Node::Element { .. }))
+    }
+
+    /// Classe principale de l'élément racine (première classe écrite, sans expression).
+    pub fn root_class(&self) -> Option<String> {
+        let Some(Node::Element { attrs, .. }) = self.root() else {
+            return None;
+        };
+        attrs
+            .iter()
+            .find(|a| a.name == "class" && a.when.is_none())
+            .and_then(|a| a.value.as_deref())
+            .filter(|v| !v.contains("{{") && !v.contains("{%"))
+            .and_then(|v| v.split_whitespace().next())
+            .map(str::to_string)
+    }
+
+    pub fn variant(&self, id: &str) -> Option<&Variant> {
+        self.variants.iter().find(|v| v.id == id)
+    }
+
+    /// Contenu pour une utilisation : l'élément racine reçoit la classe de la variante choisie
+    /// (`is-<id>`, variante personnalisée) et les attributs de l'utilisation (une classe s'ajoute,
+    /// un autre attribut remplace) ; `None` : rien à poser, contenu tel quel.
+    pub fn patched_body(&self, variant: Option<&str>, attrs: &[Attr]) -> Option<Vec<Node>> {
+        let class = variant
+            .and_then(|v| self.variant(v))
+            .filter(|v| v.kind == VariantKind::Custom)
+            .map(|v| format!("is-{}", v.id));
+        if class.is_none() && attrs.is_empty() {
+            return None;
+        }
+        let mut body = self.body.clone();
+        let Some(Node::Element { attrs: list, .. }) =
+            body.iter_mut().find(|n| matches!(n, Node::Element { .. }))
+        else {
+            return None;
+        };
+        let mut set = |name: &str, value: Option<String>| match list
+            .iter_mut()
+            .find(|a| a.name == name && a.when.is_none())
+        {
+            Some(a) if name == "class" => {
+                let cur = a.value.take().unwrap_or_default();
+                let add = value.unwrap_or_default();
+                a.value = Some(format!("{} {add}", cur.trim()).trim().to_string());
+            }
+            Some(a) => a.value = value,
+            None => list.push(Attr {
+                name: name.to_string(),
+                value,
+                when: None,
+            }),
+        };
+        if let Some(cl) = class {
+            set("class", Some(cl));
+        }
+        for a in attrs {
+            set(&a.name, a.value.clone());
+        }
+        Some(body)
     }
 
     /// Nom affiché : le nom donné, sinon la fin de l'identifiant (`partials/card` -> `card`).
@@ -539,6 +626,43 @@ impl Component {
 
     pub fn prop(&self, name: &str) -> Option<&PropDef> {
         self.props.iter().find(|p| p.name == name)
+    }
+}
+
+/// Variante d'un composant.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Variant {
+    /// Identifiant (lettres minuscules, chiffres, tirets) : classe `is-<id>` d'une variante
+    /// personnalisée ; `survol`, `appui` pour les gestes.
+    pub id: String,
+    /// Nom affiché ; sinon d'après le type ou l'identifiant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub kind: VariantKind,
+}
+
+/// Nature d'une variante.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VariantKind {
+    /// Choisie à chaque utilisation (classe `is-<id>` sur l'élément racine).
+    #[default]
+    Custom,
+    /// Pointeur sur le composant (`:hover`).
+    Hover,
+    /// Appui ou clic en cours (`:active`).
+    Pressed,
+}
+
+impl Variant {
+    /// Suffixe du sélecteur de l'élément racine dans cette variante (`.is-sombre`, `:hover`).
+    pub fn suffix(&self) -> String {
+        match self.kind {
+            VariantKind::Custom => format!(".is-{}", self.id),
+            VariantKind::Hover => ":hover".into(),
+            VariantKind::Pressed => ":active".into(),
+        }
     }
 }
 
@@ -578,6 +702,16 @@ pub enum PropKind {
     Link,
     /// Élément affiché ou masqué.
     Switch,
+}
+
+/// Identifiant de variante valide : lettres minuscules, chiffres, tirets (classe `is-<id>`).
+pub fn valid_variant_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 40
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !id.starts_with('-')
 }
 
 /// Nom de propriété valide (identifiant d'expression, pas un mot réservé).
@@ -780,6 +914,13 @@ pub enum Node {
         /// où le composant est utilisé : `"Titre"`, `p.data.title`, `true`).
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         args: BTreeMap<String, String>,
+        /// Variante personnalisée choisie (identifiant) ; aucune : variante principale.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        variant: Option<String>,
+        /// Attributs posés sur l'élément racine du composant pour cette utilisation (animations
+        /// `data-revel-*`).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        attrs: Vec<Attr>,
     },
     /// Image responsive (variantes AVIF/WebP/JPEG générées).
     Image(ImageNode),

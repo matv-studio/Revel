@@ -938,6 +938,7 @@ fn rangement_des_medias_et_composants() {
     let shelf = revel_model::Shelf {
         folders: vec!["logos".into(), "logos/clients".into()],
         items: [("/media/a.png".to_string(), "logos/clients".to_string())].into(),
+        order: Vec::new(),
     };
     let inv = apply(
         &mut s,
@@ -1229,6 +1230,8 @@ fn composants_creer_proprietes_detacher() {
                     id: None,
                     component: id.clone(),
                     args: Default::default(),
+                    variant: None,
+                    attrs: Vec::new(),
                 },
             },
         ),
@@ -1296,6 +1299,8 @@ fn detacher_condition_et_expression() {
         id: Some("u1".into()),
         component: "bouton".into(),
         args: [("lien".to_string(), "p.url".to_string())].into(),
+        variant: None,
+        attrs: Vec::new(),
     });
     s.ensure_ids();
     let at = Target {
@@ -1316,6 +1321,86 @@ fn detacher_condition_et_expression() {
         panic!("{:?}", s.pages[0].body[n - 1])
     };
     assert_eq!(attrs[0].value.as_deref(), Some("{{ p.url }}"));
+}
+
+#[test]
+fn variantes_et_attributs_d_une_utilisation() {
+    let mut s = sample();
+    s.components.push(Component::new(
+        "tuile",
+        vec![el("div", &[("class", "tuile")], vec![text("Titre")])],
+    ));
+    s.pages[0].body.push(Node::Use {
+        id: Some("u1".into()),
+        component: "tuile".into(),
+        args: Default::default(),
+        variant: None,
+        attrs: Vec::new(),
+    });
+    s.ensure_ids();
+    let doc = json(&s);
+    let use_at = Target {
+        owner: page(),
+        node: "u1".into(),
+    };
+    // Variantes : identifiant vérifié ; remplacement annulable.
+    let bad = Command::SetComponentVariants {
+        id: "tuile".into(),
+        variants: vec![revel_model::Variant {
+            id: "Mauvais Nom".into(),
+            name: None,
+            kind: revel_model::VariantKind::Custom,
+        }],
+    };
+    assert!(apply(&mut s, &bad).is_err());
+    let set = Command::SetComponentVariants {
+        id: "tuile".into(),
+        variants: vec![revel_model::Variant {
+            id: "sombre".into(),
+            name: Some("Sombre".into()),
+            kind: revel_model::VariantKind::Custom,
+        }],
+    };
+    let inv1 = apply(&mut s, &set).unwrap();
+    let inv2 = apply(
+        &mut s,
+        &Command::SetUseVariant {
+            at: use_at.clone(),
+            variant: Some("sombre".into()),
+        },
+    )
+    .unwrap();
+    // Animation posée sur l'utilisation (élément racine du composant), sans l'envelopper.
+    let inv3 = apply(
+        &mut s,
+        &Command::SetAttr {
+            at: use_at.clone(),
+            name: "data-revel-appear".into(),
+            value: Some("up".into()),
+        },
+    )
+    .unwrap();
+    let Some(Node::Use { variant, attrs, .. }) = s.pages[0].body.last() else {
+        panic!()
+    };
+    assert_eq!(variant.as_deref(), Some("sombre"));
+    assert_eq!(attrs.len(), 1);
+    // Détacher garde la variante et l'animation sur la copie.
+    let mut d = s.clone();
+    apply(&mut d, &Command::Detach { at: use_at }).unwrap();
+    let Some(Node::Element { attrs, .. }) = d.pages[0].body.last() else {
+        panic!()
+    };
+    assert_eq!(
+        attrs[0].value.as_deref(),
+        Some("tuile is-sombre"),
+        "{attrs:?}"
+    );
+    assert_eq!(attrs[1].name, "data-revel-appear");
+    for inv in [inv3, inv2, inv1] {
+        apply(&mut s, &inv).unwrap();
+    }
+    assert_eq!(json(&s), doc);
 }
 
 #[test]

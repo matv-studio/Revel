@@ -57,6 +57,9 @@
   window.__revelSlot = (n) => ({ slot: slots[n], range: slotRange(n) });
 
   const post = (msg) => window.parent.postMessage(Object.assign({ revel: 1 }, msg), "*");
+  // Canevas des composants : page d'un composant seul, variante de geste éventuelle.
+  const STAGE = location.pathname === "/__revel/component/";
+  const stageState = STAGE ? new URLSearchParams(location.search).get("rvstate") : null;
 
   // ---------------------------------------------------------------- calque de sélection
   // Dans un shadow DOM fermé : les styles du site ne le touchent pas, et inversement.
@@ -72,14 +75,17 @@
     ".sel{outline:calc(2px*var(--k)) solid #6d8cff}" +
     // Autres éléments de la sélection multiple.
     ".sel2{outline:calc(1.5px*var(--k)) solid #6d8cff;background:rgba(109,140,255,.08)}" +
-    // Espacements intérieurs (hachures bleues) et marges (hachures plus légères) de l'élément
-    // survolé, dans la couleur de sélection de Revel ; côté sous le pointeur de l'élément
-    // sélectionné : réglable en glissant (comme Framer).
+    // Espacements de l'élément sélectionné sous le pointeur (comme Framer) : intérieurs et écarts
+    // entre enfants en teinte unie, marges plus claires ; une poignée au milieu de chaque côté,
+    // réglable en glissant.
     ".side{position:fixed;display:none;pointer-events:none;z-index:2147483645;box-sizing:border-box}" +
-    ".side.p{background:repeating-linear-gradient(-45deg,rgba(109,140,255,.34) 0 calc(1px*var(--k)),rgba(109,140,255,.07) 0 calc(5px*var(--k)))}" +
-    ".side.m{background:repeating-linear-gradient(-45deg,rgba(109,140,255,.2) 0 calc(1px*var(--k)),transparent 0 calc(5px*var(--k)))}" +
-    ".spacing .side.p{background-color:rgba(109,140,255,.14)}" +
-    ".side.hot{background-color:rgba(109,140,255,.26);outline:calc(1px*var(--k)) solid #6d8cff;outline-offset:calc(-1px*var(--k))}" +
+    ".side.p,.side.g{background:rgba(109,140,255,.16)}" +
+    ".side.m{background:rgba(109,140,255,.07)}" +
+    ".spacing .side.p,.spacing .side.g{background:rgba(109,140,255,.22)}" +
+    ".side.hot{background:rgba(109,140,255,.3)}" +
+    ".ph{position:fixed;display:none;pointer-events:none;z-index:2147483647;box-sizing:border-box;background:#fff;" +
+    "border:calc(1.5px*var(--k)) solid #6d8cff;border-radius:calc(3px*var(--k));box-shadow:0 1px 2px rgba(0,0,0,.18)}" +
+    ".ph.hot{background:#6d8cff}" +
     ".sval{position:fixed;display:none;pointer-events:none;z-index:2147483647;font:600 calc(11px*var(--k))/calc(18px*var(--k)) system-ui,-apple-system,'Segoe UI',sans-serif;" +
     "background:#6d8cff;color:#fff;padding:0 calc(5px*var(--k));border-radius:calc(3px*var(--k));font-variant-numeric:tabular-nums}" +
     ".tag,.ghost,.into,.size{position:fixed;pointer-events:none;display:none;z-index:2147483647;" +
@@ -98,19 +104,13 @@
     // Utilisation de composant (vert, comme Webflow) ; modification isolée : le reste estompé.
     ".hover.comp{outline-color:#2fb67c}.sel.comp{outline-color:#2fb67c}.tag.comp{background:#2fb67c}" +
     ".dim{position:fixed;inset:0;pointer-events:none;display:none;z-index:2147483645;background:rgba(20,20,24,.5)}" +
-    "</style><div class='dim'></div><div class='spc'>" +
-    ["pt", "pr", "pb", "pl"].map((k) => "<div class='side p' data-side='" + k + "'></div>").join("") +
-    ["mt", "mr", "mb", "ml"].map((k) => "<div class='side m' data-side='" + k + "'></div>").join("") +
-    "</div><div class='sval'></div>" +
+    "</style><div class='dim'></div><div class='spc'></div><div class='sval'></div>" +
     "<div class='box hover'></div><div class='extra'></div><div class='box sel'></div><div class='box drop'></div>" +
     "<div class='box line'></div><div class='tag'></div><div class='into'></div><div class='ghost'></div><div class='size'></div>" +
     "<div class='h h-e' data-axis='e'></div><div class='h h-s' data-axis='s'></div><div class='h h-se' data-axis='se'></div>";
   const [dimBox, hoverBox, selBox, dropBox, lineBox, tagBox, intoBox, ghostBox] =
     root.querySelectorAll(".dim, .hover, .sel, .drop, .line, .tag, .into, .ghost");
   const spcBox = root.querySelector(".spc");
-  const sideBoxes = {};
-  for (const b of root.querySelectorAll(".side")) sideBoxes[b.dataset.side] = b;
-  const sides = Object.values(sideBoxes);
   const svalBox = root.querySelector(".sval");
   const extraBox = root.querySelector(".extra");
   const sizeBox = root.querySelector(".size");
@@ -210,21 +210,23 @@
 
   // Modification isolée : voile sur la page, percé aux utilisations du composant ouvert.
   const drawDim = () => {
-    if (!isolated) { dimBox.style.display = "none"; return; }
+    // Canevas des composants : rien d'autre que le composant, rien à estomper.
+    if (!isolated || STAGE) { dimBox.style.display = "none"; return; }
     const W = innerWidth;
     const H = innerHeight;
     let d = "M0 0H" + W + "V" + H + "H0Z";
+    // Une découpe par utilisation (son rectangle englobant : les rectangles de chaque boîte
+    // contenue, superposés, s'annuleraient deux à deux).
     for (const i of instances) {
       if (i.component !== isolated) continue;
-      for (const b of rangeOfInst(i).getClientRects()) {
-        if (b.width && b.height) d += "M" + b.left + " " + b.top + "H" + b.right + "V" + b.bottom + "H" + b.left + "Z";
-      }
+      const b = rangeOfInst(i).getBoundingClientRect();
+      if (b.width && b.height) d += "M" + b.left + " " + b.top + "H" + b.right + "V" + b.bottom + "H" + b.left + "Z";
     }
     dimBox.style.clipPath = "path(evenodd, '" + d + "')";
     dimBox.style.display = "block";
   };
 
-  // Marges et espacements intérieurs d'un élément : une zone hachurée par côté.
+  // Espacements d'un élément : intérieurs, marges, écarts entre enfants (`gap`).
   const px = (v) => Math.max(0, parseFloat(v) || 0);
   // Côtés : propriété CSS, sens du glissement qui augmente la valeur.
   const SIDES = {
@@ -234,63 +236,155 @@
     mb: { prop: "margin-bottom", axis: "y", sign: 1 }, ml: { prop: "margin-left", axis: "x", sign: -1 },
   };
   const OPPOSITE = { pt: "pb", pb: "pt", pl: "pr", pr: "pl", mt: "mb", mb: "mt", ml: "mr", mr: "ml" };
-  // Rectangles des côtés (zone affichée) ; `grab` : épaisseur minimale pour saisir un côté vide.
-  const sideRects = (el, grab) => {
+  // Zones réglables de l'élément : clé, propriété, axe, sens, rectangle [x, y, l, h], valeur (px).
+  // Marges : seulement non nulles (une marge vide n'a pas de zone à montrer).
+  const spaceTargets = (el) => {
     const cs = getComputedStyle(el);
     const r = el.getBoundingClientRect();
     const m = [cs.marginTop, cs.marginRight, cs.marginBottom, cs.marginLeft].map(px);
     const b = [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth].map(px);
     const p = [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map(px);
-    const g = (v) => Math.max(v, grab);
     const il = r.left + b[3], ir = r.right - b[1], it = r.top + b[0], ib = r.bottom - b[2];
-    return {
-      pt: [il, it, ir - il, g(p[0]), p[0]],
-      pb: [il, ib - g(p[2]), ir - il, g(p[2]), p[2]],
-      pl: [il, it + p[0], g(p[3]), ib - it - p[0] - p[2], p[3]],
-      pr: [ir - g(p[1]), it + p[0], g(p[1]), ib - it - p[0] - p[2], p[1]],
+    const rects = {
+      pt: [il, it, ir - il, p[0], p[0]],
+      pb: [il, ib - p[2], ir - il, p[2], p[2]],
+      pl: [il, it + p[0], p[3], ib - it - p[0] - p[2], p[3]],
+      pr: [ir - p[1], it + p[0], p[1], ib - it - p[0] - p[2], p[1]],
       mt: [r.left, r.top - m[0], r.width, m[0], m[0]],
       mb: [r.left, r.bottom, r.width, m[2], m[2]],
       ml: [r.left - m[3], r.top, m[3], r.height, m[3]],
       mr: [r.right, r.top, m[1], r.height, m[1]],
     };
+    const out = [];
+    for (const [key, [x, y, w, h, v]] of Object.entries(rects)) {
+      if (key[0] === "m" && v <= 0) continue;
+      out.push({ key, prop: SIDES[key].prop, axis: SIDES[key].axis, sign: SIDES[key].sign, rect: [x, y, w, h], v });
+    }
+    // Écarts entre enfants d'un conteneur flex ou grille : entre deux enfants voisins côte à côte
+    // (écart horizontal) ou l'un sous l'autre (écart vertical).
+    const disp = cs.display;
+    if (/flex|grid/.test(disp)) {
+      const kids = [...el.children].filter((c) => {
+        const cc = getComputedStyle(c);
+        return cc.display !== "none" && cc.position !== "absolute" && cc.position !== "fixed";
+      }).map((c) => c.getBoundingClientRect()).filter((k) => k.width > 0 || k.height > 0);
+      const cg = px(cs.columnGap), rg = px(cs.rowGap);
+      const same = cs.columnGap === cs.rowGap;
+      let n = 0;
+      for (let i = 0; i + 1 < kids.length && n < 24; i++) {
+        const a = kids[i], c = kids[i + 1];
+        const top = Math.max(a.top, c.top), bottom = Math.min(a.bottom, c.bottom);
+        const left = Math.max(a.left, c.left), right = Math.min(a.right, c.right);
+        if (bottom - top > 0 && c.left >= a.right - 0.5) {
+          out.push({ key: "g" + n++, prop: same ? "gap" : "column-gap", axis: "x", sign: 1, gap: true,
+            rect: [a.right, Math.min(a.top, c.top), c.left - a.right, Math.max(a.bottom, c.bottom) - Math.min(a.top, c.top)], v: cg });
+        } else if (right - left > 0 && c.top >= a.bottom - 0.5) {
+          out.push({ key: "g" + n++, prop: same ? "gap" : "row-gap", axis: "y", sign: 1, gap: true,
+            rect: [Math.min(a.left, c.left), a.bottom, Math.max(a.right, c.right) - Math.min(a.left, c.left), c.top - a.bottom], v: rg });
+        }
+      }
+    }
+    return out;
   };
+  // Poignée d'une zone : au milieu, couchée pour un côté haut ou bas (pilule), debout sinon.
+  // Le long du côté, au milieu de sa partie visible dans la page (élément plus haut que l'écran).
+  const handleRect = (t, k) => {
+    let [x, y, w, h] = t.rect;
+    const seen = (a, len, max) => {
+      const lo = Math.max(a, 0), hi = Math.min(a + len, max);
+      return hi - lo > 24 * k ? [lo, hi - lo] : [a, len];
+    };
+    if (t.axis === "x") [y, h] = seen(y, h, window.innerHeight);
+    else [x, w] = seen(x, w, window.innerWidth);
+    const long = 16 * k, short = 5 * k;
+    const hw = t.axis === "y" ? long : short, hh = t.axis === "y" ? short : long;
+    return [x + w / 2 - hw / 2, y + h / 2 - hh / 2, hw, hh];
+  };
+  // Zone (ou poignée) sous le pointeur, état d'un glisser en cours.
   let hotSide = null;
   let spacing = null;
-  const drawSpacing = () => {
-    const el = styled(spacing ? selected : (spacingSel || hotSide) ? selected : hovered);
-    const show = !!el && el.isConnected && !drag && !editing && !resizing &&
-      (spacing || spacingSel || hotSide || !hoveredInst);
-    if (!show) { hide(...sides); return; }
-    const rects = sideRects(el, 0);
-    for (const [k, box] of Object.entries(sideBoxes)) {
-      const [x, y, w, h] = rects[k];
-      if (w <= 0 || h <= 0) { box.style.display = "none"; continue; }
-      Object.assign(box.style, { display: "block", left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
-      box.classList.toggle("hot", k === (spacing ? spacing.side : hotSide));
-    }
-    spcBox.classList.toggle("spacing", spacingSel);
-  };
-  // Côté de l'élément sélectionné sous le pointeur : espacement intérieur (saisissable même vide,
-  // bande de 6 px), marge non nulle.
-  const spacingAt = (x, y) => {
-    if (!active || !selected || selectedInst || !selected.isConnected || editing || drag || resizing) return null;
+  // Pointeur au-dessus de l'élément sélectionné (marges comprises) : espacements montrés.
+  let overSel = false;
+  const spacingEl = () => {
+    if (!active || !selected || selectedInst || !selected.isConnected || drag || editing || resizing) return null;
     const el = styled(selected);
     const d = getComputedStyle(el).display;
-    if (d === "inline" || d === "contents" || d === "none") return null;
-    const k = parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
-    const rects = sideRects(el, 6 * k);
-    for (const key of ["pt", "pb", "pl", "pr", "mt", "mb", "ml", "mr"]) {
-      const [rx, ry, w, h, v] = rects[key];
-      if (key[0] === "m" && v <= 0) continue;
-      if (w > 0 && h > 0 && x >= rx && x <= rx + w && y >= ry && y <= ry + h) return key;
+    return d === "inline" || d === "contents" || d === "none" ? null : el;
+  };
+  const kOf = () => parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
+  const pool = (cls, n) => {
+    const list = [...spcBox.querySelectorAll(":scope > ." + cls.split(" ").join("."))];
+    while (list.length < n) {
+      const d = document.createElement("div");
+      d.className = cls;
+      spcBox.appendChild(d);
+      list.push(d);
+    }
+    return list;
+  };
+  const hideSpacing = () => { for (const b of spcBox.children) b.style.display = "none"; };
+  const drawSpacing = () => {
+    const el = spacingEl();
+    if (!el || !(spacing || spacingSel || overSel)) { hideSpacing(); return; }
+    const k = kOf();
+    const ts = spaceTargets(el);
+    const zones = pool("side", ts.length);
+    const grips = pool("ph", ts.length);
+    const hot = spacing ? spacing.key : hotSide;
+    ts.forEach((t, i) => {
+      const z = zones[i];
+      const [x, y, w, h] = t.rect;
+      z.className = "side " + (t.gap ? "g" : t.key[0]) + (t.key === hot ? " hot" : "");
+      if (w > 0 && h > 0) Object.assign(z.style, { display: "block", left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
+      else z.style.display = "none";
+      const g = grips[i];
+      const [hx, hy, hw, hh] = handleRect(t, k);
+      // Côté trop court pour une poignée : pas de poignée.
+      const room = t.axis === "y" ? w : h;
+      g.className = "ph" + (t.key === hot ? " hot" : "");
+      if (room >= 24 * k) Object.assign(g.style, { display: "block", left: hx + "px", top: hy + "px", width: hw + "px", height: hh + "px" });
+      else g.style.display = "none";
+    });
+    for (let i = ts.length; i < zones.length; i++) zones[i].style.display = "none";
+    for (let i = ts.length; i < grips.length; i++) grips[i].style.display = "none";
+    spcBox.classList.toggle("spacing", spacingSel);
+  };
+  // Zone sous le pointeur : `{ t, grip }` (grip : sur la poignée, qui seule se glisse).
+  const spacingAt = (x, y) => {
+    const el = spacingEl();
+    if (!el) return null;
+    const k = kOf();
+    const ts = spaceTargets(el);
+    const tol = 4 * k;
+    for (const t of ts) {
+      const room = t.axis === "y" ? t.rect[2] : t.rect[3];
+      if (room < 24 * k) continue;
+      const [hx, hy, hw, hh] = handleRect(t, k);
+      if (x >= hx - tol && x <= hx + hw + tol && y >= hy - tol && y <= hy + hh + tol) return { t, grip: true };
+    }
+    for (const t of ts) {
+      const [rx, ry, w, h] = t.rect;
+      if (w > 0 && h > 0 && x >= rx && x <= rx + w && y >= ry && y <= ry + h) return { t, grip: false };
     }
     return null;
   };
-  // Pointeur de la page : flèche de redimensionnement sur un côté réglable.
+  // Pointeur au-dessus de l'élément sélectionné, marges comprises.
+  const overSelected = (x, y) => {
+    const el = spacingEl();
+    if (!el) return false;
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return x >= r.left - px(cs.marginLeft) && x <= r.right + px(cs.marginRight) &&
+      y >= r.top - px(cs.marginTop) && y <= r.bottom + px(cs.marginBottom);
+  };
+  // Pointeur de la page : flèche de redimensionnement sur une poignée.
   const cursorStyle = document.createElement("style");
-  const setCursor = (side) => {
-    cursorStyle.textContent = side ? "*{cursor:" + (SIDES[side].axis === "y" ? "ns-resize" : "ew-resize") + "!important}" : "";
-    if (side && !cursorStyle.isConnected) document.documentElement.appendChild(cursorStyle);
+  let cursorAxis = null;
+  const setCursor = (axis) => {
+    if (axis === cursorAxis) return;
+    cursorAxis = axis;
+    cursorStyle.textContent = axis ? "*{cursor:" + (axis === "y" ? "ns-resize" : "ew-resize") + "!important}" : "";
+    if (axis && !cursorStyle.isConnected) document.documentElement.appendChild(cursorStyle);
   };
   const showValue = (text, x, y) => {
     const k = parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
@@ -401,11 +495,59 @@
     }, 30);
   };
 
+  // Textes modifiables de l'élément sélectionné (champ « Texte » du panneau de styles) : textes
+  // dont il est l'élément le plus proche ; dans une utilisation de composant, ses propriétés de
+  // texte et les textes venus des données.
+  const sendTexts = () => {
+    const items = [];
+    if (selected) {
+      for (let n = 0; n < ranges.length; n++) {
+        const r = ranges[n];
+        const sl = slots[n];
+        if (!r || !editable(sl)) continue;
+        let c = r.commonAncestorContainer;
+        if (c.nodeType !== 1) c = c.parentElement;
+        if (!c) continue;
+        const ir = selectedInst ? rangeOfInst(selectedInst) : null;
+        const ok = selectedInst
+          ? !!ir && ir.intersectsNode(c) && (propOf(sl, selectedInst) || dataOf(sl))
+          : c.closest("[data-rv]") === selected;
+        if (!ok) continue;
+        const frag = r.cloneContents();
+        const box = document.createElement("div");
+        box.appendChild(frag);
+        items.push({ slot: sl, text: sl.html ? box.innerHTML : box.textContent, rich: !!sl.html });
+        if (items.length >= 8) break;
+      }
+    }
+    post({ type: "texts", id: selected ? idOf(selected, selectedInst) : null, items });
+  };
+  // Texte rendu des éléments qui affichent une expression (calques : le texte, pas l'expression).
+  // Clé : identifiant de l'élément, ou « utilisation/identifiant » dans un composant.
+  const sendPreviews = () => {
+    const map = {};
+    for (let n = 0; n < ranges.length; n++) {
+      const r = ranges[n];
+      const sl = slots[n];
+      if (!r || !sl || sl.slot !== "expr") continue;
+      let c = r.commonAncestorContainer;
+      if (c.nodeType !== 1) c = c.parentElement;
+      const el = c && c.closest("[data-rv]");
+      if (!el) continue;
+      const ins = around(el);
+      const inst = ins.length ? ins[ins.length - 1] : null;
+      const key = (inst ? inst.node + "/" : "") + el.getAttribute("data-rv");
+      if (key in map) continue;
+      map[key] = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120);
+    }
+    post({ type: "previews", map });
+  };
   const select = (el, notify, inst, add) => {
     selected = el;
     selectedInst = el ? inst || null : null;
     if (!add) extra = [];
     sendComputed();
+    sendTexts();
     redraw();
     if (notify) {
       post(el
@@ -441,7 +583,29 @@
   // modifiable ; Entrée ou un clic ailleurs valide, Échap annule. L'interface reçoit le texte et
   // envoie la commande (SetText ou SetBound), puis la page est rechargée.
   let editing = null;
-  const editable = (s) => !!s && (s.slot === "text" || (s.slot === "expr" && !!s.binding && !s.transformed && !s.html));
+  // Texte riche lié (`{{ … | safe }}` : HTML venu des données) : modifiable avec sa mise en forme.
+  const editable = (s) => !!s && (s.slot === "text" || (s.slot === "expr" && !!s.binding && !s.transformed));
+  // HTML gardé d'un texte riche modifié : paragraphes, titres, listes, gras, italique, liens.
+  const KEEP = new Set(["P", "BR", "STRONG", "B", "EM", "I", "U", "A", "UL", "OL", "LI", "H2", "H3", "H4", "BLOCKQUOTE", "SPAN"]);
+  const cleanHtml = (root) => {
+    const out = document.createElement("div");
+    const copy = (from, to) => {
+      for (const n of from.childNodes) {
+        if (n.nodeType === 3) { to.appendChild(document.createTextNode(n.data)); continue; }
+        if (n.nodeType !== 1) continue;
+        if (!KEEP.has(n.tagName)) { copy(n, to); continue; }
+        const tag = n.tagName === "B" ? "strong" : n.tagName === "I" ? "em" : n.tagName.toLowerCase();
+        if (tag === "span") { copy(n, to); continue; }
+        const el = document.createElement(tag);
+        if (tag === "a" && n.getAttribute("href")) el.setAttribute("href", n.getAttribute("href"));
+        copy(n, el);
+        to.appendChild(el);
+      }
+    };
+    copy(root, out);
+    return out.innerHTML;
+  };
+  const BLOCKS = /^(P|DIV|UL|OL|LI|H[1-6]|BLOCKQUOTE|TABLE|SECTION|FIGURE)$/;
   const slotAt = (x, y) => {
     let best = null;
     let bestArea = Infinity;
@@ -460,13 +624,16 @@
   const inEdit = (t) => !!editing && !!t && editing.span.contains(t);
   const startEdit = (n) => {
     const r = ranges[n];
-    const span = document.createElement("span");
+    const rich = !!slots[n].html;
+    // Texte riche qui contient des paragraphes ou des listes : enveloppe en bloc.
+    const block = rich && Array.from(r.cloneContents().childNodes).some((c) => c.nodeType === 1 && BLOCKS.test(c.tagName));
+    const span = document.createElement(block ? "div" : "span");
     span.setAttribute("data-rv-edit", "");
-    span.setAttribute("contenteditable", "plaintext-only");
+    span.setAttribute("contenteditable", rich ? "true" : "plaintext-only");
     span.style.outline = "2px solid #6d8cff";
     span.style.outlineOffset = "2px";
     try { r.surroundContents(span); } catch (_) { return false; }
-    editing = { n, span, before: span.textContent };
+    editing = { n, span, rich, before: rich ? span.innerHTML : span.textContent };
     span.addEventListener("blur", () => finishEdit(true), { once: true });
     span.focus();
     const sel = window.getSelection();
@@ -476,7 +643,32 @@
   };
   const finishEdit = (commit) => {
     if (!editing) return;
-    const { n, span, before } = editing;
+    const { n, span, before, rich } = editing;
+    if (rich) {
+      editing = null;
+      const html = commit ? cleanHtml(span) : before;
+      const parent = span.parentNode;
+      if (!parent) return;
+      const tmp = document.createElement("template");
+      tmp.innerHTML = html;
+      const nodes = Array.from(tmp.content.childNodes);
+      const r = document.createRange();
+      if (nodes.length) {
+        parent.insertBefore(tmp.content, span);
+        r.setStartBefore(nodes[0]);
+        r.setEndAfter(nodes[nodes.length - 1]);
+      } else {
+        const empty = document.createTextNode("");
+        parent.insertBefore(empty, span);
+        r.selectNode(empty);
+      }
+      parent.removeChild(span);
+      ranges[n] = r;
+      if (commit && html !== cleanHtml(Object.assign(document.createElement("div"), { innerHTML: before }))) {
+        post({ type: "text", slot: slots[n], text: html, before });
+      } else post({ type: "editing", slot: null });
+      return;
+    }
     editing = null;
     const text = span.textContent;
     const parent = span.parentNode;
@@ -642,7 +834,7 @@
     if (drag.out || drag.y === undefined) { scrollTick = requestAnimationFrame(edgeScroll); return; }
     const m = 28;
     const v = drag.y < m ? -(m - drag.y) / 2 : drag.y > innerHeight - m ? (drag.y - (innerHeight - m)) / 2 : 0;
-    if (v) { window.scrollBy(0, v); probe(drag.x, drag.y); }
+    if (v) { window.scrollBy({ top: v, behavior: "instant" }); probe(drag.x, drag.y); }
     scrollTick = requestAnimationFrame(edgeScroll);
   };
   const startDrag = (d) => {
@@ -748,7 +940,8 @@
     resizing = { el, axis, id: rvOf(selected), x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, padX, padY,
       ratio: r.height > 0 ? r.width / r.height : 1, w: null, h: null, saved: [keep(el, "width"), keep(el, "height")] };
     try { document.documentElement.setPointerCapture(e.pointerId); } catch (_) { /* relâché */ }
-    hide(hoverBox, ...sides);
+    hide(hoverBox);
+    hideSpacing();
   };
   const moveResize = (e) => {
     const rs = resizing;
@@ -798,28 +991,29 @@
   }, true);
   window.addEventListener("pointercancel", () => { if (resizing) endResize(true); }, true);
 
-  // Glisser un côté hachuré de l'élément sélectionné : espacement intérieur ou marge (px) ; Maj :
-  // les quatre côtés, Alt : le côté opposé aussi. L'élément suit en direct ; au relâchement,
-  // l'interface écrit les valeurs dans la classe. Double-clic : valeur retirée.
-  const startSpacing = (side, e) => {
+  // Glisser la poignée d'un côté de l'élément sélectionné : espacement intérieur, marge ou écart
+  // entre enfants (px) ; Maj : les quatre côtés, Alt : le côté opposé aussi. L'élément suit en
+  // direct ; au relâchement, l'interface écrit les valeurs dans la classe. Clic sur une poignée
+  // sans glisser : champ correspondant du panneau de styles.
+  const startSpacing = (t, e) => {
     release_held();
     const el = styled(selected);
-    const kind = side[0];
-    const group = e.shiftKey ? Object.keys(SIDES).filter((k) => k[0] === kind)
-      : e.altKey ? [side, OPPOSITE[side]] : [side];
-    const rects = sideRects(el, 0);
-    spacing = { el, side, group, id: rvOf(selected), x0: e.clientX, y0: e.clientY, v0: rects[side][4], v: null,
-      saved: group.map((k) => keep(el, SIDES[k].prop)) };
+    const kind = t.key[0];
+    const keys = t.gap ? [] : e.shiftKey ? Object.keys(SIDES).filter((k) => k[0] === kind)
+      : e.altKey ? [t.key, OPPOSITE[t.key]] : [t.key];
+    const props = t.gap ? [t.prop] : keys.map((k) => SIDES[k].prop);
+    spacing = { el, key: t.key, axis: t.axis, sign: t.sign, prop: t.prop, props, id: rvOf(selected),
+      x0: e.clientX, y0: e.clientY, v0: t.v, v: null, saved: props.map((p) => keep(el, p)) };
     try { document.documentElement.setPointerCapture(e.pointerId); } catch (_) { /* relâché */ }
     hide(hoverBox);
   };
   const moveSpacing = (e) => {
     const sp = spacing;
-    const def = SIDES[sp.side];
-    const d = def.axis === "y" ? e.clientY - sp.y0 : e.clientX - sp.x0;
-    const v = Math.max(0, Math.round(sp.v0 + def.sign * d));
+    const d = sp.axis === "y" ? e.clientY - sp.y0 : e.clientX - sp.x0;
+    if (sp.v === null && Math.abs(d) < 2) return;
+    const v = Math.max(0, Math.round(sp.v0 + sp.sign * d));
     sp.v = v;
-    for (const k of sp.group) sp.el.style.setProperty(SIDES[k].prop, v + "px", "important");
+    for (const p of sp.props) sp.el.style.setProperty(p, v + "px", "important");
     showValue(v + " px", e.clientX, e.clientY);
     redraw();
   };
@@ -829,32 +1023,40 @@
     svalBox.style.display = "none";
     resized = true;
     setTimeout(() => { resized = false; }, 0);
-    if (cancel || sp.v === null || sp.v === Math.round(sp.v0)) { putBack(sp); redraw(); return; }
+    if (!cancel && sp.v === null) {
+      post({ type: "spacing_focus", prop: sp.prop });
+      redraw();
+      return;
+    }
+    if (cancel || sp.v === Math.round(sp.v0)) { putBack(sp); redraw(); return; }
     held = { el: sp.el, saved: sp.saved, timer: setTimeout(release_held, 6000) };
     const values = {};
-    for (const k of sp.group) values[SIDES[k].prop] = sp.v + "px";
+    for (const p of sp.props) values[p] = sp.v + "px";
     post({ type: "spacing", id: sp.id, values });
     redraw();
   };
   window.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || onHandle(e)) return;
-    const side = spacingAt(e.clientX, e.clientY);
-    if (!side) return;
+    const at = spacingAt(e.clientX, e.clientY);
+    if (!at || !at.grip) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    startSpacing(side, e);
+    startSpacing(at.t, e);
   }, true);
   window.addEventListener("pointermove", (e) => {
     if (spacing) { e.stopImmediatePropagation(); moveSpacing(e); return; }
     if (resizing) return;
-    const side = spacingAt(e.clientX, e.clientY);
-    if (side !== hotSide) {
-      hotSide = side;
-      setCursor(side);
-      if (!side) svalBox.style.display = "none";
+    const over = overSelected(e.clientX, e.clientY);
+    const at = over ? spacingAt(e.clientX, e.clientY) : null;
+    const key = at ? at.t.key : null;
+    if (over !== overSel || key !== hotSide) {
+      overSel = over;
+      hotSide = key;
       redraw();
     }
-    if (side) showValue(Math.round(sideRects(styled(selected), 0)[side][4]) + " px", e.clientX, e.clientY);
+    setCursor(at && at.grip ? at.t.axis : null);
+    if (at) showValue(Math.round(at.t.v) + " px", e.clientX, e.clientY);
+    else svalBox.style.display = "none";
   }, true);
   window.addEventListener("pointerup", (e) => {
     if (!spacing) return;
@@ -862,13 +1064,14 @@
     endSpacing(false);
   }, true);
   window.addEventListener("pointercancel", () => { if (spacing) endSpacing(true); }, true);
-  document.addEventListener("dblclick", (e) => {
-    const side = spacingAt(e.clientX, e.clientY);
-    if (!side || onHandle(e)) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    post({ type: "spacing", id: rvOf(selected), values: { [SIDES[side].prop]: null } });
-  }, true);
+  document.addEventListener("pointerleave", () => {
+    if (spacing || (!overSel && !hotSide)) return;
+    overSel = false;
+    hotSide = null;
+    setCursor(null);
+    svalBox.style.display = "none";
+    redraw();
+  });
 
   // Les clics sélectionnent : liens, boutons et formulaires du site ne réagissent pas.
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
@@ -896,7 +1099,7 @@
   // Texte venu des données du site (nom du site, menu, contenu) affiché dans un composant :
   // modifié sur place comme ailleurs (la donnée change, pas le composant).
   const dataOf = (sl) => !!sl && sl.slot === "expr" && !!sl.binding && !!sl.binding.source &&
-    sl.binding.source.kind !== "prop" && !sl.transformed && !sl.html;
+    sl.binding.source.kind !== "prop" && !sl.transformed;
   document.addEventListener("dblclick", (e) => {
     if (inEdit(e.target)) return;
     block(e);
@@ -910,14 +1113,17 @@
     if (p && p.inst) {
       // Texte d'une propriété de cette utilisation : modifié sur place (valeur de l'utilisation).
       if (n !== null && (propOf(slots[n], p.inst) || dataOf(slots[n]))) { startEdit(n); return; }
-      // Sinon : le composant s'ouvre, l'élément sous le pointeur est sélectionné ; un texte écrit
-      // dans le composant se modifie aussitôt (un seul double-clic).
       const inner = targetOf(e.target);
-      if (inner) {
+      // Texte écrit dans le composant : modifié aussitôt, sur place (un seul double-clic).
+      if (inner && n !== null && slots[n] && slots[n].slot === "text") {
         isolated = p.inst.component;
         select(inner, true, null);
-        if (n !== null && slots[n] && slots[n].slot === "text") startEdit(n);
+        startEdit(n);
+        return;
       }
+      // Sinon : canevas du composant (ses variantes), élément sous le pointeur sélectionné.
+      post({ type: "open_component", component: p.inst.component,
+        node: inner ? inner.getAttribute("data-rv") : null, tag: inner ? inner.tagName.toLowerCase() : "" });
       return;
     }
     if (n !== null) startEdit(n);
@@ -938,7 +1144,14 @@
   document.addEventListener("keydown", (e) => {
     if (editing) {
       if (e.key === "Escape") { e.preventDefault(); finishEdit(false); }
-      else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finishEdit(true); }
+      // Texte riche : Entrée ajoute un paragraphe, Ctrl+Entrée valide ; gras, italique, souligné.
+      else if (editing.rich) {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finishEdit(true); }
+        else if ((e.ctrlKey || e.metaKey) && /^[biu]$/i.test(e.key)) {
+          e.preventDefault();
+          document.execCommand({ b: "bold", i: "italic", u: "underline" }[e.key.toLowerCase()]);
+        }
+      } else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finishEdit(true); }
       return;
     }
     if (e.key === "Escape") {
@@ -1028,7 +1241,37 @@
   // ---------------------------------------------------------------- aperçu des styles
   let previewSheet = null;
   let previewEl = null;
+  // Composant seul, variante de geste : feuille des règles recopiées (voir plus bas).
+  const forceCss = (css) => (stageState ? css.split(":" + stageState).join(".rv-force-" + stageState) : css);
+  let forcedSheet = null;
+  const buildForced = () => {
+    if (!stageState || !("adoptedStyleSheets" in document) || typeof CSSStyleSheet !== "function") return;
+    const pseudo = ":" + stageState;
+    const out = [];
+    const walk = (rules, wrap) => {
+      for (const r of rules) {
+        if (r.selectorText !== undefined && r.style) {
+          if (r.selectorText.includes(pseudo)) out.push(wrap(forceCss(r.selectorText) + "{" + r.style.cssText + "}"));
+        } else if (r.media && r.cssRules) {
+          walk(r.cssRules, (t) => wrap("@media " + r.media.mediaText + "{" + t + "}"));
+        } else if (r.cssRules) {
+          walk(r.cssRules, wrap);
+        }
+      }
+    };
+    for (const sh of document.styleSheets) {
+      let rules = null;
+      try { rules = sh.cssRules; } catch (_) { rules = null; }
+      if (rules) walk(rules, (t) => t);
+    }
+    if (!forcedSheet) {
+      forcedSheet = new CSSStyleSheet();
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, forcedSheet];
+    }
+    try { forcedSheet.replaceSync(out.join("\n")); } catch (_) { /* règle illisible */ }
+  };
   const setPreview = (css) => {
+    css = forceCss(css);
     if ("adoptedStyleSheets" in document && typeof CSSStyleSheet === "function" && "replaceSync" in CSSStyleSheet.prototype) {
       if (!previewSheet) {
         previewSheet = new CSSStyleSheet();
@@ -1070,6 +1313,20 @@
     redraw();
   };
 
+  // Élément montré dans la page : défilement de la page seule (jamais des cadres de l'éditeur
+  // autour, que `scrollIntoView` ferait aussi défiler).
+  // `band` : partie de la page visible dans l'éditeur ({ top, bottom, left, right }, coordonnées
+  // de la fenêtre de la page), sinon toute la fenêtre.
+  const reveal = (el, band) => {
+    const r = el.getBoundingClientRect();
+    const b = band || { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
+    const m = 16;
+    const along = (a, z, lo, hi) => (a < lo ? a - lo - m : z > hi ? Math.min(a - lo - m, z - hi + m) : 0);
+    const dx = along(r.left, r.right, b.left, b.right), dy = along(r.top, r.bottom, b.top, b.bottom);
+    // Sans animation (`scroll-behavior: smooth` du site) : la position est mesurée aussitôt.
+    if (dx || dy) window.scrollBy({ left: dx, top: dy, behavior: "instant" });
+  };
+
   // ---------------------------------------------------------------- messages de l'interface
   const byId = (id) => (id ? document.querySelector('[data-rv="' + CSS.escape(id) + '"]') : null);
   // Élément (ou utilisation de composant) désigné par l'interface.
@@ -1087,7 +1344,7 @@
       case "select": {
         const { el, inst } = findId(m.id);
         select(el, false, inst);
-        if (el && m.reveal) el.scrollIntoView({ block: "nearest", inline: "nearest" });
+        if (el && m.reveal) reveal(el);
         break;
       }
       case "hover": {
@@ -1119,6 +1376,23 @@
         }
         break;
       }
+      case "attrs":
+        // Attributs modifiés (classes, animations, liens…) : posés sur chaque rendu de l'élément,
+        // sans recharger la page.
+        for (const c of m.changes || []) {
+          // Éléments repérés, et racine de chaque utilisation du composant (attributs posés sur
+          // elle pour cette utilisation).
+          const els = [...document.querySelectorAll('[data-rv="' + CSS.escape(c.id) + '"]'),
+            ...instances.filter((i) => i.node === c.id && i.root).map((i) => i.root)];
+          for (const el of els) {
+            for (const [n, v] of Object.entries(c.set || {})) {
+              try { el.setAttribute(n, v); } catch (_) { /* nom invalide */ }
+            }
+            for (const n of c.remove || []) el.removeAttribute(n);
+          }
+        }
+        redraw();
+        break;
       case "labels":
         tagNames = m.tags || null;
         otherName = m.other || "";
@@ -1150,7 +1424,7 @@
             u.searchParams.set("rv", String(Date.now()));
             const next = l.cloneNode();
             next.href = u.pathname + u.search;
-            next.addEventListener("load", () => { l.remove(); setPreview(""); release_held(); redraw(); sendComputed(); }, { once: true });
+            next.addEventListener("load", () => { l.remove(); setPreview(""); release_held(); buildForced(); redraw(); sendComputed(); }, { once: true });
             l.after(next);
           }
         }
@@ -1178,8 +1452,12 @@
         spacingSel = !!m.on;
         redraw();
         break;
+      case "wheel":
+        // Vue verrouillée de l'éditeur : molette hors de la page, la page défile.
+        window.scrollBy({ left: Number(m.dx) || 0, top: Number(m.dy) || 0, behavior: "instant" });
+        break;
       case "scroll":
-        window.scrollTo(m.x || 0, m.y || 0);
+        window.scrollTo({ left: m.x || 0, top: m.y || 0, behavior: "instant" });
         break;
       case "drag":
         // Glisser depuis l'interface (panneau « Ajouter ») : début, position, fin.
@@ -1202,21 +1480,59 @@
         }
         if (next) {
           select(next, true);
-          next.scrollIntoView({ block: "nearest", inline: "nearest" });
+          reveal(next);
+        }
+        break;
+      }
+      case "edit": {
+        // Double-clic sur un texte dans les calques : premier texte modifiable de l'élément.
+        const { el } = findId(m.id);
+        if (!el || editing) break;
+        for (let n = 0; n < ranges.length; n++) {
+          const r = ranges[n];
+          if (!r || !editable(slots[n])) continue;
+          let c = r.commonAncestorContainer;
+          if (c.nodeType !== 1) c = c.parentElement;
+          if (!c || c.closest("[data-rv]") !== el) continue;
+          if (selected !== el) select(el, true, null);
+          reveal(el);
+          window.focus();
+          startEdit(n);
+          break;
         }
         break;
       }
       case "measure": {
         // Position de la sélection (zoom sur la sélection), après l'avoir montrée.
         const el = findId(m.id).el || selected;
-        if (el) el.scrollIntoView({ block: "nearest", inline: "nearest" });
-        post({ type: "measure", rect: el ? rectOf(el) : null });
+        if (el) reveal(el, m.band || null);
+        post({ type: "measure", rect: el ? rectOf(el) : null, reveal: !!m.reveal });
         break;
       }
       default:
         break;
     }
   });
+
+  // ---------------------------------------------------------------- composant seul
+  // Canevas des composants (comme Framer) : le composant au milieu de la page, une variante par
+  // cadre. Variante de geste (`rvstate=hover|active`) : règles `:hover` / `:active` recopiées sur
+  // la classe `rv-force-…` posée sur la racine du composant, pour la montrer sans le pointeur.
+  if (STAGE) {
+    const pad = document.createElement("style");
+    pad.textContent = "body{margin:0!important;padding:32px!important;min-height:0!important}";
+    document.head.appendChild(pad);
+    if (stageState && instances[0] && instances[0].root) instances[0].root.classList.add("rv-force-" + stageState);
+    buildForced();
+    // Hauteur du composant (cadres ajustés à leur contenu).
+    const sendStage = () => {
+      const root = instances[0] && instances[0].root;
+      const r = root ? root.getBoundingClientRect() : null;
+      post({ type: "stage", h: Math.ceil((r ? r.bottom + window.scrollY : document.body.scrollHeight) + 32) });
+    };
+    sendStage();
+    if (typeof ResizeObserver === "function") new ResizeObserver(sendStage).observe(document.body);
+  }
 
   post({
     type: "ready",
@@ -1226,4 +1542,5 @@
     vars,
     scroll: { x: window.scrollX, y: window.scrollY },
   });
+  sendPreviews();
 })();

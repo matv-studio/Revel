@@ -355,7 +355,9 @@ fn Side(sx: Sx, group: &'static [&'static str; 4], side: usize) -> impl IntoView
                         },
                         Some(false) => if e.alt_key() { sx.set(prop, None) } else { editing.set(true) },
                         None => {}
-                    }>
+                    }
+                    // Clavier (Entrée, Espace) ou poignée du canevas : saisie.
+                    on:click=move |e: ev::MouseEvent| if e.detail() == 0 { editing.set(true) }>
                     {move || { let p = pv.get(); short(&p.here.clone().unwrap_or_else(|| p.hint())) }}
                 </button>
             }>
@@ -597,6 +599,37 @@ const CASE: &[Opt] = &[
     oi("capitalize", "case-capitalize", g_cap),
 ];
 
+/// Valeur d'une variable CSS du site (`--font`), déclarée sur `:root` ou `html`.
+pub fn css_var(sheet: &revel_model::Stylesheet, name: &str) -> Option<String> {
+    sheet.items.iter().find_map(|item| match item {
+        StyleItem::Rule(r)
+            if r.media.is_none()
+                && (r.selector.contains(":root") || r.selector.trim() == "html") =>
+        {
+            r.decls
+                .iter()
+                .find(|d| d.prop == name)
+                .map(|d| d.value.clone())
+        }
+        _ => None,
+    })
+}
+
+/// Nom d'une police : sa première famille ; une variable (`var(--font)`) par la police qu'elle
+/// contient, sinon par son nom lisible.
+pub fn font_label(sheet: &revel_model::Stylesheet, value: &str) -> String {
+    let v = value.trim();
+    if let Some(inner) = v.strip_prefix("var(").and_then(|r| r.strip_suffix(')')) {
+        let name = inner.split(',').next().unwrap_or_default().trim();
+        return css_var(sheet, name)
+            .filter(|x| !x.trim_start().starts_with("var("))
+            .map(|x| first_family(&x))
+            .filter(|x| !x.is_empty())
+            .unwrap_or_else(|| crate::names::humanize(name));
+    }
+    first_family(v)
+}
+
 /// Polices proposées : piles de polices du site (par première famille), polices déclarées par
 /// `@font-face`, polices du système.
 fn font_options(sx: Sx) -> Signal<Vec<Item>> {
@@ -616,7 +649,7 @@ fn font_options(sx: Sx) -> Signal<Vec<Item>> {
                 match item {
                     StyleItem::Rule(r) => {
                         for d in r.decls.iter().filter(|d| d.prop == "font-family") {
-                            push(d.value.clone(), first_family(&d.value));
+                            push(d.value.clone(), font_label(sheet, &d.value));
                         }
                     }
                     StyleItem::Raw { css } if css.trim_start().starts_with("@font-face") => {

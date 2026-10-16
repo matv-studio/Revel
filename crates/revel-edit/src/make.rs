@@ -865,6 +865,7 @@ pub fn make_component(
         id: id.to_string(),
         name: name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()),
         props: Vec::new(),
+        variants: Vec::new(),
         body: vec![node],
     };
     Ok((
@@ -882,6 +883,8 @@ pub fn make_component(
                         id: Some(use_id.clone()),
                         component: id.to_string(),
                         args: Default::default(),
+                        variant: None,
+                        attrs: Vec::new(),
                     },
                 },
             ],
@@ -1045,7 +1048,11 @@ fn substitute(nodes: &mut Vec<Node>, name: &str, expr: &str) -> bool {
 pub fn detach(site: &Site, at: &Target) -> Result<Command, EditError> {
     let (parent, index) = address::locate(site, at)?;
     let Node::Use {
-        component, args, ..
+        component,
+        args,
+        variant,
+        attrs,
+        ..
     } = address::node(site, at)?
     else {
         return Err(EditError::WrongKind(at.node.clone()));
@@ -1053,7 +1060,10 @@ pub fn detach(site: &Site, at: &Target) -> Result<Command, EditError> {
     let c = site
         .component(component)
         .ok_or_else(|| EditError::NotFound(component.clone()))?;
-    let mut body = c.body.clone();
+    // Variante et attributs de l'utilisation gardés sur l'élément racine.
+    let mut body = c
+        .patched_body(variant.as_deref(), attrs)
+        .unwrap_or_else(|| c.body.clone());
     let mut sets = Vec::new();
     for p in &c.props {
         let e = prop_expr(p, args);
@@ -1105,6 +1115,7 @@ pub fn remove_prop(site: &Site, id: &str, name: &str) -> Result<Command, EditErr
                 id: Some(uid),
                 component,
                 args,
+                ..
             } = n
                 && component == id
                 && args.contains_key(name)

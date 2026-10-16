@@ -61,6 +61,12 @@ pub struct Row {
     pub preview: Option<String>,
     /// Élément animé (panneau Interactions).
     pub animated: bool,
+    /// Texte venu des données du site ou d'un contenu (liaison, comme Webflow).
+    pub bound: bool,
+    /// Affiché sous condition (`{% if %}` sans ligne propre) : la condition.
+    pub condition: Option<String>,
+    /// Élément qui ne contient que du texte (icône de texte, double-clic pour le modifier).
+    pub textual: bool,
 }
 
 /// Affichage d'une ligne dans l'arbre simplifié.
@@ -75,6 +81,46 @@ enum Vis {
     Hide,
     /// Texte fondu dans la ligne de l'élément qui le contient.
     Merge,
+}
+
+/// Boucle ou condition qui n'affecte que des variables (au moins une) : rien d'affiché. Une
+/// boucle vide (créée à remplir) reste visible.
+fn data_only(a: &[Node], b: &[Node]) -> bool {
+    only_sets(a) && only_sets(b) && a.iter().chain(b).any(|n| !matches!(n, Node::Text { .. }))
+}
+
+/// Contenu fait seulement d'affectations de variables (et de blancs), sans rien d'affiché.
+fn only_sets(nodes: &[Node]) -> bool {
+    nodes.iter().all(|n| match n {
+        Node::Set { .. } | Node::SetBlock { .. } => true,
+        Node::Text { text } => text.trim().is_empty(),
+        Node::Each {
+            children, empty, ..
+        } => only_sets(children) && only_sets(empty),
+        Node::If {
+            then, otherwise, ..
+        } => only_sets(then) && only_sets(otherwise),
+        _ => false,
+    })
+}
+
+/// Éléments réservés aux lecteurs d'écran ou au clavier (lien d'évitement, texte masqué) :
+/// invisibles sur la page, absents des calques.
+fn a11y_only(attrs: &[revel_model::Attr]) -> bool {
+    const CLASSES: &[&str] = &[
+        "skip-link",
+        "skiplink",
+        "skip-to-content",
+        "sr-only",
+        "visually-hidden",
+        "visuallyhidden",
+        "screen-reader-text",
+    ];
+    attrs
+        .iter()
+        .find(|a| a.name == "class")
+        .and_then(|a| a.value.as_deref())
+        .is_some_and(|v| v.split_whitespace().any(|c| CLASSES.contains(&c)))
 }
 
 /// Éléments sans rendu visible (ou techniques) : jamais dans les calques.
@@ -188,11 +234,17 @@ impl<'a> Builder<'a> {
                 Node::Slot => Kind::Slot {
                     markdown: self.markdown && slot_level + 1 >= self.inner.len(),
                 },
+                // Nom donné, sinon fin de l'identifiant rendue lisible (`card-project` -> « Card
+                // project »).
                 Node::Use { component, .. } => Kind::Use(
                     self.doc
                         .component(component)
-                        .map(|c| c.label())
-                        .unwrap_or_else(|| component.clone()),
+                        .and_then(|c| c.name.clone().filter(|n| !n.trim().is_empty()))
+                        .unwrap_or_else(|| {
+                            crate::names::humanize(
+                                component.rsplit('/').next().unwrap_or(component),
+                            )
+                        }),
                 ),
                 Node::Image(img) => Kind::Image(short(&img.src, 32)),
             };
@@ -206,16 +258,19 @@ impl<'a> Builder<'a> {
                 Node::If { then, .. } => Some((Branch::Then, then.len())),
                 _ => None,
             };
+            // Texte dans un élément, éventuellement à travers des conditions sans ligne.
             let in_element = ancestors
-                .last()
-                .and_then(|a| self.rows.iter().rev().find(|r| &r.key == a))
-                .is_some_and(|r| matches!(r.kind, Kind::Element { .. }));
+                .iter()
+                .rev()
+                .filter_map(|a| self.rows.iter().rposition(|r| &r.key == a))
+                .find(|&p| self.vis[p] != Vis::Through || !matches!(self.rows[p].kind, Kind::If(_)))
+                .is_some_and(|p| matches!(self.rows[p].kind, Kind::Element { .. }));
             let vis = match n {
-                Node::Element { tag, .. } => {
+                Node::Element { tag, attrs, .. } => {
                     let t = tag.to_ascii_lowercase();
                     if t == "html" {
                         Vis::Through
-                    } else if HIDDEN.contains(&t.as_str()) {
+                    } else if HIDDEN.contains(&t.as_str()) || a11y_only(attrs) {
                         Vis::Hide
                     } else if t == "svg" {
                         Vis::Leaf
@@ -223,6 +278,17 @@ impl<'a> Builder<'a> {
                         Vis::Show
                     }
                 }
+                // Boucle ou condition qui ne fait que préparer des données (`{% set %}` seuls) :
+                // rien à afficher.
+                Node::Each {
+                    children, empty, ..
+                } if data_only(children, empty) => Vis::Hide,
+                Node::If {
+                    then, otherwise, ..
+                } if data_only(then, otherwise) => Vis::Hide,
+                // Condition sans « sinon » : pas de ligne, ses éléments marqués (visibilité
+                // conditionnelle, comme Webflow).
+                Node::If { otherwise, .. } if otherwise.is_empty() => Vis::Through,
                 Node::Html { html } if html.trim_start().starts_with("<!") => Vis::Hide,
                 Node::Text { .. } | Node::Out { .. } if in_element => Vis::Merge,
                 _ => Vis::Show,
@@ -242,8 +308,18 @@ impl<'a> Builder<'a> {
                 preview: None,
                 animated: matches!(n, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name.starts_with("data-revel-")
                     && crate::interactions::FAMILIES.iter().any(|f| a.name == f.attr()))),
+                bound: false,
+                condition: None,
+                textual: false,
             });
             self.vis.push(vis);
+            // Image : nom du fichier sur sa ligne ; adresse venue des données : ligne liée.
+            if let Node::Image(img) = n {
+                match image_file(&img.src) {
+                    Some(f) => self.rows[at].preview = Some(f),
+                    None => self.rows[at].bound = true,
+                }
+            }
             let mut anc = ancestors.to_vec();
             anc.push(k.clone());
             let before = self.rows.len();
@@ -339,6 +415,9 @@ impl<'a> Builder<'a> {
             inside: id.as_ref().map(|_| (b, nodes.len())),
             preview: None,
             animated: false,
+            bound: false,
+            condition: None,
+            textual: false,
         });
         self.vis.push(Vis::Show);
         let mut anc = ancestors.to_vec();
@@ -352,6 +431,26 @@ impl<'a> Builder<'a> {
 /// Toutes les lignes de l'arbre de la page (gabarits emboîtés, page, composants).
 pub fn rows(doc: &Site, page: &revel_protocol::EditorPageInfo) -> Vec<Row> {
     tree(doc, page).0
+}
+
+/// Lignes d'un composant seul (canevas des composants).
+pub fn component_rows(doc: &Site, id: &str) -> Vec<Row> {
+    let Some(c) = doc.component(id) else {
+        return Vec::new();
+    };
+    let owner = Owner::Component(c.id.clone());
+    let mut b = Builder {
+        doc,
+        vars: Vec::new(),
+        within: Vec::new(),
+        inner: Vec::new(),
+        markdown: false,
+        rows: Vec::new(),
+        vis: Vec::new(),
+        stack: vec![c.id.clone()],
+    };
+    b.list(&c.body, &owner, Parent::root(owner.clone()), "", &[], 0);
+    simplify(b.rows, b.vis)
 }
 
 /// Affectations de variables de la page (gabarits emboîtés, page, composants), dans l'ordre.
@@ -423,12 +522,23 @@ fn simplify(mut rows: Vec<Row>, mut vis: Vec<Vis>) -> Vec<Row> {
         if vis[i] != Vis::Merge {
             continue;
         }
-        let Some(p) = parent_of(&rows, i) else {
+        let p = rows[i]
+            .ancestors
+            .iter()
+            .rev()
+            .filter_map(|a| pos.get(a).copied())
+            .find(|&p| matches!(rows[p].kind, Kind::Element { .. }));
+        let Some(p) = p else {
             continue;
         };
+        // Texte écrit : sur la ligne ; expression : la ligne est marquée liée (son texte vient du
+        // canevas, sans accolades).
         let part = match &rows[i].kind {
             Kind::Text(t) => t.clone(),
-            Kind::Expr(e) => format!("{{{{ {e} }}}}"),
+            Kind::Expr(_) => {
+                rows[p].bound = true;
+                continue;
+            }
             _ => continue,
         };
         let prev = rows[p].preview.take().unwrap_or_default();
@@ -462,6 +572,21 @@ fn simplify(mut rows: Vec<Row>, mut vis: Vec<Vis>) -> Vec<Row> {
             vis[i] = Vis::Through;
         }
     }
+    // Éléments d'une condition sans ligne : la condition les accompagne.
+    for i in 0..rows.len() {
+        if vis[i] != Vis::Through {
+            continue;
+        }
+        let Kind::If(c) = rows[i].kind.clone() else {
+            continue;
+        };
+        let key = rows[i].key.clone();
+        for r in rows.iter_mut().skip(i + 1) {
+            if r.ancestors.last() == Some(&key) && r.condition.is_none() {
+                r.condition = Some(c.clone());
+            }
+        }
+    }
     let keep: Vec<bool> = vis.iter().map(|v| shown(*v)).collect();
     let mut out: Vec<Row> = Vec::new();
     for (i, mut r) in rows.into_iter().enumerate() {
@@ -482,6 +607,9 @@ fn simplify(mut rows: Vec<Row>, mut vis: Vec<Vis>) -> Vec<Row> {
         .collect();
     for r in &mut out {
         r.has_children = parents.contains(&r.key);
+        r.textual = !r.has_children
+            && (r.preview.is_some() || r.bound)
+            && matches!(r.kind, Kind::Element { .. });
     }
     out
 }
@@ -551,36 +679,99 @@ pub enum Zone {
     Inside,
 }
 
+/// Nom du fichier d'une image écrite (`/media/equipe.jpg` -> `equipe.jpg`) ; `None` : adresse
+/// venue d'une expression.
+fn image_file(src: &str) -> Option<String> {
+    let s = src.trim();
+    let literal = s.starts_with('/') || s.contains("://") || s.starts_with("data:");
+    (literal && !s.contains("{{"))
+        .then(|| {
+            s.rsplit('/')
+                .next()
+                .unwrap_or(s)
+                .split('?')
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .filter(|f| !f.is_empty())
+}
+
+/// Nom lisible d'une condition : dernier mot de la première donnée testée (`env.staging` ->
+/// « Staging », `not page.draft` -> « Draft »).
+fn condition_name(cond: &str) -> String {
+    let word = cond
+        .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
+        .find(|w| {
+            !w.is_empty()
+                && !matches!(*w, "not" | "and" | "or" | "in" | "is" | "true" | "false")
+                && !w.chars().next().is_some_and(|c| c.is_ascii_digit())
+        })
+        .unwrap_or(cond);
+    crate::names::humanize(word.rsplit('.').next().unwrap_or(word))
+}
+
+/// Nom d'une liste parcourue : dernier mot de sa source, lisible (`home.featured` -> « Featured »,
+/// `collections.blog | reverse` -> « Blog »).
+fn list_name(expr: &str) -> String {
+    let src = expr.split('|').next().unwrap_or_default().trim();
+    let last = src
+        .rsplit('.')
+        .next()
+        .unwrap_or(src)
+        .trim_matches(|c: char| !c.is_alphanumeric());
+    crate::names::humanize(last)
+}
+
 pub fn label(ui: Ui, k: &Kind) -> String {
     match k {
         Kind::Element { tag, class } => crate::names::element_name(ui, tag, class),
         Kind::Text(t) => format!("« {t} »"),
         Kind::Expr(e) => format!("{{{{ {e} }}}}"),
-        Kind::If(c) => ui.tx("layers-if", &[("cond", c.clone())]),
-        Kind::Each { item, expr } => ui.tx(
-            "layers-each",
-            &[("item", item.clone()), ("list", expr.clone())],
-        ),
+        Kind::If(c) => ui.tx("layers-if", &[("cond", condition_name(c))]),
+        Kind::Each { expr, .. } => ui.tx("layers-each", &[("list", list_name(expr))]),
         Kind::Branch(Branch::Otherwise) => ui.tx("layers-else", &[]),
         Kind::Branch(_) => ui.tx("layers-empty-list", &[]),
         Kind::Use(c) => c.rsplit('/').next().unwrap_or(c).to_string(),
-        Kind::Image(src) => ui.tx("layers-image", &[("src", src.clone())]),
+        Kind::Image(_) => ui.tx("layers-image", &[]),
         Kind::Html => ui.tx("layers-html", &[]),
         Kind::Slot { markdown: true } => ui.tx("layers-markdown", &[]),
         Kind::Slot { markdown: false } => ui.tx("layers-slot", &[]),
     }
 }
 
+/// Utilisation de composant la plus proche qui contient la ligne (identifiant), pour retrouver le
+/// texte rendu dans cette utilisation.
+fn use_of(rows: &[Row], r: &Row) -> Option<String> {
+    r.ancestors.iter().rev().find_map(|a| {
+        rows.iter()
+            .find(|x| &x.key == a && matches!(x.kind, Kind::Use(_)))
+            .and_then(|x| x.id.clone())
+    })
+}
+
 /// Info-bulle d'une ligne : nature et nom technique d'un élément.
 fn tooltip(ui: Ui, k: &Kind) -> String {
     match k {
         Kind::Element { tag, class } => crate::names::tooltip(ui, tag, class),
+        Kind::Each { item, expr } => ui.tx(
+            "layers-each-help",
+            &[("item", item.clone()), ("list", expr.clone())],
+        ),
+        Kind::If(c) => ui.tx("layers-if-help", &[("cond", c.clone())]),
+        Kind::Image(src) => src.clone(),
         _ => label(ui, k),
     }
 }
 
-fn icon(k: &Kind) -> AnyView {
+fn icon(k: &Kind, textual: bool) -> AnyView {
     match k {
+        // Bloc générique qui ne contient que du texte : icône de texte (comme Webflow).
+        Kind::Element { tag, .. }
+            if textual && matches!(tag.to_ascii_lowercase().as_str(), "div" | "span") =>
+        {
+            icons::text_left()
+        }
         Kind::Element { tag, .. } => crate::names::icon(tag),
         Kind::Text(_) => icons::text(),
         Kind::Expr(_) => icons::braces(),
@@ -605,8 +796,13 @@ pub fn Layers() -> impl IntoView {
 
     let all = Memo::new(move |_| {
         let url = ed.page.get();
+        let comp = ed.comp.get();
         ed.doc.with(|d| {
             let Some(d) = d else { return Vec::new() };
+            // Canevas des composants : les éléments du composant.
+            if let Some(c) = comp {
+                return component_rows(d, &c);
+            }
             ed.pages.with(|ps| {
                 ps.iter()
                     .find(|p| p.url == url)
@@ -711,7 +907,7 @@ pub fn Layers() -> impl IntoView {
             },
             label,
         }));
-        ed.post(serde_json::json!({ "type": "select", "id": id, "reveal": true }));
+        ed.select_and_reveal(&id);
     };
     let selected_row = move || {
         let sel = ed.selected.get()?;
@@ -875,7 +1071,7 @@ pub fn Layers() -> impl IntoView {
             </label>
             <div class="layers-tree" role="tree" tabindex="0" on:keydown=on_key>
                 <For each=move || visible.get()
-                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated))
+                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}{}{:?}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated, r.bound, r.condition, r.textual))
                     let:item>
                     {
                         let (r, open) = item;
@@ -888,8 +1084,28 @@ pub fn Layers() -> impl IntoView {
                         let depth = r.with_value(|r| r.depth);
                         let has_children = r.with_value(|r| r.has_children);
                         let kind = r.with_value(|r| r.kind.clone());
-                        let preview = r.with_value(|r| r.preview.clone());
                         let animated = r.with_value(|r| r.animated);
+                        let bound = r.with_value(|r| r.bound);
+                        let textual = r.with_value(|r| r.textual);
+                        let condition = r.with_value(|r| r.condition.clone());
+                        let is_conditional = condition.is_some();
+                        // Texte affiché : texte écrit, sinon texte rendu dans la page (données du
+                        // site, contenu), envoyé par le canevas — jamais l'expression.
+                        let inst = r.with_value(|r| all.with_untracked(|rows| use_of(rows, r)));
+                        let preview = move || {
+                            r.with_value(|r| r.preview.clone()).or_else(|| {
+                                let id = r.with_value(|r| r.id.clone())?;
+                                if !bound {
+                                    return None;
+                                }
+                                ed.previews.with(|m| {
+                                    inst.as_ref()
+                                        .and_then(|u| m.get(&format!("{u}/{id}")))
+                                        .or_else(|| m.get(&id))
+                                        .map(|t| short(t, 48))
+                                })
+                            })
+                        };
                         // Nom technique (`section.hero`) : info-bulle, recherche, essais.
                         let tech = r.with_value(|r| match &r.kind {
                             Kind::Element { tag, class } => crate::names::technical(tag, class),
@@ -926,8 +1142,9 @@ pub fn Layers() -> impl IntoView {
                         view! {
                             <div class="layer" role="treeitem" title=title data-tech=tech class:is-selected=is_selected class:is-multi=in_multi
                                 class:is-component=matches!(kind, Kind::Use(_))
-                                class:is-logic=matches!(kind, Kind::If(_) | Kind::Each { .. } | Kind::Branch(_))
+                                class:is-logic=matches!(kind, Kind::If(_) | Kind::Branch(_))
                                 class:is-text=matches!(kind, Kind::Text(_) | Kind::Expr(_) | Kind::Html)
+                                class:is-conditional=is_conditional
                                 class:drop-before=zone_class(Zone::Before)
                                 class:drop-after=zone_class(Zone::After)
                                 class:drop-inside=zone_class(Zone::Inside)
@@ -948,6 +1165,13 @@ pub fn Layers() -> impl IntoView {
                                         select_row(r)
                                     }
                                 })
+                                on:dblclick=move |_| {
+                                    // Texte : modifié sur place dans la page (comme un double-clic
+                                    // sur la page).
+                                    if textual && let Some(id) = r.with_value(|r| r.id.clone()) {
+                                        ed.post(serde_json::json!({ "type": "edit", "id": id }));
+                                    }
+                                }
                                 on:contextmenu=move |e: leptos::ev::MouseEvent| {
                                     r.with_value(|r| select_row(r));
                                     open_menu(&e);
@@ -1000,10 +1224,17 @@ pub fn Layers() -> impl IntoView {
                                     class:is-hidden=!has_children on:click=toggle>
                                     {if open { icons::chevron_down() } else { icons::chevron_right() }}
                                 </button>
-                                <span class="layer-icon">{icon(&kind)}</span>
+                                <span class="layer-icon">{icon(&kind, textual)}</span>
                                 <span class="layer-label">{label(ui, &kind)}</span>
-                                {preview.map(|p| view! { <span class="layer-preview">{p}</span> })}
-                                {animated.then(|| view! { <span class="layer-anim" title=ui.t("layers-animated")>{icons::bolt()}</span> })}
+                                {move || preview().map(|p| view! {
+                                    <span class="layer-preview" class:is-bound=bound
+                                        title=move || textual.then(|| ui.now("layers-edit-text", &[]))>{p}</span>
+                                })}
+                                <span class="layer-marks">
+                                    {bound.then(|| view! { <span class="layer-mark" title=ui.t("layers-bound")>{icons::database()}</span> })}
+                                    {condition.map(|c| view! { <span class="layer-mark" title=ui.tx("layers-condition", &[("cond", c)])>{icons::branch()}</span> })}
+                                    {animated.then(|| view! { <span class="layer-mark layer-anim" title=ui.t("layers-animated")>{icons::bolt()}</span> })}
+                                </span>
                             </div>
                         }
                     }
@@ -1120,5 +1351,62 @@ mod tests {
         // Le titre se déplace dans la section (même propriétaire : la page).
         let up = step_command(&rows, &rows[2], -1);
         assert!(up.is_none());
+    }
+
+    #[test]
+    fn listes_conditions_et_textes_lies_lisibles() {
+        let mut site = Site::new("Essai", "fr");
+        let layout = revel_edit::make::base_layout(&site);
+        let lid = layout.id.clone();
+        site.layouts.push(layout);
+        let mut page: revel_model::Page = serde_json::from_value(serde_json::json!({
+            "id": "index", "path": "/", "layout": lid
+        }))
+        .unwrap();
+        page.body = vec![
+            el("a1", "a", "skip-link", vec![text("Aller au contenu")]),
+            el(
+                "d1",
+                "div",
+                "intro",
+                vec![Node::Out {
+                    expr: "home.agency_text | safe".into(),
+                }],
+            ),
+            Node::If {
+                id: Some("i1".into()),
+                cond: "it".into(),
+                then: vec![el("p1", "p", "", vec![text("Oui")])],
+                otherwise: vec![],
+            },
+            Node::Each {
+                id: Some("e1".into()),
+                expr: "home.featured".into(),
+                item: "slug".into(),
+                children: vec![el("c1", "article", "carte", vec![])],
+                empty: vec![],
+            },
+        ];
+        site.pages.push(page);
+        let info: revel_protocol::EditorPageInfo = serde_json::from_value(serde_json::json!({
+            "url": "/", "page": "index", "layout": lid
+        }))
+        .unwrap();
+        let rows = rows(&site, &info);
+        // Lien d'évitement absent ; condition sans ligne (son paragraphe marqué) ; liste nommée
+        // d'après sa source ; texte venu des données marqué lié, sans l'expression.
+        assert!(!rows.iter().any(|r| r.id.as_deref() == Some("a1")));
+        assert!(!rows.iter().any(|r| matches!(r.kind, Kind::If(_))));
+        let p = rows.iter().find(|r| r.id.as_deref() == Some("p1")).unwrap();
+        assert_eq!(p.condition.as_deref(), Some("it"));
+        assert_eq!(p.preview.as_deref(), Some("Oui"));
+        let d = rows.iter().find(|r| r.id.as_deref() == Some("d1")).unwrap();
+        assert!(d.bound && d.textual && d.preview.is_none());
+        assert_eq!(condition_name("env.staging"), "Staging");
+        assert_eq!(condition_name("not page.draft and x"), "Draft");
+        assert_eq!(image_file("/media/equipe.jpg"), Some("equipe.jpg".into()));
+        assert_eq!(image_file("first.data.cover if first else ''"), None);
+        assert_eq!(list_name("home.featured"), "Featured");
+        assert_eq!(list_name("collections.blog | reverse"), "Blog");
     }
 }

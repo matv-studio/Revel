@@ -1,6 +1,7 @@
-//! Composants dans l'éditeur (3.6, D-34), comme ceux de Webflow : réglages d'une utilisation
-//! (valeurs de ses propriétés, ouvrir le composant, détacher), propriétés du composant ouvert
-//! (ajouter, renommer, valeur par défaut, supprimer), éléments du composant reliés à une
+//! Composants dans l'éditeur (3.6, D-34), comme ceux de Webflow et Framer : réglages d'une
+//! utilisation (valeurs de ses propriétés, variante, ouvrir le composant, détacher), propriétés
+//! du composant ouvert (ajouter, renommer, valeur par défaut, supprimer), variantes (survol,
+//! appui, personnalisées) dans le canevas des composants, éléments du composant reliés à une
 //! propriété (texte, image, lien, visibilité), création d'un composant à partir de la sélection.
 
 use crate::editor::{Ed, Selection};
@@ -9,7 +10,7 @@ use crate::{Ui, icons};
 use leptos::prelude::*;
 use revel_edit::canvas::{literal, quote};
 use revel_edit::{Branch, Command, Owner, Parent, Target};
-use revel_model::{Component, Node, PropDef, PropKind};
+use revel_model::{Component, Node, PropDef, PropKind, Variant, VariantKind};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -105,21 +106,21 @@ fn select(ed: Ed, id: String, tag: String, label: String) {
         tag,
         label,
     }));
-    ed.post(serde_json::json!({ "type": "select", "id": id, "reveal": true }));
+    ed.select_and_reveal(&id);
 }
 
-/// Ouvre le composant d'une utilisation (modification isolée) : son premier élément est
+/// Ouvre le composant d'une utilisation dans le canevas des composants : son premier élément est
 /// sélectionné.
 pub fn open_component(ed: Ed, use_at: &Target) {
-    let first = ed.doc.with_untracked(|d| {
+    let found = ed.doc.with_untracked(|d| {
         let d = d.as_ref()?;
         let Node::Use { component, .. } = revel_edit::address::node(d, use_at).ok()? else {
             return None;
         };
-        first_id(&d.component(component)?.body)
+        Some((component.clone(), first_id(&d.component(component)?.body)))
     });
-    if let Some((id, tag)) = first {
-        select(ed, id, tag.clone(), tag);
+    if let Some((c, first)) = found {
+        ed.open_comp(&c, first);
     }
 }
 
@@ -270,11 +271,47 @@ pub fn instance_settings(
         })
         .collect_view();
     let has_props = !c.props.is_empty();
+    // Variante choisie pour cette utilisation (variantes personnalisées du composant).
+    let customs: Vec<Variant> = c
+        .variants
+        .iter()
+        .filter(|v| v.kind == VariantKind::Custom)
+        .cloned()
+        .collect();
+    let chosen = ed.doc.with_untracked(|d| {
+        match revel_edit::address::node(d.as_ref()?, &at.get_value()).ok()? {
+            Node::Use { variant, .. } => variant.clone(),
+            _ => None,
+        }
+    });
+    let variant_row = (!customs.is_empty()).then(|| {
+        let chosen = chosen.clone().unwrap_or_default();
+        view! {
+            <label class="field instance-variant">
+                <span class="label">{ui.t("variant-label")}</span>
+                <span class="select">
+                    <select class="input" on:change=move |e| {
+                        let v = event_target_value(&e);
+                        ed.apply(ui, Command::SetUseVariant {
+                            at: at.get_value(),
+                            variant: (!v.is_empty()).then_some(v),
+                        }, false);
+                    }>
+                        <option value="" selected=chosen.is_empty()>{ui.t("variant-primary")}</option>
+                        {customs.iter().map(|v| {
+                            let on = chosen == v.id;
+                            view! { <option value=v.id.clone() selected=on>{variant_label(ui, Some(v))}</option> }
+                        }).collect_view()}
+                    </select>
+                </span>
+            </label>
+        }
+    });
     view! {
         <div class="stack instance">
             <div class="instance-head">
                 <span class="instance-icon">{icons::component()}</span>
-                <span class="instance-name">{c.label()}</span>
+                <span class="instance-name">{crate::names::component_name(&c)}</span>
             </div>
             <div class="instance-actions">
                 <button class="btn btn--small" on:click=move |_| open_component(ed, &at.get_value())>
@@ -282,14 +319,13 @@ pub fn instance_settings(
                 <button class="btn btn--small" title=ui.t("component-detach-help")
                     on:click=move |_| detach(ui, ed, at.get_value())>{icons::unlink()}{ui.t("component-detach")}</button>
             </div>
-            <div class="insp-group">
-                <p class="panel-title">{ui.t("component-props")}</p>
-                {if has_props {
-                    rows.into_any()
-                } else {
-                    view! { <p class="muted small">{ui.t("component-no-props")}</p> }.into_any()
-                }}
-            </div>
+            {variant_row}
+            {has_props.then(|| view! {
+                <div class="insp-group">
+                    <p class="panel-title">{ui.t("component-props")}</p>
+                    {rows}
+                </div>
+            })}
         </div>
     }
     .into_any()
@@ -494,13 +530,13 @@ pub fn props_section(ui: Ui, ed: Ed, component_id: String) -> AnyView {
     view! {
         <div class="insp-group component-props">
             <div class="component-props-head">
-                <p class="panel-title">{ui.t("component-props")}</p>
+                <p class="panel-title" title=ui.t("component-props-empty")>{ui.t("component-props")}</p>
                 <button class="icon-btn icon-btn--small" title=ui.t("component-prop-add") aria-label=ui.t("component-prop-add")
                     on:click=add>{icons::plus()}</button>
             </div>
             {move || comp.get().map(|c| {
                 if c.props.is_empty() {
-                    return view! { <p class="muted small">{ui.t("component-props-empty")}</p> }.into_any();
+                    return ().into_any();
                 }
                 c.props.iter().enumerate().map(|(i, p)| {
                     let kind = p.kind;
@@ -934,76 +970,293 @@ pub fn owner_component(at: &Target) -> Option<String> {
     }
 }
 
-/// Composants affichés par une page : ceux de son contenu, de ses gabarits, et ceux qu'ils
-/// utilisent.
-fn shown_by(
-    d: &revel_model::Site,
-    info: &revel_protocol::EditorPageInfo,
-) -> std::collections::HashSet<String> {
-    let mut todo: Vec<String> = Vec::new();
-    let push_uses = |nodes: &[Node], todo: &mut Vec<String>| {
-        revel_model::ids::walk(nodes, &mut |n| {
-            if let Node::Use { component, .. } = n {
-                todo.push(component.clone());
-            }
-        });
-    };
-    if let Some(p) = info
-        .page
-        .as_ref()
-        .and_then(|id| d.pages.iter().find(|p| &p.id == id))
-    {
-        push_uses(&p.body, &mut todo);
-    }
-    let mut layout = info.layout.clone();
-    let mut guard = 0;
-    while let Some(l) = layout.as_deref().and_then(|l| d.layout(l)) {
-        push_uses(&l.body, &mut todo);
-        layout = l.parent.clone();
-        guard += 1;
-        if guard > 32 {
-            break;
-        }
-    }
-    let mut seen = std::collections::HashSet::new();
-    while let Some(c) = todo.pop() {
-        if seen.insert(c.clone())
-            && let Some(comp) = d.component(&c)
-        {
-            push_uses(&comp.body, &mut todo);
-        }
-    }
-    seen
-}
-
-/// Ouvre un composant depuis le panneau : sur la page affichée s'il y est utilisé, sinon sur la
-/// première page qui l'utilise.
+/// Ouvre un composant depuis le panneau dans le canevas des composants (même s'il n'est utilisé
+/// sur aucune page).
 pub fn edit_component(ui: Ui, ed: Ed, id: &str) {
-    let found = ed.doc.with_untracked(|d| {
-        let d = d.as_ref()?;
-        let first = first_id(&d.component(id)?.body)?;
-        let cur = ed.page.get_untracked();
-        let page = ed.pages.with_untracked(|ps| {
-            let here = ps
-                .iter()
-                .find(|p| p.url == cur)
-                .filter(|p| shown_by(d, p).contains(id));
-            here.or_else(|| ps.iter().find(|p| shown_by(d, p).contains(id)))
-                .map(|p| p.url.clone())
-        });
-        Some((first, page))
-    });
-    match found {
-        Some(((node, tag), Some(url))) => {
-            if ed.page.get_untracked() != url {
-                ed.page.set(url);
-                ed.scroll.set((0.0, 0.0));
-            }
-            select(ed, node, tag.clone(), tag);
-        }
-        Some((_, None)) => ui.fail(revel_protocol::Failure::new("component-unused")),
+    let first = ed
+        .doc
+        .with_untracked(|d| first_id(&d.as_ref()?.component(id)?.body));
+    match first {
+        Some(f) => ed.open_comp(id, Some(f)),
         None => ui.fail(revel_protocol::Failure::new("component-empty")),
     }
+}
+
+// ------------------------------------------------------------------ variantes (comme Framer)
+
+/// Nom d'une variante (`None` : principale).
+pub fn variant_label(ui: Ui, v: Option<&Variant>) -> String {
+    match v {
+        None => ui.now("variant-primary", &[]),
+        Some(v) => v
+            .name
+            .clone()
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| match v.kind {
+                VariantKind::Hover => ui.now("variant-hover", &[]),
+                VariantKind::Pressed => ui.now("variant-pressed", &[]),
+                VariantKind::Custom => crate::names::humanize(&v.id),
+            }),
+    }
+}
+
+/// Commande qui donne une classe à l'élément racine du composant s'il n'en a pas (les styles
+/// des variantes s'écrivent à partir d'elle) : d'après le nom du composant.
+fn root_class_command(d: &revel_model::Site, c: &Component) -> Option<Command> {
+    if c.root_class().is_some() {
+        return None;
+    }
+    let Some(Node::Element {
+        id: Some(root),
+        attrs,
+        ..
+    }) = c.root()
+    else {
+        return None;
+    };
+    let base = revel_model::slugify(&c.label());
+    let base = if base.is_empty() {
+        "composant".to_string()
+    } else {
+        base
+    };
+    let taken: std::collections::HashSet<String> = d
+        .style_rules()
+        .flat_map(|r| {
+            r.selector
+                .split(|ch: char| !(ch.is_alphanumeric() || ch == '-' || ch == '_' || ch == '.'))
+                .flat_map(|p| p.split('.').skip(1).map(str::to_string).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let class = (1..)
+        .map(|i| {
+            if i == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{i}")
+            }
+        })
+        .find(|c| !taken.contains(c))
+        .unwrap_or(base);
+    let cur = attrs
+        .iter()
+        .find(|a| a.name == "class")
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    Some(Command::SetAttr {
+        at: Target {
+            owner: Owner::Component(c.id.clone()),
+            node: root.clone(),
+        },
+        name: "class".into(),
+        value: Some(format!("{class} {cur}").trim().to_string()),
+    })
+}
+
+/// Ajoute une variante au composant ouvert et l'affiche ; geste déjà présent : affiché.
+pub fn add_variant(ui: Ui, ed: Ed, comp_id: &str, kind: VariantKind) {
+    let Some(c) = component(ed, comp_id) else {
+        return;
+    };
+    let fixed = match kind {
+        VariantKind::Hover => Some("survol"),
+        VariantKind::Pressed => Some("appui"),
+        VariantKind::Custom => None,
+    };
+    if let Some(v) = c
+        .variants
+        .iter()
+        .find(|v| v.kind == kind && kind != VariantKind::Custom)
+    {
+        ed.variant.set(v.id.clone());
+        return;
+    }
+    let comp_id = comp_id.to_string();
+    let create = move |name: Option<String>, id: String| {
+        let Some(c) = component(ed, &comp_id) else {
+            return;
+        };
+        let mut commands: Vec<Command> = ed
+            .doc
+            .with_untracked(|d| d.as_ref().and_then(|d| root_class_command(d, &c)))
+            .into_iter()
+            .collect();
+        let mut variants = c.variants.clone();
+        variants.push(Variant {
+            id: id.clone(),
+            name,
+            kind,
+        });
+        commands.push(Command::SetComponentVariants {
+            id: comp_id.clone(),
+            variants,
+        });
+        ed.apply(ui, Command::Batch { commands }, false);
+        ed.variant.set(id);
+    };
+    match fixed {
+        Some(id) => create(None, id.to_string()),
+        None => {
+            let taken: Vec<String> = c.variants.iter().map(|v| v.id.clone()).collect();
+            let n = c
+                .variants
+                .iter()
+                .filter(|v| v.kind == VariantKind::Custom)
+                .count()
+                + 1;
+            ui.ask.set(Some(crate::dialog::Ask::input(
+                ui.now("variant-new", &[]),
+                ui.now("variant-name", &[]),
+                ui.now("variant-default-name", &[("n", n.to_string())]),
+                ui.now("variant-create", &[]),
+                move |name: String| {
+                    let base = revel_model::slugify(&name);
+                    let base = if revel_model::valid_variant_id(&base) {
+                        base
+                    } else {
+                        "variante".into()
+                    };
+                    let id = (1..)
+                        .map(|i| {
+                            if i == 1 {
+                                base.clone()
+                            } else {
+                                format!("{base}-{i}")
+                            }
+                        })
+                        .find(|x| !taken.contains(x) && !matches!(x.as_str(), "survol" | "appui"))
+                        .unwrap_or(base);
+                    create(Some(name.trim().to_string()).filter(|n| !n.is_empty()), id)
+                },
+            )));
+        }
+    }
+}
+
+/// Renomme une variante (nom affiché ; l'identifiant et la classe ne changent pas).
+pub fn rename_variant(ui: Ui, ed: Ed, comp_id: &str, vid: &str) {
+    let Some(c) = component(ed, comp_id) else {
+        return;
+    };
+    let Some(v) = c.variant(vid).cloned() else {
+        return;
+    };
+    let comp_id = comp_id.to_string();
+    let vid = vid.to_string();
+    ui.ask.set(Some(crate::dialog::Ask::input(
+        ui.now("variant-rename", &[]),
+        ui.now("variant-name", &[]),
+        variant_label(ui, Some(&v)),
+        ui.now("variant-rename", &[]),
+        move |name: String| {
+            let Some(c) = component(ed, &comp_id) else {
+                return;
+            };
+            let variants = c
+                .variants
+                .iter()
+                .map(|x| {
+                    let mut x = x.clone();
+                    if x.id == vid {
+                        x.name = Some(name.trim().to_string()).filter(|n| !n.is_empty());
+                    }
+                    x
+                })
+                .collect();
+            ed.apply(
+                ui,
+                Command::SetComponentVariants {
+                    id: comp_id.clone(),
+                    variants,
+                },
+                false,
+            );
+        },
+    )));
+}
+
+/// Retire une variante : ses styles (variante personnalisée) et son choix dans les utilisations
+/// avec elle ; les styles de survol et d'appui restent (ils peuvent venir du site).
+pub fn remove_variant(ui: Ui, ed: Ed, comp_id: &str, vid: &str) {
+    let Some(c) = component(ed, comp_id) else {
+        return;
+    };
+    let Some(v) = c.variant(vid).cloned() else {
+        return;
+    };
+    let comp_id = comp_id.to_string();
+    let vid = vid.to_string();
+    let name = variant_label(ui, Some(&v));
+    ui.ask.set(Some(
+        crate::dialog::Ask::confirm(
+            ui.now("variant-remove-title", &[("name", name)]),
+            None,
+            ui.now("action-remove", &[]),
+            move || {
+                let Some(c) = component(ed, &comp_id) else {
+                    return;
+                };
+                let mut commands = vec![Command::SetComponentVariants {
+                    id: comp_id.clone(),
+                    variants: c.variants.iter().filter(|x| x.id != vid).cloned().collect(),
+                }];
+                ed.doc.with_untracked(|d| {
+                    let Some(d) = d.as_ref() else { return };
+                    if v.kind == VariantKind::Custom
+                        && let Some(root) = c.root_class()
+                    {
+                        let prefix = format!(".{root}{}", v.suffix());
+                        for r in d.style_rules() {
+                            let hit = r.selector == prefix
+                                || r.selector.starts_with(&format!("{prefix} "))
+                                || r.selector.starts_with(&format!("{prefix}:"));
+                            if hit && let Some(id) = &r.id {
+                                commands.push(Command::RemoveRule { rule: id.clone() });
+                            }
+                        }
+                    }
+                    for (kind, owner, body) in d.owners() {
+                        revel_model::ids::walk(body, &mut |n| {
+                            if let Node::Use {
+                                id: Some(uid),
+                                component,
+                                variant: Some(x),
+                                ..
+                            } = n
+                                && *component == comp_id
+                                && *x == vid
+                            {
+                                let owner = match kind {
+                                    revel_model::ids::OwnerKind::Page => {
+                                        Owner::Page(owner.to_string())
+                                    }
+                                    revel_model::ids::OwnerKind::Layout => {
+                                        Owner::Layout(owner.to_string())
+                                    }
+                                    revel_model::ids::OwnerKind::Component => {
+                                        Owner::Component(owner.to_string())
+                                    }
+                                };
+                                commands.push(Command::SetUseVariant {
+                                    at: Target {
+                                        owner,
+                                        node: uid.clone(),
+                                    },
+                                    variant: None,
+                                });
+                            }
+                        });
+                    }
+                });
+                if ed.variant.get_untracked() == vid {
+                    ed.variant.set(String::new());
+                }
+                ed.apply(ui, Command::Batch { commands }, false);
+            },
+        )
+        .danger(),
+    ));
 }
 
 /// Renomme un composant (nom affiché ; l'identifiant ne change pas).
@@ -1013,7 +1266,7 @@ pub fn rename(ui: Ui, ed: Ed, id: &str) {
     ui.ask.set(Some(crate::dialog::Ask::input(
         ui.now("component-rename", &[]),
         ui.now("component-make-name", &[]),
-        c.label(),
+        crate::names::component_name(&c),
         ui.now("component-rename", &[]),
         move |name| {
             ed.apply(
@@ -1034,7 +1287,10 @@ pub fn delete(ui: Ui, ed: Ed, id: &str) {
     let id = id.to_string();
     ui.ask.set(Some(
         crate::dialog::Ask::confirm(
-            ui.now("component-delete-title", &[("name", c.label())]),
+            ui.now(
+                "component-delete-title",
+                &[("name", crate::names::component_name(&c))],
+            ),
             None,
             ui.now("component-delete", &[]),
             move || {
@@ -1057,4 +1313,75 @@ pub fn delete(ui: Ui, ed: Ed, id: &str) {
         )
         .danger(),
     ));
+}
+
+/// Transitions proposées pour les variantes de survol et d'appui : durée, clé du libellé.
+const TRANSITIONS: &[(&str, &str)] = &[
+    ("", "variant-transition-none"),
+    ("0.15s", "variant-transition-fast"),
+    ("0.3s", "variant-transition-smooth"),
+    ("0.6s", "variant-transition-slow"),
+];
+
+/// Transition des variantes de survol et d'appui (comme les transitions de Framer) : règle
+/// `.racine, .racine *` de la feuille du site (propriétés visuelles, durée, courbe douce).
+#[component]
+pub fn TransitionSelect(id: String) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let id = StoredValue::new(id);
+    let selector = Memo::new(move |_| {
+        ed.doc.with(|d| {
+            let r = d.as_ref()?.component(&id.get_value())?.root_class()?;
+            Some(format!(".{r}, .{r} *"))
+        })
+    });
+    let rule = Memo::new(move |_| {
+        let sel = selector.get()?;
+        ed.doc
+            .with(|d| crate::styles::find_rule(d.as_ref()?, &sel, &None))
+    });
+    let current = move || {
+        rule.with(|r| {
+            r.as_ref()
+                .and_then(|r| revel_style::values::read(&r.decls, "transition-duration"))
+                .and_then(|f| f.value)
+        })
+        .unwrap_or_default()
+    };
+    let change = move |v: String| {
+        let Some(sel) = selector.get_untracked() else {
+            return;
+        };
+        let on = !v.is_empty();
+        let list = vec![
+            (
+                "transition-property".to_string(),
+                on.then(|| {
+                    "color, background-color, border-color, opacity, transform, box-shadow, filter"
+                        .to_string()
+                }),
+            ),
+            ("transition-duration".to_string(), on.then(|| v.clone())),
+            (
+                "transition-timing-function".to_string(),
+                on.then(|| "cubic-bezier(.2, .8, .2, 1)".to_string()),
+            ),
+        ];
+        if let Some(cmd) = crate::styles::style_command(rule.get_untracked(), sel, None, list) {
+            ed.apply(ui, cmd, false);
+        }
+    };
+    view! {
+        <span class="select select--small comp-transition" title=ui.t("variant-transition-help")
+            class:is-disabled=move || selector.with(Option::is_none)>
+            <select class="input" aria-label=ui.t("variant-transition") prop:disabled=move || selector.with(Option::is_none)
+                on:change=move |e| change(event_target_value(&e))>
+                {TRANSITIONS.iter().map(|(v, k)| {
+                    let v: &'static str = v;
+                    view! { <option value=v selected=move || current() == v>{ui.t(k)}</option> }
+                }).collect_view()}
+            </select>
+        </span>
+    }
 }

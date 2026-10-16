@@ -23,6 +23,43 @@ pub struct Selection {
     pub label: String,
 }
 
+/// Champ d'une propriété dans le panneau de styles (après son affichage) : mis en saisie.
+fn focus_style_field(prop: String) {
+    use wasm_bindgen::JsCast;
+    request_animation_frame(move || {
+        request_animation_frame(move || {
+            let find = |p: &str| {
+                document()
+                    .query_selector(&format!(
+                        ".dock-panel[data-panel=\"styles\"] [data-prop=\"{p}\"]"
+                    ))
+                    .ok()
+                    .flatten()
+            };
+            let Some(cell) = find(&prop).or_else(|| {
+                matches!(prop.as_str(), "column-gap" | "row-gap")
+                    .then(|| find("gap"))
+                    .flatten()
+            }) else {
+                return;
+            };
+            let opts = web_sys::ScrollIntoViewOptions::new();
+            opts.set_block(web_sys::ScrollLogicalPosition::Nearest);
+            cell.scroll_into_view_with_scroll_into_view_options(&opts);
+            if let Ok(Some(b)) = cell.query_selector(".bm-value")
+                && let Ok(b) = b.dyn_into::<web_sys::HtmlElement>()
+            {
+                b.click();
+            } else if let Ok(Some(i)) = cell.query_selector("input")
+                && let Ok(i) = i.dyn_into::<web_sys::HtmlInputElement>()
+            {
+                let _ = i.focus();
+                i.select();
+            }
+        })
+    });
+}
+
 /// Message reçu du canevas.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -127,6 +164,9 @@ enum FromCanvas {
     /// Position de la sélection dans le cadre (zoom sur la sélection).
     Measure {
         rect: Option<Rect>,
+        /// Sélection à montrer (calques) : vue déplacée si besoin, zoom inchangé.
+        #[serde(default)]
+        reveal: bool,
     },
     /// Nombre d'éléments de la page qui portent un sélecteur.
     Count {
@@ -138,8 +178,46 @@ enum FromCanvas {
         slot: revel_edit::canvas::Slot,
         text: String,
     },
+    /// Textes modifiables de l'élément sélectionné (champ « Texte » du panneau de styles).
+    Texts {
+        id: Option<String>,
+        #[serde(default)]
+        items: Vec<TextItem>,
+    },
+    /// Canevas des composants : hauteur du composant dans ce cadre.
+    Stage {
+        h: f64,
+    },
+    /// Double-clic dans une utilisation de composant : canevas du composant, élément pointé
+    /// sélectionné.
+    OpenComponent {
+        component: String,
+        #[serde(default)]
+        node: Option<String>,
+        #[serde(default)]
+        tag: String,
+    },
+    /// Clic sur une poignée d'espacement sans la glisser : champ du panneau de styles.
+    SpacingFocus {
+        prop: String,
+    },
+    /// Textes rendus des éléments liés (calques : texte venu des données, sans l'expression).
+    Previews {
+        #[serde(default)]
+        map: std::collections::HashMap<String, String>,
+    },
     #[serde(other)]
     Other,
+}
+
+/// Texte modifiable de l'élément sélectionné : emplacement, texte affiché (HTML pour un texte
+/// riche).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct TextItem {
+    pub slot: revel_edit::canvas::Slot,
+    pub text: String,
+    #[serde(default)]
+    pub rich: bool,
 }
 
 /// Emplacement de dépôt : avant ou après l'élément `at`, ou dedans (à la fin).
@@ -238,9 +316,13 @@ pub const SIDE_HEIGHT: f64 = 900.0;
 /// cadre (pixels de la page).
 #[derive(Clone, Debug, PartialEq)]
 pub struct FrameBox {
+    /// Clé du cadre : point de rupture, ou `@<variante>` dans le canevas des composants
+    /// (`@` : variante principale).
     pub bp: String,
     pub w: f64,
     pub ox: f64,
+    /// Décalage vertical (variantes d'un composant large, les unes sous les autres).
+    pub oy: f64,
 }
 
 /// Disposition des cadres : un seul (l'écran choisi) ou tous les écrans côte à côte, du plus
@@ -322,8 +404,11 @@ pub struct Ed {
     pub style_sel: RwSignal<String>,
     pub style_state: RwSignal<String>,
     pub hovered: RwSignal<Option<String>>,
-    /// Exécuter les scripts du site dans le canevas.
-    pub scripts: RwSignal<bool>,
+    /// Textes modifiables de l'élément sélectionné (identifiant, textes), envoyés par le canevas.
+    pub texts: RwSignal<(Option<String>, Vec<TextItem>)>,
+    /// Texte rendu des éléments liés à des données (identifiant, ou « utilisation/identifiant »
+    /// dans un composant), envoyé par le canevas à chaque chargement.
+    pub previews: RwSignal<std::collections::HashMap<String, String>>,
     /// Numéro de chargement du canevas (incrémenté pour le recharger).
     pub load: RwSignal<u64>,
     /// Défilement du canevas, rétabli après un rechargement.
@@ -349,10 +434,19 @@ pub struct Ed {
     pub assistant: RwSignal<Option<String>>,
     /// Composant ouvert (modification isolée) : celui qui contient l'élément sélectionné.
     pub isolated: RwSignal<Option<String>>,
+    /// Canevas des composants (comme Framer) : composant ouvert seul, ses variantes en cadres.
+    pub comp: RwSignal<Option<String>>,
+    /// Variante modifiée dans le canevas des composants (`""` : principale).
+    pub variant: RwSignal<String>,
+    /// Hauteur mesurée du composant dans chaque cadre du canevas des composants.
+    pub comp_hs: RwSignal<std::collections::HashMap<String, f64>>,
     /// Langue de travail (celle de l'interface du site ouvert, `Ui::locale`).
     pub locale: RwSignal<Option<String>>,
     /// Tous les écrans côte à côte (le cadre de l'écran choisi est actif).
     pub side: RwSignal<bool>,
+    /// Canevas libre (déplacer la vue, zoomer, régler la largeur du cadre) ; sinon vue
+    /// verrouillée : page calée sur la zone, la molette la fait défiler (comme Webflow).
+    pub free: RwSignal<bool>,
     /// Hauteur des cadres réglée à la poignée du bas (pixels de la page) ; `None` : la place
     /// disponible (un écran : zone du canevas ; côte à côte : 900 px).
     pub frame_h: RwSignal<Option<f64>>,
@@ -369,6 +463,53 @@ pub struct Ed {
 pub const ZOOMS: [f64; 9] = [0.25, 0.33, 0.5, 0.67, 0.75, 1.0, 1.25, 1.5, 2.0];
 
 /// Commande qui ne touche que la feuille de style (le canevas recharge alors la feuille seule).
+/// Commandes qui ne touchent qu'aux attributs d'éléments (et aux styles) : appliquées en direct
+/// dans le canevas, sans rechargement (classes, animations, liens…). Éléments concernés.
+fn attr_targets(c: &Command, out: &mut Vec<revel_edit::Target>) -> bool {
+    match c {
+        Command::SetAttr { at, .. }
+        | Command::RemoveAttr { at, .. }
+        | Command::InsertAttr { at, .. }
+        | Command::RemoveAttrAt { at, .. } => {
+            if !out.contains(at) {
+                out.push(at.clone());
+            }
+            true
+        }
+        Command::Batch { commands } => {
+            !commands.is_empty()
+                && commands
+                    .iter()
+                    .all(|c| style_only(c) || attr_targets(c, out))
+        }
+        _ => false,
+    }
+}
+
+/// Attributs d'un élément tels qu'écrits (sans condition ni expression) ; `None` si l'un d'eux
+/// dépend du rendu (expression, condition) : la page doit alors être rechargée.
+fn literal_attrs(
+    d: &revel_model::Site,
+    at: &revel_edit::Target,
+) -> Option<Vec<(String, Option<String>)>> {
+    match revel_edit::address::node(d, at).ok()? {
+        // Utilisation de composant : attributs posés sur l'élément racine (une classe s'ajoute à
+        // celles du composant : page rechargée).
+        revel_model::Node::Use { attrs, .. } if attrs.iter().any(|a| a.name == "class") => None,
+        revel_model::Node::Element { attrs, .. } | revel_model::Node::Use { attrs, .. } => attrs
+            .iter()
+            .map(|a| {
+                let dynamic = a.when.is_some()
+                    || a.value
+                        .as_deref()
+                        .is_some_and(|v| v.contains("{{") || v.contains("{%"));
+                (!dynamic).then(|| (a.name.clone(), a.value.clone()))
+            })
+            .collect(),
+        _ => None,
+    }
+}
+
 pub fn style_only(c: &Command) -> bool {
     match c {
         Command::SetDecl { .. }
@@ -435,15 +576,47 @@ impl Ed {
         (0..list.length())
             .filter_map(|i| {
                 let f: web_sys::HtmlIFrameElement = list.item(i)?.dyn_into().ok()?;
-                Some((f.get_attribute("data-bp").unwrap_or_default(), f))
+                let key = f
+                    .get_attribute("data-key")
+                    .or_else(|| f.get_attribute("data-bp"))
+                    .unwrap_or_default();
+                Some((key, f))
             })
             .collect()
+    }
+
+    /// La vue se déplace et se zoome : canevas libre, ou canevas des composants (ses variantes
+    /// s'étendent au-delà de la zone).
+    pub fn navigable(self) -> bool {
+        self.free.get() || self.comp.get().is_some()
+    }
+
+    /// Canevas libre ou vue verrouillée. Verrouillée : zoom ajusté, cadre à sa largeur et sa
+    /// hauteur normales, un seul écran.
+    pub fn set_free(self, on: bool) {
+        if self.free.get_untracked() == on {
+            return;
+        }
+        self.free.set(on);
+        crate::pref_set("free", if on { "1" } else { "0" });
+        if !on {
+            if self.side.get_untracked() {
+                self.set_side(false);
+            }
+            self.zoom.set(None);
+            self.frame_w.set(None);
+            self.frame_h.set(None);
+        }
     }
 
     /// Tous les écrans côte à côte, ou l'écran choisi seul (zoom ajusté à la nouvelle vue).
     pub fn set_side(self, on: bool) {
         if self.side.get_untracked() == on {
             return;
+        }
+        // Plusieurs écrans : la vue se déplace (canevas libre).
+        if on {
+            self.set_free(true);
         }
         self.side.set(on);
         self.zoom.set(None);
@@ -491,21 +664,6 @@ impl Ed {
             0.0
         };
         self.post(serde_json::json!({ "type": "viewport", "h": h }));
-    }
-
-    /// Scripts du site exécutés dans le canevas, ou arrêtés (canevas rechargé).
-    pub fn set_scripts(self, ui: Ui, on: bool) {
-        self.scripts.set(on);
-        let path = self.path.get_value();
-        spawn_local(async move {
-            match api::canvas_open(&path, on).await {
-                Ok(b) => {
-                    self.base.set(Some(b));
-                    self.load.update(|n| *n += 1);
-                }
-                Err(e) => ui.fail(e),
-            }
-        });
     }
 
     /// Autre langue affichée (langue de travail, si le site l'a encore).
@@ -589,11 +747,51 @@ impl Ed {
                     label: node_label(ui, n),
                 }));
             }
+            // Attributs avant la modification (application en direct dans le canevas).
+            let mut targets = Vec::new();
+            let attr_cmd = attr_targets(cmd, &mut targets);
+            let before: Option<Vec<_>> = attr_cmd
+                .then(|| {
+                    self.doc.with_untracked(|d| {
+                        let d = d.as_ref()?;
+                        targets.iter().map(|t| literal_attrs(d, t)).collect()
+                    })
+                })
+                .flatten();
             let mut ok = true;
             self.doc.update(|d| {
                 if let Some(d) = d {
                     ok = revel_edit::apply(d, cmd).is_ok();
                 }
+            });
+            // Différences d'attributs à poser dans le canevas : `None` si une valeur dépend du
+            // rendu.
+            let live: Option<Vec<serde_json::Value>> = before.and_then(|before| {
+                self.doc.with_untracked(|d| {
+                    let d = d.as_ref()?;
+                    targets
+                        .iter()
+                        .zip(before)
+                        .map(|(t, b)| {
+                            let a = literal_attrs(d, t)?;
+                            let mut set = serde_json::Map::new();
+                            for (n, v) in &a {
+                                if !b.iter().any(|(m, w)| m == n && w == v) {
+                                    set.insert(
+                                        n.clone(),
+                                        v.clone().map(Into::into).unwrap_or_else(|| "".into()),
+                                    );
+                                }
+                            }
+                            let removed: Vec<String> = b
+                                .iter()
+                                .filter(|(n, _)| !a.iter().any(|(m, _)| m == n))
+                                .map(|(n, _)| n.clone())
+                                .collect();
+                            Some(serde_json::json!({ "id": t.node, "set": set, "remove": removed }))
+                        })
+                        .collect()
+                })
             });
             if matches!(cmd, Command::SetSiteInfo { .. })
                 && let Some(d) = self.doc.read_untracked().as_ref()
@@ -625,6 +823,16 @@ impl Ed {
             ) {
                 // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.
             } else if style_only(cmd) {
+                if let Some(url) = self
+                    .doc
+                    .with_untracked(|d| d.as_ref()?.stylesheet.as_ref().map(|s| s.url.clone()))
+                {
+                    self.post(serde_json::json!({ "type": "stylesheet", "url": url }));
+                }
+            } else if let Some(changes) = live.filter(|_| ok) {
+                // Classes, animations, liens… : posés en direct, sans recharger la page (ni rejouer
+                // ses animations).
+                self.post(serde_json::json!({ "type": "attrs", "changes": changes }));
                 if let Some(url) = self
                     .doc
                     .with_untracked(|d| d.as_ref()?.stylesheet.as_ref().map(|s| s.url.clone()))
@@ -1230,8 +1438,12 @@ impl Ed {
     /// Disposition des cadres (lecture suivie : à appeler hors réaction avec `untrack`).
     pub fn world(self) -> World {
         let (aw, ah) = self.area.get();
-        let side = self.side.get();
+        let comp = self.comp.get();
+        let side = self.side.get() && comp.is_none();
         let active = self.breakpoint.get();
+        if let Some(c) = comp {
+            return self.comp_world(&c, aw);
+        }
         let frames: Vec<FrameBox> = self.doc.with(|d| {
             let bps = d
                 .as_ref()
@@ -1252,6 +1464,7 @@ impl Ed {
                     bp: active.clone(),
                     w,
                     ox: 0.0,
+                    oy: 0.0,
                 }];
             }
             // Ordinateur (base) : 1280 px, entre les largeurs des autres écrans.
@@ -1271,7 +1484,12 @@ impl Ed {
             list.into_iter()
                 .map(|b| {
                     let w = b.min_width.or(b.max_width).map(f64::from).unwrap_or(base_w);
-                    let f = FrameBox { bp: b.id, w, ox };
+                    let f = FrameBox {
+                        bp: b.id,
+                        w,
+                        ox,
+                        oy: 0.0,
+                    };
                     ox += w + SIDE_GAP;
                     f
                 })
@@ -1316,34 +1534,182 @@ impl Ed {
     /// Géométrie du cadre actif (lecture suivie : à appeler hors réaction avec `untrack`).
     pub fn geo(self) -> Geo {
         let w = self.world();
-        let active = self.breakpoint.get();
-        let (fw, ox) = w
+        let active = self.active_key();
+        let (fw, ox, oy) = w
             .frames
             .iter()
             .find(|f| f.bp == active)
             .or(w.frames.first())
-            .map(|f| (f.w, f.ox))
-            .unwrap_or((320.0, 0.0));
+            .map(|f| (f.w, f.ox, f.oy))
+            .unwrap_or((320.0, 0.0, 0.0));
         Geo {
             w: fw,
-            h: w.h,
+            h: self.frame_height(&w),
             fit: w.fit,
             s: w.s,
             x: w.x + ox * w.s,
-            y: w.y,
+            y: w.y + oy * w.s,
         }
+    }
+
+    /// Clé du cadre actif : écran choisi, ou `@<variante>` dans le canevas des composants.
+    pub fn active_key(self) -> String {
+        if self.comp.get().is_some() {
+            format!("@{}", self.variant.get())
+        } else {
+            self.breakpoint.get()
+        }
+    }
+
+    /// Cadre choisi par sa clé (clic dans un cadre ou sur son nom).
+    pub fn activate_key(self, key: &str) {
+        match key.strip_prefix('@') {
+            Some(v) => {
+                if self.variant.get_untracked() != v {
+                    self.variant.set(v.to_string());
+                }
+            }
+            None => {
+                if self.breakpoint.get_untracked() != key {
+                    self.breakpoint.set(key.to_string());
+                }
+            }
+        }
+    }
+
+    /// Hauteur d'un cadre (canevas des composants : hauteur du composant).
+    pub fn frame_height(self, w: &World) -> f64 {
+        if self.comp.get().is_some() {
+            self.comp_frame_h()
+        } else {
+            w.h
+        }
+    }
+
+    /// Hauteur des cadres du canevas des composants : la plus grande hauteur mesurée.
+    pub fn comp_frame_h(self) -> f64 {
+        self.comp_hs
+            .with(|m| m.values().copied().fold(0.0f64, f64::max))
+            .clamp(120.0, 4000.0)
+    }
+
+    /// Variantes affichées du composant `id` : clé du cadre, nom, variante.
+    pub fn comp_frames(self, id: &str) -> Vec<(String, Option<revel_model::Variant>)> {
+        self.doc.with(|d| {
+            let mut v = vec![("@".to_string(), None)];
+            if let Some(c) = d.as_ref().and_then(|d| d.component(id)) {
+                v.extend(
+                    c.variants
+                        .iter()
+                        .map(|x| (format!("@{}", x.id), Some(x.clone()))),
+                );
+            }
+            v
+        })
+    }
+
+    /// Disposition du canevas des composants : un cadre par variante, à la largeur de l'écran
+    /// choisi ; côte à côte pour un composant étroit, les uns sous les autres sinon.
+    fn comp_world(self, id: &str, aw: f64) -> World {
+        let bp_w = self.doc.with(|d| {
+            let id = self.breakpoint.get();
+            d.as_ref()?
+                .breakpoints
+                .iter()
+                .find(|b| b.id == id)
+                .and_then(|b| b.max_width.or(b.min_width))
+                .map(f64::from)
+        });
+        let fw = bp_w.unwrap_or(1280.0);
+        let fh = self.comp_frame_h();
+        let keys = self.comp_frames(id);
+        let stacked = fw > 700.0;
+        let mut frames = Vec::new();
+        for (i, (k, _)) in keys.iter().enumerate() {
+            let i = i as f64;
+            frames.push(FrameBox {
+                bp: k.clone(),
+                w: fw,
+                ox: if stacked { 0.0 } else { i * (fw + SIDE_GAP) },
+                oy: if stacked { i * (fh + SIDE_GAP) } else { 0.0 },
+            });
+        }
+        let n = frames.len().max(1) as f64;
+        let total = if stacked {
+            fw
+        } else {
+            n * fw + (n - 1.0) * SIDE_GAP
+        };
+        let h = if stacked {
+            n * fh + (n - 1.0) * SIDE_GAP
+        } else {
+            fh
+        };
+        let fit = ((aw - GUTTER) / total).clamp(0.05, 1.0);
+        match self.zoom.get() {
+            None => World {
+                frames,
+                total,
+                h,
+                base_h: fh,
+                fit,
+                s: fit,
+                x: ((aw - total * fit) / 2.0).max(GUTTER / 2.0),
+                y: GUTTER / 2.0 + SIDE_LABEL,
+            },
+            Some(z) => {
+                let (x, y) = self.pan.get();
+                World {
+                    frames,
+                    total,
+                    h,
+                    base_h: fh,
+                    fit,
+                    s: z,
+                    x,
+                    y,
+                }
+            }
+        }
+    }
+
+    /// Ouvre le canevas d'un composant (variante principale) ; `node` : élément sélectionné.
+    pub fn open_comp(self, id: &str, node: Option<(String, String)>) {
+        self.comp_hs.set(Default::default());
+        self.variant.set(String::new());
+        self.zoom.set(None);
+        self.comp.set(Some(id.to_string()));
+        match node {
+            Some((nid, tag)) => self.selected.set(Some(Selection {
+                id: nid,
+                tag: tag.clone(),
+                label: tag,
+            })),
+            None => self.selected.set(None),
+        }
+    }
+
+    /// Retour à la page depuis le canevas des composants.
+    pub fn close_comp(self) {
+        if self.comp.get_untracked().is_none() {
+            return;
+        }
+        self.comp.set(None);
+        self.variant.set(String::new());
+        self.zoom.set(None);
+        self.selected.set(None);
     }
 
     /// Origine (dans la zone) du cadre d'un écran.
     pub fn frame_origin(self, bp: &str) -> (f64, f64, f64) {
         let w = untrack(|| self.world());
-        let ox = w
+        let (ox, oy) = w
             .frames
             .iter()
             .find(|f| f.bp == bp)
-            .map(|f| f.ox)
-            .unwrap_or(0.0);
-        (w.x + ox * w.s, w.y, w.s)
+            .map(|f| (f.ox, f.oy))
+            .unwrap_or((0.0, 0.0));
+        (w.x + ox * w.s, w.y + oy * w.s, w.s)
     }
 
     /// Origine des cadres gardée telle qu'une partie reste visible.
@@ -1363,6 +1729,7 @@ impl Ed {
 
     /// Zoom `z` autour du point (`cx`, `cy`) de la zone du canevas.
     pub fn zoom_at(self, z: f64, cx: f64, cy: f64) {
+        self.set_free(true);
         let w = untrack(|| self.world());
         let z = ((z * 100.0).round() / 100.0).clamp(0.05, 4.0);
         let k = z / w.s;
@@ -1378,6 +1745,8 @@ impl Ed {
             self.zoom.set(None);
             return;
         };
+        // Zoom choisi : canevas libre.
+        self.set_free(true);
         let w = untrack(|| self.world());
         let (aw, _) = self.area.get_untracked();
         let z = ((z * 100.0).round() / 100.0).clamp(0.05, 4.0);
@@ -1414,6 +1783,7 @@ impl Ed {
 
     /// Zoom sur la sélection : le canevas la montre puis donne sa position (message `measure`).
     pub fn zoom_selection(self) {
+        self.set_free(true);
         if let Some(s) = self.selected.get_untracked() {
             self.post(serde_json::json!({ "type": "measure", "id": s.id }));
         }
@@ -1430,18 +1800,84 @@ impl Ed {
             .clamp(0.05, 4.0);
         let z = (z * 100.0).round() / 100.0;
         let w = untrack(|| self.world());
-        let active = self.breakpoint.get_untracked();
-        let ox = w
+        let active = untrack(|| self.active_key());
+        let (ox, oy) = w
             .frames
             .iter()
             .find(|f| f.bp == active)
-            .map(|f| f.ox)
-            .unwrap_or(0.0);
+            .map(|f| (f.ox, f.oy))
+            .unwrap_or((0.0, 0.0));
         let x = aw / 2.0 - (ox + r.x + r.width / 2.0) * z;
-        let y = ah / 2.0 - (r.y + r.height / 2.0) * z;
+        let y = ah / 2.0 - (oy + r.y + r.height / 2.0) * z;
         let (x, y) = self.clamp_pan(&w, z, x, y);
         self.pan.set((x, y));
         self.zoom.set(Some(z));
+    }
+
+    /// Sélection choisie hors du canevas (calques, chemin, palette) : sélectionnée dans tous les
+    /// écrans, montrée dans l'écran actif (Ordinateur par défaut) ; la vue ne se déplace que si
+    /// elle n'y est pas visible.
+    pub fn select_and_reveal(self, id: &str) {
+        self.post(serde_json::json!({ "type": "select", "id": id, "reveal": true }));
+        // Partie de l'écran actif visible dans la zone : la page y défile d'abord (la vue ne bouge
+        // que si l'élément reste hors de la zone).
+        let (aw, ah) = self.area.get_untracked();
+        let w = untrack(|| self.world());
+        let active = untrack(|| self.active_key());
+        let fh = untrack(|| self.frame_height(&w));
+        let band = w.frames.iter().find(|f| f.bp == active).and_then(|f| {
+            let (s, m) = (w.s, GUTTER / 2.0);
+            let fy = w.y + f.oy * s;
+            let top = ((m - fy) / s).max(0.0);
+            let bottom = ((ah - m - fy) / s).min(fh);
+            let left = ((m - w.x) / s - f.ox).max(0.0);
+            let right = ((aw - m - w.x) / s - f.ox).min(f.w);
+            (bottom - top >= 80.0 && right - left >= 80.0).then(
+                || serde_json::json!({ "top": top, "bottom": bottom, "left": left, "right": right }),
+            )
+        });
+        self.post(serde_json::json!({ "type": "measure", "id": id, "reveal": true, "band": band }));
+    }
+
+    /// Vue déplacée (sans zoom) pour montrer un rectangle de l'écran actif, s'il sort de la zone.
+    fn reveal_rect(self, r: Rect) {
+        let (aw, ah) = self.area.get_untracked();
+        let w = untrack(|| self.world());
+        let active = untrack(|| self.active_key());
+        let (ox, oy) = w
+            .frames
+            .iter()
+            .find(|f| f.bp == active)
+            .map(|f| (f.ox, f.oy))
+            .unwrap_or((0.0, 0.0));
+        let s = w.s;
+        let m = GUTTER / 2.0;
+        let (left, top) = (w.x + (ox + r.x) * s, w.y + (oy + r.y) * s);
+        let (right, bottom) = (left + r.width * s, top + r.height * s);
+        let mut x = w.x;
+        let mut y = w.y;
+        if left < m || right > aw - m {
+            x = if r.width * s > aw - 2.0 * m {
+                m - (ox + r.x) * s
+            } else {
+                aw / 2.0 - (ox + r.x + r.width / 2.0) * s
+            };
+        }
+        if top < m || bottom > ah - m {
+            y = if r.height * s > ah - 2.0 * m {
+                m - (oy + r.y) * s
+            } else {
+                ah / 2.0 - (oy + r.y + r.height / 2.0) * s
+            };
+        }
+        if (x, y) == (w.x, w.y) || !untrack(|| self.navigable()) {
+            return;
+        }
+        let (x, y) = self.clamp_pan(&w, s, x, y);
+        self.pan.set((x, y));
+        if self.zoom.get_untracked().is_none() {
+            self.zoom.set(Some(s));
+        }
     }
 
     /// Zoom libre : cadre recentré horizontalement (changement de point de rupture).
@@ -1454,8 +1890,11 @@ impl Ed {
         }
     }
 
-    /// Déplacement de la vue (pixels de l'écran).
+    /// Déplacement de la vue (pixels de l'écran) ; rien en vue verrouillée.
     pub fn pan_by(self, dx: f64, dy: f64) {
+        if !untrack(|| self.navigable()) {
+            return;
+        }
         let w = untrack(|| self.world());
         let (x, y) = self.clamp_pan(&w, w.s, w.x + dx, w.y + dy);
         self.pan.set((x, y));
@@ -1532,7 +1971,7 @@ impl Ed {
     /// Commande d'un texte modifié dans le canevas : texte de la page (`SetText`, sans la
     /// typographie de la page si la source ne l'utilisait pas) ou valeur liée à sa source
     /// (`SetBound`, même traitement par le cœur).
-    fn text_command(self, slot: &revel_edit::canvas::Slot, text: String) -> Option<Command> {
+    pub fn text_command(self, slot: &revel_edit::canvas::Slot, text: String) -> Option<Command> {
         use revel_edit::canvas::Slot;
         use revel_edit::locale::TextPlace;
         // Autre langue : texte écrit et propriété de composant traduits (les valeurs liées
@@ -1630,7 +2069,6 @@ impl Ed {
             Slot::Expr {
                 binding: Some(binding),
                 transformed: false,
-                html: false,
                 ..
             } => Some(Command::SetBound {
                 binding: binding.clone(),
@@ -1662,7 +2100,12 @@ impl Ed {
                 .map(|d| {
                     d.components
                         .iter()
-                        .map(|c| (c.id.clone(), serde_json::Value::String(c.label())))
+                        .map(|c| {
+                            (
+                                c.id.clone(),
+                                serde_json::Value::String(crate::names::component_name(c)),
+                            )
+                        })
                         .collect()
                 })
                 .unwrap_or_default()
@@ -1875,7 +2318,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         style_sel: RwSignal::new(String::new()),
         style_state: RwSignal::new(String::new()),
         hovered: RwSignal::new(None),
-        scripts: RwSignal::new(false),
+        texts: RwSignal::new((None, Vec::new())),
+        previews: RwSignal::new(std::collections::HashMap::new()),
         load: RwSignal::new(0),
         scroll: RwSignal::new((0.0, 0.0)),
         live_scroll: RwSignal::new((0.0, 0.0)),
@@ -1892,8 +2336,12 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         saved_at: RwSignal::new(None),
         assistant: RwSignal::new(None),
         isolated: RwSignal::new(None),
+        comp: RwSignal::new(None),
+        variant: RwSignal::new(String::new()),
+        comp_hs: RwSignal::new(std::collections::HashMap::new()),
         locale: ui.locale,
         side: RwSignal::new(crate::pref_get("side").as_deref() == Some("1")),
+        free: RwSignal::new(crate::pref_get("free").as_deref() != Some("0")),
         frame_h: RwSignal::new(None),
         frame_w: RwSignal::new(None),
         hidden_bps: RwSignal::new(
@@ -1909,13 +2357,17 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     // Modification isolée d'un composant : ouverte quand la sélection est dans un composant,
     // fermée quand elle le quitte ; le canevas estompe le reste de la page.
     Effect::new(move |_| {
-        let iso = ed.selected.with(|s| {
-            let s = s.as_ref()?;
-            ed.doc.with(|d| match owner_of(d.as_ref()?, &s.id)? {
-                (revel_model::ids::OwnerKind::Component, c) => Some(c),
-                _ => None,
+        let iso = ed
+            .selected
+            .with(|s| {
+                let s = s.as_ref()?;
+                ed.doc.with(|d| match owner_of(d.as_ref()?, &s.id)? {
+                    (revel_model::ids::OwnerKind::Component, c) => Some(c),
+                    _ => None,
+                })
             })
-        });
+            // Canevas des composants : toujours ouvert sur son composant.
+            .or_else(|| ed.comp.get());
         if ed.isolated.get_untracked() != iso {
             ed.isolated.set(iso);
         }
@@ -1939,8 +2391,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     // Vue côte à côte : écran choisi signalé à chaque cadre (poignées de taille dans le seul
     // cadre actif), valeurs calculées et sélection relues dans le nouveau cadre actif.
     Effect::new(move |prev: Option<(String, bool)>| {
-        let bp = ed.breakpoint.get();
-        let side = ed.side.get();
+        let bp = ed.active_key();
+        let side = ed.side.get() || ed.comp.get().is_some();
         if side && prev.is_some() {
             let bp2 = bp.clone();
             request_animation_frame(move || {
@@ -2067,8 +2519,10 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 FromCanvas::Select { id: Some(_), .. }
                 | FromCanvas::Toggle { .. }
                 | FromCanvas::Context { .. }
-                | FromCanvas::Text { .. } => ed.breakpoint.set(from_bp.clone()),
+                | FromCanvas::Text { .. } => ed.activate_key(&from_bp),
                 FromCanvas::Ready { .. }
+                | FromCanvas::Stage { .. }
+                | FromCanvas::OpenComponent { .. }
                 | FromCanvas::Key { .. }
                 | FromCanvas::Keyup { .. }
                 | FromCanvas::Pan { .. }
@@ -2125,9 +2579,13 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 let s = ed.scale();
                 crate::canvas::open_canvas_menu(ui, ed, r.left() + x * s, r.top() + y * s);
             }
-            FromCanvas::Measure { rect } => {
+            FromCanvas::Measure { rect, reveal } => {
                 if let Some(r) = rect {
-                    ed.fit_rect(r);
+                    if reveal {
+                        ed.reveal_rect(r);
+                    } else {
+                        ed.fit_rect(r);
+                    }
                 }
             }
             FromCanvas::Select { id, tag, label } => {
@@ -2181,6 +2639,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             FromCanvas::Scrolled { x, y } => ed.live_scroll.set((x, y)),
             FromCanvas::Computed { values } => ed.computed.set(values),
             FromCanvas::Count { selector, n } => ed.count.set(Some((selector, n))),
+            // Vue verrouillée : pas de zoom au pincement ni à la molette (bouton « Canevas libre »).
+            FromCanvas::Zoom { .. } if !untrack(|| ed.navigable()) => {}
             FromCanvas::Zoom { dy, x, y } => {
                 // Position du pointeur dans le cadre -> dans la zone du canevas.
                 let at = x.zip(y).map(|(x, y)| {
@@ -2192,6 +2652,32 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             FromCanvas::Text { slot, text } => {
                 if let Some(cmd) = ed.text_command(&slot, text) {
                     ed.apply(ui, cmd, false);
+                }
+            }
+            FromCanvas::Texts { id, items } => ed.texts.set((id, items)),
+            FromCanvas::SpacingFocus { prop } => {
+                dock.layout.update(|l| l.open(crate::dock::PanelId::Styles));
+                focus_style_field(prop);
+            }
+            FromCanvas::Stage { h } => {
+                let key = from_bp.clone();
+                if ed
+                    .comp_hs
+                    .with_untracked(|m| m.get(&key).is_none_or(|v| (v - h).abs() > 1.0))
+                {
+                    ed.comp_hs.update(|m| {
+                        m.insert(key, h);
+                    });
+                }
+            }
+            FromCanvas::OpenComponent {
+                component,
+                node,
+                tag,
+            } => ed.open_comp(&component, node.map(|n| (n, tag))),
+            FromCanvas::Previews { map } => {
+                if ed.previews.with_untracked(|m| *m != map) {
+                    ed.previews.set(map);
                 }
             }
             FromCanvas::Other => {}
@@ -2364,7 +2850,7 @@ fn panel_view(p: crate::dock::PanelId) -> AnyView {
         PanelId::Styles => {
             view! { <div class="panel-pad"><crate::styles::Styles/></div> }.into_any()
         }
-        PanelId::Settings => view! { <crate::inspector::ElementSettings/> }.into_any(),
+        PanelId::Settings => ().into_any(),
         PanelId::Interactions => view! { <crate::interactions::Interactions/> }.into_any(),
     }
 }
@@ -2433,7 +2919,6 @@ fn Toolbar() -> impl IntoView {
     let can_undo = move || ed.state.with(|s| s.as_ref().is_some_and(|s| s.can_undo));
     let can_redo = move || ed.state.with(|s| s.as_ref().is_some_and(|s| s.can_redo));
     let pct = |z: f64| format!("{} %", (z * 100.0).round());
-    let set_scripts = move |on: bool| ed.set_scripts(ui, on);
     view! {
         <div class="editor-toolbar">
             <crate::pagetree::PageContext/>
@@ -2459,6 +2944,9 @@ fn Toolbar() -> impl IntoView {
                     }
                 }).collect_view()}
             </div>
+            <button class="tool-toggle free-toggle" class:is-on=move || ed.free.get() aria-pressed=move || ed.free.get().to_string()
+                title=ui.t("editor-free-help") aria-label=ui.t("editor-free")
+                on:click=move |_| ed.set_free(!ed.free.get_untracked())>{icons::expand()}</button>
             <button class="tool-toggle side-toggle" class:is-on=move || ed.side.get() aria-pressed=move || ed.side.get().to_string()
                 title=ui.t("editor-side-help") aria-label=ui.t("editor-side")
                 on:click=move |_| ed.set_side(!ed.side.get_untracked())>{icons::screens()}</button>
@@ -2480,9 +2968,6 @@ fn Toolbar() -> impl IntoView {
                     })}
                 </select>
             </div>
-            <button class="tool-toggle" class:is-on=move || ed.scripts.get() aria-pressed=move || ed.scripts.get().to_string()
-                title=ui.t("editor-scripts-help") aria-label=ui.t("editor-scripts")
-                on:click=move |_| set_scripts(!ed.scripts.get_untracked())>{icons::code()}</button>
             <ViewMenu/>
             <div class="toolbar-spacer"></div>
             <crate::dock::PanelsMenu/>
@@ -2738,9 +3223,11 @@ fn StatusBar() -> impl IntoView {
                 revel_model::ids::OwnerKind::Component => "editor-owner-component",
             };
             let name = match kind {
-                revel_model::ids::OwnerKind::Component => {
-                    d.as_ref()?.component(&id).map(|c| c.label()).unwrap_or(id)
-                }
+                revel_model::ids::OwnerKind::Component => d
+                    .as_ref()?
+                    .component(&id)
+                    .map(crate::names::component_name)
+                    .unwrap_or(id),
                 _ => id,
             };
             Some(ui.tx(key, &[("name", name)]))
@@ -2772,7 +3259,7 @@ fn StatusBar() -> impl IntoView {
             tag,
             label,
         }));
-        ed.post(serde_json::json!({ "type": "select", "id": id, "reveal": true }));
+        ed.select_and_reveal(&id);
     };
     view! {
         <footer class="editor-status">

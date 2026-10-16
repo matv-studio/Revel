@@ -147,6 +147,7 @@ pub fn Styles() -> impl IntoView {
             .with(|d| revel_edit::address::node(d.as_ref()?, &t).ok().cloned())
     });
     let classes = Memo::new(move |_| node.get().map(|n| classes_of(&n)).unwrap_or_default());
+    let is_use = Memo::new(move |_| matches!(node.get(), Some(Node::Use { .. })));
     // Classe par défaut : la première (gardée tant qu'elle reste proposée).
     Effect::new(move |_| {
         let c = candidates(&classes.get());
@@ -254,9 +255,17 @@ pub fn Styles() -> impl IntoView {
 
     view! {
         <div class="styles">
+            // Contenu de l'élément (lien, image, composant, condition, liste) en tête, avec ses
+            // textes (ceux d'une utilisation de composant après son nom) ; ses paramètres avancés
+            // en bas (onglet Réglages fondu dans Styles).
+            {move || if is_use.get() {
+                view! { <crate::inspector::ContentSettings/><crate::textfield::SelectedTexts/> }.into_any()
+            } else {
+                view! { <crate::textfield::SelectedTexts/><crate::inspector::ContentSettings/> }.into_any()
+            }}
             {move || match kind.get() {
                 0 => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
-                1 => view! { <p class="muted inspector-empty">{ui.t("styles-elements-only")}</p> }.into_any(),
+                1 => ().into_any(),
                 _ => view! {
                     <div class="style-target">
                         // Classes de l'élément (pastilles, comme le champ de sélecteur de Webflow) :
@@ -308,6 +317,10 @@ pub fn Styles() -> impl IntoView {
                                 {move || bp_label().unwrap_or_default()}
                                 {move || ed.count.get().filter(|(s, _)| *s == selector.get()).map(|(_, n)| format!(" · {}", ui.tx("styles-count", &[("count", n.to_string())])))}
                             </span>
+                            // Variante du composant ouvert : styles écrits pour elle.
+                            {move || sx.scope.get().map(|(_, _, _, name)| view! {
+                                <span class="chip chip--variant" title=ui.tx("variant-scope", &[("name", name.clone())])>{icons::component()}{name.clone()}</span>
+                            })}
                             {move || (sx.rule.get().is_none() && !selector.get().is_empty()).then(|| view! {
                                 <span class="chip chip--new" title=ui.t("styles-new-rule")>{ui.t("styles-new")}</span>
                             })}
@@ -324,6 +337,7 @@ pub fn Styles() -> impl IntoView {
                         <EffectsSection sx/>
                         <CodeSection sx/>
                     </Show>
+                    <crate::inspector::AdvancedSettings/>
                 }.into_any(),
             }}
         </div>

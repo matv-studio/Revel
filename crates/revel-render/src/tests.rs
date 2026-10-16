@@ -583,6 +583,8 @@ fn proprietes_de_composant() {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
+        variant: None,
+        attrs: Vec::new(),
     };
     s.pages[0].body.push(use_("u1", &[]));
     s.pages[0]
@@ -629,6 +631,55 @@ fn proprietes_de_composant() {
     );
     assert!(ed.slots.iter().any(|sl| matches!(sl,
         Slot::Block { owner: Owner::Page(_), node, component: Some(c) } if node == "u2" && c == "carte")));
+}
+
+#[test]
+fn variante_et_animation_d_une_utilisation() {
+    let mut s = site();
+    let mut carte = Component::new("carte", parse(r#"<div class="carte"><b>Titre</b></div>"#));
+    carte.variants = vec![
+        revel_model::Variant {
+            id: "sombre".into(),
+            name: Some("Sombre".into()),
+            kind: revel_model::VariantKind::Custom,
+        },
+        revel_model::Variant {
+            id: "survol".into(),
+            name: None,
+            kind: revel_model::VariantKind::Hover,
+        },
+    ];
+    s.components.push(carte);
+    let use_ = |variant: Option<&str>, attrs: Vec<revel_model::Attr>| Node::Use {
+        id: None,
+        component: "carte".into(),
+        args: Default::default(),
+        variant: variant.map(str::to_string),
+        attrs,
+    };
+    s.pages[0].body = vec![
+        use_(None, Vec::new()),
+        use_(
+            Some("sombre"),
+            vec![revel_model::Attr {
+                name: "data-revel-appear".into(),
+                value: Some("up".into()),
+                when: None,
+            }],
+        ),
+        // Variante inconnue ou geste : pas de classe.
+        use_(Some("survol"), Vec::new()),
+    ];
+    s.ensure_ids();
+    let inp = input(&s, Vec::new());
+    let out = build(&inp).unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains(r#"<div class="carte"><b>Titre</b></div><div class="carte is-sombre" data-revel-appear="up"><b>Titre</b></div><div class="carte"><b>Titre</b></div>"#),
+        "{home}"
+    );
+    // Page animée : script ajouté.
+    assert!(home.contains("revel-animations.js"), "{home}");
 }
 
 #[test]

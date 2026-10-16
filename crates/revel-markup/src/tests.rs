@@ -125,6 +125,8 @@ fn set_include_image() {
             id: None,
             component: "partials/header".into(),
             args: Default::default(),
+            variant: None,
+            attrs: Vec::new(),
         }
     );
     let Node::Image(img) = &n[2] else { panic!() };

@@ -120,7 +120,7 @@ try {
   const after = await f.evaluate(() => getComputedStyle(document.querySelector('h1')).color);
   check('Ctrl+Z : style d\'origine, toujours sans rechargement', after === before && (await f.evaluate(() => window.__mark === 1)), after);
 
-  // Modification de structure : page rechargée, sélection conservée.
+  // Attribut modifié (classe, animation, lien…) : posé en direct, sans recharger la page.
   const h1id = await f.evaluate(() => document.querySelector('h1').getAttribute('data-rv'));
   const owner = await (async () => {
     for (const kind of ['page', 'layout', 'component']) {
@@ -131,10 +131,11 @@ try {
   })();
   await page.evaluate((cmd) => window.__revelTest.apply(JSON.stringify(cmd), false),
     { cmd: 'set_attr', at: { owner, node: h1id }, name: 'data-essai', value: 'oui' });
-  f = await waitFrame(() => document.querySelector('h1')?.getAttribute('data-essai') === 'oui' && window.__mark === undefined, 'rechargement');
-  check('attribut modifié : page rechargée avec la modification', true);
+  f = await waitFrame(() => document.querySelector('h1')?.getAttribute('data-essai') === 'oui', 'attribut posé');
+  check('attribut modifié : posé en direct, sans rechargement', await f.evaluate(() => window.__mark === 1));
   await page.click('.editor-toolbar .btn-undo');
   f = await waitFrame(() => document.readyState === 'complete' && document.querySelector('h1') && !document.querySelector('h1').hasAttribute('data-essai'), 'annulation');
+  check('attribut annulé : retiré en direct, sans rechargement', await f.evaluate(() => window.__mark === 1));
   const disk = await invoke('edit_open');
   check('annulé : document identique à l\'ouverture', JSON.stringify(disk.site) === JSON.stringify(doc.site));
 
@@ -251,23 +252,25 @@ try {
     return found;
   };
   await page.click('.layers .layer[data-tech*="section.hero"]');
-  await page.click('.dock-tab[data-panel="settings"]');
-  await page.waitForFunction(() => document.querySelector('.dock-panel[data-panel="settings"] input')?.value === 'section');
-  check('réglages : balise de l\'élément sélectionné', true);
+  // Réglages de l'élément : rubrique « Paramètres avancés » de l'onglet Styles.
+  await page.click('.dock-tab[data-panel="styles"]');
+  await page.click('.advanced-settings > summary');
+  await page.waitForFunction(() => document.querySelector('.advanced-settings input[list="rv-tags"]')?.value === 'section');
+  check('réglages : balise de l\'élément sélectionné (paramètres avancés de l\'onglet Styles)', !(await page.$('.dock-tab[data-panel="settings"]')));
   const secId = await f.evaluate(() => document.querySelector('section.hero').getAttribute('data-rv'));
   // Identifiant (Entrée).
-  const idInput = page.locator('.dock-panel[data-panel="settings"] .field >> nth=1').locator('input');
+  const idInput = page.locator('.advanced-settings .field >> nth=1').locator('input');
   await idInput.fill('essai-id');
   await idInput.press('Enter');
   f = await waitFrame(() => !!document.querySelector('section#essai-id'), 'identifiant');
   check('réglages : identifiant écrit dans la page', true);
-  // Classe ajoutée puis retirée.
-  await page.fill('.dock-panel[data-panel="settings"] .classes-add', 'essai-classe');
-  await page.press('.dock-panel[data-panel="settings"] .classes-add', 'Tab');
+  // Classe ajoutée puis retirée (pastilles de l'onglet Styles).
+  await page.fill('.dock-panel[data-panel="styles"] .selector-add', 'essai-classe');
+  await page.press('.dock-panel[data-panel="styles"] .selector-add', 'Enter');
   f = await waitFrame(() => document.querySelector('section.hero')?.classList.contains('essai-classe'), 'classe ajoutée');
   const cls = nodeById((await invoke('edit_open')).site, secId).attrs.find((a) => a.name === 'class').value;
   check('réglages : classe ajoutée', cls.split(' ').includes('essai-classe') && cls.split(' ')[0] === 'hero', cls);
-  await page.click('.dock-panel[data-panel="settings"] .chip--class:has-text("essai-classe") .chip-x');
+  await page.click('.dock-panel[data-panel="styles"] .sel-chip:has(.sel-chip-name:text-is("essai-classe")) .sel-chip-x');
   f = await waitFrame(() => !document.querySelector('section.hero')?.classList.contains('essai-classe'), 'classe retirée');
   check('réglages : classe retirée', true);
 
@@ -280,19 +283,27 @@ try {
   await page.click('.dock-tab[data-panel="layers"]');
 
   // Lien : nouvel onglet (target + rel). Le lien est dans le composant de l'en-tête : un clic
-  // sélectionne l'utilisation, un double-clic ouvre le composant sur le lien.
+  // sélectionne l'utilisation ; « Modifier » ouvre le canevas du composant, où le lien se
+  // sélectionne directement.
   await page.frameLocator('iframe.canvas-frame').locator('header nav a', { hasText: 'Agence' }).first().click();
-  await page.waitForSelector('.dock-panel[data-panel="settings"] .instance-name');
-  check('composant : un clic sélectionne l\'utilisation entière', (await page.textContent('.dock-panel[data-panel="settings"] .instance-name')).trim() === 'header');
-  await page.frameLocator('iframe.canvas-frame').locator('header nav a', { hasText: 'Agence' }).first().dblclick();
-  await page.waitForSelector('.dock-panel[data-panel="settings"] .row-switch');
-  await page.click('.dock-panel[data-panel="settings"] .row-switch .switch');
+  await page.waitForSelector('.dock-panel[data-panel="styles"] .instance-name');
+  check('composant : un clic sélectionne l\'utilisation entière', (await page.textContent('.dock-panel[data-panel="styles"] .instance-name')).trim() === 'Header');
+  await page.click('.dock-panel[data-panel="styles"] .instance-actions .btn >> nth=0');
+  await page.waitForSelector('.comp-bar');
+  await page.waitForSelector('iframe.canvas-frame[data-key="@"]');
+  await page.waitForTimeout(800);
+  await page.frameLocator('iframe.canvas-frame[data-key="@"]').locator('header nav a', { hasText: 'Agence' }).first().click();
+  await page.waitForSelector('.dock-panel[data-panel="styles"] .row-switch');
+  check('composant : canevas du composant ouvert (variante principale), lien sélectionné', !!(await page.$('.comp-bar')));
+  await page.click('.dock-panel[data-panel="styles"] .row-switch .switch');
   f = await waitFrame(() => [...document.querySelectorAll('header nav a')].some((a) => a.textContent.trim() === 'Agence' && a.target === '_blank' && a.rel === 'noopener'), 'nouvel onglet');
   check('lien : ouverture dans un nouvel onglet', true);
+  await page.click('.comp-back');
+  await page.waitForFunction(() => !document.querySelector('.comp-bar') && !!document.querySelector('iframe.canvas-frame[data-key="desktop"]'));
 
   // Image : champs de l'image.
-  await page.locator('.layers .layer-label', { hasText: /^image / }).first().click();
-  await page.waitForFunction(() => /Texte alternatif|Image \(/.test(document.querySelector('.dock-panel[data-panel="settings"]')?.textContent || ''));
+  await page.locator('.layers .layer-label', { hasText: /^Image$/ }).first().click();
+  await page.waitForFunction(() => /Texte alternatif|Image \(/.test(document.querySelector('.dock-panel[data-panel="styles"] .content-settings')?.textContent || ''));
   check('image : source et texte alternatif proposés', true);
 
   // Tout annuler.
@@ -384,13 +395,13 @@ try {
     const lw1 = (await page.locator('.dock-col--left').boundingBox()).width;
     check('espace de travail : colonne élargie', Math.abs(lw1 - lw0 - 40) < 3, `${lw0} → ${lw1}`);
     // Fermer un panneau (menu du groupe), le rouvrir (menu « Panneaux »).
-    await page.click('.dock-tab[data-panel="settings"]');
-    await page.click('.dock-col--right .dock-group:has(.dock-tab[data-panel="settings"]) .dock-menu-btn');
+    await page.click('.dock-tab[data-panel="interactions"]');
+    await page.click('.dock-col--right .dock-group:has(.dock-tab[data-panel="interactions"]) .dock-menu-btn');
     await page.click('.dock-menu .menu-item:has-text("Fermer")');
-    check('espace de travail : panneau fermé', !(await page.$('.dock-tab[data-panel="settings"]')));
+    check('espace de travail : panneau fermé', !(await page.$('.dock-tab[data-panel="interactions"]')));
     await page.click('.panels-menu > summary');
-    await page.click('.panels-pop .menu-item--check:has-text("Réglages")');
-    check('espace de travail : panneau rouvert', !!(await page.$('.dock-tab[data-panel="settings"]')));
+    await page.click('.panels-pop .menu-item--check:has-text("Interactions")');
+    check('espace de travail : panneau rouvert', !!(await page.$('.dock-tab[data-panel="interactions"]')));
     await page.click('.panels-menu > summary');
     // Ctrl+\ : panneaux masqués puis affichés.
     await page.locator('.canvas-area').click({ position: { x: 5, y: 5 } });
@@ -603,15 +614,15 @@ try {
       const inserted = await until(async () => (await placed()).includes('"src":"\\"/media/essai-import.png\\"","alt":"\\"Carré rouge\\""'));
       check('médias : vignette glissée sur la page (image et texte alternatif par défaut)', inserted);
       // Réglages de l'image : choix parmi les médias, puis import depuis la fenêtre (choisi aussitôt).
-      await page.click('.dock-tab[data-panel="settings"]');
-      await page.click('.dock-panel[data-panel="settings"] .field-line .icon-btn');
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.click('.dock-panel[data-panel="styles"] .content-settings .field-line .icon-btn');
       await page.waitForSelector('.picker .asset[data-url="/media/essai-depot.png"]');
       const onlyImages = await page.$$eval('.picker .asset', (a) => a.every((x) => /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(x.dataset.url)));
       if (shots) await page.screenshot({ path: `${shots}/editeur-choix-image.png` });
       await page.click('.picker .asset[data-url="/media/essai-depot.png"]');
       const picked = await until(async () => (await placed()).includes('"src":"\\"/media/essai-depot.png\\""'));
       check('choix d\'une image : fenêtre (images seulement), image choisie, fenêtre fermée', onlyImages && picked && !(await page.$('.picker')));
-      await page.click('.dock-panel[data-panel="settings"] .field-line .icon-btn');
+      await page.click('.dock-panel[data-panel="styles"] .content-settings .field-line .icon-btn');
       await page.waitForSelector('.picker .asset');
       const [ch3] = await Promise.all([page.waitForEvent('filechooser'), page.click('.picker-foot .btn')]);
       await ch3.setFiles({ name: 'essai-choix.png', mimeType: 'image/png', buffer: PNG_A });
@@ -647,7 +658,7 @@ try {
       await page.fill('.dialog input', 'Bouton pause');
       await page.keyboard.press('Enter');
       await untilC(async () => !!(await comp()));
-      await page.click('.dock-tab[data-panel="settings"]');
+      await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.instance-name');
       const made = await comp();
       check('composants : créé à partir de la sélection, son utilisation sélectionnée',
@@ -722,7 +733,7 @@ try {
       await page.click('.dock-tab[data-panel="insert"]');
       await page.click('.insert-item[data-item="insert-collection-list"]');
       const listed = await untilE(async () => (await frame.locator('.liste-collection__element').count()) > 2);
-      await page.click('.dock-tab[data-panel="settings"]');
+      await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.collection-list select');
       await page.selectOption('.collection-list select >> nth=2', 'date');
       await untilE(async () => (await pageJson()).includes('sort(attribute=\\"date\\", reverse=true)'));
@@ -751,7 +762,7 @@ try {
       check('éléments : grille insérée avec ses styles', grid && gridCss === 'grid', gridCss);
       // Icône : dessin choisi dans les réglages.
       await page.click('.insert-item[data-item="insert-icon"]');
-      await page.click('.dock-tab[data-panel="settings"]');
+      await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.icon-choice[data-icon="coeur"]');
       await page.click('.icon-choice[data-icon="coeur"]');
       const heart = await untilE(async () => (await frame.locator('svg.icone[data-icon="coeur"]').count()) === 1);
@@ -759,10 +770,10 @@ try {
       // Code HTML écrit tel quel.
       await page.click('.dock-tab[data-panel="insert"]');
       await page.click('.insert-item[data-item="insert-embed"]');
-      await page.click('.dock-tab[data-panel="settings"]');
+      await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.embed-code');
       await page.fill('.embed-code', '<p class="essai-code">Bonjour</p>');
-      await page.click('.dock-panel[data-panel="settings"] .panel-title >> nth=0');
+      await page.locator('.embed-code').blur();
       const embed = await untilE(async () => (await frame.locator('.code-html .essai-code').count()) === 1);
       check('éléments : code HTML écrit tel quel', embed);
       // Bloc prêt à l'emploi : section complète avec ses icônes et ses styles.
@@ -1272,7 +1283,7 @@ try {
   check('styles : aucun libellé tronqué (français)', cut.length === 0, cut.join(', '));
   if (shots) await page.locator('.dock-col--right').screenshot({ path: `${shots}/editeur-styles-panneau-fr.png` });
   await page.evaluate(() => window.__revelTest.lang('en'));
-  await page.waitForFunction(() => document.querySelector('.dock-tab[data-panel="settings"]')?.textContent.includes('Settings'));
+  await page.waitForFunction(() => document.querySelector('.dock-tab[data-panel="layers"]')?.textContent.includes('Layers'));
   const cutEn = await truncated();
   check('styles : aucun libellé tronqué (anglais)', cutEn.length === 0, cutEn.join(', '));
   if (shots) await page.locator('.dock-col--right').screenshot({ path: `${shots}/editeur-styles-panneau-en.png` });
@@ -1867,7 +1878,8 @@ try {
       await page.waitForTimeout(300);
       const [hero1, ih1] = await f.evaluate(() => [document.querySelector('.hero').getBoundingClientRect().height, innerHeight]);
       check('cadre allongé : plus de page affichée, mise en page inchangée', Math.abs(hero1 - hero0) < 1 && ih1 > ih0 + 100, `${ih0} → ${ih1} px, héro ${Math.round(hero0)} → ${Math.round(hero1)} px`);
-      await page.dblclick('.frame-grow');
+      // Poignée sous la zone visible (zone du canevas jamais défilée) : double-clic envoyé.
+      await page.locator('.frame-grow').dispatchEvent('dblclick');
       await waitFrame((h) => Math.abs(innerHeight - h) < 2, 'hauteur rétablie', ih0);
       check('cadre allongé : double-clic, hauteur par défaut', docC() === doc11);
     }
@@ -1890,7 +1902,7 @@ try {
       };
       // Titre de l'onglet : « Site | Page », filtre du site réécrit, aperçu à jour.
       await page.click('.view-tab[data-view="view-settings"]');
-      await page.click('.settings-nav-item[data-section="settings-seo"]');
+      await page.click('.settings-nav-item[data-section="settings-general"]');
       await page.waitForSelector('.readable-title');
       await page.click('.readable-title button[data-mode="site"]');
       await until(() => JSON.parse(docR()).settings.filters.seo_title.expr.startsWith('(site.title ~'), 'format du titre');
@@ -1904,7 +1916,7 @@ try {
       await until(() => fs.readFileSync(siteYml, 'utf8').includes('share_image: /assets/img/essai.jpg'), 'image de partage');
       check('réglages lisibles : image de partage par défaut écrite dans les données (site.yml)', true);
       // Menu du site : texte d'un lien changé (affectation réécrite, canevas à jour).
-      await page.click('.settings-nav-item[data-section="settings-menus"]');
+      await page.click('.settings-nav-item[data-section="settings-navigation"]');
       await page.waitForSelector('.navlist-link');
       await page.fill('.navlist-link >> nth=0 >> .navlist-label', 'L’agence');
       await page.press('.navlist-link >> nth=0 >> .navlist-label', 'Tab');
@@ -2170,7 +2182,6 @@ try {
   // ---------------------------------------------------------------- Langues de traduction (D-36)
   await page.click('.topbar button.logo');
   await page.click('.view-tab[data-view="nav-settings"]');
-  await page.click('.settings-nav-item[data-section="translate"]');
   await page.waitForSelector('.packs .pack');
   const packs = await page.$$eval('.pack', (l) => l.map((x) => [x.dataset.pack, x.querySelector('.pack-get') ? 'get' : x.querySelector('.pack-remove') ? 'rm' : '?']));
   const bundled = packs.filter(([, a]) => a === 'rm').map(([c]) => c);
@@ -2199,7 +2210,6 @@ try {
   // Réglages › Assistants IA (4.2, serveur simulé) : activation, port, clé, configurations.
   {
     const state = () => page.textContent('.mcp-state');
-    await page.click('.settings-nav-item[data-section="assistants"]');
     await page.locator('.mcp').scrollIntoViewIfNeeded();
     const off = (await state()).trim();
     await page.click('.mcp-server .switch');

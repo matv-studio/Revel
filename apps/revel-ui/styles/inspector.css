@@ -35,6 +35,13 @@
 .select--state.is-active select.input { color: var(--inherit-text); border-color: color-mix(in srgb, var(--inherit-text) 50%, transparent); }
 .target-where { flex: 1; min-width: 0; font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chip--new { height: 18px; background: var(--set-bg); color: var(--set-text); cursor: help; }
+/* Styles écrits pour une variante du composant ouvert. */
+.chip--variant { height: 18px; gap: 4px; background: var(--comp-bg); color: var(--comp); cursor: help; }
+.chip--variant svg.icon { width: 11px; height: 11px; }
+/* Contenu de l'élément (lien, image, composant, condition, liste) en tête de l'onglet Styles. */
+.content-settings { display: flex; flex-direction: column; gap: var(--s-3); padding-bottom: var(--s-3); margin-bottom: var(--s-1); border-bottom: var(--border) solid var(--line); }
+.content-settings:not(:has(> *)) { display: none; }
+.content-settings .insp-group:first-child { border-top: 0; padding-top: 0; }
 
 /* Origine d'une valeur : code couleur de Webflow (bleu réglé ici, orange hérité) */
 .dot { display: inline-block; flex: none; width: 6px; height: 6px; border-radius: 50%; }
@@ -414,3 +421,19 @@
 .anim-settings { display: flex; flex-direction: column; gap: 6px; padding-bottom: var(--s-3); }
 .anim-settings .switch { align-self: flex-start; }
 .anim-settings .nbox.is-here .nbox-input { color: var(--set-text); }
+
+/* Liste sans valeur réglée ici : valeur en vigueur en gris, en orange si héritée (code couleur de
+   Webflow). */
+.select.is-unset select.input { color: var(--text-muted); }
+.select.is-unset.is-inherited select.input { color: var(--inherit-text); }
+.select.is-unset select.input option { color: var(--text); }
+
+/* Champ « Texte » en tête du panneau de styles. */
+.text-fields { display: flex; flex-direction: column; gap: var(--s-2); padding-bottom: var(--s-3); margin-bottom: var(--s-1); border-bottom: var(--border) solid var(--line); }
+.text-field { display: flex; flex-direction: column; gap: 4px; }
+.text-field-head { display: flex; align-items: center; gap: 4px; }
+.text-field-bound { display: grid; place-items: center; color: var(--text-faint); }
+.text-field-bound svg.icon { width: 12px; height: 12px; }
+.text-field-input { height: auto; min-height: var(--control-sm); padding: 5px 8px; resize: vertical; font: inherit; font-size: var(--text-sm); line-height: 1.4; }
+/* Couleurs du site : titre et « + » (couleur choisie ajoutée, nommée). */
+.cp-site-head { display: flex; align-items: center; justify-content: space-between; }

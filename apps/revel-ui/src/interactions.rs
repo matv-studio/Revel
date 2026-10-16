@@ -384,8 +384,10 @@ pub fn Interactions() -> impl IntoView {
         ed.doc.with(|d| {
             let n = revel_edit::address::node(d.as_ref()?, &at).ok()?;
             Some(match n {
-                Node::Element { .. } => 0u8,
-                Node::Image(_) | Node::Use { .. } => 1,
+                // Utilisation de composant : animation posée sur son élément racine, sans
+                // l'envelopper.
+                Node::Element { .. } | Node::Use { .. } => 0u8,
+                Node::Image(_) => 1,
                 _ => 2,
             })
         })
@@ -423,7 +425,7 @@ fn FamilySection(f: Family, at: StoredValue<Target>) -> impl IntoView {
         let at = at.get_value();
         ed.doc.with(
             |d| match revel_edit::address::node(d.as_ref()?, &at).ok()? {
-                Node::Element { attrs, .. } => attrs
+                Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
                     .iter()
                     .find(|a| a.name == f.attr())
                     .and_then(|a| a.value.clone()),

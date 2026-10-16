@@ -84,6 +84,15 @@ pub fn humanize(class: &str) -> String {
     }
 }
 
+/// Nom affiché d'un composant : son nom, sinon la fin de son identifiant rendue lisible
+/// (`partials/card-project` -> « Card project »).
+pub fn component_name(c: &revel_model::Component) -> String {
+    c.name
+        .clone()
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| humanize(c.id.rsplit('/').next().unwrap_or(&c.id)))
+}
+
 /// Nature de l'élément (« Titre 1 », « Paragraphe »…), réactive.
 pub fn type_name(ui: Ui, tag: &str) -> String {
     let tag = tag.to_ascii_lowercase();

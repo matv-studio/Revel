@@ -446,11 +446,18 @@ pub fn NumBox(
     let with_units = !units.is_empty();
     let shown = move || {
         let v = value.get().unwrap_or_default();
+        // Variable du site (`var(--step-3)`) : son nom lisible (« Step 3 »).
+        if let Some(name) = var_label(&v) {
+            return name;
+        }
         if with_units { split(&v).0 } else { v }
     };
     // Indication arrondie au dixième (les valeurs effectives ont souvent trois décimales).
     let placeholder = move || {
         let h = hint.get();
+        if let Some(name) = var_label(&h) {
+            return name;
+        }
         match parse_num(&h) {
             Some(n) if with_units => fmt_num((n.value * 10.0).round() / 10.0),
             Some(n) => format!("{}{}", fmt_num((n.value * 10.0).round() / 10.0), n.unit),
@@ -480,6 +487,16 @@ pub fn NumBox(
     };
     let commit_text = move |t: String, coalesce: bool| {
         let cur = value.get_untracked();
+        // Nom lisible d'une variable du site : la variable.
+        if cur.as_deref().and_then(var_label).as_deref() == Some(t.trim()) {
+            return;
+        }
+        if let Some(v) = var_named(sx, &t) {
+            if Some(&v) != cur.as_ref() {
+                on_commit.run((Some(v), coalesce));
+            }
+            return;
+        }
         let u = unit_of();
         let base = cur.clone().unwrap_or_else(|| start.get_untracked());
         let v = eval(&t, Some(&base), &u);
@@ -737,18 +754,29 @@ pub fn Choice(
                 .map(|it| it.1.clone())
         })
     };
+    // Rien de réglé ici : la valeur en vigueur s'affiche dans le champ (en gris, en orange si
+    // héritée), sans ligne de plus dans la liste.
+    let unset = move || pv.with(|p| p.here.is_none());
     view! {
-        <div class="select">
+        <div class="select" class:is-unset=unset
+            class:is-inherited=move || unset() && pv.with(|p| matches!(p.origin, super::ctx::Origin::Inherited(_)))>
             <select class="input" on:change=move |e| {
                 let v = event_target_value(&e);
                 sx.set(prop, (!v.is_empty()).then_some(v));
             }>
-                <option value="" selected=move || pv.with(|p| p.here.is_none())>{move || {
+                <option value="" hidden=true selected=unset>{move || {
                     let h = pv.with(|p| p.hint());
                     let name = label_of(&h).unwrap_or_else(|| {
-                        if prop == "font-family" { revel_style::values::first_family(&h) } else { h }
+                        if prop == "font-family" {
+                            sx.ed.doc.with(|d| match d.as_ref().and_then(|d| d.stylesheet.as_ref()) {
+                                Some(sheet) => super::sections::font_label(sheet, &h),
+                                None => revel_style::values::first_family(&h),
+                            })
+                        } else {
+                            h
+                        }
                     });
-                    if name.is_empty() { ui.tx("styles-unset", &[]) } else { ui.tx("styles-unset-value", &[("value", name)]) }
+                    if name.is_empty() { ui.tx("styles-unset", &[]) } else { name }
                 }}</option>
                 {move || {
                     let here = pv.with(|p| p.here.clone());
@@ -813,4 +841,32 @@ pub fn Switch(sx: Sx, prop: &'static str, on: &'static str, off: &'static str) -
             <span class="switch-track"></span>
         </label>
     }
+}
+
+/// Nom lisible d'une valeur faite d'une seule variable du site (`var(--step-3)` -> « Step 3 »).
+pub fn var_label(v: &str) -> Option<String> {
+    let name = v.trim().strip_prefix("var(--")?.strip_suffix(')')?;
+    (!name.is_empty() && !name.contains([',', '(', ' '])).then(|| crate::names::humanize(name))
+}
+
+/// Variable du site dont le nom lisible est `text` (« Step 3 » -> `var(--step-3)`).
+fn var_named(sx: Sx, text: &str) -> Option<String> {
+    let t = text.trim().to_lowercase();
+    if t.is_empty() {
+        return None;
+    }
+    if t.starts_with("var(") {
+        return Some(text.trim().to_string());
+    }
+    sx.ed.doc.with_untracked(|d| {
+        d.as_ref()?.style_rules().find_map(|r| {
+            if !matches!(r.selector.as_str(), ":root" | "html") {
+                return None;
+            }
+            r.decls.iter().find_map(|decl| {
+                let name = decl.prop.strip_prefix("--")?;
+                (crate::names::humanize(name).to_lowercase() == t).then(|| format!("var(--{name})"))
+            })
+        })
+    })
 }

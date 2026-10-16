@@ -18,8 +18,8 @@ enum Act {
     ZoomSel,
     Rulers,
     Guides,
-    Scripts,
     SideBySide,
+    Free,
     Panels,
     Parent,
     Insert(Preset, &'static str),
@@ -229,10 +229,10 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
         ),
         act(
             "palette-view",
-            k("editor-scripts"),
+            k("editor-free"),
             String::new(),
-            Some(icons::code),
-            Act::Scripts,
+            Some(icons::expand),
+            Act::Free,
             false,
         ),
         act(
@@ -390,10 +390,13 @@ fn run(ui: Ui, ed: Ed, dock: crate::dock::Dock, a: Act) {
                 crate::pref_set("guides", &j);
             }
         }
-        Act::Scripts => ed.set_scripts(ui, !ed.scripts.get_untracked()),
         Act::SideBySide => {
             editor();
             ed.set_side(!ed.side.get_untracked());
+        }
+        Act::Free => {
+            editor();
+            ed.set_free(!ed.free.get_untracked());
         }
         Act::Panels => dock.layout.update(|l| l.hidden = !l.hidden),
         Act::Parent => ed.post(serde_json::json!({ "type": "nav", "dir": "parent" })),
@@ -418,7 +421,7 @@ fn run(ui: Ui, ed: Ed, dock: crate::dock::Dock, a: Act) {
             editor();
             let id = s.id.clone();
             ed.selected.set(Some(s));
-            ed.post(serde_json::json!({ "type": "select", "id": id, "reveal": true }));
+            ed.select_and_reveal(&id);
         }
         Act::Tab(t) => ui.tab(t),
         Act::Preview => ui.open_preview(false),

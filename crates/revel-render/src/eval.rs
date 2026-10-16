@@ -930,6 +930,8 @@ impl<'a> Builder<'a> {
                 id,
                 component,
                 args,
+                variant,
+                attrs,
             } => match self.site.component(component) {
                 Some(_) if self.using.borrow().contains(component) => self.warn(format!(
                     "{ctx} : composant « {component} » utilisé dans lui-même, ignoré"
@@ -967,6 +969,10 @@ impl<'a> Builder<'a> {
                         }
                         values.insert(p.name.clone(), v);
                     }
+                    // Variante choisie et attributs de cette utilisation (animations) : posés sur
+                    // l'élément racine du composant.
+                    let patched = c.patched_body(variant.as_deref(), attrs);
+                    let nodes: &[Node] = patched.as_deref().unwrap_or(&c.body);
                     let body = |out: &mut String| {
                         scope.push_with(values, origins);
                         self.using.borrow_mut().push(c.id.clone());
@@ -974,7 +980,7 @@ impl<'a> Builder<'a> {
                             mark: at.mark,
                             ..At::root(Owner::Component(c.id.clone()))
                         };
-                        let r = self.nodes(&c.body, scope, out, mode, &ctx, &inner);
+                        let r = self.nodes(nodes, scope, out, mode, &ctx, &inner);
                         self.using.borrow_mut().pop();
                         scope.pop();
                         r

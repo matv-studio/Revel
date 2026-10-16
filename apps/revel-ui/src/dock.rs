@@ -22,12 +22,14 @@ pub enum PanelId {
     Components,
     Assets,
     Styles,
+    /// Ancien onglet Réglages, fondu dans Styles : gardé pour relire les dispositions
+    /// enregistrées, retiré à la lecture.
     Settings,
     Interactions,
 }
 
 impl PanelId {
-    pub const ALL: [PanelId; 10] = [
+    pub const ALL: [PanelId; 9] = [
         PanelId::Pages,
         PanelId::Layers,
         PanelId::Variables,
@@ -36,7 +38,6 @@ impl PanelId {
         PanelId::Components,
         PanelId::Assets,
         PanelId::Styles,
-        PanelId::Settings,
         PanelId::Interactions,
     ];
 
@@ -176,7 +177,7 @@ impl Default for Layout {
             ],
             right: vec![Group {
                 id: 3,
-                tabs: vec![PanelId::Styles, PanelId::Settings, PanelId::Interactions],
+                tabs: vec![PanelId::Styles, PanelId::Interactions],
                 active: PanelId::Styles,
                 size: 1.0,
             }],
@@ -428,6 +429,12 @@ impl Layout {
     /// présent une fois, panneaux nouveaux ajoutés, largeurs bornées.
     pub fn normalize(mut self) -> Self {
         let mut seen = Vec::new();
+        // Onglet Réglages fondu dans Styles (rubrique « Paramètres avancés ») : retiré des
+        // dispositions enregistrées.
+        self.closed.retain(|t| *t != PanelId::Settings);
+        for g in self.groups_mut() {
+            g.tabs.retain(|t| *t != PanelId::Settings);
+        }
         for g in self.groups_mut() {
             g.tabs.retain(|t| {
                 if seen.contains(t) {
@@ -1256,9 +1263,9 @@ mod tests {
             }
         ));
         // Fenêtre flottante, puis retour dans une colonne.
-        l.put(PanelId::Settings, Drop::Float { x: 10.0, y: 20.0 });
+        l.put(PanelId::Styles, Drop::Float { x: 10.0, y: 20.0 });
         assert_eq!(l.floats.len(), 1);
-        l.put(PanelId::Settings, Drop::Column { side: Side::Left });
+        l.put(PanelId::Styles, Drop::Column { side: Side::Left });
         assert!(l.floats.is_empty());
         assert!(all_once(&l));
         // La colonne de droite peut se vider.
@@ -1320,10 +1327,13 @@ mod tests {
         // Disposition abîmée : doublons retirés, panneaux manquants ajoutés, largeurs bornées.
         let mut bad = Layout::default();
         bad.left[0].tabs.push(PanelId::Layers);
-        bad.right[0].tabs.retain(|t| *t != PanelId::Settings);
+        bad.right[0].tabs.retain(|t| *t != PanelId::Interactions);
+        // Ancien onglet Réglages : retiré.
+        bad.right[0].tabs.push(PanelId::Settings);
         bad.left_w = 5000.0;
         let n = bad.normalize();
         assert!(all_once(&n));
+        assert!(n.group_of(PanelId::Settings).is_none());
         assert_eq!(n.left_w, MAX_COL);
         let json = serde_json::to_string(&n).unwrap();
         assert_eq!(serde_json::from_str::<Layout>(&json).unwrap(), n);

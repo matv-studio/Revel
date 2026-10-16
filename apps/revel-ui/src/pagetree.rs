@@ -22,6 +22,7 @@ use std::collections::BTreeSet;
 
 /// Ouvre une page dans le canevas.
 pub fn open_page(ed: Ed, url: String) {
+    ed.close_comp();
     if ed.page.get_untracked() != url {
         ed.page.set(url);
         ed.scroll.set((0.0, 0.0));
@@ -319,9 +320,174 @@ struct TreeCtx {
     creating_page: RwSignal<Option<String>>,
     creating_folder: RwSignal<Option<String>>,
     renaming: RwSignal<Option<String>>,
+    /// Glisser pour ranger l'affichage : dossier parent et clé de la ligne glissée.
+    dragging: RwSignal<Option<(String, String)>>,
+    /// Ligne survolée pendant le glisser et côté (`true` : après).
+    drop_at: RwSignal<Option<(String, bool)>>,
+}
+
+/// Clés de l'ordre d'affichage choisi (rangement des pages de l'éditeur).
+fn page_key(p: &EditorPageInfo) -> String {
+    format!("page:{}", p.page.as_deref().unwrap_or(&p.url))
+}
+fn folder_key(path: &str) -> String {
+    format!("folder:{path}")
+}
+fn collection_key(id: &str) -> String {
+    format!("collection:{id}")
+}
+
+/// Ligne de l'arbre rangeable (page ou dossier ; collection à la racine).
+#[derive(Clone)]
+enum Child {
+    Page(EditorPageInfo),
+    Folder(FolderNode),
+    Collection(CollectionInfo),
+}
+
+impl Child {
+    fn key(&self) -> String {
+        match self {
+            Child::Page(p) => page_key(p),
+            Child::Folder(f) => folder_key(&f.path),
+            Child::Collection(c) => collection_key(&c.id),
+        }
+    }
+}
+
+/// Ordre d'affichage : clés rangées d'abord (dans l'ordre choisi), les autres à la suite dans
+/// l'ordre habituel.
+fn arrange(ed: Ed, mut items: Vec<Child>) -> Vec<Child> {
+    ed.doc.with(|d| {
+        if let Some(d) = d {
+            let shelf = &d.library.pages;
+            items.sort_by_key(|c| shelf.rank(&c.key()).map_or((1, 0), |r| (0, r)));
+        }
+    });
+    items
 }
 
 impl TreeCtx {
+    /// Rangement par glisser possible (pas pendant une recherche).
+    fn can_drag(self) -> bool {
+        self.q.with_untracked(|q| q.trim().is_empty())
+    }
+
+    fn drag_start(self, parent: String, key: String, e: &leptos::ev::DragEvent) {
+        if !self.can_drag() {
+            e.prevent_default();
+            return;
+        }
+        if let Some(dt) = e.data_transfer() {
+            let _ = dt.set_data("text/plain", &key);
+            dt.set_effect_allowed("move");
+        }
+        self.dragging.set(Some((parent, key)));
+    }
+
+    fn drag_over(self, parent: &str, key: &str, e: &leptos::ev::DragEvent) {
+        let ok = self
+            .dragging
+            .with_untracked(|d| d.as_ref().is_some_and(|(p, k)| p == parent && k != key));
+        if !ok {
+            return;
+        }
+        e.prevent_default();
+        e.stop_propagation();
+        let after = e
+            .current_target()
+            .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok())
+            .map(|el| {
+                let r = el.get_bounding_client_rect();
+                f64::from(e.client_y()) > r.top() + r.height() / 2.0
+            })
+            .unwrap_or(false);
+        let next = Some((key.to_string(), after));
+        if self.drop_at.get_untracked() != next {
+            self.drop_at.set(next);
+        }
+    }
+
+    fn drag_end(self) {
+        self.dragging.set(None);
+        self.drop_at.set(None);
+    }
+
+    /// Dépôt : `siblings` (clés des lignes du même dossier, dans l'ordre affiché) rangées à nouveau.
+    fn drop_on(self, key: &str, siblings: &[String], e: &leptos::ev::DragEvent) {
+        e.prevent_default();
+        let src = self.dragging.get_untracked().map(|(_, k)| k);
+        let after = self.drop_at.get_untracked().is_some_and(|(_, a)| a);
+        self.drag_end();
+        let Some(src) = src.filter(|s| s != key) else {
+            return;
+        };
+        let mut keys: Vec<String> = siblings.iter().filter(|k| **k != src).cloned().collect();
+        let Some(at) = keys.iter().position(|k| k == key) else {
+            return;
+        };
+        keys.insert(if after { at + 1 } else { at }, src);
+        let Some(mut shelf) = self
+            .ed
+            .doc
+            .with_untracked(|d| d.as_ref().map(|d| d.library.pages.clone()))
+        else {
+            return;
+        };
+        let before = shelf.clone();
+        shelf.reorder(&keys);
+        if shelf != before {
+            self.ed.apply(
+                self.ui,
+                Command::SetShelf {
+                    kind: revel_edit::ShelfKind::Pages,
+                    shelf,
+                },
+                false,
+            );
+        }
+    }
+
+    fn is_dragged(self, key: String) -> impl Fn() -> bool + Copy + 'static {
+        let key = StoredValue::new(key);
+        move || {
+            self.dragging
+                .with(|d| d.as_ref().is_some_and(|(_, k)| key.with_value(|x| x == k)))
+        }
+    }
+
+    fn is_drop(self, key: String, after: bool) -> impl Fn() -> bool + Copy + 'static {
+        let key = StoredValue::new(key);
+        move || {
+            self.drop_at.with(|d| {
+                d.as_ref()
+                    .is_some_and(|(k, a)| key.with_value(|x| x == k) && *a == after)
+            })
+        }
+    }
+
+    /// Lignes d'un dossier (ou de la racine), dans l'ordre d'affichage choisi.
+    fn children(
+        self,
+        parent: &str,
+        items: Vec<Child>,
+        depth: usize,
+        collection: impl Fn(CollectionInfo, String, StoredValue<Vec<String>>) -> AnyView,
+    ) -> AnyView {
+        let items = arrange(self.ed, items);
+        let siblings = StoredValue::new(items.iter().map(Child::key).collect::<Vec<_>>());
+        let parent = parent.to_string();
+        items
+            .into_iter()
+            .map(|c| match c {
+                Child::Page(p) => self.page_row(p, depth, parent.clone(), siblings),
+                Child::Folder(f) => self.folder(f, depth, parent.clone(), siblings),
+                Child::Collection(c) => collection(c, parent.clone(), siblings),
+            })
+            .collect_view()
+            .into_any()
+    }
+
     fn toggle(self, k: String) {
         self.open.update(|o| {
             if let Some(i) = o.iter().position(|x| *x == k) {
@@ -480,8 +646,22 @@ impl TreeCtx {
         show(ui, e, items);
     }
 
-    fn page_row(self, p: EditorPageInfo, depth: usize) -> AnyView {
+    fn page_row(
+        self,
+        p: EditorPageInfo,
+        depth: usize,
+        parent: String,
+        siblings: StoredValue<Vec<String>>,
+    ) -> AnyView {
         let (ui, ed) = (self.ui, self.ed);
+        let key = page_key(&p);
+        let (k1, k2, k3) = (key.clone(), key.clone(), key.clone());
+        let (before, after) = (
+            self.is_drop(key.clone(), false),
+            self.is_drop(key.clone(), true),
+        );
+        let dragged = self.is_dragged(key);
+        let par = parent.clone();
         let url = p.url.clone();
         let (u1, u2) = (url.clone(), url.clone());
         let p2 = p.clone();
@@ -494,7 +674,13 @@ impl TreeCtx {
         });
         view! {
             <button class="list-row page-row" class:is-on=move || ed.page.get() == u1 class:is-draft=p.draft
+                class:drop-before=before class:drop-after=after class:is-dragging=dragged
                 style=format!("--depth:{depth}") title=p.url.clone() data-url=p.url.clone()
+                draggable="true"
+                on:dragstart=move |e| self.drag_start(parent.clone(), k1.clone(), &e)
+                on:dragover=move |e| self.drag_over(&par, &k2, &e)
+                on:drop=move |e| siblings.with_value(|s| self.drop_on(&k3, s, &e))
+                on:dragend=move |_| self.drag_end()
                 on:click=move |_| self.go(u2.clone())
                 on:contextmenu=move |e: leptos::ev::MouseEvent| self.page_menu(&e, &p2)>
                 <span class="list-chevron"></span>
@@ -530,8 +716,22 @@ impl TreeCtx {
         .into_any()
     }
 
-    fn folder(self, node: FolderNode, depth: usize) -> AnyView {
+    fn folder(
+        self,
+        node: FolderNode,
+        depth: usize,
+        parent: String,
+        siblings: StoredValue<Vec<String>>,
+    ) -> AnyView {
         let (ui, ed) = (self.ui, self.ed);
+        let dkey = folder_key(&node.path);
+        let (d1, d2, d3) = (dkey.clone(), dkey.clone(), dkey.clone());
+        let (before, after) = (
+            self.is_drop(dkey.clone(), false),
+            self.is_drop(dkey.clone(), true),
+        );
+        let dragged = self.is_dragged(dkey);
+        let (par1, par2) = (parent.clone(), parent);
         let key = format!("p:{}", node.path);
         let k1 = key.clone();
         let q = self.q;
@@ -551,7 +751,13 @@ impl TreeCtx {
         let row = view! {
             <div class="list-row list-folder" role="treeitem" tabindex="0" style=format!("--depth:{depth}")
                 class:is-current=move || has_current.get() && !is_open.get()
+                class:drop-before=before class:drop-after=after class:is-dragging=dragged
                 data-folder=node.path.clone()
+                draggable=move || (!renaming()).to_string()
+                on:dragstart=move |e| self.drag_start(par1.clone(), d1.clone(), &e)
+                on:dragover=move |e| self.drag_over(&par2, &d2, &e)
+                on:drop=move |e| siblings.with_value(|s| self.drop_on(&d3, s, &e))
+                on:dragend=move |_| self.drag_end()
                 on:click=move |_| if !renaming() { self.toggle(key.clone()) }
                 on:contextmenu=move |e: leptos::ev::MouseEvent| self.folder_menu(&e, &node_menu)>
                 <span class="list-chevron">{move || if is_open.get() { icons::chevron_down() } else { icons::chevron_right() }}</span>
@@ -575,8 +781,9 @@ impl TreeCtx {
                     let f = inside.clone();
                     view! {
                         {self.inputs(&f.path, depth + 1)}
-                        {f.folders.into_iter().map(|sub| self.folder(sub, depth + 1)).collect_view()}
-                        {f.pages.into_iter().map(|p| self.page_row(p, depth + 1)).collect_view()}
+                        {self.children(&f.path,
+                            f.folders.into_iter().map(Child::Folder).chain(f.pages.into_iter().map(Child::Page)).collect(),
+                            depth + 1, |_, _, _| ().into_any())}
                     }.into_any()
                 } else {
                     // Replié : seulement la page affichée.
@@ -587,7 +794,8 @@ impl TreeCtx {
                         for s in &f.folders { find(s, u, out); }
                     }
                     find(&inside, &u, &mut cur);
-                    cur.into_iter().map(|p| self.page_row(p, depth + 1)).collect_view().into_any()
+                    let none = StoredValue::new(Vec::new());
+                    cur.into_iter().map(|p| self.page_row(p, depth + 1, String::new(), none)).collect_view().into_any()
                 }
             }}
         }
@@ -619,8 +827,9 @@ pub fn PageTree(
         creating_page: creating_page.unwrap_or_else(|| RwSignal::new(None)),
         creating_folder: creating_folder.unwrap_or_else(|| RwSignal::new(None)),
         renaming: RwSignal::new(None),
+        dragging: RwSignal::new(None),
+        drop_at: RwSignal::new(None),
     };
-    let toggle = move |k: String| tc.toggle(k);
     let go = move |url: String| tc.go(url);
     let entry_menu = move |e: &web_sys::MouseEvent, c: CollectionInfo, p: EditorPageInfo| {
         use crate::ctxmenu::{CtxItem, open as show};
@@ -677,6 +886,7 @@ pub fn PageTree(
                 {own.then(|| view! { <span class="list-badge" title=ui.t("design-own-help")>{icons::layout()}</span> })}
             </button>
         }
+        .into_any()
     };
     let fixed = Memo::new(move |_| {
         let q = q.get();
@@ -699,42 +909,89 @@ pub fn PageTree(
         }
     });
     let cols = Memo::new(move |_| collections(ed));
+    let collection_row =
+        move |c: CollectionInfo, parent: String, siblings: StoredValue<Vec<String>>| {
+            collection_view(tc, c, parent, siblings, labels, entry_row, orphan_menu)
+        };
     view! {
         <div class="page-tree" role="tree">
             {move || tc.inputs("", 0)}
             {move || {
+                // Racine : pages, dossiers et collections, dans l'ordre d'affichage choisi.
                 let root = fixed.get();
-                view! {
-                    {root.pages.into_iter().map(|p| tc.page_row(p, 0)).collect_view()}
-                    {root.folders.into_iter().map(|f| tc.folder(f, 0)).collect_view()}
-                }
-            }}
-            {move || cols.get().into_iter().map(|c| {
-                let key = format!("c:{}", c.id);
-                let k1 = key.clone();
-                let ql = q.get();
-                let entries: Vec<EditorPageInfo> = c.entries.iter()
-                    .filter(|p| matches(&ql, &[&p.title, &p.url, &c.id]))
-                    .cloned()
+                let items: Vec<Child> = root.pages.into_iter().map(Child::Page)
+                    .chain(root.folders.into_iter().map(Child::Folder))
+                    .chain(cols.get().into_iter().map(Child::Collection))
                     .collect();
-                if entries.is_empty() && !ql.trim().is_empty() {
-                    return ().into_any();
-                }
-                let searching = !ql.trim().is_empty();
-                let is_open = Memo::new(move |_| searching || open.with(|o| o.contains(&k1)));
-                let id = c.id.clone();
-                let has_current = Memo::new(move |_| current_entry(ed).is_some_and(|(cc, _)| cc.id == id));
-                let n = c.entries.len();
-                let c2 = c.clone();
-                let first = c.entries.iter().find(|p| !c.own(p)).or(c.entries.first()).map(|p| p.url.clone());
-                let template_tip = match &c.template {
-                    Some(t) => ui.now("design-template-help", &[("layout", t.clone())]),
-                    None => ui.now("design-no-template", &[]),
-                };
-                view! {
+                tc.children("", items, 0, collection_row)
+            }}
+        </div>
+    }
+}
+
+/// Ligne d'une collection et ses contenus (racine de l'arbre des pages).
+#[allow(clippy::too_many_arguments)]
+fn collection_view(
+    tc: TreeCtx,
+    c: CollectionInfo,
+    parent: String,
+    siblings: StoredValue<Vec<String>>,
+    labels: RwSignal<std::collections::BTreeMap<String, String>>,
+    entry_row: impl Fn(CollectionInfo, EditorPageInfo) -> AnyView + Copy + Send + Sync + 'static,
+    orphan_menu: impl Fn(&web_sys::MouseEvent, String) + Copy + Send + Sync + 'static,
+) -> AnyView {
+    let (ui, ed, q, open) = (tc.ui, tc.ed, tc.q, tc.open);
+    let go = move |url: String| tc.go(url);
+    let toggle = move |k: String| tc.toggle(k);
+    let ckey = collection_key(&c.id);
+    let (d1, d2, d3) = (ckey.clone(), ckey.clone(), ckey.clone());
+    let (before, after) = (
+        tc.is_drop(ckey.clone(), false),
+        tc.is_drop(ckey.clone(), true),
+    );
+    let dragged = tc.is_dragged(ckey);
+    let (par1, par2) = (parent.clone(), parent);
+    {
+        {
+            let key = format!("c:{}", c.id);
+            let k1 = key.clone();
+            let ql = q.get();
+            let entries: Vec<EditorPageInfo> = c
+                .entries
+                .iter()
+                .filter(|p| matches(&ql, &[&p.title, &p.url, &c.id]))
+                .cloned()
+                .collect();
+            if entries.is_empty() && !ql.trim().is_empty() {
+                return ().into_any();
+            }
+            let searching = !ql.trim().is_empty();
+            let is_open = Memo::new(move |_| searching || open.with(|o| o.contains(&k1)));
+            let id = c.id.clone();
+            let has_current =
+                Memo::new(move |_| current_entry(ed).is_some_and(|(cc, _)| cc.id == id));
+            let n = c.entries.len();
+            let c2 = c.clone();
+            let first = c
+                .entries
+                .iter()
+                .find(|p| !c.own(p))
+                .or(c.entries.first())
+                .map(|p| p.url.clone());
+            let template_tip = match &c.template {
+                Some(t) => ui.now("design-template-help", &[("layout", t.clone())]),
+                None => ui.now("design-no-template", &[]),
+            };
+            view! {
                     <div class="list-row list-folder collection-row" style="--depth:0" role="treeitem"
                         class:is-current=move || has_current.get()
+                        class:drop-before=before class:drop-after=after class:is-dragging=dragged
                         data-collection=c.id.clone() title=template_tip
+                        draggable="true"
+                        on:dragstart=move |e| tc.drag_start(par1.clone(), d1.clone(), &e)
+                        on:dragover=move |e| tc.drag_over(&par2, &d2, &e)
+                        on:drop=move |e| siblings.with_value(|s| tc.drop_on(&d3, s, &e))
+                        on:dragend=move |_| tc.drag_end()
                         on:click=move |_| {
                             // Le modèle s'ouvre sur le contenu affiché, sinon le premier qui l'utilise.
                             if !has_current.get_untracked() && let Some(u) = first.clone() { go(u) }
@@ -775,8 +1032,7 @@ pub fn PageTree(
                         }
                     }}
                 }.into_any()
-            }).collect_view()}
-        </div>
+        }
     }
 }
 

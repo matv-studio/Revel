@@ -25,20 +25,36 @@ thread_local! {
     static MODEL: Cell<Model> = const { Cell::new(Model::Hex) };
 }
 
-/// Texte d'une valeur : une variable s'affiche par son nom.
+/// Texte d'une valeur : une variable s'affiche par son nom lisible (`var(--bleu-nuit)` ->
+/// « Bleu nuit »).
 fn display(v: &str) -> String {
     if is_var(v) {
-        v[4..v.len() - 1].trim().to_string()
+        crate::names::humanize(var_name(v))
     } else {
         v.to_string()
     }
 }
 
-/// Valeur saisie : `--nom` -> `var(--nom)`, `3d7eff` -> `#3d7eff`.
-fn from_input(t: &str) -> Option<String> {
+/// `var(--nom, repli)` -> `--nom`.
+fn var_name(v: &str) -> &str {
+    v[4..v.len() - 1]
+        .split(',')
+        .next()
+        .unwrap_or_default()
+        .trim()
+}
+
+/// Valeur saisie : nom lisible d'une couleur du site ou `--nom` -> `var(--nom)`, `3d7eff` ->
+/// `#3d7eff`.
+fn from_input(t: &str, vars: &[(String, Rgba)]) -> Option<String> {
     let t = t.trim();
     if t.is_empty() {
         None
+    } else if let Some((n, _)) = vars
+        .iter()
+        .find(|(n, _)| crate::names::humanize(n).eq_ignore_ascii_case(t))
+    {
+        Some(format!("var({n})"))
     } else if t.starts_with("--") {
         Some(format!("var({t})"))
     } else if t.chars().all(|c| c.is_ascii_hexdigit()) && matches!(t.len(), 3 | 4 | 6 | 8) {
@@ -397,14 +413,21 @@ fn Picker(
             {with_contrast.then(|| view! {
                 {move || contrast_line().map(|(t, ok)| view! { <p class="cp-contrast" class:is-low=!ok>{t}</p> })}
             })}
-            {(!vars.is_empty() || !used.is_empty()).then(|| view! {
+            {view! {
                 <div class="cp-site">
-                    <p class="cp-title">{ui.t("color-site")}</p>
+                    <div class="cp-site-head">
+                        <p class="cp-title">{ui.t("color-site")}</p>
+                        // Couleur choisie ajoutée aux couleurs du site (variable nommée), comme
+                        // les styles de couleur de Framer et les variables de Webflow.
+                        <button class="icon-btn icon-btn--small cp-add" title=ui.t("color-site-add") aria-label=ui.t("color-site-add")
+                            on:click=move |_| add_site_color(sx, rgba().to_css(), on_commit)>{crate::icons::plus()}</button>
+                    </div>
                     <div class="cp-swatches">
                         {vars.into_iter().map(|(name, c)| {
                             let n2 = name.clone();
+                            let label = crate::names::humanize(&name);
                             view! {
-                                <button class="cp-swatch is-var" style=swatch_style(Some(c)) title=name.clone() aria-label=name
+                                <button class="cp-swatch is-var" style=swatch_style(Some(c)) title=label.clone() aria-label=label
                                     on:click=move |_| {
                                         let h = hsva.get_untracked().h;
                                         let mut n = c.to_hsva();
@@ -420,7 +443,7 @@ fn Picker(
                         }).collect_view()}
                     </div>
                 </div>
-            })}
+            }}
         </div>
     }
 }
@@ -476,8 +499,8 @@ pub fn ColorInput(
                         _ => display(&h),
                     }
                 }
-                on:change=move |e| commit(from_input(&event_target_value(&e)))
-                on:keydown=move |e: ev::KeyboardEvent| { if e.key() == "Enter" { commit(from_input(&event_target_value(&e))) } }/>
+                on:change=move |e| commit(from_input(&event_target_value(&e), &site_colors(sx).0))
+                on:keydown=move |e: ev::KeyboardEvent| { if e.key() == "Enter" { commit(from_input(&event_target_value(&e), &site_colors(sx).0)) } }/>
             <span class="color-alpha" class:is-hidden=move || color().is_none_or(|c| c.alpha() >= 1.0 || c.a == 0.0)>
                 {move || color().map(|c| format!("{}%", fmt_num((c.a * 100.0).round()))).unwrap_or_default()}
             </span>
@@ -508,4 +531,59 @@ pub fn ColorField(
             on_commit=Callback::new(move |v: Option<String>| sx.set(prop, v))
             with_contrast/>
     }
+}
+
+/// Ajoute une couleur aux couleurs du site : nom demandé, variable `--nom` déclarée dans `:root`,
+/// puis la propriété réglée prend cette variable.
+fn add_site_color(sx: Sx, css: String, on_commit: Callback<Option<String>>) {
+    let ui = sx.ui;
+    let ed = sx.ed;
+    let n = site_colors(sx).0.len() + 1;
+    sx.menu.set(None);
+    ui.ask.set(Some(crate::dialog::Ask::input(
+        ui.now("color-site-add", &[]),
+        ui.now("color-site-name", &[]),
+        ui.now("color-site-default", &[("n", n.to_string())]),
+        ui.now("color-site-create", &[]),
+        move |name: String| {
+            let base = revel_model::slugify(&name);
+            let base = if base.is_empty() {
+                "couleur".to_string()
+            } else {
+                base
+            };
+            let taken: Vec<String> = ed.doc.with_untracked(|d| {
+                d.as_ref()
+                    .map(|d| {
+                        d.style_rules()
+                            .flat_map(|r| r.decls.iter().map(|x| x.prop.clone()))
+                            .filter(|p| p.starts_with("--"))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            });
+            let var = (1..)
+                .map(|i| {
+                    if i == 1 {
+                        format!("--{base}")
+                    } else {
+                        format!("--{base}-{i}")
+                    }
+                })
+                .find(|v| !taken.contains(v))
+                .unwrap_or_else(|| format!("--{base}"));
+            let rule = ed
+                .doc
+                .with_untracked(|d| super::find_rule(d.as_ref()?, ":root", &None));
+            if let Some(cmd) = super::style_command(
+                rule,
+                ":root".into(),
+                None,
+                vec![(var.clone(), Some(css.clone()))],
+            ) {
+                ed.apply(ui, cmd, false);
+            }
+            on_commit.run(Some(format!("var({var})")));
+        },
+    )));
 }

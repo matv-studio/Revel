@@ -287,6 +287,48 @@ fn session_edition_enregistre_et_annule() {
 }
 
 #[test]
+fn canevas_d_un_composant_seul() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        let mut carte = revel_model::Component::new(
+            "carte",
+            vec![revel_model::build::el(
+                "div",
+                &[("class", "carte")],
+                vec![revel_model::build::text("Titre")],
+            )],
+        );
+        carte.variants = vec![revel_model::Variant {
+            id: "sombre".into(),
+            name: None,
+            kind: revel_model::VariantKind::Custom,
+        }];
+        p.site.components.push(carte);
+        p.site.ensure_ids();
+        p.save().unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    c.canvas_open(&site, canvas::CanvasOptions::default())
+        .unwrap();
+    let page = c.canvas_respond("/__revel/component/?component=carte&variant=sombre&page=%2F");
+    assert_eq!(page.status, 200);
+    let html = String::from_utf8(page.body).unwrap();
+    assert!(html.contains("class=\"carte is-sombre\""), "{html}");
+    assert!(html.contains("data-rv="), "{html}");
+    assert!(html.contains("<script src=\"/__revel/canvas.js\"></script>"));
+    // Utilisation repérée comme un composant (sélection de ses éléments dans le canevas).
+    assert!(html.contains("\"component\":\"carte\""), "{html}");
+    assert_eq!(
+        c.canvas_respond("/__revel/component/?component=absent")
+            .status,
+        404
+    );
+}
+
+#[test]
 fn canevas_par_le_protocole() {
     use revel_edit::canvas::{Binding, Seg, Slot, Source};
     use revel_edit::{Command, Owner, Target};

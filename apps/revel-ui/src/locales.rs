@@ -690,7 +690,7 @@ fn PageTexts(
                 }
                 revel_edit::Owner::Component(id) => d
                     .and_then(|d| d.component(id))
-                    .map(|c| c.label())
+                    .map(crate::names::component_name)
                     .unwrap_or_else(|| id.clone()),
             }
         })

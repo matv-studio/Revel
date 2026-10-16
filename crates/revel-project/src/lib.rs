@@ -470,6 +470,83 @@ impl Project {
         Ok(revel_render::render_editor(&input, url, opts)?)
     }
 
+    /// Composant seul pour l'éditeur (canevas des composants, comme Framer) : en-tête du site
+    /// (feuilles de style, polices) et attributs de `body` du gabarit extérieur de la page
+    /// `reference` (variables de la page reprises), le composant au milieu de la page, dans la
+    /// variante `variant`. Adresse : [`COMPONENT_URL`].
+    pub fn render_component_editor(
+        &self,
+        component: &str,
+        variant: Option<&str>,
+        reference: &str,
+        hooks: Arc<dyn AssetHooks>,
+        environment: &str,
+        opts: &EditorOptions,
+    ) -> Result<Option<EditorPage>, ProjectError> {
+        let mut site = self.site_with_data()?;
+        if site.component(component).is_none() {
+            return Ok(None);
+        }
+        let reference = site
+            .pages
+            .iter()
+            .find(|p| p.path == reference)
+            .or_else(|| site.pages.iter().find(|p| p.path == "/"))
+            .or_else(|| site.pages.first())
+            .cloned();
+        // Gabarit le plus extérieur de la page de référence : son `body` ne garde que le contenu.
+        let mut outer = None;
+        let mut next = reference.as_ref().and_then(|p| p.layout.clone());
+        for _ in 0..16 {
+            let Some(id) = next.take() else { break };
+            let Some(l) = site.layout(&id) else { break };
+            next = l.parent.clone();
+            outer = Some(l.clone());
+        }
+        let stage = outer.map(|mut l| {
+            l.id = "__revel_stage".into();
+            l.parent = None;
+            empty_body(&mut l.body);
+            l
+        });
+        let page = revel_model::Page {
+            id: "__revel_component".into(),
+            path: COMPONENT_URL.into(),
+            layout: stage.as_ref().map(|l| l.id.clone()),
+            props: reference
+                .as_ref()
+                .map(|p| p.props.clone())
+                .unwrap_or_default(),
+            computed: reference
+                .as_ref()
+                .map(|p| p.computed.clone())
+                .unwrap_or_default(),
+            body: vec![revel_model::Node::Use {
+                id: Some("__revel_use".into()),
+                component: component.to_string(),
+                args: Default::default(),
+                variant: variant.map(str::to_string),
+                attrs: Vec::new(),
+            }],
+            draft: false,
+            name: None,
+            code: Default::default(),
+        };
+        site.layouts.extend(stage);
+        site.pages.retain(|p| p.path != COMPONENT_URL);
+        site.pages.push(page);
+        let input = BuildInput {
+            site: &site,
+            entries: self.load_entries()?,
+            locales: self.load_locales()?,
+            environment: environment.to_string(),
+            version: self.version_tag(&site),
+            hooks,
+            now: chrono::Utc::now(),
+        };
+        Ok(revel_render::render_editor(&input, COMPONENT_URL, opts)?)
+    }
+
     /// Pages HTML du site (pages fixes et contenus de collection), pour l'éditeur.
     pub fn list_pages(&self) -> Result<Vec<revel_render::PageRef>, ProjectError> {
         let site = self.site_with_data()?;
@@ -901,6 +978,30 @@ impl AssetHooks for ProjectAssets {
     fn share_image(&self, src: &str, base: &str) -> String {
         revel_render::PlainAssets.share_image(src, base)
     }
+}
+
+/// Adresse de la page d'un composant seul dans le canevas (réservée à Revel).
+pub const COMPONENT_URL: &str = "/__revel/component/";
+
+/// Contenu de l'élément `body` remplacé par le seul emplacement du contenu (en-tête, pied de
+/// page et menus du gabarit retirés). `false` : pas de `body`.
+fn empty_body(nodes: &mut [revel_model::Node]) -> bool {
+    use revel_model::Node;
+    for n in nodes.iter_mut() {
+        match n {
+            Node::Element { tag, children, .. } if tag.eq_ignore_ascii_case("body") => {
+                *children = vec![Node::Slot];
+                return true;
+            }
+            Node::Element { children, .. } => {
+                if empty_body(children) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 #[cfg(test)]

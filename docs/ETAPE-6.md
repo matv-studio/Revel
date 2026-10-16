@@ -2,9 +2,9 @@
 
 Objectif : animer un site sans écrire de code ni passer par After Effects, aussi simplement que dans Framer —
 une liste d'animations prêtes à l'emploi, chacune avec quelques réglages — puis lire les animations Lottie
-exportées d'After Effects pour ceux qui animent à la main ; ensuite empaqueter Revel pour la version 1.0
-(mises à jour automatiques, signature, documentation, installateur léger) après une dernière passe de
-comparaison avec Framer, Figma et Webflow.
+exportées d'After Effects pour ceux qui animent à la main ; faire ensuite une passe de comparaison avec
+Framer, Figma et Webflow (demande du 16/10/2026 : juste après les animations et transitions) ; enfin empaqueter
+Revel pour la version 1.0 (mises à jour automatiques, signature, documentation, installateur léger).
 
 **Critères d'acceptation**
 1. Panneau Interactions : animations prêtes à l'emploi rangées par moment (apparition, texte, survol, appui,
@@ -17,10 +17,10 @@ comparaison avec Framer, Figma et Webflow.
 3. Animations Lottie exportées d'After Effects : fichier ajouté aux médias, lecteur hébergé avec le site (pas de
    service extérieur), lecture automatique, en boucle, au survol ou au défilement.
 4. Interactions entre éléments (clic sur un bouton qui ouvre un menu, onglets, accordéons) sans code.
-5. Mises à jour automatiques de Revel, installateurs signés, documentation intégrée.
-6. Fin d'étape : passe de comparaison avec Framer, Figma et Webflow et passe complète d'expérience, d'interface
-   et de direction artistique ; installateur 1.0 léger, au logo de Revel, sans langue de traduction livrée
-   (D-46).
+5. Passe de comparaison avec Framer, Figma et Webflow et passe complète d'expérience, d'interface et de
+   direction artistique, juste après les transitions entre les pages.
+6. Mises à jour automatiques de Revel, installateurs signés, documentation intégrée ; installateur 1.0 léger,
+   au logo de Revel, sans langue de traduction livrée (D-46).
 
 ## Sous-étapes
 
@@ -30,10 +30,10 @@ comparaison avec Framer, Figma et Webflow.
 | 6.2 | **Animations Lottie** (After Effects avec Bodymovin ou LottieFiles) : bloc « Animation Lottie », lecteur hébergé avec le site, réglages de lecture | `revel-assets`, `revel-render`, `revel-ui` |
 | 6.3 | **Interactions entre éléments** : déclencheurs (clic, survol, arrivée à l'écran, défilement, chargement) et actions sur d'autres éléments (afficher, masquer, classe, animation) ; menu, onglets, accordéon prêts à l'emploi | `revel-render`, `revel-ui` |
 | 6.4 | **Transitions entre les pages** (fondu, glissement) | `revel-render`, `revel-ui` |
-| 6.5 | **Mises à jour automatiques** de Revel (vérifiées et signées) | `revel-app` |
-| 6.6 | **Signature du code** Windows et macOS (D-09) | intégration continue |
-| 6.7 | **Documentation** : aide intégrée, premiers pas | `revel-ui`, `docs/` |
-| 6.8 | **Passe de comparaison** avec Framer, Figma et Webflow ; passe d'expérience, d'interface et de direction artistique | tous |
+| 6.5 | **Passe de comparaison** avec Framer, Figma et Webflow ; passe d'expérience, d'interface et de direction artistique (placée juste après 6.4 le 16/10/2026) | tous |
+| 6.6 | **Mises à jour automatiques** de Revel (vérifiées et signées) | `revel-app` |
+| 6.7 | **Signature du code** Windows et macOS (D-09) | intégration continue |
+| 6.8 | **Documentation** : aide intégrée, premiers pas | `revel-ui`, `docs/` |
 | 6.9 | **Installateur 1.0** léger, au logo de Revel, sans langue de traduction livrée (D-46) | `revel-app`, intégration continue |
 
 ## Catalogue des animations prêtes à l'emploi (6.1)
@@ -139,3 +139,30 @@ Repères : effets Appear, Hover, Press, Loop, Text Effects, Scroll Speed et Scro
 | 6.7 | À venir |
 | 6.8 | À venir |
 | 6.9 | À venir |
+
+## Passe complète du 16/10/2026 (après 6.1)
+
+Demande de l'utilisateur, faite sur le site Alunites importé : éliminer les incohérences de l'application, et
+recréer le site depuis l'application seule pour prouver que les outils suffisent sans écrire de code.
+
+| Point | État |
+|---|---|
+| Polices et couleurs nommées (« Montserrat », « Accent ») au lieu de `var(--font)` ; menus déroulants alignés | Fait |
+| Espacements : poignées au milieu des côtés, teinte unie sans hachures, écarts entre enfants (D-60) | Fait |
+| Netteté du canevas dézoomé (D-63) | Fait (à confirmer sous Windows et macOS) |
+| Calques : liste nommée, conditions en marque, liens d'évitement absents, texte rendu au lieu des `{{ … }}`, icône de texte, double-clic pour modifier (D-61) | Fait |
+| Double-clic sur un texte riche (HTML venu des données) dans la page : modification avec sa mise en forme | Fait |
+| Champ « Texte » en tête du panneau de styles | Fait |
+| Classes, animations, attributs posés sans recharger la page ; bouton « scripts du site » retiré (D-62) | Fait |
+| Pages rangées en les glissant, sans effet sur les adresses (D-64) | Fait |
+| Largeur du cadre : la vue suit le pointeur au bord de la zone | Fait |
+| Réglages de l'application sur une page (D-65) | Fait |
+| Sélection depuis les calques avec tous les écrans affichés : un seul écran visé (D-66) | Fait |
+| Aperçu intégré bloqué sous Windows (D-67) | Fait (à confirmer sous Windows) |
+| Composants : canevas propre avec variantes (survol, appui, personnalisées), transition, variante choisie par utilisation (D-68) | Fait |
+| Animer un composant sans l'envelopper ; onglet Réglages fondu dans Styles, « Paramètres avancés » (D-69) | Fait |
+| Variables du site lisibles dans les champs de taille (« Step 3 » au lieu de `var(--step-3)`) | Fait |
+| Règle de style créée deux fois (Entrée puis sortie du champ) | Corrigé |
+| Canevas libre ou vue verrouillée, bouton de la barre (D-70) | Fait |
+| Couleurs du site créées depuis le sélecteur ; paramètres du site en six rubriques (D-71) | Fait |
+| Site Alunites recréé depuis l'application seule | En cours |

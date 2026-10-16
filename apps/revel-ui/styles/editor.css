@@ -63,6 +63,8 @@
 .canvas-area {
   position: relative;
   overflow: hidden;
+  /* Jamais défilée par programme (un `scrollIntoView` dans un cadre la décalerait). */
+  overflow: clip;
   background: var(--bg);
   min-height: 0;
   touch-action: none;
@@ -78,6 +80,8 @@
   background: #ffffff;              /* fond d'une page web sans style */
   box-shadow: 0 0 0 1px var(--line-strong), 0 8px 24px rgb(0 0 0 / .18);
 }
+/* Pendant un zoom seulement : retiré ensuite pour que la page soit redessinée nette. */
+.canvas-area.is-zooming .canvas-frame { will-change: transform; }
 .canvas-wait { display: grid; place-items: center; height: 100%; }
 /* Tous les écrans côte à côte : nom de chaque écran au-dessus de son cadre, contour de l'écran choisi. */
 .frame-label {
@@ -218,9 +222,13 @@
 /* Base nulle : le nom garde toute sa place, le texte prend ce qui reste. */
 .layer-preview { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-faint); }
 .layer-preview::before { content: "·"; margin: 0 5px 0 1px; }
-/* Élément animé (panneau Interactions). */
-.layer-anim { flex: none; display: grid; place-items: center; margin-left: auto; padding-left: 4px; color: var(--set-text); }
-.layer-anim svg.icon { width: 12px; height: 12px; }
+/* Repères en fin de ligne : texte lié aux données, affiché sous condition, animé. */
+.layer-marks { flex: none; display: flex; align-items: center; gap: 3px; margin-left: auto; padding-left: 4px; }
+.layer-marks:empty { display: none; }
+.layer-mark { display: grid; place-items: center; color: var(--text-faint); }
+.layer-mark svg.icon { width: 12px; height: 12px; }
+.layer-mark.layer-anim { color: var(--set-text); }
+.layer-preview.is-bound { font-style: italic; }
 /* Composant utilisé : vert, comme Webflow. */
 .layer.is-component .layer-icon, .layer.is-component .layer-label { color: var(--comp); }
 .layers-foot .icon-btn:disabled { opacity: .3; }
@@ -232,11 +240,13 @@
 .context-item.is-danger { color: var(--danger-text); }
 .context-item.is-danger .menu-icon { color: var(--danger-text); }
 .context-item:disabled { opacity: .4; }
-.layer.drop-before::before, .layer.drop-after::after {
+.layer.drop-before::before, .layer.drop-after::after,
+.page-tree .list-row.drop-before::before, .page-tree .list-row.drop-after::after {
   content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--focus);
 }
-.layer.drop-before::before { top: -1px; }
-.layer.drop-after::after { bottom: -1px; }
+.layer.drop-before::before, .page-tree .list-row.drop-before::before { top: -1px; }
+.layer.drop-after::after, .page-tree .list-row.drop-after::after { bottom: -1px; }
+.page-tree .list-row { position: relative; }
 .layer.drop-inside { box-shadow: inset 0 0 0 1.5px var(--focus); }
 
 /* --- Ajouter ------------------------------------------------------------------ */
@@ -313,6 +323,20 @@ kbd {
   padding: 4px 4px 4px 10px; border-radius: 999px; background: var(--surface-raised); box-shadow: var(--shadow-dialog), inset 0 0 0 1px #2fb67c; }
 .iso-name { display: inline-flex; align-items: center; gap: 6px; color: #2fb67c; font-size: var(--text-sm); font-weight: var(--weight-medium); white-space: nowrap; }
 .iso-name svg.icon { width: 14px; height: 14px; }
+/* Canevas des composants (comme Framer) : barre en bas (retour, nom, transition), variantes en
+   vert (couleur des composants), bouton « + » après la dernière variante. */
+.comp-bar { padding: 4px 6px 4px 4px; }
+.comp-back { gap: 4px; max-width: 220px; }
+.comp-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp-transition select.input { height: 26px; }
+.canvas-area.is-comp .frame-ring { box-shadow: 0 0 0 2px var(--comp); }
+.canvas-area.is-comp .frame-label.is-on { color: var(--comp); }
+.frame-add {
+  position: absolute; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+  border: var(--border) dashed var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text-muted);
+}
+.frame-add:hover { color: var(--comp); border-color: var(--comp); }
+.frame-add svg.icon { width: 13px; height: 13px; }
 
 /* Palette de commandes (Ctrl+K). */
 .overlay--top { place-items: start center; padding-top: 12vh; background: rgb(0 0 0 / .28); }

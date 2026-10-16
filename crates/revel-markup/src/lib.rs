@@ -327,6 +327,8 @@ impl<'a> Parser<'a> {
                     id: None,
                     component: component_id(name),
                     args: Default::default(),
+                    variant: None,
+                    attrs: Vec::new(),
                 }
             }
             "raw" => {

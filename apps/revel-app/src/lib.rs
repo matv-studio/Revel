@@ -936,7 +936,12 @@ fn canvas_protocol(
     preview: bool,
 ) {
     let core = app.state::<AppState>().core.clone();
-    let path = request.uri().path().to_string();
+    // Adresse avec sa requête (canevas des composants : `?component=…`).
+    let path = request
+        .uri()
+        .path_and_query()
+        .map(|p| p.as_str().to_string())
+        .unwrap_or_else(|| request.uri().path().to_string());
     std::thread::spawn(move || {
         let r = if preview {
             core.preview_respond(&path)

@@ -235,7 +235,7 @@ pub fn Menus(s: DocSession) -> impl IntoView {
         s.doc.with_untracked(|d| match o {
             revel_edit::Owner::Component(id) => d
                 .as_ref()
-                .and_then(|d| d.component(id).map(|c| c.label()))
+                .and_then(|d| d.component(id).map(crate::names::component_name))
                 .unwrap_or_else(|| id.clone()),
             revel_edit::Owner::Layout(id) | revel_edit::Owner::Page(id) => id.clone(),
         })

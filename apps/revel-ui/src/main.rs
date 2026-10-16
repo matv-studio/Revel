@@ -39,6 +39,7 @@ mod setup;
 mod site;
 mod sitesettings;
 mod styles;
+mod textfield;
 mod variables;
 mod versions;
 

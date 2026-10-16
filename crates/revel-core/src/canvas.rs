@@ -505,6 +505,42 @@ impl Core {
             let ct = content_type(&file.to_string_lossy());
             return Ok(std::fs::read(&file).ok().map(|b| CanvasResponse::ok(ct, b)));
         }
+        // Composant seul (canevas des composants) : `?component=<id>&variant=<id>&page=<adresse>`.
+        if path == revel_project::COMPONENT_URL && !preview {
+            let query = uri_path.split_once('?').map(|(_, q)| q).unwrap_or_default();
+            let param = |k: &str| {
+                query
+                    .split('&')
+                    .filter_map(|kv| kv.split_once('='))
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| percent_decode(v))
+                    .filter(|v| !v.is_empty())
+            };
+            let Some(component) = param("component") else {
+                return Ok(None);
+            };
+            let variant = param("variant");
+            let reference = param("page").unwrap_or_else(|| "/".into());
+            let page = self.with_project(&site, |p| {
+                let hooks: Arc<dyn revel_render::AssetHooks> = if opts.responsive_images {
+                    pipeline.clone()
+                } else {
+                    Arc::new(revel_project::ProjectAssets::new(p))
+                };
+                Ok(p.render_component_editor(
+                    &component,
+                    variant.as_deref(),
+                    &reference,
+                    hooks,
+                    &environment,
+                    &EditorOptions { scripts: false },
+                )?)
+            })?;
+            return Ok(page.map(|page| {
+                let html = html_viewport_units(&inject(&page.html, &page.slots, &page.vars));
+                CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
+            }));
+        }
         // Page HTML.
         if revel_render::DocKind::of_path(path) == revel_render::DocKind::Html {
             let page = self.with_project(&site, |p| {

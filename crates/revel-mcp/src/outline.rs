@@ -191,6 +191,8 @@ impl<'a> Out<'a> {
                 id,
                 component,
                 args,
+                variant,
+                attrs,
             } => {
                 let label = self
                     .site
@@ -198,10 +200,17 @@ impl<'a> Out<'a> {
                     .map(|c| c.label())
                     .unwrap_or_else(|| component.clone());
                 let id = id.as_deref().map(|i| format!(" #{i}")).unwrap_or_default();
-                let args: Vec<String> = args
+                let mut args: Vec<String> = args
                     .iter()
                     .map(|(k, v)| format!("{k}={}", excerpt(v, 40)))
                     .collect();
+                if let Some(v) = variant {
+                    args.push(format!("variant={v}"));
+                }
+                args.extend(attrs.iter().map(|a| match &a.value {
+                    Some(v) => format!("@{}={}", a.name, excerpt(v, 40)),
+                    None => format!("@{}", a.name),
+                }));
                 self.push(
                     depth,
                     format!(

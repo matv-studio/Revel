@@ -52,6 +52,10 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
     // Déplacement de la vue à la souris (espace maintenue ou bouton du milieu).
     let last = StoredValue::new((0.0f64, 0.0f64));
     let start_pan = move |e: &web_sys::PointerEvent| {
+        // Vue verrouillée : la vue ne se déplace pas.
+        if !untrack(|| ed.navigable()) {
+            return;
+        }
         if let Some(t) = e
             .current_target()
             .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
@@ -86,17 +90,46 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
     let frame_style = move || {
         let g = ed.geo();
         // Position en `left`/`top`, échelle seule en `transform` (à 100 %, aucune transformation :
-        // les pilotes WebDriver calculent mal les clics dans un cadre transformé).
+        // les pilotes WebDriver calculent mal les clics dans un cadre transformé). Position calée
+        // sur les pixels de l'écran : un cadre décalé d'une fraction de pixel est flou.
         format!(
             "left:{}px;top:{}px;width:{}px;height:{}px;transform:scale({})",
-            g.x, g.y, g.w, g.h, g.s
+            snap(g.x),
+            snap(g.y),
+            g.w,
+            g.h,
+            g.s
         )
     };
-    let shield = move || ed.space.get() || ed.panning.get() || ed.drag.get().is_some();
+    let shield = move || {
+        (ed.space.get() && ed.navigable()) || ed.panning.get() || ed.drag.get().is_some()
+    };
 
     // Changement de taille d'écran (point de rupture) : le cadre glisse vers sa nouvelle largeur.
     let resizing = RwSignal::new(false);
     let timer = StoredValue::new(None::<leptos::leptos_dom::helpers::TimeoutHandle>);
+    // Zoom en cours : cadre promu (déplacement fluide) ; 200 ms après le dernier changement,
+    // promotion retirée pour que le navigateur redessine la page nette à la nouvelle échelle (sinon
+    // il garde l'image dessinée à l'ancienne échelle, étirée ou réduite : texte flou).
+    let zooming = RwSignal::new(false);
+    let zoom_timer = StoredValue::new(None::<leptos::leptos_dom::helpers::TimeoutHandle>);
+    Effect::new(move |prev: Option<f64>| {
+        let s = ed.geo().s;
+        if prev.is_some_and(|p| (p - s).abs() > f64::EPSILON) {
+            zooming.set(true);
+            if let Some(t) = zoom_timer.get_value() {
+                t.clear();
+            }
+            zoom_timer.set_value(
+                set_timeout_with_handle(
+                    move || zooming.set(false),
+                    std::time::Duration::from_millis(200),
+                )
+                .ok(),
+            );
+        }
+        s
+    });
     Effect::new(move |prev: Option<String>| {
         let bp = ed.breakpoint.get();
         if prev.is_some_and(|p| p != bp) {
@@ -123,6 +156,13 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
         let cb = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::WheelEvent)>::new(
             move |e: web_sys::WheelEvent| {
                 e.prevent_default();
+                // Vue verrouillée : la molette fait défiler la page, où que soit le pointeur.
+                if !untrack(|| ed.navigable()) {
+                    if !(e.alt_key() || e.ctrl_key() || e.meta_key()) {
+                        ed.post(serde_json::json!({ "type": "wheel", "dx": e.delta_x(), "dy": e.delta_y() }));
+                    }
+                    return;
+                }
                 if e.alt_key() || e.ctrl_key() || e.meta_key() {
                     let at = local(e.client_x(), e.client_y());
                     // Alt+molette : certaines souris donnent un défilement horizontal.
@@ -152,10 +192,13 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
     view! {
         <div class="canvas-area" node_ref=area
             class:is-panning=move || ed.panning.get()
-            class:is-space=move || ed.space.get()
+            class:is-space=move || ed.space.get() && ed.navigable()
+            class:is-locked=move || !ed.navigable()
             class:has-rulers=move || ed.rulers.get()
             class:is-resizing=move || resizing.get() && !ed.side.get()
+            class:is-zooming=move || zooming.get()
             class:is-side=move || ed.side.get()
+            class:is-comp=move || ed.comp.get().is_some()
             on:pointerdown=move |e: ev::PointerEvent| {
                 if e.button() == 1 {
                     e.prevent_default();
@@ -177,28 +220,39 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
                 <Show when=move || ed.base.get().is_some() fallback=move || view! {
                     <div class="canvas-wait muted">{move || if failed.get() { String::new() } else { ui.tx("editor-loading", &[]) }}</div>
                 }>
-                    {move || if ed.side.get() {
+                    {move || if ed.comp.get().is_some() {
+                        view! { <ComponentFrames/> }.into_any()
+                    } else if ed.side.get() {
                         view! { <SideFrames/> }.into_any()
                     } else {
                         view! {
-                            <iframe class="canvas-frame is-active" data-bp=move || ed.breakpoint.get() title=ui.t("editor-canvas")
+                            <iframe class="canvas-frame is-active" data-bp=move || ed.breakpoint.get()
+                                data-key=move || ed.breakpoint.get() title=ui.t("editor-canvas")
                                 style=frame_style src=move || ed.src().unwrap_or_default()></iframe>
                         }.into_any()
                     }}
-                    <ColumnGuides/>
-                    <FrameGrow/>
-                    <Show when=move || !ed.side.get()>
-                        <FrameWidth side=-1.0/>
-                        <FrameWidth side=1.0/>
+                    <Show when=move || ed.comp.get().is_none()>
+                        <ColumnGuides/>
+                    </Show>
+                    // Poignées de hauteur et de largeur : canevas libre seulement.
+                    <Show when=move || ed.comp.get().is_none() && ed.free.get()>
+                        <FrameGrow/>
+                        <Show when=move || !ed.side.get()>
+                            <FrameWidth side=-1.0/>
+                            <FrameWidth side=1.0/>
+                        </Show>
                     </Show>
                 </Show>
             </div>
             <Show when=move || ed.rulers.get()>
                 <Rulers/>
             </Show>
-            // Composant ouvert (modification isolée) : son nom, « Terminer ».
-            {move || ed.isolated.get().map(|c| {
-                let name = ed.doc.with(|d| d.as_ref().and_then(|d| d.component(&c).map(|c| c.label()))).unwrap_or(c);
+            // Canevas des composants : retour à la page, nom du composant, transition des
+            // variantes.
+            {move || ed.comp.get().map(|c| view! { <ComponentBar id=c/> })}
+            // Composant ouvert dans la page (modification isolée) : son nom, « Terminer ».
+            {move || ed.isolated.get().filter(|_| ed.comp.get().is_none()).map(|c| {
+                let name = ed.doc.with(|d| d.as_ref().and_then(|d| d.component(&c).map(crate::names::component_name))).unwrap_or(c);
                 view! {
                     <div class="iso-bar" role="status">
                         <span class="iso-name">{crate::icons::component()}{name}</span>
@@ -286,7 +340,7 @@ fn SideFrames() -> impl IntoView {
                 });
                 let style = move || {
                     place(&b.get_value()).map(|(x, y, fw, h, s)| {
-                        format!("left:{x}px;top:{y}px;width:{fw}px;height:{h}px;transform:scale({s})")
+                        format!("left:{}px;top:{}px;width:{fw}px;height:{h}px;transform:scale({s})", snap(x), snap(y))
                     }).unwrap_or_default()
                 };
                 let label_style = move || {
@@ -298,11 +352,186 @@ fn SideFrames() -> impl IntoView {
                 view! {
                     <button class="frame-label" class:is-on=on style=label_style
                         on:click=move |_| ed.breakpoint.set(b.get_value())>{icon}<span>{name}</span></button>
-                    <iframe class="canvas-frame" class:is-active=on data-bp=bp.clone() title=ui.t("editor-canvas")
+                    <iframe class="canvas-frame" class:is-active=on data-bp=bp.clone() data-key=bp.clone() title=ui.t("editor-canvas")
                         style=style src=move || ed.src().unwrap_or_default()></iframe>
                 }
             }
         </For>
+    }
+}
+
+/// Canevas des composants (comme Framer) : une variante par cadre (principale, survol, appui,
+/// personnalisées), son nom au-dessus ; clic dans un cadre ou sur son nom : variante choisie (les
+/// styles s'y règlent) ; « + » ajoute une variante ; clic droit sur un nom : renommer, retirer.
+#[component]
+fn ComponentFrames() -> impl IntoView {
+    use revel_model::VariantKind;
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let comp = move || ed.comp.get().unwrap_or_default();
+    let frames = Memo::new(move |_| ed.comp_frames(&comp()));
+    let place = move |key: &str| {
+        let w = ed.world();
+        let f = w.frames.iter().find(|f| f.bp == key).cloned()?;
+        Some((
+            w.x + f.ox * w.s,
+            w.y + f.oy * w.s,
+            f.w,
+            ed.comp_frame_h(),
+            w.s,
+        ))
+    };
+    let ring = move || {
+        let key = ed.active_key();
+        place(&key).map(|(x, y, fw, h, s)| {
+            format!(
+                "left:{}px;top:{}px;width:{}px;height:{}px",
+                x - 2.0,
+                y - 2.0,
+                fw * s + 4.0,
+                h * s + 4.0
+            )
+        })
+    };
+    // Bouton « + » : à droite du dernier nom (côte à côte) ou sous le dernier cadre.
+    let plus_style = move || {
+        let w = ed.world();
+        let last = w.frames.last()?.clone();
+        let stacked = w.frames.len() > 1 && w.frames[1].oy > 0.0 || last.w > 700.0;
+        let (x, y) = if stacked {
+            (
+                w.x + last.ox * w.s,
+                w.y + (last.oy + ed.comp_frame_h()) * w.s + 12.0,
+            )
+        } else {
+            (
+                w.x + (last.ox + last.w) * w.s + 16.0,
+                w.y - crate::editor::SIDE_LABEL,
+            )
+        };
+        Some(format!("left:{x}px;top:{y}px"))
+    };
+    let add_menu = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        let id = comp();
+        let (i1, i2, i3) = (id.clone(), id.clone(), id.clone());
+        open(
+            ui,
+            &e,
+            vec![
+                CtxItem::new(ui.now("variant-add-hover", &[]), move || {
+                    crate::components::add_variant(ui, ed, &i1, VariantKind::Hover)
+                }),
+                CtxItem::new(ui.now("variant-add-pressed", &[]), move || {
+                    crate::components::add_variant(ui, ed, &i2, VariantKind::Pressed)
+                }),
+                CtxItem::new(ui.now("variant-add-custom", &[]), move || {
+                    crate::components::add_variant(ui, ed, &i3, VariantKind::Custom)
+                })
+                .sep(),
+                // Interactions entre variantes (clic, survol d'un autre élément) : étape 6.3.
+                CtxItem::new(ui.now("variant-add-interaction", &[]), || {})
+                    .disabled(true)
+                    .sep(),
+            ],
+        );
+    };
+    view! {
+        <div class="frame-ring" style=move || ring().unwrap_or_default() aria-hidden="true"></div>
+        <For each=move || frames.get() key=|(k, v)| (k.clone(), format!("{v:?}")) let:item>
+            {
+                let (key, variant) = item;
+                let k = StoredValue::new(key.clone());
+                let v = StoredValue::new(variant.clone());
+                let name = crate::components::variant_label(ui, variant.as_ref());
+                let style = move || {
+                    place(&k.get_value()).map(|(x, y, fw, h, s)| {
+                        format!("left:{}px;top:{}px;width:{fw}px;height:{h}px;transform:scale({s})", snap(x), snap(y))
+                    }).unwrap_or_default()
+                };
+                let label_style = move || {
+                    place(&k.get_value()).map(|(x, y, fw, _, s)| {
+                        format!("left:{x}px;top:{}px;max-width:{}px", y - crate::editor::SIDE_LABEL, fw * s)
+                    }).unwrap_or_default()
+                };
+                let on = move || ed.active_key() == k.get_value();
+                let src = move || {
+                    let base = ed.base.get()?;
+                    let page = ed.localized(&ed.page.get());
+                    let enc = |t: &str| js_sys::encode_uri_component(t).as_string().unwrap_or_default();
+                    let extra = v.with_value(|v| match v.as_ref().map(|v| (v.kind, v.id.clone())) {
+                        Some((VariantKind::Custom, id)) => format!("&variant={}", enc(&id)),
+                        Some((VariantKind::Hover, _)) => "&rvstate=hover".into(),
+                        Some((VariantKind::Pressed, _)) => "&rvstate=active".into(),
+                        None => String::new(),
+                    });
+                    Some(format!(
+                        "{base}__revel/component/?component={}&page={}{extra}&rv={}",
+                        enc(&comp()), enc(&page), ed.load.get()
+                    ))
+                };
+                let menu = move |e: leptos::ev::MouseEvent| {
+                    use crate::ctxmenu::{CtxItem, open};
+                    e.prevent_default();
+                    let Some(var) = v.get_value() else { return };
+                    let id = comp();
+                    let (i1, i2, vid1, vid2) = (id.clone(), id, var.id.clone(), var.id.clone());
+                    let mut items = Vec::new();
+                    if var.kind == VariantKind::Custom {
+                        items.push(CtxItem::new(ui.now("variant-rename", &[]), move || crate::components::rename_variant(ui, ed, &i1, &vid1)).icon(crate::icons::edit));
+                    }
+                    items.push(CtxItem::new(ui.now("variant-remove", &[]), move || crate::components::remove_variant(ui, ed, &i2, &vid2)).icon(crate::icons::trash).danger().sep());
+                    open(ui, &e, items);
+                };
+                view! {
+                    <button class="frame-label" class:is-on=on style=label_style data-variant=key.clone()
+                        on:click=move |_| ed.activate_key(&k.get_value())
+                        on:contextmenu=menu>{crate::icons::component()}<span>{name}</span></button>
+                    <iframe class="canvas-frame" class:is-active=on data-key=key.clone() data-bp=move || ed.breakpoint.get()
+                        title=ui.t("editor-canvas") style=style src=move || src().unwrap_or_default()></iframe>
+                }
+            }
+        </For>
+        <button class="frame-add" style=move || plus_style().unwrap_or_default() title=ui.t("variant-add")
+            aria-label=ui.t("variant-add") on:click=add_menu>{crate::icons::plus()}</button>
+    }
+}
+
+/// Barre du canevas des composants : retour à la page, nom du composant, transition des
+/// variantes de survol et d'appui.
+#[component]
+fn ComponentBar(id: String) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let id = StoredValue::new(id);
+    let name = move || {
+        ed.doc
+            .with(|d| {
+                d.as_ref().and_then(|d| {
+                    d.component(&id.get_value())
+                        .map(crate::names::component_name)
+                })
+            })
+            .unwrap_or_else(|| id.get_value())
+    };
+    let page = move || {
+        let url = ed.page.get();
+        ed.pages
+            .with(|ps| {
+                ps.iter()
+                    .find(|p| p.url == url)
+                    .map(crate::pagetree::title_of)
+            })
+            .unwrap_or(url)
+    };
+    view! {
+        <div class="iso-bar comp-bar" role="toolbar">
+            <button class="btn btn--small comp-back" title=ui.t("component-back-help") on:click=move |_| ed.close_comp()>
+                {crate::icons::arrow_left()}<span>{page}</span>
+            </button>
+            <span class="iso-name">{crate::icons::component()}{name}</span>
+            <crate::components::TransitionSelect id=id.get_value()/>
+        </div>
     }
 }
 
@@ -362,7 +591,19 @@ fn FrameGrow() -> impl IntoView {
 fn FrameWidth(side: f64) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
-    let start = StoredValue::new(None::<(f64, f64)>);
+    /// Glissement en cours : largeur, pointeur et position de la vue au départ, échelle.
+    #[derive(Clone, Copy)]
+    struct Drag {
+        w0: f64,
+        x0: f64,
+        pan0: f64,
+        s: f64,
+        /// Dernière position du pointeur.
+        x: f64,
+        /// Largeur ajoutée en restant au bord de la zone (pixels de la page).
+        extra: f64,
+    }
+    let drag = StoredValue::new(None::<Drag>);
     let dragging = RwSignal::new(false);
     let style = move || {
         let g = ed.geo();
@@ -380,6 +621,54 @@ fn FrameWidth(side: f64) -> impl IntoView {
             g.y + visible / 2.0 - h / 2.0
         )
     };
+    // Largeur et position de la vue pour l'état du glissement : le bord tiré suit le pointeur,
+    // l'autre bord reste en place ; la largeur ajoutée au bord de la zone fait défiler la vue.
+    let apply = move |d: Drag| {
+        let dx = d.x - d.x0;
+        let (w, pan_x) = if side > 0.0 {
+            (d.w0 + dx / d.s + d.extra, d.pan0 - d.extra * d.s)
+        } else {
+            (d.w0 - dx / d.s + d.extra, d.pan0 + dx)
+        };
+        let w = w.round().clamp(240.0, 3840.0);
+        ed.frame_w.set(Some(w));
+        ed.pan.update(|p| p.0 = pan_x);
+        if let Some(bp) = ed.bp_for_width(w)
+            && bp != ed.breakpoint.get_untracked()
+        {
+            ed.breakpoint.set(bp);
+        }
+    };
+    // Pointeur au bord de la zone (ou au-delà, jusqu'au bord de l'écran) : la largeur continue
+    // d'augmenter et la vue suit, d'autant plus vite que le pointeur est loin dans la marge.
+    fn tick(drag: StoredValue<Option<Drag>>, side: f64, apply: impl Fn(Drag) + Copy + 'static) {
+        let Some(mut d) = drag.get_value() else {
+            return;
+        };
+        const EDGE: f64 = 36.0;
+        if let Some(r) = document()
+            .query_selector(".canvas-area")
+            .ok()
+            .flatten()
+            .map(|a| a.get_bounding_client_rect())
+        {
+            let screen = web_sys::window()
+                .and_then(|w| w.inner_width().ok())
+                .and_then(|v| v.as_f64())
+                .unwrap_or(r.right());
+            let depth = if side > 0.0 {
+                d.x - (r.right().min(screen) - EDGE)
+            } else {
+                (r.left().max(0.0) + EDGE) - d.x
+            };
+            if depth > 0.0 && d.w0 + d.extra < 3840.0 {
+                d.extra += (depth / EDGE).min(2.0) * 10.0 / d.s;
+                drag.set_value(Some(d));
+                apply(d);
+            }
+        }
+        request_animation_frame(move || tick(drag, side, apply));
+    }
     let down = move |e: ev::PointerEvent| {
         if e.button() != 0 {
             return;
@@ -392,27 +681,35 @@ fn FrameWidth(side: f64) -> impl IntoView {
         {
             let _ = t.set_pointer_capture(e.pointer_id());
         }
-        let w = untrack(|| ed.geo().w);
-        start.set_value(Some((w, f64::from(e.client_x()))));
+        // Zoom figé pendant le glissement : le cadre ne se réajuste pas sous le pointeur.
+        let w = untrack(|| ed.world());
+        let g = untrack(|| ed.geo());
+        if untrack(|| ed.zoom.get()).is_none() {
+            ed.pan.set((w.x, w.y));
+            ed.zoom.set(Some(w.s));
+        }
+        let x = f64::from(e.client_x());
+        drag.set_value(Some(Drag {
+            w0: g.w,
+            x0: x,
+            pan0: untrack(|| ed.pan.get()).0,
+            s: g.s,
+            x,
+            extra: 0.0,
+        }));
         dragging.set(true);
+        request_animation_frame(move || tick(drag, side, apply));
     };
     let mv = move |e: ev::PointerEvent| {
-        let Some((w0, x0)) = start.get_value() else {
+        let Some(mut d) = drag.get_value() else {
             return;
         };
-        let s = ed.scale();
-        let w = (w0 + side * 2.0 * (f64::from(e.client_x()) - x0) / s)
-            .round()
-            .clamp(240.0, 3840.0);
-        ed.frame_w.set(Some(w));
-        if let Some(bp) = ed.bp_for_width(w)
-            && bp != ed.breakpoint.get_untracked()
-        {
-            ed.breakpoint.set(bp);
-        }
+        d.x = f64::from(e.client_x());
+        drag.set_value(Some(d));
+        apply(d);
     };
     let up = move |_| {
-        start.set_value(None);
+        drag.set_value(None);
         dragging.set(false);
     };
     view! {
@@ -438,7 +735,11 @@ fn ColumnGuides() -> impl IntoView {
         let g = ed.geo();
         format!(
             "left:{}px;top:{}px;width:{}px;height:{}px;transform:scale({})",
-            g.x, g.y, g.w, g.h, g.s
+            snap(g.x),
+            snap(g.y),
+            g.w,
+            g.h,
+            g.s
         )
     };
     let columns = move || {
@@ -707,4 +1008,13 @@ pub fn open_canvas_menu(ui: Ui, ed: Ed, x: f64, y: f64) {
     }
     items.extend(delete);
     open_at(ui, x, y, items, true);
+}
+
+/// Position calée sur les pixels physiques de l'écran (densité d'affichage comprise).
+fn snap(v: f64) -> f64 {
+    let dpr = web_sys::window()
+        .map(|w| w.device_pixel_ratio())
+        .filter(|d| *d > 0.0)
+        .unwrap_or(1.0);
+    (v * dpr).round() / dpr
 }

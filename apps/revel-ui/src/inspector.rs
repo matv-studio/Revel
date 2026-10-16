@@ -1,6 +1,7 @@
-//! Réglages de l'élément sélectionné (étape 2.5) : balise, identifiant, classes, lien, image,
-//! logique (condition, boucle), attributs. Chaque changement validé (sortie du champ, Entrée) est une
-//! commande d'édition.
+//! Réglages de l'élément sélectionné (étape 2.5), dans l'onglet Styles : en tête, son contenu
+//! (lien, image, composant, condition, liste) ; en bas, rubrique « Paramètres avancés » (balise,
+//! identifiant, attributs). Chaque changement validé (sortie du champ, Entrée) est une commande
+//! d'édition.
 
 use crate::editor::Ed;
 use crate::{Ui, icons};
@@ -116,13 +117,9 @@ pub(crate) fn Field(
     }
 }
 
-/// Panneau « Réglages » de l'élément sélectionné.
-#[component]
-pub fn ElementSettings() -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let ed = expect_context::<Ed>();
-    // Nœud sélectionné et son adresse.
-    let current = Memo::new(move |_| {
+/// Nœud sélectionné et son adresse.
+fn current(ed: Ed) -> Memo<Option<(Target, Node)>> {
+    Memo::new(move |_| {
         let target = ed.selected_target()?;
         let node = ed.doc.with(|d| {
             revel_edit::address::node(d.as_ref()?, &target)
@@ -130,10 +127,18 @@ pub fn ElementSettings() -> impl IntoView {
                 .cloned()
         })?;
         Some((target, node))
-    });
-    let apply = move |cmd: Command| ed.apply(ui, cmd, false);
+    })
+}
 
-    // Élément d'un composant ouvert : propriétés du composant, liaisons de l'élément.
+/// Contenu de l'élément sélectionné, en tête de l'onglet Styles : lien, image ou média, utilisation
+/// de composant (propriétés, variante), condition, liste, réglages propres à un bloc ; dans un
+/// composant ouvert, ses propriétés et les liaisons de l'élément.
+#[component]
+pub fn ContentSettings() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let current = current(ed);
+    let apply = move |cmd: Command| ed.apply(ui, cmd, false);
     let in_component = move || {
         current.get().and_then(|(at, node)| {
             let c = crate::components::owner_component(&at)?;
@@ -146,43 +151,81 @@ pub fn ElementSettings() -> impl IntoView {
         })
     };
     view! {
-        <div class="element-settings panel-pad">
-                {move || current.get().and_then(|(at, node)| crate::blocks::extra_settings(ui, ed, at, node))}
-                {move || match current.get() {
-                    None => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
-                    Some((at, node)) => match node {
-                        Node::Element { tag, attrs, .. } => element(ui, ed, apply, at, tag, attrs).into_any(),
-                        Node::Image(img) => image(ui, ed, apply, at, img).into_any(),
-                        Node::If { cond, .. } => {
-                            let at2 = at.clone();
-                            view! {
-                                <div class="stack">
-                                    <Field label=ui.t("inspector-condition") value=cond mono=true
-                                        on_commit=move |v| apply(Command::SetLogic { at: at2.clone(), cond: Some(v), expr: None, item: None })/>
-                                </div>
-                            }.into_any()
-                        }
-                        Node::Each { expr, item, .. } => {
-                            let (a1, a2) = (at.clone(), at.clone());
-                            view! {
-                                <div class="stack">
-                                    <Field label=ui.t("inspector-each-list") value=expr mono=true
-                                        on_commit=move |v| apply(Command::SetLogic { at: a1.clone(), cond: None, expr: Some(v), item: None })/>
-                                    <Field label=ui.t("inspector-each-item") value=item mono=true
-                                        on_commit=move |v| apply(Command::SetLogic { at: a2.clone(), cond: None, expr: None, item: Some(v) })/>
-                                </div>
-                            }.into_any()
-                        }
-                        Node::Use { component, args, .. } => crate::components::instance_settings(ui, ed, at, component, args),
-                        _ => view! { <p class="muted">{ui.t("inspector-none")}</p> }.into_any(),
-                    },
-                }}
-                {in_component}
+        <div class="content-settings">
+            {move || current.get().and_then(|(at, node)| crate::blocks::extra_settings(ui, ed, at, node))}
+            {move || current.get().map(|(at, node)| match node {
+                Node::Element { tag, attrs, .. } => element_content(ui, ed, apply, at, tag, attrs).into_any(),
+                Node::Image(img) => image(ui, ed, apply, at, img).into_any(),
+                Node::If { cond, .. } => view! {
+                    <div class="stack">
+                        <Field label=ui.t("inspector-condition") value=cond mono=true
+                            on_commit=move |v| apply(Command::SetLogic { at: at.clone(), cond: Some(v), expr: None, item: None })/>
+                    </div>
+                }.into_any(),
+                Node::Each { expr, item, .. } => {
+                    let (a1, a2) = (at.clone(), at.clone());
+                    view! {
+                        <div class="stack">
+                            <Field label=ui.t("inspector-each-list") value=expr mono=true
+                                on_commit=move |v| apply(Command::SetLogic { at: a1.clone(), cond: None, expr: Some(v), item: None })/>
+                            <Field label=ui.t("inspector-each-item") value=item mono=true
+                                on_commit=move |v| apply(Command::SetLogic { at: a2.clone(), cond: None, expr: None, item: Some(v) })/>
+                        </div>
+                    }.into_any()
+                }
+                Node::Use { component, args, .. } => crate::components::instance_settings(ui, ed, at, component, args),
+                _ => ().into_any(),
+            })}
+            {in_component}
         </div>
     }
 }
 
-fn element(
+/// Paramètres avancés de l'élément (balise, identifiant, attributs), rubrique repliée en bas de
+/// l'onglet Styles.
+#[component]
+pub fn AdvancedSettings() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let current = current(ed);
+    let apply = move |cmd: Command| ed.apply(ui, cmd, false);
+    view! {
+        {move || current.get().and_then(|(at, node)| match node {
+            Node::Element { tag, attrs, .. } => Some(view! {
+                <details class="style-section advanced-settings">
+                    <summary><span>{ui.t("inspector-advanced")}</span></summary>
+                    <div class="style-section-body">{element_advanced(ui, ed, apply, at, tag, attrs)}</div>
+                </details>
+            }),
+            _ => None,
+        })}
+    }
+}
+
+/// Modifie ou retire un attribut (valeur vide : retiré).
+fn setter(
+    apply: impl Fn(Command) + Copy + Send + Sync + 'static,
+    at: Target,
+) -> impl Fn(&str, String) + Clone + Send + Sync + 'static {
+    move |name: &str, v: String| {
+        let at = at.clone();
+        if v.trim().is_empty() {
+            apply(Command::RemoveAttr {
+                at,
+                name: name.to_string(),
+            });
+        } else {
+            apply(Command::SetAttr {
+                at,
+                name: name.to_string(),
+                value: Some(v),
+            });
+        }
+    }
+}
+
+/// Contenu d'un élément : lien (adresse, nouvel onglet), source d'un média et texte alternatif.
+fn element_content(
     ui: Ui,
     ed: Ed,
     apply: impl Fn(Command) + Copy + Send + Sync + 'static,
@@ -190,71 +233,13 @@ fn element(
     tag: String,
     attrs: Vec<Attr>,
 ) -> impl IntoView {
-    let set = {
-        let at = at.clone();
-        move |name: &str, v: String| {
-            let at = at.clone();
-            if v.trim().is_empty() {
-                apply(Command::RemoveAttr {
-                    at,
-                    name: name.to_string(),
-                });
-            } else {
-                apply(Command::SetAttr {
-                    at,
-                    name: name.to_string(),
-                    value: Some(v),
-                });
-            }
-        }
-    };
-    let class_value = attr(&attrs, "class")
-        .and_then(|a| a.value.clone())
-        .unwrap_or_default();
-    let dynamic_class = class_value.contains("{{") || class_value.contains("{%");
-    let classes: Vec<String> = class_value.split_whitespace().map(str::to_string).collect();
-    let id_value = attr(&attrs, "id")
-        .and_then(|a| a.value.clone())
-        .unwrap_or_default();
-    let is_link = tag.eq_ignore_ascii_case("a");
+    let set = setter(apply, at.clone());
+    let lower = tag.to_ascii_lowercase();
+    let is_link = lower == "a";
     let href = attr(&attrs, "href")
         .and_then(|a| a.value.clone())
         .unwrap_or_default();
     let blank = attr(&attrs, "target").and_then(|a| a.value.as_deref()) == Some("_blank");
-    let tag_at = at.clone();
-    let tag_now = tag.clone();
-    let others: Vec<Attr> = attrs
-        .iter()
-        .filter(|a| !matches!(a.name.as_str(), "id" | "class" | "href" | "target"))
-        // Animations : réglées dans le panneau Interactions.
-        .filter(|a| {
-            !crate::interactions::FAMILIES
-                .iter()
-                .any(|f| a.name == f.attr())
-        })
-        .cloned()
-        .collect();
-    let set_id = set.clone();
-    let set_href = set.clone();
-    let set_class_raw = set.clone();
-    let class_list = classes.clone();
-    let set_classes = {
-        let set = set.clone();
-        move |list: Vec<String>| set("class", list.join(" "))
-    };
-    let add_class = {
-        let list = class_list.clone();
-        let set_classes = set_classes.clone();
-        move |v: String| {
-            let mut l = list.clone();
-            for c in v.split_whitespace() {
-                if !l.iter().any(|x| x == c) {
-                    l.push(c.to_string());
-                }
-            }
-            set_classes(l);
-        }
-    };
     let blank_at = at.clone();
     let toggle_blank = move |on: bool| {
         let at = blank_at.clone();
@@ -281,14 +266,119 @@ fn element(
         };
         apply(cmd);
     };
-    let new_attr_at = at.clone();
-    let n_attrs = others.len();
-    let lower = tag.to_ascii_lowercase();
+    let set_href = set.clone();
+    let media = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
     let is_img = lower == "img";
-    let media_tag = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
-    let alt_empty = attr(&attrs, "alt")
-        .and_then(|a| a.value.as_deref())
-        .is_none_or(|v| v.trim().is_empty());
+    let src = attr(&attrs, "src")
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    let dynamic_src = src.contains("{{") || src.contains("{%");
+    let alt = attr(&attrs, "alt")
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    let alt_empty = alt.trim().is_empty();
+    let (set_src, set_alt) = (set.clone(), set.clone());
+    let at_pick = at.clone();
+    let pick = move || {
+        let at = at_pick.clone();
+        crate::library::pick_media(ui, is_img, crate::library::media_shelf(ed), move |url| {
+            let mut commands = vec![Command::SetAttr {
+                at: at.clone(),
+                name: "src".into(),
+                value: Some(url.clone()),
+            }];
+            if is_img
+                && alt_empty
+                && let Some(a) = ed
+                    .doc
+                    .with_untracked(|d| d.as_ref().and_then(|d| d.library.alt.get(&url).cloned()))
+            {
+                commands.push(Command::SetAttr {
+                    at: at.clone(),
+                    name: "alt".into(),
+                    value: Some(a),
+                });
+            }
+            apply(if commands.len() == 1 {
+                commands.remove(0)
+            } else {
+                Command::Batch { commands }
+            });
+        });
+    };
+    let key = if is_img {
+        "picker-choose-image"
+    } else {
+        "picker-choose-media"
+    };
+    view! {
+        {is_link.then(|| view! {
+            <div class="stack insp-content">
+                <Field label=ui.t("inspector-href") value=href.clone() placeholder="https://… /page/ #ancre"
+                    on_commit=move |v| set_href("href", v)/>
+                <label class="row-switch">
+                    <span class="switch">
+                        <input type="checkbox" prop:checked=blank on:change=move |e| toggle_blank(event_target_checked(&e))/>
+                        <span class="switch-track"></span>
+                    </span>
+                    <span>{ui.t("inspector-new-tab")}</span>
+                </label>
+            </div>
+        })}
+        {media.then(|| view! {
+            <div class="stack insp-content">
+                <Field label=ui.t("inspector-src") value=src.clone() mono=dynamic_src
+                    on_commit=move |v| set_src("src", v)>
+                    <button type="button" class="icon-btn icon-btn--small" title=ui.t(key) aria-label=ui.t(key)
+                        disabled=dynamic_src on:click=move |_| pick()>{icons::image()}</button>
+                </Field>
+                {is_img.then(|| view! {
+                    <Field label=ui.t("inspector-alt") value=alt.clone() on_commit=move |v| set_alt("alt", v)/>
+                })}
+            </div>
+        })}
+    }
+}
+
+/// Paramètres avancés d'un élément : balise, identifiant, classes calculées, autres attributs.
+fn element_advanced(
+    ui: Ui,
+    ed: Ed,
+    apply: impl Fn(Command) + Copy + Send + Sync + 'static,
+    at: Target,
+    tag: String,
+    attrs: Vec<Attr>,
+) -> impl IntoView {
+    let set = setter(apply, at.clone());
+    let class_value = attr(&attrs, "class")
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    let dynamic_class = class_value.contains("{{") || class_value.contains("{%");
+    let id_value = attr(&attrs, "id")
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    let tag_at = at.clone();
+    let tag_now = tag.clone();
+    let lower = tag.to_ascii_lowercase();
+    let media = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
+    let is_link = lower == "a";
+    let others: Vec<Attr> = attrs
+        .iter()
+        .filter(|a| !matches!(a.name.as_str(), "id" | "class"))
+        // Lien et média : réglés en tête de l'onglet.
+        .filter(|a| !(is_link && matches!(a.name.as_str(), "href" | "target")))
+        .filter(|a| !(media && matches!(a.name.as_str(), "src" | "alt")))
+        // Animations : réglées dans le panneau Interactions.
+        .filter(|a| {
+            !crate::interactions::FAMILIES
+                .iter()
+                .any(|f| a.name == f.attr())
+        })
+        .cloned()
+        .collect();
+    let set_id = set.clone();
+    let set_class_raw = set.clone();
+    let new_attr_at = at.clone();
     let lang = ed.lang();
     view! {
         <div class="stack">
@@ -304,56 +394,16 @@ fn element(
                 <datalist id="rv-tags">{TAGS.iter().map(|t| view! { <option value=*t></option> }).collect_view()}</datalist>
             </label>
             <Field label=ui.t("inspector-id") value=id_value mono=true on_commit=move |v| set_id("id", v)/>
-            <div class="field">
-                <span class="label">{ui.t("inspector-classes")}</span>
-                {if dynamic_class {
-                    // Classes calculées (expression) : modifiées comme du texte.
-                    view! {
-                        <input class="input input--mono" prop:value=class_value.clone()
-                            on:change=move |e| set_class_raw("class", event_target_value(&e))/>
-                    }.into_any()
-                } else {
-                    let add = add_class.clone();
-                    view! {
-                        <div class="classes">
-                            {classes.iter().map(|c| {
-                                let c2 = c.clone();
-                                let list = class_list.clone();
-                                let set_classes = set_classes.clone();
-                                view! {
-                                    <span class="chip chip--class">{c.clone()}
-                                        <button class="chip-x" title=ui.t("inspector-class-remove") aria-label=ui.t("inspector-class-remove")
-                                            on:click=move |_| set_classes(list.iter().filter(|x| **x != c2).cloned().collect())>{icons::close()}</button>
-                                    </span>
-                                }
-                            }).collect_view()}
-                            <input class="input input--mono classes-add" placeholder=ui.t("inspector-class-add")
-                                on:change=move |e| {
-                                    let v = event_target_value(&e);
-                                    if !v.trim().is_empty() {
-                                        add(v);
-                                    }
-                                }/>
-                        </div>
-                    }.into_any()
-                }}
-            </div>
-            {is_link.then(|| view! {
-                <div class="insp-group">
-                    <p class="panel-title">{ui.t("inspector-link")}</p>
-                    <Field label=ui.t("inspector-href") value=href.clone() placeholder="https://… /page/ #ancre"
-                        on_commit=move |v| set_href("href", v)/>
-                    <label class="row-switch">
-                        <span class="switch">
-                            <input type="checkbox" prop:checked=blank on:change=move |e| toggle_blank(event_target_checked(&e))/>
-                            <span class="switch-track"></span>
-                        </span>
-                        <span>{ui.t("inspector-new-tab")}</span>
-                    </label>
-                </div>
+            {dynamic_class.then(|| view! {
+                // Classes calculées (expression) : modifiées comme du texte.
+                <label class="field">
+                    <span class="label">{ui.t("inspector-classes")}</span>
+                    <input class="input input--mono" prop:value=class_value.clone()
+                        on:change=move |e| set_class_raw("class", event_target_value(&e))/>
+                </label>
             })}
-            <details class="insp-group insp-attrs" open={n_attrs <= 4}>
-                <summary class="panel-title">{ui.t("inspector-attributes")}<span class="list-count">{n_attrs}</span></summary>
+            <div class="insp-group insp-attrs">
+                <p class="panel-title">{ui.t("inspector-attributes")}</p>
                 {others.into_iter().map(|a| {
                     let name = a.name.clone();
                     let name_rm = a.name.clone();
@@ -391,36 +441,10 @@ fn element(
                                 }/>
                         }.into_any(),
                     };
-                    // Source d'un média : choix parmi les médias du site (pas pour une valeur calculée).
-                    let value_cell = if media_tag && a.name == "src" {
-                        let dynamic = a.value.as_deref().is_some_and(|v| v.contains("{{") || v.contains("{%"));
-                        let at_pick = at.clone();
-                        let key = if is_img { "picker-choose-image" } else { "picker-choose-media" };
-                        view! {
-                            <span class="field-line">
-                                {input}
-                                <button class="icon-btn" title=ui.t(key) aria-label=ui.t(key) disabled=dynamic
-                                    on:click=move |_| {
-                                        let at = at_pick.clone();
-                                        crate::library::pick_media(ui, is_img, crate::library::media_shelf(ed), move |url| {
-                                            let mut commands = vec![Command::SetAttr { at: at.clone(), name: "src".into(), value: Some(url.clone()) }];
-                                            if is_img && alt_empty
-                                                && let Some(alt) = ed.doc.with_untracked(|d| d.as_ref().and_then(|d| d.library.alt.get(&url).cloned()))
-                                            {
-                                                commands.push(Command::SetAttr { at: at.clone(), name: "alt".into(), value: Some(alt) });
-                                            }
-                                            apply(if commands.len() == 1 { commands.remove(0) } else { Command::Batch { commands } });
-                                        });
-                                    }>{icons::image()}</button>
-                            </span>
-                        }.into_any()
-                    } else {
-                        input.into_any()
-                    };
                     view! {
                         <div class="attr-row">
                             <span class="attr-name" title=conditional.clone().map(|w| ui.tx("inspector-attr-when", &[("cond", w)]))>{a.name.clone()}{conditional.is_some().then_some(" ?")}</span>
-                            {value_cell}
+                            {input}
                             <button class="icon-btn" title=ui.t("inspector-attr-remove") aria-label=ui.t("inspector-attr-remove")
                                 on:click=move |_| apply(Command::RemoveAttr { at: at_rm.clone(), name: name_rm.clone() })>{icons::trash()}</button>
                         </div>
@@ -438,7 +462,7 @@ fn element(
                             apply(Command::SetAttr { at: new_attr_at.clone(), name: n, value: val });
                         }
                     }/>
-            </details>
+            </div>
         </div>
     }
 }

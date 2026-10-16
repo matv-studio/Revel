@@ -318,6 +318,17 @@ pub enum Command {
         name: String,
         value: Option<String>,
     },
+    /// Variantes d'un composant remplacées (ajout, renommage, retrait, ordre).
+    SetComponentVariants {
+        id: String,
+        variants: Vec<revel_model::Variant>,
+    },
+    /// Variante choisie pour une utilisation de composant (`None` : variante principale).
+    SetUseVariant {
+        at: Target,
+        #[serde(default)]
+        variant: Option<String>,
+    },
     /// Crée le composant `id` à partir d'un nœud : le nœud devient son contenu et une utilisation
     /// du composant prend sa place.
     MakeComponent {
@@ -560,9 +571,11 @@ fn check_props(props: &[revel_model::PropDef]) -> Result<(), EditError> {
     Ok(())
 }
 
+/// Attributs d'un élément, ou ceux d'une utilisation de composant (posés sur l'élément racine du
+/// composant pour cette utilisation : animations, classe, ancre).
 fn element_attrs<'a>(site: &'a mut Site, at: &Target) -> Result<&'a mut Vec<Attr>, EditError> {
     match address::node_mut(site, at)? {
-        Node::Element { attrs, .. } => Ok(attrs),
+        Node::Element { attrs, .. } | Node::Use { attrs, .. } => Ok(attrs),
         _ => Err(EditError::NotAnElement(at.node.clone())),
     }
 }
@@ -1421,6 +1434,29 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 props: std::mem::replace(&mut c.props, props.clone()),
             })
         }
+        Command::SetComponentVariants { id, variants } => {
+            for v in variants {
+                if !revel_model::valid_variant_id(&v.id) {
+                    return Err(EditError::NotFound(format!("variante {}", v.id)));
+                }
+            }
+            let c = site
+                .components
+                .iter_mut()
+                .find(|c| &c.id == id)
+                .ok_or_else(|| EditError::NotFound(format!("composant {id}")))?;
+            Ok(Command::SetComponentVariants {
+                id: id.clone(),
+                variants: std::mem::replace(&mut c.variants, variants.clone()),
+            })
+        }
+        Command::SetUseVariant { at, variant } => match address::node_mut(site, at)? {
+            Node::Use { variant: v, .. } => Ok(Command::SetUseVariant {
+                at: at.clone(),
+                variant: std::mem::replace(v, variant.clone()),
+            }),
+            _ => Err(EditError::WrongKind(at.node.clone())),
+        },
         Command::SetUseArg { at, name, value } => match address::node_mut(site, at)? {
             Node::Use { args, .. } => {
                 let old = match value {

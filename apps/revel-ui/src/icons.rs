@@ -99,6 +99,11 @@ pub fn desktop() -> AnyView {
 }
 
 /// Écrans côte à côte (ordinateur, tablette, téléphone).
+/// Canevas libre : flèches vers les quatre coins.
+pub fn expand() -> AnyView {
+    svg(r#"<path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10M2.5 2.5l4 4M13.5 2.5l-4 4M13.5 13.5l-4-4M2.5 13.5l4-4"/>"#)
+}
+
 pub fn screens() -> AnyView {
     svg(
         r#"<rect x="0.75" y="3.5" width="7.5" height="7" rx="1"/><rect x="9.5" y="4.5" width="3.5" height="6" rx="0.75"/><rect x="13.75" y="5.5" width="1.5" height="4" rx="0.5"/>"#,
@@ -203,6 +208,10 @@ pub fn slot() -> AnyView {
 
 pub fn arrow_up() -> AnyView {
     svg(r#"<path d="M8 13V3M4 7l4-4 4 4"/>"#)
+}
+
+pub fn arrow_left() -> AnyView {
+    svg(r#"<path d="M13 8H3M7 4L3 8l4 4"/>"#)
 }
 
 pub fn arrow_down() -> AnyView {

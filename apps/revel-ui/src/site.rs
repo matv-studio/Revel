@@ -140,37 +140,72 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
 }
 
 /// Rubriques des paramètres : (rubrique, libellé, étape prévue si pas encore disponible).
+/// Six rubriques (au lieu de dix) : les réglages proches sur une même page.
 pub(crate) const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::General, "settings-general", None),
     (Section::Publish, "settings-publish", None),
-    (Section::Export, "settings-export", None),
-    (Section::Seo, "settings-seo", None),
-    (Section::Menus, "settings-menus", None),
-    (Section::Redirects, "settings-redirects", None),
+    (Section::Menus, "settings-navigation", None),
     (Section::Fonts, "settings-fonts", None),
     (Section::Code, "settings-code", None),
-    (Section::Forms, "settings-forms", None),
     (Section::Versions, "settings-versions", None),
 ];
+
+/// Rubrique qui affiche une partie des réglages : général avec référencement et formulaires,
+/// publication avec export, navigation (menus) avec redirections.
+fn group_of(s: Section) -> Section {
+    match s {
+        Section::Seo | Section::Forms => Section::General,
+        Section::Export => Section::Publish,
+        Section::Redirects => Section::Menus,
+        x => x,
+    }
+}
 
 /// Paramètres du site : rubriques à gauche (comme les réglages d'un site Webflow), contenu à droite.
 #[component]
 fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
     let ui = expect_context::<Ui>();
-    let body = match section {
-        Section::General => view! { <crate::sitesettings::General site=site.clone()/> }.into_any(),
+    let group = group_of(section);
+    let sub =
+        |key: &'static str, v: AnyView| view! { <div class="settings-sub" data-sub=key>{v}</div> };
+    let body = match group {
+        Section::General => view! {
+            {sub("general", view! { <crate::sitesettings::General site=site.clone()/> }.into_any())}
+            {sub("seo", view! { <Seo site=site.clone()/> }.into_any())}
+            {sub("forms", view! { <Forms site=site.clone()/> }.into_any())}
+        }
+        .into_any(),
         Section::Fonts => view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any(),
         Section::Code => view! { <crate::sitesettings::Code site=site.clone()/> }.into_any(),
         Section::Versions => view! { <crate::versions::Versions site=site.clone()/> }.into_any(),
-        Section::Publish => view! { <crate::publish::Publish site=site.clone()/> }.into_any(),
-        Section::Export => view! { <Export site=site.clone()/> }.into_any(),
-        Section::Redirects => view! { <Redirects site=site.clone()/> }.into_any(),
-        Section::Seo => view! { <Seo site=site.clone()/> }.into_any(),
-        Section::Forms => view! { <Forms site=site.clone()/> }.into_any(),
-        Section::Menus => {
-            view! { <crate::readable::Menus s=doc_session(ui, site.path.clone())/> }.into_any()
+        Section::Publish => view! {
+            {sub("publish", view! { <crate::publish::Publish site=site.clone()/> }.into_any())}
+            {sub("export", view! { <Export site=site.clone()/> }.into_any())}
         }
+        .into_any(),
+        _ => view! {
+            {sub("menus", view! { <crate::readable::Menus s=doc_session(ui, site.path.clone())/> }.into_any())}
+            {sub("redirects", view! { <Redirects site=site.clone()/> }.into_any())}
+        }
+        .into_any(),
     };
+    // Partie demandée (lien vers les formulaires, l'export…) : montrée.
+    let wanted = match section {
+        Section::Seo => Some("seo"),
+        Section::Forms => Some("forms"),
+        Section::Export => Some("export"),
+        Section::Redirects => Some("redirects"),
+        _ => None,
+    };
+    if let Some(key) = wanted {
+        request_animation_frame(move || {
+            if let Ok(Some(el)) =
+                document().query_selector(&format!(".settings-sub[data-sub=\"{key}\"]"))
+            {
+                el.scroll_into_view();
+            }
+        });
+    }
     view! {
         <div class="settings-layout">
             <nav class="settings-nav" aria-label=ui.t("view-settings")>
@@ -178,7 +213,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
                     let sec = *sec;
                     let title = step.map(|n| ui.tx("planned-step", &[("step", n.to_string())]));
                     view! {
-                        <button class="settings-nav-item" class:is-on=section == sec class:is-planned=step.is_some()
+                        <button class="settings-nav-item" class:is-on=group == sec class:is-planned=step.is_some()
                             data-section=*key title=title
                             on:click=move |_| ui.tab(Tab::Settings(sec))>
                             <span>{ui.t(key)}</span>

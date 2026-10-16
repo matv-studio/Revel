@@ -185,6 +185,28 @@ pub struct Sx {
     pub menu: RwSignal<Option<u32>>,
     /// Balise de l'élément sélectionné.
     pub tag: Memo<String>,
+    /// Variante du composant ouvert dans le canevas des composants : (classe de l'élément
+    /// racine, suffixe de la variante, identifiant de l'élément racine, nom de la variante).
+    pub scope: Memo<Option<(String, String, String, String)>>,
+}
+
+/// Sélecteur complet : classe et état ; dans une variante, préfixé par la racine du composant
+/// dans cette variante (`.carte:hover .titre`, `.carte.is-sombre`).
+fn scoped(
+    scope: &Option<(String, String, String, String)>,
+    root_selected: bool,
+    sel: &str,
+    state: &str,
+) -> String {
+    match scope {
+        None => format!("{sel}{state}"),
+        Some((root, suffix, _, _)) if root_selected => {
+            // Racine : la variante s'ajoute à sa classe (`.carte.is-sombre`, `.carte:hover`).
+            let rest = sel.strip_prefix(root.as_str()).unwrap_or(sel);
+            format!("{root}{suffix}{rest}{state}")
+        }
+        Some((root, suffix, _, _)) => format!("{root}{suffix} {sel}{state}"),
+    }
 }
 
 impl Sx {
@@ -192,6 +214,34 @@ impl Sx {
         // Cible partagée avec l'éditeur (poignées de taille du canevas).
         let selector = ed.style_sel;
         let state = ed.style_state;
+        let scope = Memo::new(move |_| {
+            let id = ed.comp.get()?;
+            let v = ed.variant.get();
+            if v.is_empty() {
+                return None;
+            }
+            ed.doc.with(|d| {
+                let c = d.as_ref()?.component(&id)?;
+                let var = c.variant(&v)?;
+                let root_id = match c.root()? {
+                    revel_model::Node::Element { id: Some(r), .. } => r.clone(),
+                    _ => return None,
+                };
+                Some((
+                    format!(".{}", c.root_class()?),
+                    var.suffix(),
+                    root_id,
+                    crate::components::variant_label(ui, Some(var)),
+                ))
+            })
+        });
+        let root_selected = move || {
+            scope.with(|sc| {
+                sc.as_ref().is_some_and(|(_, _, r, _)| {
+                    ed.selected.with(|s| s.as_ref().is_some_and(|s| &s.id == r))
+                })
+            })
+        };
         let media = Memo::new(move |_| {
             let id = ed.breakpoint.get();
             ed.doc.with(|d| {
@@ -203,7 +253,7 @@ impl Sx {
             })
         });
         let rule = Memo::new(move |_| {
-            let sel = format!("{}{}", selector.get(), state.get());
+            let sel = scoped(&scope.get(), root_selected(), &selector.get(), &state.get());
             let m = media.get();
             ed.doc.with(|d| find_rule(d.as_ref()?, &sel, &m))
         });
@@ -217,9 +267,17 @@ impl Sx {
                     let items = &d.stylesheet.as_ref()?.items;
                     let cur = d.breakpoints.iter().find(|b| b.id == bp)?;
                     let wide = wider(&d.breakpoints, cur);
-                    let full = format!("{sel}{st}");
+                    let sc = scope.get();
+                    let rs = root_selected();
+                    let full = scoped(&sc, rs, &sel, &st);
                     let mut chain: Vec<(String, &Breakpoint)> =
                         wide.iter().map(|b| (full.clone(), *b)).collect();
+                    // Variante : valeurs de la variante principale héritées (même état).
+                    if sc.is_some() {
+                        let base = format!("{sel}{st}");
+                        chain.push((base.clone(), cur));
+                        chain.extend(wide.iter().map(|b| (base.clone(), *b)));
+                    }
                     if !st.is_empty() {
                         chain.push((sel.clone(), cur));
                         chain.extend(wide.iter().map(|b| (sel.clone(), *b)));
@@ -260,12 +318,34 @@ impl Sx {
             sources,
             menu: RwSignal::new(None),
             tag,
+            scope,
         }
     }
 
-    /// Sélecteur complet (classe et état).
+    /// L'élément sélectionné est la racine du composant ouvert dans une variante.
+    fn root_selected(self) -> bool {
+        self.scope.with(|sc| {
+            sc.as_ref().is_some_and(|(_, _, r, _)| {
+                self.ed
+                    .selected
+                    .with(|s| s.as_ref().is_some_and(|s| &s.id == r))
+            })
+        })
+    }
+
+    /// Sélecteur complet (classe et état ; dans une variante, préfixé par la racine).
     pub fn full_selector(self) -> String {
-        format!("{}{}", self.selector.get(), self.state.get())
+        scoped(
+            &self.scope.get(),
+            self.root_selected(),
+            &self.selector.get(),
+            &self.state.get(),
+        )
+    }
+
+    /// Sélecteur complet, lecture non suivie (gestionnaires d'événements).
+    fn full_selector_now(self) -> String {
+        untrack(|| self.full_selector())
     }
 
     /// Valeur effective dans le canevas.
@@ -352,13 +432,26 @@ impl Sx {
     /// Règle plusieurs propriétés en une seule étape d'annulation. `coalesce` : fusionnée avec la
     /// précédente si elle porte sur le même champ (flèches du clavier).
     pub fn set_many(self, list: Vec<(String, Option<String>)>, coalesce: bool) {
+        // Même modification reçue deux fois avant que le document ne change (Entrée puis
+        // `change` d'un même champ) : une seule commande, sinon la règle serait créée deux fois.
+        let key = format!(
+            "{}|{:?}|{list:?}|{:?}",
+            self.full_selector_now(),
+            self.media.get_untracked(),
+            self.rule.get_untracked()
+        );
+        let now = js_sys::Date::now();
+        if LAST_SET.with(|l| {
+            l.borrow()
+                .as_ref()
+                .is_some_and(|(k, t)| *k == key && now - t < 600.0)
+        }) {
+            return;
+        }
+        LAST_SET.with(|l| *l.borrow_mut() = Some((key, now)));
         let cmd = style_command(
             self.rule.get_untracked(),
-            format!(
-                "{}{}",
-                self.selector.get_untracked(),
-                self.state.get_untracked()
-            ),
+            self.full_selector_now(),
             self.media.get_untracked(),
             list,
         );
@@ -370,11 +463,7 @@ impl Sx {
 
     /// Aperçu dans le canevas pendant un geste, sans écrire le fichier.
     pub fn preview(self, list: &[(String, String)]) {
-        let sel = format!(
-            "{}{}",
-            self.selector.get_untracked(),
-            self.state.get_untracked()
-        );
+        let sel = self.full_selector_now();
         let body: String = list
             .iter()
             .filter(|(_, v)| !v.trim().is_empty())
@@ -396,6 +485,11 @@ impl Sx {
         self.menu
             .update(|m| *m = if *m == Some(id) { None } else { Some(id) });
     }
+}
+
+thread_local! {
+    /// Dernière modification envoyée (clé, heure) : doublons rapprochés ignorés.
+    static LAST_SET: std::cell::RefCell<Option<(String, f64)>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Identifiant unique d'un menu.

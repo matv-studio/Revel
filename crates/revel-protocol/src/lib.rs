@@ -729,3 +729,17 @@ pub struct McpStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub program: Option<String>,
 }
+
+/// Modification faite par un assistant (dernières actions, Réglages › Assistants IA).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpActivity {
+    /// Heure (millisecondes depuis 1970).
+    pub at: u64,
+    /// Assistant (nom donné par l'assistant : `claude-ai`, `codex-mcp-client`…).
+    pub client: String,
+    /// Outil (`set_text`, `set_styles`…).
+    pub tool: String,
+    /// Élément, sélecteur, chemin de données ou page visés.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+}

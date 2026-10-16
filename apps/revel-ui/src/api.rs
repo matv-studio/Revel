@@ -728,6 +728,32 @@ pub async fn edit_stamp(path: &str) -> Res<revel_edit::EditStamp> {
     call("edit_stamp", &PathArg { path }).await
 }
 
+/// Serveur des assistants IA : réglages et état.
+pub async fn mcp_status() -> Res<revel_protocol::McpStatus> {
+    call("mcp_status", &NoArgs {}).await
+}
+
+#[derive(Serialize)]
+struct McpSetArgs {
+    enabled: bool,
+    port: u16,
+}
+
+/// Active ou désactive le serveur des assistants, change son port.
+pub async fn mcp_set(enabled: bool, port: u16) -> Res<revel_protocol::McpStatus> {
+    call("mcp_set", &McpSetArgs { enabled, port }).await
+}
+
+/// Nouvelle clé d'accès du serveur des assistants.
+pub async fn mcp_new_token() -> Res<revel_protocol::McpStatus> {
+    call("mcp_new_token", &NoArgs {}).await
+}
+
+/// Dernières modifications faites par les assistants.
+pub async fn mcp_activity() -> Res<Vec<revel_protocol::McpActivity>> {
+    call("mcp_activity", &NoArgs {}).await
+}
+
 /// Site à ouvrir dans l'éditeur au démarrage (argument `--open` ou variable `REVEL_OPEN`).
 pub async fn startup_site() -> Res<Option<String>> {
     call("startup_site", &NoArgs {}).await

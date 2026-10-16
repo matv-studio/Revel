@@ -2104,6 +2104,46 @@ try {
   await page.waitForSelector(`.pack[data-pack="${getCode}"] .pack-bar`, { state: 'detached', timeout: 20000 });
   check('réglages : téléchargement d\'une langue (avancement, un seul à la fois)', others, getCode);
 
+  // Réglages › Assistants IA (4.2, serveur simulé) : activation, port, clé, configurations.
+  {
+    const state = () => page.textContent('.mcp-state');
+    await page.locator('.mcp').scrollIntoViewIfNeeded();
+    const off = (await state()).trim();
+    await page.click('.mcp-server .switch');
+    await page.waitForFunction(() => /127\.0\.0\.1:47520/.test(document.querySelector('.mcp-state')?.textContent || ''));
+    check('assistants : serveur local activé (état et adresse)', /Désactivé/.test(off), (await state()).trim());
+    await page.fill('.mcp-port', '47600');
+    await page.press('.mcp-port', 'Enter');
+    await page.waitForFunction(() => /:47600/.test(document.querySelector('.mcp-state')?.textContent || ''));
+    await page.fill('.mcp-port', '80');
+    await page.press('.mcp-port', 'Enter');
+    await page.waitForTimeout(200);
+    check('assistants : port changé, port réservé refusé', await page.inputValue('.mcp-port') === '47600');
+    const snip = () => page.textContent('.snippet-code');
+    const desktop = JSON.parse(await snip());
+    await page.click('.mcp-clients [data-client="claude-code"]');
+    const code = await snip();
+    await page.click('.mcp-clients [data-client="codex"]');
+    const codex = await snip();
+    check('assistants : configurations prêtes (Claude Desktop, Claude Code, Codex)',
+      desktop.mcpServers.revel.args[0] === '--mcp' && /revel\.exe$/.test(desktop.mcpServers.revel.command)
+      && /^claude mcp add .* revel -- ".*revel\.exe" --mcp$/.test(code) && /\[mcp_servers\.revel\]/.test(codex), code);
+    await page.click('.mcp-clients [data-client="open-webui"]');
+    const fields = await page.$$eval('.mcp-field-value', (l) => l.map((e) => e.textContent));
+    const hidden = fields[4];
+    await page.click('.mcp-key-show');
+    const key1 = await page.textContent('.mcp-key-value');
+    await page.click('.mcp-key-renew');
+    await page.click('.dialog .btn--primary');
+    await page.waitForFunction((k) => document.querySelector('.mcp-key-value')?.textContent !== k, key1);
+    const key2 = await page.textContent('.mcp-key-value');
+    check('assistants : Open WebUI (adresse, clé masquée), clé affichée puis renouvelée',
+      fields[1] === 'http://127.0.0.1:47600/mcp' && /^•+$/.test(hidden) && /^[0-9a-f]{64}$/.test(key2) && key2 !== key1, fields[1]);
+    if (shots) await page.locator('.mcp').screenshot({ path: `${shots}/reglages-assistants.png` });
+    await page.click('.mcp-server .switch');
+    await page.waitForFunction(() => /Désactivé/.test(document.querySelector('.mcp-state')?.textContent || ''));
+  }
+
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {
   check('déroulement', false, e.message);

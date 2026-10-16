@@ -38,8 +38,9 @@ fn authorized(h: &HeaderMap, token: &str) -> bool {
             == 0
 }
 
-/// Hôte local (`127.0.0.1`, `localhost`, `[::1]`, avec ou sans port) : un nom de domaine
-/// redirigé vers cette machine (« DNS rebinding ») est refusé.
+/// Hôte local (`127.0.0.1`, `localhost`, `[::1]`, `host.docker.internal` pour un assistant dans
+/// Docker Desktop, avec ou sans port) : un autre nom de domaine redirigé vers cette machine
+/// (« DNS rebinding ») est refusé.
 fn local_host(h: &HeaderMap) -> bool {
     let Some(host) = h.get("host").and_then(|v| v.to_str().ok()) else {
         return false;
@@ -48,7 +49,10 @@ fn local_host(h: &HeaderMap) -> bool {
         Some(rest) => rest.split(']').next().unwrap_or_default(),
         None => host.split(':').next().unwrap_or_default(),
     };
-    matches!(name, "127.0.0.1" | "localhost" | "::1")
+    matches!(
+        name,
+        "127.0.0.1" | "localhost" | "::1" | "host.docker.internal"
+    )
 }
 
 async fn guard(State(s): State<Shared>, req: Request<Body>, next: Next) -> Response {

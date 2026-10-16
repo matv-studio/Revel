@@ -2,6 +2,7 @@
 
 mod account;
 mod api;
+mod assistants;
 mod autotr;
 mod blocks;
 mod canvas;

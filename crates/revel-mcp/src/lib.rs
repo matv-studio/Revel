@@ -7,6 +7,7 @@
 //! stdio de `revel --mcp`, voir [`relay`]). Transports : stdio et HTTP en flux sur 127.0.0.1 avec
 //! jeton ([`http`]).
 
+pub mod activity;
 pub mod config;
 #[cfg(feature = "core")]
 pub mod direct;

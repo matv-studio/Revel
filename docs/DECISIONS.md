@@ -436,3 +436,21 @@ mieux suivie des modèles), textes du site gardés dans leur langue. Sources :
 [Streamable HTTP, spécification MCP 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http),
 [rmcp — docs.rs](https://docs.rs/crate/rmcp/3.1.0/source/README.md),
 [GetStdHandle — Microsoft Learn](https://learn.microsoft.com/uk-ua/windows/console/getstdhandle).
+
+**D-42 — 16/10/2026 — prise.** **Brancher un assistant (4.2).** Réglages › Assistants IA donne pour chaque
+assistant la configuration exacte, avec le chemin réel du programme Revel installé, et l'endroit où la coller,
+plutôt qu'un assistant pas à pas : Claude Desktop et LM Studio (même notation JSON `mcpServers` → `command`,
+`args`), Claude Code (`claude mcp add --transport stdio --scope user revel -- "<programme>" --mcp`), ChatGPT de
+bureau, Codex en ligne de commande et extension des éditeurs (même fichier `~/.codex/config.toml`, table
+`[mcp_servers.revel]`, chemin en chaîne littérale TOML pour Windows). Tous passent par le relais stdio, sans clé
+à recopier. Open WebUI ne parle MCP qu'en HTTP en flux (version 0.6.31 et plus) : type, adresse, authentification
+« Bearer » et clé à reporter ; installé avec Docker, il joint l'ordinateur par `host.docker.internal`, nom désormais
+accepté par le contrôle d'hôte du serveur. Les noms des menus des autres logiciels restent ceux de leur
+documentation (en anglais). Les dernières actions des assistants (heure, assistant d'après le nom qu'il donne au
+protocole, action, cible) sont relevées par l'application pour chaque modification réellement faite, que l'outil
+s'exécute dans l'application (HTTP) ou dans le relais (assistant et outil transmis avec la commande). Sources :
+[Connect to local MCP servers — modelcontextprotocol.io](https://modelcontextprotocol.io/docs/2026-07-28/develop/connect-local-servers.md),
+[Model Context Protocol — Codex](https://learn.chatgpt.com/docs/extend/mcp.md?surface=cli),
+[MCP in LM Studio](https://lmstudio.ai/docs/app/mcp),
+[Model Context Protocol — Open WebUI](https://docs.openwebui.com/features/extensibility/mcp.md),
+[Claude Code MCP setup (guide tiers)](https://mcpplaygroundonline.com/blog/claude-code-mcp-setup-best-servers-guide.md).

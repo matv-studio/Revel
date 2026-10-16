@@ -115,7 +115,11 @@ fn agent() -> ureq::Agent {
 #[tokio::test(flavor = "multi_thread")]
 async fn assistant_de_bout_en_bout() {
     let (_d, core, path) = site();
-    let inv: Arc<dyn Invoke> = Arc::new(CoreInvoke(core.clone()));
+    let log = revel_mcp::activity::ActivityLog::default();
+    let inv: Arc<dyn Invoke> = Arc::new(revel_mcp::activity::Logged {
+        inner: Arc::new(CoreInvoke(core.clone())),
+        log: log.clone(),
+    });
     let token = "jeton-essai-0123456789abcdef0123456789abcdef".to_string();
     let server = http::start(inv, token.clone(), 0).await.unwrap();
     let url = format!("http://127.0.0.1:{}/mcp", server.port);
@@ -218,6 +222,24 @@ async fn assistant_de_bout_en_bout() {
     })
     .await;
     res.unwrap();
+    // Dernières actions : chaque modification (assistant, outil, cible), la plus récente d'abord ;
+    // l'erreur (élément inconnu) n'y est pas.
+    let acts = log.list();
+    let tools: Vec<&str> = acts.iter().map(|a| a.tool.as_str()).collect();
+    assert_eq!(
+        tools,
+        [
+            "undo",
+            "undo",
+            "undo",
+            "insert_html",
+            "set_styles",
+            "set_text"
+        ],
+        "{acts:?}"
+    );
+    assert!(acts.iter().all(|a| a.client == "essai"), "{acts:?}");
+    assert_eq!(acts[4].target.as_deref(), Some(".essai-mcp"));
     // Le site sur le disque : retour à l'état d'origine.
     let doc = std::fs::read_to_string(path.join("site.revel.json")).unwrap();
     assert!(!doc.contains("essai-mcp"));

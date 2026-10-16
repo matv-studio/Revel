@@ -32,6 +32,13 @@
   const ghProfile = [{ id: "h2", name: "GitHub Pages", environment: "production", target: { kind: "github_pages", repo: "matv-studio/alunites-revel-lab", branch: "gh-pages", custom_domain: null } }, true];
   const profiles = params.get("noprofiles") ? [] : params.get("ghprofile") ? [ghProfile] : [[{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true]];
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const mcp = { enabled: false, port: 47520, token: "3f9a1c0e7b2d4a6f8e1c3b5d7f9a0c2e4b6d8f1a3c5e7b9d0f2a4c6e8b1d3f5a" };
+  const mcpStatus = () => {
+    const busy = mcp.enabled && params.get("mcpbusy");
+    return { ...mcp, url: `http://127.0.0.1:${mcp.port}/mcp`, running: mcp.enabled && !busy,
+      error: busy ? "Only one usage of each socket address is normally permitted. (os error 10048)" : null,
+      program: "C:\\Program Files\\Revel\\revel.exe" };
+  };
   class Channel { constructor() { this.onmessage = null; } }
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
@@ -91,6 +98,16 @@
       return v;
     }
     switch (cmd) {
+      // Serveur des assistants (simulé) : `mcpbusy=1` : port occupé ; `mcpacts=1` : actions.
+      case "mcp_status": return mcpStatus();
+      case "mcp_set": mcp.enabled = args.enabled; mcp.port = args.port || 47520; return mcpStatus();
+      case "mcp_new_token": mcp.token = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join(""); return mcpStatus();
+      case "mcp_activity": return mcp.enabled && params.get("mcpacts") ? [
+        { at: Date.now() - 60_000, client: "claude-ai", tool: "set_text", target: "xg2whxr8" },
+        { at: Date.now() - 240_000, client: "claude-ai", tool: "set_styles", target: ".hero__title" },
+        { at: Date.now() - 900_000, client: "codex-mcp-client", tool: "set_data", target: "pages.accueil.news_title" },
+        { at: Date.now() - 86_400_000 * 2, client: "", tool: "undo" },
+      ] : [];
       case "get_settings": return state.settings;
       case "set_settings": state.settings = args.settings; return null;
       case "recent_sites": return state.recents;

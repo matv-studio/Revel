@@ -1,5 +1,5 @@
 //! Réglages de l'application : langue, thème, couleur d'accent et son étendue, langues de
-//! traduction automatique (D-36).
+//! traduction automatique (D-36), assistants IA (D-41).
 
 use crate::dialog::Ask;
 use crate::{Ui, api, icons};
@@ -93,6 +93,7 @@ pub fn Settings() -> impl IntoView {
                 </div>
             </div>
             <TranslatePacks/>
+            <crate::assistants::Assistants/>
             <div class="section">
                 <h2>{ui.t("settings-accounts")}</h2>
                 <div class="form-grid">

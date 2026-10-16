@@ -10,7 +10,12 @@ use revel_edit::{Command, EditState};
 use revel_model::{Node, Site};
 use revel_protocol::{CmsCollection, EditorPageInfo};
 use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
-use rmcp::model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerConfig};
+use rmcp::model::{
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    ServerCapabilities, ServerConfig,
+};
+use rmcp::service::RequestContext;
+use rmcp::{ErrorData, RoleServer};
 use rmcp::{ServerHandler, schemars, tool, tool_handler, tool_router};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -28,6 +33,29 @@ site's data files or CMS entries: resolve the variables set by {% set … %} (e.
 then `{{ a.title }}` is the data path `pages.agence.title`), read them with `get_data` and change them with \
 `set_data`; CMS entries (`list_collections`) with `get_entry` and `set_entry_field`. Keep the site's \
 language and tone.";
+
+/// Assistant et outil d'une modification (dernières actions des assistants).
+#[derive(Debug, Clone, serde::Serialize)]
+struct Via {
+    client: String,
+    tool: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target: Option<String>,
+}
+
+tokio::task_local! {
+    /// Appel d'outil en cours.
+    static VIA: Via;
+}
+
+/// Nom de l'assistant : informations du protocole 2026-07-28 (`_meta`), sinon de l'ouverture.
+fn client_of(ctx: &RequestContext<RoleServer>) -> String {
+    ctx.meta
+        .client_info()
+        .or_else(|| ctx.peer.peer_info().map(|p| p.client_info.clone()))
+        .map(|i| i.title.filter(|t| !t.trim().is_empty()).unwrap_or(i.name))
+        .unwrap_or_default()
+}
 
 /// Paramètre commun : site visé.
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
@@ -232,8 +260,16 @@ impl Revel {
         site: &Option<String>,
         mut args: Value,
     ) -> Result<Value, String> {
-        if let (Some(s), Some(o)) = (site, args.as_object_mut()) {
-            o.insert("site".into(), Value::String(s.clone()));
+        if let Some(o) = args.as_object_mut() {
+            if let Some(s) = site {
+                o.insert("site".into(), Value::String(s.clone()));
+            }
+            // Modification : assistant et outil transmis (relevés par l'application).
+            if crate::activity::WRITES.contains(&cmd)
+                && let Ok(v) = VIA.try_with(Via::clone)
+            {
+                o.insert("via".into(), json!(v));
+            }
         }
         self.inv
             .invoke(cmd, args)
@@ -942,6 +978,25 @@ impl Revel {
 
 #[tool_handler]
 impl ServerHandler for Revel {
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        let target = request.arguments.as_ref().and_then(|a| {
+            ["id", "selector", "path", "url", "page", "file"]
+                .iter()
+                .find_map(|k| a.get(*k).and_then(Value::as_str).map(str::to_string))
+        });
+        let via = Via {
+            client: client_of(&context),
+            tool: request.name.to_string(),
+            target,
+        };
+        let tcc = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+        VIA.scope(via, self.tool_router.call(tcc)).await
+    }
+
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(

@@ -484,6 +484,7 @@ impl Core {
                 .map(revel_style::render))
         })?;
         if let Some(css) = sheet {
+            let css = if preview { css } else { viewport_units(&css) };
             return Ok(Some(CanvasResponse::ok(
                 "text/css; charset=utf-8",
                 css.into_bytes(),
@@ -517,7 +518,7 @@ impl Core {
                 let html = if preview {
                     revel_render::strip_editor_marks(&page.html)
                 } else {
-                    inject(&page.html, &page.slots, &page.vars)
+                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars))
                 };
                 return Ok(Some(CanvasResponse::ok(
                     "text/html; charset=utf-8",
@@ -525,14 +526,150 @@ impl Core {
                 )));
             }
         }
-        // Copie du projet.
+        // Copie du projet (feuilles de style : unités de hauteur de fenêtre, comme ci-dessus).
         let file = self.with_project(&site, |p| Ok(p.source_of_url(path)))?;
         Ok(file.and_then(|f| {
-            std::fs::read(&f)
-                .ok()
-                .map(|b| CanvasResponse::ok(content_type(path), b))
+            let b = std::fs::read(&f).ok()?;
+            let b = match String::from_utf8(b) {
+                Ok(css) if !preview && path.to_ascii_lowercase().ends_with(".css") => {
+                    viewport_units(&css).into_bytes()
+                }
+                Ok(text) => text.into_bytes(),
+                Err(e) => e.into_bytes(),
+            };
+            Some(CanvasResponse::ok(content_type(path), b))
         }))
     }
+}
+
+/// Caractère d'identifiant CSS (nom de classe, unité…).
+fn ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b >= 0x80
+}
+
+/// Unités de hauteur de fenêtre (`vh`, `svh`, `lvh`, `dvh`) d'une feuille servie au canevas
+/// rapportées à `--rv-vh`, que le canevas règle sur la hauteur normale du cadre quand le cadre
+/// est allongé (à défaut : l'unité elle-même, rendu identique). Allonger le cadre montre plus
+/// de la page sans la remettre en page. Commentaires, chaînes et `url()` laissés tels quels.
+pub(crate) fn viewport_units(css: &str) -> String {
+    let b = css.as_bytes();
+    let n = b.len();
+    let mut out = String::with_capacity(n + 64);
+    let mut i = 0;
+    let mut last = 0;
+    while i < n {
+        let c = b[i];
+        // Commentaire.
+        if c == b'/' && b.get(i + 1) == Some(&b'*') {
+            i = css[i + 2..].find("*/").map_or(n, |k| i + 2 + k + 2);
+            continue;
+        }
+        // Chaîne.
+        if c == b'"' || c == b'\'' {
+            let mut j = i + 1;
+            while j < n && b[j] != c {
+                j += if b[j] == b'\\' { 2 } else { 1 };
+            }
+            i = (j + 1).min(n);
+            continue;
+        }
+        // Adresse.
+        if (c == b'u' || c == b'U')
+            && (i == 0 || !ident_byte(b[i - 1]))
+            && css[i..].len() >= 4
+            && css[i..i + 4].eq_ignore_ascii_case("url(")
+        {
+            i = css[i..].find(')').map_or(n, |k| i + k + 1);
+            continue;
+        }
+        let digit = |k: usize| b.get(k).is_some_and(u8::is_ascii_digit);
+        let starts = c.is_ascii_digit()
+            || (c == b'.' && digit(i + 1))
+            || ((c == b'-' || c == b'+')
+                && (digit(i + 1) || (b.get(i + 1) == Some(&b'.') && digit(i + 2))));
+        if starts && (i == 0 || !(ident_byte(b[i - 1]) || b[i - 1] == b'.' || b[i - 1] == b'#')) {
+            let start = i;
+            let mut j = i;
+            if c == b'-' || c == b'+' {
+                j += 1;
+            }
+            while digit(j) {
+                j += 1;
+            }
+            if b.get(j) == Some(&b'.') && digit(j + 1) {
+                j += 1;
+                while digit(j) {
+                    j += 1;
+                }
+            }
+            let num_end = j;
+            while j < n && b[j].is_ascii_alphabetic() {
+                j += 1;
+            }
+            let unit = css[num_end..j].to_ascii_lowercase();
+            if matches!(unit.as_str(), "vh" | "svh" | "lvh" | "dvh")
+                && (j == n || !ident_byte(b[j]))
+            {
+                out.push_str(&css[last..start]);
+                out.push_str(&format!(
+                    "calc({} * var(--rv-vh, 1{unit}))",
+                    &css[start..num_end]
+                ));
+                last = j;
+            }
+            i = j;
+            continue;
+        }
+        i += 1;
+    }
+    out.push_str(&css[last..]);
+    out
+}
+
+/// Même traitement dans une page : blocs `<style>` et attributs `style`.
+pub(crate) fn html_viewport_units(html: &str) -> String {
+    if !html.contains("vh") {
+        return html.to_string();
+    }
+    let lower = html.to_ascii_lowercase();
+    let mut out = String::with_capacity(html.len() + 64);
+    let mut last = 0;
+    let mut i = 0;
+    while let Some(k) = lower[i..].find("style") {
+        let at = i + k;
+        let before = lower.as_bytes().get(at.wrapping_sub(1)).copied();
+        // `<style …>…</style>`
+        if before == Some(b'<') {
+            let Some(open_end) = lower[at..].find('>').map(|e| at + e + 1) else {
+                break;
+            };
+            let Some(close) = lower[open_end..].find("</style").map(|e| open_end + e) else {
+                break;
+            };
+            out.push_str(&html[last..open_end]);
+            out.push_str(&viewport_units(&html[open_end..close]));
+            last = close;
+            i = close + 7;
+            continue;
+        }
+        // ` style="…"`
+        if before.is_some_and(|b| b.is_ascii_whitespace())
+            && let Some(rest) = lower[at + 5..].strip_prefix("=\"")
+        {
+            let vstart = html.len() - rest.len();
+            let Some(vend) = rest.find('"').map(|e| vstart + e) else {
+                break;
+            };
+            out.push_str(&html[last..vstart]);
+            out.push_str(&viewport_units(&html[vstart..vend]));
+            last = vend;
+            i = vend;
+            continue;
+        }
+        i = at + 5;
+    }
+    out.push_str(&html[last..]);
+    out
 }
 
 fn respond(r: Result<Option<CanvasResponse>>) -> CanvasResponse {
@@ -549,6 +686,31 @@ fn respond(r: Result<Option<CanvasResponse>>) -> CanvasResponse {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn unites_de_hauteur_de_fenetre() {
+        let css = ".hero{min-height:100vh;height:calc(50dvh - 2rem)}.col-50vh{top:-10.5svh}\
+            /* 30vh */ .a::after{content:\"5vh\"}.b{background:url(x-20vh.png);margin:1.5e2px 2lvh}";
+        assert_eq!(
+            viewport_units(css),
+            ".hero{min-height:calc(100 * var(--rv-vh, 1vh));height:calc(calc(50 * var(--rv-vh, 1dvh)) - 2rem)}\
+            .col-50vh{top:calc(-10.5 * var(--rv-vh, 1svh))}/* 30vh */ .a::after{content:\"5vh\"}\
+            .b{background:url(x-20vh.png);margin:1.5e2px calc(2 * var(--rv-vh, 1lvh))}"
+        );
+        // Sans unité de fenêtre : inchangée.
+        assert_eq!(
+            viewport_units("a{width:100vw;height:10px}"),
+            "a{width:100vw;height:10px}"
+        );
+        let html =
+            "<style>.x{height:80vh}</style><div style=\"height:20vh\" data-x=\"10vh\">10vh</div>";
+        assert_eq!(
+            html_viewport_units(html),
+            "<style>.x{height:calc(80 * var(--rv-vh, 1vh))}</style>\
+             <div style=\"height:calc(20 * var(--rv-vh, 1vh))\" data-x=\"10vh\">10vh</div>"
+        );
+    }
+
     use super::*;
 
     #[test]

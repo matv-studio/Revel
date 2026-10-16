@@ -7,7 +7,6 @@
 
 use crate::{Ui, api, icons};
 use leptos::ev;
-use leptos::html;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_edit::{Command, EditState};
@@ -42,6 +41,25 @@ enum FromCanvas {
         tag: String,
         #[serde(default)]
         label: String,
+    },
+    /// Maj+clic : élément ajouté à la sélection (ou retiré).
+    Toggle {
+        id: String,
+        #[serde(default)]
+        tag: String,
+        #[serde(default)]
+        label: String,
+    },
+    /// Poignées de taille : largeur et/ou hauteur (valeurs CSS) ; `reset` : poignée
+    /// double-cliquée (`e`, `s`, `se`), valeur retirée.
+    Resized {
+        id: String,
+        #[serde(default)]
+        width: Option<String>,
+        #[serde(default)]
+        height: Option<String>,
+        #[serde(default)]
+        reset: Option<String>,
     },
     Key {
         key: String,
@@ -204,6 +222,36 @@ pub struct Geo {
 
 /// Marge autour du cadre (zoom ajusté).
 pub const GUTTER: f64 = 48.0;
+/// Vue côte à côte : écart entre deux écrans (pixels de la page) et place de leur nom au-dessus
+/// (pixels de l'écran).
+pub const SIDE_GAP: f64 = 96.0;
+pub const SIDE_LABEL: f64 = 24.0;
+/// Vue côte à côte : hauteur des cadres par défaut (pixels de la page, écran d'ordinateur).
+pub const SIDE_HEIGHT: f64 = 900.0;
+
+/// Cadre d'un écran dans le canevas : point de rupture, largeur et décalage depuis le premier
+/// cadre (pixels de la page).
+#[derive(Clone, Debug, PartialEq)]
+pub struct FrameBox {
+    pub bp: String,
+    pub w: f64,
+    pub ox: f64,
+}
+
+/// Disposition des cadres : un seul (l'écran choisi) ou tous les écrans côte à côte, du plus
+/// large au plus étroit ; largeur totale, hauteur, zoom ajusté, zoom, origine dans la zone.
+#[derive(Clone, Debug, PartialEq)]
+pub struct World {
+    pub frames: Vec<FrameBox>,
+    pub total: f64,
+    pub h: f64,
+    /// Hauteur normale des cadres (sans allongement) : référence des unités `vh` de la page.
+    pub base_h: f64,
+    pub fit: f64,
+    pub s: f64,
+    pub x: f64,
+    pub y: f64,
+}
 
 /// Guides de colonnes affichés sur la page (grille web : colonnes, gouttière, marges, largeur
 /// maximale du contenu).
@@ -261,6 +309,13 @@ pub struct Ed {
     /// Échelle du zoom ajusté (affichée dans la liste des zooms).
     pub fit: RwSignal<f64>,
     pub selected: RwSignal<Option<Selection>>,
+    /// Sélection multiple (Maj+clic) : tous les éléments sélectionnés, l'élément principal
+    /// (`selected`) compris ; vide pour une sélection simple.
+    pub multi: RwSignal<Vec<Selection>>,
+    /// Cible du panneau de styles (classe ou combinaison, état), partagée avec les poignées de
+    /// taille du canevas.
+    pub style_sel: RwSignal<String>,
+    pub style_state: RwSignal<String>,
     pub hovered: RwSignal<Option<String>>,
     /// Exécuter les scripts du site dans le canevas.
     pub scripts: RwSignal<bool>,
@@ -291,7 +346,15 @@ pub struct Ed {
     pub isolated: RwSignal<Option<String>>,
     /// Langue de travail (celle de l'interface du site ouvert, `Ui::locale`).
     pub locale: RwSignal<Option<String>>,
-    pub frame: NodeRef<html::Iframe>,
+    /// Tous les écrans côte à côte (le cadre de l'écran choisi est actif).
+    pub side: RwSignal<bool>,
+    /// Hauteur des cadres réglée à la poignée du bas (pixels de la page) ; `None` : la place
+    /// disponible (un écran : zone du canevas ; côte à côte : 900 px).
+    pub frame_h: RwSignal<Option<f64>>,
+    /// Vue côte à côte : écrans masqués (boutons des écrans de la barre d'outils).
+    pub hidden_bps: RwSignal<Vec<String>>,
+    /// Palette de commandes ouverte (Ctrl+K).
+    pub palette: RwSignal<bool>,
 }
 
 /// Paliers de zoom.
@@ -315,21 +378,116 @@ pub fn style_only(c: &Command) -> bool {
 }
 
 impl Ed {
-    /// Message au canevas.
+    /// Message au canevas : à tous les cadres (sélection, survol, feuille de style…), ou au seul
+    /// cadre actif pour ce qui concerne l'écran choisi (aperçu d'un geste, valeurs calculées,
+    /// mesures, glisser, défilement).
     pub fn post(self, msg: serde_json::Value) {
-        let Some(frame) = self.frame.get_untracked() else {
-            return;
-        };
-        let Some(win) = frame.content_window() else {
-            return;
-        };
-        let mut msg = msg;
-        if let Some(o) = msg.as_object_mut() {
-            o.insert("revel".into(), 1.into());
+        let only_active = matches!(
+            msg.get("type").and_then(|t| t.as_str()),
+            Some("preview" | "count" | "nav" | "measure" | "drag" | "watch" | "scroll" | "spacing")
+        );
+        if only_active {
+            if let Some(f) = self.frame_el() {
+                post_to(&f, msg);
+            }
+        } else {
+            for (_, f) in self.frames_el() {
+                post_to(&f, msg.clone());
+            }
         }
-        if let Ok(v) = js_sys::JSON::parse(&msg.to_string()) {
-            let _ = win.post_message(&v, "*");
+    }
+
+    /// Cadre actif du canevas (l'écran choisi).
+    pub fn frame_el(self) -> Option<web_sys::HtmlIFrameElement> {
+        use wasm_bindgen::JsCast;
+        document()
+            .query_selector(".canvas-area iframe.canvas-frame.is-active")
+            .ok()
+            .flatten()?
+            .dyn_into()
+            .ok()
+    }
+
+    /// Cadres du canevas et leur écran (vue côte à côte : un par écran).
+    pub fn frames_el(self) -> Vec<(String, web_sys::HtmlIFrameElement)> {
+        use wasm_bindgen::JsCast;
+        let Ok(list) = document().query_selector_all(".canvas-area iframe.canvas-frame") else {
+            return Vec::new();
+        };
+        (0..list.length())
+            .filter_map(|i| {
+                let f: web_sys::HtmlIFrameElement = list.item(i)?.dyn_into().ok()?;
+                Some((f.get_attribute("data-bp").unwrap_or_default(), f))
+            })
+            .collect()
+    }
+
+    /// Tous les écrans côte à côte, ou l'écran choisi seul (zoom ajusté à la nouvelle vue).
+    pub fn set_side(self, on: bool) {
+        if self.side.get_untracked() == on {
+            return;
         }
+        self.side.set(on);
+        self.zoom.set(None);
+        self.frame_h.set(None);
+        crate::pref_set("side", if on { "1" } else { "0" });
+    }
+
+    /// Vue côte à côte : écran affiché ou masqué (au moins un reste affiché ; l'écran choisi
+    /// masqué cède la place au premier affiché).
+    pub fn toggle_bp(self, id: &str) {
+        let all: Vec<String> = self.doc.with_untracked(|d| {
+            d.as_ref()
+                .map(|d| d.breakpoints.iter().map(|b| b.id.clone()).collect())
+                .unwrap_or_default()
+        });
+        let mut hidden = self.hidden_bps.get_untracked();
+        if let Some(i) = hidden.iter().position(|h| h == id) {
+            hidden.remove(i);
+        } else {
+            let shown: Vec<&String> = all.iter().filter(|b| !hidden.contains(b)).collect();
+            if shown.len() <= 1 {
+                return;
+            }
+            hidden.push(id.to_string());
+            if self.breakpoint.get_untracked() == id
+                && let Some(next) = all.iter().find(|b| !hidden.contains(b))
+            {
+                self.breakpoint.set(next.clone());
+            }
+        }
+        hidden.retain(|h| all.contains(h));
+        if let Ok(j) = serde_json::to_string(&hidden) {
+            crate::pref_set("side_hidden", &j);
+        }
+        self.hidden_bps.set(hidden);
+    }
+
+    /// Hauteur normale des cadres transmise au canevas quand ils sont allongés (unités `vh`
+    /// inchangées), retirée sinon.
+    pub fn post_viewport(self) {
+        let w = untrack(|| self.world());
+        let h = if self.frame_h.get_untracked().is_some() && (w.h - w.base_h).abs() > 0.5 {
+            w.base_h
+        } else {
+            0.0
+        };
+        self.post(serde_json::json!({ "type": "viewport", "h": h }));
+    }
+
+    /// Scripts du site exécutés dans le canevas, ou arrêtés (canevas rechargé).
+    pub fn set_scripts(self, ui: Ui, on: bool) {
+        self.scripts.set(on);
+        let path = self.path.get_value();
+        spawn_local(async move {
+            match api::canvas_open(&path, on).await {
+                Ok(b) => {
+                    self.base.set(Some(b));
+                    self.load.update(|n| *n += 1);
+                }
+                Err(e) => ui.fail(e),
+            }
+        });
     }
 
     /// Autre langue affichée (langue de travail, si le site l'a encore).
@@ -499,23 +657,18 @@ impl Ed {
 
     /// Raccourci clavier de l'éditeur (interface ou canevas) ; `true` s'il a été traité.
     pub fn shortcut(self, ui: Ui, k: &Key) -> bool {
-        let target = || self.selected_target();
         let key = k.key.to_lowercase();
         let digit = k.digit();
         match (key.as_str(), k.ctrl) {
             ("z", true) if k.shift => self.redo(ui),
             ("z", true) => self.undo(ui),
             ("y", true) => self.redo(ui),
-            ("d", true) => match target() {
-                Some(at) => self.apply(ui, Command::Duplicate { at }, false),
-                None => return false,
-            },
+            // Palette de commandes (le canevas transmet Ctrl+K).
+            ("k", true) if !k.shift => self.palette.set(true),
+            ("d", true) => return self.duplicate_selection(ui),
             // Envelopper dans un conteneur (Ctrl+G, comme Figma et Framer) ; Ctrl+Maj+G : retirer
             // l'enveloppe (les enfants prennent sa place).
-            ("g", true) if !k.shift => match target() {
-                Some(at) => self.wrap(ui, at),
-                None => return false,
-            },
+            ("g", true) if !k.shift => return self.wrap_selection(ui),
             ("g", true) => return self.unwrap(ui),
             // Règles en pixels (Ctrl+R, comme Figma ; le rechargement de la fenêtre est neutralisé).
             ("r", true) if !k.shift => {
@@ -527,12 +680,10 @@ impl Ed {
             ("c", true) if !k.shift => return self.copy(ui, false),
             ("x", true) if !k.shift => return self.copy(ui, true),
             ("v", true) if !k.shift => return self.paste(ui),
-            ("delete" | "backspace", false) => match target() {
-                Some(at) => self.apply(ui, Command::Remove { at }, false),
-                None => return false,
-            },
+            ("delete" | "backspace", false) => return self.remove_selection(ui),
             ("escape", false) => {
                 self.selected.set(None);
+                self.multi.set(Vec::new());
                 self.post(serde_json::json!({ "type": "select", "id": null }));
             }
             // Parcours de la sélection (comme Figma) : Entrée enfant, Maj+Entrée parent, Tab frères.
@@ -626,14 +777,24 @@ impl Ed {
         Some((at, n))
     }
 
-    /// Copie l'élément sélectionné (et le retire avec `cut`).
+    /// Copie les éléments sélectionnés (et les retire avec `cut`).
     pub fn copy(self, ui: Ui, cut: bool) -> bool {
-        let Some((at, n)) = self.selected_node() else {
+        let targets = self.targets();
+        let nodes: Vec<revel_model::Node> = self.doc.with_untracked(|d| {
+            let Some(d) = d.as_ref() else {
+                return Vec::new();
+            };
+            targets
+                .iter()
+                .filter_map(|at| revel_edit::address::node(d, at).ok().cloned())
+                .collect()
+        });
+        if nodes.is_empty() {
             return false;
-        };
-        ui.clipboard.set(Some(n));
+        }
+        ui.clipboard.set(nodes);
         if cut {
-            self.apply(ui, Command::Remove { at }, false);
+            self.remove_selection(ui);
         }
         true
     }
@@ -641,7 +802,8 @@ impl Ed {
     /// Colle l'élément copié (nouveaux identifiants) : à côté d'un élément de même balise
     /// sélectionné, sinon dans l'élément sélectionné (ou après lui), sinon à la fin de la page.
     pub fn paste(self, ui: Ui) -> bool {
-        let Some(mut node) = ui.clipboard.get_untracked() else {
+        let mut nodes = ui.clipboard.get_untracked();
+        let Some(node) = nodes.first().cloned() else {
             return false;
         };
         let tag = |n: &revel_model::Node| match n {
@@ -664,19 +826,320 @@ impl Ed {
         self.doc.with_untracked(|d| {
             if let Some(d) = d {
                 let mut taken = d.node_ids();
-                revel_edit::make::refresh_ids(&mut node, &mut taken);
+                for n in &mut nodes {
+                    revel_edit::make::refresh_ids(n, &mut taken);
+                }
             }
         });
-        self.apply(
-            ui,
-            Command::Insert {
-                parent,
-                index,
+        let mut commands: Vec<Command> = nodes
+            .into_iter()
+            .enumerate()
+            .map(|(i, node)| Command::Insert {
+                parent: parent.clone(),
+                index: index + i,
                 node,
-            },
-            false,
-        );
+            })
+            .collect();
+        let cmd = if commands.len() == 1 {
+            commands.remove(0)
+        } else {
+            Command::Batch { commands }
+        };
+        self.apply(ui, cmd, false);
         true
+    }
+
+    /// Ajoute l'élément à la sélection ou l'en retire (Maj+clic) ; le dernier ajouté devient
+    /// l'élément principal (panneaux).
+    pub fn toggle_select(self, s: Selection) {
+        let Some(primary) = self.selected.get_untracked() else {
+            self.post(serde_json::json!({ "type": "select", "id": s.id }));
+            self.selected.set(Some(s));
+            return;
+        };
+        let mut all = self.multi.get_untracked();
+        if all.is_empty() {
+            all.push(primary);
+        }
+        match all.iter().position(|x| x.id == s.id) {
+            Some(i) => {
+                all.remove(i);
+            }
+            None => all.push(s),
+        }
+        let next = all.last().cloned();
+        if all.len() <= 1 {
+            all.clear();
+        }
+        self.multi.set(all);
+        self.post(
+            serde_json::json!({ "type": "select", "id": next.as_ref().map(|n| n.id.clone()) }),
+        );
+        self.selected.set(next);
+        self.post_multi();
+    }
+
+    /// Autres éléments de la sélection multiple, transmis au canevas.
+    pub fn post_multi(self) {
+        let primary = self.selected.get_untracked().map(|s| s.id);
+        let ids: Vec<String> = self
+            .multi
+            .get_untracked()
+            .into_iter()
+            .map(|s| s.id)
+            .filter(|i| Some(i) != primary.as_ref())
+            .collect();
+        self.post(serde_json::json!({ "type": "multi", "ids": ids }));
+    }
+
+    /// Éléments sélectionnés (sélection multiple, sinon l'élément sélectionné), dans l'ordre du
+    /// document, sans ceux contenus dans un autre élément sélectionné.
+    pub fn targets(self) -> Vec<revel_edit::Target> {
+        let ids: Vec<String> = {
+            let m = self.multi.get_untracked();
+            if m.is_empty() {
+                self.selected
+                    .get_untracked()
+                    .into_iter()
+                    .map(|s| s.id)
+                    .collect()
+            } else {
+                m.into_iter().map(|s| s.id).collect()
+            }
+        };
+        self.doc.with_untracked(|d| {
+            let Some(d) = d.as_ref() else {
+                return Vec::new();
+            };
+            let mut order: Vec<String> = Vec::new();
+            for (_, _, body) in d.owners() {
+                revel_model::ids::walk(body, &mut |n| {
+                    if let Some(i) = revel_model::ids::node_id(n)
+                        && ids.iter().any(|x| x == i)
+                    {
+                        order.push(i.to_string());
+                    }
+                });
+            }
+            let inside = |outer: &str, id: &str| {
+                target_of(d, outer)
+                    .and_then(|t| revel_edit::address::node(d, &t).ok())
+                    .is_some_and(|n| {
+                        let mut found = false;
+                        for list in revel_model::ids::child_lists(n) {
+                            revel_model::ids::walk(list, &mut |c| {
+                                found |= revel_model::ids::node_id(c) == Some(id);
+                            });
+                        }
+                        found
+                    })
+            };
+            order
+                .iter()
+                .filter(|id| !order.iter().any(|o| o != *id && inside(o, id)))
+                .filter_map(|id| target_of(d, id))
+                .collect()
+        })
+    }
+
+    /// Supprime les éléments sélectionnés (une seule étape d'annulation).
+    pub fn remove_selection(self, ui: Ui) -> bool {
+        let mut commands: Vec<Command> = self
+            .targets()
+            .into_iter()
+            .map(|at| Command::Remove { at })
+            .collect();
+        match commands.len() {
+            0 => false,
+            1 => {
+                self.apply(ui, commands.remove(0), false);
+                true
+            }
+            _ => {
+                self.multi.set(Vec::new());
+                self.apply(ui, Command::Batch { commands }, false);
+                true
+            }
+        }
+    }
+
+    /// Duplique les éléments sélectionnés (une seule étape d'annulation).
+    pub fn duplicate_selection(self, ui: Ui) -> bool {
+        let mut commands: Vec<Command> = self
+            .targets()
+            .into_iter()
+            .map(|at| Command::Duplicate { at })
+            .collect();
+        match commands.len() {
+            0 => false,
+            1 => {
+                self.apply(ui, commands.remove(0), false);
+                true
+            }
+            _ => {
+                self.apply(ui, Command::Batch { commands }, false);
+                true
+            }
+        }
+    }
+
+    /// Enveloppe la sélection : un élément, ou plusieurs éléments voisins (même parent), placés
+    /// ensemble dans un nouveau conteneur à la place du premier.
+    pub fn wrap_selection(self, ui: Ui) -> bool {
+        let targets = self.targets();
+        match targets.len() {
+            0 => false,
+            1 => {
+                self.wrap(ui, targets[0].clone());
+                true
+            }
+            _ => {
+                let plan = self.doc.with_untracked(|d| {
+                    let d = d.as_ref()?;
+                    let mut places = Vec::new();
+                    for t in &targets {
+                        places.push(revel_edit::address::locate(d, t).ok()?);
+                    }
+                    let parent = places[0].0.clone();
+                    if places.iter().any(|(p, _)| *p != parent) {
+                        return None;
+                    }
+                    let first = places.iter().map(|(_, i)| *i).min()?;
+                    let mut wrapper = revel_model::Node::Element {
+                        id: None,
+                        tag: "div".into(),
+                        attrs: Vec::new(),
+                        children: Vec::new(),
+                    };
+                    let mut taken = d.node_ids();
+                    revel_edit::make::refresh_ids(&mut wrapper, &mut taken);
+                    let wid = revel_model::ids::node_id(&wrapper)?.to_string();
+                    Some((parent, first, wrapper, wid))
+                });
+                let Some((parent, first, wrapper, wid)) = plan else {
+                    ui.fail(revel_protocol::Failure::new("editor-wrap-siblings"));
+                    return true;
+                };
+                let into = revel_edit::Parent {
+                    owner: parent.owner.clone(),
+                    node: Some(wid.clone()),
+                    branch: Default::default(),
+                };
+                let mut commands = vec![Command::Insert {
+                    parent,
+                    index: first,
+                    node: wrapper,
+                }];
+                for (i, at) in targets.into_iter().enumerate() {
+                    commands.push(Command::Move {
+                        at,
+                        to: into.clone(),
+                        index: i,
+                    });
+                }
+                self.multi.set(Vec::new());
+                self.apply(ui, Command::Batch { commands }, false);
+                true
+            }
+        }
+    }
+
+    /// Taille réglée aux poignées du canevas (ou retirée par un double-clic) : écrite dans la
+    /// classe réglée du panneau de styles, sinon la première classe de l'élément, au point de
+    /// rupture affiché ; un élément sans classe en reçoit une (comme Webflow).
+    pub fn resize(
+        self,
+        ui: Ui,
+        id: &str,
+        width: Option<String>,
+        height: Option<String>,
+        reset: Option<String>,
+    ) {
+        let release = move || self.post(serde_json::json!({ "type": "preview", "css": "" }));
+        let Some(at) = self.selected_target().filter(|t| t.node == id) else {
+            return release();
+        };
+        let Some(node) = self
+            .doc
+            .with_untracked(|d| revel_edit::address::node(d.as_ref()?, &at).ok().cloned())
+        else {
+            return release();
+        };
+        let list: Vec<(String, Option<String>)> = match reset.as_deref() {
+            Some("e") => vec![("width".into(), None)],
+            Some("s") => vec![("height".into(), None)],
+            Some(_) => vec![("width".into(), None), ("height".into(), None)],
+            None => [("width", width), ("height", height)]
+                .into_iter()
+                .filter_map(|(p, v)| v.map(|v| (p.to_string(), Some(v))))
+                .collect(),
+        };
+        let bp = self.breakpoint.get_untracked();
+        let media = self.doc.with_untracked(|d| {
+            d.as_ref()?
+                .breakpoints
+                .iter()
+                .find(|b| b.id == bp)
+                .and_then(|b| b.media())
+        });
+        let cands = crate::styles::candidates(&crate::styles::classes_of(&node));
+        let cur = self.style_sel.get_untracked();
+        let (sel, state) = if cands.contains(&cur) {
+            (cur, self.style_state.get_untracked())
+        } else if let Some(c) = cands.first() {
+            (c.clone(), String::new())
+        } else {
+            // Élément sans classe : classe créée d'après sa nature, réglée avec la taille.
+            if reset.is_some() || list.is_empty() {
+                return release();
+            }
+            let Some(name) = self
+                .doc
+                .with_untracked(|d| d.as_ref().map(|d| crate::styles::new_class(d, &node)))
+            else {
+                return release();
+            };
+            let Some(set_class) =
+                crate::styles::class_command(at, &node, std::slice::from_ref(&name))
+            else {
+                return release();
+            };
+            let decls = list
+                .into_iter()
+                .filter_map(|(prop, value)| {
+                    Some(revel_model::Decl {
+                        prop,
+                        value: value?,
+                        important: false,
+                    })
+                })
+                .collect();
+            self.style_sel.set(format!(".{name}"));
+            self.style_state.set(String::new());
+            self.apply(
+                ui,
+                Command::Batch {
+                    commands: vec![
+                        set_class,
+                        Command::AddRule {
+                            selector: format!(".{name}"),
+                            media,
+                            decls,
+                        },
+                    ],
+                },
+                false,
+            );
+            return;
+        };
+        let full = format!("{sel}{state}");
+        let rule = self
+            .doc
+            .with_untracked(|d| crate::styles::find_rule(d.as_ref()?, &full, &media));
+        match crate::styles::style_command(rule, full, media, list) {
+            Some(cmd) => self.apply(ui, cmd, false),
+            None => release(),
+        }
     }
 
     /// Retire l'enveloppe de l'élément sélectionné : ses enfants prennent sa place.
@@ -731,34 +1194,82 @@ impl Ed {
         }
     }
 
-    /// Géométrie du canevas (lecture suivie : à appeler hors réaction avec `untrack`).
-    pub fn geo(self) -> Geo {
+    /// Disposition des cadres (lecture suivie : à appeler hors réaction avec `untrack`).
+    pub fn world(self) -> World {
         let (aw, ah) = self.area.get();
-        let desktop_min = self.doc.with(|d| {
-            d.as_ref()
-                .and_then(|d| d.breakpoints.iter().filter_map(|b| b.max_width).max())
-                .map(|w| f64::from(w) + 1.0)
-                .unwrap_or(320.0)
+        let side = self.side.get();
+        let active = self.breakpoint.get();
+        let frames: Vec<FrameBox> = self.doc.with(|d| {
+            let bps = d
+                .as_ref()
+                .map(|d| d.breakpoints.clone())
+                .unwrap_or_default();
+            let max_max = bps.iter().filter_map(|b| b.max_width).max();
+            let min_min = bps.iter().filter_map(|b| b.min_width).min();
+            let desktop_min = max_max.map(|w| f64::from(w) + 1.0).unwrap_or(320.0);
+            if !side {
+                let w = bps
+                    .iter()
+                    .find(|b| b.id == active)
+                    .and_then(|b| b.max_width.or(b.min_width))
+                    .map(f64::from)
+                    .unwrap_or_else(|| (aw - GUTTER).max(desktop_min));
+                return vec![FrameBox {
+                    bp: active.clone(),
+                    w,
+                    ox: 0.0,
+                }];
+            }
+            // Ordinateur (base) : 1280 px, entre les largeurs des autres écrans.
+            let hi = min_min.map(|w| f64::from(w) - 1.0).unwrap_or(f64::INFINITY);
+            let base_w = 1280f64.min(hi).max(desktop_min);
+            let hidden = self.hidden_bps.get();
+            let mut list: Vec<_> = bps
+                .into_iter()
+                .filter(|b| b.id == active || !hidden.contains(&b.id))
+                .collect();
+            list.sort_by_key(|b| match (b.min_width, b.max_width) {
+                (Some(w), _) => (0, -i64::from(w)),
+                (None, None) => (1, 0),
+                (None, Some(w)) => (2, -i64::from(w)),
+            });
+            let mut ox = 0.0;
+            list.into_iter()
+                .map(|b| {
+                    let w = b.min_width.or(b.max_width).map(f64::from).unwrap_or(base_w);
+                    let f = FrameBox { bp: b.id, w, ox };
+                    ox += w + SIDE_GAP;
+                    f
+                })
+                .collect()
         });
-        let w = self
-            .frame_width()
-            .unwrap_or_else(|| (aw - GUTTER).max(desktop_min));
-        let fit = ((aw - GUTTER) / w).clamp(0.1, 1.0);
-        let h = ((ah - GUTTER) / fit).max(200.0);
+        let total = frames.last().map(|f| f.ox + f.w).unwrap_or(320.0);
+        let label = if side { SIDE_LABEL } else { 0.0 };
+        let fit = ((aw - GUTTER) / total).clamp(0.05, 1.0);
+        let base_h = if side {
+            SIDE_HEIGHT
+        } else {
+            ((ah - GUTTER - label) / fit).max(200.0)
+        };
+        let h = self.frame_h.get().unwrap_or(base_h);
         match self.zoom.get() {
-            None => Geo {
-                w,
+            None => World {
+                frames,
+                total,
                 h,
+                base_h,
                 fit,
                 s: fit,
-                x: ((aw - w * fit) / 2.0).max(GUTTER / 2.0),
-                y: GUTTER / 2.0,
+                x: ((aw - total * fit) / 2.0).max(GUTTER / 2.0),
+                y: GUTTER / 2.0 + label,
             },
             Some(z) => {
                 let (x, y) = self.pan.get();
-                Geo {
-                    w,
+                World {
+                    frames,
+                    total,
                     h,
+                    base_h,
                     fit,
                     s: z,
                     x,
@@ -768,13 +1279,46 @@ impl Ed {
         }
     }
 
-    /// Position du cadre gardée en partie visible.
-    fn clamp_pan(self, g: &Geo, x: f64, y: f64) -> (f64, f64) {
+    /// Géométrie du cadre actif (lecture suivie : à appeler hors réaction avec `untrack`).
+    pub fn geo(self) -> Geo {
+        let w = self.world();
+        let active = self.breakpoint.get();
+        let (fw, ox) = w
+            .frames
+            .iter()
+            .find(|f| f.bp == active)
+            .or(w.frames.first())
+            .map(|f| (f.w, f.ox))
+            .unwrap_or((320.0, 0.0));
+        Geo {
+            w: fw,
+            h: w.h,
+            fit: w.fit,
+            s: w.s,
+            x: w.x + ox * w.s,
+            y: w.y,
+        }
+    }
+
+    /// Origine (dans la zone) du cadre d'un écran.
+    pub fn frame_origin(self, bp: &str) -> (f64, f64, f64) {
+        let w = untrack(|| self.world());
+        let ox = w
+            .frames
+            .iter()
+            .find(|f| f.bp == bp)
+            .map(|f| f.ox)
+            .unwrap_or(0.0);
+        (w.x + ox * w.s, w.y, w.s)
+    }
+
+    /// Origine des cadres gardée telle qu'une partie reste visible.
+    fn clamp_pan(self, w: &World, s: f64, x: f64, y: f64) -> (f64, f64) {
         let (aw, ah) = self.area.get_untracked();
         let keep = 80.0;
         (
-            x.clamp(keep - g.w * g.s, (aw - keep).max(keep - g.w * g.s)),
-            y.clamp(keep - g.h * g.s, (ah - keep).max(keep - g.h * g.s)),
+            x.clamp(keep - w.total * s, (aw - keep).max(keep - w.total * s)),
+            y.clamp(keep - w.h * s, (ah - keep).max(keep - w.h * s)),
         )
     }
 
@@ -785,11 +1329,10 @@ impl Ed {
 
     /// Zoom `z` autour du point (`cx`, `cy`) de la zone du canevas.
     pub fn zoom_at(self, z: f64, cx: f64, cy: f64) {
-        let g = untrack(|| self.geo());
-        let z = ((z * 100.0).round() / 100.0).clamp(0.1, 4.0);
-        let k = z / g.s;
-        let ng = Geo { s: z, ..g };
-        let (x, y) = self.clamp_pan(&ng, cx - (cx - g.x) * k, cy - (cy - g.y) * k);
+        let w = untrack(|| self.world());
+        let z = ((z * 100.0).round() / 100.0).clamp(0.05, 4.0);
+        let k = z / w.s;
+        let (x, y) = self.clamp_pan(&w, z, cx - (cx - w.x) * k, cy - (cy - w.y) * k);
         self.pan.set((x, y));
         self.zoom.set(Some(z));
     }
@@ -801,16 +1344,16 @@ impl Ed {
             self.zoom.set(None);
             return;
         };
-        let g = untrack(|| self.geo());
+        let w = untrack(|| self.world());
         let (aw, _) = self.area.get_untracked();
-        let z = ((z * 100.0).round() / 100.0).clamp(0.1, 4.0);
-        let x = if g.w * z <= aw - GUTTER {
-            (aw - g.w * z) / 2.0
+        let z = ((z * 100.0).round() / 100.0).clamp(0.05, 4.0);
+        let x = if w.total * z <= aw - GUTTER {
+            (aw - w.total * z) / 2.0
         } else {
             GUTTER / 2.0
         };
-        let y = if g.y >= 0.0 { g.y } else { g.y * z / g.s };
-        let (x, y) = self.clamp_pan(&Geo { s: z, ..g }, x, y);
+        let y = if w.y >= 0.0 { w.y } else { w.y * z / w.s };
+        let (x, y) = self.clamp_pan(&w, z, x, y);
         self.pan.set((x, y));
         self.zoom.set(Some(z));
     }
@@ -850,36 +1393,40 @@ impl Ed {
         }
         let z = ((aw - 2.0 * GUTTER) / r.width)
             .min((ah - 2.0 * GUTTER) / r.height)
-            .clamp(0.1, 4.0);
+            .clamp(0.05, 4.0);
         let z = (z * 100.0).round() / 100.0;
-        let g = Geo {
-            s: z,
-            ..untrack(|| self.geo())
-        };
-        let x = aw / 2.0 - (r.x + r.width / 2.0) * z;
+        let w = untrack(|| self.world());
+        let active = self.breakpoint.get_untracked();
+        let ox = w
+            .frames
+            .iter()
+            .find(|f| f.bp == active)
+            .map(|f| f.ox)
+            .unwrap_or(0.0);
+        let x = aw / 2.0 - (ox + r.x + r.width / 2.0) * z;
         let y = ah / 2.0 - (r.y + r.height / 2.0) * z;
-        let (x, y) = self.clamp_pan(&g, x, y);
+        let (x, y) = self.clamp_pan(&w, z, x, y);
         self.pan.set((x, y));
         self.zoom.set(Some(z));
     }
 
     /// Zoom libre : cadre recentré horizontalement (changement de point de rupture).
     pub fn recenter(self) {
-        if self.zoom.get_untracked().is_some() {
-            let g = untrack(|| self.geo());
+        if self.zoom.get_untracked().is_some() && !self.side.get_untracked() {
+            let w = untrack(|| self.world());
             let (aw, _) = self.area.get_untracked();
             self.pan
-                .set((((aw - g.w * g.s) / 2.0).max(GUTTER / 2.0), g.y));
+                .set((((aw - w.total * w.s) / 2.0).max(GUTTER / 2.0), w.y));
         }
     }
 
     /// Déplacement de la vue (pixels de l'écran).
     pub fn pan_by(self, dx: f64, dy: f64) {
-        let g = untrack(|| self.geo());
-        let (x, y) = self.clamp_pan(&g, g.x + dx, g.y + dy);
+        let w = untrack(|| self.world());
+        let (x, y) = self.clamp_pan(&w, w.s, w.x + dx, w.y + dy);
         self.pan.set((x, y));
         if self.zoom.get_untracked().is_none() {
-            self.zoom.set(Some(g.s));
+            self.zoom.set(Some(w.s));
         }
     }
 
@@ -1102,18 +1649,7 @@ impl Ed {
     /// Adresse du nœud sélectionné (son propriétaire est retrouvé dans le document).
     pub fn selected_target(self) -> Option<revel_edit::Target> {
         let sel = self.selected.get()?;
-        self.doc.with(|d| {
-            let (kind, id) = owner_of(d.as_ref()?, &sel.id)?;
-            let owner = match kind {
-                revel_model::ids::OwnerKind::Page => revel_edit::Owner::Page(id),
-                revel_model::ids::OwnerKind::Layout => revel_edit::Owner::Layout(id),
-                revel_model::ids::OwnerKind::Component => revel_edit::Owner::Component(id),
-            };
-            Some(revel_edit::Target {
-                owner,
-                node: sel.id.clone(),
-            })
-        })
+        self.doc.with(|d| target_of(d.as_ref()?, &sel.id))
     }
 
     /// Largeur du cadre pour le point de rupture affiché ; `None` : toute la place.
@@ -1204,6 +1740,34 @@ fn path_to(nodes: &[revel_model::Node], id: &str, stack: &mut Vec<(String, Strin
     false
 }
 
+/// Message à un cadre du canevas.
+fn post_to(frame: &web_sys::HtmlIFrameElement, msg: serde_json::Value) {
+    let Some(win) = frame.content_window() else {
+        return;
+    };
+    let mut msg = msg;
+    if let Some(o) = msg.as_object_mut() {
+        o.insert("revel".into(), 1.into());
+    }
+    if let Ok(v) = js_sys::JSON::parse(&msg.to_string()) {
+        let _ = win.post_message(&v, "*");
+    }
+}
+
+/// Adresse d'un nœud (son propriétaire est retrouvé dans le document).
+pub fn target_of(doc: &Site, id: &str) -> Option<revel_edit::Target> {
+    let (kind, owner) = owner_of(doc, id)?;
+    let owner = match kind {
+        revel_model::ids::OwnerKind::Page => revel_edit::Owner::Page(owner),
+        revel_model::ids::OwnerKind::Layout => revel_edit::Owner::Layout(owner),
+        revel_model::ids::OwnerKind::Component => revel_edit::Owner::Component(owner),
+    };
+    Some(revel_edit::Target {
+        owner,
+        node: id.to_string(),
+    })
+}
+
 /// Propriétaire d'un nœud (page, gabarit, composant) : libellé pour la barre d'état.
 pub fn owner_of(doc: &Site, id: &str) -> Option<(revel_model::ids::OwnerKind, String)> {
     for (kind, owner, body) in doc.owners() {
@@ -1241,6 +1805,9 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         drop: RwSignal::new(None),
         fit: RwSignal::new(1.0),
         selected: RwSignal::new(None),
+        multi: RwSignal::new(Vec::new()),
+        style_sel: RwSignal::new(String::new()),
+        style_state: RwSignal::new(String::new()),
         hovered: RwSignal::new(None),
         scripts: RwSignal::new(false),
         load: RwSignal::new(0),
@@ -1260,7 +1827,14 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         saved_at: RwSignal::new(None),
         isolated: RwSignal::new(None),
         locale: ui.locale,
-        frame: NodeRef::new(),
+        side: RwSignal::new(crate::pref_get("side").as_deref() == Some("1")),
+        frame_h: RwSignal::new(None),
+        hidden_bps: RwSignal::new(
+            crate::pref_get("side_hidden")
+                .and_then(|v| serde_json::from_str(&v).ok())
+                .unwrap_or_default(),
+        ),
+        palette: RwSignal::new(false),
     };
     provide_context(ed);
     let dock = crate::dock::Dock::provide();
@@ -1282,6 +1856,49 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     Effect::new(move |_| {
         ed.isolated.track();
         ed.post_isolation();
+    });
+    // Sélection multiple : abandonnée quand l'élément principal n'en fait plus partie (clic
+    // simple, calques, fil d'Ariane, suppression).
+    Effect::new(move |_| {
+        let sel = ed.selected.get();
+        let keep = ed.multi.with_untracked(|m| {
+            m.is_empty() || sel.as_ref().is_some_and(|s| m.iter().any(|x| x.id == s.id))
+        });
+        if !keep {
+            ed.multi.set(Vec::new());
+            ed.post_multi();
+        }
+    });
+    // Vue côte à côte : écran choisi signalé à chaque cadre (poignées de taille dans le seul
+    // cadre actif), valeurs calculées et sélection relues dans le nouveau cadre actif.
+    Effect::new(move |prev: Option<(String, bool)>| {
+        let bp = ed.breakpoint.get();
+        let side = ed.side.get();
+        if side && prev.is_some() {
+            let bp2 = bp.clone();
+            request_animation_frame(move || {
+                for (b, f) in ed.frames_el() {
+                    post_to(&f, serde_json::json!({ "type": "active", "on": b == bp2 }));
+                }
+                ed.post(serde_json::json!({ "type": "watch", "props": crate::styles::watched() }));
+                if let Some(s) = ed.selected.get_untracked() {
+                    ed.post(serde_json::json!({ "type": "select", "id": s.id }));
+                    ed.post_multi();
+                }
+            });
+        }
+        (bp, side)
+    });
+    // Cadres allongés : hauteur normale transmise au canevas (unités `vh` inchangées).
+    Effect::new(move |_| {
+        let w = ed.world();
+        let _ = (w.h, w.base_h, ed.frame_h.get());
+        ed.post_viewport();
+    });
+    // Zoom de l'éditeur transmis au canevas (contours, poignées, étiquettes à taille constante).
+    Effect::new(move |_| {
+        let s = ed.geo().s;
+        ed.post(serde_json::json!({ "type": "scale", "s": s }));
     });
     // Adresse du canevas partagée (vignettes des médias dans les autres vues).
     {
@@ -1352,38 +1969,72 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
 
     // Messages du canevas.
     let on_message = window_event_listener(ev::message, move |e: web_sys::MessageEvent| {
-        let Some(frame) = ed.frame.get_untracked() else {
+        // Cadre qui écrit : l'actif (écran choisi) ou un autre écran de la vue côte à côte.
+        let src = e.source();
+        let from = ed
+            .frames_el()
+            .into_iter()
+            .find(|(_, f)| match (&src, f.content_window()) {
+                (Some(s), Some(w)) => js_sys::Object::is(s, w.as_ref()),
+                _ => false,
+            });
+        let Some((from_bp, from_frame)) = from else {
             return;
         };
-        let from_canvas = match (e.source(), frame.content_window()) {
-            (Some(src), Some(win)) => js_sys::Object::is(&src, win.as_ref()),
-            _ => false,
-        };
+        let active = from_frame.class_list().contains("is-active");
         let data = e.data();
         let tagged = js_sys::Reflect::get(&data, &JsValue::from_str("revel"))
             .ok()
             .and_then(|v| v.as_f64())
             == Some(1.0);
-        if !from_canvas || !tagged {
+        if !tagged {
             return;
         }
         let Ok(msg) = serde_wasm_bindgen::from_value::<FromCanvas>(data) else {
             return;
         };
+        if !active {
+            match &msg {
+                // Clic, Maj+clic, clic droit ou texte modifié dans un autre écran : il devient
+                // l'écran choisi.
+                FromCanvas::Select { id: Some(_), .. }
+                | FromCanvas::Toggle { .. }
+                | FromCanvas::Context { .. }
+                | FromCanvas::Text { .. } => ed.breakpoint.set(from_bp.clone()),
+                FromCanvas::Ready { .. }
+                | FromCanvas::Key { .. }
+                | FromCanvas::Keyup { .. }
+                | FromCanvas::Pan { .. }
+                | FromCanvas::Zoom { .. }
+                | FromCanvas::Moved { .. } => {}
+                _ => return,
+            }
+        }
         match msg {
             FromCanvas::Ready { path, vars } => {
                 // Navigation impossible dans le canevas : la page est celle demandée.
                 let _ = path;
-                ed.vars.set(vars);
-                ed.live_scroll.set((0.0, 0.0));
-                ed.post(serde_json::json!({ "type": "watch", "props": crate::styles::watched() }));
-                let (x, y) = ed.scroll.get_untracked();
-                if x != 0.0 || y != 0.0 {
-                    ed.post(serde_json::json!({ "type": "scroll", "x": x, "y": y }));
+                post_to(
+                    &from_frame,
+                    serde_json::json!({ "type": "active", "on": active }),
+                );
+                if active {
+                    ed.vars.set(vars);
+                    ed.live_scroll.set((0.0, 0.0));
+                    ed.post(
+                        serde_json::json!({ "type": "watch", "props": crate::styles::watched() }),
+                    );
+                    let (x, y) = ed.scroll.get_untracked();
+                    if x != 0.0 || y != 0.0 {
+                        ed.post(serde_json::json!({ "type": "scroll", "x": x, "y": y }));
+                    }
                 }
                 ed.post_isolation();
+                ed.post_viewport();
+                ed.post(serde_json::json!({ "type": "scale", "s": ed.scale() }));
                 if let Some(s) = ed.selected.get_untracked() {
                     ed.post(serde_json::json!({ "type": "select", "id": s.id }));
+                    ed.post_multi();
                 }
             }
             FromCanvas::Hover { id } => ed.hovered.set(id),
@@ -1402,11 +2053,9 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             }
             FromCanvas::Context { x, y } => {
                 // Position dans le cadre -> dans la fenêtre.
-                if let Some(f) = ed.frame.get_untracked() {
-                    let r = f.get_bounding_client_rect();
-                    let s = ed.scale();
-                    crate::canvas::open_canvas_menu(ui, ed, r.left() + x * s, r.top() + y * s);
-                }
+                let r = from_frame.get_bounding_client_rect();
+                let s = ed.scale();
+                crate::canvas::open_canvas_menu(ui, ed, r.left() + x * s, r.top() + y * s);
             }
             FromCanvas::Measure { rect } => {
                 if let Some(r) = rect {
@@ -1417,8 +2066,16 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 if id.is_none() {
                     ed.computed.set(Default::default());
                 }
+                ed.multi.set(Vec::new());
                 ed.selected.set(id.map(|id| Selection { id, tag, label }));
             }
+            FromCanvas::Toggle { id, tag, label } => ed.toggle_select(Selection { id, tag, label }),
+            FromCanvas::Resized {
+                id,
+                width,
+                height,
+                reset,
+            } => ed.resize(ui, &id, width, height, reset),
             FromCanvas::Key {
                 key,
                 code,
@@ -1450,8 +2107,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             FromCanvas::Zoom { dy, x, y } => {
                 // Position du pointeur dans le cadre -> dans la zone du canevas.
                 let at = x.zip(y).map(|(x, y)| {
-                    let g = untrack(|| ed.geo());
-                    (g.x + x * g.s, g.y + y * g.s)
+                    let (fx, fy, s) = ed.frame_origin(&from_bp);
+                    (fx + x * s, fy + y * s)
                 });
                 ed.zoom_by((-dy * 0.002).exp(), at);
             }
@@ -1560,6 +2217,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
 
     view! {
         <section class="editor">
+            <crate::palette::Palette/>
             <Toolbar/>
             <crate::dock::Workspace panel=panel_view>
                 <crate::canvas::CanvasArea failed=failed/>
@@ -1655,19 +2313,7 @@ fn Toolbar() -> impl IntoView {
     let can_undo = move || ed.state.with(|s| s.as_ref().is_some_and(|s| s.can_undo));
     let can_redo = move || ed.state.with(|s| s.as_ref().is_some_and(|s| s.can_redo));
     let pct = |z: f64| format!("{} %", (z * 100.0).round());
-    let set_scripts = move |on: bool| {
-        ed.scripts.set(on);
-        let path = ed.path.get_value();
-        spawn_local(async move {
-            match api::canvas_open(&path, on).await {
-                Ok(b) => {
-                    ed.base.set(Some(b));
-                    ed.load.update(|n| *n += 1);
-                }
-                Err(e) => ui.fail(e),
-            }
-        });
-    };
+    let set_scripts = move |on: bool| ed.set_scripts(ui, on);
     view! {
         <div class="editor-toolbar">
             <crate::pagetree::PageContext/>
@@ -1677,15 +2323,25 @@ fn Toolbar() -> impl IntoView {
                     let id = b.id.clone();
                     let on = b.id.clone();
                     let title = bp_label(&b);
+                    let (shown, cur) = (b.id.clone(), b.id.clone());
+                    let title2 = title.clone();
+                    // Un écran : choisi. Côte à côte : affiché ou masqué (l'écran choisi marqué).
                     view! {
-                        <button class:is-on=move || ed.breakpoint.get() == on title=title.clone() aria-label=title.clone()
-                            on:click=move |_| { ed.breakpoint.set(id.clone()); ed.recenter(); }>
+                        <button
+                            class:is-on=move || if ed.side.get() { !ed.hidden_bps.with(|h| h.contains(&shown)) } else { ed.breakpoint.get() == on }
+                            class:is-current=move || ed.side.get() && ed.breakpoint.get() == cur
+                            title=move || if ed.side.get() { ui.tx("editor-bp-toggle", &[("name", title2.clone())]) } else { title2.clone() }
+                            aria-label=title.clone()
+                            on:click=move |_| if ed.side.get_untracked() { ed.toggle_bp(&id) } else { ed.breakpoint.set(id.clone()); ed.recenter(); }>
                             {bp_icon(&b)}
                             <span class="bp-width">{b.max_width.or(b.min_width).map(|w| w.to_string()).unwrap_or_default()}</span>
                         </button>
                     }
                 }).collect_view()}
             </div>
+            <button class="tool-toggle side-toggle" class:is-on=move || ed.side.get() aria-pressed=move || ed.side.get().to_string()
+                title=ui.t("editor-side-help") aria-label=ui.t("editor-side")
+                on:click=move |_| ed.set_side(!ed.side.get_untracked())>{icons::screens()}</button>
             <BreakpointMenu/>
             <div class="select editor-zoom" title=ui.t("editor-zoom-help")>
                 <select class="input" aria-label=ui.t("editor-zoom")
@@ -1715,11 +2371,14 @@ fn Toolbar() -> impl IntoView {
                 <div class="bp-pop bp-pop--right">
                     <p class="panel-title">{ui.t("editor-shortcuts")}</p>
                     {[
+                        ("key-palette", "palette"),
                         ("key-undo", "editor-undo-short"),
                         ("key-redo", "editor-redo-short"),
                         ("key-duplicate", "layers-duplicate-short"),
                         ("key-delete", "layers-delete-short"),
                         ("key-escape", "editor-deselect"),
+                        ("key-multi", "editor-multi-add"),
+                        ("key-resize", "editor-resize"),
                         ("key-dblclick", "editor-edit-text"),
                         ("key-enter", "editor-edit-validate"),
                         ("key-child", "editor-select-child"),
@@ -1994,6 +2653,9 @@ fn StatusBar() -> impl IntoView {
     view! {
         <footer class="editor-status">
             <nav class="node-path" aria-label=ui.t("editor-path")>
+                {move || (ed.multi.with(Vec::len) > 1).then(|| view! {
+                    <span class="chip chip--multi">{ui.tx("editor-multi", &[("count", ed.multi.with(Vec::len).to_string())])}</span>
+                })}
                 {move || match crumbs() {
                     None => view! { <span class="muted">{ui.t("editor-no-selection")}</span> }.into_any(),
                     Some(list) => {

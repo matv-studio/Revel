@@ -30,8 +30,10 @@ const invoke = async (cmd, args = {}) => {
 };
 
 const browser = await chromium.launch();
+let shotPage = null;
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  shotPage = page;
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') console.log('console', m.text().slice(0, 300)); });
@@ -454,8 +456,11 @@ try {
     await page.waitForSelector('.notice--error');
     check('variables : expression invalide refusée, rien n\'est écrit', JSON.stringify((await invoke('edit_open')).site) === docV, (await page.textContent('.notice--error')).trim());
     await page.click('.notice--error .icon-btn');
+    await page.waitForSelector('.notice--error', { state: 'detached' });
     await page.click(canon + ' .var-head');
+    await page.waitForSelector(canon + '.is-open .var-expr');
     await page.fill(canon + ' .var-expr', '"https://essai.example/"');
+    await page.waitForFunction((sel) => document.querySelector(sel + ' .var-expr')?.value === '"https://essai.example/"', canon);
     await page.keyboard.press('Enter');
     await page.waitForFunction((sel) => document.querySelector(sel + ' .var-value')?.textContent.trim() === 'https://essai.example/', canon);
     check('variables : expression modifiée, valeur recalculée', true);
@@ -1682,6 +1687,145 @@ try {
         (await page.textContent('.ver-item:not(.ver-item--current) .ver-msg')).trim());
     }
 
+    // ---------------------------------------------------------------- Canevas, suite (3.11)
+    {
+      const docC = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
+      const doc11 = docC();
+      await page.click('.view-tab[data-view="view-editor"]');
+      await page.waitForSelector('iframe.canvas-frame.is-active');
+      // Zoom ajusté : toute la largeur de la page visible.
+      await page.selectOption('.editor-zoom select', '');
+      await page.waitForTimeout(400);
+      const scaleOf = () => page.evaluate(() => {
+        const t = getComputedStyle(document.querySelector('iframe.canvas-frame.is-active')).transform;
+        const m = /matrix\(([^,]+)/.exec(t);
+        return m ? Number(m[1]) : 1;
+      });
+      const toPage = async (x, y) => {
+        const box = await page.locator('iframe.canvas-frame.is-active').boundingBox();
+        const s = await scaleOf();
+        return [box.x + x * s, box.y + y * s];
+      };
+      const layer = (text) => page.locator('.layers .layer', { hasText: text }).first();
+      const undoAll = async (target, what) => {
+        for (let i = 0; i < 6 && docC() !== target; i++) {
+          await page.click('.editor-toolbar .btn-undo');
+          await page.waitForTimeout(400);
+        }
+        await until(() => docC() === target, what);
+      };
+      // Poignées de taille : largeur écrite dans la classe, au point de rupture affiché.
+      await layer('div.intro-agency__inner').click();
+      await page.waitForTimeout(600);
+      // Élément montré (le canevas a pu être rechargé après la restauration des versions).
+      const r = await waitFrame(() => {
+        const e = document.querySelector('.intro-agency__inner');
+        if (!e) return false;
+        const b = e.getBoundingClientRect();
+        if (b.top < 0 || b.bottom > innerHeight) e.scrollIntoView({ block: 'center' });
+        return true;
+      }, 'élément visible');
+      await page.waitForTimeout(400);
+      const rect = await r.evaluate(() => {
+        const b = document.querySelector('.intro-agency__inner').getBoundingClientRect();
+        return { x: b.right, y: b.top + b.height / 2, w: b.width };
+      });
+      const [hx, hy] = await toPage(rect.x, rect.y);
+      await page.mouse.move(hx, hy);
+      await page.mouse.down();
+      await page.mouse.move(hx - 30, hy, { steps: 4 });
+      await page.mouse.move(hx - 60, hy, { steps: 4 });
+      await page.mouse.up();
+      await until(() => {
+        const d = JSON.parse(docC());
+        return (d.stylesheet.items || []).some((i) => i.selector === '.intro-agency__inner' && !i.media
+          && (i.decls || []).some((x) => x.prop === 'width' && /^\d+px$/.test(x.value)));
+      }, 'largeur écrite');
+      const wNow = await (await waitFrame(() => !document.querySelector('.intro-agency__inner')?.getAttribute('style'), 'style en ligne retiré'))
+        .evaluate(() => document.querySelector('.intro-agency__inner').getBoundingClientRect().width);
+      check('canevas : poignée de taille (largeur écrite dans la classe, style en ligne retiré)', wNow < rect.w - 20, `${Math.round(rect.w)} → ${Math.round(wNow)} px`);
+      if (shots) await page.screenshot({ path: `${shots}/poignees.png` });
+      await undoAll(doc11, 'taille annulée');
+      check('canevas : taille annulée (document identique)', true);
+      // Sélection multiple (Maj+clic dans les calques) : dupliquée en une étape, annulée.
+      await layer('section.hero').click();
+      await layer('section.intro-agency').click({ modifiers: ['Shift'] });
+      await page.waitForSelector('.chip--multi');
+      const chip = (await page.textContent('.chip--multi')).trim();
+      check('canevas : sélection multiple (Maj+clic), compte affiché', /^2\b/.test(chip), chip);
+      const n0 = (docC().match(/"hero"/g) || []).length;
+      await page.keyboard.press('Control+d');
+      await until(() => docC() !== doc11, 'sélection dupliquée');
+      const d1 = JSON.parse(docC());
+      const countClass = (nodes, c) => nodes.reduce((n, x) => n + ((x.attrs || []).some((a) => a.name === 'class' && (a.value || '').split(/\s+/).includes(c)) ? 1 : 0)
+        + countClass(x.children || [], c) + countClass(x.then || [], c) + countClass(x.otherwise || [], c), 0);
+      const pagesBody = (d) => d.pages.flatMap((p) => p.body || []);
+      const dupHero = countClass(pagesBody(d1), 'hero') - countClass(pagesBody(JSON.parse(doc11)), 'hero');
+      const dupIntro = countClass(pagesBody(d1), 'intro-agency') - countClass(pagesBody(JSON.parse(doc11)), 'intro-agency');
+      check('canevas : sélection multiple dupliquée (les deux éléments)', dupHero === 1 && dupIntro === 1, `${dupHero} + ${dupIntro}`);
+      await page.click('.editor-toolbar .btn-undo');
+      await until(() => docC() === doc11, 'duplication annulée');
+      check('canevas : duplication multiple annulée en une étape', true, String(n0));
+      await page.keyboard.press('Escape');
+      // Palette de commandes (Ctrl+K) : page ouverte par son nom, puis l'accueil.
+      await page.keyboard.press('Control+k');
+      await page.waitForSelector('.palette-input');
+      await page.keyboard.type('agence');
+      const first = (await page.textContent('.palette-item.is-cur .palette-label')).trim();
+      if (shots) await page.screenshot({ path: `${shots}/palette.png` });
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => /agence/.test(document.querySelector('iframe.canvas-frame.is-active')?.src || ''));
+      check('palette : recherche, page ouverte avec Entrée', !(await page.$('.palette')), first);
+      await page.keyboard.press('Control+k');
+      await page.waitForSelector('.palette-input');
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.palette', { state: 'detached' });
+      await page.keyboard.press('Control+k');
+      await page.waitForSelector('.palette-input');
+      await page.keyboard.type('/');
+      await page.locator('.palette-item', { has: page.locator('.palette-hint', { hasText: /^\/$/ }) }).first().click();
+      await page.waitForFunction(() => !/agence/.test(document.querySelector('iframe.canvas-frame.is-active')?.src || ''));
+      check('palette : Échap ferme, retour à l\'accueil', true);
+      // Tous les écrans côte à côte : un cadre par écran, clic dans un écran = écran choisi,
+      // bouton d'un écran = affiché ou masqué.
+      const nbp = JSON.parse(docC()).breakpoints.length;
+      await page.click('.side-toggle');
+      await page.waitForFunction((n) => document.querySelectorAll('iframe.canvas-frame').length === n, nbp);
+      await page.waitForTimeout(2500);
+      const second = page.locator('iframe.canvas-frame').nth(1);
+      const sb = await second.boundingBox();
+      const bp2 = await second.getAttribute('data-bp');
+      await page.mouse.click(sb.x + sb.width / 2, sb.y + sb.height / 2);
+      await page.waitForFunction((b) => document.querySelector('iframe.canvas-frame.is-active')?.dataset.bp === b, bp2);
+      if (shots) await page.screenshot({ path: `${shots}/ecrans-cote-a-cote.png` });
+      const cur = await page.$eval('.editor-toolbar .segmented button.is-current', (b) => b.textContent.trim());
+      check('écrans côte à côte : un cadre par écran, clic dans un écran = écran choisi', true, `${nbp} cadres, choisi : ${cur}`);
+      await page.click('.editor-toolbar .segmented button >> nth=-1');
+      await page.waitForFunction((n) => document.querySelectorAll('iframe.canvas-frame').length === n - 1, nbp);
+      await page.click('.editor-toolbar .segmented button >> nth=-1');
+      await page.waitForFunction((n) => document.querySelectorAll('iframe.canvas-frame').length === n, nbp);
+      check('écrans côte à côte : écran masqué puis affiché (bouton de l\'écran)', true);
+      await page.click('.side-toggle');
+      await page.waitForFunction(() => document.querySelectorAll('iframe.canvas-frame').length === 1);
+      await page.click('.editor-toolbar .segmented button >> nth=0');
+      // Cadre allongé : plus de page visible, mise en page inchangée (unités vh).
+      f = await waitFrame(() => document.readyState === 'complete' && !!document.querySelector('.hero'), 'cadre unique');
+      const hero0 = await f.evaluate(() => document.querySelector('.hero').getBoundingClientRect().height);
+      const ih0 = await f.evaluate(() => innerHeight);
+      const g = await page.locator('.frame-grow').boundingBox();
+      await page.mouse.move(g.x + g.width / 2, g.y + 3);
+      await page.mouse.down();
+      await page.mouse.move(g.x + g.width / 2, g.y + 250, { steps: 5 });
+      await page.mouse.up();
+      f = await waitFrame((h) => innerHeight > h + 100, 'cadre allongé', ih0);
+      await page.waitForTimeout(300);
+      const [hero1, ih1] = await f.evaluate(() => [document.querySelector('.hero').getBoundingClientRect().height, innerHeight]);
+      check('cadre allongé : plus de page affichée, mise en page inchangée', Math.abs(hero1 - hero0) < 1 && ih1 > ih0 + 100, `${ih0} → ${ih1} px, héro ${Math.round(hero0)} → ${Math.round(hero1)} px`);
+      await page.dblclick('.frame-grow');
+      await waitFrame((h) => Math.abs(innerHeight - h) < 2, 'hauteur rétablie', ih0);
+      check('cadre allongé : double-clic, hauteur par défaut', docC() === doc11);
+    }
+
     // ---------------------------------------------------------------- Langues (3.8)
     const docL = () => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8');
     const dataEn = path.join(siteDir, 'src/_data/en');
@@ -1825,7 +1969,7 @@ try {
   check('aucune erreur dans l\'interface', errors.length === 0, errors.join(' | '));
 } catch (e) {
   check('déroulement', false, e.message);
-  if (shots) await page.screenshot({ path: `${shots}/echec.png` }).catch(() => {});
+  if (shots && shotPage) await shotPage.screenshot({ path: `${shots}/echec.png` }).catch(() => {});
 } finally {
   await browser.close();
 }

@@ -120,6 +120,8 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 }
 .segmented button:hover { color: var(--text); }
 .segmented button.is-on { background: var(--surface-active); color: var(--text); }
+/* Vue côte à côte : écran choisi parmi les écrans affichés. */
+.segmented button.is-current { color: var(--set-text); box-shadow: inset 0 -2px 0 var(--set-text); }
 .segmented.is-disabled { opacity: .45; }
 .segmented button:disabled { cursor: default; }
 

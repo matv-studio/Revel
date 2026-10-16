@@ -195,6 +195,76 @@ fn simulate(decls: &mut Vec<Decl>, e: &Edit) -> bool {
     }
 }
 
+/// Commande qui règle des propriétés dans la règle `rule` (sélecteur complet `selector`, média
+/// `media`), créée si elle n'existe pas ; `None` si rien ne change.
+pub(crate) fn style_command(
+    rule: Option<StyleRule>,
+    selector: String,
+    media: Option<String>,
+    list: Vec<(String, Option<String>)>,
+) -> Option<Command> {
+    let before = rule.as_ref().map(|r| r.decls.clone()).unwrap_or_default();
+    let mut decls = before.clone();
+    let mut out: Vec<Edit> = Vec::new();
+    for (prop, value) in list {
+        let value = value
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+        let Some(es) = values::edits(&decls, &prop, value.as_deref()) else {
+            continue;
+        };
+        for e in es {
+            if simulate(&mut decls, &e) {
+                out.push(e);
+            }
+        }
+    }
+    if decls == before {
+        return None;
+    }
+    Some(match rule {
+        Some(r) => {
+            let id = r.id.clone().unwrap_or_default();
+            let mut cmds: Vec<Command> = out
+                .into_iter()
+                .map(|e| Command::SetDecl {
+                    rule: id.clone(),
+                    prop: e.prop,
+                    value: e.value,
+                    important: e.important,
+                })
+                .collect();
+            if cmds.len() == 1 {
+                cmds.remove(0)
+            } else {
+                Command::Batch { commands: cmds }
+            }
+        }
+        None => Command::AddRule {
+            selector,
+            media,
+            decls,
+        },
+    })
+}
+
+/// Dernière règle d'un sélecteur complet (classe et état) pour un média.
+pub(crate) fn find_rule(
+    d: &revel_model::Site,
+    selector: &str,
+    media: &Option<String>,
+) -> Option<StyleRule> {
+    d.stylesheet
+        .as_ref()?
+        .items
+        .iter()
+        .rev()
+        .find_map(|i| match i {
+            StyleItem::Rule(r) if r.selector == selector && &r.media == media => Some(r.clone()),
+            _ => None,
+        })
+}
+
 /// Contexte partagé par les contrôles du panneau.
 #[derive(Clone, Copy)]
 pub struct Sx {
@@ -217,8 +287,9 @@ pub struct Sx {
 
 impl Sx {
     pub fn new(ui: Ui, ed: Ed) -> Self {
-        let selector = RwSignal::new(String::new());
-        let state = RwSignal::new(String::new());
+        // Cible partagée avec l'éditeur (poignées de taille du canevas).
+        let selector = ed.style_sel;
+        let state = ed.style_state;
         let media = Memo::new(move |_| {
             let id = ed.breakpoint.get();
             ed.doc.with(|d| {
@@ -232,18 +303,7 @@ impl Sx {
         let rule = Memo::new(move |_| {
             let sel = format!("{}{}", selector.get(), state.get());
             let m = media.get();
-            ed.doc.with(|d| {
-                d.as_ref()?
-                    .stylesheet
-                    .as_ref()?
-                    .items
-                    .iter()
-                    .rev()
-                    .find_map(|i| match i {
-                        StyleItem::Rule(r) if r.selector == sel && r.media == m => Some(r.clone()),
-                        _ => None,
-                    })
-            })
+            ed.doc.with(|d| find_rule(d.as_ref()?, &sel, &m))
         });
         let sources = Memo::new(move |_| {
             let sel = selector.get();
@@ -390,56 +450,20 @@ impl Sx {
     /// Règle plusieurs propriétés en une seule étape d'annulation. `coalesce` : fusionnée avec la
     /// précédente si elle porte sur le même champ (flèches du clavier).
     pub fn set_many(self, list: Vec<(String, Option<String>)>, coalesce: bool) {
-        let rule = self.rule.get_untracked();
-        let before = rule.as_ref().map(|r| r.decls.clone()).unwrap_or_default();
-        let mut decls = before.clone();
-        let mut out: Vec<Edit> = Vec::new();
-        for (prop, value) in list {
-            let value = value
-                .map(|v| v.trim().to_string())
-                .filter(|v| !v.is_empty());
-            let Some(es) = values::edits(&decls, &prop, value.as_deref()) else {
-                continue;
-            };
-            for e in es {
-                if simulate(&mut decls, &e) {
-                    out.push(e);
-                }
-            }
+        let cmd = style_command(
+            self.rule.get_untracked(),
+            format!(
+                "{}{}",
+                self.selector.get_untracked(),
+                self.state.get_untracked()
+            ),
+            self.media.get_untracked(),
+            list,
+        );
+        match cmd {
+            Some(cmd) => self.ed.apply(self.ui, cmd, coalesce),
+            None => self.clear_preview(),
         }
-        if decls == before {
-            self.clear_preview();
-            return;
-        }
-        let cmd = match rule {
-            Some(r) => {
-                let id = r.id.clone().unwrap_or_default();
-                let mut cmds: Vec<Command> = out
-                    .into_iter()
-                    .map(|e| Command::SetDecl {
-                        rule: id.clone(),
-                        prop: e.prop,
-                        value: e.value,
-                        important: e.important,
-                    })
-                    .collect();
-                if cmds.len() == 1 {
-                    cmds.remove(0)
-                } else {
-                    Command::Batch { commands: cmds }
-                }
-            }
-            None => Command::AddRule {
-                selector: format!(
-                    "{}{}",
-                    self.selector.get_untracked(),
-                    self.state.get_untracked()
-                ),
-                media: self.media.get_untracked(),
-                decls,
-            },
-        };
-        self.ed.apply(self.ui, cmd, coalesce);
     }
 
     /// Aperçu dans le canevas pendant un geste, sans écrire le fichier.

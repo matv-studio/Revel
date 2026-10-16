@@ -154,7 +154,8 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
             class:is-panning=move || ed.panning.get()
             class:is-space=move || ed.space.get()
             class:has-rulers=move || ed.rulers.get()
-            class:is-resizing=move || resizing.get()
+            class:is-resizing=move || resizing.get() && !ed.side.get()
+            class:is-side=move || ed.side.get()
             on:pointerdown=move |e: ev::PointerEvent| {
                 if e.button() == 1 {
                     e.prevent_default();
@@ -176,9 +177,16 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
                 <Show when=move || ed.base.get().is_some() fallback=move || view! {
                     <div class="canvas-wait muted">{move || if failed.get() { String::new() } else { ui.tx("editor-loading", &[]) }}</div>
                 }>
-                    <iframe class="canvas-frame" node_ref=ed.frame title=ui.t("editor-canvas")
-                        style=frame_style src=move || ed.src().unwrap_or_default()></iframe>
+                    {move || if ed.side.get() {
+                        view! { <SideFrames/> }.into_any()
+                    } else {
+                        view! {
+                            <iframe class="canvas-frame is-active" data-bp=move || ed.breakpoint.get() title=ui.t("editor-canvas")
+                                style=frame_style src=move || ed.src().unwrap_or_default()></iframe>
+                        }.into_any()
+                    }}
                     <ColumnGuides/>
+                    <FrameGrow/>
                 </Show>
             </div>
             <Show when=move || ed.rulers.get()>
@@ -213,6 +221,133 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
                 }
             })}
         </div>
+    }
+}
+
+/// Tous les écrans côte à côte (comme Framer) : un cadre par point de rupture, du plus large au
+/// plus étroit, son nom au-dessus ; un clic dans un écran (ou sur son nom) le choisit : les
+/// styles s'y règlent, poignées de taille et panneaux suivent.
+#[component]
+fn SideFrames() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let ids = Memo::new(move |_| {
+        ed.world()
+            .frames
+            .into_iter()
+            .map(|f| f.bp)
+            .collect::<Vec<_>>()
+    });
+    let place = move |bp: &str| {
+        let w = ed.world();
+        let f = w.frames.iter().find(|f| f.bp == bp).cloned()?;
+        Some((w.x + f.ox * w.s, w.y, f.w, w.h, w.s))
+    };
+    let ring = move || {
+        let bp = ed.breakpoint.get();
+        place(&bp).map(|(x, y, fw, h, s)| {
+            format!(
+                "left:{}px;top:{}px;width:{}px;height:{}px",
+                x - 2.0,
+                y - 2.0,
+                fw * s + 4.0,
+                h * s + 4.0
+            )
+        })
+    };
+    view! {
+        <div class="frame-ring" style=move || ring().unwrap_or_default() aria-hidden="true"></div>
+        <For each=move || ids.get() key=|b| b.clone() let:bp>
+            {
+                let b = StoredValue::new(bp.clone());
+                let info = move || {
+                    ed.doc.with(|d| {
+                        let bp = d.as_ref()?.breakpoints.iter().find(|x| x.id == b.get_value())?.clone();
+                        Some(bp)
+                    })
+                };
+                let name = move || {
+                    info().map(|bp| match (bp.max_width, bp.min_width) {
+                        (None, None) => {
+                            let w = place(&b.get_value()).map(|p| p.2).unwrap_or_default();
+                            format!("{} · {} px", crate::styles::bp_name(ui, &bp), w)
+                        }
+                        _ => crate::styles::bp_name(ui, &bp),
+                    }).unwrap_or_default()
+                };
+                let icon = move || info().map(|bp| match bp.max_width {
+                    Some(w) if w <= 600 => crate::icons::mobile(),
+                    Some(_) => crate::icons::tablet(),
+                    None => crate::icons::desktop(),
+                });
+                let style = move || {
+                    place(&b.get_value()).map(|(x, y, fw, h, s)| {
+                        format!("left:{x}px;top:{y}px;width:{fw}px;height:{h}px;transform:scale({s})")
+                    }).unwrap_or_default()
+                };
+                let label_style = move || {
+                    place(&b.get_value()).map(|(x, y, fw, _, s)| {
+                        format!("left:{x}px;top:{}px;max-width:{}px", y - crate::editor::SIDE_LABEL, fw * s)
+                    }).unwrap_or_default()
+                };
+                let on = move || ed.breakpoint.get() == b.get_value();
+                view! {
+                    <button class="frame-label" class:is-on=on style=label_style
+                        on:click=move |_| ed.breakpoint.set(b.get_value())>{icon}<span>{name}</span></button>
+                    <iframe class="canvas-frame" class:is-active=on data-bp=bp.clone() title=ui.t("editor-canvas")
+                        style=style src=move || ed.src().unwrap_or_default()></iframe>
+                }
+            }
+        </For>
+    }
+}
+
+/// Poignée sous le cadre actif (comme Framer) : glisser vers le bas allonge les cadres pour
+/// voir plus de la page, vers le haut les raccourcit ; double-clic : hauteur par défaut.
+#[component]
+fn FrameGrow() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    // Début du geste : hauteur des cadres et position du pointeur.
+    let start = StoredValue::new(None::<(f64, f64)>);
+    let style = move || {
+        let g = ed.geo();
+        format!(
+            "left:{}px;top:{}px",
+            g.x + g.w * g.s / 2.0 - 22.0,
+            g.y + g.h * g.s + 6.0
+        )
+    };
+    let down = move |e: ev::PointerEvent| {
+        if e.button() != 0 {
+            return;
+        }
+        e.prevent_default();
+        e.stop_propagation();
+        if let Some(t) = e
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        {
+            let _ = t.set_pointer_capture(e.pointer_id());
+        }
+        let h = untrack(|| ed.geo().h);
+        start.set_value(Some((h, f64::from(e.client_y()))));
+    };
+    let mv = move |e: ev::PointerEvent| {
+        let Some((h0, y0)) = start.get_value() else {
+            return;
+        };
+        let s = ed.scale();
+        let h = (h0 + (f64::from(e.client_y()) - y0) / s).round().max(200.0);
+        ed.frame_h.set(Some(h));
+    };
+    let up = move |_| start.set_value(None);
+    view! {
+        <div class="frame-grow" style=style role="separator" aria-orientation="horizontal"
+            title=move || ui.tx("editor-frame-height-help", &[("height", format!("{}", ed.geo().h.round()))])
+            aria-label=ui.t("editor-frame-height")
+            on:pointerdown=down on:pointermove=mv on:pointerup=up on:pointercancel=up
+            on:dblclick=move |_| ed.frame_h.set(None)></div>
     }
 }
 
@@ -380,7 +515,7 @@ pub fn open_canvas_menu(ui: Ui, ed: Ed, x: f64, y: f64) {
     use crate::ctxmenu::{CtxItem, open_at};
     use crate::icons;
     let sel = ed.selected.get_untracked().is_none();
-    let clip = ui.clipboard.with_untracked(Option::is_none);
+    let clip = ui.clipboard.with_untracked(Vec::is_empty);
     let k = |key: &str| ui.now(key, &[]);
     let items = vec![
         CtxItem::new(k("editor-select-parent"), move || {
@@ -413,17 +548,13 @@ pub fn open_canvas_menu(ui: Ui, ed: Ed, x: f64, y: f64) {
         .key(k("key-paste"))
         .disabled(clip),
         CtxItem::new(k("layers-duplicate"), move || {
-            if let Some(at) = ed.selected_target() {
-                ed.apply(ui, revel_edit::Command::Duplicate { at }, false)
-            }
+            ed.duplicate_selection(ui);
         })
         .icon(icons::copy)
         .key(k("key-duplicate"))
         .disabled(sel),
         CtxItem::new(k("layers-wrap"), move || {
-            if let Some(at) = ed.selected_target() {
-                ed.wrap(ui, at)
-            }
+            ed.wrap_selection(ui);
         })
         .icon(icons::wrap)
         .key(k("key-wrap"))
@@ -448,9 +579,7 @@ pub fn open_canvas_menu(ui: Ui, ed: Ed, x: f64, y: f64) {
         .key(k("key-down"))
         .disabled(sel),
         CtxItem::new(k("layers-delete"), move || {
-            if let Some(at) = ed.selected_target() {
-                ed.apply(ui, revel_edit::Command::Remove { at }, false)
-            }
+            ed.remove_selection(ui);
         })
         .icon(icons::trash)
         .key(k("key-delete"))

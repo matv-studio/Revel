@@ -406,12 +406,21 @@ fn SidesBox(
 
 #[component]
 pub fn SpacingSection(sx: Sx) -> impl IntoView {
+    on_cleanup(move || {
+        sx.ed
+            .post(serde_json::json!({ "type": "spacing", "on": false }))
+    });
     view! {
         <Section sx key="styles-spacing" open=true props=&[
             "margin-top", "margin-right", "margin-bottom", "margin-left",
             "padding-top", "padding-right", "padding-bottom", "padding-left",
         ]>
-            <SidesBox sx group=&MARGIN key="styles-margin-short" inner=(&PADDING, "styles-padding-short")/>
+            // Survolée : marges et espacements de la sélection montrés dans le canevas.
+            <div class="spacing-zone"
+                on:mouseenter=move |_| sx.ed.post(serde_json::json!({ "type": "spacing", "on": true }))
+                on:mouseleave=move |_| sx.ed.post(serde_json::json!({ "type": "spacing", "on": false }))>
+                <SidesBox sx group=&MARGIN key="styles-margin-short" inner=(&PADDING, "styles-padding-short")/>
+            </div>
         </Section>
     }
 }

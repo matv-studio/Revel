@@ -141,7 +141,7 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
 }
 
 /// Rubriques des paramètres : (rubrique, libellé, étape prévue si pas encore disponible).
-const SECTIONS: &[(Section, &str, Option<u8>)] = &[
+pub(crate) const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::General, "settings-general", None),
     (Section::Publish, "settings-publish", None),
     (Section::Export, "settings-export", None),

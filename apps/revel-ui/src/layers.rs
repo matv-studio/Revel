@@ -746,6 +746,8 @@ pub fn Layers() -> impl IntoView {
                                 opened.update(|o| { o.insert(k); });
                             }
                         };
+                        let id_multi = id.clone();
+                        let in_multi = move || ed.multi.with(|m| m.iter().any(|x| Some(&x.id) == id_multi.as_ref()));
                         let is_selected = move || {
                             let sel = ed.selected.get().map(|s| s.id);
                             sel.is_some() && sel == id.clone() && all.with(|rows| {
@@ -758,7 +760,7 @@ pub fn Layers() -> impl IntoView {
                         };
                         let draggable = r.with_value(|r| r.id.is_some()).to_string();
                         view! {
-                            <div class="layer" role="treeitem" class:is-selected=is_selected
+                            <div class="layer" role="treeitem" class:is-selected=is_selected class:is-multi=in_multi
                                 class:is-logic=matches!(kind, Kind::If(_) | Kind::Each { .. } | Kind::Branch(_))
                                 class:is-text=matches!(kind, Kind::Text(_) | Kind::Expr(_) | Kind::Html)
                                 class:drop-before=zone_class(Zone::Before)
@@ -767,7 +769,20 @@ pub fn Layers() -> impl IntoView {
                                 style=format!("--depth:{depth}")
                                 data-depth=depth
                                 draggable=draggable
-                                on:click=move |_| r.with_value(|r| select_row(r))
+                                on:click=move |e: leptos::ev::MouseEvent| r.with_value(|r| {
+                                    // Maj (ou Ctrl) + clic : ajouté à la sélection ou retiré.
+                                    if (e.shift_key() || e.ctrl_key() || e.meta_key()) && ed.selected.get_untracked().is_some() {
+                                        if let Some(id) = r.id.clone() {
+                                            ed.toggle_select(Selection {
+                                                id,
+                                                tag: match &r.kind { Kind::Element { tag, .. } => tag.clone(), _ => String::new() },
+                                                label: label(ui, &r.kind),
+                                            });
+                                        }
+                                    } else {
+                                        select_row(r)
+                                    }
+                                })
                                 on:contextmenu=move |e: leptos::ev::MouseEvent| {
                                     r.with_value(|r| select_row(r));
                                     open_menu(&e);
@@ -843,13 +858,13 @@ pub fn Layers() -> impl IntoView {
                     on:click=move |_| act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, 1))))>{icons::arrow_down()}</button>
                 <button class="icon-btn icon-btn--small" title=move || tip("layers-wrap", "key-wrap") aria-label=ui.t("layers-wrap")
                     prop:disabled=move || target().is_none()
-                    on:click=move |_| { if let Some(at) = target() { ed.wrap(ui, at) } }>{icons::wrap()}</button>
+                    on:click=move |_| { ed.wrap_selection(ui); }>{icons::wrap()}</button>
                 <button class="icon-btn icon-btn--small" title=move || tip("layers-duplicate", "key-duplicate") aria-label=ui.t("layers-duplicate")
                     prop:disabled=move || target().is_none()
-                    on:click=move |_| act(target().map(|at| Command::Duplicate { at }))>{icons::copy()}</button>
+                    on:click=move |_| { ed.duplicate_selection(ui); }>{icons::copy()}</button>
                 <button class="icon-btn icon-btn--small" title=move || tip("layers-delete", "key-delete") aria-label=ui.t("layers-delete")
                     prop:disabled=move || target().is_none()
-                    on:click=move |_| act(target().map(|at| Command::Remove { at }))>{icons::trash()}</button>
+                    on:click=move |_| { ed.remove_selection(ui); }>{icons::trash()}</button>
             </footer>
         </aside>
     }

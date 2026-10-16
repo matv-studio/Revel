@@ -64,13 +64,27 @@
   const root = host.attachShadow({ mode: "closed" });
   root.innerHTML =
     "<style>" +
-    ":host{all:initial}" +
+    // `--k` : inverse du zoom de l'éditeur (traits, poignées et étiquettes gardent leur taille à
+    // l'écran).
+    ":host{all:initial;--k:1}" +
     ".box{position:fixed;box-sizing:border-box;pointer-events:none;display:none;z-index:2147483646}" +
-    ".hover{outline:1px solid #6d8cff}" +
-    ".sel{outline:2px solid #6d8cff}" +
-    ".tag,.ghost,.into{position:fixed;pointer-events:none;display:none;z-index:2147483647;" +
-    "font:600 11px/18px system-ui,-apple-system,'Segoe UI',sans-serif;background:#6d8cff;color:#fff;" +
-    "padding:0 6px;border-radius:3px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis}" +
+    ".hover{outline:calc(1px*var(--k)) solid #6d8cff}" +
+    ".sel{outline:calc(2px*var(--k)) solid #6d8cff}" +
+    // Autres éléments de la sélection multiple.
+    ".sel2{outline:calc(1.5px*var(--k)) solid #6d8cff;background:rgba(109,140,255,.08)}" +
+    // Marges (orange) et espacements intérieurs (vert) de l'élément survolé, comme les outils de
+    // développement des navigateurs.
+    ".mar{border-style:solid;border-color:rgba(246,166,80,.32)}" +
+    ".pad{border-style:solid;border-color:rgba(110,190,110,.30)}" +
+    ".spacing .mar{border-color:rgba(246,166,80,.55)}.spacing .pad{border-color:rgba(110,190,110,.5)}" +
+    ".tag,.ghost,.into,.size{position:fixed;pointer-events:none;display:none;z-index:2147483647;" +
+    "font:600 calc(11px*var(--k))/calc(18px*var(--k)) system-ui,-apple-system,'Segoe UI',sans-serif;background:#6d8cff;color:#fff;" +
+    "padding:0 calc(6px*var(--k));border-radius:calc(3px*var(--k));white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis}" +
+    ".size{background:#1f1f1f;font-variant-numeric:tabular-nums}" +
+    // Poignées de taille de l'élément sélectionné (bord droit, bord bas, coin).
+    ".h{position:fixed;display:none;z-index:2147483647;box-sizing:border-box;width:calc(9px*var(--k));height:calc(9px*var(--k));" +
+    "background:#fff;border:calc(1.5px*var(--k)) solid #3d7eff;border-radius:calc(2px*var(--k));pointer-events:auto}" +
+    ".h-e{cursor:ew-resize}.h-s{cursor:ns-resize}.h-se{cursor:nwse-resize}" +
     // Glisser-déposer : conteneur d'arrivée (pointillés), ligne d'insertion, étiquette qui suit le pointeur.
     ".drop{outline:1px dashed #6d8cff;outline-offset:-1px;background:rgba(109,140,255,.06)}" +
     ".line{background:#3d7eff;border-radius:2px;box-shadow:0 0 0 1px #fff}" +
@@ -79,11 +93,24 @@
     // Utilisation de composant (vert, comme Webflow) ; modification isolée : le reste estompé.
     ".hover.comp{outline-color:#2fb67c}.sel.comp{outline-color:#2fb67c}.tag.comp{background:#2fb67c}" +
     ".dim{position:fixed;inset:0;pointer-events:none;display:none;z-index:2147483645;background:rgba(20,20,24,.5)}" +
-    "</style><div class='dim'></div><div class='box hover'></div><div class='box sel'></div><div class='box drop'></div>" +
-    "<div class='box line'></div><div class='tag'></div><div class='into'></div><div class='ghost'></div>";
+    "</style><div class='dim'></div><div class='spc'><div class='box mar'></div><div class='box pad'></div></div>" +
+    "<div class='box hover'></div><div class='extra'></div><div class='box sel'></div><div class='box drop'></div>" +
+    "<div class='box line'></div><div class='tag'></div><div class='into'></div><div class='ghost'></div><div class='size'></div>" +
+    "<div class='h h-e' data-axis='e'></div><div class='h h-s' data-axis='s'></div><div class='h h-se' data-axis='se'></div>";
   const [dimBox, hoverBox, selBox, dropBox, lineBox, tagBox, intoBox, ghostBox] =
     root.querySelectorAll(".dim, .hover, .sel, .drop, .line, .tag, .into, .ghost");
+  const spcBox = root.querySelector(".spc");
+  const marBox = root.querySelector(".mar");
+  const padBox = root.querySelector(".pad");
+  const extraBox = root.querySelector(".extra");
+  const sizeBox = root.querySelector(".size");
+  const handles = [...root.querySelectorAll(".h")];
   document.documentElement.appendChild(host);
+  // Cadre actif (plusieurs écrans côte à côte : un seul reçoit les poignées de taille).
+  let active = true;
+  // Autres éléments sélectionnés (identifiants), espacements montrés pour la sélection.
+  let extra = [];
+  let spacingSel = false;
 
   let hovered = null;
   let hoveredInst = null;
@@ -178,20 +205,80 @@
     dimBox.style.display = "block";
   };
 
+  // Marges et espacements intérieurs d'un élément (bordures colorées de deux boîtes).
+  const px = (v) => Math.max(0, parseFloat(v) || 0);
+  const drawSpacing = () => {
+    const el = styled(spacingSel ? selected : hovered);
+    const show = !!el && el.isConnected && !drag && !editing && !resizing && (spacingSel || !hoveredInst);
+    if (!show) { hide(marBox, padBox); return; }
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    const m = [cs.marginTop, cs.marginRight, cs.marginBottom, cs.marginLeft].map(px);
+    const b = [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth].map(px);
+    const p = [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map(px);
+    const set = (box, x, y, w, h, bw) => {
+      if (!bw.some((v) => v > 0) || w <= 0 || h <= 0) { box.style.display = "none"; return; }
+      Object.assign(box.style, { display: "block", left: x + "px", top: y + "px", width: w + "px", height: h + "px",
+        borderWidth: bw.map((v) => v + "px").join(" ") });
+    };
+    set(marBox, r.left - m[3], r.top - m[0], r.width + m[1] + m[3], r.height + m[0] + m[2], m);
+    set(padBox, r.left + b[3], r.top + b[0], r.width - b[1] - b[3], r.height - b[0] - b[2], p);
+    spcBox.classList.toggle("spacing", spacingSel);
+  };
+
+  // Poignées de taille : élément sélectionné (pas une utilisation de composant, pas un élément
+  // en ligne, dont la largeur ne se règle pas), cadre actif, hors glisser et texte en cours.
+  const resizable = () => {
+    if (!active || !selected || selectedInst || !selected.isConnected || editing || drag) return false;
+    const el = styled(selected);
+    const d = getComputedStyle(el).display;
+    return d !== "contents" && d !== "none" && (d !== "inline" || REPLACED.has(el.tagName));
+  };
+  const drawHandles = (r) => {
+    if (!r || (!resizable() && !resizing)) { hide(...handles); return; }
+    const k = parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
+    const half = 4.5 * k;
+    const at = { e: [r.right, r.top + r.height / 2], s: [r.left + r.width / 2, r.bottom], se: [r.right, r.bottom] };
+    for (const h of handles) {
+      const [x, y] = at[h.dataset.axis];
+      h.style.display = "block";
+      h.style.left = (x - half) + "px";
+      h.style.top = (y - half) + "px";
+    }
+  };
+
+  // Autres éléments de la sélection multiple : un contour chacun.
+  const drawExtra = () => {
+    const els = extra.map((id) => findId(id)).filter((f) => f.el && f.el !== selected);
+    while (extraBox.children.length < els.length) {
+      const b = document.createElement("div");
+      b.className = "box sel2";
+      extraBox.appendChild(b);
+    }
+    [...extraBox.children].forEach((b, i) => {
+      if (i < els.length) place(b, els[i].el, els[i].inst);
+      else b.style.display = "none";
+    });
+  };
+
   const draw = () => {
     drawDim();
+    drawSpacing();
+    drawExtra();
     const same = hovered === selected && hoveredInst === selectedInst;
     place(hoverBox, hovered && !same ? hovered : null, hoveredInst);
     const r = place(selBox, selected, selectedInst);
     if (r && selected) {
+      const k = parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
       tagBox.textContent = label(selected, selectedInst);
       tagBox.classList.toggle("comp", !!selectedInst);
       tagBox.style.display = "block";
       tagBox.style.left = Math.max(0, r.left) + "px";
-      tagBox.style.top = (r.top >= 20 ? r.top - 20 : r.bottom + 2) + "px";
+      tagBox.style.top = (r.top >= 20 * k ? r.top - 20 * k : r.bottom + 2 * k) + "px";
     } else {
       tagBox.style.display = "none";
     }
+    drawHandles(r && !selectedInst ? styled(selected).getBoundingClientRect() : null);
   };
 
   let frame = 0;
@@ -213,6 +300,11 @@
     return (svg || node).closest("[data-rv]");
   };
 
+  // Élément qui porte les styles : l'image d'une `<picture>` (ses classes sont sur `<img>`).
+  const styled = (el) => (el && el.tagName === "PICTURE" ? el.querySelector("img") || el : el);
+  // Éléments remplacés : largeur et hauteur s'appliquent même en ligne.
+  const REPLACED = new Set(["IMG", "VIDEO", "IFRAME", "CANVAS", "svg", "SVG", "INPUT", "TEXTAREA", "SELECT", "OBJECT", "EMBED"]);
+
   // Valeurs calculées des propriétés suivies par le panneau de styles, pour l'élément sélectionné.
   let watched = [];
   let computedTimer = 0;
@@ -220,7 +312,7 @@
     clearTimeout(computedTimer);
     computedTimer = setTimeout(() => {
       if (!selected || !selected.isConnected || !watched.length) return;
-      const cs = getComputedStyle(selected);
+      const cs = getComputedStyle(styled(selected));
       const values = {};
       for (const p of watched) values[p] = cs.getPropertyValue(p).trim();
       // Affichage du parent (réglages d'un élément dans une pile) et fond effectif sous l'élément
@@ -237,16 +329,17 @@
     }, 30);
   };
 
-  const select = (el, notify, inst) => {
+  const select = (el, notify, inst, add) => {
     selected = el;
     selectedInst = el ? inst || null : null;
+    if (!add) extra = [];
     sendComputed();
     redraw();
     if (notify) {
       post(el
         ? { type: "select", id: idOf(el, selectedInst), tag: selectedInst ? "" : el.tagName.toLowerCase(), label: label(el, selectedInst),
             rect: selectedInst ? rectOf({ getBoundingClientRect: () => boxOf(el, selectedInst) }) : rectOf(el),
-            component: selectedInst ? selectedInst.component : undefined }
+            component: selectedInst ? selectedInst.component : undefined, add: !!add }
         : { type: "select", id: null });
     }
   };
@@ -543,20 +636,113 @@
   document.addEventListener("pointerup", (e) => release(e, false), true);
   document.addEventListener("pointercancel", (e) => release(e, true), true);
 
+  // ---------------------------------------------------------------- poignées de taille
+  // Glisser une poignée : largeur et/ou hauteur de l'élément (valeurs de la propriété CSS, en px,
+  // `box-sizing` respecté) ; Maj sur le coin : proportions gardées. L'élément suit en direct (style
+  // en ligne prioritaire, retiré quand la feuille du site est rechargée) ; au relâchement,
+  // l'interface écrit les valeurs dans la classe. Double-clic : valeur retirée (taille automatique).
+  // Poignée sous le pointeur (le calque est une racine fermée : les événements de la page n'en
+  // voient que l'hôte, d'où un repérage par position).
+  const handleAt = (x, y) => {
+    for (const h of handles) {
+      if (h.style.display !== "block") continue;
+      const r = h.getBoundingClientRect();
+      if (x >= r.left - 1 && x <= r.right + 1 && y >= r.top - 1 && y <= r.bottom + 1) return h.dataset.axis;
+    }
+    return null;
+  };
+  const onHandle = (e) => typeof e.clientX === "number" && handleAt(e.clientX, e.clientY) !== null;
+  let resizing = null;
+  let resized = false;
+  let held = null;
+  const keep = (el, prop) => ({ prop, value: el.style.getPropertyValue(prop), prio: el.style.getPropertyPriority(prop) });
+  const putBack = (h) => {
+    if (!h) return;
+    for (const s of h.saved) {
+      if (s.value) h.el.style.setProperty(s.prop, s.value, s.prio);
+      else h.el.style.removeProperty(s.prop);
+    }
+    if (!h.el.getAttribute("style")) h.el.removeAttribute("style");
+  };
+  const release_held = () => { if (held) { clearTimeout(held.timer); putBack(held); held = null; redraw(); } };
+  const startResize = (axis, e) => {
+    release_held();
+    const el = styled(selected);
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    const content = cs.boxSizing !== "border-box";
+    const padX = content ? px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.borderLeftWidth) + px(cs.borderRightWidth) : 0;
+    const padY = content ? px(cs.paddingTop) + px(cs.paddingBottom) + px(cs.borderTopWidth) + px(cs.borderBottomWidth) : 0;
+    resizing = { el, axis, id: rvOf(selected), x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, padX, padY,
+      ratio: r.height > 0 ? r.width / r.height : 1, w: null, h: null, saved: [keep(el, "width"), keep(el, "height")] };
+    try { document.documentElement.setPointerCapture(e.pointerId); } catch (_) { /* relâché */ }
+    hide(hoverBox, marBox, padBox);
+  };
+  const moveResize = (e) => {
+    const rs = resizing;
+    const dx = e.clientX - rs.x0;
+    const dy = e.clientY - rs.y0;
+    let w = rs.axis !== "s" ? Math.max(1, Math.round(rs.w0 + dx)) : null;
+    let h = rs.axis !== "e" ? Math.max(1, Math.round(rs.h0 + dy)) : null;
+    if (rs.axis === "se" && e.shiftKey) h = Math.max(1, Math.round(w / rs.ratio));
+    rs.w = w === null ? null : Math.max(0, Math.round(w - rs.padX));
+    rs.h = h === null ? null : Math.max(0, Math.round(h - rs.padY));
+    if (rs.w !== null) rs.el.style.setProperty("width", rs.w + "px", "important");
+    if (rs.h !== null) rs.el.style.setProperty("height", rs.h + "px", "important");
+    sizeBox.textContent = rs.w !== null && rs.h !== null ? rs.w + " \u00d7 " + rs.h : (rs.w !== null ? rs.w : rs.h) + " px";
+    const k = parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
+    Object.assign(sizeBox.style, { display: "block", left: (e.clientX + 12 * k) + "px", top: (e.clientY + 14 * k) + "px" });
+    redraw();
+  };
+  const endResize = (cancel) => {
+    const rs = resizing;
+    resizing = null;
+    sizeBox.style.display = "none";
+    resized = true;
+    setTimeout(() => { resized = false; }, 0);
+    const changed = !cancel && ((rs.w !== null && Math.round(rs.w + rs.padX) !== Math.round(rs.w0)) ||
+      (rs.h !== null && Math.round(rs.h + rs.padY) !== Math.round(rs.h0)));
+    if (!changed) { putBack(rs); redraw(); return; }
+    // Taille gardée jusqu'au rechargement de la feuille (ou de la page) ; sinon rétablie.
+    held = { el: rs.el, saved: rs.saved, timer: setTimeout(release_held, 6000) };
+    post({ type: "resized", id: rs.id, width: rs.w === null ? undefined : rs.w + "px", height: rs.h === null ? undefined : rs.h + "px" });
+    redraw();
+  };
+  window.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || !onHandle(e) || !resizable()) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    startResize(handleAt(e.clientX, e.clientY), e);
+  }, true);
+  window.addEventListener("pointermove", (e) => {
+    if (!resizing) return;
+    e.stopImmediatePropagation();
+    moveResize(e);
+  }, true);
+  window.addEventListener("pointerup", (e) => {
+    if (!resizing) return;
+    e.stopImmediatePropagation();
+    endResize(false);
+  }, true);
+  window.addEventListener("pointercancel", () => { if (resizing) endResize(true); }, true);
+
   // Les clics sélectionnent : liens, boutons et formulaires du site ne réagissent pas.
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
   document.addEventListener("click", (e) => {
     if (inEdit(e.target)) return;
     if (editing) finishEdit(true);
     block(e);
-    if (dragged) return;
+    if (dragged || onHandle(e) || resized) return;
     const p = pick(e.target);
+    // Maj+clic : élément ajouté à la sélection (ou retiré), géré par l'interface.
+    if (e.shiftKey && p && selected) { post({ type: "toggle", id: idOf(p.el, p.inst), tag: p.inst ? "" : p.el.tagName.toLowerCase(), label: label(p.el, p.inst) }); return; }
     select(p ? p.el : null, true, p ? p.inst : null);
   }, true);
   // Clic droit : élément sélectionné, menu de l'éditeur (pas celui du navigateur).
   document.addEventListener("contextmenu", (e) => {
     if (inEdit(e.target)) return;
     block(e);
+    if (onHandle(e)) return;
     const p = pick(e.target);
     if (p && (p.el !== selected || p.inst !== selectedInst)) select(p.el, true, p.inst);
     post({ type: "context", x: e.clientX, y: e.clientY });
@@ -566,6 +752,11 @@
   document.addEventListener("dblclick", (e) => {
     if (inEdit(e.target)) return;
     block(e);
+    if (onHandle(e)) {
+      const axis = handleAt(e.clientX, e.clientY);
+      if (selected && resizable()) post({ type: "resized", id: rvOf(selected), reset: axis });
+      return;
+    }
     const n = slotAt(e.clientX, e.clientY);
     const p = pick(e.target);
     if (p && p.inst) {
@@ -602,6 +793,7 @@
     }
     if (e.key === "Escape") {
       if (drag && drag.move) { release(e, true); return; }
+      if (resizing) { endResize(true); return; }
       select(null, true);
       return;
     }
@@ -627,8 +819,22 @@
   }, true);
 
   // Molette avec Alt (ou Ctrl, pincement du pavé tactile) : zoom de l'éditeur autour du pointeur.
+  // Page entièrement visible dans ce sens (cadre allongé à la hauteur de la page) : la vue de
+  // l'éditeur se déplace (comme Framer) ; sinon la page défile.
   window.addEventListener("wheel", (e) => {
-    if (e.altKey || e.ctrlKey || e.metaKey) { e.preventDefault(); post({ type: "zoom", dy: e.deltaY || e.deltaX, x: e.clientX, y: e.clientY }); }
+    if (e.altKey || e.ctrlKey || e.metaKey) { e.preventDefault(); post({ type: "zoom", dy: e.deltaY || e.deltaX, x: e.clientX, y: e.clientY }); return; }
+    const se = document.scrollingElement || document.documentElement;
+    const canY = se.scrollHeight > innerHeight + 1;
+    const canX = se.scrollWidth > innerWidth + 1;
+    let inner = false;
+    for (let el = e.target; el && el !== document.documentElement && el.nodeType === 1; el = el.parentElement) {
+      const cs = getComputedStyle(el);
+      if (/(auto|scroll)/.test(cs.overflowY + cs.overflowX) && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)) { inner = true; break; }
+    }
+    if (!inner && !(canY && e.deltaY) && !(canX && e.deltaX) && (e.deltaY || e.deltaX)) {
+      e.preventDefault();
+      post({ type: "pan", dx: -e.deltaX, dy: -e.deltaY });
+    }
   }, { passive: false });
   // Bouton du milieu : déplacement de la vue (écarts en pixels de l'écran).
   let panFrom = null;
@@ -686,6 +892,29 @@
     sendComputed();
   };
 
+  // ---------------------------------------------------------------- cadre allongé
+  // Hauteur normale du cadre (`--rv-vh`, 1 % de cette hauteur) : les unités `vh` de la page,
+  // rapportées à cette variable par Revel, ne changent pas quand le cadre est allongé.
+  let vhSheet = null;
+  let vhEl = null;
+  const setViewport = (h) => {
+    const css = h > 0 ? ":root{--rv-vh:" + (h / 100) + "px}" : "";
+    if ("adoptedStyleSheets" in document && typeof CSSStyleSheet === "function" && "replaceSync" in CSSStyleSheet.prototype) {
+      if (!vhSheet) {
+        vhSheet = new CSSStyleSheet();
+        document.adoptedStyleSheets = [...document.adoptedStyleSheets, vhSheet];
+      }
+      vhSheet.replaceSync(css);
+    } else if (css) {
+      if (!vhEl) vhEl = document.createElement("style");
+      vhEl.textContent = css;
+      if (!vhEl.isConnected) document.head.appendChild(vhEl);
+    } else if (vhEl) {
+      vhEl.remove();
+    }
+    redraw();
+  };
+
   // ---------------------------------------------------------------- messages de l'interface
   const byId = (id) => (id ? document.querySelector('[data-rv="' + CSS.escape(id) + '"]') : null);
   // Élément (ou utilisation de composant) désigné par l'interface.
@@ -733,6 +962,8 @@
       case "preview":
         // Aperçu pendant un geste (glisser, couleur) : feuille ajoutée, retirée quand la feuille du
         // site est rechargée. Feuille construite (adoptedStyleSheets) : la page ne change pas.
+        // Aperçu retiré (geste refusé) : taille tenue par les poignées rétablie.
+        if (!m.css) release_held();
         setPreview(m.css || "");
         break;
       case "stylesheet": {
@@ -743,12 +974,34 @@
             u.searchParams.set("rv", String(Date.now()));
             const next = l.cloneNode();
             next.href = u.pathname + u.search;
-            next.addEventListener("load", () => { l.remove(); setPreview(""); redraw(); sendComputed(); }, { once: true });
+            next.addEventListener("load", () => { l.remove(); setPreview(""); release_held(); redraw(); sendComputed(); }, { once: true });
             l.after(next);
           }
         }
         break;
       }
+      case "scale":
+        // Zoom de l'éditeur : traits, poignées et étiquettes à taille constante à l'écran.
+        host.style.setProperty("--k", String(1 / Math.max(0.05, Number(m.s) || 1)));
+        redraw();
+        break;
+      case "active":
+        active = !!m.on;
+        redraw();
+        break;
+      case "viewport":
+        setViewport(Number(m.h) || 0);
+        break;
+      case "multi":
+        // Autres éléments sélectionnés (sélection multiple).
+        extra = Array.isArray(m.ids) ? m.ids : [];
+        redraw();
+        break;
+      case "spacing":
+        // Rubrique « Espacement » du panneau de styles survolée : espacements de la sélection.
+        spacingSel = !!m.on;
+        redraw();
+        break;
       case "scroll":
         window.scrollTo(m.x || 0, m.y || 0);
         break;

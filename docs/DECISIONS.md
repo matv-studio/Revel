@@ -360,7 +360,9 @@ Fonts](https://developers.google.com/fonts/docs/css2).
 
 **D-38 — 15/10/2026 — prise.** **Versions du site et synchronisation GitHub (3.10, D-25).** Le dossier du
 site est un dépôt Git ordinaire (`git2`, sans Git installé) ; « Activer les versions » le crée s'il n'existe pas,
-ajoute `.revel/` (caches, corbeille) au `.gitignore` et enregistre une première version. Une version enregistre
+ajoute `.revel/` (caches, corbeille) au `.gitignore`, garde les fins de ligne telles quelles dans ce dépôt
+(`core.autocrlf` désactivé : sous Windows, Git les convertirait à chaque restauration ou récupération) et
+enregistre une première version. Une version enregistre
 tous les fichiers du site (ajoutés, modifiés, supprimés), avec un message (proposé : date et heure) et l'auteur
 réglé pour Git (dépôt ou ordinateur), sinon le compte GitHub connecté, sinon « Revel ». Paramètres › Versions : changements en cours, puis versions
 de la plus récente à la plus ancienne (fusions marquées) ; pour chacune, fichiers changés et comparaison ligne
@@ -375,3 +377,25 @@ celle en ligne. La publication synchronise avant de publier quand l'option du pr
 s'arrête sur un conflit. Sources : [Save and restore backups — Webflow Help
 Center](https://help.webflow.com/hc/en-us/articles/33961244069395), [Dealing with non-fast-forward errors —
 GitHub Docs](https://docs.github.com/en/get-started/using-git/dealing-with-non-fast-forward-errors).
+
+**D-39 — 16/10/2026 — prise.** **Canevas, suite (3.11).** Poignées de taille sur l'élément sélectionné (bord
+droit, bord bas, coin ; Maj sur le coin : proportions gardées ; Échap : annulé ; double-clic : valeur retirée) :
+largeur et hauteur en px, `box-sizing` respecté, écrites dans la classe réglée du panneau de styles (sinon la
+première de l'élément), à l'état et au point de rupture affichés ; un élément sans classe en reçoit une d'après
+sa nature (`div-block`, `heading`, `image`…, numérotée si elle existe), comme Webflow qui crée une classe quand
+on règle un élément qui n'en a pas. Images (`<picture>`) : classes et tailles portées par `<img>`, désormais
+réglables dans le panneau de styles. Marges (orange) et espacements intérieurs (vert) de l'élément survolé, plus
+marqués quand la rubrique « Espacement » est survolée. Contours, poignées et étiquettes à taille constante quel
+que soit le zoom. Sélection multiple (Maj+clic dans le canevas, Maj ou Ctrl+clic dans les calques) : supprimer,
+dupliquer, copier, couper, coller et envelopper (éléments voisins) en une étape d'annulation ; le panneau règle
+l'élément principal. Palette de commandes (Ctrl+K, dans toutes les vues du site ; reste « lien » dans un texte
+riche) : actions, affichage, éléments à ajouter, vues et rubriques, pages, écrans, calques de la page, recherche
+sans accents. Tous les écrans côte à côte (du plus large au plus étroit, ordinateur à 1280 px) : un clic dans un
+écran ou sur son nom le choisit (poignées et styles y suivent), les boutons des écrans affichent ou masquent
+chaque écran (au moins un reste). Cadre étirable vers le bas (poignée sous le cadre, double-clic : hauteur par
+défaut) pour voir plus de la page sans la faire défiler : la mise en page ne change pas, les unités `vh`, `svh`,
+`lvh`, `dvh` des feuilles et des pages servies au canevas étant rapportées à la hauteur normale du cadre
+(`--rv-vh`, rendu identique tant que le cadre n'est pas allongé ; site publié inchangé) ; limite : un élément
+`position: fixed` en bas de fenêtre suit le bas du cadre allongé. Page entièrement visible : la molette déplace
+la vue. Sources : [Automatic class name generation — Webflow](https://webflow.com/updates/automatic-class-name-generation),
+[Creating breakpoints in Framer — Framer Academy](https://www.framer.com/academy/lessons/framer-fundamentals-breakpoints).

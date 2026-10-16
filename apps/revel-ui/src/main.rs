@@ -24,6 +24,7 @@ mod locales;
 mod pageops;
 mod pagesettings;
 mod pagetree;
+mod palette;
 mod panels;
 mod publish;
 mod richtext;
@@ -127,7 +128,7 @@ pub struct Ui {
     /// Page à afficher dans l'éditeur (demandée par une autre vue, la vue CMS par exemple).
     pub goto_page: RwSignal<Option<String>>,
     /// Élément copié (Ctrl+C), collé avec de nouveaux identifiants (Ctrl+V), d'un site à l'autre.
-    pub clipboard: RwSignal<Option<revel_model::Node>>,
+    pub clipboard: RwSignal<Vec<revel_model::Node>>,
     /// Page affichée dans l'éditeur (l'aperçu s'ouvre sur elle).
     pub current_page: RwSignal<Option<String>>,
     /// Menu contextuel ouvert (clic droit).
@@ -223,6 +224,28 @@ impl Ui {
             }
         });
         self.reload_recents();
+    }
+    /// Aperçu du site ouvert, à la page affichée : dans l'espace de travail, ou dans une nouvelle
+    /// fenêtre.
+    pub fn open_preview(self, window: bool) {
+        if let Route::Site { site, .. } = self.route.get_untracked() {
+            let env = self.preview_environment(&site);
+            spawn_local(async move {
+                let page = self.current_page.get_untracked();
+                if window {
+                    if let Err(e) = api::preview(&site.path, &env, page.as_deref()).await {
+                        self.fail(e);
+                    }
+                    return;
+                }
+                match api::preview_url(&site.path, &env).await {
+                    Ok(base) => self
+                        .preview
+                        .set(Some((base, page.unwrap_or_else(|| "/".into())))),
+                    Err(e) => self.fail(e),
+                }
+            });
+        }
     }
     /// Change de vue dans le site ouvert.
     pub fn tab(self, tab: Tab) {
@@ -340,7 +363,7 @@ fn App() -> impl IntoView {
         ask: RwSignal::new(None),
         github: RwSignal::new(None),
         goto_page: RwSignal::new(None),
-        clipboard: RwSignal::new(None),
+        clipboard: RwSignal::new(Vec::new()),
         current_page: RwSignal::new(None),
         context: RwSignal::new(None),
         preview: RwSignal::new(None),
@@ -480,7 +503,7 @@ enum Page {
 }
 
 /// Vues d'un site, dans l'ordre de la barre supérieure.
-const VIEWS: &[(Tab, &str)] = &[
+pub(crate) const VIEWS: &[(Tab, &str)] = &[
     (Tab::Editor, "view-editor"),
     (Tab::Cms, "view-cms"),
     (Tab::Locales, "view-locales"),
@@ -496,26 +519,7 @@ fn TopBar() -> impl IntoView {
     };
     let site_open = move || tab().is_some();
     // Aperçu : dans l'espace de travail ; dans une nouvelle fenêtre avec Maj+clic ou par le menu.
-    let preview = move |window: bool| {
-        if let Route::Site { site, .. } = ui.route.get_untracked() {
-            let env = ui.preview_environment(&site);
-            spawn_local(async move {
-                let page = ui.current_page.get_untracked();
-                if window {
-                    if let Err(e) = api::preview(&site.path, &env, page.as_deref()).await {
-                        ui.fail(e);
-                    }
-                    return;
-                }
-                match api::preview_url(&site.path, &env).await {
-                    Ok(base) => ui
-                        .preview
-                        .set(Some((base, page.unwrap_or_else(|| "/".into())))),
-                    Err(e) => ui.fail(e),
-                }
-            });
-        }
-    };
+    let preview = move |window: bool| ui.open_preview(window);
     let preview_menu = RwSignal::new(false);
     let on_down =
         window_event_listener(leptos::ev::pointerdown, move |e: web_sys::PointerEvent| {

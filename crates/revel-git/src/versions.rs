@@ -175,7 +175,11 @@ pub fn init(dir: &Path, name: &str, email: &str, message: &str) -> Result<Versio
     }
     let mut o = git2::RepositoryInitOptions::new();
     o.initial_head("main");
-    Repository::init_opts(dir, &o)?;
+    let repo = Repository::init_opts(dir, &o)?;
+    // Fichiers gardés tels que Revel et Pages CMS les écrivent (fins de ligne `\n`), même si
+    // Git convertit les fins de ligne sur cet ordinateur (`core.autocrlf`, réglage courant sous
+    // Windows) : une version restaurée ou reçue ne change pas les fichiers du site.
+    repo.config()?.set_bool("core.autocrlf", false)?;
     let gi = dir.join(".gitignore");
     let old = std::fs::read_to_string(&gi).unwrap_or_default();
     let missing: String = IGNORE

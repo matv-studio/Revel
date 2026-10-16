@@ -450,6 +450,37 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
     ]
 }
 
+/// Élément à ajouter proposé par la palette de commandes : famille, libellé, texte par défaut,
+/// icône, préréglage.
+pub type PaletteItem = (
+    &'static str,
+    &'static str,
+    &'static str,
+    fn() -> AnyView,
+    Preset,
+);
+
+/// Éléments à ajouter proposés par la palette de commandes (éléments prévus exclus).
+pub fn palette_items() -> Vec<PaletteItem> {
+    groups()
+        .into_iter()
+        .flat_map(|(g, items)| {
+            items
+                .into_iter()
+                .filter_map(move |it| Some((g, it.key, it.text, it.icon, it.preset?)))
+        })
+        .collect()
+}
+
+/// Ajoute un élément dans l'élément sélectionné (ou juste après lui), sinon à la fin de la page.
+pub fn add_preset(ui: Ui, ed: Ed, preset: Preset, text_key: &'static str) {
+    let Some((parent, index)) = insertion_point(ed) else {
+        ui.fail(revel_protocol::Failure::new("insert-no-place"));
+        return;
+    };
+    insert_at(ui, ed, preset, text_key, parent, index);
+}
+
 #[component]
 pub fn Insert() -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -546,7 +577,7 @@ impl CanvasDrag {
 
     /// Point de la page sous le pointeur (coordonnées de la fenêtre), s'il est sur le cadre.
     pub fn frame_point(self, cx: f64, cy: f64) -> Option<(f64, f64)> {
-        let f = self.ed.frame.get_untracked()?;
+        let f = self.ed.frame_el()?;
         let r = f.get_bounding_client_rect();
         let inside = cx >= r.left() && cx <= r.right() && cy >= r.top() && cy <= r.bottom();
         let s = self.ed.scale();

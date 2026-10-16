@@ -13,10 +13,11 @@ mod ctx;
 mod sections;
 
 pub use ctx::watched;
+pub(crate) use ctx::{bp_name, find_rule, style_command};
 
 use crate::editor::Ed;
 use crate::{Ui, icons};
-use ctx::{Sx, bp_name};
+use ctx::Sx;
 use leptos::ev;
 use leptos::prelude::*;
 use revel_edit::Command;
@@ -32,22 +33,99 @@ const STATES: &[(&str, &str)] = &[
     (":focus-visible", "styles-state-focus"),
 ];
 
-/// Classes littérales de l'élément (pas d'expression).
-fn classes_of(n: &Node) -> Vec<String> {
-    match n {
+/// Classes littérales de l'élément ou de l'image (pas d'expression).
+pub(crate) fn classes_of(n: &Node) -> Vec<String> {
+    let value = match n {
         Node::Element { attrs, .. } => attrs
             .iter()
             .find(|a| a.name == "class")
-            .and_then(|a| a.value.as_deref())
-            .filter(|v| !v.contains("{{") && !v.contains("{%"))
-            .map(|v| v.split_whitespace().map(str::to_string).collect())
-            .unwrap_or_default(),
-        _ => Vec::new(),
+            .and_then(|a| a.value.as_deref()),
+        Node::Image(img) => img.class.as_deref(),
+        _ => None,
+    };
+    value
+        .filter(|v| !v.contains("{{") && !v.contains("{%"))
+        .map(|v| v.split_whitespace().map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+/// Commande qui remplace les classes d'un élément ou d'une image (`None` : plus de classe).
+pub(crate) fn class_command(at: revel_edit::Target, n: &Node, list: &[String]) -> Option<Command> {
+    let value = (!list.is_empty()).then(|| list.join(" "));
+    match n {
+        Node::Element { .. } => Some(Command::SetAttr {
+            at,
+            name: "class".into(),
+            value,
+        }),
+        Node::Image(img) => {
+            let mut img = img.clone();
+            img.class = value;
+            Some(Command::SetImage { at, image: img })
+        }
+        _ => None,
     }
 }
 
+/// Classe à créer pour un élément qui n'en a pas (comme Webflow : d'après sa nature,
+/// numérotée si elle existe déjà dans la feuille de style ou la page).
+pub(crate) fn new_class(d: &revel_model::Site, n: &Node) -> String {
+    let base = match n {
+        Node::Image(_) => "image",
+        Node::Element { tag, .. } => match tag.to_ascii_lowercase().as_str() {
+            "div" => "div-block",
+            "img" | "picture" => "image",
+            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => "heading",
+            "p" => "paragraph",
+            "a" => "link",
+            "ul" | "ol" => "list",
+            "li" => "list-item",
+            "span" => "text-span",
+            "section" => "section",
+            "button" => "button",
+            "nav" => "nav",
+            "header" => "header",
+            "footer" => "footer",
+            "figure" => "figure",
+            "video" => "video",
+            "form" => "form",
+            "input" => "input",
+            _ => "block",
+        },
+        _ => "block",
+    };
+    let mut taken = std::collections::HashSet::new();
+    for r in d.style_rules() {
+        for part in r
+            .selector
+            .split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.'))
+        {
+            for c in part.split('.').skip(1) {
+                taken.insert(c.to_string());
+            }
+        }
+    }
+    for (_, _, body) in d.owners() {
+        revel_model::ids::walk(body, &mut |n| {
+            for c in classes_of(n) {
+                taken.insert(c);
+            }
+        });
+    }
+    (1..)
+        .map(|i| {
+            if i == 1 {
+                base.to_string()
+            } else {
+                format!("{base}-{i}")
+            }
+        })
+        .find(|c| !taken.contains(c))
+        .unwrap_or_else(|| base.to_string())
+}
+
 /// Sélecteurs proposés : chaque classe, puis la combinaison de toutes (classe combinée).
-fn candidates(classes: &[String]) -> Vec<String> {
+pub(crate) fn candidates(classes: &[String]) -> Vec<String> {
     let mut v: Vec<String> = classes.iter().map(|c| format!(".{c}")).collect();
     if classes.len() > 1 {
         v.push(classes.iter().map(|c| format!(".{c}")).collect());
@@ -114,7 +192,7 @@ pub fn Styles() -> impl IntoView {
     // panneau (3). Le panneau reste en place d'un élément à l'autre (sections ouvertes gardées).
     let kind = Memo::new(move |_| match node.get() {
         None => 0u8,
-        Some(n) if !matches!(n, Node::Element { .. }) => 1,
+        Some(n) if !matches!(n, Node::Element { .. } | Node::Image(_)) => 1,
         Some(_) if !has_sheet.get() => 2,
         Some(_) => 3,
     });
@@ -152,7 +230,7 @@ pub fn Styles() -> impl IntoView {
         if name.is_empty() || name.contains(char::is_whitespace) {
             return;
         }
-        let Some(at) = ed.selected_target() else {
+        let (Some(at), Some(n)) = (ed.selected_target(), node.get_untracked()) else {
             return;
         };
         let mut list = classes.get_untracked();
@@ -160,20 +238,14 @@ pub fn Styles() -> impl IntoView {
             list.push(name.clone());
         }
         selector.set(format!(".{name}"));
-        ed.apply(
-            ui,
-            Command::SetAttr {
-                at,
-                name: "class".into(),
-                value: Some(list.join(" ")),
-            },
-            false,
-        );
+        if let Some(cmd) = class_command(at, &n, &list) {
+            ed.apply(ui, cmd, false);
+        }
     };
 
     // Retrait d'une classe de l'élément.
     let remove_class = move |name: String| {
-        let Some(at) = ed.selected_target() else {
+        let (Some(at), Some(n)) = (ed.selected_target(), node.get_untracked()) else {
             return;
         };
         let list: Vec<String> = classes
@@ -181,15 +253,9 @@ pub fn Styles() -> impl IntoView {
             .into_iter()
             .filter(|c| *c != name)
             .collect();
-        ed.apply(
-            ui,
-            Command::SetAttr {
-                at,
-                name: "class".into(),
-                value: (!list.is_empty()).then(|| list.join(" ")),
-            },
-            false,
-        );
+        if let Some(cmd) = class_command(at, &n, &list) {
+            ed.apply(ui, cmd, false);
+        }
     };
 
     view! {

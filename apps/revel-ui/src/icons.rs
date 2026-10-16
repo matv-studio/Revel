@@ -197,6 +197,21 @@ pub fn image() -> AnyView {
 }
 
 /// Code (HTML brut, variable).
+/// Dégradé linéaire.
+pub fn gradient_linear() -> AnyView {
+    svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M5 2.5v11M8 2.5v11M11 2.5v11" stroke-opacity=".45"/>"#)
+}
+
+/// Dégradé radial.
+pub fn gradient_radial() -> AnyView {
+    svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><circle cx="8" cy="8" r="2"/><circle cx="8" cy="8" r="4" stroke-opacity=".45"/>"#)
+}
+
+/// Étiquette (sélecteur de balise : toutes les balises d'un type).
+pub fn tag() -> AnyView {
+    svg(r#"<path d="M2.5 3.5v4l6 6 5-5-6-6h-4z"/><circle cx="5.5" cy="5.5" r="1"/>"#)
+}
+
 pub fn code() -> AnyView {
     svg(r#"<path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5"/>"#)
 }

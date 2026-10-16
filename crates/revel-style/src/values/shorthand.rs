@@ -255,6 +255,15 @@ fn derive(sh: &str, v: &str, prop: &str) -> Option<Option<String>> {
             }))
         }
         ("font", p) if FONT.contains(&p) => Some(None),
+        // `gap: 24px` ou `gap: 24px 48px` (lignes puis colonnes).
+        ("gap", "row-gap" | "column-gap") => {
+            let t = split_top(v, ' ');
+            Some(match t.as_slice() {
+                [a] => Some(a.clone()),
+                [r, c] => Some(if prop == "row-gap" { r.clone() } else { c.clone() }),
+                _ => None,
+            })
+        }
         _ => None,
     }
 }
@@ -303,6 +312,22 @@ fn compose(sh: &str, v: &str, prop: &str, value: Option<&str>) -> Option<Option<
             let mut out: Vec<String> = value.map(|x| split_top(x, ' ')).unwrap_or_default();
             out.extend(rest);
             Some((!out.is_empty()).then(|| out.join(" ")))
+        }
+        ("gap", "row-gap" | "column-gap") => {
+            let t = split_top(v, ' ');
+            let (mut r, mut c) = match t.as_slice() {
+                [a] => (a.clone(), a.clone()),
+                [r, c] => (r.clone(), c.clone()),
+                _ => return None,
+            };
+            // Écart retiré d'un seul sens : écart par défaut (`normal`) dans ce sens.
+            let x = value.map(|x| x.trim().to_string()).unwrap_or_else(|| "normal".into());
+            if prop == "row-gap" {
+                r = x;
+            } else {
+                c = x;
+            }
+            Some(Some(if r == c { r } else { format!("{r} {c}") }))
         }
         _ => None,
     }

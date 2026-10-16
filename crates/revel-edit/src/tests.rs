@@ -1886,3 +1886,190 @@ fn selecteur_de_langue() {
     assert!(c.contains(".langue[aria-current=\"page\"]"), "{c}");
     assert!(json(&s).contains("\"locales\""));
 }
+
+#[test]
+fn pages_d_une_collection() {
+    let mut s = sample();
+    s.collections.push(revel_model::Collection {
+        id: "projets".into(),
+        source: Default::default(),
+        folder: "content/projets".into(),
+        path: None,
+        layout: None,
+        props: Default::default(),
+        filter: None,
+        sort: None,
+        fields: vec![],
+    });
+    let base = s.clone();
+    let l = crate::make::collection_template(&s, "projets", "title");
+    assert_eq!(l.id, "modele-projets");
+    // Le modèle garde le titre du contenu et son texte (emplacement).
+    let mut slot = false;
+    revel_model::ids::walk(&l.body, &mut |n| slot |= matches!(n, Node::Slot));
+    assert!(slot);
+    let cmd = Command::Batch {
+        commands: vec![
+            Command::AddLayout {
+                layout: l.clone(),
+                index: None,
+            },
+            Command::SetCollectionPages {
+                id: "projets".into(),
+                path: Some("/projets/{{ slug }}/".into()),
+                layout: Some(l.id.clone()),
+            },
+        ],
+    };
+    let inv = apply(&mut s, &cmd).unwrap();
+    assert_eq!(s.collections[0].path.as_deref(), Some("/projets/{{ slug }}/"));
+    assert_eq!(s.collections[0].layout.as_deref(), Some("modele-projets"));
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), json(&base));
+    // Adresse sans partie propre à chaque contenu, gabarit inconnu : refusés.
+    for (path, layout) in [("/projets/", None), ("/p/{{ slug }}/", Some("absent"))] {
+        let r = apply(
+            &mut s,
+            &Command::SetCollectionPages {
+                id: "projets".into(),
+                path: Some(path.into()),
+                layout: layout.map(String::from),
+            },
+        );
+        assert!(r.is_err(), "{path}");
+    }
+}
+
+#[test]
+fn regle_ajoutee_deux_fois_reste_unique() {
+    let mut s = sample();
+    let add = |v: &str| Command::AddRule {
+        selector: ".bouton".into(),
+        media: None,
+        decls: vec![revel_model::Decl {
+            prop: "color".into(),
+            value: v.into(),
+            important: false,
+        }],
+    };
+    let base = json(&s);
+    let e1 = expand(&s, &add("red")).unwrap();
+    let i1 = apply(&mut s, &e1).unwrap();
+    // Deuxième réglage envoyé avant que le panneau ne connaisse la règle : même règle modifiée.
+    let e2 = expand(&s, &add("blue")).unwrap();
+    let i2 = apply(&mut s, &e2).unwrap();
+    assert_eq!(s.style_rules().filter(|r| r.selector == ".bouton").count(), 1);
+    assert!(css(&s).contains(".bouton { color: blue; }"), "{}", css(&s));
+    apply(&mut s, &i2).unwrap();
+    assert!(css(&s).contains(".bouton { color: red; }"));
+    apply(&mut s, &i1).unwrap();
+    assert_eq!(json(&s), base);
+}
+
+#[test]
+fn texte_mis_en_forme_modifie_d_un_bloc() {
+    use crate::inline::{Piece, is_rich_host, rich_hosts, set_inline};
+    let mut s = sample();
+    // `<h2>Le <span class="accent">bureau</span> d’études</h2>` ajouté à la page.
+    let h2 = el(
+        "h2",
+        &[],
+        vec![
+            text("Le "),
+            el(
+                "span",
+                &[("class", "accent"), ("data-anim", "fade")],
+                vec![text("bureau")],
+            ),
+            text(" d'études"),
+        ],
+    );
+    s.pages[0].body.push(h2);
+    s.ensure_ids();
+    let h2_id = id_of(&s, "h2");
+    let span_id = match address::node(&s, &Target { owner: page(), node: h2_id.clone() }) {
+        Ok(Node::Element { children, .. }) => node_id(&children[1]).unwrap().to_string(),
+        _ => panic!(),
+    };
+    let hosts = rich_hosts(&s);
+    assert!(hosts.contains(&h2_id));
+    // Texte avec une expression : modifié texte par texte.
+    let p = address::node(&s, &Target { owner: page(), node: id_of(&s, "p") }).unwrap();
+    assert!(!is_rich_host(p));
+    let at = Target {
+        owner: page(),
+        node: h2_id.clone(),
+    };
+    let t = |s: &str| Piece::Text { text: s.into() };
+    let span = |id: Option<&str>, kids: Vec<Piece>| Piece::Element {
+        tag: "span".into(),
+        id: id.map(String::from),
+        class: None,
+        href: None,
+        target: None,
+        children: kids,
+    };
+    // Contenu inchangé (typographie de la page comprise) : pas de commande.
+    let same = vec![t("Le "), span(Some(&span_id), vec![t("bureau")]), t(" d’études")];
+    assert_eq!(set_inline(&s, &at, &same, true).unwrap(), None);
+    // Mot ajouté dans le span, mot mis en gras, copie du span collée à la fin.
+    let base = json(&s);
+    let new = vec![
+        t("Le "),
+        span(Some(&span_id), vec![t("grand bureau")]),
+        Piece::Element {
+            tag: "b".into(),
+            id: None,
+            class: None,
+            href: None,
+            target: None,
+            children: vec![t(" d’études")],
+        },
+        span(Some(&span_id), vec![t(" !")]),
+        Piece::Element {
+            tag: "br".into(),
+            id: None,
+            class: None,
+            href: None,
+            target: None,
+            children: vec![],
+        },
+    ];
+    let cmd = set_inline(&s, &at, &new, true).unwrap().unwrap();
+    let inv = apply(&mut s, &cmd).unwrap();
+    let Node::Element { children, .. } = address::node(&s, &at).unwrap().clone() else {
+        panic!()
+    };
+    assert_eq!(children.len(), 4, "{children:?}");
+    // Span repris : même identifiant, mêmes attributs.
+    assert_eq!(node_id(&children[1]), Some(span_id.as_str()));
+    let Node::Element { attrs, .. } = &children[1] else { panic!() };
+    assert_eq!(attrs.len(), 2);
+    // Gras : `strong`, apostrophe de la source rétablie.
+    let Node::Element { tag, children: b, .. } = &children[2] else { panic!() };
+    assert_eq!(tag, "strong");
+    assert_eq!(b, &vec![text(" d'études")]);
+    // Copie : mêmes attributs, nouvel identifiant ; retour à la ligne final retiré.
+    let Node::Element { id, attrs, .. } = &children[3] else { panic!() };
+    assert_ne!(id.as_deref(), Some(span_id.as_str()));
+    assert_eq!(attrs.len(), 2);
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), base);
+    // Lien de la barre de mise en forme : adresse modifiée, lien retiré.
+    let link = vec![Piece::Element {
+        tag: "a".into(),
+        id: None,
+        class: None,
+        href: Some("/contact/".into()),
+        target: None,
+        children: vec![t("Le bureau")],
+    }];
+    let cmd = set_inline(&s, &at, &link, false).unwrap().unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let Node::Element { children, .. } = address::node(&s, &at).unwrap().clone() else {
+        panic!()
+    };
+    let Node::Element { tag, attrs, .. } = &children[0] else { panic!() };
+    assert_eq!(tag, "a");
+    assert_eq!(attrs[0].value.as_deref(), Some("/contact/"));
+}

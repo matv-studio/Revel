@@ -142,6 +142,10 @@
 .list-meta { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--text-faint); opacity: 0; }
 .list-row:hover .list-meta, .list-row.is-on .list-meta { opacity: 1; }
 .list-count { flex: none; font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+/* Collection sans page par contenu : grisée, « + » pour créer ses pages. */
+.list-row.is-pageless { cursor: default; }
+.list-row.is-pageless .list-label, .list-row.is-pageless .list-icon { color: var(--text-faint); }
+.list-row .list-action { flex: none; margin-right: -2px; }
 .panel-empty { padding: var(--s-4); font-size: var(--text-sm); text-align: center; }
 
 .panel-foot {

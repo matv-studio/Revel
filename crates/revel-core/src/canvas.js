@@ -104,6 +104,13 @@
     // Utilisation de composant (vert, comme Webflow) ; modification isolée : le reste estompé.
     ".hover.comp{outline-color:#2fb67c}.sel.comp{outline-color:#2fb67c}.tag.comp{background:#2fb67c}" +
     ".dim{position:fixed;inset:0;pointer-events:none;display:none;z-index:2147483645;background:rgba(20,20,24,.5)}" +
+    // Barre de mise en forme du texte en cours de modification.
+    ".fbar{position:fixed;display:none;align-items:center;gap:calc(2px*var(--k));z-index:2147483647;padding:calc(3px*var(--k));" +
+    "background:#1f1f1f;border-radius:calc(6px*var(--k));box-shadow:0 4px 14px rgba(0,0,0,.3);font:600 calc(12px*var(--k))/1 system-ui,-apple-system,'Segoe UI',sans-serif}" +
+    ".fbar button{all:unset;cursor:pointer;color:#fff;min-width:calc(24px*var(--k));height:calc(24px*var(--k));display:grid;place-items:center;border-radius:calc(4px*var(--k))}" +
+    ".fbar button:hover{background:#3a3a3a}.fbar button.on{background:#6d8cff}.fbar svg{width:calc(16px*var(--k));height:calc(16px*var(--k))}" +
+    ".fbar .fb-url{display:none;width:calc(200px*var(--k));height:calc(24px*var(--k));border:0;border-radius:calc(4px*var(--k));padding:0 calc(6px*var(--k));font:inherit;font-weight:400}" +
+    ".fbar.is-link button{display:none}.fbar.is-link .fb-url{display:block}" +
     "</style><div class='dim'></div><div class='spc'></div><div class='sval'></div>" +
     "<div class='box hover'></div><div class='extra'></div><div class='box sel'></div><div class='box drop'></div>" +
     "<div class='box line'></div><div class='tag'></div><div class='into'></div><div class='ghost'></div><div class='size'></div>" +
@@ -500,7 +507,17 @@
   // texte et les textes venus des données.
   const sendTexts = () => {
     const items = [];
-    if (selected) {
+    // Texte mis en forme modifié d'un bloc : un seul champ pour tout l'élément (D-72).
+    const hostId = selected && !selectedInst ? selected.getAttribute("data-rv") : null;
+    if (hostId && richIds.has(hostId)) {
+      for (let n = 0; n < ranges.length; n++) {
+        const r = ranges[n];
+        if (!r || !slots[n] || slots[n].slot !== "text" || !selected.contains(r.startContainer)) continue;
+        items.push({ slot: slots[n], text: richHtml(selected), rich: false, host: hostId });
+        break;
+      }
+    }
+    if (selected && !items.length) {
       for (let n = 0; n < ranges.length; n++) {
         const r = ranges[n];
         const sl = slots[n];
@@ -606,6 +623,32 @@
     return out.innerHTML;
   };
   const BLOCKS = /^(P|DIV|UL|OL|LI|H[1-6]|BLOCKQUOTE|TABLE|SECTION|FIGURE)$/;
+  // Mise en forme d'un texte de la page (gras, italique, souligné, lien, span) : seules ces
+  // balises restent ; `null` : texte simple, sans mise en forme.
+  const INLINE = { STRONG: "strong", B: "strong", EM: "em", I: "em", U: "u", A: "a", SPAN: "span", BR: "br" };
+  const cleanInline = (root) => {
+    const out = document.createElement("div");
+    let rich = false;
+    const copy = (from, to) => {
+      for (const n of from.childNodes) {
+        if (n.nodeType === 3) { to.appendChild(document.createTextNode(n.data)); continue; }
+        if (n.nodeType !== 1) continue;
+        const tag = INLINE[n.tagName];
+        if (!tag) { copy(n, to); continue; }
+        rich = true;
+        const el = document.createElement(tag);
+        if (tag === "a") {
+          if (n.getAttribute("href")) el.setAttribute("href", n.getAttribute("href"));
+          if (n.getAttribute("target")) el.setAttribute("target", n.getAttribute("target"));
+        }
+        if (tag === "span" && n.getAttribute("class")) el.setAttribute("class", n.getAttribute("class"));
+        copy(n, el);
+        to.appendChild(el);
+      }
+    };
+    copy(root, out);
+    return rich ? out.innerHTML : null;
+  };
   const slotAt = (x, y) => {
     let best = null;
     let bestArea = Infinity;
@@ -622,27 +665,222 @@
     return best;
   };
   const inEdit = (t) => !!editing && !!t && editing.span.contains(t);
-  const startEdit = (n) => {
+
+  // Texte mis en forme modifié d'un bloc (D-72) : un élément qui ne contient que du texte et des
+  // éléments de mise en forme (liste envoyée par l'interface) se modifie en entier, comme un seul
+  // texte ; ses éléments gardent leur repère `data-rv` (classes et réglages repris).
+  let richIds = new Set();
+  const RICH = Object.assign({ SMALL: "small", SUP: "sup", SUB: "sub", MARK: "mark", S: "s", CODE: "code" }, INLINE);
+  const richHost = (n) => {
+    const sl = slots[n];
+    const r = ranges[n];
+    if (!sl || sl.slot !== "text" || !r || !richIds.size) return null;
+    let c = r.commonAncestorContainer;
+    if (c.nodeType !== 1) c = c.parentElement;
+    let el = c && c.closest("[data-rv]");
+    let best = null;
+    // Du texte pointé vers l'élément qui le contient : un span ou un gras dans un titre modifie
+    // tout le titre.
+    while (el) {
+      if (richIds.has(el.getAttribute("data-rv"))) best = el;
+      else if (best) break;
+      if (!RICH[el.tagName]) break;
+      el = parentRv(el);
+    }
+    return best;
+  };
+  // HTML d'un élément modifié d'un bloc : texte et éléments de mise en forme, avec leur repère.
+  const richHtml = (root) => {
+    const out = document.createElement("div");
+    const copy = (from, to) => {
+      for (const n of from.childNodes) {
+        if (n.nodeType === 3) { to.appendChild(document.createTextNode(n.data)); continue; }
+        if (n.nodeType !== 1) continue;
+        const tag = RICH[n.tagName];
+        // Span posé par le navigateur (style d'une commande) : son texte seul.
+        const stray = tag === "span" && !n.hasAttribute("data-rv") && !n.hasAttribute("class") && n.attributes.length > 0;
+        if (!tag || stray) { copy(n, to); continue; }
+        const el = document.createElement(tag);
+        for (const a of ["data-rv", "class", "href", "target"]) if (n.hasAttribute(a)) el.setAttribute(a, n.getAttribute(a));
+        copy(n, el);
+        to.appendChild(el);
+      }
+    };
+    copy(root, out);
+    return out.innerHTML;
+  };
+  // Chemin d'un nœud depuis `root` (positions), pour retrouver les repères après une annulation.
+  const pathOf = (root, node) => {
+    const p = [];
+    for (let x = node; x && x !== root; x = x.parentNode) p.unshift(Array.prototype.indexOf.call(x.parentNode.childNodes, x));
+    return p;
+  };
+  const nodeAt = (root, p) => p.reduce((x, i) => (x ? x.childNodes[i] : null), root);
+  // Mot sous le pointeur (double-clic) : sélectionné, comme dans un traitement de texte.
+  const wordAt = (x, y, within) => {
+    if (typeof x !== "number" || !document.caretRangeFromPoint) return null;
+    const c = document.caretRangeFromPoint(x, y);
+    if (!c || c.startContainer.nodeType !== 3 || !within.contains(c.startContainer)) return null;
+    const t = c.startContainer;
+    const s = t.data;
+    const w = /[\p{L}\p{N}_'’-]/u;
+    let a = c.startOffset;
+    let b = a;
+    while (a > 0 && w.test(s[a - 1])) a--;
+    while (b < s.length && w.test(s[b])) b++;
+    const r = document.createRange();
+    r.setStart(t, a);
+    r.setEnd(t, b);
+    return r;
+  };
+  const selectIn = (el, x, y) => {
+    const sel = window.getSelection();
+    if (!sel) return;
+    const w = wordAt(x, y, el);
+    if (w && !w.collapsed) { sel.removeAllRanges(); sel.addRange(w); } else sel.selectAllChildren(el);
+  };
+  // Sortie du texte : validé, sauf vers le champ d'adresse de la barre de mise en forme.
+  const watchBlur = (el) => {
+    const onBlur = () => {
+      setTimeout(() => {
+        if (!editing || editing.span !== el) return;
+        if (fbar.classList.contains("is-link") || document.activeElement === el) {
+          el.addEventListener("blur", onBlur, { once: true });
+          return;
+        }
+        finishEdit(true);
+      }, 0);
+    };
+    el.addEventListener("blur", onBlur, { once: true });
+  };
+  const plainPaste = (e) => {
+    e.preventDefault();
+    const t = (e.clipboardData && e.clipboardData.getData("text/plain")) || "";
+    document.execCommand("insertText", false, t.replace(/\s*\n\s*/g, " "));
+  };
+  const startRich = (n, host, x, y) => {
+    const saved = host.innerHTML;
+    // Repères dans l'élément : positions retrouvées si la saisie est abandonnée.
+    const marks = [];
+    for (let k = 0; k < ranges.length; k++) {
+      const r = ranges[k];
+      if (!r || !host.contains(r.startContainer) || !host.contains(r.endContainer)) continue;
+      marks.push({ k, sp: pathOf(host, r.startContainer), so: r.startOffset, ep: pathOf(host, r.endContainer), eo: r.endOffset });
+    }
+    const style = host.getAttribute("style");
+    host.setAttribute("data-rv-edit", "");
+    host.setAttribute("contenteditable", "true");
+    host.style.outline = "2px solid #6d8cff";
+    host.style.outlineOffset = "2px";
+    host.addEventListener("paste", plainPaste);
+    editing = { n, span: host, rich: false, block: { saved, marks, style, before: richHtml(host) } };
+    watchBlur(host);
+    host.focus();
+    selectIn(host, x, y);
+    post({ type: "editing", slot: slots[n] });
+    return true;
+  };
+  const finishRich = (commit) => {
+    const { n, span: host, block } = editing;
+    editing = null;
+    hideFormatBar();
+    host.removeEventListener("paste", plainPaste);
+    host.removeAttribute("contenteditable");
+    host.removeAttribute("data-rv-edit");
+    if (block.style === null) host.removeAttribute("style");
+    else host.setAttribute("style", block.style);
+    const html = richHtml(host);
+    if (commit && html !== block.before) {
+      // Page rechargée après l'enregistrement.
+      post({ type: "rich_text", slot: slots[n], id: host.getAttribute("data-rv"), html });
+      return;
+    }
+    // Abandon : texte d'origine et repères rétablis.
+    host.innerHTML = block.saved;
+    for (const m of block.marks) {
+      const s = nodeAt(host, m.sp);
+      const e = nodeAt(host, m.ep);
+      if (!s || !e) continue;
+      const r = document.createRange();
+      try { r.setStart(s, m.so); r.setEnd(e, m.eo); ranges[m.k] = r; } catch (_) { /* structure changée */ }
+    }
+    post({ type: "editing", slot: null });
+  };
+  // Gras, italique, souligné posés par Revel (pas par le navigateur : un titre déjà gras par son
+  // style recevrait un « gras retiré » en style) : la sélection est enveloppée, ou sortie de
+  // l'élément qui la contient déjà.
+  const FORMAT = { bold: ["strong", "b"], italic: ["em", "i"], underline: ["u"] };
+  const toggleFormat = (kind) => {
+    const sel = window.getSelection();
+    if (!editing || !sel || !sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    if (r.collapsed || !editing.span.contains(r.commonAncestorContainer)) return;
+    const tags = FORMAT[kind];
+    let wrap = null;
+    for (let x = r.commonAncestorContainer; x && x !== editing.span; x = x.parentNode) {
+      if (x.nodeType === 1 && tags.includes(x.localName)) { wrap = x; break; }
+    }
+    if (wrap) {
+      // Sortie : l'élément coupé en trois, la partie sélectionnée sans la mise en forme.
+      const before = document.createRange();
+      before.setStart(wrap, 0);
+      before.setEnd(r.startContainer, r.startOffset);
+      const after = document.createRange();
+      after.setStart(r.endContainer, r.endOffset);
+      after.setEnd(wrap, wrap.childNodes.length);
+      const fa = after.extractContents();
+      const fb = before.extractContents();
+      const mid = Array.from(wrap.childNodes);
+      if (fb.textContent) { const w1 = wrap.cloneNode(false); w1.appendChild(fb); wrap.before(w1); }
+      if (fa.textContent) { const w2 = wrap.cloneNode(false); w2.appendChild(fa); wrap.after(w2); }
+      wrap.replaceWith(...mid);
+      if (mid.length) {
+        const nr = document.createRange();
+        nr.setStartBefore(mid[0]);
+        nr.setEndAfter(mid[mid.length - 1]);
+        sel.removeAllRanges();
+        sel.addRange(nr);
+      }
+      return;
+    }
+    const frag = r.extractContents();
+    // Même mise en forme déjà présente dans la sélection : retirée (une seule enveloppe).
+    for (const inner of Array.from(frag.querySelectorAll(tags.join(",")))) inner.replaceWith(...inner.childNodes);
+    const el = document.createElement(tags[0]);
+    el.appendChild(frag);
+    r.insertNode(el);
+    sel.removeAllRanges();
+    const nr = document.createRange();
+    nr.selectNodeContents(el);
+    sel.addRange(nr);
+  };
+  const startEdit = (n, x, y) => {
+    const host = richHost(n);
+    if (host) return startRich(n, host, x, y);
     const r = ranges[n];
     const rich = !!slots[n].html;
     // Texte riche qui contient des paragraphes ou des listes : enveloppe en bloc.
     const block = rich && Array.from(r.cloneContents().childNodes).some((c) => c.nodeType === 1 && BLOCKS.test(c.tagName));
     const span = document.createElement(block ? "div" : "span");
     span.setAttribute("data-rv-edit", "");
-    span.setAttribute("contenteditable", rich ? "true" : "plaintext-only");
+    // Texte de la page aussi en `true` : gras, italique, lien, span (barre de mise en forme) ;
+    // un collage arrive en texte simple.
+    span.setAttribute("contenteditable", "true");
+    if (!rich) span.addEventListener("paste", plainPaste);
     span.style.outline = "2px solid #6d8cff";
     span.style.outlineOffset = "2px";
     try { r.surroundContents(span); } catch (_) { return false; }
     editing = { n, span, rich, before: rich ? span.innerHTML : span.textContent };
-    span.addEventListener("blur", () => finishEdit(true), { once: true });
+    watchBlur(span);
     span.focus();
-    const sel = window.getSelection();
-    if (sel) sel.selectAllChildren(span);
+    selectIn(span, x, y);
     post({ type: "editing", slot: slots[n] });
     return true;
   };
   const finishEdit = (commit) => {
     if (!editing) return;
+    if (editing.block) { finishRich(commit); return; }
+    hideFormatBar();
     const { n, span, before, rich } = editing;
     if (rich) {
       editing = null;
@@ -670,7 +908,10 @@
       return;
     }
     editing = null;
+    hideFormatBar();
     const text = span.textContent;
+    // Mise en forme ajoutée : le texte devient texte et éléments (la page est rechargée).
+    const html = commit && slots[n].slot === "text" ? cleanInline(span) : null;
     const parent = span.parentNode;
     if (!parent) return;
     const node = document.createTextNode(commit ? text : before);
@@ -679,9 +920,134 @@
     r.selectNode(node);
     ranges[n] = r;
     parent.normalize();
-    if (commit && text !== before) post({ type: "text", slot: slots[n], text, before });
+    if (html !== null) post({ type: "text_html", slot: slots[n], html });
+    else if (commit && text !== before) post({ type: "text", slot: slots[n], text, before });
     else post({ type: "editing", slot: null });
   };
+
+  // Barre de mise en forme (comme Webflow) : au-dessus du texte sélectionné pendant la
+  // modification ; gras, italique, lien, span (texte à styler à part).
+  const fbar = document.createElement("div");
+  fbar.className = "fbar";
+  // Mêmes tracés que les icônes de l'interface (16 px, trait de 1,5 px).
+  const fbIcon = (d) => "<svg viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='1.5' " +
+    "stroke-linecap='round' stroke-linejoin='round'><path d='" + d + "'/></svg>";
+  fbar.innerHTML =
+    "<button data-c='bold'>" + fbIcon("M5 3h4a2.5 2.5 0 0 1 0 5H5zM5 8h4.8a2.5 2.5 0 0 1 0 5H5z") + "</button>" +
+    "<button data-c='italic'>" + fbIcon("M6.5 3h6M3.5 13h6M9.5 3l-3 10") + "</button>" +
+    "<button data-c='link'>" + fbIcon("M6.5 9.5l3-3M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1") + "</button>" +
+    "<button data-c='span'>" + fbIcon("M5.5 3H3.5v10h2M10.5 3h2v10h-2") + "</button>" +
+    "<input class='fb-url' placeholder='https://… /page/'>";
+  root.appendChild(fbar);
+  const fbUrl = fbar.querySelector(".fb-url");
+  let fbRange = null;
+  // Événement sur la barre (racine fermée : repérée par sa position).
+  const onBar = (e) => {
+    if (fbar.style.display !== "flex" || typeof e.clientX !== "number") return false;
+    const r = fbar.getBoundingClientRect();
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  };
+  const hideFormatBar = () => { fbar.style.display = "none"; fbar.classList.remove("is-link"); fbRange = null; };
+  hideFormatBar();
+  const formatTitles = (t) => {
+    if (!t) return;
+    for (const b of fbar.querySelectorAll("button")) if (t[b.dataset.c]) b.title = t[b.dataset.c];
+    if (t.url) fbUrl.placeholder = t.url;
+  };
+  const showFormatBar = () => {
+    const sel = window.getSelection();
+    if (!editing || !sel || sel.rangeCount === 0 || sel.isCollapsed || !editing.span.contains(sel.anchorNode)) {
+      if (!fbar.classList.contains("is-link")) fbar.style.display = "none";
+      return;
+    }
+    const b = sel.getRangeAt(0).getBoundingClientRect();
+    const k = parseFloat(getComputedStyle(host).getPropertyValue("--k")) || 1;
+    // État des boutons : gras, italique ou lien déjà appliqués à la sélection.
+    const inTag = (tags) => {
+      for (let n = sel.anchorNode; n && n !== editing.span; n = n.parentNode) if (n.nodeType === 1 && tags.includes(n.localName)) return true;
+      return false;
+    };
+    // Span : actif seulement si la sélection en est tout le texte (sinon un clic en crée un
+    // autre dedans).
+    const exactSpan = () => {
+      for (let n = sel.anchorNode; n && n !== editing.span; n = n.parentNode) {
+        if (n.nodeType === 1 && n.localName === "span") return sel.toString() === n.textContent;
+      }
+      return false;
+    };
+    const on = { bold: inTag(["strong", "b"]), italic: inTag(["em", "i"]), link: inTag(["a"]), span: exactSpan() };
+    for (const btn of fbar.querySelectorAll("button")) btn.classList.toggle("on", !!on[btn.dataset.c]);
+    fbar.style.display = "flex";
+    fbar.style.left = Math.max(4, b.left + b.width / 2 - 70 * k) + "px";
+    fbar.style.top = Math.max(4, b.top - 34 * k) + "px";
+  };
+  document.addEventListener("selectionchange", () => { if (editing) showFormatBar(); });
+  // Boutons : la sélection du texte reste (appui sans prise du focus).
+  fbar.addEventListener("mousedown", (e) => { if (e.target !== fbUrl) e.preventDefault(); });
+  fbar.addEventListener("pointerdown", (e) => e.stopPropagation(), true);
+  fbar.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b || !editing) return;
+    e.stopPropagation();
+    const c = b.dataset.c;
+    const sel = window.getSelection();
+    // Élément de mise en forme qui contient déjà la sélection.
+    const around = (tag) => {
+      for (let n = sel && sel.anchorNode; n && n !== editing.span; n = n.parentNode) if (n.nodeType === 1 && n.localName === tag) return n;
+      return null;
+    };
+    if (c === "bold" || c === "italic") toggleFormat(c);
+    else if (c === "span") {
+      // Deuxième appui sur un span sélectionné en entier : retiré ; sinon un span de plus.
+      const cur = around("span");
+      const old = cur && sel.toString() === cur.textContent ? cur : null;
+      if (old) {
+        // Deuxième appui : le span est retiré, son texte reste.
+        const r = document.createRange();
+        const first = old.firstChild, last = old.lastChild;
+        old.replaceWith(...old.childNodes);
+        if (first && last) { r.setStartBefore(first); r.setEndAfter(last); sel.removeAllRanges(); sel.addRange(r); }
+      } else if (sel && sel.rangeCount && !sel.isCollapsed) {
+        const r = sel.getRangeAt(0);
+        const sp = document.createElement("span");
+        sp.appendChild(r.extractContents());
+        r.insertNode(sp);
+        sel.selectAllChildren(sp);
+      }
+    } else if (c === "link") {
+      fbRange = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+      const a = around("a");
+      fbar.classList.add("is-link");
+      fbUrl.value = a ? a.getAttribute("href") || "" : "";
+      fbUrl.focus();
+      fbUrl.select();
+      return;
+    }
+    showFormatBar();
+  });
+  // Champ d'adresse quitté ailleurs que vers le texte : modification validée.
+  fbUrl.addEventListener("blur", () => setTimeout(() => {
+    if (editing && fbar.classList.contains("is-link") && document.activeElement !== editing.span) {
+      fbar.classList.remove("is-link");
+      finishEdit(true);
+    }
+  }, 0));
+  fbUrl.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") { hideFormatBar(); if (editing) editing.span.focus(); return; }
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const url = fbUrl.value.trim();
+    const r = fbRange;
+    fbar.classList.remove("is-link");
+    if (!editing) return;
+    editing.span.focus();
+    const sel = window.getSelection();
+    if (r && sel) { sel.removeAllRanges(); sel.addRange(r); }
+    if (url) document.execCommand("createLink", false, url);
+    else document.execCommand("unlink");
+    showFormatBar();
+  });
 
   // ---------------------------------------------------------------- glisser-déposer
   // Emplacement de dépôt sous le pointeur, selon le modèle de Webflow : sur le bord d'un élément
@@ -860,7 +1226,7 @@
   let press = null;
   let dragged = false;
   document.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || editing || inEdit(e.target)) return;
+    if (e.button !== 0 || editing || inEdit(e.target) || onBar(e)) return;
     const p = pick(e.target);
     if (p) press = { el: p.el, inst: p.inst, x: e.clientX, y: e.clientY, id: e.pointerId };
   }, true);
@@ -1076,7 +1442,7 @@
   // Les clics sélectionnent : liens, boutons et formulaires du site ne réagissent pas.
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
   document.addEventListener("click", (e) => {
-    if (inEdit(e.target)) return;
+    if (inEdit(e.target) || onBar(e)) return;
     if (editing) finishEdit(true);
     block(e);
     if (dragged || onHandle(e) || resized) return;
@@ -1087,7 +1453,7 @@
   }, true);
   // Clic droit : élément sélectionné, menu de l'éditeur (pas celui du navigateur).
   document.addEventListener("contextmenu", (e) => {
-    if (inEdit(e.target)) return;
+    if (inEdit(e.target) || onBar(e)) return;
     block(e);
     if (onHandle(e)) return;
     const p = pick(e.target);
@@ -1101,7 +1467,7 @@
   const dataOf = (sl) => !!sl && sl.slot === "expr" && !!sl.binding && !!sl.binding.source &&
     sl.binding.source.kind !== "prop" && !sl.transformed;
   document.addEventListener("dblclick", (e) => {
-    if (inEdit(e.target)) return;
+    if (inEdit(e.target) || onBar(e)) return;
     block(e);
     if (onHandle(e)) {
       const axis = handleAt(e.clientX, e.clientY);
@@ -1112,13 +1478,13 @@
     const p = pick(e.target);
     if (p && p.inst) {
       // Texte d'une propriété de cette utilisation : modifié sur place (valeur de l'utilisation).
-      if (n !== null && (propOf(slots[n], p.inst) || dataOf(slots[n]))) { startEdit(n); return; }
+      if (n !== null && (propOf(slots[n], p.inst) || dataOf(slots[n]))) { startEdit(n, e.clientX, e.clientY); return; }
       const inner = targetOf(e.target);
       // Texte écrit dans le composant : modifié aussitôt, sur place (un seul double-clic).
       if (inner && n !== null && slots[n] && slots[n].slot === "text") {
         isolated = p.inst.component;
         select(inner, true, null);
-        startEdit(n);
+        startEdit(n, e.clientX, e.clientY);
         return;
       }
       // Sinon : canevas du composant (ses variantes), élément sous le pointeur sélectionné.
@@ -1126,16 +1492,16 @@
         node: inner ? inner.getAttribute("data-rv") : null, tag: inner ? inner.tagName.toLowerCase() : "" });
       return;
     }
-    if (n !== null) startEdit(n);
+    if (n !== null) startEdit(n, e.clientX, e.clientY);
   }, true);
   for (const type of ["auxclick", "submit", "mouseup", "pointerup"]) {
-    document.addEventListener(type, (e) => { if (!inEdit(e.target)) block(e); }, true);
+    document.addEventListener(type, (e) => { if (!inEdit(e.target) && !onBar(e)) block(e); }, true);
   }
   // Appui : pas de sélection de texte ni de focus d'un champ du site, mais le canevas reçoit le
   // clavier (Échap, raccourcis).
   for (const type of ["mousedown", "pointerdown"]) {
     document.addEventListener(type, (e) => {
-      if (inEdit(e.target)) return;
+      if (inEdit(e.target) || onBar(e)) return;
       block(e);
       window.focus();
     }, true);
@@ -1144,14 +1510,20 @@
   document.addEventListener("keydown", (e) => {
     if (editing) {
       if (e.key === "Escape") { e.preventDefault(); finishEdit(false); }
-      // Texte riche : Entrée ajoute un paragraphe, Ctrl+Entrée valide ; gras, italique, souligné.
+      // Gras, italique, souligné (texte riche et texte de la page).
+      else if ((e.ctrlKey || e.metaKey) && /^[biu]$/i.test(e.key)) {
+        e.preventDefault();
+        toggleFormat({ b: "bold", i: "italic", u: "underline" }[e.key.toLowerCase()]);
+        showFormatBar();
+      }
+      // Texte riche : Entrée ajoute un paragraphe, Ctrl+Entrée valide.
       else if (editing.rich) {
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finishEdit(true); }
-        else if ((e.ctrlKey || e.metaKey) && /^[biu]$/i.test(e.key)) {
-          e.preventDefault();
-          document.execCommand({ b: "bold", i: "italic", u: "underline" }[e.key.toLowerCase()]);
-        }
-      } else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finishEdit(true); }
+      } else if (e.key === "Enter" && e.shiftKey) {
+        // Maj+Entrée : retour à la ligne dans le texte (balise `br`).
+        e.preventDefault();
+        document.execCommand("insertLineBreak");
+      } else if (e.key === "Enter") { e.preventDefault(); finishEdit(true); }
       return;
     }
     if (e.key === "Escape") {
@@ -1393,9 +1765,15 @@
         }
         redraw();
         break;
+      case "rich":
+        // Éléments de texte mis en forme modifiés d'un bloc (D-72).
+        richIds = new Set(Array.isArray(m.ids) ? m.ids : []);
+        if (!editing) sendTexts();
+        break;
       case "labels":
         tagNames = m.tags || null;
         otherName = m.other || "";
+        formatTitles(m.format);
         redraw();
         break;
       case "watch":

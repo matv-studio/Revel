@@ -951,3 +951,24 @@ fn animations_produites_si_utilisees() {
     let js = file(&out, "assets/revel-animations.js");
     assert!(js.contains("RevelAnimations") && !js.contains("/*"));
 }
+
+#[test]
+fn contenus_en_brouillon_ecartes_de_la_generation() {
+    let mut s = site();
+    for c in s.collections.iter_mut() {
+        c.filter = None;
+    }
+    let out = build(&input(
+        &s,
+        vec![
+            entry("a", json!({"slug": "a", "title": "Publié", "date": "2026-01-02"})),
+            entry("b", json!({"slug": "b", "title": "Brouillon", "draft": true})),
+            entry("c", json!({"slug": "c", "title": "Masqué", "published": false})),
+        ],
+    ))
+    .unwrap();
+    let paths: Vec<&str> = out.files.iter().map(|f| f.path.as_str()).collect();
+    assert!(paths.contains(&"project/a/index.html"), "{paths:?}");
+    assert!(!paths.iter().any(|p| p.starts_with("project/b") || p.starts_with("project/c")), "{paths:?}");
+    assert!(!file(&out, "index.html").contains("Brouillon"));
+}

@@ -28,6 +28,7 @@ web-sys = { version = "0.3", features = [
     "HtmlInputElement", "ResizeObserver", "Storage", "NodeList", "WheelEvent",
     "Node", "Text", "Document", "ClipboardEvent", "Selection", "Range", "HtmlDocument",
     "FocusEvent", "InputEvent", "HtmlCanvasElement", "CanvasRenderingContext2d",
+    "HtmlTemplateElement", "DocumentFragment",
     "AddEventListenerOptions", "HtmlTextAreaElement", "HtmlDetailsElement", "File", "FileList", "Blob", "HtmlImageElement",
 ] }
 # Texte riche en Markdown (vue CMS) : Markdown -> HTML dans l'éditeur visuel (même lecteur que
@@ -45,3 +46,8 @@ console_error_panic_hook = "0.1.7"
 opt-level = "z"
 lto = true
 codegen-units = 1
+
+# Construction de développement : numéros de ligne seulement dans les informations de débogage
+# (sinon le fichier .wasm dépasse un gigaoctet) ; les messages de panique restent situés.
+[profile.dev]
+debug = "line-tables-only"

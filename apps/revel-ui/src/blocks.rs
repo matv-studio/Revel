@@ -428,12 +428,41 @@ enum Slot {
     Href,
 }
 
-/// Texte, image ou lien d'un élément d'une liste de collection relié à un champ du contenu
-/// (« Get text from » de Webflow).
+/// Contenu auquel un élément peut se relier : collection, début des expressions de ses champs,
+/// expression de l'adresse de sa page. Dans une liste de collection : l'élément de la liste
+/// (`item.data.client`, `item.url`) ; dans le modèle d'une collection (page de collection de
+/// Webflow) : le contenu affiché (`client`, `page.url`).
+fn binding_context(d: &Site, at: &Target) -> Option<(String, String, String)> {
+    if let Some((q, item)) = enclosing_list(d, at) {
+        return Some((q.collection, format!("{item}.data."), format!("{item}.url")));
+    }
+    let revel_edit::Owner::Layout(lid) = &at.owner else {
+        return None;
+    };
+    d.collections
+        .iter()
+        .find(|c| {
+            c.layout.as_deref().is_some_and(|t| {
+                t == lid || lid.strip_prefix(t).is_some_and(|r| r.starts_with("--"))
+            })
+        })
+        .map(|c| (c.id.clone(), String::new(), "page.url".into()))
+}
+
+/// Texte, image ou lien d'un élément relié à un champ du contenu (« Get text from » de
+/// Webflow) : dans une liste de collection ou dans le modèle des pages d'une collection.
 fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
-    let (q, item) = ed.doc.with_untracked(|d| enclosing_list(d.as_ref()?, at))?;
-    let prefix = format!("{item}.data.");
-    let field_of = |e: &str| e.trim().strip_prefix(&prefix).map(str::to_string);
+    let (collection_id, prefix, url_expr) =
+        ed.doc.with_untracked(|d| binding_context(d.as_ref()?, at))?;
+    let is_field = |f: &str| !f.is_empty() && f.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-');
+    let field_of = |e: &str| {
+        let e = e.trim();
+        // Texte riche (HTML) : affiché tel quel (`| safe`).
+        let e = e.strip_suffix("| safe").map(str::trim_end).unwrap_or(e);
+        e.strip_prefix(prefix.as_str())
+            .filter(|f| is_field(f))
+            .map(str::to_string)
+    };
     let mut slots: Vec<(Slot, Option<String>)> = Vec::new();
     match node {
         Node::Element {
@@ -443,6 +472,8 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
             ..
         } => {
             match children.as_slice() {
+                // Bloc vide (texte riche du contenu à y placer) ou texte écrit.
+                [] if !tag.eq_ignore_ascii_case("a") => slots.push((Slot::Text, None)),
                 [Node::Text { .. }] => slots.push((Slot::Text, None)),
                 [Node::Out { expr }] => slots.push((
                     Slot::Text,
@@ -461,7 +492,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     .map(str::trim)
                     .map(str::to_string);
                 let cur = match inner {
-                    Some(e) if e == format!("{item}.url") => Some("@url".to_string()),
+                    Some(e) if e == url_expr => Some("@url".to_string()),
                     Some(e) => Some(field_of(&e).unwrap_or(e)),
                     None => None,
                 };
@@ -481,8 +512,9 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     }
     let cols = collections(ed);
     let at = StoredValue::new(at.clone());
-    let item = StoredValue::new(item);
-    let collection = StoredValue::new(q.collection.clone());
+    let prefix = StoredValue::new(prefix.clone());
+    let url_expr = StoredValue::new(url_expr);
+    let collection = StoredValue::new(collection_id);
     let fields = move |slot: Slot| -> Vec<(String, String)> {
         cols.with(|cs| {
             cs.iter()
@@ -490,6 +522,8 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                 .map(|c| {
                     c.fields
                         .iter()
+                        // Champ à plusieurs valeurs : pas un texte ni une image seule.
+                        .filter(|f| !f.list)
                         .filter(|f| match slot {
                             Slot::Src => matches!(f.kind.as_deref(), Some("image" | "file") | None),
                             _ => !matches!(
@@ -510,26 +544,47 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     };
     let set = move |slot: Slot, v: String| {
         let at = at.get_value();
-        let item = item.get_value();
-        let expr = |f: &str| format!("{item}.data.{f}");
+        let prefix = prefix.get_value();
+        let rich = cols.with_untracked(|cs| {
+            cs.iter()
+                .find(|c| collection.with_value(|id| c.id == *id))
+                .and_then(|c| c.fields.iter().find(|f| f.name == v))
+                .is_some_and(|f| matches!(f.kind.as_deref(), Some("rich-text" | "rich_text" | "markdown")))
+        });
+        let expr = |f: &str| {
+            if rich && slot == Slot::Text {
+                format!("{prefix}{f} | safe")
+            } else {
+                format!("{prefix}{f}")
+            }
+        };
         let cmd = match slot {
-            Slot::Text => Command::Replace {
-                parent: Parent::of(&at, Branch::Children),
-                index: 0,
-                node: if v.is_empty() {
+            Slot::Text => {
+                let node = if v.is_empty() {
                     Node::Text {
                         text: ui.now("block-bound-text", &[]),
                     }
                 } else {
                     Node::Out { expr: expr(&v) }
-                },
-            },
+                };
+                let empty = ed.doc.with_untracked(|d| {
+                    d.as_ref()
+                        .and_then(|d| revel_edit::address::node(d, &at).ok())
+                        .is_some_and(|n| matches!(n, Node::Element { children, .. } if children.is_empty()))
+                });
+                let parent = Parent::of(&at, Branch::Children);
+                if empty {
+                    Command::Insert { parent, index: 0, node }
+                } else {
+                    Command::Replace { parent, index: 0, node }
+                }
+            }
             Slot::Href => Command::SetAttr {
                 at: at.clone(),
                 name: "href".into(),
                 value: Some(match v.as_str() {
                     "" => "#".into(),
-                    "@url" => format!("{{{{ {item}.url }}}}"),
+                    "@url" => format!("{{{{ {} }}}}", url_expr.get_value()),
                     f => format!("{{{{ {} }}}}", expr(f)),
                 }),
             },

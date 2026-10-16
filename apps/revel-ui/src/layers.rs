@@ -903,6 +903,8 @@ pub fn Layers() -> impl IntoView {
             id: id.clone(),
             tag: match &r.kind {
                 Kind::Element { tag, .. } => tag.clone(),
+                // Image du site : rendue en `<picture>` (réglages des médias : ajustement…).
+                Kind::Image(_) => "img".into(),
                 _ => String::new(),
             },
             label,
@@ -1027,12 +1029,12 @@ pub fn Layers() -> impl IntoView {
             .key(ui.now("key-parent", &[]))
             .disabled(parent_row().is_none()),
             CtxItem::new(ui.now("layers-up", &[]), move || {
-                act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, -1))))
+                ed.step(ui, -1);
             })
             .icon(icons::arrow_up)
             .key(ui.now("key-up", &[])),
             CtxItem::new(ui.now("layers-down", &[]), move || {
-                act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, 1))))
+                ed.step(ui, 1);
             })
             .icon(icons::arrow_down)
             .key(ui.now("key-down", &[])),
@@ -1051,6 +1053,49 @@ pub fn Layers() -> impl IntoView {
             .icon(icons::copy)
             .key(ui.now("key-duplicate", &[]))
             .disabled(!has),
+        ];
+        let mut items = items;
+        // Composants, comme dans le Navigator de Webflow : créer à partir du calque ; ouvrir ou
+        // détacher une utilisation.
+        let at = StoredValue::new(target());
+        let is_use = at.with_value(|t| {
+            t.as_ref().is_some_and(|t| {
+                ed.doc.with_untracked(|d| {
+                    d.as_ref()
+                        .and_then(|d| revel_edit::address::node(d, t).ok())
+                        .is_some_and(|n| matches!(n, revel_model::Node::Use { .. }))
+                })
+            })
+        });
+        if is_use {
+            items.push(
+                CtxItem::new(ui.now("component-edit", &[]), move || {
+                    if let Some(t) = at.get_value() {
+                        crate::components::open_component(ed, &t)
+                    }
+                })
+                .icon(icons::edit)
+                .sep(),
+            );
+            items.push(
+                CtxItem::new(ui.now("component-detach", &[]), move || {
+                    if let Some(t) = at.get_value() {
+                        crate::components::detach(ui, ed, t)
+                    }
+                })
+                .icon(icons::unlink),
+            );
+        } else {
+            items.push(
+                CtxItem::new(ui.now("component-make", &[]), move || {
+                    crate::components::make_from_selection(ui, ed)
+                })
+                .icon(icons::component)
+                .disabled(!has)
+                .sep(),
+            );
+        }
+        items.push(
             CtxItem::new(ui.now("layers-delete", &[]), move || {
                 act(target().map(|at| Command::Remove { at }))
             })
@@ -1059,7 +1104,7 @@ pub fn Layers() -> impl IntoView {
             .disabled(!has)
             .danger()
             .sep(),
-        ];
+        );
         open(ui, e, items);
     };
     view! {
@@ -1157,7 +1202,7 @@ pub fn Layers() -> impl IntoView {
                                         if let Some(id) = r.id.clone() {
                                             ed.toggle_select(Selection {
                                                 id,
-                                                tag: match &r.kind { Kind::Element { tag, .. } => tag.clone(), _ => String::new() },
+                                                tag: match &r.kind { Kind::Element { tag, .. } => tag.clone(), Kind::Image(_) => "img".into(), _ => String::new() },
                                                 label: label(ui, &r.kind),
                                             });
                                         }
@@ -1249,10 +1294,10 @@ pub fn Layers() -> impl IntoView {
                     on:click=move |_| { if let Some(p) = parent_row() { select_row(&p) } }>{icons::parent()}</button>
                 <button class="icon-btn icon-btn--small" title=move || tip("layers-up", "key-up") aria-label=ui.t("layers-up")
                     prop:disabled=move || selected_row().is_none()
-                    on:click=move |_| act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, -1))))>{icons::arrow_up()}</button>
+                    on:click=move |_| { ed.step(ui, -1); }>{icons::arrow_up()}</button>
                 <button class="icon-btn icon-btn--small" title=move || tip("layers-down", "key-down") aria-label=ui.t("layers-down")
                     prop:disabled=move || selected_row().is_none()
-                    on:click=move |_| act(selected_row().and_then(|r| all.with_untracked(|a| step_command(a, &r, 1))))>{icons::arrow_down()}</button>
+                    on:click=move |_| { ed.step(ui, 1); }>{icons::arrow_down()}</button>
                 <button class="icon-btn icon-btn--small" title=move || tip("layers-wrap", "key-wrap") aria-label=ui.t("layers-wrap")
                     prop:disabled=move || target().is_none()
                     on:click=move |_| { ed.wrap_selection(ui); }>{icons::wrap()}</button>

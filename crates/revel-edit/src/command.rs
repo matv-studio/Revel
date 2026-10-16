@@ -233,6 +233,15 @@ pub enum Command {
     SetPageDraft { id: String, draft: bool },
     /// Nom d'une page dans Revel (`None` : titre ou adresse).
     SetPageName { id: String, name: Option<String> },
+    /// Pages des contenus d'une collection (comme la page de collection de Webflow) : adresse de
+    /// chaque contenu (`/projets/{{ slug }}/`) et gabarit modèle ; `None` : pas de page.
+    SetCollectionPages {
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        layout: Option<String>,
+    },
     /// Redirections du site remplacées.
     SetRedirects {
         redirects: Vec<revel_model::Redirect>,
@@ -494,6 +503,28 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
                 .map(crate::style::checked_media)
                 .transpose()?;
             let items = crate::style::items(site)?;
+            // Règle déjà présente (deux réglages envoyés avant que le premier ne l'ait créée) :
+            // ses valeurs sont réglées, pas de seconde règle identique.
+            let existing = items.iter().rev().find_map(|i| match i {
+                StyleItem::Rule(r) if r.selector == selector && r.media == media => r.id.clone(),
+                _ => None,
+            });
+            if let Some(rule) = existing {
+                return expand(
+                    site,
+                    &Command::Batch {
+                        commands: decls
+                            .iter()
+                            .map(|d| Command::SetDecl {
+                                rule: rule.clone(),
+                                prop: d.prop.clone(),
+                                value: Some(d.value.clone()),
+                                important: d.important,
+                            })
+                            .collect(),
+                    },
+                );
+            }
             let index = revel_style::insertion_index(items, &selector, media.as_deref());
             Command::InsertStyle {
                 index,
@@ -1066,6 +1097,28 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             Ok(Command::SetPageName {
                 id: id.clone(),
                 name: std::mem::replace(&mut p.name, name),
+            })
+        }
+        Command::SetCollectionPages { id, path, layout } => {
+            if let Some(p) = path
+                && (!p.starts_with('/') || !p.contains("{{"))
+            {
+                return Err(EditError::InvalidPath(p.clone()));
+            }
+            if let Some(l) = layout
+                && !site.layouts.iter().any(|x| &x.id == l)
+            {
+                return Err(EditError::NotFound(format!("gabarit {l}")));
+            }
+            let c = site
+                .collections
+                .iter_mut()
+                .find(|c| &c.id == id)
+                .ok_or_else(|| EditError::NotFound(format!("collection {id}")))?;
+            Ok(Command::SetCollectionPages {
+                id: id.clone(),
+                path: std::mem::replace(&mut c.path, path.clone()),
+                layout: std::mem::replace(&mut c.layout, layout.clone()),
             })
         }
         Command::SetRedirects { redirects } => {

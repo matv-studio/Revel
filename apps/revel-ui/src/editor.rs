@@ -184,6 +184,19 @@ enum FromCanvas {
         #[serde(default)]
         items: Vec<TextItem>,
     },
+    /// Texte de la page mis en forme sur place (gras, italique, lien, span) : HTML à écrire en
+    /// texte et éléments.
+    TextHtml {
+        slot: revel_edit::canvas::Slot,
+        html: String,
+    },
+    /// Élément de texte mis en forme modifié d'un bloc (D-72) : `id` de l'élément, `slot` d'un
+    /// de ses textes (propriétaire), contenu en HTML (éléments repérés par `data-rv`).
+    RichText {
+        slot: revel_edit::canvas::Slot,
+        id: String,
+        html: String,
+    },
     /// Canevas des composants : hauteur du composant dans ce cadre.
     Stage {
         h: f64,
@@ -218,6 +231,9 @@ pub struct TextItem {
     pub text: String,
     #[serde(default)]
     pub rich: bool,
+    /// Texte mis en forme modifié d'un bloc : identifiant de l'élément (`text` : son HTML).
+    #[serde(default)]
+    pub host: Option<String>,
 }
 
 /// Emplacement de dépôt : avant ou après l'élément `at`, ou dedans (à la fin).
@@ -734,16 +750,18 @@ impl Ed {
                 self.state.set(Some(st));
                 return;
             }
-            // Élément ajouté (copie, enveloppe, insertion) : sélectionné.
-            if let Some(n) = inserted(cmd)
+            // Élément ajouté (copie, enveloppe, insertion) : sélectionné. Mise en forme d'un
+            // texte (le texte remplacé par des morceaux, gras, retour à la ligne) : sélection
+            // gardée.
+            let text_format = matches!(cmd, Command::Batch { commands }
+                if matches!(commands.first(), Some(Command::Replace { .. })));
+            if !text_format
+                && let Some(n) = inserted(cmd)
                 && let Some(id) = revel_model::ids::node_id(n)
             {
                 self.selected.set(Some(Selection {
                     id: id.to_string(),
-                    tag: match n {
-                        revel_model::Node::Element { tag, .. } => tag.clone(),
-                        _ => String::new(),
-                    },
+                    tag: node_tag(n),
                     label: node_label(ui, n),
                 }));
             }
@@ -995,7 +1013,7 @@ impl Ed {
     }
 
     /// Nœud sélectionné (copie).
-    fn selected_node(self) -> Option<(revel_edit::Target, revel_model::Node)> {
+    pub(crate) fn selected_node(self) -> Option<(revel_edit::Target, revel_model::Node)> {
         let at = self.selected_target()?;
         let n = self
             .doc
@@ -1323,11 +1341,18 @@ impl Ed {
                 .find(|b| b.id == bp)
                 .and_then(|b| b.media())
         });
-        let cands = crate::styles::candidates(&crate::styles::classes_of(&node));
+        let classes = crate::styles::classes_of(&node);
+        let cands = crate::styles::candidates(&classes);
         let cur = self.style_sel.get_untracked();
-        let (sel, state) = if cands.contains(&cur) {
+        // Choix « toutes les balises » (élément sans classe) gardé.
+        let tag = classes
+            .is_empty()
+            .then(|| crate::styles::tag_selector(&node))
+            .flatten()
+            .filter(|(t, _)| *t == cur);
+        let (sel, state) = if cands.contains(&cur) || tag.is_some() {
             (cur, self.style_state.get_untracked())
-        } else if let Some(c) = cands.first() {
+        } else if let Some(c) = cands.last() {
             (c.clone(), String::new())
         } else {
             // Élément sans classe : classe créée d'après sa nature, réglée avec la taille.
@@ -1355,15 +1380,16 @@ impl Ed {
                     })
                 })
                 .collect();
+            // État choisi (survol…) gardé : la règle le porte.
+            let state = self.style_state.get_untracked();
             self.style_sel.set(format!(".{name}"));
-            self.style_state.set(String::new());
             self.apply(
                 ui,
                 Command::Batch {
                     commands: vec![
                         set_class,
                         Command::AddRule {
-                            selector: format!(".{name}"),
+                            selector: format!(".{name}{state}"),
                             media,
                             decls,
                         },
@@ -1424,7 +1450,25 @@ impl Ed {
             let row = rows
                 .iter()
                 .find(|r| r.id.as_deref() == Some(sel.id.as_str()))?;
-            crate::layers::step_command(&rows, row, dir)
+            crate::layers::step_command(&rows, row, dir).or_else(|| {
+                // Pas d'autre calque de ce côté, mais un texte (texte lié au contenu, par
+                // exemple) : l'élément passe de l'autre côté du texte.
+                let at = self.selected_target()?;
+                let (parent, idx) = revel_edit::address::locate(d, &at).ok()?;
+                let len = revel_edit::address::list(d, &parent).ok()?.len();
+                let index = if dir < 0 {
+                    idx.checked_sub(1)?
+                } else if idx + 1 < len {
+                    idx + 1
+                } else {
+                    return None;
+                };
+                Some(Command::Move {
+                    at,
+                    to: parent,
+                    index,
+                })
+            })
         });
         match cmd {
             Some(c) => {
@@ -1971,6 +2015,180 @@ impl Ed {
     /// Commande d'un texte modifié dans le canevas : texte de la page (`SetText`, sans la
     /// typographie de la page si la source ne l'utilisait pas) ou valeur liée à sa source
     /// (`SetBound`, même traitement par le cœur).
+    /// Texte de la page mis en forme sur place : le nœud texte remplacé par du texte et des
+    /// éléments (`strong`, `em`, `u`, `a`, `span`, `br`) ; dans une autre langue, texte seul.
+    pub fn text_html_command(self, slot: &revel_edit::canvas::Slot, html: &str) -> Option<Command> {
+        use revel_edit::canvas::Slot;
+        let tpl: web_sys::HtmlTemplateElement =
+            wasm_bindgen::JsCast::dyn_into(document().create_element("template").ok()?).ok()?;
+        tpl.set_inner_html(html);
+        let content = tpl.content();
+        if self.lang_untracked().is_some() {
+            let text = content.text_content().unwrap_or_default();
+            return self.text_command(slot, text);
+        }
+        let Slot::Text { parent, index } = slot else {
+            return None;
+        };
+        self.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let old = match revel_edit::address::list(d, parent).ok()?.get(*index)? {
+                revel_model::Node::Text { text } => text.clone(),
+                _ => return None,
+            };
+            let typo = d.settings.typography.as_deref() == Some("fr");
+            let mut taken = d.node_ids();
+            fn convert(
+                n: &web_sys::Node,
+                old: &str,
+                typo: bool,
+                taken: &mut std::collections::HashSet<String>,
+            ) -> Option<revel_model::Node> {
+                use wasm_bindgen::JsCast;
+                if n.node_type() == web_sys::Node::TEXT_NODE {
+                    let t = n.text_content().unwrap_or_default();
+                    let t = if typo {
+                        revel_edit::canvas::untypo(&t, old)
+                    } else {
+                        t
+                    };
+                    return (!t.is_empty()).then_some(revel_model::Node::Text { text: t });
+                }
+                let el = n.dyn_ref::<web_sys::Element>()?;
+                let tag = el.tag_name().to_ascii_lowercase();
+                if !matches!(tag.as_str(), "strong" | "em" | "u" | "a" | "span" | "br") {
+                    return None;
+                }
+                let attrs = ["href", "target", "class"]
+                    .iter()
+                    .filter_map(|a| {
+                        el.get_attribute(a).map(|v| revel_model::Attr {
+                            name: a.to_string(),
+                            value: Some(v),
+                            when: None,
+                        })
+                    })
+                    .collect();
+                let kids = el.child_nodes();
+                let children = (0..kids.length())
+                    .filter_map(|i| convert(&kids.item(i)?, old, typo, taken))
+                    .collect();
+                let id = revel_model::ids::fresh(taken);
+                taken.insert(id.clone());
+                Some(revel_model::Node::Element {
+                    id: Some(id),
+                    tag,
+                    attrs,
+                    children,
+                })
+            }
+            let kids = content.child_nodes();
+            let nodes: Vec<revel_model::Node> = (0..kids.length())
+                .filter_map(|i| convert(&kids.item(i)?, &old, typo, &mut taken))
+                .collect();
+            let mut it = nodes.into_iter();
+            let first = it.next()?;
+            let mut commands = vec![Command::Replace {
+                parent: parent.clone(),
+                index: *index,
+                node: first,
+            }];
+            for (i, node) in it.enumerate() {
+                commands.push(Command::Insert {
+                    parent: parent.clone(),
+                    index: index + 1 + i,
+                    node,
+                });
+            }
+            Some(Command::Batch { commands })
+        })
+    }
+
+    /// Élément de texte mis en forme modifié d'un bloc (D-72), sur la page ou dans le panneau :
+    /// contenu remplacé, éléments existants repris par leur repère `data-rv`. Renvoie aussi le
+    /// span ajouté par la barre de mise en forme (un seul), à sélectionner. `None` : rien de
+    /// changé.
+    pub fn rich_text_command(
+        self,
+        slot: &revel_edit::canvas::Slot,
+        id: &str,
+        html: &str,
+    ) -> Option<(Command, Option<String>)> {
+        use revel_edit::canvas::Slot;
+        use revel_edit::inline::Piece;
+        use wasm_bindgen::JsCast;
+        let Slot::Text { parent, .. } = slot else {
+            return None;
+        };
+        let tpl: web_sys::HtmlTemplateElement =
+            document().create_element("template").ok()?.dyn_into().ok()?;
+        tpl.set_inner_html(html);
+        fn pieces(n: &web_sys::Node) -> Vec<Piece> {
+            let kids = n.child_nodes();
+            (0..kids.length())
+                .filter_map(|i| kids.item(i))
+                .filter_map(|c| {
+                    if c.node_type() == web_sys::Node::TEXT_NODE {
+                        return Some(Piece::Text {
+                            text: c.text_content().unwrap_or_default(),
+                        });
+                    }
+                    let el = c.dyn_ref::<web_sys::Element>()?;
+                    Some(Piece::Element {
+                        tag: el.tag_name().to_ascii_lowercase(),
+                        id: el.get_attribute("data-rv"),
+                        class: el.get_attribute("class"),
+                        href: el.get_attribute("href"),
+                        target: el.get_attribute("target"),
+                        children: pieces(&c),
+                    })
+                })
+                .collect()
+        }
+        let pieces = pieces(&tpl.content());
+        let at = revel_edit::Target {
+            owner: parent.owner.clone(),
+            node: id.to_string(),
+        };
+        self.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let typo = d.settings.typography.as_deref() == Some("fr");
+            let cmd = revel_edit::inline::set_inline(d, &at, &pieces, typo).ok()??;
+            // Span nouveau : identifiant absent du document.
+            let taken = d.node_ids();
+            let mut spans = Vec::new();
+            if let Command::Replace { node, .. } = &cmd {
+                revel_model::ids::walk(std::slice::from_ref(node), &mut |n| {
+                    if let revel_model::Node::Element {
+                        id: Some(i), tag, ..
+                    } = n
+                        && tag == "span"
+                        && !taken.contains(i)
+                    {
+                        spans.push(i.clone());
+                    }
+                });
+            }
+            let span = (spans.len() == 1).then(|| spans.remove(0));
+            Some((cmd, span))
+        })
+    }
+
+    /// Éléments de texte mis en forme modifiables d'un bloc, envoyés au canevas (aucun dans une
+    /// autre langue : les textes s'y traduisent un par un).
+    pub fn post_rich_hosts(self) {
+        let ids = if self.lang_untracked().is_some() {
+            Vec::new()
+        } else {
+            self.doc.with_untracked(|d| {
+                d.as_ref()
+                    .map(revel_edit::inline::rich_hosts)
+                    .unwrap_or_default()
+            })
+        };
+        self.post(serde_json::json!({ "type": "rich", "ids": ids }));
+    }
+
     pub fn text_command(self, slot: &revel_edit::canvas::Slot, text: String) -> Option<Command> {
         use revel_edit::canvas::Slot;
         use revel_edit::locale::TextPlace;
@@ -2179,8 +2397,19 @@ fn writes_entries(c: &Command) -> bool {
         | Command::SetPagePath { .. }
         | Command::SetPageDraft { .. }
         | Command::SetPageName { .. }
-        | Command::SetPageProp { .. } => true,
+        | Command::SetPageProp { .. }
+        | Command::SetCollectionPages { .. } => true,
         _ => false,
+    }
+}
+
+/// Balise d'un nœud pour la sélection : celle de l'élément, `img` pour une image du site
+/// (réglages propres aux médias : ajustement, proportions).
+pub(crate) fn node_tag(n: &revel_model::Node) -> String {
+    match n {
+        revel_model::Node::Element { tag, .. } => tag.clone(),
+        revel_model::Node::Image(_) => "img".into(),
+        _ => String::new(),
     }
 }
 
@@ -2519,7 +2748,9 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 FromCanvas::Select { id: Some(_), .. }
                 | FromCanvas::Toggle { .. }
                 | FromCanvas::Context { .. }
-                | FromCanvas::Text { .. } => ed.activate_key(&from_bp),
+                | FromCanvas::Text { .. }
+                | FromCanvas::TextHtml { .. }
+                | FromCanvas::RichText { .. } => ed.activate_key(&from_bp),
                 FromCanvas::Ready { .. }
                 | FromCanvas::Stage { .. }
                 | FromCanvas::OpenComponent { .. }
@@ -2540,6 +2771,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                     serde_json::json!({ "type": "active", "on": active }),
                 );
                 post_to(&from_frame, crate::names::canvas_labels(ui));
+                ed.post_rich_hosts();
                 if active {
                     ed.vars.set(vars);
                     ed.live_scroll.set((0.0, 0.0));
@@ -2654,6 +2886,26 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                     ed.apply(ui, cmd, false);
                 }
             }
+            FromCanvas::TextHtml { slot, html } => {
+                if let Some(cmd) = ed.text_html_command(&slot, &html) {
+                    ed.apply(ui, cmd, false);
+                }
+            }
+            FromCanvas::RichText { slot, id, html } => match ed.rich_text_command(&slot, &id, &html) {
+                Some((cmd, span)) => {
+                    // Span créé par la barre de mise en forme : sélectionné, prêt à styler.
+                    if let Some(span) = span {
+                        ed.selected.set(Some(Selection {
+                            id: span,
+                            tag: "span".into(),
+                            label: crate::names::type_name(ui, "span"),
+                        }));
+                    }
+                    ed.apply(ui, cmd, false)
+                }
+                // Rien de changé (ou contenu refusé) : la page reprend son texte.
+                None => ed.load.update(|n| *n += 1),
+            },
             FromCanvas::Texts { id, items } => ed.texts.set((id, items)),
             FromCanvas::SpacingFocus { prop } => {
                 dock.layout.update(|l| l.open(crate::dock::PanelId::Styles));
@@ -2695,13 +2947,17 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         ) {
             return;
         }
-        let in_field = document()
-            .active_element()
-            .map(|el| {
-                matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
-                    || el.has_attribute("contenteditable")
-            })
-            .unwrap_or(false);
+        let is_field = |el: &web_sys::Element| {
+            matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
+                || el.has_attribute("contenteditable")
+        };
+        // Touche partie d'un champ, même s'il vient de disparaître (champ d'espacement validé
+        // par Entrée) : pas un raccourci de l'éditeur (Entrée sélectionnerait l'enfant).
+        let in_field = document().active_element().is_some_and(|el| is_field(&el))
+            || e
+                .target()
+                .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok())
+                .is_some_and(|el| is_field(&el));
         // Un menu ouvert (panneau de styles) se ferme d'abord avec Échap.
         let menu_open = document().query_selector(".pop").ok().flatten().is_some();
         if in_field || (menu_open && e.key() == "Escape") {

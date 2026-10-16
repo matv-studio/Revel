@@ -256,12 +256,16 @@
 .insert-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
 .insert-item {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  min-width: 0; height: 64px; padding: var(--s-2) 4px;
+  min-width: 0; min-height: 64px; padding: var(--s-2) 4px;
   border: var(--border) solid var(--line); border-radius: var(--radius-md);
   background: var(--surface-raised); color: var(--text);
   font-size: var(--text-xs); cursor: grab; touch-action: none; user-select: none;
 }
-.insert-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Libellé sur deux lignes au plus (« Liste de collection », « Animation Lottie ») plutôt que coupé. */
+.insert-item span {
+  max-width: 100%; text-align: center; line-height: 1.25; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
 .insert-item:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--line-strong); }
 .insert-item:active:not(:disabled) { cursor: grabbing; }
 .insert-item svg.icon { color: var(--text-muted); width: 18px; height: 18px; }

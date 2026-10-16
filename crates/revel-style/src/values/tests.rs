@@ -272,6 +272,19 @@ fn raccourcis_modifies_sur_place() {
         edits(&d, "text-decoration-line", Some("line-through")).unwrap(),
         vec![e("text-decoration", Some("line-through dotted"))]
     );
+    // Écart : lignes et colonnes réglées à part dans `gap`.
+    let d = decls(&[("gap", "24px")]);
+    assert_eq!(read(&d, "column-gap").unwrap().value.as_deref(), Some("24px"));
+    assert_eq!(
+        edits(&d, "column-gap", Some("48px")).unwrap(),
+        vec![e("gap", Some("24px 48px"))]
+    );
+    let d = decls(&[("gap", "24px 48px")]);
+    assert_eq!(read(&d, "row-gap").unwrap().value.as_deref(), Some("24px"));
+    assert_eq!(
+        edits(&d, "row-gap", Some("48px")).unwrap(),
+        vec![e("gap", Some("48px"))]
+    );
     // Variable : propriété écrite après le raccourci (retirée d'abord si elle le précède).
     let d = decls(&[("margin-top", "4px"), ("margin", "var(--m)")]);
     assert_eq!(

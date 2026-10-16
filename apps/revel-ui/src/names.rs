@@ -166,7 +166,19 @@ pub fn canvas_labels(ui: Ui) -> serde_json::Value {
             ui.now("el-heading", &[("level", level.to_string())]).into(),
         );
     }
-    serde_json::json!({ "type": "labels", "tags": map, "other": ui.now("el-other", &[]) })
+    serde_json::json!({
+        "type": "labels",
+        "tags": map,
+        "other": ui.now("el-other", &[]),
+        // Barre de mise en forme du texte (info-bulles).
+        "format": {
+            "bold": ui.now("format-bold", &[]),
+            "italic": ui.now("format-italic", &[]),
+            "link": ui.now("format-link", &[]),
+            "span": ui.now("format-span", &[]),
+            "url": ui.now("format-url", &[]),
+        },
+    })
 }
 
 #[cfg(test)]

@@ -16,7 +16,14 @@ const WATCHED: &[&str] = &[
     "align-items",
     "justify-items",
     "gap",
+    "row-gap",
+    "column-gap",
     "grid-template-columns",
+    "grid-column",
+    "grid-row",
+    "justify-self",
+    "align-self",
+    "order",
     "flex",
     "margin-top",
     "margin-right",
@@ -79,6 +86,13 @@ const WATCHED: &[&str] = &[
     "opacity",
     "box-shadow",
     "cursor",
+    "mix-blend-mode",
+    "filter",
+    "backdrop-filter",
+    "transform",
+    "transition",
+    "white-space",
+    "text-wrap",
 ];
 
 /// Propriétés suivies par le canevas.
@@ -449,6 +463,14 @@ impl Sx {
             return;
         }
         LAST_SET.with(|l| *l.borrow_mut() = Some((key, now)));
+        // Élément sans classe (ni balise choisie) : classe créée d'après sa nature, comme les
+        // poignées du canevas.
+        if self.selector.get_untracked().is_empty() {
+            if let Some((at, node)) = self.ed.selected_node() {
+                self.ed.set_props(self.ui, at, node, list);
+            }
+            return;
+        }
         let cmd = style_command(
             self.rule.get_untracked(),
             self.full_selector_now(),

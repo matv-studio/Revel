@@ -119,6 +119,19 @@ fn site_colors(sx: Sx) -> (Vec<(String, Rgba)>, Vec<Rgba>) {
     })
 }
 
+/// Couleur effective d'une valeur : variable du site résolue (`var(--accent)`), sinon lue.
+pub(super) fn resolve_color(sx: Sx, v: &str) -> Option<Rgba> {
+    if is_var(v) {
+        let name = var_name(v).to_string();
+        return site_colors(sx)
+            .0
+            .into_iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, c)| c);
+    }
+    Rgba::parse(v)
+}
+
 /// Zone glissée du sélecteur.
 #[derive(Clone, Copy, PartialEq)]
 enum Area {
@@ -176,11 +189,18 @@ fn Picker(
 
     let update = move |a: Area, (x, y): (f64, f64)| {
         hsva.update(|c| match a {
-            Area::Plane => {
-                c.s = x;
-                c.v = 1.0 - y;
+            Area::Plane | Area::Hue => {
+                if a == Area::Plane {
+                    c.s = x;
+                    c.v = 1.0 - y;
+                } else {
+                    c.h = x * 360.0;
+                }
+                // Couleur partie de « transparente » : rendue visible dès qu'on la choisit.
+                if c.a == 0.0 {
+                    c.a = 1.0;
+                }
             }
-            Area::Hue => c.h = x * 360.0,
             Area::Alpha => c.a = (x * 100.0).round() / 100.0,
         });
         on_preview.run(rgba().to_css());
@@ -365,8 +385,17 @@ fn Picker(
                     Model::Hex => view! {
                         <Channel wide=true label="#" value=Signal::derive(move || rgba().hex6()[1..].to_string())
                             on=Callback::new(move |v: String| {
-                                if let Some(mut c) = Rgba::parse(&format!("#{}", v.trim().trim_start_matches('#'))) {
-                                    if c.a >= 1.0 { c.a = hsva.get_untracked().a; }
+                                // Valeur affichée renvoyée telle quelle (sortie du champ après
+                                // Entrée) : rien de changé.
+                                let typed = v.trim().trim_start_matches('#');
+                                if typed.eq_ignore_ascii_case(&rgba().hex6()[1..]) && hsva.get_untracked().a < 1.0 {
+                                    return;
+                                }
+                                if let Some(mut c) = Rgba::parse(&format!("#{typed}")) {
+                                    // Hexadécimal sans opacité : celle en cours, sauf une couleur
+                                    // transparente (la couleur écrite doit se voir).
+                                    let a = hsva.get_untracked().a;
+                                    if c.a >= 1.0 && a > 0.0 { c.a = a; }
                                     set_rgba(c);
                                 }
                             })/>
@@ -482,6 +511,8 @@ pub fn ColorInput(
             sx.clear_preview();
         }
     };
+    // Créé ici et non dans le menu : « + » (couleur du site) l'appelle après la fermeture du menu.
+    let picker_commit = Callback::new(commit);
     view! {
         <div class="color-input" class:is-here=move || value.get().is_some()>
             <button class="color-swatch pop-trigger" style=move || swatch_style(color())
@@ -507,7 +538,7 @@ pub fn ColorInput(
             <Pop sx id wide=true>
                 {move || {
                     let start = untrack(color).unwrap_or(Rgba::BLACK);
-                    view! { <Picker sx start on_preview on_commit=Callback::new(commit) with_contrast/> }
+                    view! { <Picker sx start on_preview on_commit=picker_commit with_contrast/> }
                 }}
             </Pop>
         </div>

@@ -262,6 +262,32 @@ fn net(e: ureq::Error) -> CoreError {
     CoreError::Font(e.to_string())
 }
 
+/// Jeu de caractères d'un fichier découpé à la manière de Google Fonts et Fontsource
+/// (`montserrat-latin-ext-wght-normal.woff2`) : plage de caractères qu'il couvre, pour que le
+/// navigateur ne charge que les fichiers utiles et que les jeux ne se masquent pas entre eux.
+fn subset_range(name: &str) -> Option<&'static str> {
+    let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(name);
+    let words: Vec<String> = stem
+        .split(['-', '_', '.', ' '])
+        .map(str::to_ascii_lowercase)
+        .collect();
+    let has = |a: &str, b: Option<&str>| {
+        words.windows(2).any(|w| w[0] == a && Some(w[1].as_str()) == b)
+            || (b.is_none() && words.iter().any(|w| w == a))
+    };
+    // Plages de Fontsource (identiques à celles de Google Fonts).
+    let table: [(&str, Option<&str>, &str); 7] = [
+        ("latin", Some("ext"), "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"),
+        ("cyrillic", Some("ext"), "U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F"),
+        ("greek", Some("ext"), "U+1F00-1FFF"),
+        ("latin", None, "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"),
+        ("cyrillic", None, "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116"),
+        ("greek", None, "U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF"),
+        ("vietnamese", None, "U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB"),
+    ];
+    table.iter().find(|(a, b, _)| has(a, *b)).map(|(_, _, r)| *r)
+}
+
 /// Jeux de caractères utiles aux langues du site.
 fn subsets(site: &Site) -> Vec<&'static str> {
     let mut out = vec!["latin", "latin-ext"];
@@ -561,7 +587,14 @@ impl Core {
                 f.weight.trim()
             };
             let web = format!("{prefix}/fonts/{slug}/{name}");
-            items.push(face_css(family, weight, f.italic, &web, format, None));
+            items.push(face_css(
+                family,
+                weight,
+                f.italic,
+                &web,
+                format,
+                subset_range(&f.name),
+            ));
         }
         self.apply_fonts(path, &site, moves, items)
     }
@@ -722,6 +755,15 @@ mod tests {
             ("latin", "700", "https://x/b.woff2")
         );
         assert_eq!(b[1].4.as_deref(), Some("U+0000-00FF"));
+        assert!(subset_range("montserrat-latin-ext-wght-normal.woff2")
+            .unwrap()
+            .starts_with("U+0100-02BA"));
+        assert!(subset_range("montserrat-latin-wght-italic.woff2")
+            .unwrap()
+            .starts_with("U+0000-00FF"));
+        assert_eq!(subset_range("inter_greek-ext.woff2"), Some("U+1F00-1FFF"));
+        assert_eq!(subset_range("Inter-Bold.woff2"), None);
+        assert_eq!(subset_range("Latinum-Bold.woff2"), None);
         assert_eq!(font_format("a.woff2", b"wOF2xxxx"), Some("woff2"));
         assert_eq!(font_format("a.woff2", b"wOFFxxxx"), None);
         assert_eq!(font_format("a.otf", b"OTTOxxxx"), Some("opentype"));

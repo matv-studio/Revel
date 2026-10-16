@@ -957,6 +957,31 @@ fn schema_modifie_dans_pages_cms_et_annule() {
     assert!(!site.join("contenus/offres/stage.md").exists());
     c.edit_redo(&site).unwrap();
     assert_eq!(config(), with);
+    // Dossier qui a déjà des contenus (site existant repris) : leurs champs décrits en plus.
+    std::fs::create_dir_all(site.join("contenus/clients")).unwrap();
+    std::fs::write(
+        site.join("contenus/clients/volvo.md"),
+        "---\ntitle: Volvo\nslug: volvo\nlogo: /media/volvo.svg\nordre: 3\n---\n",
+    )
+    .unwrap();
+    c.edit_apply(
+        &site,
+        Command::CreateCmsCollection {
+            id: "clients".into(),
+            label: "Clients".into(),
+            folder: "contenus/clients".into(),
+            fields: fields.clone(),
+        },
+        false,
+    )
+    .unwrap();
+    let cl = c.cms(&site).unwrap().into_iter().find(|x| x.id == "clients").unwrap();
+    let names: Vec<&str> = cl.fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, vec!["title", "slug", "logo", "ordre"]);
+    assert_eq!(cl.fields[2].kind.as_deref(), Some("image"));
+    assert_eq!(cl.fields[0].label.as_deref(), Some("Titre"));
+    c.edit_undo(&site).unwrap();
+    assert_eq!(config(), with);
     // Noms refusés.
     for (id, folder) in [
         ("x y", "contenus/xy"),

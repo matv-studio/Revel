@@ -497,6 +497,28 @@ fn create_collection(
     {
         return Err(Bound(format!("dossier déjà utilisé : {folder}")));
     }
+    // Dossier qui contient déjà des contenus (site existant) : leurs autres champs décrits
+    // d'après leurs valeurs, après ceux demandés.
+    let mut fields = fields.clone();
+    let data: Vec<serde_json::Value> = project
+        .entries_of(&folder)
+        .map(|l| l.into_iter().map(|e| e.data).collect())
+        .unwrap_or_default();
+    if !data.is_empty()
+        && let Some(list) = fields.as_array_mut()
+    {
+        let refs: Vec<&serde_json::Value> = data.iter().collect();
+        for f in crate::pagescms::infer_fields(&refs, 0) {
+            let name = f.get("name").and_then(|v| v.as_str());
+            if !list
+                .iter()
+                .any(|x| x.get("name").and_then(|v| v.as_str()) == name)
+            {
+                list.push(f);
+            }
+        }
+    }
+    let fields = &fields;
     let old = pagesyml::read(&project.dir).map_err(Bound)?;
     let mut text = old.clone().unwrap_or_default();
     let created = text.trim().is_empty();

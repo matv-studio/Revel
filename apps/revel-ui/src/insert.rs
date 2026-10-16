@@ -53,10 +53,20 @@ pub fn insertion_point(ed: Ed) -> Option<(Parent, usize)> {
                 Some(into_page(d, page.as_deref(), p, i))
             }
             None => {
-                // Sans sélection : à la fin du corps de la page affichée (page fixe).
-                let id = page?;
-                let body = d.pages.iter().find(|p| p.id == id)?.body.len();
-                Some((Parent::root(Owner::Page(id)), body))
+                // Sans sélection : à la fin du corps de la page affichée (page fixe), ou du
+                // modèle d'une page de contenu (page de collection).
+                if let Some(id) = page {
+                    let body = d.pages.iter().find(|p| p.id == id)?.body.len();
+                    return Some((Parent::root(Owner::Page(id)), body));
+                }
+                let url = ed.page.get_untracked();
+                let layout = ed.pages.with_untracked(|ps| {
+                    ps.iter()
+                        .find(|p| p.url == url && p.collection.is_some())
+                        .and_then(|p| p.layout.clone())
+                })?;
+                let body = d.layout(&layout)?.body.len();
+                Some((Parent::root(Owner::Layout(layout)), body))
             }
         }
     })

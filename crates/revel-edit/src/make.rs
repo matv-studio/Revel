@@ -287,10 +287,12 @@ impl Preset {
                 vec![attr("href", "#"), attr("class", "button")],
                 vec![txt(text)],
             ),
+            // Texte alternatif vide (image décorative) tant qu'il n'est pas écrit : celui du
+            // média choisi le remplace (`text` : ignoré, un mot générique n'aide personne).
             Preset::Image => Node::Image(ImageNode {
                 id: id(),
                 src: "\"\"".into(),
-                alt: Some(format!("\"{}\"", text.replace('"', "'"))),
+                alt: Some("\"\"".into()),
                 ..Default::default()
             }),
             Preset::List => {
@@ -511,6 +513,58 @@ pub fn own_layout_id(site: &Site, template: &str, file: &str) -> String {
         n += 1;
     }
     id
+}
+
+/// Modèle des pages d'une collection (page de collection de Webflow) : gabarit enfant du
+/// gabarit habituel des pages, avec le titre du contenu (`title_field`) et son texte.
+/// Identifiant libre `modele-<collection>`.
+pub fn collection_template(site: &Site, collection: &str, title_field: &str) -> revel_model::Layout {
+    let base = format!("modele-{}", collection.replace('_', "-"));
+    let mut id = base.clone();
+    let mut n = 2;
+    while site.layouts.iter().any(|l| l.id == id) {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    let mut taken = site.node_ids();
+    let mut fresh_id = || {
+        let i = fresh(&taken);
+        taken.insert(i.clone());
+        Some(i)
+    };
+    let class = |v: &str| Attr {
+        name: "class".into(),
+        value: Some(v.into()),
+        when: None,
+    };
+    let (s, h, c) = (fresh_id(), fresh_id(), fresh_id());
+    let body = vec![Node::Element {
+        id: s,
+        tag: "section".into(),
+        attrs: vec![class("section")],
+        children: vec![
+            Node::Element {
+                id: h,
+                tag: "h1".into(),
+                attrs: vec![],
+                children: vec![Node::Out {
+                    expr: title_field.into(),
+                }],
+            },
+            Node::Element {
+                id: c,
+                tag: "div".into(),
+                attrs: vec![class("contenu")],
+                children: vec![Node::Slot],
+            },
+        ],
+    }];
+    revel_model::Layout {
+        id,
+        parent: usual_layout(site).or_else(|| site.layouts.first().map(|l| l.id.clone())),
+        props: Default::default(),
+        body,
+    }
 }
 
 /// Copie du gabarit `from` sous l'identifiant `id` (même parent, mêmes variables), avec de

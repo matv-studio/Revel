@@ -426,6 +426,12 @@ Paramètres du site : six rubriques au lieu de dix (Général avec référenceme
 export, Navigation avec redirections, Polices, Code personnalisé, Versions), parties côte à côte sur un grand
 écran.
 
+**D-72 — 16/10/2026 — prise.** **Mise en forme dans le texte.** Pendant la modification d'un texte sur le
+canevas, une barre apparaît au-dessus de la sélection : gras, italique, lien, span (texte à styler à part), comme
+la barre de texte de Webflow. Ctrl+B, Ctrl+I et Ctrl+U font de même. La mise en forme devient des éléments
+`strong`, `em`, `u`, `a` et `span` dans le document (une seule annulation pour la saisie) ; tout autre balise
+collée est réduite à son texte.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

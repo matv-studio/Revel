@@ -909,6 +909,48 @@ pub fn PageTree(
         }
     });
     let cols = Memo::new(move |_| collections(ed));
+    // Collections sans page par contenu : proposées en bas de l'arbre, avec la création de
+    // leurs pages (modèle commun, comme la page de collection de Webflow).
+    let pageless = Memo::new(move |_| {
+        ed.doc.with(|d| {
+            d.as_ref()
+                .map(|d| {
+                    d.collections
+                        .iter()
+                        .filter(|c| c.path.is_none() && c.source.is_folder() && !c.folder.is_empty())
+                        .map(|c| (c.id.clone(), c.folder.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+    });
+    let create_pages = move |id: String, folder: String| {
+        let base = folder.rsplit('/').next().unwrap_or(&id).to_string();
+        let Some(layout) = ed.doc.with_untracked(|d| {
+            d.as_ref()
+                .map(|d| revel_edit::make::collection_template(d, &id, "title"))
+        }) else {
+            return;
+        };
+        let lid = layout.id.clone();
+        ed.apply(
+            ui,
+            Command::Batch {
+                commands: vec![
+                    Command::AddLayout {
+                        layout,
+                        index: None,
+                    },
+                    Command::SetCollectionPages {
+                        id,
+                        path: Some(format!("/{base}/{{{{ slug }}}}/")),
+                        layout: Some(lid),
+                    },
+                ],
+            },
+            false,
+        );
+    };
     let collection_row =
         move |c: CollectionInfo, parent: String, siblings: StoredValue<Vec<String>>| {
             collection_view(tc, c, parent, siblings, labels, entry_row, orphan_menu)
@@ -925,6 +967,21 @@ pub fn PageTree(
                     .collect();
                 tc.children("", items, 0, collection_row)
             }}
+            {move || pageless.get().into_iter().map(|(id, folder)| {
+                let (id2, f2) = (id.clone(), folder.clone());
+                let name = labels.with(|l| l.get(&folder).cloned()).unwrap_or_else(|| label_of(&id));
+                view! {
+                    <div class="list-row collection-row is-pageless" style="--depth:0" role="treeitem"
+                        data-collection=id.clone() title=ui.t("pages-collection-none")>
+                        <span class="list-chevron"></span>
+                        <span class="list-icon">{icons::database()}</span>
+                        <span class="list-label">{name}</span>
+                        <button class="icon-btn icon-btn--small list-action" title=ui.t("pages-collection-create")
+                            aria-label=ui.t("pages-collection-create")
+                            on:click=move |_| create_pages(id2.clone(), f2.clone())>{icons::plus()}</button>
+                    </div>
+                }
+            }).collect_view()}
         </div>
     }
 }
@@ -1120,6 +1177,18 @@ pub fn PageContext() -> impl IntoView {
             .unwrap_or(u)
     };
     let entry = Memo::new(move |_| current_entry(ed));
+    // Libellés des collections (`.pages.yml`, « Projets »), par dossier.
+    let labels = RwSignal::new(std::collections::BTreeMap::<String, String>::new());
+    let path = ed.path.get_value();
+    spawn_local(async move {
+        if let Ok(cols) = api::cms_collections(&path).await {
+            let _ = labels.try_set(
+                cols.into_iter()
+                    .filter_map(|c| Some((c.folder, c.label?)))
+                    .collect(),
+            );
+        }
+    });
     view! {
         <Show when=move || !panel_shown()>
             <details class="bp-menu page-pick" node_ref=menu>
@@ -1137,7 +1206,7 @@ pub fn PageContext() -> impl IntoView {
         {move || entry.get().filter(|(c, _)| c.template.is_some()).map(|(c, p)| {
             let own = c.own(&p);
             let (c2, p2) = (c.clone(), p.clone());
-            let label = label_of(&c.id);
+            let label = labels.with(|l| l.get(&c.folder).cloned()).unwrap_or_else(|| label_of(&c.id));
             view! {
                 <div class="design-chip" class:is-own=own
                     title=if own { ui.now("design-own-help", &[]) } else { ui.now("design-template-help", &[("layout", c.template.clone().unwrap_or_default())]) }>

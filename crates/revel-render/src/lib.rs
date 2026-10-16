@@ -959,6 +959,12 @@ fn entry_layout(
     }
 }
 
+/// Contenu non publié : `draft: true` ou `published: false` dans son en-tête.
+fn entry_draft(data: &serde_json::Value) -> bool {
+    data.get("draft").and_then(serde_json::Value::as_bool) == Some(true)
+        || data.get("published").and_then(serde_json::Value::as_bool) == Some(false)
+}
+
 /// `drafts` : pages en brouillon comprises (éditeur, aperçu), sinon écartées (génération).
 fn prepare<'s>(
     b: &eval::Builder<'s>,
@@ -979,6 +985,11 @@ fn prepare<'s>(
     {
         let mut items: Vec<CollectedItem> = Vec::new();
         for e in input.entries.iter().filter(|e| e.folder == col.folder) {
+            // Contenu en brouillon (`draft: true`, `published: false`, comme le montre la vue
+            // CMS) : écarté du site généré, gardé dans l'éditeur et l'aperçu.
+            if !drafts && entry_draft(&e.data) {
+                continue;
+            }
             let mut data: BTreeMap<String, Value> = col
                 .props
                 .iter()

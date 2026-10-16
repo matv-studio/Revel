@@ -102,7 +102,7 @@ pub(crate) fn Field(
     match children {
         None => view! {
             <label class="field">
-                <span class="label">{label}</span>
+                {move || label.with(|l| (!l.is_empty()).then(|| view! { <span class="label">{l.clone()}</span> }))}
                 {input}
             </label>
         }
@@ -311,11 +311,34 @@ fn element_content(
     } else {
         "picker-choose-media"
     };
+    let level = (lower.len() == 2 && lower.starts_with('h'))
+        .then(|| lower[1..].parse::<u8>().ok())
+        .flatten()
+        .filter(|l| (1..=6).contains(l));
+    let level_at = at.clone();
     view! {
+        // Niveau d'un titre (comme les boutons H1 à H6 de Webflow).
+        {level.map(|cur| view! {
+            <div class="stack insp-content">
+                <div class="field">
+                    <span class="label">{ui.t("inspector-heading-level")}</span>
+                    <div class="seg seg--small" role="radiogroup" aria-label=ui.t("inspector-heading-level")>
+                        {(1..=6u8).map(|l| {
+                            let at = level_at.clone();
+                            view! {
+                                <button role="radio" class:is-on=l == cur aria-checked=(l == cur).to_string()
+                                    on:click=move |_| if l != cur { apply(Command::SetTag { at: at.clone(), tag: format!("h{l}") }) }>
+                                    <span>{format!("H{l}")}</span>
+                                </button>
+                            }
+                        }).collect_view()}
+                    </div>
+                </div>
+            </div>
+        })}
         {is_link.then(|| view! {
             <div class="stack insp-content">
-                <Field label=ui.t("inspector-href") value=href.clone() placeholder="https://… /page/ #ancre"
-                    on_commit=move |v| set_href("href", v)/>
+                <LinkTarget ed href=href.clone() on_commit=move |v: String| set_href("href", v)/>
                 <label class="row-switch">
                     <span class="switch">
                         <input type="checkbox" prop:checked=blank on:change=move |e| toggle_blank(event_target_checked(&e))/>
@@ -340,6 +363,113 @@ fn element_content(
     }
 }
 
+/// Destination d'un lien : nature de l'adresse écrite (`mailto:`, `tel:`, page du site, autre).
+#[derive(Clone, Copy, PartialEq)]
+enum LinkKind {
+    Page,
+    Url,
+    Email,
+    Phone,
+}
+
+fn link_kind(href: &str, pages: &[String]) -> LinkKind {
+    if href.starts_with("mailto:") {
+        LinkKind::Email
+    } else if href.starts_with("tel:") {
+        LinkKind::Phone
+    } else if href.is_empty() || href == "#" || pages.iter().any(|p| p == href) {
+        LinkKind::Page
+    } else {
+        LinkKind::Url
+    }
+}
+
+/// Destination d'un lien, comme dans Webflow : une page du site choisie dans la liste, une
+/// adresse, une adresse e-mail ou un numéro de téléphone (le préfixe s'écrit seul).
+#[component]
+fn LinkTarget(
+    ed: Ed,
+    href: String,
+    on_commit: impl Fn(String) + Send + Sync + Clone + 'static,
+) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    // Pages fixes du site (adresse, nom).
+    let pages: Vec<(String, String)> = ed.pages.with_untracked(|ps| {
+        ps.iter()
+            .filter(|p| p.page.is_some() && !p.url.ends_with(".xml") && !p.url.ends_with(".txt") && !p.url.contains(".ht"))
+            .map(|p| (p.url.clone(), crate::pagetree::title_of(p)))
+            .collect()
+    });
+    let urls: Vec<String> = pages.iter().map(|(u, _)| u.clone()).collect();
+    let kind = RwSignal::new(link_kind(&href, &urls));
+    let href = StoredValue::new(href);
+    let commit = StoredValue::new(on_commit);
+    let run = move |v: String| commit.with_value(|f| f(v));
+    let tabs = [
+        (LinkKind::Page, "link-page"),
+        (LinkKind::Url, "link-url"),
+        (LinkKind::Email, "link-email"),
+        (LinkKind::Phone, "link-phone"),
+    ];
+    let value_of = move |k: LinkKind| {
+        let h = href.get_value();
+        match k {
+            LinkKind::Email => h.strip_prefix("mailto:").unwrap_or_default().to_string(),
+            LinkKind::Phone => h.strip_prefix("tel:").unwrap_or_default().to_string(),
+            _ if link_kind(&h, &[]) == LinkKind::Url || k == LinkKind::Url => {
+                if h == "#" { String::new() } else { h }
+            }
+            _ => h,
+        }
+    };
+    view! {
+        <div class="field link-target">
+            <span class="label">{ui.t("inspector-href")}</span>
+            <div class="seg seg--small" role="radiogroup" aria-label=ui.t("inspector-href")>
+                {tabs.into_iter().map(|(k, key)| view! {
+                    <button role="radio" class:is-on=move || kind.get() == k aria-checked=move || (kind.get() == k).to_string()
+                        on:click=move |_| kind.set(k)><span>{ui.t(key)}</span></button>
+                }).collect_view()}
+            </div>
+            {move || match kind.get() {
+                LinkKind::Page => {
+                    let cur = href.get_value();
+                    let known = pages.iter().any(|(u, _)| *u == cur);
+                    view! {
+                        <div class="select">
+                            <select class="input" aria-label=ui.t("link-page") on:change=move |e| run(event_target_value(&e))>
+                                <option value="" hidden=true selected=!known>{ui.t("link-page-choose")}</option>
+                                {pages.iter().map(|(u, name)| view! {
+                                    <option value=u.clone() selected=*u == cur>{name.clone()}</option>
+                                }).collect_view()}
+                            </select>
+                        </div>
+                    }.into_any()
+                }
+                k => {
+                    let (ph, prefix) = match k {
+                        LinkKind::Email => ("nom@exemple.fr", "mailto:"),
+                        LinkKind::Phone => ("+33 4 72 27 03 74", "tel:"),
+                        _ => ("https://…", ""),
+                    };
+                    view! {
+                        <Field label=String::new() value=value_of(k) placeholder=ph
+                            on_commit=move |v: String| {
+                                let v = v.trim().to_string();
+                                if v.is_empty() { run(String::new()); return; }
+                                let v = match k {
+                                    LinkKind::Phone => v.chars().filter(|c| !c.is_whitespace() && *c != '.').collect::<String>().replace("(0)", ""),
+                                    _ => v,
+                                };
+                                run(format!("{prefix}{v}"))
+                            }/>
+                    }.into_any()
+                }
+            }}
+        </div>
+    }
+}
+
 /// Paramètres avancés d'un élément : balise, identifiant, classes calculées, autres attributs.
 fn element_advanced(
     ui: Ui,
@@ -360,6 +490,10 @@ fn element_advanced(
     let tag_at = at.clone();
     let tag_now = tag.clone();
     let lower = tag.to_ascii_lowercase();
+    let had_link_attrs: Vec<&'static str> = ["href", "target", "rel"]
+        .into_iter()
+        .filter(|n| attrs.iter().any(|a| a.name == *n))
+        .collect();
     let media = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
     let is_link = lower == "a";
     let others: Vec<Attr> = attrs
@@ -382,16 +516,33 @@ fn element_advanced(
     let lang = ed.lang();
     view! {
         <div class="stack">
+            // Nature de l'élément par son nom (« Navigation », « Pied de page »), la balise en
+            // info-bulle ; une balise hors de la liste reste proposée telle quelle.
             <label class="field">
                 <span class="label">{ui.t("inspector-tag")}</span>
-                <input class="input input--mono" list="rv-tags" prop:value=tag.clone()
-                    on:change=move |e| {
-                        let v = event_target_value(&e).trim().to_ascii_lowercase();
-                        if !v.is_empty() && v != tag_now {
-                            apply(Command::SetTag { at: tag_at.clone(), tag: v });
-                        }
-                    }/>
-                <datalist id="rv-tags">{TAGS.iter().map(|t| view! { <option value=*t></option> }).collect_view()}</datalist>
+                <div class="select">
+                    <select class="input" title=format!("<{lower}>")
+                        on:change=move |e| {
+                            let v = event_target_value(&e);
+                            if !v.is_empty() && v != tag_now {
+                                // Un lien qui devient autre chose perd son adresse et sa cible.
+                                let mut commands = vec![Command::SetTag { at: tag_at.clone(), tag: v.clone() }];
+                                if tag_now.eq_ignore_ascii_case("a") && v != "a" {
+                                    for name in ["href", "target", "rel"] {
+                                        if had_link_attrs.contains(&name) {
+                                            commands.push(Command::RemoveAttr { at: tag_at.clone(), name: name.into() });
+                                        }
+                                    }
+                                }
+                                apply(if commands.len() == 1 { commands.remove(0) } else { Command::Batch { commands } });
+                            }
+                        }>
+                        {(!TAGS.contains(&lower.as_str())).then(|| view! { <option value=lower.clone() selected=true>{format!("<{lower}>")}</option> })}
+                        {TAGS.iter().map(|t| view! {
+                            <option value=*t selected=*t == lower>{crate::names::type_name(ui, t)}</option>
+                        }).collect_view()}
+                    </select>
+                </div>
             </label>
             <Field label=ui.t("inspector-id") value=id_value mono=true on_commit=move |v| set_id("id", v)/>
             {dynamic_class.then(|| view! {

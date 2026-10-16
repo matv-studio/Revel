@@ -286,24 +286,106 @@ fn guess_face(name: &str) -> (String, bool) {
     (w.to_string(), italic)
 }
 
-/// Nom de famille lu dans un nom de fichier (`BrandSans-Bold.woff2` -> « Brand Sans »).
+/// Nom de famille lu dans un nom de fichier (`BrandSans-Bold.woff2` -> « Brand Sans »,
+/// `montserrat-latin-wght-normal.woff2` -> « Montserrat »).
 fn guess_family(name: &str) -> String {
     let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(name);
-    let base = stem.split(['-', '_']).next().unwrap_or(stem);
+    let base = stem.split(['-', '_', '[']).next().unwrap_or(stem);
+    let base = base.strip_suffix("Variable").unwrap_or(base);
     let mut out = String::new();
     let mut prev_lower = false;
     for c in base.chars() {
         if c.is_uppercase() && prev_lower {
             out.push(' ');
         }
+        if out.is_empty() || out.ends_with(' ') {
+            out.extend(c.to_uppercase());
+        } else {
+            out.push(c);
+        }
         prev_lower = c.is_lowercase();
-        out.push(c);
     }
     out.trim().to_string()
 }
 
-/// Libellé d'une graisse (`400` -> « 400 · Normal »).
+/// Graisses d'une police variable (axe `wght`) : toute l'étendue, le navigateur s'en tient à
+/// celle du fichier.
+const VARIABLE: &str = "100 900";
+
+/// Police variable : table `fvar` dans le fichier (TrueType, OpenType, WOFF, WOFF2), ou nom
+/// qui le dit (`Inter[wght].ttf`, `Montserrat-VariableFont_wght.ttf`, `…-wght-normal.woff2`).
+fn is_variable(name: &str, data: &[u8]) -> bool {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("wght") || lower.contains("variable") {
+        return true;
+    }
+    let u16_at = |i: usize| data.get(i..i + 2).map(|b| u16::from_be_bytes([b[0], b[1]]) as usize);
+    // Entier de longueur variable de WOFF2 (UIntBase128) : position qui suit.
+    let skip128 = |mut i: usize| -> Option<usize> {
+        for _ in 0..5 {
+            let b = *data.get(i)?;
+            i += 1;
+            if b & 0x80 == 0 {
+                return Some(i);
+            }
+        }
+        None
+    };
+    match data.get(0..4) {
+        Some(b"wOF2") => {
+            let Some(n) = u16_at(12) else {
+                return false;
+            };
+            let mut i = 48;
+            for _ in 0..n {
+                let Some(&flags) = data.get(i) else {
+                    return false;
+                };
+                i += 1;
+                let known = flags & 63;
+                // 47 : `fvar` dans la liste des tables connues de WOFF2.
+                if known == 47 {
+                    return true;
+                }
+                if known == 63 {
+                    if data.get(i..i + 4) == Some(b"fvar".as_slice()) {
+                        return true;
+                    }
+                    i += 4;
+                }
+                let Some(next) = skip128(i) else {
+                    return false;
+                };
+                i = next;
+                // Longueur transformée : glyf et loca (10, 11) transformés par défaut, les
+                // autres tables seulement avec une transformation déclarée.
+                let t = flags >> 6;
+                if (matches!(known, 10 | 11) && t == 0) || (!matches!(known, 10 | 11) && t != 0) {
+                    let Some(next) = skip128(i) else {
+                        return false;
+                    };
+                    i = next;
+                }
+            }
+            false
+        }
+        Some(b"wOFF") => {
+            let n = u16_at(12).unwrap_or(0);
+            (0..n).any(|k| data.get(44 + k * 20..48 + k * 20) == Some(b"fvar".as_slice()))
+        }
+        Some(_) => {
+            let n = u16_at(4).unwrap_or(0);
+            (0..n).any(|k| data.get(12 + k * 16..16 + k * 16) == Some(b"fvar".as_slice()))
+        }
+        None => false,
+    }
+}
+
+/// Libellé d'une graisse (`400` -> « 400 · Normal », `100 900` -> « Variable · 100–900 »).
 fn weight_label(ui: Ui, w: &str) -> String {
+    if let Some((a, b)) = w.split_once(' ') {
+        return format!("{} · {a}–{b}", ui.now("weight-variable", &[]));
+    }
     let key = format!("weight-{w}");
     let name = ui.now(&key, &[]);
     if name == key {
@@ -444,7 +526,10 @@ pub fn Fonts(site: SiteSummary) -> impl IntoView {
                         continue;
                     };
                     let name = f.name();
-                    let (w, it) = guess_face(&name);
+                    let (mut w, it) = guess_face(&name);
+                    if is_variable(&name, &bytes) {
+                        w = VARIABLE.to_string();
+                    }
                     out.push(Pending {
                         data: base64::engine::general_purpose::STANDARD.encode(bytes),
                         weight: RwSignal::new(w),
@@ -507,7 +592,7 @@ pub fn Fonts(site: SiteSummary) -> impl IntoView {
     });
     on_cleanup(move || esc.remove());
     let weights = [
-        "100", "200", "300", "400", "500", "600", "700", "800", "900",
+        VARIABLE, "100", "200", "300", "400", "500", "600", "700", "800", "900",
     ];
     view! {
         <section class="page settings-page fonts-page">
@@ -666,6 +751,39 @@ mod tests {
         assert_eq!(guess_face("Brand-ExtraLight.otf"), ("200".into(), false));
         assert_eq!(guess_face("Brand-Regular.woff"), ("400".into(), false));
         assert_eq!(guess_family("BrandSans-Bold.woff2"), "Brand Sans");
-        assert_eq!(guess_family("inter_regular.woff2"), "inter");
+        assert_eq!(guess_family("inter_regular.woff2"), "Inter");
+        assert_eq!(
+            guess_family("montserrat-latin-wght-normal.woff2"),
+            "Montserrat"
+        );
+        assert_eq!(guess_family("Inter[wght].ttf"), "Inter");
+        assert_eq!(guess_family("RobotoFlexVariable-x.ttf"), "Roboto Flex");
+    }
+
+    #[test]
+    fn polices_variables() {
+        assert!(is_variable("Inter[wght].ttf", b""));
+        assert!(is_variable("montserrat-latin-wght-normal.woff2", b""));
+        // TrueType : répertoire des tables (`head`, `fvar`).
+        let mut ttf = vec![0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0];
+        ttf.extend_from_slice(b"head");
+        ttf.extend_from_slice(&[0; 12]);
+        ttf.extend_from_slice(b"fvar");
+        ttf.extend_from_slice(&[0; 12]);
+        assert!(is_variable("a.ttf", &ttf));
+        ttf[28..32].copy_from_slice(b"GSUB");
+        assert!(!is_variable("a.ttf", &ttf));
+        // WOFF2 : en-tête de 48 octets, puis cmap (0), glyf (10, transformée : deux longueurs),
+        // fvar (47).
+        let mut w2 = b"wOF2".to_vec();
+        w2.extend_from_slice(&[0; 8]);
+        w2.extend_from_slice(&[0, 3]);
+        w2.resize(48, 0);
+        w2.extend_from_slice(&[0, 0x81, 0x00]);
+        w2.extend_from_slice(&[10, 0x10, 0x20]);
+        w2.extend_from_slice(&[47, 0x05]);
+        assert!(is_variable("a.woff2", &w2));
+        w2[54] = 28;
+        assert!(!is_variable("a.woff2", &w2));
     }
 }

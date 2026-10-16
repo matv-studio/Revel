@@ -17,6 +17,10 @@
 }
 .sel-chip.is-on { background: var(--set-bg); color: var(--set-text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--set-text) 45%, transparent); }
 .sel-chip.is-combo { font-style: italic; }
+/* Toutes les balises d'un type : pastille en pointillés tant qu'elle n'est pas choisie. */
+.sel-chip.is-tag:not(.is-on) { background: none; color: var(--text-muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.sel-chip.is-tag .sel-chip-name { display: inline-flex; align-items: center; gap: 4px; }
+.sel-chip.is-tag svg.icon { width: 12px; height: 12px; }
 .sel-chip-name {
   height: 100%; padding: 0 6px; border: 0; background: none; color: inherit;
   font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -251,7 +255,7 @@
 }
 .color-input:hover { border-color: var(--text-faint); }
 .color-input:focus-within { outline: 2px solid var(--focus); outline-offset: -1px; border-color: transparent; }
-.checker, .color-swatch, .cp-swatch, .cp-alpha {
+.checker, .color-swatch, .cp-swatch, .cp-alpha, .stops-bar, .stop {
   --checker: conic-gradient(#d4d4d4 25%, #ffffff 0 50%, #d4d4d4 0 75%, #ffffff 0) 0 0 / 8px 8px;
 }
 .color-swatch {
@@ -323,6 +327,17 @@
 }
 .shadow-card .nbox, .shadow-card .color-input { background: var(--surface); }
 .shadow-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+
+/* --- Filtres, transformations, transitions, grille (D-73) -------------------------------------- */
+.fx-list { display: flex; flex-direction: column; gap: 6px; }
+.fx-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 92px) auto; gap: 4px; align-items: center; }
+.fx-row > .input { height: var(--control-sm); }
+.stack-tight { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.grid-tracks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; align-items: center; }
+.grid-tracks > .icon-btn { justify-self: start; }
+.gap-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; flex: 1; min-width: 0; }
+.gap-pair.is-single { grid-template-columns: minmax(0, 1fr); }
+.gap-pair > span { min-width: 0; }
 
 /* --- Code CSS ----------------------------------------------------------------------------------- */
 .decl-row { display: grid; grid-template-columns: minmax(0, 96px) minmax(0, 1fr) auto auto; gap: var(--s-1); align-items: center; }
@@ -435,5 +450,58 @@
 .text-field-bound { display: grid; place-items: center; color: var(--text-faint); }
 .text-field-bound svg.icon { width: 12px; height: 12px; }
 .text-field-input { height: auto; min-height: var(--control-sm); padding: 5px 8px; resize: vertical; font: inherit; font-size: var(--text-sm); line-height: 1.4; }
+/* Texte mis en forme modifié d'un bloc (D-72) : span stylé repérable. */
+.text-field-rich { cursor: text; overflow-wrap: anywhere; max-height: 180px; overflow: auto; }
+.text-field-rich:focus { outline: 2px solid var(--focus); outline-offset: -1px; border-color: transparent; }
+.text-field-rich span { text-decoration: underline dotted var(--focus); text-underline-offset: 3px; }
+.text-field-rich a { color: var(--focus); }
 /* Couleurs du site : titre et « + » (couleur choisie ajoutée, nommée). */
 .cp-site-head { display: flex; align-items: center; justify-content: space-between; }
+
+/* --- Image et dégradé (calques du fond) -------------------------------------------- */
+.bg-layers { display: flex; flex-direction: column; gap: 4px; }
+/* « + » sur la ligne du libellé. */
+.bg-layers-head { position: absolute; top: 0; right: 0; }
+.bg-empty { margin: 0; font-size: var(--text-xs); }
+.bg-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bg-layer { border: var(--border) solid var(--line); border-radius: var(--radius-md); background: var(--bg); }
+.bg-layer.is-open { border-color: var(--line-strong); }
+.bg-layer-row { display: flex; align-items: center; gap: 2px; padding-right: 2px; }
+.bg-layer-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: var(--control-sm);
+  padding: 0 6px; border: 0; background: none; color: var(--text); font-size: var(--text-xs); text-align: left;
+}
+.bg-layer-main:disabled { cursor: default; color: var(--text-muted); }
+.bg-thumb {
+  flex: none; width: 16px; height: 16px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18);
+  background-color: var(--surface-active); background-size: cover; background-position: center;
+}
+.bg-layer-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bg-editor { display: flex; flex-direction: column; gap: 6px; padding: 6px 6px 8px; border-top: var(--border) solid var(--line); }
+.bg-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 6px; }
+.bg-row--stack { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.bg-row-label { font-size: var(--text-xs); color: var(--text-muted); }
+.bg-row-control { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bg-row-control > .nbox { flex: 1; }
+.bg-center { align-items: flex-start; }
+.bg-xy { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.bg-image-pick { display: flex; align-items: center; gap: 6px; }
+.bg-image-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); }
+/* Cadran de l'angle. */
+.dial {
+  flex: none; position: relative; width: 26px; height: 26px; border-radius: 50%;
+  border: var(--border) solid var(--line-strong); background: var(--surface-raised); cursor: grab; touch-action: none;
+}
+.dial:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.dial-hand { position: absolute; left: 50%; top: 50%; width: 2px; height: 10px; margin-left: -1px; margin-top: -10px; border-radius: 1px; background: var(--text); transform-origin: 50% 100%; }
+/* Barre des couleurs du dégradé. */
+.stops { display: flex; flex-direction: column; gap: 6px; }
+.stops-bar { position: relative; height: 18px; margin: 0 7px; border-radius: 4px; background: var(--checker); cursor: copy; touch-action: none; }
+.stops-fill { position: absolute; inset: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); pointer-events: none; }
+.stop {
+  position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; padding: 0;
+  border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgb(0 0 0 / .45), 0 1px 3px rgb(0 0 0 / .3);
+  background: linear-gradient(var(--stop), var(--stop)), var(--checker); cursor: ew-resize; touch-action: none;
+}
+.stop.is-on { box-shadow: 0 0 0 2px var(--focus), 0 1px 3px rgb(0 0 0 / .3); }
+.stop-edit { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; gap: 4px; align-items: center; }

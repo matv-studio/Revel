@@ -7,9 +7,11 @@
 //! origine (réglée ici, héritée d'un écran plus large ou de l'état de base) ; la valeur effective
 //! de l'élément (calculée dans le canevas) sert d'indication.
 
+mod background;
 mod color;
 mod controls;
 mod ctx;
+mod fx;
 mod sections;
 
 pub use ctx::watched;
@@ -33,14 +35,15 @@ const STATES: &[(&str, &str)] = &[
     (":focus-visible", "styles-state-focus"),
 ];
 
-/// Classes littérales de l'élément ou de l'image (pas d'expression).
+/// Classes littérales de l'élément ou de l'image (pas d'expression). Les champs d'une image
+/// sont des expressions : sa classe est un texte entre guillemets (`"carte__image"`).
 pub(crate) fn classes_of(n: &Node) -> Vec<String> {
     let value = match n {
         Node::Element { attrs, .. } => attrs
             .iter()
             .find(|a| a.name == "class")
-            .and_then(|a| a.value.as_deref()),
-        Node::Image(img) => img.class.as_deref(),
+            .and_then(|a| a.value.clone()),
+        Node::Image(img) => img.class.as_deref().and_then(revel_edit::canvas::literal),
         _ => None,
     };
     value
@@ -60,7 +63,7 @@ pub(crate) fn class_command(at: revel_edit::Target, n: &Node, list: &[String]) -
         }),
         Node::Image(img) => {
             let mut img = img.clone();
-            img.class = value;
+            img.class = value.map(|v| revel_edit::canvas::quote(&v));
             Some(Command::SetImage { at, image: img })
         }
         _ => None,
@@ -81,6 +84,13 @@ pub(crate) fn new_class(d: &revel_model::Site, n: &Node) -> String {
             "ul" | "ol" => "list",
             "li" => "list-item",
             "span" => "text-span",
+            "strong" | "b" => "bold-text",
+            "em" | "i" => "italic-text",
+            "blockquote" => "block-quote",
+            "main" => "main",
+            "article" => "article",
+            "aside" => "aside",
+            "label" => "label",
             "section" => "section",
             "button" => "button",
             "nav" => "nav",
@@ -124,6 +134,41 @@ pub(crate) fn new_class(d: &revel_model::Site, n: &Node) -> String {
         .unwrap_or_else(|| base.to_string())
 }
 
+/// Balises qu'on peut régler toutes ensemble (sélecteur de balise, comme « All Paragraphs »
+/// et « Body (All Pages) » de Webflow), avec le libellé du choix.
+const TAGS: &[(&str, &str)] = &[
+    ("body", "styles-tag-body"),
+    ("p", "styles-tag-p"),
+    ("h1", "styles-tag-h1"),
+    ("h2", "styles-tag-h2"),
+    ("h3", "styles-tag-h3"),
+    ("h4", "styles-tag-h4"),
+    ("h5", "styles-tag-h5"),
+    ("h6", "styles-tag-h6"),
+    ("a", "styles-tag-a"),
+    ("img", "styles-tag-img"),
+    ("ul", "styles-tag-ul"),
+    ("ol", "styles-tag-ol"),
+    ("li", "styles-tag-li"),
+    ("blockquote", "styles-tag-blockquote"),
+    ("strong", "styles-tag-strong"),
+    ("em", "styles-tag-em"),
+    ("figure", "styles-tag-figure"),
+    ("section", "styles-tag-section"),
+    ("button", "styles-tag-button"),
+    ("video", "styles-tag-video"),
+];
+
+/// Sélecteur de balise proposé pour l'élément (`p`, `body`…) et la clé de son libellé.
+pub(crate) fn tag_selector(n: &Node) -> Option<(&'static str, &'static str)> {
+    let tag = match n {
+        Node::Element { tag, .. } => tag.to_ascii_lowercase(),
+        Node::Image(_) => "img".into(),
+        _ => return None,
+    };
+    TAGS.iter().find(|(t, _)| *t == tag).copied()
+}
+
 /// Sélecteurs proposés : chaque classe, puis la combinaison de toutes (classe combinée).
 pub(crate) fn candidates(classes: &[String]) -> Vec<String> {
     let mut v: Vec<String> = classes.iter().map(|c| format!(".{c}")).collect();
@@ -148,12 +193,35 @@ pub fn Styles() -> impl IntoView {
     });
     let classes = Memo::new(move |_| node.get().map(|n| classes_of(&n)).unwrap_or_default());
     let is_use = Memo::new(move |_| matches!(node.get(), Some(Node::Use { .. })));
-    // Classe par défaut : la première (gardée tant qu'elle reste proposée).
+    // Choix « toutes les balises » : proposé pour un élément sans classe.
+    let tag_sel = Memo::new(move |_| {
+        node.get()
+            .filter(|n| classes_of(n).is_empty())
+            .and_then(|n| tag_selector(&n))
+    });
+    // Classe par défaut : la combinaison (gardée tant qu'elle reste proposée). Sans classe : le
+    // corps de page se règle pour toutes les pages ; un autre élément reçoit une classe à la
+    // première valeur réglée (comme Webflow), sauf choix « toutes les balises ».
     Effect::new(move |_| {
         let c = candidates(&classes.get());
-        if !c.contains(&selector.get_untracked()) {
-            selector.set(c.first().cloned().unwrap_or_default());
+        let tag = tag_sel.get();
+        let cur = selector.get_untracked();
+        if c.contains(&cur) || (cur.is_empty() && c.is_empty()) {
+            if cur.is_empty() && tag.is_some_and(|(t, _)| t == "body") {
+                selector.set("body".into());
+            }
+            return;
         }
+        if tag.is_some_and(|(t, _)| t == cur) {
+            return;
+        }
+        // Plusieurs classes : leur combinaison, comme Webflow (la classe seule se choisit dans
+        // les pastilles).
+        selector.set(match (c.last(), tag) {
+            (Some(all), _) => all.clone(),
+            (None, Some(("body", _))) => "body".into(),
+            _ => String::new(),
+        });
     });
     // Nombre d'éléments de la page qui portent la classe (demandé au canevas).
     Effect::new(move |_| {
@@ -232,7 +300,9 @@ pub fn Styles() -> impl IntoView {
         if !list.contains(&name) {
             list.push(name.clone());
         }
-        selector.set(format!(".{name}"));
+        // Classe ajoutée à côté d'autres : la combinaison est réglée (classe combinée de
+        // Webflow), pour ne pas modifier tous les éléments qui portent la nouvelle classe seule.
+        selector.set(candidates(&list).pop().unwrap_or_else(|| format!(".{name}")));
         if let Some(cmd) = class_command(at, &n, &list) {
             ed.apply(ui, cmd, false);
         }
@@ -296,6 +366,17 @@ pub fn Styles() -> impl IntoView {
                                     }
                                 }).collect_view()
                             }}
+                            // Toutes les balises de ce type (élément sans classe).
+                            {move || tag_sel.get().map(|(t, key)| view! {
+                                <span class="sel-chip is-tag" class:is-on=move || selector.get() == t
+                                    role="option" aria-selected=move || (selector.get() == t).to_string()
+                                    title=ui.t("styles-tag-help")>
+                                    <button class="sel-chip-name" on:click=move |_| {
+                                        let on = selector.get_untracked() == t;
+                                        selector.set(if on { String::new() } else { t.to_string() });
+                                    }>{icons::tag()}{ui.t(key)}</button>
+                                </span>
+                            })}
                             <input class="selector-add" placeholder=move || if classes.get().is_empty() { ui.tx("styles-class-first", &[]) } else { ui.tx("styles-class-new", &[]) }
                                 aria-label=ui.t("styles-class-new")
                                 on:change=move |e| {
@@ -326,20 +407,51 @@ pub fn Styles() -> impl IntoView {
                             })}
                         </div>
                     </div>
-                    <Show when=move || !selector.get().is_empty()>
-                        <LayoutSection sx/>
-                        <SpacingSection sx/>
-                        <SizeSection sx/>
-                        <PositionSection sx/>
-                        <TextSection sx/>
-                        <BackgroundSection sx/>
-                        <BorderSection sx/>
-                        <EffectsSection sx/>
-                        <CodeSection sx/>
-                    </Show>
+                    // Sans classe ni balise choisie : la première valeur crée la classe.
+                    <LayoutSection sx/>
+                    <SpacingSection sx/>
+                    <SizeSection sx/>
+                    <PositionSection sx/>
+                    <TextSection sx/>
+                    <BackgroundSection sx/>
+                    <BorderSection sx/>
+                    <EffectsSection sx/>
+                    <CodeSection sx/>
                     <crate::inspector::AdvancedSettings/>
                 }.into_any(),
             }}
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classe_d_une_image_ecrite_en_expression() {
+        let img = Node::Image(revel_model::ImageNode {
+            id: Some("i".into()),
+            src: "\"/media/a.jpg\"".into(),
+            class: Some("\"carte__image grande\"".into()),
+            ..Default::default()
+        });
+        assert_eq!(classes_of(&img), vec!["carte__image", "grande"]);
+        let at = revel_edit::Target {
+            owner: revel_edit::Owner::Page("p".into()),
+            node: "i".into(),
+        };
+        let Some(Command::SetImage { image, .. }) =
+            class_command(at, &img, &["hero__img".to_string()])
+        else {
+            panic!("commande attendue");
+        };
+        assert_eq!(image.class.as_deref(), Some("\"hero__img\""));
+        // Classe calculée : pas de pastille.
+        let dynamic = Node::Image(revel_model::ImageNode {
+            class: Some("cls".into()),
+            ..Default::default()
+        });
+        assert!(classes_of(&dynamic).is_empty());
     }
 }

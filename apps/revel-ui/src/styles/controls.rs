@@ -405,6 +405,31 @@ pub const LETTER_UNITS: &[UnitOpt] = &[
     u("em", "unit-em"),
     k("normal", "unit-normal"),
 ];
+pub const PCT_UNITS: &[UnitOpt] = &[u("%", "unit-percent")];
+pub const DEG_UNITS: &[UnitOpt] = &[u("deg", "unit-deg"), u("turn", "unit-turn")];
+pub const TIME_UNITS: &[UnitOpt] = &[u("ms", "unit-ms"), u("s", "unit-s")];
+pub const BLUR_UNITS: &[UnitOpt] = &[
+    u("px", "unit-px"),
+    u("em", "unit-em"),
+    u("rem", "unit-rem"),
+];
+pub const MOVE_UNITS: &[UnitOpt] = &[
+    u("px", "unit-px"),
+    u("%", "unit-percent-self"),
+    u("em", "unit-em"),
+    u("rem", "unit-rem"),
+    u("vw", "unit-vw"),
+    u("vh", "unit-vh"),
+];
+pub const TRACK_UNITS: &[UnitOpt] = &[
+    u("fr", "unit-fr"),
+    u("px", "unit-px"),
+    u("%", "unit-percent"),
+    u("rem", "unit-rem"),
+    k("auto", "unit-auto"),
+    k("min-content", "unit-min-content"),
+    k("max-content", "unit-max-content"),
+];
 /// Partage d'une valeur : nombre (sans unité) et unité, ou mot-clé entier.
 fn split(v: &str) -> (String, Option<String>) {
     match parse_num(v) {
@@ -464,7 +489,11 @@ pub fn NumBox(
             // Mot-clé (« none », « auto ») : son nom court traduit.
             None => match units.iter().find(|o| o.kw && o.v == h) {
                 Some(o) => ui.tx(&format!("{}-s", o.key), &[]),
-                None => h,
+                None => match h.as_str() {
+                    "auto" => ui.tx("unit-auto-s", &[]),
+                    "none" => ui.tx("unit-none-s", &[]),
+                    _ => h,
+                },
             },
         }
     };
@@ -619,7 +648,11 @@ pub fn PropNum(
     view! {
         <NumBox sx
             value=Signal::derive(move || pv.get().here)
-            hint=Signal::derive(move || pv.get().hint())
+            hint=Signal::derive(move || {
+                // Écart « normal » des piles et grilles : nul (comme l'indique Webflow).
+                let h = pv.get().hint();
+                if h == "normal" && prop.ends_with("gap") { "0".into() } else { h }
+            })
             start=Signal::derive(move || start_value(&pv.get(), unit, zero))
             on_preview=Callback::new(move |v: String| sx.preview(&[(prop.to_string(), v)]))
             on_commit=Callback::new(move |(v, co): (Option<String>, bool)| sx.set_many(vec![(prop.to_string(), v)], co))

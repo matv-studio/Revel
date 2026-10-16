@@ -4,14 +4,14 @@
 use super::color::{ColorField, ColorInput};
 use super::controls::*;
 use super::ctx::Sx;
+use super::fx::{ChildPlacement, FILTERS, FuncList, GapField, GridTracks, TRANSFORMS, Transitions};
 use crate::icons;
 use leptos::ev;
 use leptos::prelude::*;
 use revel_edit::Command;
 use revel_model::{Decl, StyleItem, StyleRule};
 use revel_style::values::{
-    Shadow, first_family, format_shadows, grid_columns, grid_count, length::parse_num,
-    parse_shadows, split_top,
+    Shadow, first_family, format_shadows, length::parse_num, parse_shadows, split_top,
 };
 use wasm_bindgen::JsCast;
 
@@ -135,7 +135,8 @@ fn AlignBox(sx: Sx) -> impl IntoView {
     }
 }
 
-/// Direction d'une pile : horizontale ou verticale, ordre inversé.
+/// Direction d'une pile : horizontale ou verticale (flèches, nom en info-bulle : le texte serait
+/// coupé dans la largeur du panneau), ordre inversé.
 #[component]
 fn Direction(sx: Sx) -> impl IntoView {
     let ui = sx.ui;
@@ -157,10 +158,10 @@ fn Direction(sx: Sx) -> impl IntoView {
             <div class="seg" role="radiogroup">
                 <button role="radio" class:is-on=move || here() && !column() class:is-implied=move || !here() && !column()
                     title=ui.t("dir-horizontal") aria-label=ui.t("dir-horizontal")
-                    on:click=move |_| set(false, reversed())>{icons::arrow_right()}<span>{ui.t("dir-horizontal")}</span></button>
+                    on:click=move |_| set(false, reversed())>{icons::arrow_right()}</button>
                 <button role="radio" class:is-on=move || here() && column() class:is-implied=move || !here() && column()
                     title=ui.t("dir-vertical") aria-label=ui.t("dir-vertical")
-                    on:click=move |_| set(true, reversed())>{icons::arrow_down()}<span>{ui.t("dir-vertical")}</span></button>
+                    on:click=move |_| set(true, reversed())>{icons::arrow_down()}</button>
             </div>
             <button class="tool-toggle" class:is-on=reversed aria-pressed=move || reversed().to_string()
                 title=ui.t("dir-reverse") aria-label=ui.t("dir-reverse")
@@ -190,32 +191,6 @@ fn DisplayMore(sx: Sx) -> impl IntoView {
     }
 }
 
-/// Nombre de colonnes d'une grille (`repeat(N, minmax(0, 1fr))`) ; autre forme : texte.
-#[component]
-fn GridColumns(sx: Sx) -> impl IntoView {
-    let pv = Memo::new(move |_| sx.get("grid-template-columns"));
-    let count = |v: String| grid_count(&v).map(|n| n.to_string()).unwrap_or(v);
-    view! {
-        <NumBox sx
-            value=Signal::derive(move || pv.get().here.map(count))
-            hint=Signal::derive(move || count(pv.get().hint()))
-            start=Signal::derive(move || pv.get().here.and_then(|v| grid_count(&v)).unwrap_or(1).to_string())
-            on_preview=Callback::new(move |v: String| {
-                if let Ok(n) = v.parse::<u32>() {
-                    sx.preview(&[("grid-template-columns".into(), grid_columns(n.max(1)))]);
-                }
-            })
-            on_commit=Callback::new(move |(v, co): (Option<String>, bool)| {
-                let v = v.map(|v| match v.parse::<f64>() {
-                    Ok(n) => grid_columns(n.round().max(1.0) as u32),
-                    Err(_) => v,
-                });
-                sx.set_many(vec![("grid-template-columns".into(), v)], co);
-            })
-            unit="" label="styles-columns"/>
-    }
-}
-
 #[component]
 pub fn LayoutSection(sx: Sx) -> impl IntoView {
     let display = Memo::new(move |_| sx.get("display").current());
@@ -225,7 +200,8 @@ pub fn LayoutSection(sx: Sx) -> impl IntoView {
     let in_stack = move || sx.computed("--rv-parent-display").ends_with("flex");
     view! {
         <Section sx key="styles-layout" open=true
-            props=&["display", "flex-direction", "justify-content", "align-items", "gap", "flex-wrap", "grid-template-columns", "flex"]>
+            props=&["display", "flex-direction", "justify-content", "align-items", "gap", "row-gap", "column-gap", "flex-wrap",
+                "grid-template-columns", "justify-items", "flex", "grid-column", "grid-row", "justify-self", "align-self", "order"]>
             <Row sx props=&["display"] key="styles-display" stack=true>
                 <Seg sx prop="display" options=DISPLAY/>
                 <DisplayMore sx/>
@@ -252,17 +228,17 @@ pub fn LayoutSection(sx: Sx) -> impl IntoView {
                         </div>
                     </div>
                 </div>
-                <Row sx props=&["gap"] key="styles-gap" scrub=Some(LabelScrub { prop: "gap", unit: "px", step: 1.0, zero: "0px" })>
-                    <PropNum sx prop="gap" units=GAP_UNITS label="styles-gap"/>
+                <Row sx props=&["gap", "row-gap", "column-gap"] key="styles-gap" scrub=Some(LabelScrub { prop: "gap", unit: "px", step: 1.0, zero: "0px" })>
+                    <GapField sx/>
                 </Row>
                 <Row sx props=&["flex-wrap"] key="styles-wrap">
                     <Switch sx prop="flex-wrap" on="wrap" off="nowrap"/>
                 </Row>
             </Show>
             <Show when=is_grid>
-                <Row sx props=&["grid-template-columns"] key="styles-columns"><GridColumns sx/></Row>
-                <Row sx props=&["gap"] key="styles-gap" scrub=Some(LabelScrub { prop: "gap", unit: "px", step: 1.0, zero: "0px" })>
-                    <PropNum sx prop="gap" units=GAP_UNITS label="styles-gap"/>
+                <Row sx props=&["grid-template-columns"] key="styles-columns" stack=true><GridTracks sx/></Row>
+                <Row sx props=&["gap", "row-gap", "column-gap"] key="styles-gap" scrub=Some(LabelScrub { prop: "gap", unit: "px", step: 1.0, zero: "0px" })>
+                    <GapField sx/>
                 </Row>
                 <Row sx props=&["justify-items"] key="align-horizontal"><Choice sx prop="justify-items" options=opts(sx, GRID_X)/></Row>
                 <Row sx props=&["align-items"] key="align-vertical"><Choice sx prop="align-items" options=opts(sx, GRID_Y)/></Row>
@@ -270,6 +246,7 @@ pub fn LayoutSection(sx: Sx) -> impl IntoView {
             <Show when=in_stack>
                 <Row sx props=&["flex"] key="styles-flex-child"><Choice sx prop="flex" options=opts(sx, FLEX_CHILD)/></Row>
             </Show>
+            <ChildPlacement sx/>
         </Section>
     }
 }
@@ -599,6 +576,20 @@ const CASE: &[Opt] = &[
     oi("capitalize", "case-capitalize", g_cap),
 ];
 
+/// Retour à la ligne : automatique, jamais (une ligne), retours écrits gardés.
+const WHITE_SPACE: &[Opt] = &[
+    o("normal", "ws-normal"),
+    o("nowrap", "ws-nowrap"),
+    o("pre-line", "ws-pre-line"),
+    o("pre-wrap", "ws-pre-wrap"),
+];
+/// Coupure des lignes : lignes équilibrées (titres), sans mot seul en fin (paragraphes).
+const TEXT_WRAP: &[Opt] = &[
+    oa("wrap", "tw-wrap", &["auto"]),
+    o("balance", "tw-balance"),
+    o("pretty", "tw-pretty"),
+];
+
 /// Valeur d'une variable CSS du site (`--font`), déclarée sur `:root` ou `html`.
 pub fn css_var(sheet: &revel_model::Stylesheet, name: &str) -> Option<String> {
     sheet.items.iter().find_map(|item| match item {
@@ -720,7 +711,7 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
     view! {
         <Section sx key="styles-typography" open=true props=&[
             "font-family", "font-weight", "font-size", "line-height", "letter-spacing", "color",
-            "text-align", "font-style", "text-decoration-line", "text-transform",
+            "text-align", "font-style", "text-decoration-line", "text-transform", "white-space", "text-wrap",
         ]>
             <Row sx props=&["font-family"] key="styles-font-family">
                 <Choice sx prop="font-family" options=font_options(sx)/>
@@ -753,6 +744,12 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
             <Row sx props=&["text-transform"] key="styles-text-transform">
                 <Seg sx prop="text-transform" options=CASE/>
             </Row>
+            <Row sx props=&["white-space"] key="styles-white-space">
+                <Choice sx prop="white-space" options=opts(sx, WHITE_SPACE)/>
+            </Row>
+            <Row sx props=&["text-wrap"] key="styles-text-wrap">
+                <Choice sx prop="text-wrap" options=opts(sx, TEXT_WRAP)/>
+            </Row>
         </Section>
     }
 }
@@ -765,41 +762,6 @@ const BG_SIZE: &[Opt] = &[
     o("contain", "bg-contain"),
     oa("auto", "bg-auto", &["auto auto"]),
 ];
-
-/// Image de fond : chemin (sans `url()`) ; un dégradé reste en texte.
-#[component]
-fn BgImage(sx: Sx) -> impl IntoView {
-    let ui = sx.ui;
-    let pv = Memo::new(move |_| sx.get("background-image"));
-    let strip = |v: &str| -> String {
-        let t = v.trim();
-        match t.strip_prefix("url(").and_then(|r| r.strip_suffix(')')) {
-            Some(inner) if !t.contains(',') => inner
-                .trim()
-                .trim_matches(|c| c == '"' || c == '\'')
-                .to_string(),
-            _ => t.to_string(),
-        }
-    };
-    view! {
-        <input class="input" spellcheck="false" placeholder=move || {
-                let h = pv.get().hint();
-                if h == "none" || h.is_empty() { ui.tx("bg-image-none", &[]) } else { strip(&h) }
-            }
-            prop:value=move || pv.get().here.map(|v| strip(&v)).unwrap_or_default()
-            on:change=move |e| {
-                let t = event_target_value(&e).trim().to_string();
-                let v = if t.is_empty() {
-                    None
-                } else if t == "none" || t.contains('(') {
-                    Some(t)
-                } else {
-                    Some(format!("url(\"{}\")", t.replace('"', "%22")))
-                };
-                sx.set("background-image", v);
-            }/>
-    }
-}
 
 /// Position 3 × 3 d'une image de fond.
 #[component]
@@ -837,17 +799,20 @@ fn BgPosition(sx: Sx) -> impl IntoView {
 
 #[component]
 pub fn BackgroundSection(sx: Sx) -> impl IntoView {
+    // Taille, position et répétition : pour un calque image (pas pour un dégradé seul).
     let has_image = move || {
         let v = sx.get("background-image").current();
-        !v.is_empty() && v != "none"
+        super::background::parse_layers(&v)
+            .iter()
+            .any(|l| matches!(l, super::background::Layer::Image(_)))
     };
     view! {
         <Section sx key="styles-backgrounds" props=&["background-color", "background-image", "background-size", "background-position", "background-repeat"]>
             <Row sx props=&["background-color"] key="styles-background-color">
                 <ColorField sx prop="background-color"/>
             </Row>
-            <Row sx props=&["background-image"] key="styles-background-image">
-                <BgImage sx/>
+            <Row sx props=&["background-image"] key="styles-background-image" stack=true>
+                <super::background::BgLayers sx/>
             </Row>
             <Show when=has_image>
                 <Row sx props=&["background-size"] key="styles-background-size" stack=true>
@@ -986,6 +951,26 @@ const CURSORS: &[Opt] = &[
     o("none", "cursor-none"),
 ];
 
+/// Mélange avec ce qui est dessous (comme les modes de fusion d'un logiciel de dessin).
+const BLEND: &[Opt] = &[
+    o("normal", "blend-normal"),
+    o("multiply", "blend-multiply"),
+    o("screen", "blend-screen"),
+    o("overlay", "blend-overlay"),
+    o("darken", "blend-darken"),
+    o("lighten", "blend-lighten"),
+    o("color-dodge", "blend-color-dodge"),
+    o("color-burn", "blend-color-burn"),
+    o("hard-light", "blend-hard-light"),
+    o("soft-light", "blend-soft-light"),
+    o("difference", "blend-difference"),
+    o("exclusion", "blend-exclusion"),
+    o("hue", "blend-hue"),
+    o("saturation", "blend-saturation"),
+    o("color", "blend-color"),
+    o("luminosity", "blend-luminosity"),
+];
+
 /// Opacité : curseur et pourcentage ; écrite en décimal (`0.6`).
 #[component]
 fn Opacity(sx: Sx) -> impl IntoView {
@@ -1116,9 +1101,20 @@ fn Shadows(sx: Sx) -> impl IntoView {
 #[component]
 pub fn EffectsSection(sx: Sx) -> impl IntoView {
     view! {
-        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor"]>
+        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transition"]>
+            <Row sx props=&["mix-blend-mode"] key="styles-blend"><Choice sx prop="mix-blend-mode" options=opts(sx, BLEND)/></Row>
             <Row sx props=&["opacity"] key="styles-opacity"><Opacity sx/></Row>
             <Row sx props=&["box-shadow"] key="styles-box-shadow" stack=true><Shadows sx/></Row>
+            <Row sx props=&["transform"] key="styles-transform" stack=true>
+                <FuncList sx prop="transform" defs=TRANSFORMS add_key="fx-transform-add" none_key="fx-transform-none"/>
+            </Row>
+            <Row sx props=&["transition"] key="styles-transition" stack=true><Transitions sx/></Row>
+            <Row sx props=&["filter"] key="styles-filter" stack=true>
+                <FuncList sx prop="filter" defs=FILTERS add_key="fx-filter-add" none_key="fx-filter-none"/>
+            </Row>
+            <Row sx props=&["backdrop-filter"] key="styles-backdrop" stack=true>
+                <FuncList sx prop="backdrop-filter" defs=FILTERS add_key="fx-backdrop-add" none_key="fx-filter-none"/>
+            </Row>
             <Row sx props=&["cursor"] key="styles-cursor"><Choice sx prop="cursor" options=opts(sx, CURSORS)/></Row>
         </Section>
     }

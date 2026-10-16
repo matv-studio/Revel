@@ -137,6 +137,12 @@ impl Project {
         self.entries_in(&folders)
     }
 
+    /// Contenus d'un dossier, qu'il soit ou non celui d'une collection (dossier repris d'un site
+    /// existant).
+    pub fn entries_of(&self, folder: &str) -> Result<Vec<Entry>, ProjectError> {
+        self.entries_in(&[folder.to_string()])
+    }
+
     /// Contenus (fichiers Markdown) de dossiers du projet.
     fn entries_in(&self, folders: &[String]) -> Result<Vec<Entry>, ProjectError> {
         let mut out = Vec::new();

@@ -255,7 +255,7 @@ try {
   // Réglages de l'élément : rubrique « Paramètres avancés » de l'onglet Styles.
   await page.click('.dock-tab[data-panel="styles"]');
   await page.click('.advanced-settings > summary');
-  await page.waitForFunction(() => document.querySelector('.advanced-settings input[list="rv-tags"]')?.value === 'section');
+  await page.waitForFunction(() => document.querySelector('.advanced-settings .field select.input')?.value === 'section');
   check('réglages : balise de l\'élément sélectionné (paramètres avancés de l\'onglet Styles)', !(await page.$('.dock-tab[data-panel="settings"]')));
   const secId = await f.evaluate(() => document.querySelector('section.hero').getAttribute('data-rv'));
   // Identifiant (Entrée).
@@ -1340,8 +1340,128 @@ try {
     await page.click('.editor-toolbar .btn-undo');
     f = await waitFrame(() => !document.body.textContent.includes('Texte essai'), 'annulation du texte');
   }
+  // Mise en forme dans le texte (barre au-dessus de la sélection, comme Webflow) :
+  // gras par la barre, italique au clavier, une seule annulation pour le tout.
+  const t4 = await slotPoint("s.slot === 'text' && s.parent.owner.kind === 'page'");
+  if (t4) {
+    const count = (site, tag) => JSON.stringify(site).split(`"tag":"${tag}"`).length - 1;
+    const site0 = (await invoke('edit_open')).site;
+    await page.mouse.dblclick(t4.px, t4.py);
+    f = await waitFrame(() => !!document.querySelector('[data-rv-edit]'), 'mode édition (mise en forme)');
+    const word = await f.evaluate(() => {
+      const span = document.querySelector('[data-rv-edit]');
+      const w = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+      for (let t; (t = w.nextNode());) {
+        const m = /\p{L}{3,}/u.exec(t.data);
+        if (!m) continue;
+        const r = document.createRange();
+        r.setStart(t, m.index);
+        r.setEnd(t, m.index + m[0].length);
+        const s = getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+        const b = r.getBoundingClientRect();
+        return { text: m[0], x: b.left + b.width / 2, y: b.top };
+      }
+      return null;
+    });
+    check('mise en forme : mot sélectionné dans le texte', !!word, word && word.text);
+    if (word) {
+      await page.waitForTimeout(200);
+      const box = await page.locator('iframe.canvas-frame').boundingBox();
+      const k = box.width / parseFloat(await page.$eval('iframe.canvas-frame', (e) => e.style.width));
+      if (shots) await page.screenshot({ path: `${shots}/mise-en-forme.png`, clip: { x: Math.max(0, box.x + word.x * k - 200), y: Math.max(0, box.y + word.y * k - 80), width: 400, height: 140 } });
+      // Premier bouton (gras) : 70 px à gauche du milieu de la sélection, 34 px au-dessus.
+      await page.mouse.click(box.x + word.x * k - 70 + 15, Math.max(box.y + 4 + 15, box.y + word.y * k - 34 + 15));
+      await page.keyboard.press('Control+i');
+      const html = await f.evaluate(() => document.querySelector('[data-rv-edit]').innerHTML);
+      check('mise en forme : gras (barre) et italique (clavier) dans le texte', /<(b|strong)\b/.test(html) && /<(i|em)\b/.test(html), html.slice(0, 160));
+      await page.keyboard.press('Enter');
+      let site1 = site0;
+      for (let i = 0; i < 50 && count(site1, 'strong') === count(site0, 'strong'); i++) {
+        await page.waitForTimeout(100);
+        site1 = (await invoke('edit_open')).site;
+      }
+      check('mise en forme : strong et em enregistrés dans le document',
+        count(site1, 'strong') === count(site0, 'strong') + 1 && count(site1, 'em') === count(site0, 'em') + 1 && JSON.stringify(site1).includes(word.text));
+      f = await waitFrame(() => !document.querySelector('[data-rv-edit]') && !!document.querySelector('strong em, em strong'), 'mise en forme affichée');
+      await page.click('.editor-toolbar .btn-undo');
+      let back = false;
+      for (let i = 0; i < 50 && !back; i++) {
+        back = JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(site0);
+        if (!back) await page.waitForTimeout(100);
+      }
+      check('mise en forme : une seule annulation rend le texte d\'origine', back);
+      f = await waitFrame(() => !document.querySelector('strong em, em strong'), 'annulation de la mise en forme');
+    }
+  }
+  // Texte et éléments de mise en forme modifiés d'un bloc (D-72) : le titre entier, ses spans
+  // gardés (mêmes identifiants), une seule annulation.
+  {
+    const site0 = (await invoke('edit_open')).site;
+    f = await waitFrame(() => document.readyState === 'complete', 'canevas prêt (bloc)');
+    const pt = await f.evaluate(() => {
+      // Textes de la page (hors composants) : élément qui les contient.
+      const hosts = new Set();
+      for (let n = 0; n < 5000; n++) {
+        const x = window.__revelSlot(n);
+        if (!x.slot) break;
+        if (x.slot.slot !== 'text' || x.slot.parent.owner.kind === 'component' || !x.range) continue;
+        let c = x.range.commonAncestorContainer;
+        if (c.nodeType !== 1) c = c.parentElement;
+        for (let e = c && c.closest('[data-rv]'); e; e = e.parentElement && e.parentElement.closest('[data-rv]')) hosts.add(e);
+      }
+      for (const el of hosts) {
+        const kids = [...el.childNodes];
+        if (!kids.some((k) => k.nodeType === 1 && k.hasAttribute('data-rv'))) continue;
+        if (!kids.every((k) => k.nodeType === 3 || (k.nodeType === 1 && /^(SPAN|STRONG|EM|BR|A)$/.test(k.tagName)))) continue;
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let t; (t = w.nextNode());) {
+          const m = /\p{L}{3,}/u.exec(t.data);
+          if (!m) continue;
+          const r = document.createRange();
+          r.setStart(t, m.index);
+          r.setEnd(t, m.index + m[0].length);
+          const b = r.getBoundingClientRect();
+          if (b.width > 2 && b.top > 0 && b.bottom < innerHeight) return { x: b.left + b.width / 2, y: b.top + b.height / 2, word: m[0] };
+        }
+      }
+      return null;
+    });
+    check('bloc : texte avec des éléments de mise en forme repéré', !!pt);
+    if (pt) {
+      const box = await page.locator('iframe.canvas-frame').boundingBox();
+      const k = box.width / parseFloat(await page.$eval('iframe.canvas-frame', (e) => e.style.width));
+      await page.mouse.dblclick(box.x + pt.x * k, box.y + pt.y * k);
+      f = await waitFrame(() => !!document.querySelector('[data-rv-edit][data-rv]'), 'modification d\'un bloc');
+      const st = await f.evaluate(() => {
+        const e = document.querySelector('[data-rv-edit]');
+        return { id: e.getAttribute('data-rv'), kids: [...e.querySelectorAll('[data-rv]')].map((k) => k.getAttribute('data-rv')), sel: getSelection().toString() };
+      });
+      check('bloc : élément entier modifiable, mot pointé sélectionné', st.kids.length > 0 && st.sel === pt.word, `${st.sel} / ${pt.word}`);
+      await page.keyboard.press('Control+End');
+      await page.keyboard.type(' bloc');
+      await page.keyboard.press('Enter');
+      let site1 = site0;
+      for (let i = 0; i < 50 && JSON.stringify(site1) === JSON.stringify(site0); i++) {
+        await page.waitForTimeout(100);
+        site1 = (await invoke('edit_open')).site;
+      }
+      const s1 = JSON.stringify(site1);
+      check('bloc : texte enregistré, éléments de mise en forme gardés', s1.includes(' bloc') && st.kids.every((id) => s1.includes(`"id":"${id}"`)));
+      f = await waitFrame(() => !document.querySelector('[data-rv-edit]') && document.body.textContent.includes(' bloc'), 'bloc enregistré');
+      await page.click('.editor-toolbar .btn-undo');
+      let back = false;
+      for (let i = 0; i < 50 && !back; i++) {
+        back = JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(site0);
+        if (!back) await page.waitForTimeout(100);
+      }
+      check('bloc : une seule annulation', back);
+      f = await waitFrame(() => !document.body.textContent.includes(' bloc'), 'annulation du bloc');
+    }
+  }
   // Texte lié à l'en-tête d'un contenu (fichier Markdown).
-  const t2 = await slotPoint("s.slot === 'expr' && s.binding && s.binding.source.kind === 'entry' && !s.transformed && !s.html");
+  const t2 =await slotPoint("s.slot === 'expr' && s.binding && s.binding.source.kind === 'entry' && !s.transformed && !s.html");
   check('textes : texte lié à un contenu repéré', !!t2, t2 && `${t2.text.trim()} (${t2.slot.binding.source.folder}/${t2.slot.binding.source.file})`);
   if (t2 && siteDir) {
     const file = path.join(siteDir, t2.slot.binding.source.folder, t2.slot.binding.source.file + '.md');

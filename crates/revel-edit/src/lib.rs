@@ -14,6 +14,7 @@ pub mod collection;
 pub mod command;
 pub mod history;
 pub mod icons;
+pub mod inline;
 pub mod locale;
 pub mod make;
 pub mod readable;

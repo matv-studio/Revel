@@ -4,6 +4,7 @@
 //! Code sans dépendance, partagé par l'interface (WebAssembly) et vérifié par `cargo test`.
 
 pub mod color;
+pub mod fx;
 pub mod length;
 pub mod shadow;
 pub mod shorthand;
@@ -12,6 +13,10 @@ pub mod shorthand;
 mod tests;
 
 pub use color::{Hsva, Rgba, contrast};
+pub use fx::{
+    Func, Tracks, Transition, format_funcs, format_tracks, format_transitions, parse_funcs,
+    parse_tracks, parse_transitions, span_of,
+};
 pub use length::{Num, eval, fmt_num, step};
 pub use shadow::{Shadow, format_shadows, parse_shadows};
 pub use shorthand::{Edit, Found, edits, read};

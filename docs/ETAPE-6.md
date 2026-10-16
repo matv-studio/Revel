@@ -165,4 +165,5 @@ recréer le site depuis l'application seule pour prouver que les outils suffisen
 | Règle de style créée deux fois (Entrée puis sortie du champ) | Corrigé |
 | Canevas libre ou vue verrouillée, bouton de la barre (D-70) | Fait |
 | Couleurs du site créées depuis le sélecteur ; paramètres du site en six rubriques (D-71) | Fait |
+| Mise en forme dans le texte : barre gras, italique, lien, span (D-72) | Fait |
 | Site Alunites recréé depuis l'application seule | En cours |

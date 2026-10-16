@@ -166,9 +166,21 @@ impl Core {
         let token = self.github_token()?;
         let access = token.access_token.clone();
         let full = repo.clone();
+        // Dépôt absent au nom du compte connecté : créé (public, GitHub Pages gratuit), sauf pour
+        // une vérification (5.6).
+        let homepage = domain.as_ref().map(|d| format!("https://{d}/"));
         let (user, info) = blocking(move || {
             let c = Client::new(&access);
-            Ok::<_, revel_git::GitError>((c.user()?, c.repo(&full)?))
+            let user = c.user()?;
+            let mut info = c.repo(&full)?;
+            if info.is_none()
+                && !dry_run
+                && let Some((owner, name)) = full.split_once('/')
+                && owner.eq_ignore_ascii_case(&user.login)
+            {
+                info = Some(c.create_repo(name, homepage.as_deref())?);
+            }
+            Ok::<_, revel_git::GitError>((user, info))
         })
         .await?;
         let info = info.ok_or_else(|| CoreError::GithubRepoNotFound(repo.clone()))?;

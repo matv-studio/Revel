@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 mod eval;
+mod forms;
 mod html;
 pub mod rebase;
 mod typography;
@@ -231,6 +232,8 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let mut warnings = Vec::new();
     let mut files = Vec::new();
     let mut pages: Vec<(String, bool)> = Vec::new();
+    // Formulaires reçus par l'hébergement (5.8) trouvés dans les pages.
+    let mut forms = 0usize;
     {
         let mut b = eval::Builder::new(input);
         b.lang = eval::Lang {
@@ -238,7 +241,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
             all: all.clone(),
             ..Default::default()
         };
-        build_pages(&b, input, &mut files, &mut pages, &mut warnings)?;
+        build_pages(&b, input, &mut files, &mut pages, &mut forms, &mut warnings)?;
     }
     for l in site.locales.iter().filter(|l| !l.draft) {
         let (lsite, entries, primary_data) = localize(input, l);
@@ -257,7 +260,14 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
             all: all.clone(),
             primary_data,
         };
-        build_pages(&b, &linput, &mut files, &mut pages, &mut warnings)?;
+        build_pages(
+            &b,
+            &linput,
+            &mut files,
+            &mut pages,
+            &mut forms,
+            &mut warnings,
+        )?;
     }
     if all.len() > 1 && site.pages.iter().any(|p| p.path == "/sitemap.xml") {
         warnings.push(
@@ -272,6 +282,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
         );
     }
     seo_files(site, &pages, &mut files, &mut warnings);
+    forms::handler_file(site, forms, &mut files, &mut warnings);
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(BuildOutput { files, warnings })
 }
@@ -282,6 +293,7 @@ fn build_pages(
     input: &BuildInput,
     files: &mut Vec<OutputFile>,
     pages: &mut Vec<(String, bool)>,
+    forms: &mut usize,
     warnings: &mut Vec<String>,
 ) -> Result<(), RenderError> {
     let prepared = prepare(b, input, false)?;
@@ -290,7 +302,10 @@ fn build_pages(
         let html = b.render_job(&prepared.globals, j, kind, warnings)?;
         let html = if kind == DocKind::Html {
             pages.push((j.url.clone(), truthy(&j.data, "noindex")));
-            finish_html(b, input.site, j, html)
+            let scripts = b.editor.as_ref().is_none_or(|e| e.scripts);
+            let (html, n) = forms::wire(input.site, finish_html(b, input.site, j, html), scripts);
+            *forms += n;
+            html
         } else {
             html
         };
@@ -337,7 +352,7 @@ fn custom_code(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String 
 
 /// Insère `code` avant la dernière balise fermante `tag` (casse ignorée) ; sans elle : au début
 /// (`at_end` faux) ou à la fin du document.
-fn insert_before(html: &str, tag: &str, code: &str, at_end: bool) -> String {
+pub(crate) fn insert_before(html: &str, tag: &str, code: &str, at_end: bool) -> String {
     let lower = html.to_ascii_lowercase();
     match lower.rfind(tag) {
         Some(i) => format!("{}{code}\n{}", &html[..i], &html[i..]),

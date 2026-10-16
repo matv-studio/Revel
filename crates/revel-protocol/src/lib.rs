@@ -3,6 +3,8 @@
 //! Types sérialisables uniquement, sans dépendance système : la même crate est compilée
 //! pour l'interface (wasm32) et pour l'application, la ligne de commande et le futur serveur MCP.
 
+pub mod hosting;
+
 use serde::{Deserialize, Serialize};
 
 /// Site connu de l'application.
@@ -307,6 +309,29 @@ pub struct HostingProfile {
     /// (D-25), quand le site a des versions et un dépôt distant.
     #[serde(default = "yes")]
     pub sync_versions: bool,
+    /// Adresse du site publié par cet hébergement (« Voir le site ») ; à défaut, l'adresse publique
+    /// du site pour l'environnement de production.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub site_url: Option<String>,
+    /// Hébergeur choisi à la mise en ligne (`hosting::PRESETS`, `ovh`…) : guides du nom de domaine
+    /// et des formulaires.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset: Option<String>,
+}
+
+/// Connexion d'essai à un hébergement SFTP (5.3) : clé du serveur à enregistrer, dossiers où
+/// peut aller le site.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostProbe {
+    /// Clé du serveur (format `known_hosts`).
+    pub server_key: String,
+    /// Empreinte SHA-256 de la clé.
+    pub fingerprint: String,
+    /// Dossiers trouvés pour le site, relatifs au dossier personnel (`www/`, `public_html/`…).
+    pub folders: Vec<String>,
+    /// Dossier proposé.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggested: Option<String>,
 }
 
 fn yes() -> bool {
@@ -440,8 +465,59 @@ pub enum DeployEvent {
         done: usize,
         total: usize,
     },
+    /// Contrôles du site généré (5.4) : liens cassés, images lourdes ou sans texte alternatif,
+    /// pages sans titre. Une publication s'arrête ensuite (`Failed`, `error-publish-checks`) si
+    /// elle n'a pas été demandée « quand même » ; une vérification continue.
+    Checks {
+        checks: Vec<SiteCheck>,
+    },
     Finished(DeploySummary),
     Failed(Failure),
+}
+
+/// Vérification d'un nom de domaine par Revel (5.7), sans service extérieur : adresses du
+/// domaine (résolveur du système), réponse en HTTPS, page d'accueil identique à celle publiée.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DomainStatus {
+    /// Domaine vérifié (`alunites.com`).
+    pub domain: String,
+    /// Adresses IP trouvées (vide : le domaine ne pointe nulle part).
+    pub addresses: Vec<String>,
+    /// Adresses attendues quand l'hébergeur les publie (GitHub Pages) ; vide sinon.
+    pub expected: Vec<String>,
+    /// Réponse en HTTPS avec un certificat valide.
+    pub https: bool,
+    /// Réponse en HTTP (sans chiffrement).
+    pub http: bool,
+    /// Page d'accueil reçue identique à la dernière publiée sur cet hébergement ; `None` : rien à
+    /// comparer (pas encore publié, pas de réponse).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serves_site: Option<bool>,
+    /// Raison de l'échec HTTPS (certificat, délai…).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub https_error: Option<String>,
+}
+
+/// Point à vérifier avant de publier (5.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SiteCheck {
+    pub kind: CheckKind,
+    /// Adresse de la page concernée.
+    pub page: String,
+    /// Lien ou image en cause (vide pour une page sans titre).
+    pub target: String,
+    /// Taille de l'image (octets), pour une image trop lourde.
+    #[serde(default)]
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckKind {
+    BrokenLink,
+    HeavyImage,
+    MissingAlt,
+    NoTitle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -742,4 +818,47 @@ pub struct McpActivity {
     /// Élément, sélecteur, chemin de données ou page visés.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
+}
+
+/// Destination de publication et ce qui reste à y publier (5.1).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublishDestination {
+    /// Identifiant de l'hébergement.
+    pub profile: String,
+    pub name: String,
+    /// Environnement généré (`production` : site public).
+    pub environment: String,
+    /// Adresse du site en ligne, si connue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Dernière publication (millisecondes depuis 1970) ; `None` : jamais publié depuis Revel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_at: Option<i64>,
+    /// Publication précédente gardée (revenir en arrière, 5.5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_at: Option<i64>,
+    /// Pages modifiées depuis la dernière publication (vide : à jour ; jamais publié : vide aussi).
+    #[serde(default)]
+    pub changes: Vec<PageChange>,
+    /// Accès disponibles (mot de passe enregistré ou compte GitHub connecté).
+    pub ready: bool,
+}
+
+/// Page modifiée depuis la dernière publication.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PageChange {
+    pub url: String,
+    /// Titre ou nom de la page (vide : l'adresse suffit).
+    pub title: String,
+    pub kind: ChangeKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeKind {
+    Added,
+    Changed,
+    Removed,
+    /// Styles, médias ou scripts du site (une seule ligne).
+    Files,
 }

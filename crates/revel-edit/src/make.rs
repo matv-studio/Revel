@@ -112,6 +112,8 @@ pub enum Preset {
     BlockTestimonial,
     BlockFaq,
     BlockContact,
+    /// Formulaire de contact reçu par l'hébergement (5.8).
+    BlockForm,
 }
 
 impl Preset {
@@ -126,11 +128,12 @@ impl Preset {
             Preset::BlockTestimonial => Block::Testimonial,
             Preset::BlockFaq => Block::Faq,
             Preset::BlockContact => Block::Contact,
+            Preset::BlockForm => Block::Form,
             _ => return None,
         })
     }
 
-    pub const ALL: [Preset; 23] = [
+    pub const ALL: [Preset; 24] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -154,6 +157,7 @@ impl Preset {
         Preset::BlockTestimonial,
         Preset::BlockFaq,
         Preset::BlockContact,
+        Preset::BlockForm,
     ];
 
     /// Règles de style dont l'élément a besoin (ajoutées si le site ne les a pas).
@@ -270,7 +274,8 @@ impl Preset {
             | Preset::BlockCta
             | Preset::BlockTestimonial
             | Preset::BlockFaq
-            | Preset::BlockContact => el(id(), "section", vec![], vec![]),
+            | Preset::BlockContact
+            | Preset::BlockForm => el(id(), "section", vec![], vec![]),
             Preset::Section => el(id(), "section", vec![], vec![]),
             Preset::Container => el(id(), "div", vec![], vec![]),
             Preset::Heading => el(id(), "h2", vec![], vec![txt(text)]),

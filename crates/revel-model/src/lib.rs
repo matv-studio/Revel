@@ -337,6 +337,30 @@ pub struct Settings {
     /// Code ajouté à toutes les pages HTML du site (3.9).
     #[serde(default, skip_serializing_if = "CustomCode::is_empty")]
     pub code: CustomCode,
+    /// Formulaires du site reçus par l'hébergement (5.8).
+    #[serde(default, skip_serializing_if = "FormSettings::is_default")]
+    pub forms: FormSettings,
+}
+
+/// Formulaires du site (5.8) : les messages des `<form data-revel-form>` sont transmis par
+/// courriel par un script PHP produit à la génération, sans service extérieur.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FormSettings {
+    /// Adresse qui reçoit les messages ; vide : formulaires non reçus.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub recipient: String,
+    /// Objet des courriels (par défaut : « Nouveau message depuis <site> »).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    /// Message affiché après l'envoi (par défaut selon la langue du site).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub success: Option<String>,
+}
+
+impl FormSettings {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 /// Code ajouté tel quel aux pages HTML (statistiques, vérification d'un service, scripts) :

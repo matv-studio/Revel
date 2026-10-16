@@ -334,6 +334,12 @@ error-keyring = Le trousseau du système n’est pas accessible : { $detail }
 error-blocked = Publication bloquée : corrigez d’abord les points signalés.
 error-not-built = Le site n’a pas encore été généré pour cet environnement. Générez-le, puis ouvrez l’aperçu.
 error-sftp-connect = Connexion à { $host } impossible. Vérifiez l’adresse du serveur, le port et votre connexion internet. ({ $detail })
+error-sftp-timeout = Pas de réponse de { $host }. Vérifiez l’adresse du serveur et le port ; chez o2switch, autorisez d’abord l’adresse IP de cet ordinateur (cPanel › Autorisation SSH).
+error-no-previous = Aucune publication précédente n’a été gardée pour cet hébergement.
+error-publish-checks = { $count ->
+    [one] 1 point à vérifier avant de publier.
+   *[other] { $count } points à vérifier avant de publier.
+}
 error-sftp-host-key = La clé du serveur a changé depuis la dernière connexion. Cela peut venir d’un changement chez l’hébergeur ou d’une tentative d’interception : vérifiez auprès de votre hébergeur avant de continuer.
 error-sftp-auth = Identifiant ou mot de passe refusé par le serveur.
 error-sftp = Le serveur a renvoyé une erreur : { $detail }
@@ -1405,3 +1411,129 @@ mcp-tool-apply_commands = Modifications
 mcp-tool-undo = Annulation
 mcp-tool-redo = Rétablissement
 action-copy = Copier
+
+# Bouton « Publier » de la barre supérieure (5.1)
+pub-panel = Publication
+pub-public = Site public
+pub-test = Version de test
+pub-never = Jamais publié
+pub-at-now = Publié à l’instant
+pub-at-min = Publié il y a { $n } min
+pub-at-hours = Publié il y a { $n } h
+pub-at-date = Publié le { $date }
+pub-changes = { $n ->
+    [one] 1 page modifiée
+   *[other] { $n } pages modifiées
+}
+pub-files-changed = Styles ou médias modifiés
+pub-up-to-date = À jour
+pub-kind-added = Nouvelle
+pub-kind-changed = Modifiée
+pub-kind-removed = Supprimée
+pub-files = Styles, médias et scripts
+pub-live = En ligne
+pub-waiting = En attente
+pub-needs-access = Accès à compléter
+pub-hosting = Hébergements
+pub-hosting-help = Gérer les hébergements du site (Paramètres › Publication)
+pub-empty = Pas encore en ligne
+pub-setup = Mettre en ligne
+pub-dirty = Modifications non publiées
+pub-page-open = Ouvrir dans l’éditeur
+pub-select = Inclure dans la publication
+
+# Mise en ligne guidée (5.2, 5.3)
+setup-title = Mettre en ligne
+setup-host = Hébergeur
+setup-host-pick = Choisir un hébergeur
+setup-other = Autre
+setup-other-help = Autre hébergeur avec un accès SFTP
+setup-console = Espace client
+setup-paste = Message de l’hébergeur
+setup-paste-help = Collez le courriel d’installation ou la page des accès : serveur, identifiant et mot de passe sont reconnus
+setup-paste-placeholder = Coller ici (facultatif)
+setup-env-help = Site public : l’adresse de votre site. Version de test : une adresse à part pour relire avant de publier le site public
+setup-advanced = Réglages avancés
+setup-folder = Dossier du site
+setup-connect = Se connecter
+setup-connecting = Connexion au serveur…
+setup-connected = Connecté
+host-ovh-sftp = Activer SFTP : Web Cloud › Hébergements › votre hébergement › FTP - SSH, colonne « SFTP »
+host-ovh-access = Accès : même onglet, « Serveur FTP et SFTP » et « Login principal »
+host-o2switch-ip = Autoriser cet ordinateur : cPanel › Outils › Autorisation SSH › Ajouter une exception, port 22
+host-o2switch-access = Accès : identifiant et mot de passe cPanel (courriel « Bienvenue chez o2switch »)
+host-infomaniak-access = Accès : Manager › Hébergement Web › FTP / SSH
+host-hostinger-ssh = Activer SSH : hPanel › Sites web › Tableau de bord › Accès SSH › Activer
+host-hostinger-access = Accès : même page (adresse IP, port 65002, identifiant) ; mot de passe du FTP
+host-ionos-create = Créer l’accès : Menu › Hébergement › SFTP & SSH › Configurer
+host-ionos-access = Accès : SFTP & SSH › Administrer › votre identifiant
+
+# Contrôles avant publication (5.4)
+check-title = Avant de publier
+check-broken-link = { $n ->
+    [one] 1 lien cassé
+   *[other] { $n } liens cassés
+}
+check-heavy-image = { $n ->
+    [one] 1 image de plus de 1 Mo
+   *[other] { $n } images de plus de 1 Mo
+}
+check-missing-alt = { $n ->
+    [one] 1 image sans texte alternatif
+   *[other] { $n } images sans texte alternatif
+}
+check-no-title = { $n ->
+    [one] 1 page sans titre
+   *[other] { $n } pages sans titre
+}
+publish-anyway = Publier quand même
+
+# Revenir à la publication précédente (5.5)
+pub-rollback-help = Revenir à la publication du { $date }
+pub-rollback-title = Remettre en ligne la version du { $date } ?
+pub-rollback-confirm = Revenir
+publish-restoring = Préparation de la version précédente…
+
+# Nom de domaine (5.7)
+domain-title = Nom de domaine
+domain-name = Domaine
+domain-records = Enregistrements à créer
+domain-records-help = Chez le gestionnaire de votre domaine (zone DNS) : enregistrements A pour le domaine, CNAME pour www
+domain-type = Type
+domain-host = Nom
+domain-value = Valeur
+domain-ipv6 = IPv6 (facultatif)
+domain-other = Chez votre gestionnaire de domaine : enregistrements indiqués par votre hébergeur
+domain-check = Vérifier
+domain-check-help = Un changement de domaine peut mettre jusqu’à 48 h à s’appliquer
+domain-checking = Vérification du domaine…
+domain-none = { $domain } ne pointe vers aucune adresse
+domain-elsewhere = { $domain } pointe vers { $addresses }, pas vers l’hébergement
+domain-points = { $domain } pointe vers { $addresses }
+domain-https = HTTPS actif
+domain-no-https = HTTPS pas encore actif
+domain-serves = Le domaine affiche votre site
+domain-other-page = Le domaine affiche une autre page que votre site
+host-ovh-domain-1 = Web Cloud › Hébergements › votre hébergement › Mes sites › Ajouter un site › Associer un domaine externe
+host-ovh-domain-2 = Chez votre gestionnaire de domaine : enregistrements A et TXT « ovhcontrol » affichés par OVHcloud
+host-o2switch-domain-1 = cPanel › Domaines › Domaines configurés : ajouter le domaine
+host-o2switch-domain-2 = Chez votre gestionnaire de domaine : serveurs ns1.o2switch.net et ns2.o2switch.net, ou enregistrement A vers l’adresse IP partagée (cPanel)
+host-infomaniak-domain-1 = Manager › votre site › Informations : adresses IPv4 et IPv6
+host-infomaniak-domain-2 = Chez votre gestionnaire de domaine : enregistrements A (et AAAA) vers ces adresses
+host-hostinger-domain-1 = hPanel › Sites web : ajouter le site, puis « Check guide »
+host-hostinger-domain-2 = Chez votre gestionnaire de domaine : serveurs de noms affichés, ou enregistrements A pour @ et www vers l’adresse IP ; DNSSEC désactivé
+host-ionos-domain-1 = Menu › Domaines & SSL › Configurer un domaine externe
+host-ionos-domain-2 = Chez votre gestionnaire de domaine : serveurs de noms IONOS, ou enregistrement TXT de confirmation sur @
+
+# Formulaires (5.8)
+insert-help-form = Formulaire de contact : messages reçus par courriel grâce à votre hébergement (Paramètres › Formulaires). Glisser sur la page, ou cliquer.
+forms-help = Les messages des formulaires du site sont transmis par courriel par votre hébergement (PHP), sans service extérieur
+forms-recipient = Adresse de réception
+forms-subject = Objet des courriels
+forms-subject-default = Nouveau message depuis { $site }
+forms-success = Message après l’envoi
+forms-success-default = Merci, votre message a bien été envoyé.
+forms-host-yes = { $name } : formulaires reçus
+forms-host-no = { $name } : formulaires indisponibles (pas de PHP)
+forms-infomaniak = Infomaniak : activer la fonction mail du site (paramètres avancés › PHP / Apache) et renseigner l’e-mail de l’expéditeur ; 50 messages par 24 h au plus
+forms-from-domain = Messages envoyés depuis site@ votre domaine : le domaine doit être celui de l’hébergement

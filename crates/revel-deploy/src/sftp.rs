@@ -105,6 +105,9 @@ pub struct Report {
 pub enum SftpError {
     #[error("connexion à {0} impossible : {1}")]
     Connect(String, String),
+    /// Pas de réponse du serveur dans le délai (adresse, port, pare-feu de l'hébergeur).
+    #[error("pas de réponse de {0}")]
+    Timeout(String),
     #[error("la clé du serveur ne correspond pas à la clé enregistrée (reçue : {0})")]
     HostKeyMismatch(String),
     #[error("identifiant ou mot de passe refusé")]
@@ -163,6 +166,153 @@ fn key_matches(line: &str, key: &PublicKey) -> bool {
     })
 }
 
+/// Délai de connexion au serveur (serveur injoignable, adresse IP non autorisée par le pare-feu).
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Connexion et authentification ; clé du serveur (ligne `known_hosts`) et son empreinte.
+async fn connect(
+    target: &SftpTarget,
+) -> Result<(russh::client::Handle<Client>, String, String), SftpError> {
+    let received = Arc::new(Mutex::new(None));
+    let handler = Client {
+        expected: target.known_host_key.clone(),
+        received: received.clone(),
+    };
+    let config = Arc::new(russh::client::Config {
+        inactivity_timeout: Some(std::time::Duration::from_secs(60)),
+        keepalive_interval: Some(std::time::Duration::from_secs(20)),
+        ..Default::default()
+    });
+    let addr = format!("{}:{}", target.host, target.port);
+    let connected = tokio::time::timeout(
+        CONNECT_TIMEOUT,
+        russh::client::connect(config, (target.host.as_str(), target.port), handler),
+    )
+    .await;
+    let server_key = received.lock().ok().and_then(|k| k.clone());
+    let (key_line, fingerprint) = match &server_key {
+        Some(k) => (
+            format!("{} {}", target.host, k.to_openssh().unwrap_or_default()),
+            k.fingerprint(HashAlg::Sha256).to_string(),
+        ),
+        None => (String::new(), String::new()),
+    };
+    let session = match connected {
+        Err(_) => return Err(SftpError::Timeout(addr)),
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
+            if target.known_host_key.is_some() && server_key.is_some() {
+                return Err(SftpError::HostKeyMismatch(key_line));
+            }
+            return Err(SftpError::Connect(addr, e.to_string()));
+        }
+    };
+    let mut session = session;
+    let auth = session
+        .authenticate_password(target.user.clone(), target.password.clone())
+        .await
+        .map_err(|e| SftpError::Connect(addr.clone(), e.to_string()))?;
+    if !auth.success() {
+        return Err(SftpError::Auth);
+    }
+    Ok((session, key_line, fingerprint))
+}
+
+/// Ouvre le sous-système SFTP d'une session authentifiée.
+async fn open_sftp(
+    session: &russh::client::Handle<Client>,
+) -> Result<Arc<RawSftpSession>, SftpError> {
+    let channel = session.channel_open_session().await.map_err(sftp_err)?;
+    channel
+        .request_subsystem(true, "sftp")
+        .await
+        .map_err(sftp_err)?;
+    let sftp = Arc::new(RawSftpSession::new(channel.into_stream()));
+    sftp.set_timeout(60);
+    Ok(sftp)
+}
+
+/// Connexion d'essai (5.3) : clé du serveur et dossiers où peut aller le site.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Probe {
+    /// Clé du serveur, au format `known_hosts`.
+    pub server_key: String,
+    pub fingerprint: String,
+    /// Dossiers trouvés, relatifs au dossier personnel, terminés par `/`, du plus probable au
+    /// moins probable.
+    pub folders: Vec<String>,
+}
+
+/// Dossiers habituels d'un site dans le dossier personnel (hébergements mutualisés).
+const WEB_ROOTS: &[&str] = &["www", "public_html", "htdocs", "httpdocs", "html", "web"];
+
+/// Se connecte, s'authentifie et cherche les dossiers du site (`www/`, `public_html/`,
+/// `domains/<domaine>/public_html/`, `sites/<domaine>/`…), sans rien écrire.
+pub async fn probe(target: &SftpTarget) -> Result<Probe, SftpError> {
+    let (session, server_key, fingerprint) = connect(target).await?;
+    let sftp = open_sftp(&session).await?;
+    sftp.init().await.map_err(sftp_err)?;
+    let is_dir = |p: String| {
+        let sftp = sftp.clone();
+        async move {
+            sftp.stat(p)
+                .await
+                .is_ok_and(|a| a.attrs.file_type().is_dir())
+        }
+    };
+    let list = |p: &str| {
+        let sftp = sftp.clone();
+        let p = p.to_string();
+        async move {
+            let mut names = Vec::new();
+            let Ok(h) = sftp.opendir(p).await else {
+                return names;
+            };
+            while let Ok(n) = sftp.readdir(h.handle.clone()).await {
+                if n.files.is_empty() {
+                    break;
+                }
+                names.extend(
+                    n.files
+                        .into_iter()
+                        .map(|f| f.filename)
+                        .filter(|f| !f.starts_with('.')),
+                );
+            }
+            let _ = sftp.close(h.handle).await;
+            names.sort();
+            names
+        }
+    };
+    let mut folders = Vec::new();
+    // Un dossier par domaine (Hostinger, Infomaniak) d'abord : plus précis.
+    for d in list("domains").await {
+        let p = format!("domains/{d}/public_html");
+        if is_dir(p.clone()).await {
+            folders.push(format!("{p}/"));
+        }
+    }
+    for d in list("sites").await {
+        let p = format!("sites/{d}");
+        if is_dir(p.clone()).await {
+            folders.push(format!("{p}/"));
+        }
+    }
+    for d in WEB_ROOTS {
+        if is_dir((*d).to_string()).await {
+            folders.push(format!("{d}/"));
+        }
+    }
+    let _ = session
+        .disconnect(russh::Disconnect::ByApplication, "", "fr")
+        .await;
+    Ok(Probe {
+        server_key,
+        fingerprint,
+        folders,
+    })
+}
+
 /// Publie `local_dir` sur le serveur.
 pub async fn deploy(
     local_dir: &Path,
@@ -195,53 +345,11 @@ pub async fn deploy(
     }
 
     // Connexion.
-    let received = Arc::new(Mutex::new(None));
-    let handler = Client {
-        expected: target.known_host_key.clone(),
-        received: received.clone(),
-    };
-    let config = Arc::new(russh::client::Config {
-        inactivity_timeout: Some(std::time::Duration::from_secs(60)),
-        keepalive_interval: Some(std::time::Duration::from_secs(20)),
-        ..Default::default()
-    });
-    let addr = format!("{}:{}", target.host, target.port);
-    let connected =
-        russh::client::connect(config, (target.host.as_str(), target.port), handler).await;
-    let server_key = received.lock().ok().and_then(|k| k.clone());
-    let (key_line, fingerprint) = match &server_key {
-        Some(k) => (
-            format!("{} {}", target.host, k.to_openssh().unwrap_or_default()),
-            k.fingerprint(HashAlg::Sha256).to_string(),
-        ),
-        None => (String::new(), String::new()),
-    };
-    let mut session = match connected {
-        Ok(s) => s,
-        Err(e) => {
-            if target.known_host_key.is_some() && server_key.is_some() {
-                return Err(SftpError::HostKeyMismatch(key_line));
-            }
-            return Err(SftpError::Connect(addr, e.to_string()));
-        }
-    };
-    let auth = session
-        .authenticate_password(target.user.clone(), target.password.clone())
-        .await
-        .map_err(|e| SftpError::Connect(addr.clone(), e.to_string()))?;
-    if !auth.success() {
-        return Err(SftpError::Auth);
-    }
+    let (session, key_line, fingerprint) = connect(target).await?;
     on_event(Event::Connected {
         server_key: key_line.clone(),
     });
-    let channel = session.channel_open_session().await.map_err(sftp_err)?;
-    channel
-        .request_subsystem(true, "sftp")
-        .await
-        .map_err(sftp_err)?;
-    let sftp = Arc::new(RawSftpSession::new(channel.into_stream()));
-    sftp.set_timeout(60);
+    let sftp = open_sftp(&session).await?;
     let version = sftp.init().await.map_err(sftp_err)?;
     let posix_rename = version.extensions.contains_key("posix-rename@openssh.com");
     let r = Remote {

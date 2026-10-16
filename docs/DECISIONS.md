@@ -489,3 +489,73 @@ par les outils de D-41 ; Revel n'a pas de panneau de discussion, son interface r
 français ↔ anglais reste livré dans l'installateur jusqu'à la version 1.0 (D-36). La version 1.0 aura un
 installateur plus léger et plus soigné, au logo de Revel, sans langue de traduction livrée (toutes téléchargées
 depuis Réglages › Traduction automatique) ; à faire à l'étape 6 (empaquetage).
+
+**D-47 — 16/10/2026 — prise.** **Publier en un clic (5.1) : pages modifiées calculées sur l'ordinateur.** Le
+bouton « Publier » de la barre supérieure ouvre un panneau ancré (comme Webflow et Framer) : une ligne par
+hébergement (adresse du site, « Site public » ou « Version de test », date de la dernière publication), cases à
+cocher s'il y en a plusieurs, pages modifiées dépliables, avancement, puis « En ligne » et « Voir le site ».
+Les modifications non publiées sont connues sans interroger le serveur : à chaque publication réussie, Revel
+garde dans son état (`revel-state.json`) l'empreinte (BLAKE3) du HTML de chaque page générée et une empreinte des
+fichiers copiés (styles, médias, scripts) ; l'état actuel est généré en mémoire et comparé (pages ajoutées,
+modifiées, supprimées ; « Styles, médias et scripts » en une ligne). Le résultat est gardé tant que le site ne
+change pas (révision de la session d'édition), le panneau le relit à l'ouverture et toutes les 8 s, fenêtre
+visible. Limite : une publication faite hors de cette installation de Revel (autre ordinateur, outil FTP)
+n'est pas connue ; la date affichée est celle de la dernière publication depuis Revel.
+
+**D-48 — 16/10/2026 — prise (décision de l'utilisateur pour la liste).** **Première mise en ligne guidée
+(5.2).** Hébergeur choisi dans une liste déroulante (OVHcloud, o2switch, Infomaniak, Hostinger, IONOS, GitHub
+Pages) avec un bouton « Autre » à côté, plutôt que des tuiles. Pour chaque hébergeur, les étapes pour obtenir
+les accès SFTP (activer SFTP chez OVHcloud, autoriser l'adresse IP chez o2switch, activer SSH chez Hostinger,
+créer l'accès chez IONOS) et le lien de l'espace client, d'après leurs aides officielles (`docs/HEBERGEURS.md`) ;
+port (65002 chez Hostinger) et dossier habituel préremplis. Le courriel d'installation ou la page des accès,
+collés tels quels, sont lus sur l'ordinateur (`revel_protocol::hosting::parse_access` : libellés français et
+anglais, valeur à la ligne, adresse `sftp://`) ; le message est effacé ensuite car il contient le mot de passe.
+o2switch n'a d'aide qu'en français : ses libellés restent en français dans l'interface anglaise.
+
+**D-49 — 16/10/2026 — prise.** **Connexion d'essai et clé du serveur (5.3).** « Se connecter » ouvre une session
+SFTP sans rien écrire (`revel_deploy::sftp::probe`, délai de 20 s) : accès vérifiés, clé du serveur enregistrée
+avec l'hébergement sans l'afficher (confiance à la première connexion, comme `ssh` avec
+`StrictHostKeyChecking=accept-new`), dossiers du site trouvés (`domains/<domaine>/public_html`,
+`sites/<domaine>`, `www`, `public_html`, `htdocs`, `httpdocs`, `html`, `web`) ; dossier proposé : celui du
+domaine du site, sinon le dossier habituel de l'hébergeur, sinon le premier trouvé. La clé n'est montrée qu'en
+cas de changement (échec « clé du serveur changée »). Sans réponse (pare-feu d'o2switch sans adresse IP
+autorisée), l'échec le dit.
+
+**D-50 — 16/10/2026 — prise.** **Contrôles avant publication (5.4).** Faits sur le site généré (ce qui sera mis
+en ligne) : liens internes vers une page ou un fichier absent, images de plus de 1 Mo envoyées telles quelles,
+images sans attribut `alt` (un `alt=""` volontaire est accepté), pages sans `<title>` ; pages de redirection
+ignorées ; liens externes non vérifiés (pas de requête vers d'autres sites). Une publication s'arrête et le
+panneau montre les points regroupés ; « Publier quand même » relance sans contrôle. Plusieurs hébergements :
+contrôles une seule fois.
+
+**D-51 — 16/10/2026 — prise.** **Revenir à la publication précédente (5.5).** Chaque publication réussie est
+gardée dans le dossier du site (`.revel/published`) : fichiers rangés par empreinte BLAKE3 (un contenu identique
+n'est gardé qu'une fois d'une version à l'autre), liste des fichiers des deux dernières versions par
+hébergement, fichiers inutilisés retirés. Revenir republie la version précédente par le même envoi qu'une
+publication (seuls les fichiers qui diffèrent partent, SFTP comme GitHub Pages) ; la version remplacée devient
+la précédente, un second retour annule le premier. Les fichiers sont copiés (pas de liens physiques vers le
+dossier généré, réécrit à chaque génération).
+
+**D-52 — 16/10/2026 — prise.** **GitHub Pages en un clic (5.6).** Dépôt proposé `compte/nom-du-site` ; s'il
+n'existe pas au nom du compte connecté, il est créé public (GitHub Pages gratuit) sans commit initial à la
+première publication (`POST /user/repos`), puis la branche `gh-pages` est envoyée et GitHub Pages activé comme
+avant. Pas de création pour un dépôt d'organisation ni pendant une vérification. Source :
+[Create a repository for the authenticated user](https://docs.github.com/en/rest/repos/repos#create-a-repository-for-the-authenticated-user).
+
+**D-53 — 16/10/2026 — prise.** **Nom de domaine (5.7).** Pour GitHub Pages : quatre enregistrements A, quatre AAAA
+(facultatifs) et CNAME `www` vers `compte.github.io`, prêts à copier
+([documentation GitHub](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)) ;
+pour les autres hébergeurs, chemin de leur espace client (leurs adresses IP dépendent du serveur). Vérification
+par Revel, sans service extérieur : adresses données par le résolveur du système, requête HTTPS (certificat
+vérifié) puis HTTP vers le domaine, page d'accueil reçue comparée à l'empreinte du fichier `index.html` de la
+dernière publication. Le domaine enregistré devient l'adresse du site publié (« Voir le site ») et, pour GitHub
+Pages, le domaine personnalisé envoyé à la publication suivante.
+
+**D-54 — 16/10/2026 — prise.** **Formulaires (5.8).** Les `<form data-revel-form="nom">` (bloc « Formulaire »
+du panneau Ajouter) envoient leurs champs à `/revel-form.php`, produit à la génération quand une adresse de
+réception est réglée (Paramètres › Formulaires) : fonction `mail()` de PHP de l'hébergement, expéditeur
+`site@<domaine du site>` (exigé par OVHcloud et IONOS), visiteur en `Reply-To`, champ piège, dix envois par
+heure et par adresse IP, réponse JSON (envoi sans recharger la page) ou page de confirmation. Compatible PHP 7.0.
+GitHub Pages n'exécute pas PHP : signalé dans Paramètres › Formulaires et par l'avertissement de publication.
+Les formulaires qui ont déjà leur propre `action` (comme `contact.php` du site Alunites) ne sont pas touchés.
+Limites des hébergeurs : `docs/HEBERGEURS.md` (Infomaniak : fonction mail à activer, 50 messages par 24 h).

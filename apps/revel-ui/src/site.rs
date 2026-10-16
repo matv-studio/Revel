@@ -1,6 +1,5 @@
 //! Site ouvert : vues (éditeur, CMS, localisation, paramètres) et rubriques des paramètres.
 
-use crate::panels::Planned;
 use crate::{Route, Section, Tab, Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -150,7 +149,7 @@ pub(crate) const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::Redirects, "settings-redirects", None),
     (Section::Fonts, "settings-fonts", None),
     (Section::Code, "settings-code", None),
-    (Section::Forms, "settings-forms", Some(5)),
+    (Section::Forms, "settings-forms", None),
     (Section::Versions, "settings-versions", None),
 ];
 
@@ -167,22 +166,9 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         Section::Export => view! { <Export site=site.clone()/> }.into_any(),
         Section::Redirects => view! { <Redirects site=site.clone()/> }.into_any(),
         Section::Seo => view! { <Seo site=site.clone()/> }.into_any(),
+        Section::Forms => view! { <Forms site=site.clone()/> }.into_any(),
         Section::Menus => {
             view! { <crate::readable::Menus s=doc_session(ui, site.path.clone())/> }.into_any()
-        }
-        other => {
-            let (key, step) = SECTIONS
-                .iter()
-                .find(|(s, ..)| *s == other)
-                .map(|(_, k, st)| (*k, st.unwrap_or(3)))
-                .unwrap_or(("settings-general", 3));
-            view! {
-                <section class="page settings-page">
-                    <header class="page-head"><h1>{ui.t(key)}</h1></header>
-                    <Planned key=planned_key(other) step=step icon=icons::settings/>
-                </section>
-            }
-            .into_any()
         }
     };
     view! {
@@ -203,15 +189,6 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
             </nav>
             <div class="settings-content">{body}</div>
         </div>
-    }
-}
-
-/// Texte d'une rubrique prévue.
-fn planned_key(s: Section) -> &'static str {
-    match s {
-        Section::Seo => "settings-seo-planned",
-        Section::Forms => "settings-forms-planned",
-        _ => "settings-general",
     }
 }
 
@@ -398,6 +375,99 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                         }></textarea>
                 </label>
             </div>
+        </section>
+    }
+}
+
+/// Paramètres › Formulaires (5.8) : adresse qui reçoit les messages des formulaires du site,
+/// objet, message après l'envoi ; hébergements qui les reçoivent (PHP) ou non.
+#[component]
+fn Forms(site: SiteSummary) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let s = doc_session(ui, site.path.clone());
+    let forms = move || {
+        s.doc.with(|d| {
+            d.as_ref()
+                .map(|d| d.settings.forms.clone())
+                .unwrap_or_default()
+        })
+    };
+    let site_name = move || {
+        s.doc
+            .with(|d| d.as_ref().map(|d| d.name.clone()).unwrap_or_default())
+    };
+    let set = move |f: &dyn Fn(&mut revel_model::FormSettings)| {
+        let mut v = forms();
+        f(&mut v);
+        s.apply
+            .run(revel_edit::Command::SetFormSettings { forms: v });
+    };
+    let hosts = RwSignal::new(Vec::<revel_protocol::HostingProfile>::new());
+    let path = site.path.clone();
+    spawn_local(async move {
+        if let Ok(l) = api::profiles(&path).await {
+            hosts.set(l.into_iter().map(|(p, _)| p).collect());
+        }
+    });
+    let email_ok = move || {
+        let r = forms().recipient;
+        let r = r.trim();
+        r.is_empty() || (r.contains('@') && r.rsplit('@').next().is_some_and(|d| d.contains('.')))
+    };
+    view! {
+        <section class="page settings-page">
+            <header class="page-head"><h1 title=ui.t("forms-help")>{ui.t("settings-forms")}</h1></header>
+            <div class="section stack">
+                <label class="field">
+                    <span class="label">{ui.t("forms-recipient")}</span>
+                    <input class="input forms-recipient" type="email" autocomplete="email" spellcheck="false"
+                        placeholder="bonjour@exemple.fr" class:is-invalid=move || !email_ok()
+                        prop:value=move || forms().recipient
+                        on:change=move |e| { let v = event_target_value(&e); set(&|f| f.recipient = v.trim().to_string()) }/>
+                </label>
+                <div class="form-cols">
+                    <label class="field">
+                        <span class="label">{ui.t("forms-subject")}</span>
+                        <input class="input" type="text"
+                            placeholder=move || ui.tx("forms-subject-default", &[("site", site_name())])
+                            prop:value=move || forms().subject.unwrap_or_default()
+                            on:change=move |e| { let v = event_target_value(&e); set(&|f| f.subject = (!v.trim().is_empty()).then(|| v.trim().to_string())) }/>
+                    </label>
+                    <label class="field">
+                        <span class="label">{ui.t("forms-success")}</span>
+                        <input class="input" type="text" placeholder=ui.t("forms-success-default")
+                            prop:value=move || forms().success.unwrap_or_default()
+                            on:change=move |e| { let v = event_target_value(&e); set(&|f| f.success = (!v.trim().is_empty()).then(|| v.trim().to_string())) }/>
+                    </label>
+                </div>
+            </div>
+            <Show when=move || !hosts.with(Vec::is_empty)>
+                <div class="section">
+                    <ul class="domain-lines forms-hosts">
+                        {move || hosts.get().into_iter().map(|p| {
+                            let github = matches!(p.target, revel_protocol::HostingTarget::GithubPages { .. });
+                            let note = match p.preset.as_deref() {
+                                Some("infomaniak") => Some("forms-infomaniak"),
+                                Some("ovh") | Some("ionos") => Some("forms-from-domain"),
+                                _ => None,
+                            };
+                            let text = if github {
+                                ui.tx("forms-host-no", &[("name", p.name.clone())])
+                            } else {
+                                ui.tx("forms-host-yes", &[("name", p.name.clone())])
+                            };
+                            view! {
+                                <li class="domain-line" class:is-ok=!github class:is-ko=github
+                                    title=note.map(|k| ui.tx(k, &[])).unwrap_or_default()>
+                                    {if github { icons::warning() } else { icons::check() }}
+                                    <span>{text}</span>
+                                    {note.map(|_| view! { <span class="forms-note">{icons::info()}</span> })}
+                                </li>
+                            }
+                        }).collect_view()}
+                    </ul>
+                </div>
+            </Show>
         </section>
     }
 }

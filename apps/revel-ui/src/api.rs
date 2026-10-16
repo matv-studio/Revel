@@ -316,10 +316,12 @@ pub async fn delete_profile(site: &str, id: &str) -> Res<()> {
     call("delete_profile", &A { site, id }).await
 }
 
+/// Publication (ou vérification, `dry_run`) ; `skip_checks` : « Publier quand même » (5.4).
 pub async fn deploy(
     site: &str,
     profile_id: &str,
     dry_run: bool,
+    skip_checks: bool,
     on: impl Fn(DeployEvent) + 'static,
 ) -> Res<()> {
     #[derive(Serialize)]
@@ -328,6 +330,7 @@ pub async fn deploy(
         site: &'a str,
         profile_id: &'a str,
         dry_run: bool,
+        skip_checks: bool,
     }
     call_with_channel::<_, (), _>(
         "deploy",
@@ -335,8 +338,72 @@ pub async fn deploy(
             site,
             profile_id,
             dry_run,
+            skip_checks,
         },
         on,
+    )
+    .await
+}
+
+/// Connexion d'essai à un hébergement SFTP avant de l'enregistrer (5.3) ; `password` : saisi.
+pub async fn hosting_probe(
+    site: &str,
+    profile: &HostingProfile,
+    password: Option<String>,
+) -> Res<revel_protocol::HostProbe> {
+    #[derive(Serialize)]
+    struct A<'a> {
+        site: &'a str,
+        profile: &'a HostingProfile,
+        password: Option<String>,
+    }
+    call(
+        "hosting_probe",
+        &A {
+            site,
+            profile,
+            password,
+        },
+    )
+    .await
+}
+
+/// Destinations de publication du site : dernière publication, pages modifiées depuis (5.1).
+pub async fn publish_state(path: &str) -> Res<Vec<revel_protocol::PublishDestination>> {
+    call("publish_state", &PathArg { path }).await
+}
+
+/// Republie la version précédente d'un hébergement (5.5).
+pub async fn rollback(site: &str, profile_id: &str, on: impl Fn(DeployEvent) + 'static) -> Res<()> {
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct A<'a> {
+        site: &'a str,
+        profile_id: &'a str,
+    }
+    call_with_channel::<_, (), _>("rollback", &A { site, profile_id }, on).await
+}
+
+/// Vérifie qu'un domaine mène au site publié sur un hébergement (5.7).
+pub async fn domain_check(
+    site: &str,
+    profile_id: &str,
+    domain: &str,
+) -> Res<revel_protocol::DomainStatus> {
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct A<'a> {
+        site: &'a str,
+        profile_id: &'a str,
+        domain: &'a str,
+    }
+    call(
+        "domain_check",
+        &A {
+            site,
+            profile_id,
+            domain,
+        },
     )
     .await
 }

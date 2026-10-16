@@ -1908,6 +1908,54 @@ try {
       check('réglages lisibles : tout annulé (document, données)', true);
     }
 
+    // ---------------------------------------------------------------- Publier en un clic (5.1)
+    // Bouton « Publier » de la barre supérieure (hébergement simulé) : publication sans quitter
+    // l'éditeur, date de la dernière publication mise à jour.
+    {
+      await page.click('.pub-btn');
+      await page.waitForSelector('.pub-pop .pub-dest');
+      const meta0 = (await page.textContent('.pub-dest-meta')).trim();
+      const single = (await page.$$('.pub-check')).length === 0;
+      await page.click('.pub-foot .btn--primary');
+      await page.waitForSelector('.pub-dest .chip--ok', { timeout: 15000 });
+      const meta1 = (await page.textContent('.pub-dest-meta')).trim();
+      const stay = await page.isVisible('.view-tab.is-on[data-view="view-editor"]');
+      if (shots) await page.locator('.pub-pop').screenshot({ path: `${shots}/publier.png` });
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.pub-pop', { state: 'detached' });
+      check('publier en un clic : publié depuis la barre supérieure, sans quitter l\'éditeur',
+        /Jamais publié/.test(meta0) && single && /Publié à l’instant/.test(meta1) && stay, `${meta0} -> ${meta1}`);
+    }
+
+    // ---------------------------------------------------------------- Mise en ligne guidée (5.2, 5.3)
+    // Paramètres › Publication › Ajouter : hébergeur reconnu dans le message collé, accès remplis,
+    // connexion d'essai (simulée), dossier proposé, hébergement enregistré.
+    {
+      await page.click('.pub-btn');
+      await page.click('.pub-foot .pub-manage');
+      await page.waitForSelector('.settings-page .host');
+      const before = (await page.$$('.settings-page .host')).length;
+      await page.click('.settings-page .page-head .btn');
+      await page.waitForSelector('.setup');
+      await page.fill('.setup-paste', 'Votre hébergement est installé.\nServeur FTP et SFTP : ftp.cluster031.hosting.ovh.net\nLogin principal : alunitp\nMot de passe : Xy7-kQ2pLm\n');
+      const preset = await page.inputValue('.setup-preset');
+      const filled = [await page.inputValue('.setup-server'), await page.inputValue('.setup-user'), (await page.inputValue('.setup-password')).length];
+      const cleared = await page.inputValue('.setup-paste');
+      await page.click('.setup .btn--primary');
+      await page.waitForSelector('.setup-state.status--ok');
+      await page.click('.setup-advanced > summary');
+      const folder = await page.inputValue('.setup-folder');
+      if (shots) await page.locator('.setup').screenshot({ path: `${shots}/mise-en-ligne.png` });
+      await page.click('.setup .dialog-actions .btn:not(.btn--primary)');
+      await page.waitForSelector('.setup', { state: 'detached' });
+      await page.waitForFunction((n) => document.querySelectorAll('.settings-page .host').length === n + 1, before);
+      check('mise en ligne guidée : OVHcloud reconnu, accès remplis, message effacé, dossier www/ proposé, hébergement ajouté',
+        preset === 'ovh' && filled[0] === 'ftp.cluster031.hosting.ovh.net' && filled[1] === 'alunitp' && filled[2] === 10
+          && cleared === '' && folder === 'www/', `${preset} ${filled.join(' ')} ${folder}`);
+      await page.click('.view-tab[data-view="view-editor"]');
+      await page.waitForSelector('.view-tab.is-on[data-view="view-editor"]');
+    }
+
     // ---------------------------------------------------------------- Assistants IA (4.1)
     // Un assistant (MCP, même cœur) modifie un texte de la page et une donnée du site : l'éditeur
     // les affiche aussitôt ; Ctrl+Z dans l'éditeur les annule (même historique).

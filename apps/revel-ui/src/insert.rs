@@ -433,7 +433,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
         ),
         (
             "insert-group-forms",
-            vec![planned("insert-form", icons::page, 5)],
+            vec![item(
+                Preset::BlockForm,
+                "insert-form",
+                "insert-help-form",
+                "",
+                icons::page,
+                "section",
+                true,
+            )],
         ),
         (
             "insert-group-code",

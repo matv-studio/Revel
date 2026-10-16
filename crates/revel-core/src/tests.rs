@@ -71,6 +71,8 @@ fn recents_generation_et_hebergements() {
             &key,
             HostingProfile {
                 sync_versions: true,
+                site_url: None,
+                preset: None,
                 id: String::new(),
                 name: "OVH".into(),
                 environment: "production".into(),
@@ -161,6 +163,8 @@ async fn publication_par_le_coeur() {
             &key,
             HostingProfile {
                 sync_versions: true,
+                site_url: None,
+                preset: None,
                 id: String::new(),
                 name: "Essai".into(),
                 environment: "production".into(),
@@ -177,7 +181,7 @@ async fn publication_par_le_coeur() {
         .unwrap();
     let events = Mutex::new(Vec::new());
     let s = c
-        .deploy(&site, &p.id, false, false, &|e| {
+        .deploy(&site, &p.id, false, false, false, &|e| {
             events.lock().unwrap().push(e)
         })
         .await
@@ -197,7 +201,10 @@ async fn publication_par_le_coeur() {
             ..
         }
     ));
-    let s2 = c.deploy(&site, &p.id, false, false, &|_| {}).await.unwrap();
+    let s2 = c
+        .deploy(&site, &p.id, false, false, false, &|_| {})
+        .await
+        .unwrap();
     assert_eq!((s2.uploaded, s2.key_recorded), (0, false));
     assert!(
         events
@@ -1838,4 +1845,245 @@ fn langues_fichiers_et_generation() {
             .locales
             .is_empty()
     );
+}
+
+#[test]
+fn pages_modifiees_depuis_la_publication() {
+    use revel_edit::Command;
+    use revel_protocol::{ChangeKind, HostingTarget, SiteTemplate};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let v = d.path().join("vitrine");
+    c.new_site_from(&v, "Atelier", "fr", SiteTemplate::Showcase)
+        .unwrap();
+    c.edit_open(&v).unwrap();
+    let key = v.display().to_string();
+    let p = c
+        .save_profile(
+            &key,
+            HostingProfile {
+                sync_versions: false,
+                site_url: Some("https://atelier.example".into()),
+                preset: None,
+                id: String::new(),
+                name: "Hébergement".into(),
+                environment: "production".into(),
+                target: HostingTarget::Sftp {
+                    host: "ftp.example".into(),
+                    port: 22,
+                    user: "atelier".into(),
+                    remote_dir: "www/".into(),
+                    known_host_key: None,
+                },
+            },
+            Some("secret".into()),
+        )
+        .unwrap();
+    // Jamais publié : aucune page signalée, adresse réglée, accès prêts.
+    let st = c.publish_state(&v).unwrap();
+    assert_eq!(st.len(), 1);
+    assert!(st[0].published_at.is_none() && st[0].changes.is_empty() && st[0].ready);
+    assert_eq!(st[0].url.as_deref(), Some("https://atelier.example"));
+    // Publié : à jour.
+    let snap = c.snapshot(&v, "production").unwrap();
+    assert!(snap.pages.contains_key("/") && snap.pages.contains_key("/contact/"));
+    c.record_publish(&v, &p.id, None, snap);
+    let st = c.publish_state(&v).unwrap();
+    assert!(
+        st[0].published_at.is_some() && st[0].changes.is_empty(),
+        "{st:?}"
+    );
+    // Page ajoutée, nom du site changé (toutes les pages) : signalés ; annulés : à jour.
+    let page = revel_model::Page {
+        id: "tarifs".into(),
+        path: "/tarifs/".into(),
+        body: Vec::new(),
+        ..c.edit_open(&v).unwrap().site.pages[0].clone()
+    };
+    c.edit_apply(&v, Command::AddPage { page, index: None }, false)
+        .unwrap();
+    let st = c.publish_state(&v).unwrap();
+    let added: Vec<_> = st[0]
+        .changes
+        .iter()
+        .filter(|ch| ch.kind == ChangeKind::Added)
+        .map(|ch| ch.url.as_str())
+        .collect();
+    assert_eq!(added, ["/tarifs/"], "{:?}", st[0].changes);
+    c.edit_undo(&v).unwrap();
+    assert!(c.publish_state(&v).unwrap()[0].changes.is_empty());
+}
+
+/// Connexion d'essai (5.3) et contrôles avant publication (5.4) contre le serveur d'essai
+/// (variables `REVEL_SFTP_*`) : dossier proposé, accès refusés, publication arrêtée par une page
+/// sans titre puis menée « quand même ».
+#[tokio::test(flavor = "multi_thread")]
+async fn connexion_d_essai_et_controles() {
+    let get = |k: &str| std::env::var(k).ok();
+    let (Some(host), Some(port), Some(user), Some(password), Some(home)) = (
+        get("REVEL_SFTP_HOST"),
+        get("REVEL_SFTP_PORT"),
+        get("REVEL_SFTP_USER"),
+        get("REVEL_SFTP_PASSWORD"),
+        get("REVEL_SFTP_HOME"),
+    ) else {
+        eprintln!("REVEL_SFTP_* absent : essai ignoré");
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let key = site.display().to_string();
+    let _ = std::fs::remove_dir_all(Path::new(&home).join("revel-controles"));
+    let _ = std::fs::remove_file(Path::new(&home).join(".deploy/revel-controles.manifest"));
+    let mut profile = HostingProfile {
+        id: String::new(),
+        name: "OVHcloud".into(),
+        environment: "production".into(),
+        target: HostingTarget::Sftp {
+            host,
+            port: port.parse().unwrap(),
+            user,
+            remote_dir: String::new(),
+            known_host_key: None,
+        },
+        sync_versions: false,
+        site_url: None,
+        preset: Some("ovh".into()),
+    };
+    let probe = c
+        .hosting_probe(&site, &profile, Some(password.clone()))
+        .await
+        .unwrap();
+    assert!(probe.server_key.contains(" ssh-"), "{}", probe.server_key);
+    let suggested = probe.suggested.clone().unwrap();
+    assert!(probe.folders.contains(&suggested), "{probe:?}");
+    // Site sans adresse publique : dossier habituel de l'hébergeur s'il existe.
+    if probe.folders.iter().any(|f| f == "www/") {
+        assert_eq!(suggested, "www/");
+    }
+    let refused = c
+        .hosting_probe(&site, &profile, Some("faux".into()))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.failure().key, "error-sftp-auth");
+
+    if let HostingTarget::Sftp {
+        remote_dir,
+        known_host_key,
+        ..
+    } = &mut profile.target
+    {
+        *remote_dir = "revel-controles/".into();
+        *known_host_key = Some(probe.server_key.clone());
+    }
+    let p = c.save_profile(&key, profile, Some(password)).unwrap();
+    // Page sans titre : publication arrêtée avant toute connexion.
+    let events = Mutex::new(Vec::new());
+    let e = c
+        .deploy(&site, &p.id, false, false, true, &|e| {
+            events.lock().unwrap().push(e)
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(e.failure().key, "error-publish-checks");
+    assert!(events.lock().unwrap().iter().any(|e| matches!(
+        e,
+        DeployEvent::Checks { checks } if checks.iter().any(|c| c.kind == revel_protocol::CheckKind::NoTitle && c.page == "/")
+    )));
+    assert!(!Path::new(&home).join("revel-controles").exists());
+    // Vérification : contrôles signalés, comparaison menée à terme.
+    let s = c
+        .deploy(&site, &p.id, true, false, true, &|_| {})
+        .await
+        .unwrap();
+    assert!(s.dry_run && s.uploaded > 0);
+    // Publier quand même.
+    let s = c
+        .deploy(&site, &p.id, false, false, false, &|_| {})
+        .await
+        .unwrap();
+    assert!(!s.dry_run && !s.key_recorded);
+    assert!(
+        Path::new(&home)
+            .join("revel-controles/index.html")
+            .is_file()
+    );
+}
+
+/// Revenir à la publication précédente (5.5) contre le serveur d'essai : deux publications,
+/// retour à la première, puis retour annulé.
+#[tokio::test(flavor = "multi_thread")]
+async fn revenir_a_la_publication_precedente() {
+    let get = |k: &str| std::env::var(k).ok();
+    let (Some(host), Some(port), Some(user), Some(password), Some(home)) = (
+        get("REVEL_SFTP_HOST"),
+        get("REVEL_SFTP_PORT"),
+        get("REVEL_SFTP_USER"),
+        get("REVEL_SFTP_PASSWORD"),
+        get("REVEL_SFTP_HOME"),
+    ) else {
+        eprintln!("REVEL_SFTP_* absent : essai ignoré");
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let key = site.display().to_string();
+    let remote = Path::new(&home).join("revel-retour");
+    let _ = std::fs::remove_dir_all(&remote);
+    let _ = std::fs::remove_file(Path::new(&home).join(".deploy/revel-retour.manifest"));
+    let p = c
+        .save_profile(
+            &key,
+            HostingProfile {
+                id: String::new(),
+                name: "Essai".into(),
+                environment: "production".into(),
+                target: HostingTarget::Sftp {
+                    host,
+                    port: port.parse().unwrap(),
+                    user,
+                    remote_dir: "revel-retour/".into(),
+                    known_host_key: None,
+                },
+                sync_versions: false,
+                site_url: None,
+                preset: None,
+            },
+            Some(password),
+        )
+        .unwrap();
+    let set_title = |t: &str| {
+        let mut pr = revel_project::Project::open(&site).unwrap();
+        pr.site.pages[0]
+            .props
+            .insert("title".into(), serde_json::json!(t));
+        pr.save().unwrap();
+    };
+    let home_page = || std::fs::read_to_string(remote.join("index.html")).unwrap();
+    // Aucune version précédente : refus.
+    let e = c.rollback(&site, &p.id, &|_| {}).await.unwrap_err();
+    assert_eq!(e.failure().key, "error-no-previous");
+    c.deploy(&site, &p.id, false, false, false, &|_| {})
+        .await
+        .unwrap();
+    assert!(home_page().contains("<h1>Accueil</h1>"));
+    set_title("Bienvenue");
+    c.deploy(&site, &p.id, false, false, false, &|_| {})
+        .await
+        .unwrap();
+    assert!(home_page().contains("<h1>Bienvenue</h1>"));
+    let state = c.publish_state(&site).unwrap();
+    assert!(state[0].previous_at.is_some() && state[0].changes.is_empty());
+    // Retour : première version en ligne ; la page d'accueil diffère désormais du site.
+    let s = c.rollback(&site, &p.id, &|_| {}).await.unwrap();
+    assert_eq!(s.uploaded, 1, "{s:?}");
+    assert!(home_page().contains("<h1>Accueil</h1>"));
+    let state = c.publish_state(&site).unwrap();
+    assert_eq!(state[0].changes.len(), 1, "{:?}", state[0].changes);
+    // Second retour : annule le premier.
+    c.rollback(&site, &p.id, &|_| {}).await.unwrap();
+    assert!(home_page().contains("<h1>Bienvenue</h1>"));
+    assert!(c.publish_state(&site).unwrap()[0].changes.is_empty());
 }

@@ -5378,6 +5378,7 @@ version = "0.4.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "blake3",
  "chrono",
  "keyring",
  "revel-assets",
@@ -5517,6 +5518,7 @@ dependencies = [
  "revel-model",
  "revel-render",
  "revel-style",
+ "serde",
  "serde-saphyr",
  "serde_json",
  "thiserror 2.0.21",

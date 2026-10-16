@@ -794,3 +794,34 @@ fn langues() {
             .is_none()
     );
 }
+
+/// Formulaires reçus par l'hébergement (5.8) : formulaire relié au script, script produit avec
+/// l'adresse de réception ; sans adresse, avertissement et pas de script.
+#[test]
+fn formulaires_du_site() {
+    let mut s = site();
+    s.base_url = Some("https://alunites.com".into());
+    s.pages[0].body.extend(parse(
+        r#"<form class="formulaire" data-revel-form="contact"><input name="email" type="email"><button type="submit">Envoyer</button></form>"#,
+    ));
+    let out = build(&input(&s, vec![])).unwrap();
+    assert!(!out.files.iter().any(|f| f.path == "revel-form.php"));
+    assert!(
+        out.warnings.iter().any(|w| w.contains("Formulaires")),
+        "{:?}",
+        out.warnings
+    );
+    s.settings.forms.recipient = "contact@alunites.com".into();
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains(r#"data-revel-form="contact" action="/revel-form.php" method="post""#),
+        "{home}"
+    );
+    assert!(home.contains("_revel_hp") && home.contains("document.addEventListener(\"submit\""));
+    let php = file(&out, "revel-form.php");
+    assert!(
+        php.contains("const RECIPIENT = 'contact@alunites.com';")
+            && php.contains("const FROM = 'site@alunites.com';")
+    );
+}

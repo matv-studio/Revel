@@ -99,3 +99,59 @@ async fn publication_incrementale() {
         .unwrap_err();
     assert!(matches!(e, SftpError::Auth), "{e}");
 }
+
+/// Connexion d'essai : dossiers du site trouvés (domaines, dossiers habituels, lien symbolique),
+/// rien écrit ; serveur injoignable : délai dépassé.
+#[tokio::test(flavor = "multi_thread")]
+async fn connexion_d_essai() {
+    use revel_deploy::sftp::probe;
+    let Some((t, home)) = target() else {
+        eprintln!("REVEL_SFTP_* absent : essai ignoré");
+        return;
+    };
+    let p = probe(&t).await.unwrap();
+    assert!(p.server_key.contains("ssh-"), "{}", p.server_key);
+    assert!(p.fingerprint.starts_with("SHA256:"));
+    // Dossiers attendus seulement s'ils existent chez l'utilisateur d'essai.
+    for (dir, rel) in [
+        (
+            "domains/alunites.com/public_html",
+            "domains/alunites.com/public_html/",
+        ),
+        ("www", "www/"),
+        ("public_html", "public_html/"),
+        ("html", "html/"),
+    ] {
+        assert_eq!(
+            home.join(dir).is_dir(),
+            p.folders.iter().any(|f| f == rel),
+            "{rel} : {:?}",
+            p.folders
+        );
+    }
+    let first_domain = p.folders.iter().position(|f| f.starts_with("domains/"));
+    let first_root = p
+        .folders
+        .iter()
+        .position(|f| !f.contains('/') || f.matches('/').count() == 1);
+    if let (Some(a), Some(b)) = (first_domain, first_root) {
+        assert!(a < b, "{:?}", p.folders);
+    }
+    assert!(!home.join(".deploy/probe").exists());
+
+    // Mauvais mot de passe.
+    let mut bad = t.clone();
+    bad.password = "faux".into();
+    assert!(matches!(probe(&bad).await.unwrap_err(), SftpError::Auth));
+
+    // Adresse non routable (pare-feu qui ignore les paquets) : délai dépassé.
+    let mut lost = t.clone();
+    lost.host = "10.255.255.1".into();
+    let started = std::time::Instant::now();
+    let e = probe(&lost).await.unwrap_err();
+    assert!(
+        matches!(e, SftpError::Timeout(_) | SftpError::Connect(..)),
+        "{e}"
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(30));
+}

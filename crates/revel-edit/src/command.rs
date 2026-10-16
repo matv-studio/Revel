@@ -239,6 +239,8 @@ pub enum Command {
     },
     /// Référencement du site (plan du site, `robots.txt`).
     SetSeoSettings { seo: revel_model::SeoSettings },
+    /// Formulaires du site (5.8) : adresse de réception, objet, message après l'envoi.
+    SetFormSettings { forms: revel_model::FormSettings },
     /// Identité du site (3.9) : nom, adresse publique (`https://…`, sans `/` final ; vide :
     /// aucune), langue principale (code valide, différent des autres langues), typographie
     /// (`fr` ou aucune).
@@ -1066,6 +1068,13 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         Command::SetSeoSettings { seo } => Ok(Command::SetSeoSettings {
             seo: std::mem::replace(&mut site.settings.seo, seo.clone()),
         }),
+        Command::SetFormSettings { forms } => {
+            let mut forms = forms.clone();
+            forms.recipient = forms.recipient.trim().to_string();
+            Ok(Command::SetFormSettings {
+                forms: std::mem::replace(&mut site.settings.forms, forms),
+            })
+        }
         Command::SetSiteInfo {
             name,
             base_url,

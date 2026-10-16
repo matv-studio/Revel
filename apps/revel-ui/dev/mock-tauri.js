@@ -30,7 +30,26 @@
   let lastPacks = [];
   let github = params.get("github") || null;
   const ghProfile = [{ id: "h2", name: "GitHub Pages", environment: "production", target: { kind: "github_pages", repo: "matv-studio/alunites-revel-lab", branch: "gh-pages", custom_domain: null } }, true];
-  const profiles = params.get("noprofiles") ? [] : params.get("ghprofile") ? [ghProfile] : [[{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true]];
+  const recette = [{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true];
+  // `hosts2=1` : site public et version de test ; `nosecret=1` : mot de passe du site public absent.
+  const publicHost = [{ id: "h0", name: "OVHcloud", environment: "production", site_url: "https://alunites.com", preset: "ovh", target: { kind: "sftp", host: "ftp.cluster031.hosting.ovh.net", port: 22, user: "alunitp", remote_dir: "www/", known_host_key: "x" } }, !params.get("nosecret")];
+  const profiles = params.get("noprofiles") ? [] : params.get("ghprofile") ? [ghProfile] : params.get("hosts2") ? [publicHost, recette] : [recette];
+  // Publications (5.1) : site public publié il y a 3 h, modifié depuis ; version de test jamais
+  // publiée (`pubnever=1` : aucune publication).
+  const published = params.get("pubnever") ? {} : { h0: Date.now() - 3 * 3600_000 - 240_000, h2: Date.now() - 26 * 3600_000 };
+  const pendingChanges = params.get("uptodate") ? {} : {
+    h0: [{ url: "/", title: "Accueil", kind: "changed" }, { url: "/offres/tournage/", title: "Tournage", kind: "added" },
+      { url: "/agence/", title: "Agence", kind: "changed" }, { url: "/projets/ancien-film/", title: "Ancien film", kind: "removed" },
+      { url: "", title: "", kind: "files" }],
+    h2: [{ url: "", title: "", kind: "files" }],
+  };
+  // Publications précédentes gardées (5.5) : site public, la veille.
+  const previous = params.get("pubnever") ? {} : { h0: Date.now() - 27 * 3600_000 };
+  const publishState = () => profiles.map(([p, ready]) => ({
+    profile: p.id, name: p.name, environment: p.environment, ready,
+    url: p.site_url || (p.target.kind === "github_pages" ? "https://matv-studio.github.io/alunites-revel-lab/" : p.environment === "production" ? site.base_url : null),
+    published_at: published[p.id] ?? null, previous_at: previous[p.id] ?? null, changes: published[p.id] ? (pendingChanges[p.id] || []) : [],
+  }));
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const mcp = { enabled: false, port: 47520, token: "3f9a1c0e7b2d4a6f8e1c3b5d7f9a0c2e4b6d8f1a3c5e7b9d0f2a4c6e8b1d3f5a" };
   const mcpStatus = () => {
@@ -121,6 +140,45 @@
       case "edit_open": return { site: { schema_version: 3, name: site.name, default_locale: "fr" }, state: { revision: 0, can_undo: false, can_redo: false } };
       case "has_site": return true;
       case "list_profiles": return profiles;
+      case "publish_state": return publishState();
+      // Nom de domaine (5.7) : `domainko=1` : HTTPS absent, autre page.
+      case "domain_check": {
+        await wait(400);
+        const gh = profiles.find(([p]) => p.id === args.profileId)?.[0].target.kind === "github_pages";
+        const ko = params.get("domainko");
+        return { domain: args.domain, addresses: gh ? ["185.199.108.153", "185.199.109.153"] : ["213.186.33.5"],
+          expected: gh ? ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"] : [],
+          https: !ko, http: true, serves_site: !ko, https_error: ko ? "certificate not valid for name" : null };
+      }
+      // Retour à la publication précédente (5.5) : la précédente devient la publiée.
+      case "rollback": {
+        const ch = args.onEvent;
+        ch.onmessage({ event: "connected", server_key: "x" });
+        ch.onmessage({ event: "planned", upload: 3, delete: 1, bytes: 120_000, total: 4537 });
+        for (let i = 1; i <= 3; i++) { await wait(params.get("pubslow") ? 700 : 60); ch.onmessage({ event: "uploaded", done: i, total: 3 }); }
+        const prev = previous[args.profileId];
+        previous[args.profileId] = published[args.profileId]; published[args.profileId] = prev;
+        pendingChanges[args.profileId] = [{ url: "/", title: "Accueil", kind: "changed" }];
+        ch.onmessage({ event: "finished", uploaded: 3, deleted: 1, total_files: 4537, bytes: 120_000, dry_run: false, server_key: "", server_fingerprint: "", key_recorded: false, url: profiles.find(([p]) => p.id === args.profileId)?.[0].site_url });
+        return null;
+      }
+      // Connexion d'essai (5.3) : `probefail=auth|timeout` : échec ; dossiers selon l'hébergeur.
+      case "hosting_probe": {
+        await wait(params.get("pubslow") ? 2500 : 500);
+        const t = args.profile.target;
+        const pf = params.get("probefail");
+        if (pf) throw pf === "timeout" ? { key: "error-sftp-timeout", args: [["host", `${t.host}:${t.port}`]] } : { key: "error-sftp-auth", args: [] };
+        const folders = /o2switch/.test(t.host) ? ["public_html/", "www/"]
+          : /^\d/.test(t.host) ? ["domains/alunites.com/public_html/", "public_html/"]
+          : /infomaniak/.test(t.host) ? ["sites/alunites.com/"] : ["www/"];
+        return { server_key: `${t.host} ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOx`, fingerprint: "SHA256:/bPN11w+yMb4D7FWpnTAuPkibmBXY17S0Uw/rDzIJv8", folders, suggested: folders[0] };
+      }
+      case "save_profile": {
+        const p = { ...args.profile, id: args.profile.id || "h" + Date.now() };
+        const i = profiles.findIndex(([q]) => q.id === p.id);
+        if (i >= 0) profiles[i] = [p, true]; else profiles.push([p, true]);
+        return p;
+      }
       case "build_site": {
         const ch = args.onEvent;
         ch.onmessage({ event: "progress", phase: "pages", done: 0, total: 1 });
@@ -174,17 +232,32 @@
         ch.onmessage({ event: "building", build: { event: "progress", phase: "pages", done: 1, total: 1 } });
         ch.onmessage({ event: "warnings", warnings: [{ blocking: false, key: "deploy-warn-too-many-files", args: [["count", "24512"], ["max", "20000"]] }].filter(() => params.get("warn")) });
         await wait(80);
-        if (fail) { const f = { key: "error-sftp-" + fail, args: [["host", "ftp.cluster000.hosting.ovh.net"], ["detail", "connection refused"]] }; ch.onmessage({ event: "failed", ...f }); throw f; }
+        // Contrôles (5.4) : `checks=1` : points à vérifier ; publication arrêtée sauf « quand même ».
+        if (params.get("checks") && !args.skipChecks) {
+          ch.onmessage({ event: "checks", checks: [
+            { kind: "broken_link", page: "/agence/", target: "/equipe/ancienne-page/", size: 0 },
+            { kind: "broken_link", page: "/", target: "/offres/tournage-drone/", size: 0 },
+            { kind: "heavy_image", page: "/project/wattr/", target: "/media/projets/wattr-cover.png", size: 3_480_000 },
+            { kind: "missing_alt", page: "/", target: "/media/accueil/equipe.jpg", size: 0 },
+            { kind: "missing_alt", page: "/agence/", target: "/media/agence/bureau.jpg", size: 0 },
+            { kind: "missing_alt", page: "/agence/", target: "/media/agence/plateau.jpg", size: 0 },
+            { kind: "no_title", page: "/mentions-legales/", target: "", size: 0 },
+          ] });
+          if (!args.dryRun) { const f = { key: "error-publish-checks", args: [["count", "7"]] }; ch.onmessage({ event: "failed", ...f }); throw f; }
+        }
+        if (fail && (!params.get("failon") || params.get("failon") === args.profileId)) { const f = { key: "error-sftp-" + fail, args: [["host", "ftp.cluster000.hosting.ovh.net"], ["detail", "connection refused"]] }; ch.onmessage({ event: "failed", ...f }); throw f; }
         ch.onmessage({ event: "connected", server_key: "x" });
         ch.onmessage({ event: "planned", upload: 14, delete: 2, bytes: 3_400_000, total: 4537 });
         if (args.dryRun) { ch.onmessage({ event: "finished", uploaded: 14, deleted: 2, total_files: 4537, bytes: 3_400_000, dry_run: true, server_key: "x", server_fingerprint: "SHA256:/bPN11w+yMb4D7FWpnTAuPkibmBXY17S0Uw/rDzIJv8", key_recorded: true }); return null; }
         if (params.get("ghprofile")) {
           for (let i = 0; i <= 4356; i += 1089) { await wait(30); ch.onmessage({ event: "preparing", done: i, total: 4356 }); }
+          published[args.profileId] = Date.now(); delete pendingChanges[args.profileId];
           ch.onmessage({ event: "finished", uploaded: 4356, deleted: 0, total_files: 4358, bytes: 751_000_000, dry_run: false, server_key: "", server_fingerprint: "", key_recorded: false, url: "https://matv-studio.github.io/alunites-revel-lab/", pages_enabled: true });
           return null;
         }
-        for (let i = 1; i <= 14; i++) { await wait(40); ch.onmessage({ event: "uploaded", done: i, total: 14 }); }
-        ch.onmessage({ event: "finished", uploaded: 14, deleted: 2, total_files: 4537, bytes: 3_400_000, dry_run: !!args.dryRun, server_key: "x ssh-ed25519 AAAA", server_fingerprint: "SHA256:/bPN11w+yMb4D7FWpnTAuPkibmBXY17S0Uw/rDzIJv8", key_recorded: true });
+        for (let i = 1; i <= 14; i++) { await wait(params.get("pubslow") ? 700 : 40); ch.onmessage({ event: "uploaded", done: i, total: 14 }); }
+        if (!args.dryRun) { if (published[args.profileId]) previous[args.profileId] = published[args.profileId]; published[args.profileId] = Date.now(); delete pendingChanges[args.profileId]; }
+        ch.onmessage({ event: "finished", url: profiles.find(([p]) => p.id === args.profileId)?.[0].site_url, uploaded: 14, deleted: 2, total_files: 4537, bytes: 3_400_000, dry_run: !!args.dryRun, server_key: "x ssh-ed25519 AAAA", server_fingerprint: "SHA256:/bPN11w+yMb4D7FWpnTAuPkibmBXY17S0Uw/rDzIJv8", key_recorded: true });
         return null;
       }
       default: return null;

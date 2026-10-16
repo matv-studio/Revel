@@ -15,6 +15,8 @@ pub enum Block {
     Testimonial,
     Faq,
     Contact,
+    /// Formulaire de contact reçu par l'hébergement (5.8).
+    Form,
 }
 
 type Rules = Vec<(&'static str, Vec<(&'static str, &'static str)>)>;
@@ -81,7 +83,7 @@ fn common() -> Rules {
 }
 
 impl Block {
-    pub const ALL: [Block; 7] = [
+    pub const ALL: [Block; 8] = [
         Block::Hero,
         Block::Features,
         Block::TextImage,
@@ -89,6 +91,7 @@ impl Block {
         Block::Testimonial,
         Block::Faq,
         Block::Contact,
+        Block::Form,
     ];
 
     /// Contenu en balisage (langue du site : français, sinon anglais). `<i data-icone="…">` :
@@ -133,6 +136,12 @@ impl Block {
             }
             (Block::Contact, true) => {
                 r##"<section class="bloc bloc-contact"><div class="bloc__inner"><h2 class="bloc-sous-titre">Nous contacter</h2><p class="bloc-texte">Écrivez-nous ou appelez-nous, nous répondons sous 48 heures.</p><ul class="bloc-contact__liste"><li><i data-icone="courriel"></i><a href="mailto:bonjour@exemple.fr">bonjour@exemple.fr</a></li><li><i data-icone="telephone"></i><a href="tel:+33100000000">01 00 00 00 00</a></li><li><i data-icone="lieu"></i><span>1 rue de l'Exemple, 75000 Paris</span></li></ul></div></section>"##
+            }
+            (Block::Form, true) => {
+                r##"<section class="bloc bloc-formulaire"><div class="bloc__inner"><h2 class="bloc-sous-titre">Écrivez-nous</h2><form class="formulaire" data-revel-form="contact"><div class="formulaire__ligne"><label class="champ"><span class="champ__libelle">Nom</span><input class="champ__saisie" type="text" name="nom" autocomplete="name" required></label><label class="champ"><span class="champ__libelle">E-mail</span><input class="champ__saisie" type="email" name="email" autocomplete="email" required></label></div><label class="champ"><span class="champ__libelle">Message</span><textarea class="champ__saisie" name="message" rows="5" required></textarea></label><button class="bloc-bouton" type="submit">Envoyer</button><p class="formulaire__etat" data-revel-form-status role="status" aria-live="polite"></p></form></div></section>"##
+            }
+            (Block::Form, false) => {
+                r##"<section class="bloc bloc-formulaire"><div class="bloc__inner"><h2 class="bloc-sous-titre">Write to us</h2><form class="formulaire" data-revel-form="contact"><div class="formulaire__ligne"><label class="champ"><span class="champ__libelle">Name</span><input class="champ__saisie" type="text" name="name" autocomplete="name" required></label><label class="champ"><span class="champ__libelle">Email</span><input class="champ__saisie" type="email" name="email" autocomplete="email" required></label></div><label class="champ"><span class="champ__libelle">Message</span><textarea class="champ__saisie" name="message" rows="5" required></textarea></label><button class="bloc-bouton" type="submit">Send</button><p class="formulaire__etat" data-revel-form-status role="status" aria-live="polite"></p></form></div></section>"##
             }
             (Block::Contact, false) => {
                 r##"<section class="bloc bloc-contact"><div class="bloc__inner"><h2 class="bloc-sous-titre">Contact us</h2><p class="bloc-texte">Write or call us, we answer within 48 hours.</p><ul class="bloc-contact__liste"><li><i data-icone="courriel"></i><a href="mailto:hello@example.com">hello@example.com</a></li><li><i data-icone="telephone"></i><a href="tel:+15550000000">+1 555 000 0000</a></li><li><i data-icone="lieu"></i><span>1 Example Street, City</span></li></ul></div></section>"##
@@ -256,6 +265,57 @@ impl Block {
                 (
                     ".bloc-faq details p",
                     vec![("margin", "12px 0 0"), ("opacity", "0.8")],
+                ),
+            ],
+            Block::Form => vec![
+                (
+                    ".formulaire",
+                    vec![
+                        ("display", "grid"),
+                        ("gap", "16px"),
+                        ("max-width", "640px"),
+                        ("margin-top", "24px"),
+                    ],
+                ),
+                (
+                    ".formulaire__ligne",
+                    vec![
+                        ("display", "grid"),
+                        (
+                            "grid-template-columns",
+                            "repeat(auto-fit, minmax(220px, 1fr))",
+                        ),
+                        ("gap", "16px"),
+                    ],
+                ),
+                (".champ", vec![("display", "grid"), ("gap", "6px")]),
+                (
+                    ".champ__libelle",
+                    vec![("font-size", "14px"), ("font-weight", "600")],
+                ),
+                (
+                    ".champ__saisie",
+                    vec![
+                        ("width", "100%"),
+                        ("padding", "12px 14px"),
+                        ("border", "1px solid rgba(0, 0, 0, 0.2)"),
+                        ("border-radius", "8px"),
+                        ("background", "transparent"),
+                        ("color", "inherit"),
+                        ("font", "inherit"),
+                    ],
+                ),
+                (
+                    ".formulaire .bloc-bouton",
+                    vec![
+                        ("justify-self", "start"),
+                        ("border", "0"),
+                        ("cursor", "pointer"),
+                    ],
+                ),
+                (
+                    ".formulaire__etat",
+                    vec![("margin", "0"), ("min-height", "1.5em")],
                 ),
             ],
             Block::Contact => vec![

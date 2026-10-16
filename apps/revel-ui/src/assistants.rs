@@ -91,7 +91,7 @@ fn when(at: u64, lang: &str) -> String {
 
 /// Bouton « copier » : coche affichée un instant après la copie.
 #[component]
-fn CopyBtn(#[prop(into)] text: Signal<String>, label: &'static str) -> impl IntoView {
+pub(crate) fn CopyBtn(#[prop(into)] text: Signal<String>, label: &'static str) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let done = RwSignal::new(false);
     view! {

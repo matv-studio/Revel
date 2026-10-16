@@ -13,6 +13,7 @@ mod components;
 mod ctxmenu;
 mod dialog;
 mod dock;
+mod domain;
 mod editor;
 mod files;
 mod home;
@@ -28,9 +29,11 @@ mod pagetree;
 mod palette;
 mod panels;
 mod publish;
+mod publishbar;
 mod readable;
 mod richtext;
 mod settings;
+mod setup;
 mod site;
 mod sitesettings;
 mod styles;
@@ -153,6 +156,16 @@ pub struct Ui {
     pub auto: RwSignal<Option<autotr::Job>>,
     /// Langue de traduction en téléchargement : code, avancement (0..1, `None` : préparation).
     pub pack_job: RwSignal<Option<(String, Option<f32>)>>,
+    /// Publications de la dernière série (barre supérieure ou Paramètres › Publication).
+    pub deploys: RwSignal<Vec<publish::Run>>,
+    /// Hébergements ou publications changés : listes à relire.
+    pub publish_rev: RwSignal<u32>,
+    /// Panneau du bouton « Publier » ouvert.
+    pub publish_panel: RwSignal<bool>,
+    /// Fenêtre « Mettre en ligne » (première mise en ligne guidée) ouverte.
+    pub setup: RwSignal<bool>,
+    /// Fenêtre « Nom de domaine » ouverte pour un hébergement (identifiant).
+    pub domain_for: RwSignal<Option<String>>,
 }
 
 impl Ui {
@@ -377,6 +390,11 @@ fn App() -> impl IntoView {
         goto_entry: RwSignal::new(None),
         auto: RwSignal::new(None),
         pack_job: RwSignal::new(None),
+        deploys: RwSignal::new(Vec::new()),
+        publish_rev: RwSignal::new(0),
+        publish_panel: RwSignal::new(false),
+        setup: RwSignal::new(false),
+        domain_for: RwSignal::new(None),
     };
     provide_context(ui);
     spawn_local(async move {
@@ -493,6 +511,8 @@ fn App() -> impl IntoView {
             </main>
             <library::MediaPicker/>
             <dialog::Dialog/>
+            <setup::SetupDialog/>
+            <domain::DomainDialog/>
             <ctxmenu::ContextLayer/>
         </div>
     }
@@ -596,7 +616,7 @@ fn TopBar() -> impl IntoView {
                             </div>
                         </Show>
                     </div>
-                    <button class="btn btn--primary" on:click=move |_| ui.tab(Tab::Settings(Section::Publish))>{ui.t("nav-publish")}</button>
+                    <publishbar::PublishButton/>
                 </Show>
             </div>
             <div class="activity" class:activity--on=move || ui.activity.get().is_some()>

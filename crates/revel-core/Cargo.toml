@@ -27,6 +27,8 @@ revel-assets.workspace = true
 revel-translate = { workspace = true, features = ["download"] }
 serde.workspace = true
 serde_json.workspace = true
+# Réserve des publications (revenir à la précédente, 5.5) : fichiers rangés par empreinte.
+blake3 = "1.8.7"
 thiserror.workspace = true
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "sync", "macros", "time"] }

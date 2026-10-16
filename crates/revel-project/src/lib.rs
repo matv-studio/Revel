@@ -391,6 +391,55 @@ impl Project {
         Ok(report)
     }
 
+    /// Empreinte de ce qu'une publication mettrait en ligne (5.1) : chaque page HTML (adresse →
+    /// empreinte de son contenu) et l'ensemble des autres fichiers (feuille de style, fichiers
+    /// copiés tels quels). Rendu complet sans images ni écriture : comparer deux empreintes donne
+    /// les pages modifiées entre deux états du site.
+    pub fn publish_snapshot(&self, environment: &str) -> Result<Snapshot, ProjectError> {
+        let site = self.site_with_data()?;
+        let input = BuildInput {
+            site: &site,
+            entries: self.load_entries()?,
+            locales: self.load_locales()?,
+            environment: environment.to_string(),
+            version: self.version_tag(&site),
+            hooks: Arc::new(ProjectAssets::new(self)),
+            now: chrono::Utc::now(),
+        };
+        let out = revel_render::build(&input)?;
+        let mut pages = BTreeMap::new();
+        for f in &out.files {
+            if let Some(url) = page_url(&f.path) {
+                pages.insert(url, blake3::hash(&f.bytes).to_hex().to_string());
+            }
+        }
+        // Autres fichiers : feuille de style du modèle et fichiers copiés (chemin, taille, contenu
+        // des fichiers versionnés via `version_tag`, date pour les autres).
+        let mut h = blake3::Hasher::new();
+        h.update(self.version_tag(&site).as_bytes());
+        let mut files = Vec::new();
+        for p in &site.passthrough {
+            collect_files(&self.dir.join(&p.from), &mut files);
+        }
+        files.sort();
+        for f in &files {
+            let rel = f.strip_prefix(&self.dir).unwrap_or(f);
+            h.update(rel.to_string_lossy().replace('\\', "/").as_bytes());
+            if let Ok(m) = std::fs::metadata(f) {
+                h.update(&m.len().to_le_bytes());
+                if let Ok(t) = m.modified()
+                    && let Ok(d) = t.duration_since(std::time::UNIX_EPOCH)
+                {
+                    h.update(&d.as_secs().to_le_bytes());
+                }
+            }
+        }
+        Ok(Snapshot {
+            pages,
+            assets: h.finalize().to_hex().to_string(),
+        })
+    }
+
     /// Site complété des données du dossier de données (comme pour la génération).
     fn site_with_data(&self) -> Result<Site, ProjectError> {
         let mut site = self.site.clone();
@@ -630,6 +679,29 @@ impl Project {
         // 41 bits : 8 caractères en base 36, comme l'horodatage utilisé auparavant.
         to_base36(u128::from(u64::from_le_bytes(n) >> 23))
     }
+}
+
+/// Empreinte d'une publication (voir [`Project::publish_snapshot`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Snapshot {
+    /// Adresse de chaque page HTML → empreinte de son contenu.
+    pub pages: BTreeMap<String, String>,
+    /// Empreinte des autres fichiers (styles, médias, scripts).
+    pub assets: String,
+}
+
+/// Adresse d'une page à partir de son fichier généré (`a/index.html` → `/a/`, `404.html` →
+/// `/404.html`) ; `None` pour un fichier qui n'est pas une page HTML.
+pub fn page_url(path: &str) -> Option<String> {
+    let p = path.trim_start_matches('/');
+    if !p.ends_with(".html") {
+        return None;
+    }
+    Some(match p.strip_suffix("index.html") {
+        Some("") => "/".to_string(),
+        Some(dir) if dir.ends_with('/') => format!("/{dir}"),
+        _ => format!("/{p}"),
+    })
 }
 
 /// Fichiers d'un dossier (récursif) ou fichier seul.

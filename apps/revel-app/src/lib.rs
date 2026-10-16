@@ -397,15 +397,83 @@ async fn deploy(
     site: String,
     profile_id: String,
     dry_run: bool,
+    skip_checks: Option<bool>,
     on_event: Channel<DeployEvent>,
 ) -> Res<()> {
     let core = s.core.clone();
     let send = move |e: DeployEvent| {
         let _ = on_event.send(e);
     };
-    core.deploy(&PathBuf::from(site), &profile_id, dry_run, false, &send)
+    let checks = !skip_checks.unwrap_or(false);
+    core.deploy(
+        &PathBuf::from(site),
+        &profile_id,
+        dry_run,
+        false,
+        checks,
+        &send,
+    )
+    .await
+    .map(|_| ())
+    .map_err(err)
+}
+
+/// Vérifie qu'un domaine mène au site publié sur un hébergement (5.7).
+#[tauri::command]
+async fn domain_check(
+    s: State<'_, AppState>,
+    site: String,
+    profile_id: String,
+    domain: String,
+) -> Res<revel_protocol::DomainStatus> {
+    let core = s.core.clone();
+    core.domain_check(&PathBuf::from(site), &profile_id, &domain)
+        .await
+        .map_err(err)
+}
+
+/// Remet en ligne la version précédente d'un hébergement (5.5).
+#[tauri::command]
+async fn rollback(
+    s: State<'_, AppState>,
+    site: String,
+    profile_id: String,
+    on_event: Channel<DeployEvent>,
+) -> Res<()> {
+    let core = s.core.clone();
+    let send = move |e: DeployEvent| {
+        let _ = on_event.send(e);
+    };
+    core.rollback(&PathBuf::from(site), &profile_id, &send)
         .await
         .map(|_| ())
+        .map_err(err)
+}
+
+/// Connexion d'essai à un hébergement SFTP avant de l'enregistrer (5.3).
+#[tauri::command]
+async fn hosting_probe(
+    s: State<'_, AppState>,
+    site: String,
+    profile: HostingProfile,
+    password: Option<String>,
+) -> Res<revel_protocol::HostProbe> {
+    let core = s.core.clone();
+    core.hosting_probe(&PathBuf::from(site), &profile, password)
+        .await
+        .map_err(err)
+}
+
+/// Destinations de publication du site : dernière publication, pages modifiées depuis (5.1).
+#[tauri::command]
+async fn publish_state(
+    s: State<'_, AppState>,
+    path: String,
+) -> Res<Vec<revel_protocol::PublishDestination>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.publish_state(&PathBuf::from(path)))
+        .await
+        .map_err(sys)?
         .map_err(err)
 }
 
@@ -945,6 +1013,10 @@ pub fn run() {
             save_profile,
             delete_profile,
             deploy,
+            publish_state,
+            hosting_probe,
+            rollback,
+            domain_check,
             github_account,
             github_connect,
             github_cancel,

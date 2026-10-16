@@ -4,6 +4,7 @@
 //! Références (consultées le 13/10/2026) :
 //! - <https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow>
 //! - <https://docs.github.com/en/rest/pages/pages>
+//! - <https://docs.github.com/en/rest/repos/repos#create-a-repository-for-the-authenticated-user>
 //! - <https://docs.github.com/en/rest/about-the-rest-api/api-versions>
 
 use crate::GitError;
@@ -322,6 +323,26 @@ impl Client {
         match s {
             200 => Self::json(s, &b).map(Some),
             404 => Ok(None),
+            _ => Err(api_error(s, &b)),
+        }
+    }
+
+    /// Crée un dépôt public au nom du compte connecté (`POST /user/repos`), sans commit initial :
+    /// GitHub Pages en un clic (5.6).
+    pub fn create_repo(&self, name: &str, homepage: Option<&str>) -> Result<Repo, GitError> {
+        let body = serde_json::json!({
+            "name": name,
+            "homepage": homepage,
+            "private": false,
+            "auto_init": false,
+            "has_wiki": false,
+        });
+        let (s, b) = Self::read(
+            self.req(self.agent.post(format!("{API}/user/repos")))
+                .send_json(&body),
+        )?;
+        match s {
+            201 => Self::json(s, &b),
             _ => Err(api_error(s, &b)),
         }
     }

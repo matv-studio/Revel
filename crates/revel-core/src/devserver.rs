@@ -134,6 +134,7 @@ impl Core {
                 )
             }
             "edit_stamp" => json(self.edit_stamp(site).map_err(f)?),
+            "publish_state" => json(self.publish_state(site).map_err(f)?),
             "edit_undo" => json(self.edit_undo(site).map_err(f)?),
             "edit_redo" => json(self.edit_redo(site).map_err(f)?),
             "cms_collections" => json(self.cms(site).map_err(f)?),

@@ -14,13 +14,17 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 
 pub mod canvas;
+mod checks;
 pub mod devserver;
+pub mod domain;
 mod edit;
 mod fonts;
 mod github;
 pub mod pagescms;
 pub mod preview;
+mod publish;
 mod readable;
+mod rollback;
 pub mod secrets;
 pub mod starter;
 mod state;
@@ -84,6 +88,12 @@ pub enum CoreError {
     /// Import ou remplacement d'un média refusé.
     #[error("{0}")]
     Media(String),
+    /// Points à vérifier avant de publier (5.4).
+    #[error("{0} point(s) à vérifier avant de publier")]
+    Checks(usize),
+    /// Pas de publication précédente gardée (5.5).
+    #[error("aucune publication précédente")]
+    NoPrevious,
     #[error("{0}")]
     Other(String),
 }
@@ -105,12 +115,15 @@ impl CoreError {
                 S::HostKeyMismatch(received) => {
                     Failure::new("error-sftp-host-key").arg("received", received.clone())
                 }
+                S::Timeout(host) => Failure::new("error-sftp-timeout").arg("host", host.clone()),
                 S::Auth => Failure::new("error-sftp-auth"),
                 S::Sftp(detail) => Failure::new("error-sftp").arg("detail", detail.clone()),
                 S::Io(e) => Failure::new("error-io").arg("detail", e.to_string()),
                 S::RemoteDir(dir) => Failure::new("error-sftp-remote-dir").arg("dir", dir.clone()),
                 S::FileName(name) => Failure::new("error-sftp-file-name").arg("name", name.clone()),
             },
+            Self::Checks(n) => Failure::new("error-publish-checks").arg("count", n.to_string()),
+            Self::NoPrevious => Failure::new("error-no-previous"),
             Self::AlreadyImported => Failure::new("error-already-imported"),
             Self::NotEleventy => Failure::new("error-not-eleventy"),
             Self::UnknownProfile(id) => Failure::new("error-unknown-profile").arg("id", id.clone()),
@@ -189,6 +202,9 @@ pub struct Core {
     translate_cancel: AtomicBool,
     /// Dernier site ouvert pour l'édition : site des assistants (MCP) quand ils n'en nomment pas.
     last_site: Mutex<Option<PathBuf>>,
+    /// Empreintes de publication par (site, environnement), avec l'état du site qu'elles décrivent.
+    snapshots:
+        Mutex<std::collections::HashMap<(String, String), (String, revel_project::Snapshot)>>,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -242,6 +258,7 @@ impl Core {
             translate_busy: AtomicBool::new(false),
             translate_cancel: AtomicBool::new(false),
             last_site: Mutex::new(None),
+            snapshots: Mutex::new(Default::default()),
         }
     }
 
@@ -531,6 +548,7 @@ impl Core {
         profile_id: &str,
         dry_run: bool,
         full_sync: bool,
+        checks: bool,
         on_event: &(dyn Fn(DeployEvent) + Send + Sync),
     ) -> Result<DeploySummary> {
         let site_key = site.display().to_string();
@@ -546,7 +564,51 @@ impl Core {
                 on_event(DeployEvent::Building { build: e })
             })
         })?;
-        let warnings = self.host_warnings(&out, &profile.target)?;
+        // Empreinte de ce qui est publié (pages modifiées depuis, 5.1), prise sur le site généré.
+        let snapshot = if dry_run {
+            None
+        } else {
+            tokio::task::block_in_place(|| {
+                revel_project::Project::open(site)?
+                    .publish_snapshot(&profile.environment)
+                    .map_err(CoreError::from)
+            })
+            .ok()
+        };
+        // Contrôles (5.4) : une publication s'arrête s'il y a des points à vérifier (sauf
+        // « Publier quand même ») ; une vérification les signale et continue.
+        if checks {
+            let found = tokio::task::block_in_place(|| checks::check_site(&out));
+            if !found.is_empty() {
+                let n = found.len();
+                on_event(DeployEvent::Checks { checks: found });
+                if !dry_run {
+                    let e = CoreError::Checks(n);
+                    on_event(DeployEvent::Failed(e.failure()));
+                    return Err(e);
+                }
+            }
+        }
+        self.upload(site, &profile, &out, dry_run, full_sync, snapshot, on_event)
+            .await
+    }
+
+    /// Envoi d'un site généré (dossier `out`) sur un hébergement ; publication réussie gardée
+    /// (pages modifiées depuis, version pour revenir en arrière).
+    #[allow(clippy::too_many_arguments)]
+    async fn upload(
+        &self,
+        site: &Path,
+        profile: &HostingProfile,
+        out: &Path,
+        dry_run: bool,
+        full_sync: bool,
+        snapshot: Option<revel_project::Snapshot>,
+        on_event: &(dyn Fn(DeployEvent) + Send + Sync),
+    ) -> Result<DeploySummary> {
+        let site_key = site.display().to_string();
+        let profile_id = profile.id.as_str();
+        let warnings = self.host_warnings(out, &profile.target)?;
         if let Some(b) = warnings.iter().find(|w| w.blocking) {
             on_event(DeployEvent::Warnings {
                 warnings: warnings.clone(),
@@ -562,7 +624,7 @@ impl Core {
                 let r = self
                     .deploy_github_pages(
                         site,
-                        &out,
+                        out,
                         &profile.environment,
                         repo,
                         branch,
@@ -572,8 +634,14 @@ impl Core {
                         on_event,
                     )
                     .await;
-                if let Err(e) = &r {
-                    on_event(DeployEvent::Failed(e.failure()));
+                match &r {
+                    Err(e) => on_event(DeployEvent::Failed(e.failure())),
+                    Ok(summary) => {
+                        if let Some(snap) = snapshot {
+                            self.keep_version(site, profile, out, &snap);
+                            self.record_publish(site, profile_id, summary.url.clone(), snap);
+                        }
+                    }
                 }
                 r
             }
@@ -604,7 +672,7 @@ impl Core {
                     dry_run,
                     parallel: 4,
                 };
-                let report = revel_deploy::sftp::deploy(&out, &target, &opts, &|e| {
+                let report = revel_deploy::sftp::deploy(out, &target, &opts, &|e| {
                     use revel_deploy::sftp::Event;
                     on_event(match e {
                         Event::Connected { server_key } => DeployEvent::Connected { server_key },
@@ -653,9 +721,13 @@ impl Core {
                     server_key: report.server_key,
                     server_fingerprint: report.server_fingerprint,
                     key_recorded,
-                    url: None,
+                    url: self.destination_url(site, profile, None),
                     pages_enabled: false,
                 };
+                if let Some(snap) = snapshot {
+                    self.keep_version(site, profile, out, &snap);
+                    self.record_publish(site, profile_id, None, snap);
+                }
                 on_event(DeployEvent::Finished(s.clone()));
                 Ok(s)
             }

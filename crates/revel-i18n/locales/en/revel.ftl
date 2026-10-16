@@ -331,6 +331,12 @@ error-keyring = The system keychain is not available: { $detail }
 error-blocked = Publication blocked: fix the points listed first.
 error-not-built = The site has not been generated for this environment yet. Generate it, then open the preview.
 error-sftp-connect = Cannot connect to { $host }. Check the server address, the port and your internet connection. ({ $detail })
+error-sftp-timeout = No response from { $host }. Check the server address and port; at o2switch, first allow this computer's IP address (cPanel › “Autorisation SSH”).
+error-no-previous = No previous publish has been kept for this hosting.
+error-publish-checks = { $count ->
+    [one] 1 item to review before publishing.
+   *[other] { $count } items to review before publishing.
+}
 error-sftp-host-key = The server key has changed since the last connection. This may come from a change at your host or an interception attempt: check with your host before continuing.
 error-sftp-auth = Login or password rejected by the server.
 error-sftp = The server returned an error: { $detail }
@@ -1402,3 +1408,129 @@ mcp-tool-apply_commands = Changes
 mcp-tool-undo = Undo
 mcp-tool-redo = Redo
 action-copy = Copy
+
+# Bouton « Publier » de la barre supérieure (5.1)
+pub-panel = Publishing
+pub-public = Public site
+pub-test = Test version
+pub-never = Never published
+pub-at-now = Published just now
+pub-at-min = Published { $n } min ago
+pub-at-hours = Published { $n } h ago
+pub-at-date = Published { $date }
+pub-changes = { $n ->
+    [one] 1 page changed
+   *[other] { $n } pages changed
+}
+pub-files-changed = Styles or media changed
+pub-up-to-date = Up to date
+pub-kind-added = New
+pub-kind-changed = Changed
+pub-kind-removed = Removed
+pub-files = Styles, media and scripts
+pub-live = Live
+pub-waiting = Waiting
+pub-needs-access = Access needed
+pub-hosting = Hosting
+pub-hosting-help = Manage the site's hosting (Settings › Publishing)
+pub-empty = Not online yet
+pub-setup = Go live
+pub-dirty = Unpublished changes
+pub-page-open = Open in the editor
+pub-select = Include in this publish
+
+# Guided go-live (5.2, 5.3)
+setup-title = Go live
+setup-host = Hosting provider
+setup-host-pick = Choose a provider
+setup-other = Other
+setup-other-help = Another provider with SFTP access
+setup-console = Customer area
+setup-paste = Message from your host
+setup-paste-help = Paste the setup email or the access page: server, username and password are recognized
+setup-paste-placeholder = Paste here (optional)
+setup-env-help = Public site: your site's address. Test version: a separate address to review before publishing the public site
+setup-advanced = Advanced settings
+setup-folder = Site folder
+setup-connect = Connect
+setup-connecting = Connecting to the server…
+setup-connected = Connected
+host-ovh-sftp = Enable SFTP: Web Cloud › Hosting plans › your plan › FTP - SSH, “SFTP” column
+host-ovh-access = Access: same tab, “FTP and SFTP server” and “Main login”
+host-o2switch-ip = Allow this computer: cPanel › Outils › “Autorisation SSH” › “Ajouter une exception”, port 22
+host-o2switch-access = Access: cPanel username and password (“Bienvenue chez o2switch” email)
+host-infomaniak-access = Access: Manager › hosting & website management › your hosting › FTP / SSH
+host-hostinger-ssh = Enable SSH: hPanel › Websites › Dashboard › SSH Access › Enable
+host-hostinger-access = Access: same section (FTP IP, port 65002, username); FTP password
+host-ionos-create = Create access: Menu › Hosting › SFTP & SSH › Set up
+host-ionos-access = Access: SFTP & SSH › Manage › your user name
+
+# Pre-publish checks (5.4)
+check-title = Before publishing
+check-broken-link = { $n ->
+    [one] 1 broken link
+   *[other] { $n } broken links
+}
+check-heavy-image = { $n ->
+    [one] 1 image over 1 MB
+   *[other] { $n } images over 1 MB
+}
+check-missing-alt = { $n ->
+    [one] 1 image without alt text
+   *[other] { $n } images without alt text
+}
+check-no-title = { $n ->
+    [one] 1 page without a title
+   *[other] { $n } pages without a title
+}
+publish-anyway = Publish anyway
+
+# Back to the previous publish (5.5)
+pub-rollback-help = Go back to the version published { $date }
+pub-rollback-title = Put the version from { $date } back online?
+pub-rollback-confirm = Go back
+publish-restoring = Preparing the previous version…
+
+# Domain name (5.7)
+domain-title = Domain name
+domain-name = Domain
+domain-records = Records to create
+domain-records-help = At your domain registrar (DNS zone): A records for the domain, CNAME for www
+domain-type = Type
+domain-host = Name
+domain-value = Value
+domain-ipv6 = IPv6 (optional)
+domain-other = At your domain registrar: the records given by your host
+domain-check = Check
+domain-check-help = A domain change can take up to 48 hours to apply
+domain-checking = Checking the domain…
+domain-none = { $domain } does not point to any address
+domain-elsewhere = { $domain } points to { $addresses }, not to the hosting
+domain-points = { $domain } points to { $addresses }
+domain-https = HTTPS active
+domain-no-https = HTTPS not active yet
+domain-serves = The domain shows your site
+domain-other-page = The domain shows a page other than your site
+host-ovh-domain-1 = OVHcloud Control Panel › Web Cloud › your hosting plan › add the domain as an external domain (“Mes sites” / Multisite)
+host-ovh-domain-2 = At your domain registrar: the A and TXT “ovhcontrol” records shown by OVHcloud
+host-o2switch-domain-1 = cPanel › Domaines › “Domaines configurés”: add the domain
+host-o2switch-domain-2 = At your domain registrar: name servers ns1.o2switch.net and ns2.o2switch.net, or an A record to the shared IP address (cPanel)
+host-infomaniak-domain-1 = Manager › your site › Information: IPv4 and IPv6 addresses
+host-infomaniak-domain-2 = At your domain registrar: A (and AAAA) records to these addresses
+host-hostinger-domain-1 = hPanel › Websites: add the site, then “Check guide”
+host-hostinger-domain-2 = At your domain registrar: the name servers shown, or A records for @ and www to the IP address; DNSSEC off
+host-ionos-domain-1 = Menu › Domains & SSL › set up an external domain
+host-ionos-domain-2 = At your domain registrar: IONOS name servers, or the confirmation TXT record on @
+
+# Forms (5.8)
+insert-help-form = Contact form: messages received by email through your hosting (Settings › Forms). Drag onto the page, or click.
+forms-help = Messages from the site's forms are sent by email by your hosting (PHP), with no external service
+forms-recipient = Receiving address
+forms-subject = Email subject
+forms-subject-default = New message from { $site }
+forms-success = Message after sending
+forms-success-default = Thank you, your message has been sent.
+forms-host-yes = { $name }: forms received
+forms-host-no = { $name }: forms unavailable (no PHP)
+forms-infomaniak = Infomaniak: turn on the site's mail function (advanced settings › PHP / Apache) and set the sender email; 50 messages per 24 h at most
+forms-from-domain = Messages are sent from site@ your domain: the domain must be the hosting's

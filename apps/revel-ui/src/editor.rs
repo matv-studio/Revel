@@ -603,6 +603,7 @@ impl Ed {
                     | Command::SetShelf { .. }
                     | Command::SetRedirects { .. }
                     | Command::SetSeoSettings { .. }
+                    | Command::SetFormSettings { .. }
             ) {
                 // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.
             } else if style_only(cmd) {

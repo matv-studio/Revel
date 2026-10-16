@@ -25,6 +25,19 @@ pub struct State {
     /// Langues de traduction livrées avec l'application et retirées par l'utilisateur (D-36).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub translate_off: Vec<String>,
+    /// Chemin du site -> hébergement -> dernière publication (5.1).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub published: BTreeMap<String, BTreeMap<String, PublishRecord>>,
+}
+
+/// Dernière publication sur un hébergement : date, adresse, empreinte de ce qui a été publié.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PublishRecord {
+    /// Millisecondes depuis 1970.
+    pub at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    pub snapshot: revel_project::Snapshot,
 }
 
 impl State {

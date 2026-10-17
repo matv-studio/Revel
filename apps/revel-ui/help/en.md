@@ -10,8 +10,13 @@ Revel builds a website without writing code: you place elements on the page, set
 
 A Revel site opens with **Open a site**. An existing site comes in with **Import**:
 
-- **Folder**: a folder of HTML pages (hand-made or exported from Webflow) or an Eleventy project. Each page keeps its address; the shared header and footer go into a layout, the styles into the Styles panel.
+- **Folder**: a folder of HTML pages (hand-made, or an unzipped Webflow code export) or an Eleventy project. Each page keeps its address; the shared header and footer go into a layout, the styles into the Styles panel. Webflow export: add the collections' CSV files (CMS › collection › Export) or a Webflow API token to bring in the CMS content.
+- **Link**: the address of a live site (made with Framer, Webflow or anything else). Revel reads its pages and copies its images, fonts and styles into the projects folder; appear animations become Revel animations.
 - **Git repository**: paste a repository address (`https://github.com/account/site`, or a folder's: `…/tree/main/docs`). Revel copies it into the projects folder, history included, then imports it. A site that needs building (SvelteKit, Next…) is not built by Revel: import the folder produced by its build if it is in the repository.
+- **Figma**: the file link (Share › Copy link) and a personal access token (Figma › Settings › Security › Personal access tokens). Choose the frames: each one becomes a page, the first one is the home page.
+- **WordPress**: the export file (Tools › Export › All content). Posts become a collection, pages keep their address, images are copied from the site.
+
+At the end, the dialog shows what was brought in and the points to check, then opens the site in the editor.
 
 ## The editor
 

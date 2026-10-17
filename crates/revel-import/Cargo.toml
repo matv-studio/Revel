@@ -11,6 +11,7 @@ revel-model.workspace = true
 revel-markup.workspace = true
 revel-render.workspace = true
 revel-style.workspace = true
+revel-project.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -18,6 +19,12 @@ regex = "1.13.1"
 serde-saphyr = "1.3.0"
 # Lecture du HTML comme un navigateur (html5ever), déjà présente par Tauri (wry).
 dom_query = { version = "0.28.0", default-features = false }
+# Import depuis un lien (7.4) : lecture d'un site publié.
+ureq = { version = "3.4.2", features = ["platform-verifier"] }
+url = "2.5.8"
+percent-encoding = "2.3.2"
+# Fichier d'export de WordPress (7.6).
+roxmltree = "0.21.1"
 
 [lints]
 workspace = true

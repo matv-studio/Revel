@@ -5,7 +5,7 @@
   const state = {
     settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null },
     // `update=1` : une version plus récente est proposée (Réglages › Mises à jour).
-    update: params.get("update") ? { enabled: true, available: { version: "0.6.0", notes: "Version d’essai de la simulation." } } : null,
+    update: params.get("update") ? { enabled: true, available: { version: "0.7.0", notes: "Version d’essai de la simulation." } } : null,
     recents: params.get("empty") ? [] : [
       { path: "C:\\Sites\\alunites-revel-lab", name: "Alunites", opened_at: "2026-10-13T14:02:11+00:00" },
       { path: "C:\\Sites\\atelier-lumen", name: "Atelier Lumen", opened_at: "2026-10-11T09:40:00+00:00" },
@@ -141,7 +141,7 @@
       case "create_site": return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
       case "cms_collections": return cms;
       case "cms_folders": return [];
-      case "app_info": return ["0.5.0", 3];
+      case "app_info": return ["0.6.0", 3];
       case "update_check": return state.update || { enabled: false };
       case "update_install": return null;
       // Sans pont : document minimal (vue CMS, captures) ; modifications non simulées.
@@ -149,13 +149,20 @@
       case "has_site": return true;
       // Import d'un site (étape 7) : nature d'après le nom du dossier (`svelte` : site à
       // construire, `eleventy`, `vide` : rien à importer), copie de dépôt simulée.
-      case "plugin:dialog|open": return window.__revelPick ?? null;
+      case "plugin:dialog|open": {
+        if (args.options && args.options.directory === false) {
+          const f = window.__revelPickFiles ?? null;
+          return args.options.multiple ? f : (Array.isArray(f) ? f[0] : f);
+        }
+        return window.__revelPick ?? null;
+      }
       case "probe_site": {
         const p = args.path.toLowerCase();
         const has_site = state.recents.some((r) => r.path === args.path);
         if (p.includes("svelte")) return { kind: "needs_build", pages: 0, tool: "SvelteKit", outputs: ["build"], has_site };
         if (p.includes("eleventy")) return { kind: "eleventy", pages: 0, has_site };
         if (p.includes("vide")) return { kind: "unknown", pages: 0, has_site };
+        if (p.includes("webflow")) return { kind: "static", pages: 8, has_site, made_with: "Webflow", csv: [args.path + "\\Atelier - Blog Posts - 65f0.csv"] };
         return { kind: "static", pages: 12, has_site };
       }
       case "git_clone": {
@@ -174,7 +181,76 @@
         const base = args.path.split(/[\\/]/).filter(Boolean).pop();
         const name = base.replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
         state.recents = [{ path: args.path, name, opened_at: new Date().toISOString() }, ...state.recents.filter((r) => r.path !== args.path)];
-        return { site: { ...site, name, path: args.path }, warnings: args.path.includes("dist") ? [] : ["about.html : élément <base> gardé ; les adresses relatives sont lues depuis l'adresse de la page"] };
+        window.__revelImportOptions = args.options;
+        const webflow = args.path.toLowerCase().includes("webflow");
+        return {
+          site: { ...site, name, path: args.path },
+          warnings: args.path.includes("dist") ? [] : ["about.html : élément <base> gardé ; les adresses relatives sont lues depuis l'adresse de la page"],
+          stats: webflow
+            ? { tool: "Webflow", pages: 7, layouts: 2, style_rules: 214, animations: 6, forms: 1, collections: (args.options.csv || []).length, entries: 12 * (args.options.csv || []).length, files: 0 }
+            : { pages: 12, layouts: 2, style_rules: 140, animations: 0, forms: 0, collections: 0, entries: 0, files: 0 },
+        };
+      }
+      // Import depuis un lien (7.4) : `importslow=1` : lecture lente (annulation).
+      case "import_url": {
+        const host = args.url.trim().replace(/^[a-z]+:\/\//i, "").split(/[/?#]/)[0].replace(/^www\./, "");
+        if (!host.includes(".")) throw { key: "error-import-url", args: [] };
+        if (host.startsWith("absent")) { await wait(200); throw { key: "error-import-unreachable", args: [["detail", host]] }; }
+        window.__revelCancelImport = false;
+        for (let i = 1; i <= 8; i++) {
+          await wait(params.get("importslow") || window.__revelImportSlow ? 400 : 40);
+          if (window.__revelCancelImport) throw { key: "error-import-cancelled", args: [] };
+          args.onEvent.onmessage({ pages: i * 3, files: i * 21, bytes: i * 734003 });
+        }
+        const path = args.parent + "\\" + slug(host);
+        state.recents = [{ path, name: host, opened_at: new Date().toISOString() }, ...state.recents];
+        return {
+          site: { ...site, name: host, path },
+          warnings: ["Framer : menus, carrousels et effets au survol produits par le moteur de Framer non repris ; animations d'apparition reprises dans le panneau Interactions"],
+          stats: { tool: "Framer", pages: 24, layouts: 2, style_rules: 1180, animations: 37, forms: 0, collections: 0, entries: 0, files: 168 },
+        };
+      }
+      case "import_cancel": window.__revelCancelImport = true; return null;
+      case "probe_wordpress": {
+        if (!args.file.toLowerCase().endsWith(".xml")) throw { key: "error-import-wxr", args: [["detail", "ce fichier n'est pas un export WordPress (WXR)"]] };
+        return { title: "Atelier Lumen", url: "https://atelier.example", pages: 6, posts: 48, media: 120 };
+      }
+      case "import_wordpress": {
+        for (let i = 1; i <= 5; i++) { await wait(40); if (args.media) args.onEvent.onmessage({ pages: 0, files: i * 12, bytes: 0 }); }
+        const path = args.parent + "\\atelier-lumen";
+        state.recents = [{ path, name: "Atelier Lumen", opened_at: new Date().toISOString() }, ...state.recents];
+        window.__revelWpMedia = args.media;
+        return {
+          site: { ...site, name: "Atelier Lumen", path },
+          warnings: ["code court WordPress [gallery] gardé tel quel (extension WordPress non reprise)", "3 commentaire(s) non repris (pas de commentaires dans un site statique)"],
+          stats: { tool: "WordPress", pages: 8, layouts: 2, style_rules: 31, animations: 0, forms: 0, collections: 1, entries: 48, files: args.media ? 60 : 0 },
+        };
+      }
+      case "figma_has_token": return !!state.figmaToken;
+      case "figma_forget_token": state.figmaToken = null; return null;
+      case "figma_read": {
+        await wait(60);
+        if (!/figma\.com\/(design|file|proto)\/[A-Za-z0-9]{10,}/.test(args.url)) throw { key: "error-figma-url", args: [] };
+        if (args.token) { if (args.token === "mauvais") throw { key: "error-figma-token", args: [] }; state.figmaToken = args.token; }
+        if (!state.figmaToken) throw { key: "error-figma-token", args: [] };
+        return { key: "AbCdEf1234567890", name: "Maquette Atelier", canvases: [
+          { id: "0:1", name: "Desktop", frames: [
+            { id: "1:1", name: "Accueil", width: 1440, height: 3200 },
+            { id: "1:2", name: "À propos", width: 1440, height: 2100 },
+            { id: "1:3", name: "Contact", width: 1440, height: 1200 } ] },
+          { id: "0:2", name: "Mobile", frames: [ { id: "2:1", name: "Accueil mobile", width: 390, height: 4200 } ] },
+          { id: "0:3", name: "Composants", frames: [] } ] };
+      }
+      case "import_figma": {
+        window.__revelFigmaFrames = args.frames;
+        for (let i = 1; i <= 4; i++) { await wait(40); args.onEvent.onmessage({ pages: args.frames.length, files: i * 5, bytes: 0 }); }
+        const path = args.parent + "\\maquette-atelier";
+        state.recents = [{ path, name: "Maquette Atelier", opened_at: new Date().toISOString() }, ...state.recents];
+        return {
+          site: { ...site, name: "Maquette Atelier", path },
+          warnings: ["Figma : 4 élément(s) placé(s) à une position fixe (cadres sans mise en page automatique), à revoir pour les petits écrans"],
+          stats: { tool: "Figma", pages: args.frames.length, layouts: 1, style_rules: 96, animations: 0, forms: 0, collections: 0, entries: 0, files: 20 },
+        };
       }
       case "list_profiles": return profiles;
       case "publish_state": return publishState();

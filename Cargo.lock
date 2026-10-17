@@ -5400,7 +5400,7 @@ dependencies = [
 
 [[package]]
 name = "revel-app"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "base64 0.22.1",
  "revel-core",
@@ -5419,7 +5419,7 @@ dependencies = [
 
 [[package]]
 name = "revel-assets"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -5439,7 +5439,7 @@ dependencies = [
 
 [[package]]
 name = "revel-cli"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5460,11 +5460,11 @@ dependencies = [
 
 [[package]]
 name = "revel-cms"
-version = "0.5.0"
+version = "0.6.0"
 
 [[package]]
 name = "revel-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -5496,7 +5496,7 @@ dependencies = [
 
 [[package]]
 name = "revel-deploy"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "russh",
  "russh-sftp",
@@ -5509,11 +5509,11 @@ dependencies = [
 
 [[package]]
 name = "revel-dns"
-version = "0.5.0"
+version = "0.6.0"
 
 [[package]]
 name = "revel-edit"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "revel-markup",
  "revel-model",
@@ -5525,7 +5525,7 @@ dependencies = [
 
 [[package]]
 name = "revel-git"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "git2",
  "openssl-sys",
@@ -5538,7 +5538,7 @@ dependencies = [
 
 [[package]]
 name = "revel-i18n"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "fluent-bundle",
  "unic-langid",
@@ -5546,24 +5546,29 @@ dependencies = [
 
 [[package]]
 name = "revel-import"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "dom_query",
+ "percent-encoding",
  "regex",
  "revel-markup",
  "revel-model",
+ "revel-project",
  "revel-render",
  "revel-style",
+ "roxmltree",
  "serde",
  "serde-saphyr",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
+ "ureq",
+ "url",
 ]
 
 [[package]]
 name = "revel-markup"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "htmlize",
  "revel-model",
@@ -5572,7 +5577,7 @@ dependencies = [
 
 [[package]]
 name = "revel-mcp"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "axum",
  "getrandom 0.3.4",
@@ -5593,7 +5598,7 @@ dependencies = [
 
 [[package]]
 name = "revel-model"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5602,7 +5607,7 @@ dependencies = [
 
 [[package]]
 name = "revel-project"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "blake3",
  "chrono",
@@ -5620,7 +5625,7 @@ dependencies = [
 
 [[package]]
 name = "revel-protocol"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5628,7 +5633,7 @@ dependencies = [
 
 [[package]]
 name = "revel-render"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "minijinja",
@@ -5644,7 +5649,7 @@ dependencies = [
 
 [[package]]
 name = "revel-style"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "revel-model",
  "thiserror 2.0.21",
@@ -5652,7 +5657,7 @@ dependencies = [
 
 [[package]]
 name = "revel-translate"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -5765,6 +5770,15 @@ dependencies = [
  "quote",
  "serde_json",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

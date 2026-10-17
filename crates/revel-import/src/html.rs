@@ -17,6 +17,7 @@
 //! fermées, `<tbody>` implicite, attributs sans guillemets. `{{` et `{%` restent du texte.
 
 use crate::Report;
+use crate::adapt::{self, Tool};
 use crate::eleventy::ImportError;
 use dom_query::{Document, NodeData, NodeRef};
 use revel_model::{Attr, CustomCode, Layout, Node, Page, Passthrough, Site, Stylesheet};
@@ -103,6 +104,11 @@ pub struct Options {
     pub name: String,
     /// Langue si les pages n'en déclarent pas (`<html lang>`).
     pub lang: String,
+    /// Blocs `<style>` de l'en-tête des pages repris dans la feuille du site (règles en double
+    /// fusionnées) : site lu à son adresse (7.4), dont les styles sont écrits dans les pages.
+    pub merge_styles: bool,
+    /// Fichiers CSV des collections du CMS de Webflow (7.3), en plus de ceux du dossier.
+    pub cms_csv: Vec<PathBuf>,
 }
 
 /// Page lue.
@@ -150,6 +156,42 @@ pub fn import(root: &Path, opts: &Options) -> Result<(Site, Report), ImportError
         ));
     }
 
+    // Outil d'origine : moteur retiré, animations et formulaires repris (7.3, 7.7).
+    let tool = adapt::tool(&docs[0].head, &docs[0].html_attrs);
+    report.tool = tool.map(|t| t.name().to_string());
+    let mut extra_css = String::new();
+    match tool {
+        Some(Tool::Framer) => {
+            for d in &mut docs {
+                report.animations += adapt::framer(&mut d.head, &mut d.body);
+            }
+            report.warnings.push(
+                "Framer : menus, carrousels et effets au survol produits par le moteur de Framer non repris ; animations d'apparition reprises dans le panneau Interactions".into(),
+            );
+        }
+        Some(Tool::Webflow) => {
+            let ix2 = webflow_interactions(root, &docs);
+            for d in &mut docs {
+                let (a, f) = adapt::webflow(&mut d.body, ix2.as_ref());
+                report.animations += a;
+                report.forms += f;
+            }
+            if report.forms > 0 {
+                extra_css.push_str(adapt::WEBFLOW_FORM_CSS);
+                extra_css.push('\n');
+            }
+        }
+        _ => {}
+    }
+    for d in &mut docs {
+        report.animations += adapt::aos(&mut d.body);
+    }
+    if opts.merge_styles
+        && let Some(css) = take_inline_styles(&mut docs, &mut report)
+    {
+        extra_css.insert_str(0, &css);
+    }
+
     let mut site = Site::new(
         site_name(&docs).unwrap_or_else(|| opts.name.clone()),
         docs[0]
@@ -184,7 +226,7 @@ pub fn import(root: &Path, opts: &Options) -> Result<(Site, Report), ImportError
         .cloned()
         .collect();
     // Feuilles de style locales communes : fusionnées dans la feuille du site.
-    merge_stylesheets(root, &mut common_head, &mut site, &mut report);
+    merge_stylesheets(root, &mut common_head, &extra_css, &mut site, &mut report);
     let common_keys: HashSet<String> = docs[0]
         .head
         .iter()
@@ -535,6 +577,33 @@ fn read_page(rel: &str, text: &str, report: &mut Report) -> Doc {
     d
 }
 
+/// Éléments d'un morceau de HTML (contenu d'un article, d'une page de CMS), lus comme dans une
+/// page à la racine du site : `{{` reste du texte.
+pub fn fragment(html: &str) -> Vec<Node> {
+    let doc = Document::from(format!(
+        "<!DOCTYPE html><html><head></head><body>{html}</body></html>"
+    ));
+    let cx = Cx { dir: "/" };
+    doc.select("body")
+        .nodes()
+        .first()
+        .map(|b| {
+            b.children()
+                .iter()
+                .filter_map(|n| convert(n, &cx))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Outil qui a produit les pages du dossier (accueil lu), pour l'annoncer avant l'import.
+pub fn origin(root: &Path) -> Option<Tool> {
+    let first = scan(root).into_iter().next()?;
+    let text = std::fs::read_to_string(root.join(&first)).ok()?;
+    let d = read_page(&first, &text, &mut Report::default());
+    adapt::tool(&d.head, &d.html_attrs)
+}
+
 /// Adresse publiée d'un fichier de page.
 fn page_url(rel: &str) -> String {
     let lower = rel.to_ascii_lowercase();
@@ -759,7 +828,7 @@ pub fn rewrite_css_urls(css: &str, dir: &str) -> String {
         if Some(i) == next_url {
             out.push_str(&rest[..i + 4]);
             rest = &rest[i + 4..];
-            let Some(end) = rest.find(')') else {
+            let Some(end) = crate::crawl::url_close(rest) else {
                 out.push_str(rest);
                 return out;
             };
@@ -896,6 +965,50 @@ fn is_visual_head(n: &Node) -> bool {
 }
 
 /// Titre et description lus dans le référencement de la page (D-32).
+/// Document de base d'un site produit par un import (Figma) : type de document, langue, en-tête
+/// (encodage, écran, titre et description de la page, feuille du site), emplacement de la page.
+pub(crate) fn base_document(lang: &str, css: &str) -> Vec<Node> {
+    let a = |n: &str, v: &str| Attr {
+        name: n.into(),
+        value: Some(v.into()),
+        when: None,
+    };
+    let mut head = vec![
+        element("meta", vec![a("charset", "utf-8")], Vec::new()),
+        element(
+            "meta",
+            vec![
+                a("name", "viewport"),
+                a("content", "width=device-width, initial-scale=1"),
+            ],
+            Vec::new(),
+        ),
+    ];
+    head.extend(seo_nodes());
+    head.push(element(
+        "link",
+        vec![a("rel", "stylesheet"), a("href", css)],
+        Vec::new(),
+    ));
+    vec![
+        Node::Html {
+            html: "<!DOCTYPE html>".into(),
+        },
+        nl(),
+        element(
+            "html",
+            vec![a("lang", lang)],
+            vec![
+                nl(),
+                element("head", Vec::new(), lines(head)),
+                nl(),
+                element("body", Vec::new(), lines(vec![Node::Slot])),
+                nl(),
+            ],
+        ),
+    ]
+}
+
 fn seo_nodes() -> Vec<Node> {
     vec![
         element(
@@ -945,7 +1058,7 @@ fn trailing_scripts(body: &[Node]) -> (usize, Vec<Node>) {
 }
 
 /// HTML d'origine de nœuds lus dans une page (code ajouté d'une page).
-fn to_html(nodes: &[Node]) -> String {
+pub(crate) fn to_html(nodes: &[Node]) -> String {
     const VOID: &[&str] = &[
         "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source",
         "track", "wbr",
@@ -960,6 +1073,11 @@ fn to_html(nodes: &[Node]) -> String {
                     .replace('>', "&gt;"),
             ),
             Node::Html { html } => out.push_str(html),
+            Node::Out { expr } => {
+                out.push_str("{{ ");
+                out.push_str(expr);
+                out.push_str(" }}");
+            }
             Node::Element {
                 tag,
                 attrs,
@@ -1412,7 +1530,13 @@ fn with_current(nodes: &[&Node], urls: &[&str]) -> Option<Node> {
 
 /// Feuilles locales liées par toutes les pages, sans `media` restrictif : fusionnées dans l'ordre
 /// dans la feuille du site, à l'adresse de la première ; leurs liens retirés sauf le premier.
-fn merge_stylesheets(root: &Path, head: &mut Vec<Node>, site: &mut Site, report: &mut Report) {
+fn merge_stylesheets(
+    root: &Path,
+    head: &mut Vec<Node>,
+    extra: &str,
+    site: &mut Site,
+    report: &mut Report,
+) {
     let mut found: Vec<(usize, String, PathBuf)> = Vec::new();
     for (i, n) in head.iter().enumerate() {
         let Node::Element { tag, attrs, .. } = n else {
@@ -1442,7 +1566,7 @@ fn merge_stylesheets(root: &Path, head: &mut Vec<Node>, site: &mut Site, report:
             found.push((i, url, file));
         }
     }
-    if found.is_empty() {
+    if found.is_empty() && extra.trim().is_empty() {
         return;
     }
     let mut css = String::new();
@@ -1464,6 +1588,7 @@ fn merge_stylesheets(root: &Path, head: &mut Vec<Node>, site: &mut Site, report:
             }
         }
     }
+    css.push_str(extra);
     let items = match revel_style::parse(&css) {
         Ok(items) => items,
         Err(e) => {
@@ -1473,32 +1598,222 @@ fn merge_stylesheets(root: &Path, head: &mut Vec<Node>, site: &mut Site, report:
             return;
         }
     };
-    let (first, url, file) = found[0].clone();
-    if let Node::Element { attrs, .. } = &mut head[first]
-        && let Some(a) = attrs.iter_mut().find(|a| a.name == "href")
-    {
-        a.value = Some(url.clone());
-    }
-    for (i, _, _) in found.iter().skip(1).rev() {
-        head.remove(*i);
-    }
+    let (url, source) = match found.first() {
+        Some((first, url, file)) => {
+            if let Node::Element { attrs, .. } = &mut head[*first]
+                && let Some(a) = attrs.iter_mut().find(|a| a.name == "href")
+            {
+                a.value = Some(url.clone());
+            }
+            for (i, _, _) in found.iter().skip(1).rev() {
+                head.remove(*i);
+            }
+            let source = file
+                .strip_prefix(root)
+                .unwrap_or(file)
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
+            (url.clone(), Some(source))
+        }
+        None => {
+            // Styles écrits dans les pages seulement : nouvelle feuille, liée à la fin de
+            // l'en-tête commun.
+            let mut url = "/assets/styles.css".to_string();
+            let mut n = 2;
+            while root.join(url.trim_start_matches('/')).exists() {
+                url = format!("/assets/styles-{n}.css");
+                n += 1;
+            }
+            head.push(element(
+                "link",
+                vec![
+                    Attr {
+                        name: "rel".into(),
+                        value: Some("stylesheet".into()),
+                        when: None,
+                    },
+                    Attr {
+                        name: "href".into(),
+                        value: Some(url.clone()),
+                        when: None,
+                    },
+                ],
+                Vec::new(),
+            ));
+            (url, None)
+        }
+    };
     site.breakpoints = revel_style::breakpoints_from(&items);
     report.style_rules = items
         .iter()
         .filter(|i| matches!(i, revel_model::StyleItem::Rule(_)))
         .count();
-    let source = file
-        .strip_prefix(root)
-        .unwrap_or(&file)
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join("/");
-    site.stylesheet = Some(Stylesheet {
-        url,
-        source: Some(source),
-        items,
-    });
+    site.stylesheet = Some(Stylesheet { url, source, items });
+}
+
+/// Blocs `<style>` de l'en-tête des pages (tous médias) retirés des pages et réunis : règles et
+/// blocs `@…` de premier niveau dans l'ordre de première apparition, sans doublons. `None` si
+/// aucun bloc ou si Revel ne lit pas ces styles (pages laissées telles quelles).
+fn take_inline_styles(docs: &mut [Doc], report: &mut Report) -> Option<String> {
+    let is_style = |n: &Node| matches!(n, Node::Element { tag, .. } if tag == "style");
+    // Blocs dans l'ordre des pages ; un bloc répété ne garde que sa dernière place (celle qui
+    // décide de la cascade : une règle reprise plus loin l'emporte sur celles d'entre-deux).
+    let mut all: Vec<String> = Vec::new();
+    for d in docs.iter() {
+        let dir = match d.url.rfind('/') {
+            Some(i) => &d.url[..=i],
+            None => "/",
+        };
+        for n in d.head.iter().filter(|n| is_style(n)) {
+            let Node::Element {
+                attrs, children, ..
+            } = n
+            else {
+                continue;
+            };
+            let text: String = children
+                .iter()
+                .map(|c| match c {
+                    Node::Html { html } => html.as_str(),
+                    Node::Text { text } => text.as_str(),
+                    _ => "",
+                })
+                .collect();
+            let blocks = top_level_blocks(&rewrite_css_urls(&text, dir));
+            match attr(attrs, "media")
+                .map(str::trim)
+                .filter(|m| !m.is_empty() && !m.eq_ignore_ascii_case("all"))
+            {
+                // `<style media="…">` : ses règles dans un bloc `@media`.
+                Some(m) if !blocks.is_empty() => {
+                    all.push(format!("@media {m} {{\n{}\n}}", blocks.join("\n")));
+                }
+                _ => all.extend(blocks),
+            }
+        }
+    }
+    let mut seen = HashSet::new();
+    let mut kept: Vec<&String> = all
+        .iter()
+        .rev()
+        .filter(|b| seen.insert(b.as_str()))
+        .collect();
+    kept.reverse();
+    let mut css = String::new();
+    for b in kept {
+        css.push_str(b);
+        css.push('\n');
+    }
+    if css.is_empty() {
+        return None;
+    }
+    if let Err(e) = revel_style::parse(&css) {
+        report.warnings.push(format!(
+            "styles écrits dans les pages non repris dans le panneau Styles ({e}) : gardés dans les pages"
+        ));
+        return None;
+    }
+    for d in docs.iter_mut() {
+        d.head.retain(|n| !is_style(n));
+    }
+    Some(css)
+}
+
+/// Règles et blocs `@…` de premier niveau d'un texte CSS (commentaires retirés).
+fn top_level_blocks(css: &str) -> Vec<String> {
+    let b = css.as_bytes();
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let (mut depth, mut i) = (0usize, 0usize);
+    let mut quote: Option<u8> = None;
+    while i < b.len() {
+        let c = b[i];
+        if let Some(q) = quote {
+            if c == b'\\' && i + 1 < b.len() {
+                cur.push_str(&css[i..i + 2]);
+                i += 2;
+                continue;
+            }
+            if c == q {
+                quote = None;
+            }
+        } else if c == b'/' && b.get(i + 1) == Some(&b'*') {
+            i = css[i + 2..].find("*/").map_or(b.len(), |k| i + 2 + k + 2);
+            continue;
+        } else if c == b'"' || c == b'\'' {
+            quote = Some(c);
+        } else if c == b'{' {
+            depth += 1;
+        } else if c == b'}' {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                cur.push('}');
+                out.push(cur.trim().to_string());
+                cur.clear();
+                i += 1;
+                continue;
+            }
+        } else if c == b';' && depth == 0 {
+            // `@import …;`, `@charset …;`
+            cur.push(';');
+            let t = cur.trim().to_string();
+            if !t.starts_with("@charset") {
+                out.push(t);
+            }
+            cur.clear();
+            i += 1;
+            continue;
+        }
+        let ch = css[i..].chars().next().unwrap_or(' ');
+        cur.push(ch);
+        i += ch.len_utf8();
+    }
+    out.retain(|s| !s.is_empty() && s != "}");
+    out
+}
+
+/// Données des interactions de Webflow, lues dans les scripts locaux des pages (`webflow.js`).
+fn webflow_interactions(root: &Path, docs: &[Doc]) -> Option<Value> {
+    fn scripts<'a>(nodes: &'a [Node], out: &mut Vec<&'a str>) {
+        for n in nodes {
+            if let Node::Element {
+                tag,
+                attrs,
+                children,
+                ..
+            } = n
+            {
+                if tag == "script"
+                    && let Some(src) = attr(attrs, "src")
+                {
+                    out.push(src);
+                }
+                scripts(children, out);
+            }
+        }
+    }
+    let mut srcs = Vec::new();
+    for d in docs.iter().take(3) {
+        scripts(&d.head, &mut srcs);
+        scripts(&d.body, &mut srcs);
+    }
+    let mut done = HashSet::new();
+    for src in srcs {
+        let url = src.split(['?', '#']).next().unwrap_or("");
+        if !url.starts_with('/') || url.starts_with("//") || !done.insert(url) {
+            continue;
+        }
+        let file = root.join(percent_decode(url.trim_start_matches('/')));
+        if std::fs::metadata(&file).is_ok_and(|m| m.is_file() && m.len() < 20_000_000)
+            && let Ok(js) = std::fs::read_to_string(&file)
+            && let Some(cfg) = adapt::ix2_config(&js)
+        {
+            return Some(cfg);
+        }
+    }
+    None
 }
 
 /// `%20` et autres séquences d'une adresse décodées (nom de fichier).

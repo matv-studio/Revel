@@ -221,6 +221,22 @@ jobs:
             --save captures-ecarts \
             --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/project/wattr/ \
             | tee -a "$GITHUB_STEP_SUMMARY"
+      # Import WordPress (7.6) : fichier d'export de référence des thèmes WordPress (articles,
+      # pages, menus, codes courts, médias de WordPress.com), sans téléchargement des images.
+      - name: Import WordPress
+        shell: bash
+        run: |
+          REVEL=target/release/revel
+          curl -sSfL -o wxr.xml https://raw.githubusercontent.com/WordPress/theme-test-data/master/themeunittestdata.wordpress.xml
+          $REVEL import-wordpress wxr.xml import-wp --lang en --no-media | tee import-wp.log
+          echo "## Import WordPress" >> "$GITHUB_STEP_SUMMARY"
+          head -1 import-wp.log >> "$GITHUB_STEP_SUMMARY"
+          site=$(find import-wp -maxdepth 2 -name site.revel.json -printf '%h\n' | head -1)
+          $REVEL build "$site" --out import-wp-out --no-images | tee -a "$GITHUB_STEP_SUMMARY"
+          n=$(find import-wp-out -name index.html | wc -l)
+          echo "pages produites : $n" >> "$GITHUB_STEP_SUMMARY"
+          test "$n" -ge 60
+          test -f import-wp-out/2013/01/10/markup-image-alignment/index.html
       # Canevas de l'éditeur (étape 2.2) : chaque page, repères retirés, identique à la page
       # générée ; servi comme par l'application, il donne les mêmes styles et captures que le site,
       # et répond à la souris et aux messages de l'interface.

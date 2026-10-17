@@ -10,8 +10,13 @@ Revel construit un site sans écrire de code : vous placez des éléments sur la
 
 Un site Revel s'ouvre avec **Ouvrir un site**. Un site existant se reprend avec **Importer** :
 
-- **Dossier** : un dossier de pages HTML (fait à la main ou exporté de Webflow) ou un projet Eleventy. Chaque page garde son adresse ; l'en-tête et le pied communs vont dans un gabarit, les styles dans le panneau Styles.
+- **Dossier** : un dossier de pages HTML (fait à la main, ou export du code de Webflow décompressé) ou un projet Eleventy. Chaque page garde son adresse ; l'en-tête et le pied communs vont dans un gabarit, les styles dans le panneau Styles. Export Webflow : ajoutez les fichiers CSV des collections (CMS › collection › Export) ou un jeton de l'API de Webflow pour reprendre les contenus du CMS.
+- **Lien** : l'adresse d'un site en ligne (fait avec Framer, Webflow ou autre). Revel lit ses pages et copie ses images, polices et styles dans le dossier des projets ; les animations d'apparition deviennent des animations Revel.
 - **Dépôt Git** : collez l'adresse d'un dépôt (`https://github.com/compte/site`, ou celle d'un dossier : `…/tree/main/docs`). Revel le copie dans le dossier des projets, historique compris, puis l'importe. Un site à construire (SvelteKit, Next…) n'est pas construit par Revel : importez le dossier produit par sa construction s'il est dans le dépôt.
+- **Figma** : le lien du fichier (Partager › Copier le lien) et un jeton personnel (Figma › Settings › Security › Personal access tokens). Choisissez les cadres : chacun devient une page, le premier est l'accueil.
+- **WordPress** : le fichier d'export (Outils › Exporter › Tout le contenu). Les articles deviennent une collection, les pages gardent leur adresse, les images sont copiées depuis le site.
+
+À la fin, la boîte montre ce qui a été repris et les points à vérifier, puis ouvre le site dans l'éditeur.
 
 ## L'éditeur
 

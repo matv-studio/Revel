@@ -52,6 +52,37 @@ enum Command {
         #[arg(long, default_value = "en")]
         lang: String,
     },
+    /// Lit un site publié (Framer, Webflow, tout site) et l'importe dans un nouveau dossier de
+    /// `parent` (7.4) ; `--raw` : lecture seule (copie du site, sans import).
+    ImportUrl {
+        url: String,
+        parent: PathBuf,
+        #[arg(long, default_value = "en")]
+        lang: String,
+        #[arg(long)]
+        raw: bool,
+    },
+    /// Importe un site WordPress depuis son fichier d'export (WXR) dans un nouveau dossier de
+    /// `parent` (7.6).
+    ImportWordpress {
+        file: PathBuf,
+        parent: PathBuf,
+        #[arg(long, default_value = "en")]
+        lang: String,
+        /// Images gardées sur le site d'origine (pas de téléchargement).
+        #[arg(long)]
+        no_media: bool,
+    },
+    /// Importe un fichier Figma (7.5) : jeton dans la variable d'environnement `FIGMA_TOKEN`,
+    /// cadres choisis (`--frames 1:2,1:3`, sinon ceux de la première page).
+    ImportFigma {
+        url: String,
+        parent: PathBuf,
+        #[arg(long, default_value = "en")]
+        lang: String,
+        #[arg(long)]
+        frames: Option<String>,
+    },
     /// Fidélité d'un import HTML statique : génère le site importé et compare chaque page produite
     /// à la page d'origine (structure lue comme un navigateur).
     ImportCheck {
@@ -237,8 +268,14 @@ fn main() -> Result<()> {
                     .ok()
                     .and_then(|d| d.file_name().map(|n| n.to_string_lossy().to_string()))
                     .unwrap_or_else(|| "Site".into());
-                let (site, report) =
-                    revel_import::html::import(&dir, &revel_import::html::Options { name, lang })?;
+                let (site, report) = revel_import::html::import(
+                    &dir,
+                    &revel_import::html::Options {
+                        name,
+                        lang,
+                        ..Default::default()
+                    },
+                )?;
                 println!(
                     "pages : {} · gabarits : {} · règles de style : {} · fichiers copiés : {}",
                     report.pages,
@@ -261,6 +298,113 @@ fn main() -> Result<()> {
                 anyhow::bail!("rien à importer ; dossiers de pages : {outputs:?}")
             }
         },
+        Command::ImportUrl {
+            url,
+            parent,
+            lang,
+            raw,
+        } => {
+            std::fs::create_dir_all(&parent)?;
+            if raw {
+                let start = revel_import::crawl::parse_start(&url)
+                    .ok_or_else(|| anyhow::anyhow!("adresse non reconnue"))?;
+                let dest = parent.join(revel_import::crawl::site_name(&start));
+                let r = revel_import::crawl::crawl(
+                    &start,
+                    &dest,
+                    &revel_import::crawl::Http::new(),
+                    &Default::default(),
+                    &mut |p| {
+                        eprint!(
+                            "\r{} pages · {} fichiers · {} Ko   ",
+                            p.pages,
+                            p.files,
+                            p.bytes / 1024
+                        )
+                    },
+                )?;
+                eprintln!();
+                println!(
+                    "{} : {} pages, {} fichiers, {} Ko, outil : {}",
+                    dest.display(),
+                    r.pages,
+                    r.files,
+                    r.bytes / 1024,
+                    r.tool.as_deref().unwrap_or("?")
+                );
+                for w in &r.warnings {
+                    println!("! {w}");
+                }
+                return Ok(());
+            }
+            let core = revel_core::Core::new(
+                &std::env::temp_dir().join("revel-cli-config"),
+                Box::new(revel_core::secrets::Memory::default()),
+            );
+            let r = core
+                .import_url(&url, &parent, &lang, |e| {
+                    eprint!(
+                        "\r{} pages · {} fichiers · {} Ko   ",
+                        e.pages,
+                        e.files,
+                        e.bytes / 1024
+                    )
+                })
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            eprintln!();
+            print_import(&r);
+        }
+        Command::ImportWordpress {
+            file,
+            parent,
+            lang,
+            no_media,
+        } => {
+            std::fs::create_dir_all(&parent)?;
+            let core = revel_core::Core::new(
+                &std::env::temp_dir().join("revel-cli-config"),
+                Box::new(revel_core::secrets::Memory::default()),
+            );
+            let r = core
+                .import_wordpress(&file, &parent, &lang, !no_media, |e| {
+                    eprint!("\r{} fichiers   ", e.files)
+                })
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            eprintln!();
+            print_import(&r);
+        }
+        Command::ImportFigma {
+            url,
+            parent,
+            lang,
+            frames,
+        } => {
+            std::fs::create_dir_all(&parent)?;
+            let token = std::env::var("FIGMA_TOKEN")
+                .map_err(|_| anyhow::anyhow!("variable d'environnement FIGMA_TOKEN absente"))?;
+            let core = revel_core::Core::new(
+                &std::env::temp_dir().join("revel-cli-config"),
+                Box::new(revel_core::secrets::Memory::default()),
+            );
+            let file = core
+                .figma_read(&url, Some(&token))
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let ids: Vec<String> = match frames {
+                Some(f) => f.split(',').map(|s| s.trim().to_string()).collect(),
+                None => file
+                    .canvases
+                    .first()
+                    .map(|c| c.frames.iter().map(|f| f.id.clone()).collect())
+                    .unwrap_or_default(),
+            };
+            let r = core
+                .import_figma(&url, &ids, &parent, &lang, |e| {
+                    eprint!("\r{} fichiers   ", e.files)
+                })
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            eprintln!();
+            print_import(&r);
+        }
         Command::ImportCheck { dir, limit } => {
             let project =
                 Project::open(&dir).with_context(|| format!("ouverture de {}", dir.display()))?;
@@ -594,4 +738,25 @@ async fn start_mcp(
         eprintln!("clé : {token}");
     }
     Ok(server)
+}
+
+/// Bilan d'un import.
+fn print_import(r: &revel_protocol::ImportResult) {
+    let s = &r.stats;
+    println!(
+        "{} · outil : {} · pages : {} · gabarits : {} · règles de style : {} · animations : {} · formulaires : {} · collections : {} ({} contenus) · fichiers : {}",
+        r.site.path,
+        s.tool.as_deref().unwrap_or("?"),
+        s.pages,
+        s.layouts,
+        s.style_rules,
+        s.animations,
+        s.forms,
+        s.collections,
+        s.entries,
+        s.files
+    );
+    for w in &r.warnings {
+        println!("! {w}");
+    }
 }

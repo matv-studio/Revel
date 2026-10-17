@@ -32,7 +32,7 @@ Revel pour la version 1.0 (mises à jour automatiques, signature, documentation,
 | 6.4 | **Transitions entre les pages** (fondu, glissement) | `revel-render`, `revel-ui` |
 | 6.5 | **Passe de comparaison** avec Framer, Figma et Webflow ; passe d'expérience, d'interface et de direction artistique (placée juste après 6.4 le 16/10/2026) | tous |
 | 6.6 | **Mises à jour automatiques** de Revel (vérifiées et signées) | `revel-app` |
-| 6.7 | **Signature du code** Windows et macOS (D-09) | intégration continue |
+| 6.7 | **Signature du code** Windows et macOS (D-09) : déplacée à l'étape 8, fonctions optionnelles (17/10/2026) | intégration continue |
 | 6.8 | **Documentation** : aide intégrée, premiers pas | `revel-ui`, `docs/` |
 | 6.9 | **Installateur 1.0** léger, au logo de Revel, sans langue de traduction livrée (D-46) | `revel-app`, intégration continue |
 
@@ -136,7 +136,7 @@ Repères : effets Appear, Hover, Press, Loop, Text Effects, Scroll Speed et Scro
 | 6.4 | Terminée : transition entre les pages (fondu, glissement) dans Paramètres › Général, en CSS, coupée pour le mouvement réduit (D-76) |
 | 6.5 | Terminée (17/10/2026) : passe d'écran en écran (éditeur, Ajouter, Styles, Interactions, CMS, Localisation, Paramètres, accueil, Réglages, aide), en thème sombre et clair, comparée à Webflow, Framer et Figma ; corrigé : exemple du titre de l'onglet sans le nom du site quand les données sont dans le document, icône propre aux onglets, tuile « Lottie » à la hauteur des autres, « Tronquer » au lieu d'un libellé coupé, nombre de contenus (et non d'« entrées ») dans le CMS, « Adresse de la page » sans terme technique, champ robots.txt à sa taille, page de l'éditeur gardée (sans rechargement) après un réglage sans effet sur elle dans Paramètres (transition, référencement, formulaires, redirections) ; essais de bout en bout ajoutés (onglets, accordéon, Lottie, actions, transition, aide) |
 | 6.6 | Faite côté application et construction (D-77) : recherche au lancement, Réglages › Mises à jour, installation vérifiée et relance ; active dès que la clé de signature est déclarée dans le dépôt (à faire par l'utilisateur) |
-| 6.7 | Préparée (D-09) : signature Windows (Azure Artifact Signing) et macOS (Developer ID, notarisation) dès que les secrets sont déclarés ; signature ad hoc sous macOS sans certificat ; **pas de signature pour l'instant** (choix de l'utilisateur, 17/10/2026) |
+| 6.7 | Déplacée à l'étape 8 (8.1, fonctions optionnelles) le 17/10/2026 ; la construction des installateurs reste prête (D-09) |
 | 6.8 | Terminée : aide intégrée « Premiers pas » (menu « ? » de l'éditeur), quatorze rubriques en français et en anglais (`apps/revel-ui/help/`), libellés vérifiés sur ceux de l'interface |
 | 6.9 | Prête : installateur Windows au logo de Revel (bandeau, barre latérale, icône, français et anglais selon le système), image disque macOS avec fond et emplacements ; langues de traduction non livrées dès la 0.5.1 (D-79, avancé sur D-46) |
 

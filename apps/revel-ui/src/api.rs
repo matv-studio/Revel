@@ -235,22 +235,109 @@ pub async fn probe_site(path: &str) -> Res<revel_protocol::ImportProbe> {
 }
 
 /// Importe le site d'un dossier (Eleventy ou HTML statique).
-pub async fn import_site(path: &str, overwrite: bool, lang: &str) -> Res<ImportResult> {
-    #[derive(Serialize)]
-    struct A<'a> {
-        path: &'a str,
-        overwrite: bool,
-        lang: &'a str,
-    }
-    call(
+pub async fn import_site(
+    path: &str,
+    options: &revel_protocol::ImportOptions,
+    on: impl Fn(revel_protocol::ImportEvent) + 'static,
+) -> Res<ImportResult> {
+    call_with_channel(
         "import_site",
-        &A {
-            path,
-            overwrite,
-            lang,
-        },
+        &serde_json::json!({ "path": path, "options": options }),
+        on,
     )
     .await
+}
+
+/// Lit le site publié à `url` et l'importe dans un nouveau dossier de `parent` (7.4).
+pub async fn import_url(
+    url: &str,
+    parent: &str,
+    lang: &str,
+    on: impl Fn(revel_protocol::ImportEvent) + 'static,
+) -> Res<ImportResult> {
+    call_with_channel(
+        "import_url",
+        &serde_json::json!({ "url": url, "parent": parent, "lang": lang }),
+        on,
+    )
+    .await
+}
+
+pub async fn import_cancel() -> Res<()> {
+    call("import_cancel", &NoArgs {}).await
+}
+
+/// Examine un fichier d'export WordPress (7.6).
+pub async fn probe_wordpress(file: &str) -> Res<revel_protocol::WxrProbe> {
+    call("probe_wordpress", &serde_json::json!({ "file": file })).await
+}
+
+pub async fn import_wordpress(
+    file: &str,
+    parent: &str,
+    lang: &str,
+    media: bool,
+    on: impl Fn(revel_protocol::ImportEvent) + 'static,
+) -> Res<ImportResult> {
+    call_with_channel(
+        "import_wordpress",
+        &serde_json::json!({ "file": file, "parent": parent, "lang": lang, "media": media }),
+        on,
+    )
+    .await
+}
+
+pub async fn figma_has_token() -> Res<bool> {
+    call("figma_has_token", &NoArgs {}).await
+}
+
+pub async fn figma_forget_token() -> Res<()> {
+    call("figma_forget_token", &NoArgs {}).await
+}
+
+/// Pages et cadres d'un fichier Figma (7.5) ; `token` : jeton saisi, gardé s'il est accepté.
+pub async fn figma_read(url: &str, token: Option<&str>) -> Res<revel_protocol::FigmaFile> {
+    call(
+        "figma_read",
+        &serde_json::json!({ "url": url, "token": token }),
+    )
+    .await
+}
+
+pub async fn import_figma(
+    url: &str,
+    frames: &[String],
+    parent: &str,
+    lang: &str,
+    on: impl Fn(revel_protocol::ImportEvent) + 'static,
+) -> Res<ImportResult> {
+    call_with_channel(
+        "import_figma",
+        &serde_json::json!({ "url": url, "frames": frames, "parent": parent, "lang": lang }),
+        on,
+    )
+    .await
+}
+
+/// Choix de fichiers (`exts` : extensions acceptées, sans point).
+pub async fn pick_files(label: &str, exts: &[&str], multiple: bool) -> Res<Vec<String>> {
+    let v: serde_json::Value = call(
+        "plugin:dialog|open",
+        &serde_json::json!({ "options": {
+            "directory": false,
+            "multiple": multiple,
+            "filters": [{ "name": label, "extensions": exts }],
+        } }),
+    )
+    .await?;
+    Ok(match v {
+        serde_json::Value::String(s) => vec![s],
+        serde_json::Value::Array(a) => a
+            .into_iter()
+            .filter_map(|x| x.as_str().map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
+    })
 }
 
 /// Copie un dépôt Git dans un nouveau dossier de `parent`.

@@ -183,6 +183,7 @@ fn site_statique_importe() {
         &Options {
             name: "dossier".into(),
             lang: "en".into(),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -407,6 +408,7 @@ fn noms_des_pages() {
         &Options {
             name: "Atelier".into(),
             lang: "fr".into(),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -526,4 +528,191 @@ fn type_de_document() {
     let a = "<!DOCTYPE html><html><head><title>T</title></head><body><p>x</p></body></html>";
     let b = "<html><head><title>T</title></head><body><p>x</p></body></html>";
     assert_eq!(html::compare(a, b, "index.html", 5).len(), 1);
+}
+
+/// Site publié par Framer, lu à son adresse (7.4) : styles écrits dans les pages, moteur de
+/// Framer, animations d'apparition.
+fn framer_page(title: &str, page_css: &str, body: &str) -> String {
+    format!(
+        r#"<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="generator" content="Framer 9a2b3c4">
+<title>{title}</title>
+<link rel="modulepreload" href="/_externe/framerusercontent.com/sites/x/chunk-A.mjs">
+<style data-framer-css-ssr-minified>@font-face{{font-family:"Inter";src:url(/_externe/fonts.gstatic.com/s/inter/v1/a.woff2)}}body{{--framer-will-change-override:none}}.framer-body{{margin:0}}{page_css}</style>
+<script type="framer/appear" id="__framer__appearAnimationsContent">{{"a1":{{"default":{{"initial":{{"opacity":0.001,"y":30}},"animate":{{"opacity":1,"y":0,"transition":{{"type":"spring","delay":0.2,"duration":0.6,"bounce":0}}}}}}}}}}</script>
+</head>
+<body>
+<div id="main" data-framer-hydrate-v2="x">{body}</div>
+<div id="__framer-badge-container"></div>
+<script type="module" data-framer-bundle="main" src="/_externe/framerusercontent.com/sites/x/script_main.mjs"></script>
+</body>
+</html>"#
+    )
+}
+
+#[test]
+fn site_framer_lu_en_ligne() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    write(
+        r,
+        "index.html",
+        &framer_page(
+            "Accueil",
+            "@media (max-width:809px){.framer-p{font-size:24px}}.framer-p{font-size:36px}@media (max-width:809px){.framer-p{font-size:24px}}.framer-A1 .framer-titre{font-size:64px}",
+            r#"<h1 class="framer-titre" data-framer-appear-id="a1" style="will-change:transform;opacity:0.001;transform:translateY(30px)">Studio</h1>"#,
+        ),
+    );
+    write(
+        r,
+        "contact/index.html",
+        &framer_page(
+            "Contact",
+            ".framer-B2 .framer-form{display:grid}",
+            r#"<p class="framer-form">Écrire</p>"#,
+        ),
+    );
+    let (site, report) = html::import(
+        r,
+        &Options {
+            name: "studio".into(),
+            lang: "fr".into(),
+            merge_styles: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(report.tool.as_deref(), Some("Framer"));
+    assert_eq!(report.animations, 1);
+    let sheet = site.stylesheet.as_ref().expect("feuille du site");
+    assert_eq!(sheet.url, "/assets/styles.css");
+    let css = revel_style::generate(&sheet.items);
+    // Règles communes une seule fois, règles propres à chaque page reprises.
+    assert_eq!(css.matches(".framer-body").count(), 1, "{css}");
+    assert!(css.contains(".framer-A1 .framer-titre"));
+    // Bloc répété : gardé à sa dernière place (après la règle générale, comme dans la page).
+    let base = css.find(".framer-p {").expect("règle générale");
+    let media = css
+        .rfind("@media (max-width:809px)")
+        .expect("règle d'écran");
+    assert!(media > base, "{css}");
+    assert_eq!(css.matches("@media (max-width:809px)").count(), 1);
+    assert!(css.contains(".framer-B2 .framer-form"));
+    let base = format!("{:?}", site.layouts[0].body);
+    assert!(base.contains("/assets/styles.css"));
+    assert!(!base.contains("framer/appear"));
+    assert!(!base.contains("modulepreload"));
+    let home = format!("{:?}", site.pages[0].body);
+    assert!(home.contains("data-revel-appear"), "{home}");
+    assert!(home.contains("up dur=0.6 delay=0.2 dist=30"), "{home}");
+    assert!(!home.contains("opacity:0.001"));
+    assert!(!home.contains("__framer-badge"));
+    for p in &site.pages {
+        assert!(
+            !format!("{:?}", p.body).contains("<style"),
+            "styles retirés des pages"
+        );
+        assert!(!p.code.body.contains("framer"), "{}", p.code.body);
+    }
+}
+
+/// Export du code de Webflow (7.3) : interactions, formulaire, contenus du CMS (CSV).
+#[test]
+fn export_webflow_avec_cms() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    let page = |title: &str, main: &str| {
+        format!(
+            r#"<!DOCTYPE html><!-- This site was created in Webflow. https://webflow.com --><html data-wf-page="p1" data-wf-site="65f0abc"><head><meta charset="utf-8"><title>{title}</title><meta content="Webflow" name="generator"><link href="css/normalize.css" rel="stylesheet" type="text/css"><link href="css/webflow.css" rel="stylesheet" type="text/css"><link href="css/atelier.webflow.css" rel="stylesheet" type="text/css"></head><body><div class="nav"><a href="index.html" aria-current="page" class="w--current">Accueil</a></div>{main}<script src="js/webflow.js" type="text/javascript"></script></body></html>"#
+        )
+    };
+    write(
+        r,
+        "index.html",
+        &page(
+            "Atelier",
+            r#"<h1 data-w-id="w1" style="opacity:0" class="hero">Bienvenue</h1><div class="w-form"><form id="email-form" name="email-form" data-name="Email Form" method="get"><input type="email" name="email"><input type="submit" value="Envoyer" class="w-button"></form><div class="w-form-done"><div>Merci !</div></div><div class="w-form-fail"><div>Erreur.</div></div></div><div class="w-dyn-list"><div class="w-dyn-empty"><div>No items found.</div></div></div>"#,
+        ),
+    );
+    write(
+        r,
+        "detail_blog-posts.html",
+        &page(
+            "Article",
+            r#"<div class="article"><h1 class="heading w-dyn-bind-empty"></h1><img src="https://d3e54v103j8qbb.cloudfront.net/plugins/Basic/assets/placeholder.60f9b1840c.svg" loading="lazy" alt="" class="w-dyn-bind-empty"><div class="w-richtext w-dyn-bind-empty"></div></div>"#,
+        ),
+    );
+    write(r, "css/normalize.css", "html{font-family:sans-serif}");
+    write(
+        r,
+        "css/webflow.css",
+        ".w-form{margin:0 0 15px}.w-form-done{display:none}",
+    );
+    write(r, "css/atelier.webflow.css", ".hero{font-size:48px}");
+    write(
+        r,
+        "js/webflow.js",
+        r#"/*! webflow */!function(){}();Webflow.require('ix2').init({"events":{"e-1":{"id":"e-1","eventTypeId":"SCROLL_INTO_VIEW","action":{"actionTypeId":"FADE_EFFECT","config":{"actionListId":"fadeIn","autoStopEventId":"e-2","duration":1000,"delay":0,"easing":""}},"target":{"id":"p1|w1","appliesTo":"ELEMENT"}}},"actionLists":{},"site":{}});"#,
+    );
+    let (mut site, mut report) = html::import(
+        r,
+        &Options {
+            name: "atelier".into(),
+            lang: "fr".into(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(report.tool.as_deref(), Some("Webflow"));
+    assert_eq!(report.animations, 1);
+    assert_eq!(report.forms, 1);
+    let home = site.pages.iter().find(|p| p.path == "/").unwrap();
+    let h = format!("{:?}", home.body);
+    assert!(h.contains("fade dur=1 delay=0"), "{h}");
+    assert!(h.contains("data-revel-form"), "{h}");
+    assert!(h.contains("revel-form-box"), "{h}");
+    let css = revel_style::generate(&site.stylesheet.as_ref().unwrap().items);
+    assert!(css.contains(".revel-form-box"), "{css}");
+
+    // Contenus du CMS.
+    let csv = "Name,Slug,Collection ID,Locale ID,Item ID,Archived,Draft,Created On,Updated On,Published On,Post Body,Main Image\n\"Bols d'hiver\",bols-d-hiver,c,l,i1,false,false,x,x,x,<p>Texte.</p>,\n";
+    let cols = vec![revel_import::webflow::from_csv("Atelier - Blog Posts - 1.csv", csv).unwrap()];
+    struct Off;
+    impl revel_import::crawl::Fetch for Off {
+        fn get(&self, _: &url::Url) -> Result<revel_import::crawl::Fetched, String> {
+            Err("hors ligne".into())
+        }
+    }
+    revel_import::webflow::apply(&mut site, r, cols, &Off, None, &mut |_| {}, &mut report).unwrap();
+    assert_eq!(report.entries, 1);
+    assert!(
+        !site.pages.iter().any(|p| p.path.contains("detail_")),
+        "page modèle retirée"
+    );
+    let col = site
+        .collections
+        .iter()
+        .find(|c| c.id == "blog_posts")
+        .unwrap();
+    assert_eq!(col.path.as_deref(), Some("/blog-posts/{{ slug }}/"));
+    assert_eq!(col.layout.as_deref(), Some("cms-blog-posts"));
+    let entry = std::fs::read_to_string(r.join("content/blog-posts/bols-d-hiver.md")).unwrap();
+    assert!(
+        entry.contains("name: Bols d'hiver") || entry.contains("name: \"Bols d'hiver\""),
+        "{entry}"
+    );
+    assert!(entry.ends_with("<p>Texte.</p>\n"), "{entry}");
+    let yml = std::fs::read_to_string(r.join(".pages.yml")).unwrap();
+    assert!(yml.contains("name: blog_posts"), "{yml}");
+    assert!(yml.contains("type: rich-text"), "{yml}");
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|w| w.contains("liste(s) du CMS"))
+    );
 }

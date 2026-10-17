@@ -366,17 +366,125 @@ fn probe_site(s: State<AppState>, path: String) -> Res<revel_protocol::ImportPro
     s.core.probe_site(&PathBuf::from(path)).map_err(err)
 }
 
-/// Importe un site (Eleventy ou HTML statique) dans son dossier.
+/// Importe un site (Eleventy ou HTML statique) dans son dossier ; export Webflow : contenus du
+/// CMS (fichiers CSV ou API).
 #[tauri::command]
 async fn import_site(
     s: State<'_, AppState>,
     path: String,
-    overwrite: bool,
-    lang: String,
+    options: revel_protocol::ImportOptions,
+    on_event: Channel<revel_protocol::ImportEvent>,
 ) -> Res<ImportResult> {
     let core = s.core.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        core.import_site(&PathBuf::from(path), overwrite, &lang)
+        core.import_site(&PathBuf::from(path), &options, |e| {
+            let _ = on_event.send(e);
+        })
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Lit le site publié à une adresse et l'importe dans un nouveau dossier de `parent` (7.4).
+#[tauri::command]
+async fn import_url(
+    s: State<'_, AppState>,
+    url: String,
+    parent: String,
+    lang: String,
+    on_event: Channel<revel_protocol::ImportEvent>,
+) -> Res<ImportResult> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.import_url(&url, &PathBuf::from(parent), &lang, |e| {
+            let _ = on_event.send(e);
+        })
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Interrompt l'import en cours.
+#[tauri::command]
+fn import_cancel(s: State<AppState>) {
+    s.core.import_cancel();
+}
+
+/// Examine un fichier d'export WordPress (7.6).
+#[tauri::command]
+fn probe_wordpress(s: State<AppState>, file: String) -> Res<revel_protocol::WxrProbe> {
+    s.core.probe_wordpress(&PathBuf::from(file)).map_err(err)
+}
+
+/// Importe un site WordPress depuis son fichier d'export dans un nouveau dossier de `parent`.
+#[tauri::command]
+async fn import_wordpress(
+    s: State<'_, AppState>,
+    file: String,
+    parent: String,
+    lang: String,
+    media: bool,
+    on_event: Channel<revel_protocol::ImportEvent>,
+) -> Res<ImportResult> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.import_wordpress(
+            &PathBuf::from(file),
+            &PathBuf::from(parent),
+            &lang,
+            media,
+            |e| {
+                let _ = on_event.send(e);
+            },
+        )
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Un jeton Figma est gardé dans le trousseau.
+#[tauri::command]
+fn figma_has_token(s: State<AppState>) -> bool {
+    s.core.figma_has_token()
+}
+
+#[tauri::command]
+fn figma_forget_token(s: State<AppState>) -> Res<()> {
+    s.core.figma_forget_token().map_err(err)
+}
+
+/// Lit les pages et cadres d'un fichier Figma (7.5).
+#[tauri::command]
+async fn figma_read(
+    s: State<'_, AppState>,
+    url: String,
+    token: Option<String>,
+) -> Res<revel_protocol::FigmaFile> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.figma_read(&url, token.as_deref()))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Importe des cadres d'un fichier Figma dans un nouveau dossier de `parent`.
+#[tauri::command]
+async fn import_figma(
+    s: State<'_, AppState>,
+    url: String,
+    frames: Vec<String>,
+    parent: String,
+    lang: String,
+    on_event: Channel<revel_protocol::ImportEvent>,
+) -> Res<ImportResult> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.import_figma(&url, &frames, &PathBuf::from(parent), &lang, |e| {
+            let _ = on_event.send(e);
+        })
     })
     .await
     .map_err(sys)?
@@ -1167,6 +1275,14 @@ pub fn run() {
             import_eleventy,
             probe_site,
             import_site,
+            import_url,
+            import_cancel,
+            probe_wordpress,
+            import_wordpress,
+            figma_has_token,
+            figma_forget_token,
+            figma_read,
+            import_figma,
             git_clone,
             git_clone_cancel,
             discard_clone,

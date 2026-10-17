@@ -64,32 +64,99 @@ try {
     await page.waitForFunction(() => ![...document.querySelectorAll('.site-card')].some((c) => c.textContent.includes('Maison Oka')));
     check('accueil : site supprimé après confirmation', title);
   }
-  // Import (étape 7) : dossier de pages HTML examiné puis importé ; dépôt Git copié (site à
-  // construire signalé, dossier produit importable, licence absente signalée) ; copie abandonnée
-  // retirée ; dossier d'un dépôt nommé dans l'adresse (…/tree/main/docs).
+  // Import (étape 7), une boîte pour toutes les sources : dossier de pages HTML examiné puis
+  // importé (bilan dans la boîte) ; export Webflow et contenus de son CMS (CSV ou API) ; site
+  // lu depuis un lien (avancement, annulation) ; dépôt Git copié (site à construire signalé,
+  // dossier produit importable, licence absente signalée, copie abandonnée retirée) ; fichier
+  // Figma (jeton, cadres choisis) ; export WordPress (examen, images).
   {
     const openImport = async () => {
       await page.click('.page-head .toolbar .btn:has-text("Importer")');
       await page.waitForSelector('.import-dialog');
     };
+    const closeSummary = async () => {
+      await page.waitForSelector('.import-summary');
+      await page.click('.import-close');
+      await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    };
+    const stat = (k) => page.$eval(`.import-stat[data-stat="${k}"] .import-stat-value`, (e) => e.textContent.trim()).catch(() => null);
     await openImport();
+    const tiles = await page.$$eval('.import-sources .import-tile', (l) => l.map((b) => b.dataset.source).join());
     const runOff = await page.$eval('.import-run', (b) => b.disabled);
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-sources.png` });
     await page.evaluate(() => { window.__revelPick = 'C:\\Sites\\maquette-html'; });
     await page.click('.import-choose');
     await page.waitForSelector('.import-kind.chip--ok');
     const kind = (await page.textContent('.import-kind')).trim();
     if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-dossier.png` });
     await page.click('.import-run');
-    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
-    await page.waitForSelector('.section h2:has-text("Import terminé")');
+    await page.waitForSelector('.import-summary');
+    const pagesStat = await stat('import-stat-pages');
+    const warnCount = (await page.textContent('.import-warnings summary .chip')).trim();
+    const title = (await page.textContent('.import-summary h2')).trim();
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-bilan.png` });
+    await closeSummary();
     const listed = await page.locator('.site-card', { hasText: 'Maquette html' }).count();
-    const warned = await page.locator('.section .list-plain li').count();
-    check('import : dossier de pages HTML examiné puis importé', runOff && kind === 'Site HTML · 12 pages' && listed === 1 && warned === 1, kind);
+    check('import : sources proposées, dossier examiné, importé, bilan dans la boîte',
+      tiles === 'folder,link,git,figma,wordpress' && runOff && kind === 'Site HTML · 12 pages' && title === 'Site importé' && pagesStat === '12' && warnCount === '1' && listed === 1,
+      `${tiles} · ${kind} · ${pagesStat} · ${warnCount}`);
+    // Export Webflow : outil reconnu, fichiers CSV du CMS trouvés, ajoutés, retirés ; API.
+    await openImport();
+    await page.evaluate(() => { window.__revelPick = 'C:\\Sites\\export-webflow'; });
+    await page.click('.import-choose');
+    await page.waitForSelector('.import-cms');
+    const madeWith = (await page.textContent('.import-status .import-made-with')).trim();
+    const found = await page.locator('.import-file').count();
+    await page.evaluate(() => { window.__revelPickFiles = ['C:\\Exports\\Atelier - Categories - 1.csv', 'C:\\Exports\\Atelier - Auteurs - 2.csv']; });
+    await page.click('.import-cms-add');
+    await page.waitForFunction(() => document.querySelectorAll('.import-file').length === 3);
+    await page.locator('.import-file', { hasText: 'Auteurs' }).locator('.chip-remove').click();
+    await page.waitForFunction(() => document.querySelectorAll('.import-file').length === 2);
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-webflow-cms.png` });
+    await page.click('.import-cms-mode button[data-mode="api"]');
+    const apiOff = await page.$eval('.import-run', (b) => b.disabled);
+    await page.fill('.import-wf-token', 'jeton-du-site');
+    const apiOn = !(await page.$eval('.import-run', (b) => b.disabled));
+    await page.click('.import-cms-mode button[data-mode="csv"]');
+    await page.click('.import-run');
+    await page.waitForSelector('.import-summary');
+    const sent = await page.evaluate(() => window.__revelImportOptions);
+    const entries = await stat('import-stat-entries');
+    const forms = await stat('import-stat-forms');
+    await closeSummary();
+    check('import : export Webflow, contenus du CMS (fichiers CSV ajoutés, retirés ; jeton exigé pour l\'API)',
+      madeWith === 'Fait avec Webflow' && found === 1 && apiOff && apiOn && sent.csv.length === 2 && !sent.webflow_token && entries === '24' && forms === '1',
+      `${madeWith} · ${found} · ${JSON.stringify(sent)}`);
+    // Lien : dossier créé d'après le domaine, avancement, annulation, puis import.
+    await openImport();
+    await page.click('.import-sources .import-tile[data-source="link"]');
+    const linkOff = await page.$eval('.import-run', (b) => b.disabled);
+    await page.fill('.import-link', 'https://www.studio.framer.website/');
+    await page.waitForFunction(() => /studio-framer-website$/.test(document.querySelector('.import-target')?.textContent.trim() || ''));
+    await page.evaluate(() => { window.__revelImportSlow = true; });
+    await page.click('.import-run');
+    const firstText = await page.waitForSelector('.import-progress-label').then((e) => e.textContent());
+    await page.waitForFunction(() => /[1-9]\d* pages · \d+ fichiers · [\d,]+ Mo$/.test(document.querySelector('.import-progress-label')?.textContent || ''));
+    const progressText = (await page.textContent('.import-progress-label')).trim();
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-lien-lecture.png` });
+    await page.click('.import-cancel');
+    await page.waitForFunction(() => !document.querySelector('.import-progress'));
+    const stillOpen = await page.locator('.import-dialog').count() === 1 && await page.locator('.import-error').count() === 0;
+    await page.evaluate(() => { window.__revelImportSlow = false; });
+    await page.click('.import-run');
+    await page.waitForSelector('.import-summary');
+    const framer = (await page.textContent('.import-summary .import-made-with')).trim();
+    const anims = await stat('import-stat-animations');
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-lien-bilan.png` });
+    await closeSummary();
+    check('import : site lu depuis un lien (avancement, annulation sans message, bilan Framer)',
+      linkOff && firstText.trim() === 'Lecture du site…' && /^Lecture du site… \d+ pages · \d+ fichiers · [\d,]+ Mo$/.test(progressText) && stillOpen && framer === 'Fait avec Framer' && anims === '37',
+      `${progressText} · ${framer} · ${anims}`);
     // Dépôt Git : site à construire, sans licence ; son dossier produit s'importe.
     await openImport();
-    await page.click('.import-source button[data-source="git"]');
+    await page.click('.import-sources .import-tile[data-source="git"]');
     await page.fill('.import-url', 'https://github.com/exemple/svelte-p3r');
-    await page.waitForFunction(() => /svelte-p3r$/.test(document.querySelector('.import-dialog .path-value:not(.import-folder)')?.textContent.trim() || ''));
+    await page.waitForFunction(() => /svelte-p3r$/.test(document.querySelector('.import-target')?.textContent.trim() || ''));
     await page.click('.import-run');
     await page.waitForSelector('.import-kind.chip--warn');
     const build = (await page.textContent('.import-kind')).trim();
@@ -106,29 +173,74 @@ try {
     check('import : copie abandonnée retirée', discarded.length === 1 && /svelte-p3r$/.test(discarded[0]), discarded.join());
     // Dossier produit importé.
     await openImport();
-    await page.click('.import-source button[data-source="git"]');
+    await page.click('.import-sources .import-tile[data-source="git"]');
     await page.fill('.import-url', 'https://github.com/exemple/svelte-p3r');
     await page.click('.import-run');
     await page.waitForSelector('.import-output');
     await page.click('.import-output');
-    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    await closeSummary();
     check('import : dossier produit par la construction importé', await page.locator('.site-card', { hasText: 'Build' }).count() === 1);
     // Adresse d'un dossier sur GitHub : copie puis import direct de ce dossier.
     await openImport();
-    await page.click('.import-source button[data-source="git"]');
+    await page.click('.import-sources .import-tile[data-source="git"]');
     await page.fill('.import-url', 'github.com/exemple/vitrine/tree/main/docs');
     await page.press('.import-url', 'Enter');
-    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    await closeSummary();
     check('import : dossier nommé dans l\'adresse du dépôt, importé directement', await page.locator('.site-card', { hasText: 'Docs' }).count() === 1);
     // Adresse non reconnue : message, boîte gardée.
     await openImport();
-    await page.click('.import-source button[data-source="git"]');
+    await page.click('.import-sources .import-tile[data-source="git"]');
     await page.fill('.import-url', 'ftp://exemple/depot');
     await page.click('.import-run');
     await page.waitForSelector('.import-dialog .import-error');
     check('import : adresse non reconnue signalée dans la boîte', (await page.textContent('.import-error')).trim() === 'Adresse de dépôt non reconnue.');
-    await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    // Figma : jeton demandé, fichier lu, cadres de la première page choisis, import des cadres
+    // choisis ; jeton gardé puis oublié.
+    await page.click('.import-sources .import-tile[data-source="figma"]');
+    const figOff = await page.$eval('.import-run', (b) => b.disabled);
+    const readLabel = (await page.textContent('.import-run')).trim();
+    await page.fill('.import-figma-url', 'https://www.figma.com/design/AbCdEf1234567890/Maquette');
+    const noToken = await page.$eval('.import-run', (b) => b.disabled);
+    await page.fill('.import-figma-token', 'mauvais');
+    await page.click('.import-run');
+    await page.waitForSelector('.import-dialog .import-error');
+    const badToken = (await page.textContent('.import-error')).trim();
+    await page.fill('.import-figma-token', 'figd_essai');
+    await page.click('.import-run');
+    await page.waitForSelector('.import-frames');
+    const count = (await page.textContent('.import-figma-count')).trim();
+    const saved = await page.locator('.import-figma-saved .chip--ok').count() === 1;
+    await page.locator('.import-frame', { hasText: 'Contact' }).locator('input').uncheck();
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-figma-cadres.png` });
+    await page.click('.import-run');
+    await page.waitForSelector('.import-summary');
+    const frames = await page.evaluate(() => window.__revelFigmaFrames);
+    await closeSummary();
+    await openImport();
+    await page.click('.import-sources .import-tile[data-source="figma"]');
+    await page.waitForSelector('.import-figma-forget');
+    await page.click('.import-figma-forget');
+    await page.waitForSelector('.import-figma-token');
+    check('import : Figma (jeton refusé signalé, cadres lus et choisis, jeton gardé puis oublié)',
+      figOff && readLabel === 'Lire le fichier' && noToken && badToken === 'Jeton Figma absent ou refusé.' && count === '3 / 4' && saved && frames.join() === '1:1,1:2',
+      `${readLabel} · ${badToken} · ${count} · ${frames}`);
+    // WordPress : fichier examiné, images non téléchargées sur demande.
+    await page.click('.import-sources .import-tile[data-source="wordpress"]');
+    await page.evaluate(() => { window.__revelPickFiles = ['C:\\Exports\\atelier.WordPress.2026-10-17.xml']; });
+    await page.click('.import-choose-wxr');
+    await page.waitForSelector('.import-wp-probe');
+    const counts = (await page.textContent('.import-wp-probe')).replace(/\s+/g, ' ').trim();
+    await page.waitForFunction(() => /atelier-lumen$/.test(document.querySelector('.import-target')?.textContent.trim() || ''));
+    await page.click('.import-wp-media-row .switch-track');
+    await page.waitForFunction(() => !document.querySelector('.import-wp-media').checked);
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-wordpress.png` });
+    await page.click('.import-run');
+    await page.waitForSelector('.import-summary');
+    const media = await page.evaluate(() => window.__revelWpMedia);
+    const posts = await stat('import-stat-entries');
+    await closeSummary();
+    check('import : WordPress (fichier examiné, images gardées en ligne sur demande, articles repris)',
+      /Atelier Lumen.*6 pages · 48 articles · 120 médias/.test(counts) && media === false && posts === '48', `${counts} · ${media} · ${posts}`);
     // Liste des sites d'origine pour la suite des essais.
     await page.reload();
     await page.waitForSelector('.site-card');

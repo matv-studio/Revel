@@ -2315,7 +2315,16 @@ fn depot_git_de_pages_html_importe() {
     ));
     assert!(matches!(c.discard_clone(&src), Err(CoreError::NotAClone)));
 
-    let r = c.import_site(&path, false, "en").unwrap();
+    let r = c
+        .import_site(
+            &path,
+            &revel_protocol::ImportOptions {
+                lang: "en".into(),
+                ..Default::default()
+            },
+            |_| {},
+        )
+        .unwrap();
     assert_eq!(r.site.name, "Source");
     assert!(path.join(".git").is_dir(), "historique gardé");
     // Une copie importée n'est plus retirable.
@@ -2367,10 +2376,343 @@ fn copie_abandonnee_et_site_a_construire() {
     assert_eq!(probe.kind, revel_protocol::ImportKind::NeedsBuild);
     assert_eq!(probe.tool.as_deref(), Some("SvelteKit"));
     assert!(matches!(
-        c.import_site(&path, false, "fr"),
+        c.import_site(
+            &path,
+            &revel_protocol::ImportOptions {
+                lang: "fr".into(),
+                ..Default::default()
+            },
+            |_| {}
+        ),
         Err(CoreError::NeedsBuild(t)) if t == "SvelteKit"
     ));
     c.discard_clone(&path).unwrap();
     assert!(!path.exists());
     assert!(src.join("package.json").is_file(), "dépôt d'origine intact");
+}
+
+/// Accès réseau simulé : adresse → (type, contenu).
+struct Net(std::collections::HashMap<String, (&'static str, Vec<u8>)>);
+
+impl revel_import::crawl::Fetch for Net {
+    fn get(
+        &self,
+        url: &revel_import::crawl::Url,
+    ) -> std::result::Result<revel_import::crawl::Fetched, String> {
+        let (ct, body) = self
+            .0
+            .get(url.as_str())
+            .cloned()
+            .unwrap_or(("text/plain", Vec::new()));
+        Ok(revel_import::crawl::Fetched {
+            status: if body.is_empty() { 404 } else { 200 },
+            url: url.clone(),
+            content_type: ct.into(),
+            body,
+        })
+    }
+}
+
+fn net(entries: &[(&str, &'static str, &[u8])]) -> Net {
+    Net(entries
+        .iter()
+        .map(|(u, ct, b)| (u.to_string(), (*ct, b.to_vec())))
+        .collect())
+}
+
+fn build_to(path: &Path, out: &Path) -> revel_project::BuildReport {
+    revel_project::Project::open(path)
+        .unwrap()
+        .build(
+            out,
+            &revel_project::BuildOptions {
+                environment: "production".into(),
+                images: false,
+                progress: None,
+            },
+        )
+        .unwrap()
+}
+
+/// Import depuis un lien (7.4) : site publié par Framer lu, importé, généré.
+#[test]
+fn import_depuis_un_lien() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let page = |title: &str, body: &str, css: &str| {
+        format!(
+            r#"<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="generator" content="Framer 1"><title>{title}</title><link rel="preconnect" href="https://fonts.gstatic.com"><style data-framer-css-ssr-minified>body{{margin:0}}.framer-t{{font-size:40px}}{css}</style><script type="framer/appear" id="__framer__appearAnimationsContent">{{"a":{{"default":{{"initial":{{"opacity":0.001,"x":-40}},"animate":{{"opacity":1,"x":0,"transition":{{"type":"tween","delay":0,"duration":0.5}}}}}}}}}}</script></head><body><div id="main"><nav><a href="./">Accueil</a><a href="./a-propos">À propos</a></nav>{body}</div><script type="module" data-framer-bundle="main" src="https://framerusercontent.com/sites/1/script_main.mjs"></script></body></html>"#
+        )
+    };
+    let home = page(
+        "Studio",
+        r#"<h1 class="framer-t" data-framer-appear-id="a" style="opacity:0.001;transform:translateX(-40px)">Studio</h1><img src="https://framerusercontent.com/images/abc.png?scale-down-to=512" alt="">"#,
+        ".framer-home{padding:10px}",
+    );
+    let about = page("À propos", "<p>Équipe</p>", ".framer-about{padding:20px}");
+    let png = [0x89u8, b'P', b'N', b'G', 1, 2, 3];
+    let fetch = net(&[
+        (
+            "https://studio.framer.website/",
+            "text/html",
+            home.as_bytes(),
+        ),
+        (
+            "https://studio.framer.website/a-propos",
+            "text/html",
+            about.as_bytes(),
+        ),
+        (
+            "https://framerusercontent.com/images/abc.png?scale-down-to=512",
+            "image/png",
+            &png,
+        ),
+    ]);
+    let parent = d.path().join("projets");
+    std::fs::create_dir_all(&parent).unwrap();
+    let pages = std::cell::Cell::new(0);
+    let r = c
+        .import_url_with("studio.framer.website", &parent, "fr", &fetch, |e| {
+            pages.set(e.pages)
+        })
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(pages.get(), 2);
+    assert_eq!(r.stats.tool.as_deref(), Some("Framer"));
+    assert_eq!(r.stats.pages, 2);
+    assert_eq!(r.stats.animations, 1);
+    assert!(r.stats.style_rules >= 4, "{:?}", r.stats);
+    assert!(r.stats.files >= 1);
+    let path = PathBuf::from(&r.site.path);
+    assert!(path.starts_with(&parent));
+    let out = d.path().join("out");
+    build_to(&path, &out);
+    let html = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        html.contains("data-revel-appear=\"left dur=0.5 delay=0 dist=40\""),
+        "{html}"
+    );
+    assert!(html.contains("/assets/revel-animations.js"));
+    assert!(
+        !html.contains("framerusercontent.com/sites"),
+        "moteur retiré : {html}"
+    );
+    assert!(
+        !html.contains("https://framerusercontent.com/images"),
+        "image locale : {html}"
+    );
+    assert!(!html.contains("preconnect"), "{html}");
+    assert!(out.join("a-propos/index.html").is_file());
+    let css = std::fs::read_to_string(out.join("assets/styles.css")).unwrap();
+    assert!(
+        css.contains(".framer-about") && css.contains(".framer-home"),
+        "{css}"
+    );
+    // Site injoignable : dossier retiré.
+    let before = std::fs::read_dir(&parent).unwrap().count();
+    assert!(matches!(
+        c.import_url_with("absent.example", &parent, "fr", &fetch, |_| {}),
+        Err(CoreError::SiteUnreachable(_))
+    ));
+    assert_eq!(std::fs::read_dir(&parent).unwrap().count(), before);
+    assert!(matches!(
+        c.import_url_with("pas une adresse", &parent, "fr", &fetch, |_| {}),
+        Err(CoreError::BadSiteUrl)
+    ));
+}
+
+/// Import WordPress (7.6) : articles, pages, menu, images, site généré.
+#[test]
+fn import_wordpress() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let wxr = r#"<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0" xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:wp="http://wordpress.org/export/1.2/">
+<channel>
+<title>Atelier Lumen</title><link>https://atelier.example</link><description>Céramiques</description><language>fr-FR</language>
+<wp:base_site_url>https://atelier.example</wp:base_site_url><wp:base_blog_url>https://atelier.example</wp:base_blog_url>
+<item><title>Bols d'hiver</title><link>https://atelier.example/2024/01/bols-d-hiver/</link><dc:creator><![CDATA[marie]]></dc:creator>
+<content:encoded><![CDATA[<!-- wp:paragraph --><p>Une série de <a href="https://atelier.example/a-propos/">bols</a>.</p><!-- /wp:paragraph -->
+<figure><img src="https://atelier.example/wp-content/uploads/2024/01/bol.jpg" alt=""/></figure>]]></content:encoded>
+<excerpt:encoded><![CDATA[]]></excerpt:encoded><wp:post_id>10</wp:post_id><wp:post_date><![CDATA[2024-01-15 09:30:00]]></wp:post_date>
+<wp:post_name><![CDATA[bols-d-hiver]]></wp:post_name><wp:status><![CDATA[publish]]></wp:status><wp:post_type><![CDATA[post]]></wp:post_type>
+<category domain="category" nicename="ceramique"><![CDATA[Céramique]]></category></item>
+<item><title>À propos</title><link>https://atelier.example/a-propos/</link>
+<content:encoded><![CDATA[<p>L'atelier {{ Lumen }}.</p>]]></content:encoded><wp:post_id>12</wp:post_id>
+<wp:post_name><![CDATA[a-propos]]></wp:post_name><wp:status><![CDATA[publish]]></wp:status><wp:post_type><![CDATA[page]]></wp:post_type></item>
+</channel></rss>"#;
+    let file = d.path().join("export.xml");
+    std::fs::write(&file, wxr).unwrap();
+    let probe = c.probe_wordpress(&file).unwrap();
+    assert_eq!((probe.pages, probe.posts), (1, 1));
+    let jpg = [0xffu8, 0xd8, 0xff, 0xe0, 1];
+    let fetch = net(&[(
+        "https://atelier.example/wp-content/uploads/2024/01/bol.jpg",
+        "image/jpeg",
+        &jpg,
+    )]);
+    let r = c
+        .import_wordpress_with(&file, d.path(), "en", true, &fetch, |_| {})
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r.site.name, "Atelier Lumen");
+    assert_eq!(r.stats.entries, 1);
+    assert_eq!(r.stats.files, 1);
+    let path = PathBuf::from(&r.site.path);
+    let out = d.path().join("out");
+    let report = build_to(&path, &out);
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    let post = std::fs::read_to_string(out.join("2024/01/bols-d-hiver/index.html"))
+        .unwrap_or_else(|_| panic!("article à son adresse d'origine"));
+    assert!(post.contains("<a href=\"/a-propos/\">bols</a>"), "{post}");
+    assert!(
+        post.contains("src=\"/wp-content/uploads/2024/01/bol.jpg\""),
+        "{post}"
+    );
+    assert!(
+        !post.contains("article__resume"),
+        "résumé non répété sous le titre : {post}"
+    );
+    assert!(out.join("wp-content/uploads/2024/01/bol.jpg").is_file());
+    let about = std::fs::read_to_string(out.join("a-propos/index.html")).unwrap();
+    assert!(
+        about.contains("L'atelier {{ Lumen }}.") || about.contains("L&#39;atelier {{ Lumen }}."),
+        "{about}"
+    );
+    let home = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(
+        home.contains("Atelier Lumen") && home.contains("Bols d"),
+        "{home}"
+    );
+    assert!(home.contains("href=\"/a-propos/\""), "menu : {home}");
+    // Fichier qui n'est pas un export WordPress.
+    std::fs::write(d.path().join("x.xml"), "<rss></rss>").unwrap();
+    assert!(matches!(
+        c.probe_wordpress(&d.path().join("x.xml")),
+        Err(CoreError::NotWxr(_))
+    ));
+}
+
+/// Import Figma (7.5) : jeton gardé, cadres lus, site généré.
+#[test]
+fn import_figma() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let file = serde_json::json!({
+        "name": "Maquette",
+        "components": {},
+        "document": { "id": "0:0", "type": "DOCUMENT", "children": [
+            { "id": "0:1", "name": "Page 1", "type": "CANVAS", "children": [
+                { "id": "1:1", "name": "Desktop", "type": "FRAME",
+                  "absoluteBoundingBox": { "x": 0, "y": 0, "width": 1440, "height": 900 },
+                  "layoutMode": "VERTICAL", "itemSpacing": 16, "paddingTop": 64, "paddingLeft": 64, "paddingRight": 64, "paddingBottom": 64,
+                  "children": [
+                    { "id": "1:2", "name": "Titre", "type": "TEXT", "characters": "Bonjour",
+                      "absoluteBoundingBox": { "x": 64, "y": 64, "width": 400, "height": 60 },
+                      "layoutSizingHorizontal": "HUG", "layoutSizingVertical": "HUG",
+                      "style": { "fontFamily": "Inter", "fontWeight": 700, "fontSize": 48 } }
+                  ] }
+            ] }
+        ] }
+    });
+    let body = serde_json::to_vec(&file).unwrap();
+    let fetch = net(&[(
+        "https://api.figma.com/v1/files/AbCdEf1234567890",
+        "application/json",
+        &body,
+    )]);
+    assert!(!c.figma_has_token());
+    assert!(matches!(
+        c.figma_read_with(
+            "https://www.figma.com/design/AbCdEf1234567890/Maquette",
+            None,
+            &fetch
+        ),
+        Err(CoreError::FigmaToken)
+    ));
+    let f = c
+        .figma_read_with(
+            "https://www.figma.com/design/AbCdEf1234567890/Maquette",
+            Some("figd_essai"),
+            &fetch,
+        )
+        .unwrap();
+    assert!(c.figma_has_token(), "jeton gardé");
+    assert_eq!(f.canvases[0].frames[0].width, 1440);
+    let r = c
+        .import_figma_with(
+            "https://www.figma.com/design/AbCdEf1234567890/Maquette",
+            &["1:1".to_string()],
+            d.path(),
+            "fr",
+            &fetch,
+            false,
+            |_| {},
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r.stats.tool.as_deref(), Some("Figma"));
+    let path = PathBuf::from(&r.site.path);
+    let out = d.path().join("out");
+    build_to(&path, &out);
+    let html = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(html.contains("<h1 class=\"titre\">Bonjour</h1>"), "{html}");
+    assert!(html.contains("<title>Desktop</title>"), "{html}");
+    c.figma_forget_token().unwrap();
+    assert!(!c.figma_has_token());
+}
+
+/// Export Webflow avec les contenus du CMS en CSV (7.3) : pages des contenus générées.
+#[test]
+fn export_webflow_et_cms() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = d.path().join("export");
+    let page = |title: &str, main: &str| {
+        format!(
+            r#"<!DOCTYPE html><html data-wf-page="p" data-wf-site="65f0"><head><meta charset="utf-8"><title>{title}</title><meta content="Webflow" name="generator"><link href="css/site.webflow.css" rel="stylesheet" type="text/css"></head><body><div class="nav">Atelier</div>{main}</body></html>"#
+        )
+    };
+    std::fs::create_dir_all(site.join("css")).unwrap();
+    std::fs::write(site.join("css/site.webflow.css"), ".nav{color:red}").unwrap();
+    std::fs::write(
+        site.join("index.html"),
+        page("Accueil", "<h1>Bienvenue</h1>"),
+    )
+    .unwrap();
+    std::fs::write(
+        site.join("detail_post.html"),
+        page(
+            "Article",
+            r#"<h1 class="t w-dyn-bind-empty"></h1><div class="w-richtext w-dyn-bind-empty"></div>"#,
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        site.join("Atelier - Posts - 1.csv"),
+        "Name,Slug,Collection ID,Locale ID,Item ID,Archived,Draft,Created On,Updated On,Published On,Post Body\nBols,bols,c,l,i,false,false,x,x,x,<p>Texte du bol.</p>\n",
+    )
+    .unwrap();
+    let probe = c.probe_site(&site).unwrap();
+    assert_eq!(probe.made_with.as_deref(), Some("Webflow"));
+    assert_eq!(probe.csv.len(), 1);
+    let r = c
+        .import_site(
+            &site,
+            &revel_protocol::ImportOptions {
+                lang: "fr".into(),
+                ..Default::default()
+            },
+            |_| {},
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r.stats.collections, 1);
+    assert_eq!(r.stats.entries, 1);
+    let out = d.path().join("out");
+    build_to(&site, &out);
+    let entry = std::fs::read_to_string(out.join("post/bols/index.html")).unwrap();
+    assert!(entry.contains("<h1 class=\"t\">Bols</h1>"), "{entry}");
+    assert!(entry.contains("<p>Texte du bol.</p>"), "{entry}");
+    assert!(
+        entry.contains("<div class=\"nav\">Atelier</div>"),
+        "gabarit du site : {entry}"
+    );
+    assert!(!out.join("detail_post.html").exists());
 }

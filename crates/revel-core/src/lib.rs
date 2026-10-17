@@ -110,6 +110,26 @@ pub enum CoreError {
     CloneCancelled,
     #[error("ce dossier n'est pas une copie de dépôt en cours d'import")]
     NotAClone,
+    #[error("adresse de site non reconnue")]
+    BadSiteUrl,
+    #[error("site injoignable : {0}")]
+    SiteUnreachable(String),
+    #[error("l'adresse ne mène pas à une page HTML")]
+    NotHtml,
+    #[error("import annulé")]
+    ImportCancelled,
+    #[error("{0}")]
+    NotWxr(String),
+    #[error("adresse de fichier Figma non reconnue")]
+    FigmaUrl,
+    #[error("jeton Figma absent ou refusé")]
+    FigmaToken,
+    #[error("fichier Figma introuvable ou inaccessible avec ce jeton")]
+    FigmaNotFound,
+    #[error("Figma : {0}")]
+    Figma(String),
+    #[error("jeton de l'API de Webflow refusé")]
+    WebflowToken,
     #[error("{0}")]
     Other(String),
 }
@@ -180,6 +200,18 @@ impl CoreError {
             Self::BadRepoUrl => Failure::new("error-git-url"),
             Self::CloneCancelled => Failure::new("error-git-clone-cancelled"),
             Self::NotAClone => Failure::new("error-not-a-clone"),
+            Self::BadSiteUrl => Failure::new("error-import-url"),
+            Self::SiteUnreachable(d) => {
+                Failure::new("error-import-unreachable").arg("detail", d.clone())
+            }
+            Self::NotHtml => Failure::new("error-import-not-html"),
+            Self::ImportCancelled => Failure::new("error-import-cancelled"),
+            Self::NotWxr(d) => Failure::new("error-import-wxr").arg("detail", d.clone()),
+            Self::FigmaUrl => Failure::new("error-figma-url"),
+            Self::FigmaToken => Failure::new("error-figma-token"),
+            Self::FigmaNotFound => Failure::new("error-figma-not-found"),
+            Self::Figma(d) => Failure::new("error-figma").arg("detail", d.clone()),
+            Self::WebflowToken => Failure::new("error-webflow-token"),
             Self::Other(detail) => Failure::detail(detail.clone()),
         }
     }
@@ -233,6 +265,8 @@ pub struct Core {
     /// Copies de dépôts faites pour un import et pas encore importées (7.2).
     clones: Mutex<Vec<PathBuf>>,
     clone_cancel: AtomicBool,
+    /// Interruption de l'import en cours (site lu en ligne, médias, Figma).
+    import_cancel: AtomicBool,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -289,6 +323,7 @@ impl Core {
             snapshots: Mutex::new(Default::default()),
             clones: Mutex::new(Vec::new()),
             clone_cancel: AtomicBool::new(false),
+            import_cancel: AtomicBool::new(false),
         }
     }
 
@@ -443,6 +478,14 @@ impl Core {
         self.touch_recent(&summary);
         Ok(ImportResult {
             site: summary,
+            stats: revel_protocol::ImportStats {
+                tool: Some("Eleventy".into()),
+                pages: report.pages,
+                layouts: report.layouts,
+                style_rules: report.style_rules,
+                collections: report.collections,
+                ..Default::default()
+            },
             warnings: report.warnings,
         })
     }

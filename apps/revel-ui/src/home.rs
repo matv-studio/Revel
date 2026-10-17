@@ -8,7 +8,6 @@ use revel_protocol::ImportResult;
 #[component]
 pub fn Home() -> impl IntoView {
     let ui = expect_context::<Ui>();
-    let import = RwSignal::new(None::<ImportResult>);
     let open_path = move |path: String| ui.open_path(path, crate::Tab::Editor);
     let open = move |_| {
         spawn_local(async move {
@@ -147,24 +146,7 @@ pub fn Home() -> impl IntoView {
                     <button class="btn btn--primary" on:click=create>{icons::plus()}{ui.t("action-new")}</button>
                 </div>
             </header>
-            {move || import.get().map(|r| {
-                let site = r.site.clone();
-                let n = r.warnings.len();
-                view! {
-                    <div class="section">
-                        <div class="section-head">
-                            <h2>{ui.t("import-done")}</h2>
-                            <button class="btn btn--primary" on:click=move |_| ui.open(site.clone())>{ui.t("action-edit-site")}</button>
-                        </div>
-                        <p class="strong">{r.site.name.clone()}</p>
-                        <Show when=move || { n > 0 }>
-                            <h3>{ui.t("import-warnings")}</h3>
-                            <ul class="list-plain">{r.warnings.iter().map(|w| view! { <li>{w.clone()}</li> }).collect_view()}</ul>
-                        </Show>
-                    </div>
-                }
-            })}
-            <Show when=move || ui.recents.get().is_empty() && import.get().is_none()>
+            <Show when=move || ui.recents.get().is_empty()>
                 <div class="empty">
                     <p>{ui.t("home-empty")}</p>
                     <div class="toolbar">
@@ -268,7 +250,7 @@ pub fn Home() -> impl IntoView {
             </Show>
             <Show when=move || importing.get()>
                 <crate::importer::ImportSite close=Callback::new(move |()| importing.set(false))
-                    done=Callback::new(move |r: ImportResult| import.set(Some(r)))/>
+                    done=Callback::new(move |_: ImportResult| {})/>
             </Show>
         </section>
     }

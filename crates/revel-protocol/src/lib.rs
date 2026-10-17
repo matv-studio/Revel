@@ -270,6 +270,100 @@ pub struct CmsEntry {
 pub struct ImportResult {
     pub site: SiteSummary,
     pub warnings: Vec<String>,
+    /// Ce qui a été repris (bilan de fin d'import).
+    #[serde(default)]
+    pub stats: ImportStats,
+}
+
+/// Bilan chiffré d'un import (étape 7).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportStats {
+    /// Outil qui a produit le site (Framer, Webflow, WordPress, Figma).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<String>,
+    #[serde(default)]
+    pub pages: usize,
+    #[serde(default)]
+    pub layouts: usize,
+    /// Règles du panneau Styles.
+    #[serde(default)]
+    pub style_rules: usize,
+    /// Animations reprises en animations Revel.
+    #[serde(default)]
+    pub animations: usize,
+    /// Formulaires envoyés par Revel.
+    #[serde(default)]
+    pub forms: usize,
+    #[serde(default)]
+    pub collections: usize,
+    /// Entrées de collections (articles, contenus du CMS).
+    #[serde(default)]
+    pub entries: usize,
+    /// Fichiers téléchargés (site lu à son adresse, médias).
+    #[serde(default)]
+    pub files: usize,
+}
+
+/// Avancement d'un import lu en ligne : pages lues, fichiers téléchargés, octets reçus.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportEvent {
+    pub pages: usize,
+    pub files: usize,
+    pub bytes: u64,
+}
+
+/// Réglages d'un import de dossier.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportOptions {
+    /// Remplacer le site Revel déjà présent.
+    #[serde(default)]
+    pub overwrite: bool,
+    /// Langue du site si ses pages n'en déclarent pas.
+    #[serde(default)]
+    pub lang: String,
+    /// Fichiers CSV des collections du CMS de Webflow (7.3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub csv: Vec<String>,
+    /// Jeton de l'API de Webflow : contenus du CMS lus en ligne (7.3), jamais gardé.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub webflow_token: Option<String>,
+}
+
+/// Fichier d'export WordPress examiné avant import (7.6).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WxrProbe {
+    /// Titre du site.
+    pub title: String,
+    /// Adresse du site d'origine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    pub pages: usize,
+    pub posts: usize,
+    /// Images et fichiers joints.
+    pub media: usize,
+}
+
+/// Fichier Figma lu avant import (7.5) : cadres de premier niveau de chaque page du fichier.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FigmaFile {
+    pub key: String,
+    pub name: String,
+    pub canvases: Vec<FigmaCanvas>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FigmaCanvas {
+    pub id: String,
+    pub name: String,
+    pub frames: Vec<FigmaFrame>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FigmaFrame {
+    pub id: String,
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Nature d'un dossier à importer (7.1, 7.2).
@@ -302,6 +396,12 @@ pub struct ImportProbe {
     /// Le dossier contient déjà un site Revel.
     #[serde(default)]
     pub has_site: bool,
+    /// Outil qui a produit les pages (export Webflow, site lu chez Framer…).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub made_with: Option<String>,
+    /// Fichiers CSV du CMS de Webflow trouvés à la racine du dossier.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub csv: Vec<String>,
 }
 
 /// Dépôt copié depuis Git (7.2).

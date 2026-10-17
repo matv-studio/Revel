@@ -7,12 +7,21 @@
 //! - [`html`] : site HTML statique (7.1) : pages, gabarit commun, feuille de style du site,
 //!   fichiers copiés tels quels.
 //!
+//! - [`crawl`] : site publié lu à son adresse (7.4), écrit comme un dossier statique.
+//!
 //! [`detect`] reconnaît la nature d'un dossier (Eleventy, HTML statique, site à construire).
+
+#![cfg_attr(test, recursion_limit = "512")]
 
 use std::path::Path;
 
+pub mod adapt;
+pub mod crawl;
 pub mod eleventy;
+pub mod figma;
 pub mod html;
+pub mod webflow;
+pub mod wordpress;
 
 /// Rapport d'import : ce qui a été repris et ce qui reste à vérifier.
 #[derive(Debug, Default)]
@@ -23,6 +32,16 @@ pub struct Report {
     pub collections: usize,
     /// Règles de style importées dans le modèle (D-18).
     pub style_rules: usize,
+    /// Outil d'origine reconnu (Framer, Webflow, WordPress).
+    pub tool: Option<String>,
+    /// Animations reprises en animations Revel (7.7).
+    pub animations: usize,
+    /// Formulaires repris en formulaires Revel.
+    pub forms: usize,
+    /// Entrées de collections écrites.
+    pub entries: usize,
+    /// Fichiers téléchargés (médias).
+    pub files: usize,
     pub warnings: Vec<String>,
 }
 

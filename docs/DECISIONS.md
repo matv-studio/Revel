@@ -559,6 +559,56 @@ produit par sa construction (`dist`, `build`, `out`, `_site`, `public`) s'il est
 - Exemple étudié : `deltea/p3r-pause-menu` (SvelteKit, adaptateur Vercel, sans licence affichée) est un site à
   construire, non importable par cette voie.
 
+**D-81 — 17/10/2026 — prise.** **Import depuis un lien (7.4) : le site publié est lu, pas l'outil.** Pages
+suivies depuis l'accueil, les liens et le plan du site (`sitemap.xml`), règles de `robots.txt` respectées
+(`Crawl-delay` : pages lues une à une, pause plafonnée à 2 s), 2 000 pages et 2 Go au plus, six téléchargements
+simultanés, interruption possible. Images, polices, scripts et
+feuilles des serveurs de l'outil (framerusercontent.com, website-files.com, fonts.gstatic.com…) copiés dans le
+site (`/_externe/<serveur>/…`) : le site importé ne dépend plus d'eux (D-36), connexions préparées
+(`preconnect`) retirées. Les styles écrits dans les pages (`<style>`, cas de Framer) sont réunis, règles en double
+fusionnées, dans la feuille du site (`/assets/styles.css`), donc modifiables dans le panneau Styles.
+- Seule voie pour Framer (pas d'export HTML, voir ETAPE-7) ; marche pour tout site en ligne dont les pages sont
+  écrites en HTML (pas pour une application dont le contenu est produit par JavaScript).
+- Droits : l'import ne vérifie pas que l'utilisateur peut reprendre le site lu (même règle que D-80).
+
+**D-82 — 17/10/2026 — prise.** **Moteurs des outils retirés, animations reprises (7.7).** Framer : scripts de
+son moteur retirés (le HTML publié est complet ; gardés, ils recréeraient la page et effaceraient les
+modifications faites dans Revel), apparitions (`framer/appear`) reprises en animations Revel (`data-revel-appear`,
+modifiables dans le panneau Interactions), état de départ masqué retiré. Menus, carrousels et effets au survol
+produits par ce moteur ne sont pas repris (signalé). Webflow : `webflow.js` gardé ; interactions d'apparition
+d'un élément (effets prêts à l'emploi et animations sur mesure : opacité, déplacement en pixels, échelle,
+rotation) reprises et détachées de Webflow ; interactions sur une classe, au défilement continu, au survol ou au
+clic gardées pour Webflow. AOS (`data-aos`) repris. Formulaires Webflow envoyés par Revel (D-54).
+
+**D-83 — 17/10/2026 — prise.** **Contenus du CMS de Webflow (7.3) : fichiers CSV ou API, jeton jamais gardé.**
+Les fichiers CSV exportés (une collection par fichier, trouvés à la racine de l'export ou ajoutés) donnent des
+champs déduits des valeurs (texte, texte riche, image, date, oui/non, nombre, lien, références entre fichiers) ;
+l'API de Webflow (jeton du site, lecture du CMS, identifiant du site lu dans `data-wf-site`) donne les types
+exacts et les brouillons. Contenus en fichiers Markdown (`content/<collection>`, décrits dans `.pages.yml`),
+images copiées dans `images/cms/`. La page modèle exportée (`detail_<collection>.html`) devient le gabarit des
+pages de la collection (`/<collection>/<slug>/`), éléments liés reliés aux champs dans l'ordre (à vérifier,
+signalé). Les listes du CMS sont exportées vides par Webflow : à relier dans Revel (signalé).
+
+**D-84 — 17/10/2026 — prise.** **WordPress (7.6) : fichier d'export, modèle Blog de Revel, adresses gardées.** Le
+thème (PHP) n'est pas dans le fichier d'export : le site part du modèle Blog de Revel (gabarits, styles). Articles
+en collection `articles` (texte HTML, image mise en avant, catégories, étiquettes, auteur, brouillons), adresse
+d'origine gardée par article (`permalink`) : les liens existants restent valides, un nouvel article prend
+`/articles/<slug>/`. Pages à leur adresse, premier menu de navigation repris. Images utilisées téléchargées depuis
+le site (mêmes adresses `/wp-content/uploads/…`) si l'option est gardée. Codes courts d'extensions et
+commentaires non repris (signalés).
+
+**D-85 — 17/10/2026 — prise.** **Figma (7.5) : API de Figma, jeton personnel gardé dans le trousseau.** Le fichier
+est lu par l'API REST (`GET /v1/files/:clé`, droit `file_content:read`), cadres de premier niveau proposés par page
+du fichier ; chaque cadre choisi devient une page (le premier : l'accueil). Mise en page automatique → flex,
+largeur « remplir » ou égale au parent → étirée, largeur fixe → plafonnée à l'écran ; cadres sans mise en page
+automatique : positions absolues (signalé). Une classe par élément, réutilisée par les éléments du même nom aux
+mêmes styles. Styles de couleur du fichier → couleurs du site (variables CSS de `:root`) ; les variables de
+Figma ne sont lisibles par l'API qu'avec une place complète d'une organisation Enterprise
+([documentation](https://developers.figma.com/docs/rest-api/variables/)) : non lues. Composants utilisés
+plusieurs fois avec la même structure → composants Revel, textes en propriétés. Formes et icônes exportées en SVG, images téléchargées, polices ajoutées depuis Google Fonts et
+copiées dans le site (D-24). Le jeton (Figma › Settings › Security) est gardé dans le trousseau du système, comme
+celui de GitHub, et peut être oublié depuis la boîte d'import.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

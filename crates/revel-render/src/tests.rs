@@ -231,6 +231,11 @@ fn chemins_de_sortie() {
     assert_eq!(output_path("/").unwrap(), "index.html");
     assert_eq!(output_path("/agence/").unwrap(), "agence/index.html");
     assert_eq!(output_path("/.htaccess").unwrap(), ".htaccess");
+    assert!(
+        output_path("//greek/a/").is_err(),
+        "chemin absolu une fois joint"
+    );
+    assert!(output_path("/a\\b/").is_err());
     assert!(output_path("/../x").is_err());
     assert_eq!(DocKind::of_path("/feed.xml"), DocKind::Xml);
     assert_eq!(DocKind::of_path("/robots.txt"), DocKind::Text);

@@ -172,7 +172,13 @@ impl DocKind {
 
 /// `/agence/` -> `agence/index.html` ; `/` -> `index.html` ; `/sitemap.xml` -> `sitemap.xml`.
 pub fn output_path(path: &str) -> Result<String, RenderError> {
-    if !path.starts_with('/') || path.split('/').any(|s| s == "..") {
+    // `//dossier/` (adresse d'origine mal formée) ou `\` : chemin absolu une fois joint au
+    // dossier de sortie, refusé.
+    if !path.starts_with('/')
+        || path.starts_with("//")
+        || path.contains('\\')
+        || path.split('/').any(|s| s == "..")
+    {
         return Err(RenderError::InvalidPath(path.into()));
     }
     let trimmed = &path[1..];

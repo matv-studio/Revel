@@ -287,12 +287,24 @@ pub fn fill(
         }
         let p = u.path();
         let p = p.strip_prefix(prefix.as_str()).unwrap_or(p);
-        let p = if p.is_empty() { "/" } else { p };
         // Adresse sans réécriture (`?page_id=12`) : pas d'adresse lisible.
-        if u.query().is_some() && p == "/" {
+        if u.query().is_some() && (p.is_empty() || p == "/") {
             return None;
         }
-        Some(p.to_string())
+        // Lettres accentuées en clair (nom du dossier produit), barres doublées réduites.
+        let decoded = percent_encoding::percent_decode_str(p).decode_utf8_lossy();
+        let mut out = String::from("/");
+        for seg in decoded
+            .split('/')
+            .filter(|s| !s.is_empty() && *s != "." && *s != "..")
+        {
+            out.push_str(seg);
+            out.push('/');
+        }
+        if !p.ends_with('/') && out.len() > 1 {
+            out.pop();
+        }
+        Some(out)
     };
 
     // Images utilisées : contenus, images mises en avant.

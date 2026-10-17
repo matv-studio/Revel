@@ -627,7 +627,10 @@ et cherche la mise à jour à cette adresse ; sans réponse, l'adresse inscrite 
 même façon. Version proposée affichée « Préversion x.y.z » (barre supérieure, réglages) ; changer le réglage
 relance la recherche. Retirer le réglage ne fait jamais revenir à une version plus ancienne. Rien d'autre à
 publier ni à héberger : le flux des installateurs reste le même. Choix de l'utilisateur : réglage livré dans le
-brouillon 0.6.0 reconstruit, sans nouveau numéro de version.
+brouillon 0.6.0 reconstruit, sans nouveau numéro de version (commit 6c00d74, flux 39066418973 : les 17 fichiers
+du brouillon remplacés, signature vérifiée avec la clé intégrée). La session ne peut pas modifier une version
+GitHub (refus 403) : le brouillon vise encore 21dd2c8 ; à la publication, choisir `main` comme cible pour que
+l'étiquette `v0.6.0` soit posée sur le commit construit.
 
 ## Décisions ouvertes
 

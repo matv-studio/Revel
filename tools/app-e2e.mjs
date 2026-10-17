@@ -80,11 +80,37 @@ try {
     return exec(script);
   };
   const top = () => wd('POST', `${S}/frame`, { id: null });
-  // Premier élément trouvé ; `first` : son premier élément repéré (ligne du haut d'un grand titre,
-  // dont le centre peut être sous le bas de la fenêtre : Edge WebDriver refuse alors le clic).
+  // Clic sur le premier élément trouvé (`first` : son premier élément repéré, la ligne du haut
+  // d'un grand titre). Canevas libre : la page ne défile pas dans son cadre, la vue se déplace ;
+  // l'élément est d'abord amené dans la partie visible de la zone (sinon Edge WebDriver vise un
+  // point hors de la fenêtre : « element click intercepted »).
   const clickInCanvas = async (css, first = false) => {
+    const sel = first ? `${css} [data-rv]` : css;
+    const at = await inCanvas(`const e = document.querySelector(arguments[0]) || document.querySelector(arguments[1]);
+      if (!e) return null;
+      const b = e.getBoundingClientRect();
+      const top = Math.max(b.top, 0), bottom = Math.min(b.bottom, innerHeight);
+      const left = Math.max(b.left, 0), right = Math.min(b.right, innerWidth);
+      return [(left + right) / 2, (top + bottom) / 2];`.replace('arguments[0]', JSON.stringify(sel)).replace('arguments[1]', JSON.stringify(css)));
+    if (at) {
+      await top();
+      await exec(`const [x, y] = arguments[0];
+        const f = document.querySelector("iframe.canvas-frame");
+        const fr = f.getBoundingClientRect();
+        const k = fr.width / f.offsetWidth || 1;
+        const a = document.querySelector(".canvas-area");
+        const ar = a.getBoundingClientRect();
+        const t = Math.max(ar.top, 0), btm = Math.min(ar.bottom, innerHeight);
+        const l = Math.max(ar.left, 0), r = Math.min(ar.right, innerWidth);
+        const px = fr.left + x * k, py = fr.top + y * k;
+        const dx = px < l + 20 || px > r - 20 ? px - (l + r) / 2 : 0;
+        const dy = py < t + 20 || py > btm - 20 ? py - (t + btm) / 2 : 0;
+        if (dx || dy) a.dispatchEvent(new WheelEvent("wheel", { deltaX: dx, deltaY: dy, clientX: l + 5, clientY: t + 5, bubbles: true, cancelable: true }));
+        return [dx, dy];`, [at]);
+      await sleep(300);
+    }
     await inCanvas('return 1');
-    const inner = first ? await find(`${css} [data-rv]`) : [];
+    const inner = first ? await find(sel) : [];
     const el = inner.length ? inner : await find(css);
     await wd('POST', `${S}/element/${el[0][ELEMENT]}/click`, {});
   };

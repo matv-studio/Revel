@@ -141,7 +141,7 @@ mesures remises dans `C:\MATV_LOCAL\_Interne\Revel\verification-import`.
 | zolt-portfolio.framer.website (Framer) | 6 pages, 173 fichiers, 15 Mo, 3 s | 871 règles, 7 animations | accueil, contact, étude de cas | 0,01 à 1,45 % / 0,02 à 1,28 % (bandeau défilant du moteur de Framer non repris) |
 | techstudio-template.webflow.io (Webflow, 12 pages lues sur 44) | 12 pages, 367 fichiers, 61 Mo, 7 s | 2 gabarits, 1 254 règles, 85 animations, 14 formulaires | accueil, à propos, projets | 0,04 à 0,85 % / 0,04 à 0,43 % (vidéo de fond, défilement continu laissé à Webflow) |
 | alunites.com (site statique, 15 pages lues, `Crawl-delay`) | 15 pages, 117 fichiers, 487 Mo, 95 s | 2 gabarits, 2 074 règles | accueil, article | 2,5 à 3,3 % / 5,2 à 9,3 % (bandeau des cookies affiché seulement sur le site en ligne, logos défilants, vidéos) |
-| Données d'essai des thèmes WordPress (`themeunittestdata.wordpress.xml`) | fichier d'export, 58 articles, 23 pages | 78 pages produites, adresses d'origine (`/2013/01/10/…/`), menu repris ; codes courts `[gallery]`, `[audio]` signalés | accueil, article, page | sans original à comparer (thème non exporté) : vérifié à l'œil ; ajouté à l'intégration continue |
+| Données d'essai des thèmes WordPress (`themeunittestdata.wordpress.xml`) | fichier d'export, 58 articles, 23 pages | 79 pages produites, adresses d'origine (`/2013/01/10/…/`, `/greek/επίπεδο-2/`), menu repris ; codes courts `[gallery]`, `[audio]` signalés | accueil, article, page | sans original à comparer (thème non exporté) : vérifié à l'œil ; ajouté à l'intégration continue |
 
 Écarts trouvés par cette passe et corrigés :
 
@@ -158,7 +158,10 @@ mesures remises dans `C:\MATV_LOCAL\_Interne\Revel\verification-import`.
 - **données de composant prises pour un fichier** (attribut `data` hors `<object>`) ;
 - **interactions Webflow** : format des sites publiés (`.init(` suivi d'un retour à la ligne), effets prêts à
   l'emploi réglés dans l'interaction, animations des enfants laissées à Webflow ;
-- **`Crawl-delay`** respecté (alunites.com demande 10 s : pages une à une, pause de 2 s au plus).
+- **`Crawl-delay`** respecté (alunites.com demande 10 s : pages une à une, pause de 2 s au plus) ;
+- **adresse WordPress à barre doublée** (`//greek/…`) : chemin absolu une fois joint au dossier de sortie (écriture
+  hors du site, refusée par l'intégration continue) → adresse normalisée et lettres accentuées en clair ; la
+  génération refuse désormais tout chemin de page de cette forme.
 
 Non vérifié sur un fichier réel faute d'accès : Figma (jeton personnel de l'utilisateur nécessaire ; format de
 l'API suivi d'après sa documentation, essais sur des réponses de cette forme) et contenus du CMS de Webflow

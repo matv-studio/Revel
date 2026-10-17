@@ -632,6 +632,17 @@ du brouillon remplacés, signature vérifiée avec la clé intégrée). La sessi
 GitHub (refus 403) : le brouillon vise encore 21dd2c8 ; à la publication, choisir `main` comme cible pour que
 l'étiquette `v0.6.0` soit posée sur le commit construit.
 
+**D-87 — 17/10/2026 — prise.** **Un installateur par système à partir de la version qui suit la 0.6.0 : plus de
+`.msi` ni de `.rpm`.** Demande de l'utilisateur (17 fichiers dans le brouillon 0.6.0, dont deux installateurs de
+remplacement). `bundle.targets` de `tauri.conf.json` passe de `"all"` à `["nsis", "app", "dmg", "deb",
+"appimage"]` (valeurs de la [configuration de Tauri](https://v2.tauri.app/reference/config/) ; `app` donne le
+`.app.tar.gz` des mises à jour macOS). Fichiers d'une version : `.exe`, `.dmg` ×2, `.app.tar.gz` ×2, `.deb`,
+`.AppImage`, une `.sig` par fichier installable par mise à jour (5) et `latest.json`, soit 13. Contrepartie :
+pas d'installateur MSI pour un déploiement géré par un service informatique (Intune, stratégies de groupe) ;
+Fedora et openSUSE passent par l'AppImage. Le brouillon 0.6.0 garde ses 17 fichiers ; une installation faite
+avec son `.msi` ou son `.rpm` ne trouverait plus de mise à jour du même type (le module cherche
+`<système>-<architecture>-<installateur>`, puis `<système>-<architecture>`) : ne pas diffuser ces deux fichiers.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

@@ -68,6 +68,16 @@ enum FromCanvas {
         path: String,
         #[serde(default)]
         vars: Vec<revel_edit::canvas::VarValue>,
+        /// Révision du document rendu.
+        #[serde(default)]
+        rev: Option<u64>,
+    },
+    /// Page mise à jour sur place après une modification.
+    Refreshed {
+        #[serde(default)]
+        vars: Vec<revel_edit::canvas::VarValue>,
+        #[serde(default)]
+        rev: Option<u64>,
     },
     Hover {
         id: Option<String>,
@@ -729,6 +739,20 @@ impl Ed {
         ))
     }
 
+    /// Page modifiée : mise à jour sur place dans chaque cadre du canevas, sans rechargement ni
+    /// animation rejouée (le canevas recharge lui-même la page s'il ne peut pas la mettre à jour).
+    pub fn refresh(self) {
+        self.post(serde_json::json!({ "type": "refresh" }));
+    }
+
+    /// Rendu antérieur à la dernière modification connue de l'éditeur.
+    fn stale(self, rev: Option<u64>) -> bool {
+        let now = self
+            .state
+            .with_untracked(|s| s.as_ref().map(|s| s.revision));
+        matches!((rev, now), (Some(r), Some(n)) if r < n)
+    }
+
     /// Après une modification, une annulation ou un rétablissement : copie locale et canevas.
     pub fn after(self, ui: Ui, st: EditState) {
         if let Some(cmd) = &st.applied {
@@ -742,7 +766,7 @@ impl Ed {
                 ) {
                     self.reopen(ui);
                 }
-                self.load.update(|n| *n += 1);
+                self.refresh();
                 self.state.set(Some(st));
                 return;
             }
@@ -750,7 +774,7 @@ impl Ed {
             // document, pages et canevas relus.
             if writes_entries(cmd) {
                 self.reopen(ui);
-                self.load.update(|n| *n += 1);
+                self.refresh();
                 self.state.set(Some(st));
                 return;
             }
@@ -876,7 +900,7 @@ impl Ed {
                     self.post(serde_json::json!({ "type": "stylesheet", "url": url }));
                 }
             } else {
-                self.load.update(|n| *n += 1);
+                self.refresh();
             }
         }
         self.state.set(Some(st));
@@ -908,7 +932,7 @@ impl Ed {
                     self.doc.set(Some(o.site));
                     self.state.set(Some(o.state));
                     if reload {
-                        self.load.update(|n| *n += 1);
+                        self.refresh();
                     }
                 }
                 Err(e) => ui.fail(e),
@@ -2792,6 +2816,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 | FromCanvas::TextHtml { .. }
                 | FromCanvas::RichText { .. } => ed.activate_key(&from_bp),
                 FromCanvas::Ready { .. }
+                | FromCanvas::Refreshed { .. }
                 | FromCanvas::Stage { .. }
                 | FromCanvas::OpenComponent { .. }
                 | FromCanvas::Key { .. }
@@ -2803,9 +2828,13 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             }
         }
         match msg {
-            FromCanvas::Ready { path, vars } => {
+            FromCanvas::Ready { path, vars, rev } => {
                 // Navigation impossible dans le canevas : la page est celle demandée.
                 let _ = path;
+                // Page rendue avant la dernière modification : mise à jour sur place.
+                if ed.stale(rev) {
+                    post_to(&from_frame, serde_json::json!({ "type": "refresh" }));
+                }
                 post_to(
                     &from_frame,
                     serde_json::json!({ "type": "active", "on": active }),
@@ -2828,6 +2857,23 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 ed.post(serde_json::json!({ "type": "scale", "s": ed.scale() }));
                 if let Some(s) = ed.selected.get_untracked() {
                     ed.post(serde_json::json!({ "type": "select", "id": s.id }));
+                    ed.post_multi();
+                }
+            }
+            FromCanvas::Refreshed { vars, rev } => {
+                if ed.stale(rev) {
+                    post_to(&from_frame, serde_json::json!({ "type": "refresh" }));
+                }
+                if active {
+                    ed.vars.set(vars);
+                }
+                ed.post_rich_hosts();
+                ed.post_isolation();
+                if let Some(s) = ed.selected.get_untracked() {
+                    post_to(
+                        &from_frame,
+                        serde_json::json!({ "type": "select", "id": s.id }),
+                    );
                     ed.post_multi();
                 }
             }
@@ -2945,7 +2991,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                         ed.apply(ui, cmd, false)
                     }
                     // Rien de changé (ou contenu refusé) : la page reprend son texte.
-                    None => ed.load.update(|n| *n += 1),
+                    None => ed.refresh(),
                 }
             }
             FromCanvas::Texts { id, items } => ed.texts.set((id, items)),

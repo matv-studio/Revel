@@ -120,6 +120,11 @@ pub async fn forget_site(path: &str) -> Res<()> {
     call("forget_site", &PathArg { path }).await
 }
 
+/// Site mis à la corbeille du système et retiré de la liste.
+pub async fn delete_site(path: &str) -> Res<()> {
+    call("delete_site", &PathArg { path }).await
+}
+
 /// Sélection d'un dossier (fenêtre du système). `None` si annulé.
 pub async fn pick_folder() -> Res<Option<String>> {
     pick_folder_at(None).await

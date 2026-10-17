@@ -133,6 +133,8 @@
       case "get_settings": return state.settings;
       case "set_settings": state.settings = args.settings; return null;
       case "recent_sites": return state.recents;
+      case "forget_site":
+      case "delete_site": state.recents = state.recents.filter((r) => r.path !== args.path); return null;
       case "open_site": return site;
       case "default_sites_dir": return state.settings.projects_dir || "C:\\Program Files\\Revel\\Projects";
       case "site_folder": return args.parent + "\\" + slug(args.name || "");

@@ -53,6 +53,17 @@ try {
     && (await page.getAttribute('.template-choice[data-template="new-site-template-showcase"]', 'aria-checked')) === 'true');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('.dialog--form'));
+  // Accueil : supprimer un site (confirmation, dossier mis à la corbeille ; simulé ici).
+  {
+    const card = page.locator('.site-card', { hasText: 'Maison Oka' });
+    await card.hover();
+    await card.locator('.site-delete').click();
+    await page.waitForSelector('.dialog .btn--danger');
+    const title = (await page.textContent('.dialog')).includes('Maison Oka');
+    await page.click('.dialog .btn--danger');
+    await page.waitForFunction(() => ![...document.querySelectorAll('.site-card')].some((c) => c.textContent.includes('Maison Oka')));
+    check('accueil : site supprimé après confirmation', title);
+  }
   // Un clic sur un site l'ouvre dans l'éditeur.
   await page.click('.site-open');
   await page.waitForSelector('iframe.canvas-frame');
@@ -276,7 +287,7 @@ try {
 
   // Ajouter un titre dans la section sélectionnée.
   await page.click('.dock-tab[data-panel="insert"]');
-  await page.click('.insert-item:has-text("Titre")');
+  await page.dblclick('.insert-item:has-text("Titre")');
   f = await waitFrame(() => [...document.querySelectorAll('section.hero h2')].some((h) => h.textContent === 'Nouveau titre'), 'titre ajouté');
   await page.waitForFunction(() => document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech === 'h2');
   check('ajouter : titre inséré dans la section, sélectionné', true);
@@ -448,6 +459,19 @@ try {
     await page.click('.node-path .node-crumb[data-tech*="section.hero"]');
     await page.waitForTimeout(200);
     check('fil d\'Ariane : parent sélectionné', (await page.getAttribute('.layers .layer.is-selected', 'data-tech')).startsWith('section.hero'));
+    // Composant dans les calques : une ligne sans contenu ; double-clic : son canevas.
+    {
+      const comps = await page.$$eval('.layers .layer.is-component', (l) => l.map((r) => !!r.querySelector('.layer-toggle.is-hidden')));
+      if (comps.length) {
+        await page.dblclick('.layers .layer.is-component >> nth=0');
+        await page.waitForSelector('.canvas-area.is-comp');
+        await page.click('.comp-back');
+        await page.waitForSelector('.canvas-area:not(.is-comp)');
+        f = await waitFrame(() => document.readyState === 'complete' && !!window.__revelSlot, 'retour à la page');
+      }
+      check('calques : composant non dépliable, double-clic ouvre son canevas', comps.every(Boolean), `${comps.length} composant(s)`);
+      await page.click('.layers .layer[data-tech*="section.hero"]');
+    }
     // Interactions (6.1) : animation prête à l'emploi ajoutée, changée, réglée, essayée dans le
     // canevas, retirée ; document identique après annulation.
     {
@@ -742,7 +766,7 @@ try {
       await page.click('.dock-tab[data-panel="layers"]');
       await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
       await page.click('.dock-tab[data-panel="insert"]');
-      await page.click('.insert-item[data-item="insert-collection-list"]');
+      await page.dblclick('.insert-item[data-item="insert-collection-list"]');
       const listed = await untilE(async () => (await frame.locator('.liste-collection__element').count()) > 2);
       await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.collection-list select');
@@ -767,12 +791,22 @@ try {
       await page.click('.dock-tab[data-panel="layers"]');
       await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
       await page.click('.dock-tab[data-panel="insert"]');
+      // Un clic seul n'ajoute rien ; le double-clic ajoute, page mise à jour sur place (pas de
+      // rechargement : animations non rejouées).
+      await frameOf().evaluate(() => { window.__sansRechargement = 1; });
+      const before1 = await pageJson();
       await page.click('.insert-item[data-item="insert-grid"]');
+      await page.waitForTimeout(500);
+      const oneClick = (await pageJson()) === before1;
+      await page.dblclick('.insert-item[data-item="insert-grid"]');
       const grid = await untilE(async () => (await frame.locator('.grille .grille__cellule').count()) === 2);
+      check('ajouter : un clic n\'ajoute rien, un double-clic ajoute', oneClick && grid);
+      check('canevas : page mise à jour sur place après un ajout (sans rechargement)',
+        await frameOf().evaluate(() => window.__sansRechargement === 1));
       const gridCss = await frame.locator('.grille').evaluate((g) => getComputedStyle(g).display);
       check('éléments : grille insérée avec ses styles', grid && gridCss === 'grid', gridCss);
       // Icône : dessin choisi dans les réglages.
-      await page.click('.insert-item[data-item="insert-icon"]');
+      await page.dblclick('.insert-item[data-item="insert-icon"]');
       await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.icon-choice[data-icon="coeur"]');
       await page.click('.icon-choice[data-icon="coeur"]');
@@ -780,7 +814,7 @@ try {
       check('éléments : icône insérée, dessin changé', heart);
       // Code HTML écrit tel quel.
       await page.click('.dock-tab[data-panel="insert"]');
-      await page.click('.insert-item[data-item="insert-embed"]');
+      await page.dblclick('.insert-item[data-item="insert-embed"]');
       await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.embed-code');
       await page.fill('.embed-code', '<p class="essai-code">Bonjour</p>');
@@ -792,7 +826,7 @@ try {
       await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
       await page.click('.dock-tab[data-panel="insert"]');
       await page.locator('.insert-item[data-item="insert-block-features"]').scrollIntoViewIfNeeded();
-      await page.click('.insert-item[data-item="insert-block-features"]');
+      await page.dblclick('.insert-item[data-item="insert-block-features"]');
       const block = await untilE(async () => (await frame.locator('.bloc-avantages .bloc-avantage .icone').count()) === 3);
       const blockCss = block && await frame.locator('.bloc-avantages__grille').evaluate((g) => getComputedStyle(g).display);
       check('éléments : bloc prêt à l\'emploi (avantages, icônes, styles)', block && blockCss === 'grid', String(blockCss));
@@ -802,8 +836,13 @@ try {
         await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
         await page.click('.dock-tab[data-panel="insert"]');
         await page.locator(`.insert-item[data-item="insert-${key}"]`).scrollIntoViewIfNeeded();
-        await page.click(`.insert-item[data-item="insert-${key}"]`);
+        await page.dblclick(`.insert-item[data-item="insert-${key}"]`);
       };
+      // Élément vide : icône et hauteur d'environ 50 px dans le canevas seulement.
+      await addIn('container');
+      const empty = await untilE(async () => (await frame.locator('[data-rv-empty="box"]').count()) > 0);
+      const emptyH = empty ? await frame.locator('[data-rv-empty="box"]').first().evaluate((e) => e.getBoundingClientRect().height) : 0;
+      check('canevas : élément vide montré (icône, environ 50 px de haut)', empty && emptyH >= 48, String(emptyH));
       await addIn('tabs');
       const tabsIn = await untilE(async () => (await frame.locator('[data-revel-tabs] [data-revel-tab]').count()) === 2
         && (await frame.locator('[data-revel-tabs] [data-revel-panel]').count()) === 2);
@@ -1228,6 +1267,49 @@ try {
     await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2 + dy, { steps: 4 });
     return async () => page.mouse.up();
   };
+  // Disposition comme Webflow : Bloc, Flex, Grille, Masqué et la flèche des autres affichages ;
+  // flex (direction, matrice X / Y, écarts) ; grille (colonnes, lignes) ; tout annulé.
+  {
+    const layDecls = async () => JSON.stringify((await titleRule()).decls);
+    const lay0 = await layDecls();
+    const untilD = async (prop, v) => {
+      for (let i = 0; i < 60; i++) {
+        if (decl(await titleRule(), prop) === v) return true;
+        await page.waitForTimeout(100);
+      }
+      return false;
+    };
+    const labels = await page.$$eval('.display-ctl .seg button', (l) => l.map((b) => b.textContent.trim()));
+    await page.click('.display-ctl .seg button:has-text("Flex")');
+    const flex = await untilD('display', 'flex');
+    await page.click('.seg-more');
+    await page.click('.display-more .menu-item:has-text("Bloc en ligne")');
+    const inline = await untilD('display', 'inline-block');
+    await page.click('.display-ctl .seg button:has-text("Flex")');
+    await untilD('display', 'flex');
+    await page.click('.align-box .align-cell >> nth=4');
+    const centre = await untilD('justify-content', 'center') && await untilD('align-items', 'center');
+    check('disposition : Bloc, Flex, Grille, Masqué ; autres affichages par la flèche ; matrice d\'alignement',
+      labels.join('|') === 'Bloc|Flex|Grille|Masqué' && flex && inline && centre, labels.join('|'));
+    await page.click('.display-ctl .seg button:has-text("Grille")');
+    await untilD('display', 'grid');
+    await page.locator('.stepper').nth(0).locator('.stepper-arrows button').nth(0).click();
+    const cols = await untilD('grid-template-columns', 'repeat(2, minmax(0, 1fr))');
+    // Lignes non fixées : nombre de lignes affichées dans la page (implicites comprises), plus une.
+    await page.waitForTimeout(800);
+    const rowsInput = page.locator('.stepper').nth(1).locator('input');
+    const shown = parseInt((await rowsInput.inputValue()) || (await rowsInput.getAttribute('placeholder')) || '1', 10) || 1;
+    await page.locator('.stepper').nth(1).locator('.stepper-arrows button').nth(0).click();
+    const rows = await untilD('grid-template-rows', `repeat(${shown + 1}, auto)`);
+    check('disposition : grille, colonnes et lignes par les flèches', cols && rows,
+      `${decl(await titleRule(), 'grid-template-columns')} / ${decl(await titleRule(), 'grid-template-rows')}`);
+    if (shots) await page.locator('.dock-col--right').screenshot({ path: `${shots}/styles-disposition.png` });
+    for (let i = 0; i < 12 && (await layDecls()) !== lay0; i++) {
+      await page.click('.editor-toolbar .btn-undo');
+      await page.waitForTimeout(250);
+    }
+    check('disposition : tout annulé', (await layDecls()) === lay0);
+  }
   // Boîte des marges : glisser la marge du haut de 20 px vers le haut.
   {
     const before = await titleRule();
@@ -1331,7 +1413,7 @@ try {
   if (shots) await page.screenshot({ path: `${shots}/editeur-styles.png` });
   // Aucun libellé tronqué dans l'inspecteur (sections dépliées).
   for (const d of await page.$$('.dock-panel[data-panel="styles"] details:not([open]) > summary')) await d.click().catch(() => {});
-  const truncated = () => page.$$eval('.dock-panel[data-panel="styles"] :is(.style-label, .style-label-text, .label, .seg button span, .mini-label), .dock-tab-label', (els) =>
+  const truncated = () => page.$$eval('.dock-panel[data-panel="styles"] :is(.style-label, .style-label-text, .label, .seg button span, .mini-label, .pair-label), .dock-tab-label', (els) =>
     els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent.trim()));
   const cut = await truncated();
   check('styles : aucun libellé tronqué (français)', cut.length === 0, cut.join(', '));
@@ -2353,10 +2435,30 @@ try {
     check('langues : tout annulé (document, dossier de la langue retiré)', true);
   }
 
+  // Réglages de Revel ouverts depuis le site : menu du site gardé, retour au projet.
+  {
+    await page.click('.site-menu-btn');
+    await page.click('.site-menu-pop .menu-item:has-text("Réglages de Revel")');
+    await page.waitForSelector('.section[data-section="translate"] :is(.packs-more, .packs-none, .pack)');
+    const kept = await page.locator('.site-menu-btn').count() === 1;
+    await page.click('.site-menu-btn');
+    await page.click('.site-menu-back');
+    await page.waitForSelector('iframe.canvas-frame');
+    check('réglages : menu du site gardé, retour au projet', kept);
+  }
+
   // ---------------------------------------------------------------- Langues de traduction (D-36)
   await page.click('.topbar button.logo');
   await page.click('.view-tab[data-view="nav-settings"]');
-  await page.waitForSelector('.packs .pack');
+  await page.waitForSelector('.section[data-section="translate"] :is(.packs-more, .packs-none, .pack)');
+  // Langues installées seulement ; les autres sous « Plus de langues ».
+  const shownFirst = await page.$$eval('.pack', (l) => l.every((x) => !!x.querySelector('.pack-remove')));
+  // Aucune langue installée : dit sans ouvrir la liste.
+  const noneLine = (await page.$('.packs-none')) !== null;
+  const nShown = (await page.$$('.pack')).length;
+  await page.click('.packs-more');
+  await page.waitForSelector('.packs .pack .pack-get');
+  check('réglages : langues installées, puis « Plus de langues »', shownFirst && noneLine === (nShown === 0), `${nShown} installée(s)`);
   const packs = await page.$$eval('.pack', (l) => l.map((x) => [x.dataset.pack, x.querySelector('.pack-get') ? 'get' : x.querySelector('.pack-remove') ? 'rm' : '?']));
   const bundled = packs.filter(([, a]) => a === 'rm').map(([c]) => c);
   check('réglages : langues de traduction (catalogue, chacune retirable ou téléchargeable)', packs.length >= 20

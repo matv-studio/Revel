@@ -70,10 +70,32 @@ pub fn Home() -> impl IntoView {
             ui.reload_recents();
         });
     };
-    // Menu contextuel d'un site : ouvrir, paramètres, afficher le dossier, retirer de la liste.
-    let site_menu = move |e: &leptos::ev::MouseEvent, path: String| {
+    // Suppression d'un site : confirmée, dossier mis à la corbeille du système.
+    let delete = move |path: String, name: String| {
+        let p = StoredValue::new(path);
+        ui.ask.set(Some(
+            crate::dialog::Ask::confirm(
+                ui.now("site-delete-title", &[("name", name.clone())]),
+                Some(ui.now("site-delete-body", &[])),
+                ui.now("site-delete-confirm", &[]),
+                move || {
+                    let path = p.get_value();
+                    spawn_local(async move {
+                        match api::delete_site(&path).await {
+                            Ok(()) => ui.reload_recents(),
+                            Err(e) => ui.fail(e),
+                        }
+                    });
+                },
+            )
+            .danger(),
+        ));
+    };
+    // Menu contextuel d'un site : ouvrir, paramètres, afficher le dossier, retirer de la liste,
+    // supprimer.
+    let site_menu = move |e: &leptos::ev::MouseEvent, path: String, name: String| {
         use crate::ctxmenu::{CtxItem, open};
-        let (a, b, c, d) = (path.clone(), path.clone(), path.clone(), path);
+        let (a, b, c, d, f) = (path.clone(), path.clone(), path.clone(), path.clone(), path);
         let items = vec![
             CtxItem::new(ui.now("action-edit-site", &[]), move || {
                 open_path(a.clone())
@@ -95,6 +117,11 @@ pub fn Home() -> impl IntoView {
             CtxItem::new(ui.now("action-forget", &[]), move || forget(d.clone()))
                 .icon(icons::close)
                 .sep(),
+            CtxItem::new(ui.now("site-delete", &[]), move || {
+                delete(f.clone(), name.clone())
+            })
+            .icon(icons::trash)
+            .danger(),
         ];
         open(ui, e, items);
     };
@@ -216,7 +243,7 @@ pub fn Home() -> impl IntoView {
                                     let opened = r.opened_at.clone();
                                     view! {
                                         <tr class="row-link site-open" data-site=r.path.clone() title=ui.t("action-edit-site")
-                                            on:contextmenu={ let p = r.path.clone(); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone()) }
+                                            on:contextmenu={ let (p, n) = (r.path.clone(), r.name.clone()); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone(), n.clone()) }
                                             on:click=move |_| open_path(p.clone())>
                                             <td class="strong">
                                                 <span class="site-dot" style=format!("--hue:{}", hue(&r.name))></span>
@@ -230,6 +257,8 @@ pub fn Home() -> impl IntoView {
                                                         on:click=move |ev| { ev.stop_propagation(); open_settings(p3.clone()) }>{icons::settings()}</button>
                                                     <button class="icon-btn" title=ui.t("action-forget") aria-label=ui.t("action-forget")
                                                         on:click=move |ev| { ev.stop_propagation(); forget(p2.clone()) }>{icons::close()}</button>
+                                                    <button class="icon-btn site-delete" title=ui.t("site-delete") aria-label=ui.t("site-delete")
+                                                        on:click={ let (p, n) = (r.path.clone(), r.name.clone()); move |ev: leptos::ev::MouseEvent| { ev.stop_propagation(); delete(p.clone(), n.clone()) } }>{icons::trash()}</button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -248,7 +277,7 @@ pub fn Home() -> impl IntoView {
                                     <article class="site-card site-open" data-site=r.path.clone() title=r.path.clone()
                                         tabindex="0" style=format!("--hue:{}", hue(&r.name))
                                         on:click=move |_| open_path(p.clone())
-                                        on:contextmenu={ let p = r.path.clone(); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone()) }
+                                        on:contextmenu={ let (p, n) = (r.path.clone(), r.name.clone()); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone(), n.clone()) }
                                         on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { open_path(p4.clone()) }>
                                         <div class="site-thumb"><span class="site-mono">{mono(&r.name)}</span></div>
                                         <div class="site-info">
@@ -260,6 +289,8 @@ pub fn Home() -> impl IntoView {
                                                 on:click=move |ev| { ev.stop_propagation(); open_settings(p3.clone()) }>{icons::settings()}</button>
                                             <button class="icon-btn icon-btn--small" title=ui.t("action-forget") aria-label=ui.t("action-forget")
                                                 on:click=move |ev| { ev.stop_propagation(); forget(p2.clone()) }>{icons::close()}</button>
+                                            <button class="icon-btn icon-btn--small site-delete" title=ui.t("site-delete") aria-label=ui.t("site-delete")
+                                                on:click={ let (p, n) = (r.path.clone(), r.name.clone()); move |ev: leptos::ev::MouseEvent| { ev.stop_propagation(); delete(p.clone(), n.clone()) } }>{icons::trash()}</button>
                                         </div>
                                     </article>
                                 }

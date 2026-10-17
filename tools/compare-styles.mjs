@@ -109,6 +109,8 @@ async function settle(page) {
     // Calque de sélection du canevas (survol déclenché par un déplacement simulé du pointeur) :
     // il ne fait pas partie du site.
     document.querySelector('revel-overlay')?.style.setProperty('display', 'none', 'important');
+    // Éléments vides montrés par le canevas (icône, hauteur) : rendus comme dans le site.
+    for (const e of document.querySelectorAll('[data-rv-empty]')) e.removeAttribute('data-rv-empty');
     for (const a of document.getAnimations()) {
       try { a.finish(); } catch { a.pause(); a.currentTime = 0; } // animation infinie
     }

@@ -22,7 +22,7 @@ Panels can move: drag a tab to another column, or onto the canvas to make it a w
 ## Add elements
 
 1. Select where to add (a section, a block).
-2. In **Add**, click an element or drag it onto the page.
+2. In **Add**, double-click an element or drag it onto the page.
 3. **Ready-made blocks** (page header, features, FAQ, form…) add a whole section.
 
 To move an element, drag it on the page or in **Layers**. Alt+drag makes a copy.

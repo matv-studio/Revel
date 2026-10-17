@@ -37,9 +37,6 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Visual website builder",
-    "resources": [
-      "models/"
-    ],
     "windows": {
       "nsis": {
         "installMode": "perMachine",

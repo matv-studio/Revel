@@ -138,7 +138,7 @@ Repères : effets Appear, Hover, Press, Loop, Text Effects, Scroll Speed et Scro
 | 6.6 | Faite côté application et construction (D-77) : recherche au lancement, Réglages › Mises à jour, installation vérifiée et relance ; active dès que la clé de signature est déclarée dans le dépôt (à faire par l'utilisateur) |
 | 6.7 | Préparée (D-09) : signature Windows (Azure Artifact Signing) et macOS (Developer ID, notarisation) dès que les secrets sont déclarés ; signature ad hoc sous macOS sans certificat ; **pas de signature pour l'instant** (choix de l'utilisateur, 17/10/2026) |
 | 6.8 | Terminée : aide intégrée « Premiers pas » (menu « ? » de l'éditeur), quatorze rubriques en français et en anglais (`apps/revel-ui/help/`), libellés vérifiés sur ceux de l'interface |
-| 6.9 | Prête : installateur Windows au logo de Revel (bandeau, barre latérale, icône, français et anglais selon le système), image disque macOS avec fond et emplacements ; à partir de la version 1.0, langues de traduction non livrées (étape sautée, ressources retirées) (D-46) |
+| 6.9 | Prête : installateur Windows au logo de Revel (bandeau, barre latérale, icône, français et anglais selon le système), image disque macOS avec fond et emplacements ; langues de traduction non livrées dès la 0.5.1 (D-79, avancé sur D-46) |
 
 ## Passe complète du 16/10/2026 (après 6.1)
 
@@ -171,3 +171,20 @@ recréer le site depuis l'application seule pour prouver que les outils suffisen
 | Grille, écarts, place d'un enfant, filtres, transformations, transitions, mélange, retour à la ligne (D-73) | Fait |
 | CMS : écriture des dates, texte avant et après une valeur, affichage selon un champ, image de fond reliée, liste sans le contenu affiché, liste d'un champ, dossiers de contenus proposés (D-73) | Fait |
 | Site Alunites entier recréé depuis l'application seule | Dernière étape (demande du 17/10/2026) |
+
+## Retours sur la 0.5.0 (17/10/2026)
+
+| Point | État |
+|---|---|
+| Canevas mis à jour sur place après une modification, sans rejouer les animations (D-78) | Fait |
+| Listes déroulantes à la charte (filtre des médias et toutes les autres) | Fait (Chromium 135 et plus, WebView2) |
+| Composant non déplié dans les calques, ouvert dans son espace par un double-clic | Fait |
+| Disposition à la Webflow : Bloc, Flex, Grille, Masqué et autres affichages, alignement, écarts, grille par nombre de pistes, enfant de grille ou flex (D-78) | Fait |
+| Fichiers de la recréation d'Alunites remis en l'état | Fait |
+| Ajouter : un clic n'ajoute rien, double-clic ajoute ; conteneur vide montré par son icône (50 px) | Fait |
+| Supprimer un site depuis l'accueil (corbeille du système) | Fait |
+| Barres de défilement fines | Fait |
+| Boutons « Dupliquer » et « Supprimer » centrés dans les paramètres de la page | Fait |
+| Menu du site gardé dans les Réglages, retour au projet | Fait |
+| Langues de traduction : installées seulement (« Aucune langue installée » sinon), les autres sous « Plus de langues » | Fait |
+| Aucune langue de traduction livrée dans les versions construites (D-79) | Fait (dès la 0.5.1) |

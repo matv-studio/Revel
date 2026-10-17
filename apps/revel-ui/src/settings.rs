@@ -369,9 +369,29 @@ fn TranslatePacks() -> impl IntoView {
             </li>
         }
     };
+    // Langues installées seulement ; les autres sous « Plus de langues » (celle en cours de
+    // téléchargement reste affichée).
+    let more = RwSignal::new(false);
+    let job_code = Memo::new(move |_| ui.pack_job.with(|j| j.as_ref().map(|j| j.0.clone())));
+    let installed =
+        |p: &TranslatePack| matches!(p.state, PackState::Bundled | PackState::Installed);
+    let others = move || {
+        packs.with(|l| {
+            l.as_ref()
+                .map_or(0, |l| l.iter().filter(|p| !installed(p)).count())
+        })
+    };
+    // Aucune langue installée (aucune n'est livrée avec Revel, D-79) : dit sans ouvrir la liste.
+    let none = move || {
+        packs.with(|l| l.as_ref().is_some_and(|l| !l.iter().any(installed)))
+            && job_code.with(Option::is_none)
+    };
     view! {
         <section class="section settings-card" data-section="translate">
             <h2 title=ui.t("settings-translate-help")>{ui.t("settings-translate")}</h2>
+            <Show when=none>
+                <p class="muted packs-none">{ui.t("settings-translate-none")}</p>
+            </Show>
             <ul class="packs">
                 {move || packs.get().map(|mut list| {
                     list.sort_by_key(|p| match p.state {
@@ -379,9 +399,25 @@ fn TranslatePacks() -> impl IntoView {
                         PackState::BundledOff => 1,
                         PackState::Available => 2,
                     });
-                    list.into_iter().map(row).collect_view()
+                    let all = more.get();
+                    let job = job_code.get();
+                    list.into_iter()
+                        .filter(|p| all || installed(p) || job.as_deref() == Some(p.code.as_str()))
+                        .map(row)
+                        .collect_view()
                 })}
             </ul>
+            {move || (others() > 0).then(|| view! {
+                <button class="btn btn--small packs-more" aria-expanded=move || more.get().to_string()
+                    on:click=move |_| more.update(|m| *m = !*m)>
+                    <span class="packs-more-icon" class:is-open=move || more.get()>{icons::chevron_down()}</span>
+                    {move || if more.get() {
+                        ui.now("settings-translate-less", &[])
+                    } else {
+                        ui.now("settings-translate-more", &[("count", others().to_string())])
+                    }}
+                </button>
+            })}
         </section>
     }
 }

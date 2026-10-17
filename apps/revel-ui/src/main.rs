@@ -172,6 +172,8 @@ pub struct Ui {
     pub domain_for: RwSignal<Option<String>>,
     /// Version plus récente de Revel publiée (6.6), vérifiée au lancement.
     pub update: RwSignal<Option<revel_protocol::UpdateInfo>>,
+    /// Dernier site ouvert et sa vue : gardés dans les réglages de Revel pour y revenir.
+    pub last_site: RwSignal<Option<(SiteSummary, Tab)>>,
 }
 
 impl Ui {
@@ -402,8 +404,16 @@ fn App() -> impl IntoView {
         setup: RwSignal::new(false),
         domain_for: RwSignal::new(None),
         update: RwSignal::new(None),
+        last_site: RwSignal::new(None),
     };
     provide_context(ui);
+    // Site ouvert retenu (menu du site gardé dans les réglages de Revel) ; oublié une fois revenu
+    // à l'accueil.
+    Effect::new(move |_| match ui.route.get() {
+        Route::Site { site, tab } => ui.last_site.set(Some((site, tab))),
+        Route::Home => ui.last_site.set(None),
+        Route::Settings => {}
+    });
     // Mises à jour de Revel (6.6) : vérifiées une fois au lancement, sans bloquer l'ouverture.
     spawn_local(async move {
         if let Ok(c) = api::update_check().await {
@@ -574,7 +584,8 @@ fn TopBar() -> impl IntoView {
             <div class="topbar-start">
                 <button class="logo" title=ui.t("nav-all-sites") aria-label=ui.t("nav-all-sites")
                     on:click=move |_| ui.route.set(Route::Home)>{icons::logo()}</button>
-                <Show when=site_open fallback=|| view! { <span class="topbar-title">"Revel"</span> }>
+                <Show when=move || site_open() || (ui.route.with(|r| matches!(r, Route::Settings)) && ui.last_site.with(Option::is_some))
+                    fallback=|| view! { <span class="topbar-title">"Revel"</span> }>
                     <SiteMenu/>
                 </Show>
             </div>
@@ -651,10 +662,12 @@ fn TopBar() -> impl IntoView {
 fn SiteMenu() -> impl IntoView {
     let ui = expect_context::<Ui>();
     let open = RwSignal::new(false);
+    // Site ouvert, ou dernier site ouvert (depuis les réglages de Revel).
     let current = move || match ui.route.get() {
         Route::Site { site, .. } => Some(site),
-        _ => None,
+        _ => ui.last_site.get().map(|(s, _)| s),
     };
+    let away = move || !matches!(ui.route.get(), Route::Site { .. });
     let on_down =
         window_event_listener(leptos::ev::pointerdown, move |e: web_sys::PointerEvent| {
             let inside = e
@@ -687,6 +700,17 @@ fn SiteMenu() -> impl IntoView {
             </button>
             <Show when=move || open.get()>
                 <div class="menu site-menu-pop" role="menu">
+                    // Depuis les réglages de Revel : retour au site, dans la vue quittée.
+                    {move || away().then(|| ui.last_site.get()).flatten().map(|(site, tab)| {
+                        let name = site.name.clone();
+                        view! {
+                            <button class="menu-item site-menu-back" role="menuitem"
+                                on:click=move |_| { open.set(false); ui.route.set(Route::Site { site: site.clone(), tab }) }>
+                                {icons::arrow_left()}<span class="menu-label">{ui.tx("nav-back-to-site", &[("name", name)])}</span>
+                            </button>
+                            <div class="menu-sep"></div>
+                        }
+                    })}
                     {move || {
                         let here = current().map(|s| s.path).unwrap_or_default();
                         let others: Vec<_> = ui.recents.get().into_iter().filter(|r| r.path != here).take(6).collect();

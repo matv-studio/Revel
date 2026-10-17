@@ -72,6 +72,10 @@ pub enum CoreError {
     Edit(revel_edit::EditError),
     #[error("site non ouvert dans l'éditeur")]
     NotOpen,
+    #[error("ce dossier ne contient pas de site Revel")]
+    NotASite,
+    #[error("mise à la corbeille impossible : {0}")]
+    Trash(String),
     #[error("pas de traduction automatique de « {0} » vers « {1} »")]
     NoTranslation(String, String),
     #[error("traduction automatique : {0}")]
@@ -142,6 +146,8 @@ impl CoreError {
             Self::GithubCancelled => Failure::new("error-github-cancelled"),
             Self::Edit(e) => Failure::new(e.key()).arg("detail", e.to_string()),
             Self::NotOpen => Failure::new("error-edit-not-open"),
+            Self::NotASite => Failure::new("error-not-a-site"),
+            Self::Trash(detail) => Failure::new("error-trash").arg("detail", detail.clone()),
             Self::NoTranslation(from, to) => Failure::new("error-translate-pair")
                 .arg("from", revel_model::language_name(from))
                 .arg("to", revel_model::language_name(to)),
@@ -292,6 +298,31 @@ impl Core {
 
     pub fn forget_site(&self, path: &str) {
         self.with_state(|s| s.recents.retain(|r| r.path != path));
+    }
+
+    /// Supprime un site depuis l'accueil : son dossier va à la corbeille du système (récupérable
+    /// depuis elle), il quitte la liste des sites et sa session d'édition est fermée. Seul un
+    /// dossier qui contient un site Revel est accepté.
+    pub fn delete_site(&self, path: &str) -> Result<()> {
+        let dir = Path::new(path);
+        if !dir.join(revel_project::SITE_FILE).is_file() {
+            return Err(CoreError::NotASite);
+        }
+        self.edit_close(dir);
+        #[cfg(target_os = "macos")]
+        let ctx = {
+            // Sans passer par le Finder (pas d'autorisation d'automatisation demandée).
+            use trash::macos::{DeleteMethod, TrashContextExtMacos};
+            let mut c = trash::TrashContext::default();
+            c.set_delete_method(DeleteMethod::NsFileManager);
+            c
+        };
+        #[cfg(not(target_os = "macos"))]
+        let ctx = trash::TrashContext::default();
+        ctx.delete(dir)
+            .map_err(|e| CoreError::Trash(e.to_string()))?;
+        self.forget_site(path);
+        Ok(())
     }
 
     fn touch_recent(&self, summary: &SiteSummary) {

@@ -12,6 +12,7 @@ mod color;
 mod controls;
 mod ctx;
 mod fx;
+mod layout;
 mod sections;
 
 pub use ctx::watched;
@@ -20,6 +21,7 @@ pub(crate) use ctx::{bp_name, find_rule, style_command};
 use crate::editor::Ed;
 use crate::{Ui, icons};
 use ctx::Sx;
+use layout::{ChildSection, LayoutSection};
 use leptos::ev;
 use leptos::prelude::*;
 use revel_edit::Command;
@@ -413,6 +415,7 @@ pub fn Styles() -> impl IntoView {
                     </div>
                     // Sans classe ni balise choisie : la première valeur crée la classe.
                     <LayoutSection sx/>
+                    <ChildSection sx/>
                     <SpacingSection sx/>
                     <SizeSection sx/>
                     <PositionSection sx/>

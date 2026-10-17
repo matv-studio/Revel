@@ -201,13 +201,18 @@ fn media_entry(file: &Path, url: &str, out: &mut Vec<revel_protocol::MediaFile>)
     });
 }
 
-pub fn inject(html: &str, slots: &[Slot], vars: &[VarValue]) -> String {
+/// `rev` : révision de la session d'édition au moment du rendu (l'éditeur demande une mise à jour
+/// sur place d'une page rendue avant sa dernière modification).
+pub fn inject(html: &str, slots: &[Slot], vars: &[VarValue], rev: Option<u64>) -> String {
     // `</` échappé : la liste ne peut pas fermer l'élément <script>.
     let json = |v: String| v.replace("</", "<\\/");
     let slots = json(serde_json::to_string(slots).unwrap_or_else(|_| "[]".into()));
     let vars = json(serde_json::to_string(vars).unwrap_or_else(|_| "[]".into()));
+    let rev = rev
+        .map(|r| format!(" data-rev=\"{r}\""))
+        .unwrap_or_default();
     let tail = format!(
-        "<script type=\"application/json\" id=\"rv-slots\">{slots}</script>\
+        "<script type=\"application/json\" id=\"rv-slots\"{rev}>{slots}</script>\
          <script type=\"application/json\" id=\"rv-vars\">{vars}</script>\
          <script src=\"{CANVAS_JS_URL}\"></script>"
     );
@@ -581,6 +586,7 @@ impl Core {
             };
             let variant = param("variant");
             let reference = param("page").unwrap_or_else(|| "/".into());
+            let rev = self.session_revision(&site);
             let page = self.with_project(&site, |p| {
                 let hooks: Arc<dyn revel_render::AssetHooks> = if opts.responsive_images {
                     pipeline.clone()
@@ -597,12 +603,14 @@ impl Core {
                 )?)
             })?;
             return Ok(page.map(|page| {
-                let html = html_viewport_units(&inject(&page.html, &page.slots, &page.vars));
+                let html = html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev));
                 CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
             }));
         }
         // Page HTML.
         if revel_render::DocKind::of_path(path) == revel_render::DocKind::Html {
+            // Révision lue avant le rendu : une modification faite pendant le rendu sera signalée.
+            let rev = self.session_revision(&site);
             let page = self.with_project(&site, |p| {
                 let hooks: Arc<dyn revel_render::AssetHooks> = if opts.responsive_images {
                     pipeline.clone()
@@ -622,7 +630,7 @@ impl Core {
                 let html = if preview {
                     revel_render::strip_editor_marks(&page.html)
                 } else {
-                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars))
+                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
                 };
                 return Ok(Some(CanvasResponse::ok(
                     "text/html; charset=utf-8",
@@ -824,7 +832,7 @@ mod tests {
             node: "x</script>".into(),
             component: None,
         }];
-        let h = inject("<html><body><p>a</p></BODY></html>", &slots, &[]);
+        let h = inject("<html><body><p>a</p></BODY></html>", &slots, &[], None);
         assert!(
             h.starts_with("<html><body><p>a</p><script type=\"application/json\" id=\"rv-slots\">")
         );

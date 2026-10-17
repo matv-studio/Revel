@@ -223,6 +223,8 @@
 .page-settings-seo:disabled { opacity: .55; }
 .page-settings-note { margin: 0; font-size: var(--text-xs); }
 .page-settings-foot { gap: 6px; padding: 0 8px; }
+/* Boutons du bas d'un panneau : centrés dans la barre (les petits boutons s'alignent en haut ailleurs). */
+.panel-foot .btn--small { align-self: center; }
 .path-input { display: flex; align-items: center; min-width: 0; border-radius: var(--radius-md); background: var(--bg); border: var(--border) solid var(--line); }
 .path-input:focus-within { border-color: var(--focus); }
 .path-input.is-bad { border-color: var(--danger-text); }

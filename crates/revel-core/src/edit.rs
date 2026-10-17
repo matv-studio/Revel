@@ -789,6 +789,11 @@ impl Core {
         })
     }
 
+    /// Révision de la session d'édition d'un site ouvert (rendus du canevas datés).
+    pub(crate) fn session_revision(&self, path: &Path) -> Option<u64> {
+        self.with_session(path, |s| Ok(s.revision)).ok()
+    }
+
     fn with_session<T>(&self, path: &Path, f: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let s = map.get_mut(&key(path)).ok_or(CoreError::NotOpen)?;

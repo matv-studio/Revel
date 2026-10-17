@@ -221,6 +221,12 @@ fn forget_site(s: State<AppState>, path: String) {
     s.core.forget_site(&path);
 }
 
+/// Site supprimé depuis l'accueil : dossier mis à la corbeille du système.
+#[tauri::command]
+fn delete_site(s: State<AppState>, path: String) -> Res<()> {
+    s.core.delete_site(&path).map_err(err)
+}
+
 #[tauri::command]
 fn has_site(path: String) -> bool {
     PathBuf::from(path)
@@ -1064,7 +1070,8 @@ pub fn run() {
                 .unwrap_or_else(|_| std::env::temp_dir().join("revel"));
             let secrets: Box<dyn revel_core::SecretStore> = Box::new(revel_core::secrets::Keyring);
             let core = Arc::new(Core::new(&dir, secrets));
-            // Modèles de traduction livrés dans les ressources de l'installateur (D-36).
+            // Modèles de traduction placés dans les ressources de l'application : aucun n'est livré
+            // depuis la 0.5.1 (D-79), le dossier n'est lu que s'il existe.
             if let Ok(models) = app
                 .path()
                 .resolve("models", tauri::path::BaseDirectory::Resource)
@@ -1095,6 +1102,7 @@ pub fn run() {
             set_settings,
             recent_sites,
             forget_site,
+            delete_site,
             has_site,
             open_site,
             new_site,

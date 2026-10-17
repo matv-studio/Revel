@@ -360,13 +360,20 @@ impl<'a> Builder<'a> {
                         self.branch(Branch::Empty, empty, owner, &id, &k, &anc, slot_level);
                     }
                 }
+                // Utilisation de composant : une ligne, sans son contenu (modifié dans le canevas du
+                // composant, ouvert par un double-clic sur la ligne) ; ses variables restent relevées
+                // pour le panneau Variables.
                 Node::Use { component, .. } => {
                     if let Some(c) = self.doc.component(component)
                         && !self.stack.contains(component)
                     {
                         self.stack.push(component.clone());
+                        let rows = std::mem::take(&mut self.rows);
+                        let vis = std::mem::take(&mut self.vis);
                         let o = Owner::Component(c.id.clone());
                         self.list(&c.body, &o, Parent::root(o.clone()), &k, &anc, slot_level);
+                        self.rows = rows;
+                        self.vis = vis;
                         self.stack.pop();
                     }
                 }
@@ -1259,6 +1266,14 @@ pub fn Layers() -> impl IntoView {
                                     }
                                 })
                                 on:dblclick=move |_| {
+                                    // Utilisation de composant : son canevas (comme un double-clic
+                                    // sur la page).
+                                    if matches!(r.with_value(|r| r.kind.clone()), Kind::Use(_)) {
+                                        if let Some(t) = r.with_value(|r| Some(Target { owner: r.owner.clone(), node: r.id.clone()? })) {
+                                            crate::components::open_component(ed, &t);
+                                        }
+                                        return;
+                                    }
                                     // Texte : modifié sur place dans la page (comme un double-clic
                                     // sur la page).
                                     if textual && let Some(id) = r.with_value(|r| r.id.clone()) {

@@ -22,7 +22,7 @@ Les panneaux se déplacent : glissez un onglet vers une autre colonne ou sur le 
 ## Ajouter des éléments
 
 1. Sélectionnez l'endroit où ajouter (une section, un bloc).
-2. Dans **Ajouter**, cliquez sur un élément, ou glissez-le sur la page.
+2. Dans **Ajouter**, double-cliquez sur un élément, ou glissez-le sur la page.
 3. Les **blocs prêts à l'emploi** (en-tête de page, avantages, questions fréquentes, formulaire…) ajoutent une section complète.
 
 Pour déplacer un élément, glissez-le sur la page ou dans les **Calques**. Alt+glisser en fait une copie.

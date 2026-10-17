@@ -559,3 +559,121 @@ pub fn sparkle() -> AnyView {
 pub fn download() -> AnyView {
     svg(r#"<path d="M8 3v8M5 8l3 3 3-3M3 11v2h10v-2"/>"#)
 }
+
+// ------------------------------------------------------------------------------------------------
+// Disposition (styles, comme Webflow)
+
+/// Retour à la ligne des éléments d'un flex.
+pub fn wrap_lines() -> AnyView {
+    svg(r#"<path d="M2 4.5h9a2.5 2.5 0 0 1 0 5H6.5"/><path d="m8 7.5-2 2 2 2M2 12h2.5"/>"#)
+}
+
+pub fn chevron_up() -> AnyView {
+    svg(r#"<path d="m4.5 9.5 3.5-3.5 3.5 3.5"/>"#)
+}
+
+/// Réglage détaillé (clé).
+pub fn wrench() -> AnyView {
+    svg(
+        r#"<path d="M10.2 2.3a3.2 3.2 0 0 0-3.6 4.3L2.5 10.7a1.4 1.4 0 0 0 2 2l4.1-4.1a3.2 3.2 0 0 0 4.3-3.6l-1.9 1.9-1.6-.4-.4-1.6Z"/>"#,
+    )
+}
+
+/// Affichage « bloc en ligne ».
+pub fn display_inline_block() -> AnyView {
+    svg(r#"<rect x="4.5" y="4.5" width="7" height="7" rx="1"/><path d="M1.5 8h1.5M13 8h1.5"/>"#)
+}
+
+/// Affichage « flex en ligne ».
+pub fn display_inline_flex() -> AnyView {
+    svg(
+        r#"<rect x="2.5" y="4.5" width="5" height="7" rx="1"/><rect x="8.5" y="4.5" width="5" height="7" rx="1"/>"#,
+    )
+}
+
+/// Affichage « grille en ligne ».
+pub fn display_inline_grid() -> AnyView {
+    svg(
+        r#"<rect x="3.5" y="3.5" width="4" height="4" rx=".8"/><rect x="8.5" y="3.5" width="4" height="4" rx=".8"/><rect x="3.5" y="8.5" width="4" height="4" rx=".8"/><rect x="8.5" y="8.5" width="4" height="4" rx=".8"/>"#,
+    )
+}
+
+/// Affichage « en ligne » (texte).
+pub fn display_inline() -> AnyView {
+    svg(r#"<path d="M3 11.5 5.5 4.5 8 11.5M3.8 9.3h3.4M10.5 7v4.5M10.5 8.8c0-1.9 3-1.9 3 0v2.7"/>"#)
+}
+
+/// Affichage « contenu seul » (boîte en pointillés).
+pub fn display_contents() -> AnyView {
+    svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke-dasharray="2 2"/>"#)
+}
+
+pub fn align_left() -> AnyView {
+    svg(r#"<path d="M2.5 2.5v11"/><rect x="4.5" y="5.5" width="7" height="5" rx="1"/>"#)
+}
+
+pub fn align_center_h() -> AnyView {
+    svg(r#"<path d="M8 2.5v3M8 10.5v3"/><rect x="4" y="5.5" width="8" height="5" rx="1"/>"#)
+}
+
+pub fn align_right() -> AnyView {
+    svg(r#"<path d="M13.5 2.5v11"/><rect x="4.5" y="5.5" width="7" height="5" rx="1"/>"#)
+}
+
+pub fn align_stretch_h() -> AnyView {
+    svg(r#"<path d="M2.5 2.5v11M13.5 2.5v11"/><rect x="4.5" y="5.5" width="7" height="5" rx="1"/>"#)
+}
+
+pub fn align_top() -> AnyView {
+    svg(r#"<path d="M2.5 2.5h11"/><rect x="5.5" y="4.5" width="5" height="7" rx="1"/>"#)
+}
+
+pub fn align_middle() -> AnyView {
+    svg(r#"<path d="M2.5 8h3M10.5 8h3"/><rect x="5.5" y="4" width="5" height="8" rx="1"/>"#)
+}
+
+pub fn align_bottom() -> AnyView {
+    svg(r#"<path d="M2.5 13.5h11"/><rect x="5.5" y="4.5" width="5" height="7" rx="1"/>"#)
+}
+
+pub fn align_stretch_v() -> AnyView {
+    svg(r#"<path d="M2.5 2.5h11M2.5 13.5h11"/><rect x="5.5" y="4.5" width="5" height="7" rx="1"/>"#)
+}
+
+pub fn align_baseline() -> AnyView {
+    svg(r#"<path d="M2.5 11.5h11M5 11.5V6M8 11.5v-7M11 11.5V8"/>"#)
+}
+
+pub fn space_between_h() -> AnyView {
+    svg(
+        r#"<path d="M2.5 2.5v11M13.5 2.5v11"/><rect x="4.2" y="5.5" width="2.6" height="5" rx=".6"/><rect x="9.2" y="5.5" width="2.6" height="5" rx=".6"/>"#,
+    )
+}
+
+pub fn space_around_h() -> AnyView {
+    svg(
+        r#"<path d="M2.5 2.5v11M13.5 2.5v11"/><rect x="5" y="5.5" width="2" height="5" rx=".6"/><rect x="9" y="5.5" width="2" height="5" rx=".6"/>"#,
+    )
+}
+
+pub fn space_between_v() -> AnyView {
+    svg(
+        r#"<path d="M2.5 2.5h11M2.5 13.5h11"/><rect x="5.5" y="4.2" width="5" height="2.6" rx=".6"/><rect x="5.5" y="9.2" width="5" height="2.6" rx=".6"/>"#,
+    )
+}
+
+pub fn space_around_v() -> AnyView {
+    svg(
+        r#"<path d="M2.5 2.5h11M2.5 13.5h11"/><rect x="5.5" y="5" width="5" height="2" rx=".6"/><rect x="5.5" y="9" width="5" height="2" rx=".6"/>"#,
+    )
+}
+
+/// Ordre : en premier.
+pub fn order_first() -> AnyView {
+    svg(r#"<path d="M3 3v10M13 8H6.5M9.5 5l-3 3 3 3"/>"#)
+}
+
+/// Ordre : en dernier.
+pub fn order_last() -> AnyView {
+    svg(r#"<path d="M13 3v10M3 8h6.5M6.5 5l3 3-3 3"/>"#)
+}

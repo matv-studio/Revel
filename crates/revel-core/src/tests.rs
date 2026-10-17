@@ -375,7 +375,9 @@ fn canevas_par_le_protocole() {
     );
     assert!(html.contains("<script src=\"/__revel/canvas.js\"></script>"));
     // Repères : la valeur affichée vient de la variable « title » de la page.
-    let start = html.find("id=\"rv-slots\">").unwrap() + "id=\"rv-slots\">".len();
+    // Balise des repères : `id="rv-slots"` puis, le cas échéant, le numéro de révision (`data-rev`).
+    let tag = html.find("id=\"rv-slots\"").unwrap();
+    let start = tag + html[tag..].find('>').unwrap() + 1;
     let end = start + html[start..].find("</script>").unwrap();
     let slots: Vec<Slot> = serde_json::from_str(&html[start..end]).unwrap();
     assert!(
@@ -2237,4 +2239,34 @@ fn dossier_des_projets_utilisable() {
     let f = d.path().join("fichier");
     std::fs::write(&f, "x").unwrap();
     assert!(!crate::usable_dir(&f));
+}
+
+#[test]
+fn suppression_d_un_site_refusee_hors_site() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let other = d.path().join("documents");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join("note.txt"), "garder").unwrap();
+    // Dossier sans site Revel : refusé, rien n'est touché.
+    assert!(matches!(
+        c.delete_site(&other.display().to_string()),
+        Err(CoreError::NotASite)
+    ));
+    assert!(other.join("note.txt").is_file());
+}
+
+/// Mise à la corbeille réelle (dépend de la corbeille du système) : à lancer à la main avec
+/// `cargo test -p revel-core -- --ignored corbeille`.
+#[test]
+#[ignore]
+fn site_mis_a_la_corbeille() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let path = site.display().to_string();
+    c.edit_open(&site).unwrap();
+    c.delete_site(&path).unwrap();
+    assert!(!site.exists());
+    assert!(c.recent_sites().iter().all(|r| r.path != path));
 }

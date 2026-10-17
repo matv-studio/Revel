@@ -21,15 +21,12 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
-      # Langues de traduction livrées jusqu'à la version 1.0 (D-46), téléchargées ensuite.
-      models: ${{ steps.v.outputs.models }}
     steps:
       - uses: actions/checkout@v7
       - id: v
         shell: bash
         run: |
           v=$(jq -r .version apps/revel-app/tauri.conf.json)
-          if [ "${v%%.*}" -ge 1 ]; then echo "models=false" >> "$GITHUB_OUTPUT"; else echo "models=true" >> "$GITHUB_OUTPUT"; fi
           echo "Version $v" >> "$GITHUB_STEP_SUMMARY"
       - id: m
         shell: bash
@@ -45,38 +42,8 @@ jobs:
           if [ "$CHOIX" = "tous" ]; then sel="$all"; else sel=$(echo "$all" | jq -c --arg o "$CHOIX" '[.[] | select(.os == $o)]'); fi
           echo "matrix=$(echo "$sel" | jq -c '{include: .}')" >> "$GITHUB_OUTPUT"
 
-  # Langues de traduction livrées (D-36 : français et anglais), communes à tous les systèmes :
-  # téléchargées une fois depuis Hugging Face (révisions et empreintes figées dans
-  # crates/revel-translate/src/catalog.rs, comme depuis les réglages de l'application), préparées,
-  # transmises aux installateurs.
-  modeles:
-    needs: plan
-    if: needs.plan.outputs.models == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - name: Rust (version de rust-toolchain.toml)
-        run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
-      - name: Préparation
-        run: cargo run --release -q -p revel-translate --features download --example preparer -- apps/revel-app/models fr
-      - name: Vérification
-        shell: bash
-        run: |
-          n=$(find apps/revel-app/models -name model.safetensors | wc -l)
-          du -sh apps/revel-app/models/*/ | tee -a "$GITHUB_STEP_SUMMARY"
-          if [ "$n" -ne 2 ]; then echo "::error::$n modèles préparés sur 2"; exit 1; fi
-      - uses: actions/upload-artifact@v7
-        with:
-          name: modeles
-          path: apps/revel-app/models/
-          retention-days: 1
-          compression-level: 0
-
   bundle:
-    needs: [plan, modeles]
-    # Version 1.0 : sans langue livrée (étape « modeles » sautée).
-    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.modeles.result == 'success' || needs.modeles.result == 'skipped') }}
+    needs: plan
     permissions:
       contents: write
     strategy:
@@ -85,12 +52,8 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
-      # Modèles de traduction inclus dans l'installateur (ressources Tauri, dossier models/).
-      - uses: actions/download-artifact@v8
-        if: needs.plan.outputs.models == 'true'
-        with:
-          name: modeles
-          path: apps/revel-app/models/
+      # Aucune langue de traduction livrée (D-79) : toutes se téléchargent depuis Réglages ›
+      # Traduction automatique.
       - name: Dépendances système (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -142,11 +105,7 @@ jobs:
         run: |
           conf='{}'
           add() { conf=$(jq -c --argjson a "$1" '. * $a' <<< "$conf"); }
-          # Version 1.0 : installateur léger, langues de traduction téléchargées depuis les réglages.
-          if [ "${{ needs.plan.outputs.models }}" != "true" ]; then
-            add '{"bundle":{"resources":[]}}'
-            echo "- Langues de traduction : non livrées (téléchargées depuis Réglages)" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "- Langues de traduction : non livrées (téléchargées depuis Réglages)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$MAJ" = "true" ]; then
             add "$(jq -nc --arg k "$PUBKEY" '{bundle: {createUpdaterArtifacts: true}, plugins: {updater: {pubkey: $k}}}')"
             echo "- Mises à jour automatiques : actives" >> "$GITHUB_STEP_SUMMARY"

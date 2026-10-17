@@ -89,6 +89,29 @@
   border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted);
   transform: rotate(45deg); pointer-events: none;
 }
+/* Liste ouverte aux couleurs de Revel. Fenêtre de choix personnalisable (Chromium 135+ : WebView2
+   sous Windows) : même dessin que les menus (fond relevé, coins arrondis, ombre, survol) ;
+   ailleurs, liste du système à laquelle on donne au moins les couleurs du thème. */
+select option { background-color: var(--surface-raised); color: var(--text); }
+select option:disabled { color: var(--text-faint); }
+@supports (appearance: base-select) {
+  select, select::picker(select) { appearance: base-select; }
+  select::picker-icon { display: none; }
+  select::picker(select) {
+    margin-top: 4px; padding: 4px; min-width: anchor-size(width);
+    background: var(--surface-raised); color: var(--text);
+    border: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-dialog);
+  }
+  select option {
+    display: flex; align-items: center; gap: var(--s-2); min-height: 28px; padding: 0 10px;
+    border-radius: var(--radius-sm); background: transparent; font-size: var(--text-sm); white-space: nowrap;
+  }
+  select option:hover, select option:focus-visible { background: var(--surface-hover); outline: none; }
+  select option[hidden] { display: none; }
+  select option:checked { font-weight: var(--weight-medium); }
+  select option::checkmark { order: 1; margin-left: auto; color: var(--text-muted); }
+  select optgroup { font-size: var(--text-xs); color: var(--text-faint); }
+}
 /* Champs numériques sans flèches d'incrément */
 input.input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 input.input[type="number"]::-webkit-inner-spin-button,
@@ -1100,3 +1123,10 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .update-status { margin: 10px 0 0; font-size: var(--text-sm); color: var(--text-muted); }
 .update-status.is-on { color: var(--text); }
 .update-pill { gap: 6px; margin-right: 8px; }
+
+/* Réglages › Traduction automatique : langues installées, puis « Plus de langues ». */
+.packs-more { align-self: flex-start; margin-top: var(--s-2); }
+.packs-more-icon { display: inline-flex; transition: transform var(--fast) var(--ease); }
+.packs-more-icon.is-open { transform: rotate(180deg); }
+.packs-none { margin: var(--s-3) 0 0; font-size: var(--text-sm); }
+.packs:not(:has(.pack)) { display: none; }

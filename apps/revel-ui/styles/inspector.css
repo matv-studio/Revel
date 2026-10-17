@@ -506,3 +506,80 @@
 }
 .stop.is-on { box-shadow: 0 0 0 2px var(--focus), 0 1px 3px rgb(0 0 0 / .3); }
 .stop-edit { display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; gap: 4px; align-items: center; }
+
+/* --- Disposition (comme Webflow) ----------------------------------------------------------- */
+/* Affichages et flèche des autres affichages, collée à droite. */
+.display-ctl { display: flex; min-width: 0; }
+.display-ctl > .seg { flex: 1; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.display-more { position: relative; flex: none; display: flex; }
+.seg-more {
+  display: inline-grid; place-items: center; width: 22px; padding: 0;
+  border: var(--border) solid var(--line-strong); border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--bg); color: var(--text-muted);
+}
+.seg-more svg.icon { width: 12px; height: 12px; }
+.seg-more:hover { color: var(--text); }
+.seg-more.is-on { background: var(--set-bg); color: var(--set-text); }
+.seg-more.is-implied { color: var(--text); }
+.display-more .pop { left: auto; right: 0; }
+.pop-menu { display: flex; flex-direction: column; min-width: 150px; }
+.pop-menu .menu-item {
+  display: flex; align-items: center; gap: var(--s-2); height: 28px; padding: 0 8px;
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--text);
+  font-size: var(--text-sm); text-align: left; white-space: nowrap;
+}
+.pop-menu .menu-item svg.icon { width: 14px; height: 14px; color: var(--text-muted); }
+.pop-menu .menu-item.is-on { color: var(--set-text); }
+.pop-menu .menu-item.is-on svg.icon { color: var(--set-text); }
+
+/* Alignement : matrice à gauche, X et Y à droite. */
+.align-xy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.xy-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.xy-line > .select { flex: 1; min-width: 0; }
+.xy { flex: none; width: 10px; font-size: var(--text-xs); color: var(--text-faint); text-align: center; }
+.align-box.spread-x .align-cell.is-on i { width: 14px; height: 4px; }
+.align-box.spread-y .align-cell.is-on i { width: 4px; height: 14px; }
+.align-box.spread-x.spread-y .align-cell.is-on i { width: 10px; height: 10px; }
+
+/* Deux champs côte à côte, libellés dessous (écarts, colonnes et lignes), cadenas à droite. */
+.pair-ctl { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.pair-ctl > .tool-toggle { margin-top: 0; }
+.pair-fields { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px; }
+.pair-fields--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pair-label { font-size: 10px; color: var(--text-faint); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair-label--two { grid-column: span 2; }
+.style-label-spacer { display: block; }
+
+/* Nombre de colonnes ou de lignes : champ et flèches. */
+.stepper { display: flex; min-width: 0; }
+.stepper > .nbox { flex: 1; min-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.stepper-arrows {
+  flex: none; display: flex; flex-direction: column; width: 16px;
+  border: var(--border) solid var(--line-strong); border-left: 0; border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--bg); overflow: hidden;
+}
+.stepper-arrows button {
+  flex: 1; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--text-faint);
+}
+.stepper-arrows button + button { border-top: var(--border) solid var(--line); }
+.stepper-arrows button:hover { color: var(--text); background: var(--surface-hover); }
+.stepper-arrows svg.icon { width: 10px; height: 10px; }
+
+/* Plus d'options d'alignement (grille). */
+.more-options > summary {
+  display: flex; align-items: center; justify-content: center; gap: 4px; height: 24px;
+  border: var(--border) solid var(--line); border-radius: var(--radius-md);
+  font-size: var(--text-xs); color: var(--text-muted); cursor: default; list-style: none;
+}
+.more-options > summary::-webkit-details-marker { display: none; }
+.more-options > summary::before {
+  content: ""; width: 4px; height: 4px; margin-top: -2px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg);
+}
+.more-options[open] > summary::before { transform: rotate(-135deg); margin-top: 2px; }
+.more-options > summary:hover { color: var(--text); background: var(--surface-hover); }
+.more-options[open] { display: flex; flex-direction: column; gap: 6px; }
+
+/* Enfant d'une grille ou d'un flex. */
+.parent-edit { width: 100%; justify-content: center; }

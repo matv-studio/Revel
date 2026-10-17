@@ -37,12 +37,14 @@ pub fn Help(open: RwSignal<bool>) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let current = RwSignal::new(0usize);
     let list = Memo::new(move |_| sections(&ui.lang()));
-    let _esc = window_event_listener(leptos::ev::keydown, move |e| {
-        if e.key() == "Escape" && open.get_untracked() {
+    // Échap ferme l'aide ; écouteur retiré avec la fenêtre (sinon il survit à l'éditeur).
+    let esc = window_event_listener(leptos::ev::keydown, move |e| {
+        if e.key() == "Escape" && open.try_get_untracked() == Some(true) {
             e.prevent_default();
             open.set(false);
         }
     });
+    on_cleanup(move || esc.remove());
     view! {
         <Show when=move || open.get()>
             <div class="overlay" on:mousedown=move |e| { if e.target() == e.current_target() { open.set(false) } }>

@@ -13,6 +13,9 @@
   const slotsEl = document.getElementById("rv-slots");
   let slots = [];
   try { slots = JSON.parse(slotsEl ? slotsEl.textContent : "[]"); } catch (_) { slots = []; }
+  // Révision du document rendu : l'interface demande une mise à jour sur place si elle en a une
+  // plus récente (modification faite pendant le chargement).
+  let rev = slotsEl ? Number(slotsEl.getAttribute("data-rev")) || 0 : 0;
   // Valeurs des affectations `{% set %}` au rendu (panneau Variables).
   const varsEl = document.getElementById("rv-vars");
   let vars = [];
@@ -22,11 +25,23 @@
   // (sinon `:last-child` changerait), et les commentaires repères sont remplacés par des plages
   // (Range) vivantes, puis les textes adjacents fusionnés comme dans le site (sinon la mise en
   // forme du texte pourrait varier d'une fraction de pixel).
+  // En-tête de la page au chargement (sans titre ni métadonnées ; feuilles de style par leur
+  // chemin) : comparé à celui d'un nouveau rendu pour savoir si la page peut être mise à jour sur
+  // place (voir `refreshPage`).
+  const headSig = (h) => [...h.children]
+    .filter((e) => !/^(TITLE|META)$/.test(e.tagName) && !(e.tagName === "LINK" && /\b(canonical|alternate)\b/.test(e.getAttribute("rel") || "")))
+    .map((e) => (e.tagName === "LINK" && /stylesheet/.test(e.getAttribute("rel") || "")
+      ? "css:" + new URL(e.getAttribute("href") || "", location.href).pathname
+      : e.outerHTML))
+    .join("\n");
+  const headAtLoad = headSig(document.head);
   if (slotsEl) slotsEl.remove();
   if (varsEl) varsEl.remove();
   if (document.currentScript) document.currentScript.remove();
   const ranges = [];
-  {
+  // Repères remplacés par des plages (au chargement, puis après chaque mise à jour sur place).
+  const scanMarkers = () => {
+    ranges.length = 0;
     const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_COMMENT);
     const open = new Map();
     const marks = [];
@@ -51,7 +66,8 @@
       c.remove();
     }
     for (const p of parents) p.normalize();
-  }
+  };
+  scanMarkers();
   /** Plage du repère `n` dans la page (texte, expression, composant). */
   const slotRange = (n) => ranges[n] || null;
   window.__revelSlot = (n) => ({ slot: slots[n], range: slotRange(n) });
@@ -164,6 +180,17 @@
   };
   const roots = new Map();
   for (const i of instances) { i.root = rootOf(i); if (i.root && !roots.has(i.root)) roots.set(i.root, i); }
+  // Utilisations relues (après une mise à jour sur place).
+  const buildInstances = () => {
+    instances.length = 0;
+    for (let n = 0; n < slots.length; n++) {
+      const sl = slots[n];
+      if (sl && sl.slot === "block" && sl.component && ranges[n]) instances.push({ n, node: sl.node, component: sl.component });
+    }
+    for (const i of instances) i.depth = depth(rangeOfInst(i).startContainer);
+    roots.clear();
+    for (const i of instances) { i.root = rootOf(i); if (i.root && !roots.has(i.root)) roots.set(i.root, i); }
+  };
   const instName = (i) => names[i.component] || i.component.split("/").pop();
   const isOpen = (i) => !!isolated && i.component === isolated;
   // Utilisations qui contiennent `el`, de la plus externe à la plus interne.
@@ -1702,6 +1729,57 @@
     if (dx || dy) window.scrollBy({ left: dx, top: dy, behavior: "instant" });
   };
 
+  // ---------------------------------------------------------------- éléments vides
+  // Élément sans contenu ni taille (bloc, section, grille… tout juste ajouté) : dans le canevas
+  // seulement, haut d'environ 50 px avec l'icône de son type, pour le retrouver et le sélectionner.
+  const EMPTY_ICONS = {
+    box: '<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/>',
+    section: '<path d="M1.5 3h13M1.5 13h13"/><rect x="3.5" y="5.5" width="9" height="5" rx="1"/>',
+    grid: '<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/>' +
+      '<rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/>',
+    flex: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M5.5 2.5v11M10.5 2.5v11"/>',
+    list: '<path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/>',
+    lottie: '<path d="M8 2.5v3M8 10.5v3M2.5 8h3M10.5 8h3M4.2 4.2l1.6 1.6M10.2 10.2l1.6 1.6M4.2 11.8l1.6-1.6M10.2 5.8l1.6-1.6"/>',
+  };
+  const emptyCss = "[data-rv-empty]{min-height:50px!important;min-width:50px!important;" +
+    "background:rgba(109,140,255,.07) center/20px no-repeat!important;outline:1px dashed rgba(109,140,255,.6)!important;outline-offset:-1px}" +
+    Object.entries(EMPTY_ICONS).map(([k, d]) => '[data-rv-empty="' + k + '"]{background-image:url("data:image/svg+xml,' +
+      encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#6d8cff" ' +
+        'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + d + "</svg>") + '")!important}').join("");
+  if ("adoptedStyleSheets" in document && typeof CSSStyleSheet === "function") {
+    try {
+      const sh = new CSSStyleSheet();
+      sh.replaceSync(emptyCss);
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, sh];
+    } catch (_) { /* moteur sans feuilles construites */ }
+  }
+  const CONTAINERS = new Set(["DIV", "SECTION", "HEADER", "FOOTER", "MAIN", "ARTICLE", "ASIDE", "NAV", "FORM", "FIGURE",
+    "UL", "OL", "LI", "DETAILS", "BLOCKQUOTE"]);
+  const markEmpty = () => {
+    for (const el of document.querySelectorAll("[data-rv-empty]")) el.removeAttribute("data-rv-empty");
+    const found = [];
+    for (const el of document.querySelectorAll("[data-rv]")) {
+      if (!CONTAINERS.has(el.tagName)) continue;
+      if ([...el.childNodes].some((c) => c.nodeType === 1 || (c.nodeType === 3 && c.nodeValue.trim()))) continue;
+      // Masqué (lui ou un parent) : laissé tel quel.
+      if (!el.getClientRects().length) continue;
+      const r = el.getBoundingClientRect();
+      if (r.height >= 2 && r.width >= 2) continue;
+      found.push(el);
+    }
+    for (const el of found) {
+      const d = getComputedStyle(el).display;
+      el.setAttribute("data-rv-empty",
+        el.hasAttribute("data-lottie") ? "lottie"
+          : /grid/.test(d) ? "grid"
+            : /flex/.test(d) ? "flex"
+              : /^(SECTION|HEADER|FOOTER|MAIN|ARTICLE|ASIDE|NAV)$/.test(el.tagName) ? "section"
+                : /^(UL|OL|LI)$/.test(el.tagName) ? "list" : "box");
+    }
+    if (found.length) redraw();
+  };
+  markEmpty();
+
   // ---------------------------------------------------------------- messages de l'interface
   const byId = (id) => (id ? document.querySelector('[data-rv="' + CSS.escape(id) + '"]') : null);
   // Élément (ou utilisation de composant) désigné par l'interface.
@@ -1710,6 +1788,142 @@
     const inst = instances.find((i) => i.node === id && i.root);
     if (inst) return { el: inst.root, inst };
     return { el: byId(id), inst: null };
+  };
+
+  // Feuille de style rechargée (même chemin) : la nouvelle remplace l'ancienne une fois chargée,
+  // sans éclair ni animation rejouée.
+  const reloadSheet = (path) => {
+    for (const l of document.querySelectorAll('link[rel~="stylesheet"]')) {
+      const u = new URL(l.href, location.href);
+      if (u.origin !== location.origin || u.pathname !== path) continue;
+      u.searchParams.set("rv", String(Date.now()));
+      const next = l.cloneNode();
+      next.href = u.pathname + u.search;
+      next.addEventListener("load", () => { l.remove(); setPreview(""); release_held(); buildForced(); markEmpty(); redraw(); sendComputed(); }, { once: true });
+      l.after(next);
+    }
+  };
+
+  // ---------------------------------------------------------------- mise à jour sur place
+  // Après une modification, la page rendue de nouveau est comparée à celle affichée : seuls les
+  // nœuds changés sont remplacés. Pas de rechargement : position, images, vidéos et animations
+  // Lottie gardées, animations de la page non rejouées. En-tête changé (police, code ajouté) ou
+  // rendu illisible : rechargement complet.
+  const keyOf = (n) => (n.nodeType === 1 && n.hasAttribute("data-rv") ? n.tagName + "#" + n.getAttribute("data-rv") : null);
+  const fits = (a, b) => a.nodeType === b.nodeType && (a.nodeType !== 1 || (a.tagName === b.tagName && keyOf(a) === keyOf(b)));
+  const syncAttrs = (cur, next, keep) => {
+    for (const a of [...cur.attributes]) {
+      if (!next.hasAttribute(a.name) && !(keep && keep.includes(a.name))) cur.removeAttribute(a.name);
+    }
+    for (const a of [...next.attributes]) {
+      if (cur.getAttribute(a.name) !== a.value && !(keep && keep.includes(a.name))) cur.setAttribute(a.name, a.value);
+    }
+  };
+  const lottieOf = (el) => [...el.attributes].filter((a) => a.name.startsWith("data-lottie"))
+    .map((a) => a.name + "=" + a.value).sort().join(" ");
+  const morphNode = (cur, next) => {
+    if (cur.nodeType !== 1) {
+      if (cur.nodeValue !== next.nodeValue) cur.nodeValue = next.nodeValue;
+      return;
+    }
+    if (cur.__rvLottie) {
+      // Animation Lottie : lecteur gardé si ses réglages n'ont pas changé (son style aussi).
+      if (lottieOf(cur) === lottieOf(next)) { syncAttrs(cur, next, ["style"]); return; }
+      try { cur.__rvLottie.destroy(); } catch (_) { /* déjà retirée */ }
+      cur.__rvLottie = null;
+    }
+    syncAttrs(cur, next);
+    if (cur.tagName === "TEMPLATE") { cur.innerHTML = next.innerHTML; return; }
+    morphChildren(cur, next);
+  };
+  const morphChildren = (parent, src) => {
+    const list = [...src.childNodes];
+    const wanted = new Set(list.map(keyOf).filter(Boolean));
+    const spare = (x) => !keyOf(x) || !wanted.has(keyOf(x));
+    let cur = parent.firstChild;
+    for (const n of list) {
+      if (cur && fits(cur, n)) { morphNode(cur, n); cur = cur.nextSibling; continue; }
+      // Élément repéré plus loin : les nœuds qui le précèdent sont retirés s'ils ne servent plus
+      // (l'élément reste en place), sinon il est déplacé.
+      const k = keyOf(n);
+      let found = null;
+      if (k) for (let x = cur; x; x = x.nextSibling) if (keyOf(x) === k) { found = x; break; }
+      if (found) {
+        let before = true;
+        for (let x = cur; x !== found; x = x.nextSibling) if (!spare(x)) { before = false; break; }
+        if (before) {
+          while (cur !== found) { const nx = cur.nextSibling; parent.removeChild(cur); cur = nx; }
+          morphNode(found, n);
+          cur = found.nextSibling;
+        } else {
+          parent.insertBefore(found, cur);
+          morphNode(found, n);
+        }
+        continue;
+      }
+      // Nouveau nœud (ses scripts ne sont pas exécutés).
+      parent.insertBefore(document.importNode(n, true), cur);
+    }
+    while (cur) { const nx = cur.nextSibling; parent.removeChild(cur); cur = nx; }
+  };
+  let refreshing = false;
+  let refreshAgain = false;
+  const refreshPage = async () => {
+    if (refreshing) { refreshAgain = true; return; }
+    // Texte en cours de modification, glisser ou réglage en cours : mise à jour juste après.
+    if (editing || drag || resizing || spacing) { setTimeout(refreshPage, 150); return; }
+    refreshing = true;
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set("rvt", String(Date.now()));
+      const res = await fetch(u.pathname + u.search, { cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+      if (headSig(doc.head) !== headAtLoad) { location.reload(); return; }
+      const sEl = doc.getElementById("rv-slots");
+      const vEl = doc.getElementById("rv-vars");
+      const nextSlots = JSON.parse(sEl ? sEl.textContent : "[]");
+      const nextVars = JSON.parse(vEl ? vEl.textContent : "[]");
+      if (sEl) rev = Number(sEl.getAttribute("data-rev")) || rev;
+      for (const x of [sEl, vEl, ...doc.querySelectorAll('script[src="/__revel/canvas.js"]')]) if (x) x.remove();
+      // Liens de la page actuelle (à recharger) : feuilles du même site.
+      const sheets = [...doc.head.querySelectorAll('link[rel~="stylesheet"]')]
+        .map((l) => new URL(l.getAttribute("href") || "", location.href))
+        .filter((x) => x.origin === location.origin)
+        .map((x) => x.pathname);
+      slots = nextSlots;
+      vars = nextVars;
+      if (document.title !== doc.title) document.title = doc.title;
+      for (const a of ["lang", "dir"]) {
+        const v = doc.documentElement.getAttribute(a);
+        if (v === null) document.documentElement.removeAttribute(a);
+        else if (document.documentElement.getAttribute(a) !== v) document.documentElement.setAttribute(a, v);
+      }
+      const selId = selected ? idOf(selected, selectedInst) : null;
+      syncAttrs(document.body, doc.body);
+      morphChildren(document.body, doc.body);
+      scanMarkers();
+      buildInstances();
+      if (STAGE && stageState && instances[0] && instances[0].root) instances[0].root.classList.add("rv-force-" + stageState);
+      if (window.RevelLottie) window.RevelLottie.refresh();
+      markEmpty();
+      for (const path of new Set(sheets)) reloadSheet(path);
+      // Sélection retrouvée par son identifiant (l'interface la confirme sur `refreshed`).
+      hovered = null;
+      hoveredInst = null;
+      const again = findId(selId);
+      selected = again.el;
+      selectedInst = again.inst;
+      redraw();
+      sendPreviews();
+      post({ type: "refreshed", vars, rev });
+    } catch (_) {
+      location.reload();
+      return;
+    } finally {
+      refreshing = false;
+    }
+    if (refreshAgain) { refreshAgain = false; refreshPage(); }
   };
 
   window.addEventListener("message", (e) => {
@@ -1774,6 +1988,9 @@
           }
         }
         if (window.RevelLottie) window.RevelLottie.refresh();
+        markEmpty();
+        // Animation Lottie chargée : l'élément n'est plus vide.
+        setTimeout(markEmpty, 400);
         redraw();
         break;
       case "rich":
@@ -1805,20 +2022,14 @@
         if (!m.css) release_held();
         setPreview(m.css || "");
         break;
-      case "stylesheet": {
+      case "stylesheet":
         // Feuille de style régénérée : rechargée sans recharger la page.
-        for (const l of document.querySelectorAll('link[rel~="stylesheet"]')) {
-          const u = new URL(l.href, location.href);
-          if (u.pathname === m.url) {
-            u.searchParams.set("rv", String(Date.now()));
-            const next = l.cloneNode();
-            next.href = u.pathname + u.search;
-            next.addEventListener("load", () => { l.remove(); setPreview(""); release_held(); buildForced(); redraw(); sendComputed(); }, { once: true });
-            l.after(next);
-          }
-        }
+        reloadSheet(m.url);
         break;
-      }
+      case "refresh":
+        // Page modifiée : mise à jour sur place.
+        refreshPage();
+        break;
       case "scale":
         // Zoom de l'éditeur : traits, poignées et étiquettes à taille constante à l'écran.
         host.style.setProperty("--k", String(1 / Math.max(0.05, Number(m.s) || 1)));
@@ -1929,6 +2140,7 @@
     title: document.title,
     slots: slots.length,
     vars,
+    rev,
     scroll: { x: window.scrollX, y: window.scrollY },
   });
   sendPreviews();

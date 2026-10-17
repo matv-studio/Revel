@@ -652,10 +652,10 @@ pub fn Insert() -> impl IntoView {
                                         title=move || ui.tx(help, &[])
                                         on:pointerdown=on_down
                                         on:pointermove=move |e| on_move(e, drag_item())
-                                        on:pointerup=move |e| {
-                                            // Relâché sans glisser : clic (insertion à l'emplacement de la sélection).
-                                            if !finish(Some(e)) { add(preset, text_key) }
-                                        }
+                                        on:pointerup=move |e| { finish(Some(e)); }
+                                        // Double-clic : ajouté à l'emplacement de la sélection (un clic seul
+                                        // n'ajoute rien, comme dans Webflow ; glisser le pose où l'on veut).
+                                        on:dblclick=move |_| add(preset, text_key)
                                         on:pointercancel=move |_| { finish(None); }
                                         on:keydown=move |e: ev::KeyboardEvent| if e.key() == "Enter" || e.key() == " " { e.prevent_default(); add(preset, text_key) }>
                                         {(it.icon)()}<span>{ui.t(key)}</span>

@@ -454,65 +454,14 @@ pub fn GridTracks(sx: Sx) -> impl IntoView {
     }
 }
 
-/// Écart d'une pile ou d'une grille : un seul, ou lignes et colonnes à part (cadenas).
-#[component]
-pub fn GapField(sx: Sx) -> impl IntoView {
-    let ui = sx.ui;
-    let row = Memo::new(move |_| sx.get("row-gap"));
-    let col = Memo::new(move |_| sx.get("column-gap"));
-    // Écarts différents : séparés.
-    let split = RwSignal::new(false);
-    let differ = move || row.get().current() != col.get().current();
-    let apart = move || split.get() || differ();
-    view! {
-        <div class="ctl-line">
-            {move || if apart() {
-                view! {
-                    <div class="gap-pair">
-                        <PropNum sx prop="row-gap" units=GAP_UNITS label="styles-row-gap" prefix=Some("↕")/>
-                        <PropNum sx prop="column-gap" units=GAP_UNITS label="styles-column-gap" prefix=Some("↔")/>
-                    </div>
-                }.into_any()
-            } else {
-                view! { <PropNum sx prop="gap" units=GAP_UNITS label="styles-gap"/> }.into_any()
-            }}
-            <button class="tool-toggle" class:is-on=move || !apart() aria-pressed=move || (!apart()).to_string()
-                title=ui.t("gap-link") aria-label=ui.t("gap-link")
-                on:click=move |_| {
-                    if apart() {
-                        // Réunis : l'écart des lignes pour les deux.
-                        let v = row.get_untracked().here.or_else(|| sx.get("gap").here);
-                        split.set(false);
-                        sx.set_many(vec![("row-gap".into(), None), ("column-gap".into(), None), ("gap".into(), v)], false);
-                    } else {
-                        split.set(true);
-                    }
-                }>
-                {move || if apart() { icons::unlink() } else { icons::link() }}
-            </button>
-        </div>
-    }
-}
-
-const SELF_X: &[Opt] = &[
-    oa("auto", "self-auto", &["normal"]),
-    o("start", "align-left"),
-    o("center", "align-center"),
-    o("end", "align-right"),
-    o("stretch", "align-stretch"),
-];
-const SELF_Y: &[Opt] = &[
-    oa("auto", "self-auto", &["normal"]),
-    oa("flex-start", "align-top", &["start", "self-start"]),
-    o("center", "align-center"),
-    oa("flex-end", "align-bottom", &["end", "self-end"]),
-    o("stretch", "align-stretch"),
-    o("baseline", "align-baseline"),
-];
-
 /// Cases occupées dans une grille (`grid-column: span N`).
 #[component]
-fn Span(sx: Sx, prop: &'static str, label: &'static str, prefix: &'static str) -> impl IntoView {
+pub fn Span(
+    sx: Sx,
+    prop: &'static str,
+    label: &'static str,
+    prefix: &'static str,
+) -> impl IntoView {
     let pv = Memo::new(move |_| sx.get(prop));
     let shown = move |v: &str| {
         span_of(v)
@@ -540,40 +489,5 @@ fn Span(sx: Sx, prop: &'static str, label: &'static str, prefix: &'static str) -
                 sx.set_many(vec![(prop.into(), v)], co);
             })
             unit="" label prefix=Some(prefix)/>
-    }
-}
-
-/// Place de l'élément dans la grille ou la pile qui le contient : cases occupées, alignement
-/// propre, ordre.
-#[component]
-pub fn ChildPlacement(sx: Sx) -> impl IntoView {
-    let parent = move || sx.computed("--rv-parent-display");
-    let in_grid = move || parent().ends_with("grid");
-    let in_stack = move || parent().ends_with("flex");
-    view! {
-        <Show when=in_grid>
-            <div class="style-row" data-prop="grid-column">
-                <Label sx props=&["grid-column", "grid-row"] key="styles-grid-span"/>
-                <div class="style-control gap-pair">
-                    <Span sx prop="grid-column" label="grid-span-columns" prefix="↔"/>
-                    <Span sx prop="grid-row" label="grid-span-rows" prefix="↕"/>
-                </div>
-            </div>
-        </Show>
-        <Show when=move || in_grid() || in_stack()>
-            // Alignement propre : horizontal et vertical dans une grille, en travers dans une pile.
-            <div class="style-row" data-prop="align-self">
-                <Label sx props=&["justify-self", "align-self"] key="styles-self"/>
-                <div class="style-control gap-pair" class:is-single=move || !in_grid()>
-                    <Show when=in_grid>
-                        <span title=sx.ui.t("align-horizontal")><Choice sx prop="justify-self" options=opts(sx, SELF_X)/></span>
-                    </Show>
-                    <span title=sx.ui.t("align-vertical")><Choice sx prop="align-self" options=opts(sx, SELF_Y)/></span>
-                </div>
-            </div>
-            <Row sx props=&["order"] key="styles-order" scrub=Some(LabelScrub { prop: "order", unit: "", step: 1.0, zero: "0" })>
-                <PropNum sx prop="order" unit="" label="styles-order"/>
-            </Row>
-        </Show>
     }
 }

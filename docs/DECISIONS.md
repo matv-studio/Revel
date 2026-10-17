@@ -512,6 +512,39 @@ sous Windows).
   Perdre la clé privée empêche de publier des mises à jour pour les versions déjà installées. Une version
   n'est proposée qu'une fois publiée (pas en brouillon ni en préversion).
 
+**D-78 — 17/10/2026 — prise.** **Retours sur la 0.5.0 : canevas mis à jour sur place, disposition à la Webflow,
+ajout au double-clic.**
+- Le canevas n'est plus rechargé après une modification : la page rendue est relue et comparée à celle
+  affichée, seuls les nœuds qui diffèrent sont remplacés (les animations déjà jouées ne repartent pas). Le rendu
+  porte le numéro de révision de la session (`data-rev`), pour reconnaître un canevas en retard. Le
+  rechargement complet reste le recours si l'en-tête de la page change (feuilles, scripts) ou si la mise à jour
+  échoue.
+- Panneau Ajouter : un clic sur une tuile n'ajoute rien, un double-clic ajoute, le glisser-déposer reste. Un
+  conteneur vide (boîte, section, grille, flex, liste, Lottie) est montré dans le canevas par son icône sur une
+  zone d'au moins 50 px, sans changer le site produit.
+- Calques : un composant n'est plus déplié, il se modifie dans son propre espace, ouvert par un double-clic.
+- Disposition (panneau Styles) reprise de Webflow : affichage Bloc, Flex, Grille, Masqué et une flèche pour les
+  autres ; alignement par une grille de 3 × 3 et deux lignes X et Y ; écarts de colonnes et de rangées liés ou
+  non ; grille réglée par nombre de colonnes et de rangées (pistes détaillées sur demande) ; rubrique « Enfant
+  de grille » ou « Enfant flex » pour l'élément placé dedans.
+- Listes déroulantes à la charte par `appearance: base-select` (Chromium 135 et plus, donc WebView2 ; ailleurs
+  la liste du système, aux couleurs de la charte quand c'est possible ; https://developer.chrome.com/blog/a-customizable-select).
+  Barres de défilement fines, dessinées comme la piste des curseurs.
+- Accueil : un site se supprime en l'envoyant à la corbeille du système (crate `trash`), après confirmation ;
+  seul un dossier contenant `site.revel.json` est accepté.
+- Réglages : le menu du site reste dans la barre supérieure, avec « Revenir au site » ; seules les langues
+  installées sont listées, les autres sous « Plus de langues ».
+
+**D-79 — 17/10/2026 — prise (décision de l'utilisateur).** **Aucune langue de traduction livrée, dès la
+0.5.1.** Remplace D-46 sur ce point : toutes les versions construites à partir de maintenant sont sans modèle
+de traduction (ni français ↔ anglais), toutes les langues se téléchargent depuis Réglages › Traduction
+automatique. Installateurs plus légers (le modèle français pesait environ 300 Mo). Les langues installées sont
+listées directement, « Aucune langue installée » sinon ; les autres sous « Plus de langues ».
+- Une installation de la 0.5.0 perd le français livré à la mise à jour (les ressources de l'application sont
+  remplacées) : il se retélécharge depuis les Réglages.
+- Construction : étape « modeles » retirée du flux des installateurs, ressource `models/` retirée de
+  `tauri.conf.json`.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
@@ -745,7 +778,7 @@ l'ordinateur. Sources :
 précisée).** On discute avec l'assistant dans son application (téléchargée par l'utilisateur), qui pilote Revel
 par les outils de D-41 ; Revel n'a pas de panneau de discussion, son interface reste plus sobre.
 
-**D-46 — 16/10/2026 — prise (décision de l'utilisateur).** **Installateur.** Le modèle de traduction
+**D-46 — 16/10/2026 — prise (décision de l'utilisateur), remplacée par D-79 pour les langues livrées.** **Installateur.** Le modèle de traduction
 français ↔ anglais reste livré dans l'installateur jusqu'à la version 1.0 (D-36). La version 1.0 aura un
 installateur plus léger et plus soigné, au logo de Revel, sans langue de traduction livrée (toutes téléchargées
 depuis Réglages › Traduction automatique) ; à faire à l'étape 6 (empaquetage).

@@ -511,6 +511,13 @@ sous Windows).
   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, puis la variable `TAURI_UPDATER_PUBKEY` (contenu de la clé publique).
   Perdre la clé privée empêche de publier des mises à jour pour les versions déjà installées. Une version
   n'est proposée qu'une fois publiée (pas en brouillon ni en préversion).
+- 17/10/2026 : clés déclarées par l'utilisateur ; la 0.6.0 est la première version construite avec elles
+  (`latest.json` et une signature par installateur, 11 cibles ; signature du `.deb` vérifiée avec la clé
+  publique lue dans l'application construite). Les adresses de `latest.json` sont celles de l'API GitHub
+  (`/releases/assets/<id>`), que le module de mise à jour télécharge avec l'en-tête
+  `Accept: application/octet-stream` (tauri-plugin-updater 2.14.0). Le flux crée des brouillons marqués
+  « préversion » : en publier un comme mise à jour demande de décocher « Set as a pre-release ». Les versions
+  0.5.0 et antérieures n'ont pas de clé et ne se mettent pas à jour seules.
 
 **D-78 — 17/10/2026 — prise.** **Retours sur la 0.5.0 : canevas mis à jour sur place, disposition à la Webflow,
 ajout au double-clic.**

@@ -2673,13 +2673,13 @@ try {
     await page.click(`${card} .update-actions .btn >> nth=0`);
     await status('à jour');
     const help = await page.getAttribute(`${card} .label:has-text("Recevoir les préversions")`, 'title');
-    await page.click(`${card} .update-prereleases`);
+    await page.click(`${card} .switch`);
     await status('^Préversion 0\\.7\\.1-beta\\.1 disponible$');
     await page.waitForSelector('.update-pill');
     const pill = (await page.textContent('.update-pill')).trim();
     const saved = await page.evaluate(() => window.__revelSettings?.prereleases === true);
     if (shots) await page.screenshot({ path: `${shots}/reglages-preversions.png` });
-    await page.click(`${card} .update-prereleases`);
+    await page.click(`${card} .switch`);
     await status('à jour');
     const pillGone = (await page.$('.update-pill')) === null;
     const off = await page.evaluate(() => window.__revelSettings?.prereleases === false);

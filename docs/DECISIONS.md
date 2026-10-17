@@ -616,6 +616,19 @@ plusieurs fois avec la même structure → composants Revel, textes en propriét
 copiées dans le site (D-24). Le jeton (Figma › Settings › Security) est gardé dans le trousseau du système, comme
 celui de GitHub, et peut être oublié depuis la boîte d'import.
 
+**D-86 — 17/10/2026 — prise.** **Préversions dans les mises à jour (6.6) : réglage « Recevoir les préversions ».**
+L'adresse inscrite dans l'application (`…/releases/latest/download/latest.json`) ne mène qu'à la version marquée
+« Latest », qu'une préversion ne peut pas recevoir (« Drafts and prereleases cannot be set as latest »,
+[API de GitHub](https://docs.github.com/en/rest/releases/releases)). Réglages › Mises à jour › « Recevoir les
+préversions » (réglage de l'application, désactivé par défaut) : Revel lit la liste publique des versions du même
+dépôt (`api.github.com/repos/<compte>/<dépôt>/releases`, sans compte, 60 lectures par heure et par adresse IP),
+retient le numéro de version le plus élevé parmi celles qui portent un `latest.json` (brouillons jamais visibles)
+et cherche la mise à jour à cette adresse ; sans réponse, l'adresse inscrite sert seule. Signature vérifiée de la
+même façon. Version proposée affichée « Préversion x.y.z » (barre supérieure, réglages) ; changer le réglage
+relance la recherche. Retirer le réglage ne fait jamais revenir à une version plus ancienne. Rien d'autre à
+publier ni à héberger : le flux des installateurs reste le même. Choix de l'utilisateur : réglage livré dans le
+brouillon 0.6.0 reconstruit, sans nouveau numéro de version.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

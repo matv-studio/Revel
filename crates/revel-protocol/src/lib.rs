@@ -724,6 +724,9 @@ pub struct AppSettings {
     /// l'application quand il est modifiable (Windows, AppImage), sinon `Documents/Revel`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub projects_dir: Option<String>,
+    /// Mises à jour : préversions proposées aussi (versions d'essai publiées sur GitHub, D-86).
+    #[serde(default)]
+    pub prereleases: bool,
 }
 
 fn default_theme() -> String {
@@ -742,6 +745,7 @@ impl Default for AppSettings {
             accent: None,
             accent_scope: default_accent_scope(),
             projects_dir: None,
+            prereleases: false,
         }
     }
 }
@@ -764,6 +768,9 @@ pub struct UpdateInfo {
     /// Notes de la version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// Préversion (proposée seulement si les préversions sont demandées, D-86).
+    #[serde(default)]
+    pub prerelease: bool,
 }
 
 /// Texte à traduire automatiquement (D-36).

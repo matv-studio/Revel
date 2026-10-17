@@ -621,7 +621,7 @@ fn TopBar() -> impl IntoView {
                 {move || ui.update.get().map(|u| view! {
                     <button class="btn btn--small update-pill" title=ui.t("update-pill-help")
                         on:click=move |_| ui.route.set(Route::Settings)>
-                        {icons::download()}{ui.tx("update-pill", &[("version", u.version.clone())])}
+                        {icons::download()}{ui.tx(if u.prerelease { "update-pill-pre" } else { "update-pill" }, &[("version", u.version.clone())])}
                     </button>
                 })}
                 <Show when=site_open>

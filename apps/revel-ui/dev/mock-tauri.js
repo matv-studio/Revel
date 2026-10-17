@@ -131,7 +131,7 @@
         { at: Date.now() - 86_400_000 * 2, client: "", tool: "undo" },
       ] : [];
       case "get_settings": return state.settings;
-      case "set_settings": state.settings = args.settings; return null;
+      case "set_settings": state.settings = args.settings; window.__revelSettings = args.settings; return null;
       case "recent_sites": return state.recents;
       case "forget_site":
       case "delete_site": state.recents = state.recents.filter((r) => r.path !== args.path); return null;
@@ -142,7 +142,14 @@
       case "cms_collections": return cms;
       case "cms_folders": return [];
       case "app_info": return ["0.6.0", 3];
-      case "update_check": return state.update || { enabled: false };
+      // `window.__revelUpdates` : mises à jour actives sans version plus récente ; préversions
+      // demandées (D-86) : une préversion plus récente est proposée.
+      case "update_check": {
+        const u = state.update || (window.__revelUpdates ? { enabled: true } : null);
+        if (!u) return { enabled: false };
+        if (state.settings.prereleases) return { enabled: true, available: { version: "0.7.1-beta.1", notes: "Préversion de la simulation.", prerelease: true } };
+        return u;
+      }
       case "update_install": return null;
       // Sans pont : document minimal (vue CMS, captures) ; modifications non simulées.
       case "edit_open": return { site: { schema_version: 3, name: site.name, default_locale: "fr" }, state: { revision: 0, can_undo: false, can_redo: false } };

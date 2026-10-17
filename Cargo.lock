@@ -5483,6 +5483,7 @@ dependencies = [
  "revel-render",
  "revel-style",
  "revel-translate",
+ "semver",
  "serde",
  "serde_json",
  "tempfile",

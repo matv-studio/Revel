@@ -167,19 +167,65 @@ fn updates_enabled(app: &tauri::AppHandle) -> bool {
         .is_some_and(|k| !k.trim().is_empty())
 }
 
+/// Version plus récente publiée, s'il y en a une, et si c'est une préversion (6.6). Préversions
+/// demandées : la plus récente version publiée du dépôt, préversion comprise, est cherchée d'abord ;
+/// sans réponse de GitHub, l'adresse inscrite dans l'application sert seule (D-86).
+async fn find_update(
+    app: &tauri::AppHandle,
+) -> Result<Option<(tauri_plugin_updater::Update, bool)>, Failure> {
+    use tauri_plugin_updater::UpdaterExt;
+    let wanted = app.state::<AppState>().core.settings().prereleases;
+    let endpoint = app
+        .config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|u| u.get("endpoints"))
+        .and_then(|e| e.get(0))
+        .and_then(|e| e.as_str())
+        .map(str::to_string);
+    let feed = match (wanted, endpoint) {
+        (true, Some(endpoint)) => tauri::async_runtime::spawn_blocking(move || {
+            revel_core::updates::prerelease_feed_online(&endpoint)
+        })
+        .await
+        .ok()
+        .flatten(),
+        _ => None,
+    };
+    let updater = match &feed {
+        Some(f) => {
+            let url = tauri::Url::parse(&f.url).map_err(sys)?;
+            app.updater_builder()
+                .endpoints(vec![url])
+                .map_err(sys)?
+                .build()
+                .map_err(sys)?
+        }
+        None => app.updater().map_err(sys)?,
+    };
+    let found = updater.check().await.map_err(sys)?;
+    Ok(found.map(|u| {
+        let pre = feed
+            .as_ref()
+            .is_some_and(|f| f.prerelease && f.version == u.version);
+        (u, pre)
+    }))
+}
+
 /// Version plus récente publiée, s'il y en a une (6.6).
 #[tauri::command]
 async fn update_check(app: tauri::AppHandle) -> Res<revel_protocol::UpdateCheck> {
-    use tauri_plugin_updater::UpdaterExt;
     if !updates_enabled(&app) {
         return Ok(revel_protocol::UpdateCheck::default());
     }
-    let found = app.updater().map_err(sys)?.check().await.map_err(sys)?;
+    let found = find_update(&app).await?;
     Ok(revel_protocol::UpdateCheck {
         enabled: true,
-        available: found.map(|u| revel_protocol::UpdateInfo {
+        available: found.map(|(u, prerelease)| revel_protocol::UpdateInfo {
             version: u.version.clone(),
             notes: u.body.clone(),
+            prerelease,
         }),
     })
 }
@@ -187,11 +233,10 @@ async fn update_check(app: tauri::AppHandle) -> Res<revel_protocol::UpdateCheck>
 /// Télécharge la version proposée, vérifie sa signature, l'installe et relance Revel (6.6).
 #[tauri::command]
 async fn update_install(app: tauri::AppHandle) -> Res<()> {
-    use tauri_plugin_updater::UpdaterExt;
     if !updates_enabled(&app) {
         return Ok(());
     }
-    let Some(update) = app.updater().map_err(sys)?.check().await.map_err(sys)? else {
+    let Some((update, _)) = find_update(&app).await? else {
         return Ok(());
     };
     update

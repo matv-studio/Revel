@@ -97,6 +97,12 @@ Une date reliée s'écrit comme vous le voulez (16 octobre 2026, 16.10.2026…) 
 - **Ctrl+Z** annule, **Ctrl+Maj+Z** rétablit.
 - **Paramètres › Versions** garde l'historique du site : enregistrez une version, comparez, revenez en arrière.
 
+## Mises à jour de Revel
+
+- À chaque lancement, Revel cherche une version plus récente ; un bouton **Version x.y.z** apparaît alors en haut à droite.
+- **Réglages › Mises à jour** l'installe et relance Revel. Chaque version est vérifiée par sa signature avant d'être installée.
+- **Recevoir les préversions** propose aussi les versions d'essai, publiées avant la version stable.
+
 ## Raccourcis utiles
 
 | Action | Raccourci |

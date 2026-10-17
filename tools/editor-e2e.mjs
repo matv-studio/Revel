@@ -2664,6 +2664,30 @@ try {
   await page.waitForSelector(`.pack[data-pack="${getCode}"] .pack-bar`, { state: 'detached', timeout: 20000 });
   check('réglages : téléchargement d\'une langue (avancement, un seul à la fois)', others, getCode);
 
+  // Réglages › Mises à jour : préversions demandées puis retirées (D-86), recherche relancée.
+  {
+    await page.evaluate(() => { window.__revelUpdates = true; });
+    const card = '.section[data-section="updates"]';
+    const status = (re) => page.waitForFunction(([c, r]) => new RegExp(r).test(document.querySelector(`${c} .update-status`)?.textContent || ''), [card, re]);
+    await page.locator(card).scrollIntoViewIfNeeded();
+    await page.click(`${card} .update-actions .btn >> nth=0`);
+    await status('à jour');
+    const help = await page.getAttribute(`${card} .label:has-text("Recevoir les préversions")`, 'title');
+    await page.click(`${card} .update-prereleases`);
+    await status('^Préversion 0\\.7\\.1-beta\\.1 disponible$');
+    await page.waitForSelector('.update-pill');
+    const pill = (await page.textContent('.update-pill')).trim();
+    const saved = await page.evaluate(() => window.__revelSettings?.prereleases === true);
+    if (shots) await page.screenshot({ path: `${shots}/reglages-preversions.png` });
+    await page.click(`${card} .update-prereleases`);
+    await status('à jour');
+    const pillGone = (await page.$('.update-pill')) === null;
+    const off = await page.evaluate(() => window.__revelSettings?.prereleases === false);
+    await page.evaluate(() => { window.__revelUpdates = false; });
+    check('réglages : préversions demandées puis retirées (enregistrées, recherche relancée, « Préversion » dans la barre)',
+      !!help && pill === 'Préversion 0.7.1-beta.1' && saved && pillGone && off, pill);
+  }
+
   // Réglages › Assistants IA (4.2, serveur simulé) : activation, port, clé, configurations.
   {
     const state = () => page.textContent('.mcp-state');

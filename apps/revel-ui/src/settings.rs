@@ -37,7 +37,8 @@ pub fn Settings() -> impl IntoView {
     }
 }
 
-/// Mises à jour de Revel (6.6) : version installée, recherche, installation et relance.
+/// Mises à jour de Revel (6.6) : version installée, préversions (D-86), recherche, installation et
+/// relance.
 #[component]
 fn Updates() -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -50,15 +51,28 @@ fn Updates() -> impl IntoView {
             let _ = version.try_set(v);
         }
     });
+    let run_check = move || async move {
+        let r = api::update_check().await;
+        if let Ok(c) = &r {
+            ui.update.set(c.available.clone());
+        }
+        let _ = checked.try_set(Some(r.map_err(|e| ui.failure(&e))));
+        let _ = busy.try_set(false);
+    };
     let check = move || {
         busy.set(true);
+        spawn_local(run_check());
+    };
+    // Préversions (D-86) : réglage enregistré, puis nouvelle recherche selon lui.
+    let set_prereleases = move |on: bool| {
+        ui.settings.update(|s| s.prereleases = on);
+        let s = ui.settings.get_untracked();
+        busy.set(true);
         spawn_local(async move {
-            let r = api::update_check().await;
-            if let Ok(c) = &r {
-                ui.update.set(c.available.clone());
+            if let Err(e) = api::set_settings(&s).await {
+                ui.fail(e);
             }
-            let _ = checked.try_set(Some(r.map_err(|e| ui.failure(&e))));
-            let _ = busy.try_set(false);
+            run_check().await;
         });
     };
     let install = move || {
@@ -70,14 +84,19 @@ fn Updates() -> impl IntoView {
             let _ = busy.try_set(false);
         });
     };
+    let available = move |u: revel_protocol::UpdateInfo| {
+        let key = if u.prerelease {
+            "update-available-pre"
+        } else {
+            "update-available"
+        };
+        (true, ui.tx(key, &[("version", u.version)]))
+    };
     let status = move || match checked.get() {
-        None => ui
-            .update
-            .get()
-            .map(|u| (true, ui.tx("update-available", &[("version", u.version)]))),
+        None => ui.update.get().map(available),
         Some(Ok(c)) if !c.enabled => Some((false, ui.tx("update-disabled", &[]))),
         Some(Ok(c)) => Some(match c.available {
-            Some(u) => (true, ui.tx("update-available", &[("version", u.version)])),
+            Some(u) => available(u),
             None => (false, ui.tx("update-none", &[])),
         }),
         Some(Err(e)) => Some((false, e)),
@@ -89,6 +108,15 @@ fn Updates() -> impl IntoView {
             <div class="form-grid">
                 <span class="label">{ui.t("update-version")}</span>
                 <span class="mono">{move || version.get()}</span>
+                <span class="label" title=ui.t("update-prereleases-help")>{ui.t("update-prereleases")}</span>
+                <label class="switch">
+                    <input type="checkbox" class="update-prereleases"
+                        prop:checked=move || ui.settings.with(|s| s.prereleases)
+                        prop:disabled=move || busy.get()
+                        aria-label=ui.t("update-prereleases")
+                        on:change=move |e| set_prereleases(event_target_checked(&e))/>
+                    <span class="switch-track"></span>
+                </label>
             </div>
             <div class="ctl-line update-actions">
                 <button class="btn" disabled=move || busy.get() on:click=move |_| check()>{ui.t("update-check")}</button>

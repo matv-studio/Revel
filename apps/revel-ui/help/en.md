@@ -97,6 +97,12 @@ A linked date is written the way you want (October 16, 2026, 16.10.2026…); an 
 - **Ctrl+Z** undoes, **Ctrl+Shift+Z** redoes.
 - **Settings › Versions** keeps the site's history: save a version, compare, go back.
 
+## Revel updates
+
+- Each time it starts, Revel checks for a newer version; a **Version x.y.z** button then appears at the top right.
+- **Settings › Updates** installs it and restarts Revel. Each version is checked by its signature before it is installed.
+- **Receive pre-releases** also offers test versions, published before the stable release.
+
 ## Useful shortcuts
 
 | Action | Shortcut |

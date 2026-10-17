@@ -30,6 +30,7 @@ pub mod secrets;
 pub mod starter;
 mod state;
 mod translate;
+pub mod updates;
 mod versions;
 
 pub use secrets::SecretStore;

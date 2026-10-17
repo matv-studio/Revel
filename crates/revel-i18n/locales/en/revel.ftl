@@ -400,6 +400,7 @@ publish-check-failed = Check failed. { $message }
 publish-delete-title = Delete “{ $name }”?
 publish-delete-body = The saved access details and password will be erased. Files already online are not changed.
 error-detail = { $detail }
+error-update = Updates unreachable: { $detail }
 error-no-desktop = This action requires the Revel desktop app.
 error-project = The site could not be read: { $detail }
 error-import = Import failed: { $detail }

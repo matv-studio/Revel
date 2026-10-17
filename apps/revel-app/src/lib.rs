@@ -204,7 +204,12 @@ async fn find_update(
         }
         None => app.updater().map_err(sys)?,
     };
-    let found = updater.check().await.map_err(sys)?;
+    // Aucune version publiée hors préversion (adresse « latest » sans réponse) : rien à proposer,
+    // pas une panne.
+    let found = match updater.check().await {
+        Err(tauri_plugin_updater::Error::ReleaseNotFound) => None,
+        r => r.map_err(|e| Failure::new("error-update").arg("detail", e.to_string()))?,
+    };
     Ok(found.map(|u| {
         let pre = feed
             .as_ref()

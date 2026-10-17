@@ -403,6 +403,7 @@ publish-check-failed = Échec de la vérification. { $message }
 publish-delete-title = Supprimer « { $name } » ?
 publish-delete-body = Les accès et le mot de passe enregistrés seront effacés. Les fichiers déjà en ligne ne sont pas modifiés.
 error-detail = { $detail }
+error-update = Mises à jour injoignables : { $detail }
 error-no-desktop = Cette action nécessite l’application de bureau Revel.
 error-project = Le site n’a pas pu être lu : { $detail }
 error-import = L’import a échoué : { $detail }

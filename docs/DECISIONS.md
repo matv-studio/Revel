@@ -630,11 +630,11 @@ publier ni à héberger : le flux des installateurs reste le même. Choix de l'u
 brouillon 0.6.0 reconstruit, sans nouveau numéro de version (commit 6c00d74, flux 39066418973 : les 17 fichiers
 du brouillon remplacés, signature vérifiée avec la clé intégrée). La session ne peut pas modifier une version
 GitHub (refus 403) : le brouillon vise encore 21dd2c8 ; à la publication, choisir comme cible le commit
-construit, 6c00d74 (« Essai des préversions : clic sur l'interrupteur entier », parmi les commits récents), et non
-`main`, qui porte depuis D-87.
+construit, 6c00d74. Publiée en préversion le 17/10/2026 sur `main` alors à b5b7a30 (même code que 6c00d74, seuls
+des documents en plus) : étiquette `v0.6.0` conforme aux installateurs.
 
-**D-87 — 17/10/2026 — prise.** **Un installateur par système à partir de la version qui suit la 0.6.0 : plus de
-`.msi` ni de `.rpm`.** Demande de l'utilisateur (17 fichiers dans le brouillon 0.6.0, dont deux installateurs de
+**D-87 — 17/10/2026 — annulée le jour même.** **Un installateur par système à partir de la version qui suit la
+0.6.0 : plus de `.msi` ni de `.rpm`.** Demande de l'utilisateur (17 fichiers dans le brouillon 0.6.0, dont deux installateurs de
 remplacement). `bundle.targets` de `tauri.conf.json` passe de `"all"` à `["nsis", "app", "dmg", "deb",
 "appimage"]` (valeurs de la [configuration de Tauri](https://v2.tauri.app/reference/config/) ; `app` donne le
 `.app.tar.gz` des mises à jour macOS). Fichiers d'une version : `.exe`, `.dmg` ×2, `.app.tar.gz` ×2, `.deb`,
@@ -643,6 +643,9 @@ pas d'installateur MSI pour un déploiement géré par un service informatique (
 Fedora et openSUSE passent par l'AppImage. Le brouillon 0.6.0 garde ses 17 fichiers ; une installation faite
 avec son `.msi` ou son `.rpm` ne trouverait plus de mise à jour du même type (le module cherche
 `<système>-<architecture>-<installateur>`, puis `<système>-<architecture>`) : ne pas diffuser ces deux fichiers.
+- Annulée (17/10/2026) : la 0.6.0 a été publiée (préversion) avec son `.msi` et son `.rpm` ; l'utilisateur garde
+  les installateurs de remplacement. `bundle.targets` revient à `"all"`, pour que les installations faites avec
+  ces fichiers continuent de recevoir les mises à jour de leur type.
 
 ## Décisions ouvertes
 

@@ -34,7 +34,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "app", "dmg", "deb", "appimage"],
+    "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Visual website builder",
     "windows": {

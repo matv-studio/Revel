@@ -1,5 +1,5 @@
-# Installateurs Windows (NSIS), macOS (DMG, et .app.tar.gz pour les mises à jour) et Linux (AppImage, deb) ;
-# pas de .msi ni de .rpm depuis la 0.6.0 (D-87, `bundle.targets` de tauri.conf.json).
+# Installateurs Windows (NSIS, et MSI de remplacement), macOS (DMG, et .app.tar.gz pour les mises à jour) et
+# Linux (AppImage, deb, et rpm de remplacement) ; tous gardés (D-87 annulée).
 # Déclenché par une étiquette `v*` (ex. v0.1.0) ou à la main. Crée une version
 # GitHub en brouillon : rien n'est publié sans validation manuelle.
 # Référence : https://tauri.app/distribute/pipelines/github/

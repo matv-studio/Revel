@@ -629,8 +629,9 @@ relance la recherche. Retirer le réglage ne fait jamais revenir à une version 
 publier ni à héberger : le flux des installateurs reste le même. Choix de l'utilisateur : réglage livré dans le
 brouillon 0.6.0 reconstruit, sans nouveau numéro de version (commit 6c00d74, flux 39066418973 : les 17 fichiers
 du brouillon remplacés, signature vérifiée avec la clé intégrée). La session ne peut pas modifier une version
-GitHub (refus 403) : le brouillon vise encore 21dd2c8 ; à la publication, choisir `main` comme cible pour que
-l'étiquette `v0.6.0` soit posée sur le commit construit.
+GitHub (refus 403) : le brouillon vise encore 21dd2c8 ; à la publication, choisir comme cible le commit
+construit, 6c00d74 (« Essai des préversions : clic sur l'interrupteur entier », parmi les commits récents), et non
+`main`, qui porte depuis D-87.
 
 **D-87 — 17/10/2026 — prise.** **Un installateur par système à partir de la version qui suit la 0.6.0 : plus de
 `.msi` ni de `.rpm`.** Demande de l'utilisateur (17 fichiers dans le brouillon 0.6.0, dont deux installateurs de

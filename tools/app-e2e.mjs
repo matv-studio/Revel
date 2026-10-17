@@ -80,9 +80,12 @@ try {
     return exec(script);
   };
   const top = () => wd('POST', `${S}/frame`, { id: null });
-  const clickInCanvas = async (css) => {
+  // Premier élément trouvé ; `first` : son premier élément repéré (ligne du haut d'un grand titre,
+  // dont le centre peut être sous le bas de la fenêtre : Edge WebDriver refuse alors le clic).
+  const clickInCanvas = async (css, first = false) => {
     await inCanvas('return 1');
-    const el = await find(css);
+    const inner = first ? await find(`${css} [data-rv]`) : [];
+    const el = inner.length ? inner : await find(css);
     await wd('POST', `${S}/element/${el[0][ELEMENT]}/click`, {});
   };
   const waitFor = async (what, fn, tries = 120) => {
@@ -118,7 +121,7 @@ try {
   await top();
   await exec('const s = document.querySelector(".editor-zoom select"); s.value = "1"; s.dispatchEvent(new Event("change", { bubbles: true }));');
   await waitFor('zoom 100 %', async () => /^(|none|scale\(1\))$/.test(await exec('return document.querySelector("iframe.canvas-frame").style.transform')));
-  await clickInCanvas('h1');
+  await clickInCanvas('h1', true);
   await top();
   const status = await waitFor('sélection dans la barre d\'état', async () => {
     const t = await exec('return document.querySelector(".editor-status") && document.querySelector(".editor-status").textContent');
@@ -133,7 +136,7 @@ try {
   // éléments repérés.
   const rvCount = 'return document.readyState === "complete" && window.__revelSlot ? document.querySelectorAll("[data-rv]").length : -1';
   const count = await inCanvas(rvCount);
-  await clickInCanvas('h1');
+  await clickInCanvas('h1', true);
   await keys('Delete');
   const fewer = await waitFor('Suppr dans le canevas', async () => {
     const n = await inCanvas(rvCount);

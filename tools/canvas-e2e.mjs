@@ -118,14 +118,17 @@ try {
   }, [id, linkId]);
   if (linkSel.component) {
     // Lien dans un composant (pied de page) : un clic sélectionne l'utilisation entière, un
-    // double-clic ouvre le composant sur l'élément cliqué (3.6).
+    // double-clic ouvre le canevas du composant sur l'élément cliqué (D-68), ou modifie sur
+    // place un texte écrit dans le composant.
     check('clic dans un composant : utilisation sélectionnée, pas de navigation',
       f.url().endsWith(page) && linkSel.rect && linkSel.rect.height > 0, `${linkSel.label} ; ${f.url()}`);
     await link.dblclick();
-    const inner = await waitFor((m) => m.type === 'select' && m.id && !m.component && m.id !== sel.id, 'select dans le composant');
+    const inner = await waitFor((m) => (m.type === 'open_component' && m.component && m.node)
+      || (m.type === 'select' && m.id && m.id !== sel.id && m.id !== linkSel.id), 'composant ouvert sur l\'élément cliqué');
+    const innerId = inner.type === 'open_component' ? inner.node : inner.id;
     await parent.waitForTimeout(300);
-    check('double-clic dans un composant : élément du composant sélectionné, pas de navigation',
-      (await inLink(inner.id)) && f.url().endsWith(page), `${inner.label} ; ${f.url()}`);
+    check('double-clic dans un composant : composant ouvert sur l\'élément cliqué, pas de navigation',
+      (await inLink(innerId)) && f.url().endsWith(page), `${inner.type} ${inner.component || inner.label || ''} ; ${f.url()}`);
   } else {
     check('clic sur un lien : sélection, pas de navigation', (await inLink(linkSel.id)) && f.url().endsWith(page),
       `${linkSel.label} ; ${f.url()}`);

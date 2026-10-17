@@ -1130,3 +1130,13 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .packs-more-icon.is-open { transform: rotate(180deg); }
 .packs-none { margin: var(--s-3) 0 0; font-size: var(--text-sm); }
 .packs:not(:has(.pack)) { display: none; }
+
+/* Import d'un site (étape 7) */
+.chip--warn { background: color-mix(in srgb, var(--warning-text) 16%, transparent); color: var(--warning-text); }
+.import-dialog { width: min(560px, calc(100vw - 32px)); }
+.import-source button { display: inline-flex; align-items: center; gap: 6px; }
+.path-value.is-empty { min-height: 1.2em; }
+.import-progress { display: flex; align-items: center; gap: var(--s-2); font-size: var(--text-sm); }
+.import-progress .meter-bar { flex: 1; }
+.import-status { display: flex; flex-direction: column; gap: var(--s-2); }
+.import-outputs { display: flex; flex-wrap: wrap; gap: var(--s-2); }

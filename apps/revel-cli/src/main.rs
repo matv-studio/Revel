@@ -42,6 +42,24 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Importe un site (Eleventy ou HTML statique, reconnu) : écrit `site.revel.json` à sa racine.
+    Import {
+        dir: PathBuf,
+        /// Affiche le rapport sans écrire le fichier.
+        #[arg(long)]
+        dry_run: bool,
+        /// Langue du site si ses pages n'en déclarent pas.
+        #[arg(long, default_value = "en")]
+        lang: String,
+    },
+    /// Fidélité d'un import HTML statique : génère le site importé et compare chaque page produite
+    /// à la page d'origine (structure lue comme un navigateur).
+    ImportCheck {
+        dir: PathBuf,
+        /// Différences affichées par page.
+        #[arg(long, default_value_t = 5)]
+        limit: usize,
+    },
     /// Applique des commandes d'édition (fichier JSON : une commande ou une liste) et enregistre.
     Apply {
         dir: PathBuf,
@@ -208,6 +226,85 @@ fn main() -> Result<()> {
                 Project::create(&dir, site)?;
                 println!("{}", dir.join(revel_project::SITE_FILE).display());
             }
+        }
+        Command::Import { dir, dry_run, lang } => match revel_import::detect(&dir) {
+            revel_import::SiteKind::Eleventy => {
+                anyhow::bail!("projet Eleventy : utiliser `revel import-eleventy`")
+            }
+            revel_import::SiteKind::Static { .. } => {
+                let name = dir
+                    .canonicalize()
+                    .ok()
+                    .and_then(|d| d.file_name().map(|n| n.to_string_lossy().to_string()))
+                    .unwrap_or_else(|| "Site".into());
+                let (site, report) =
+                    revel_import::html::import(&dir, &revel_import::html::Options { name, lang })?;
+                println!(
+                    "pages : {} · gabarits : {} · règles de style : {} · fichiers copiés : {}",
+                    report.pages,
+                    report.layouts,
+                    report.style_rules,
+                    site.passthrough.len()
+                );
+                for w in &report.warnings {
+                    println!("! {w}");
+                }
+                if !dry_run {
+                    Project::create(&dir, site)?;
+                    println!("{}", dir.join(revel_project::SITE_FILE).display());
+                }
+            }
+            revel_import::SiteKind::NeedsBuild { tool, outputs } => anyhow::bail!(
+                "site à construire avec {tool} (non importé) ; dossiers produits : {outputs:?}"
+            ),
+            revel_import::SiteKind::Unknown { outputs } => {
+                anyhow::bail!("rien à importer ; dossiers de pages : {outputs:?}")
+            }
+        },
+        Command::ImportCheck { dir, limit } => {
+            let project =
+                Project::open(&dir).with_context(|| format!("ouverture de {}", dir.display()))?;
+            let out =
+                std::env::temp_dir().join(format!("revel-import-check-{}", std::process::id()));
+            project.build(
+                &out,
+                &revel_project::BuildOptions {
+                    environment: "production".into(),
+                    images: false,
+                    progress: None,
+                },
+            )?;
+            let mut same = 0;
+            let pages = revel_import::html::scan(&dir);
+            for rel in &pages {
+                let produced_rel = {
+                    let l = rel.to_ascii_lowercase();
+                    if l.ends_with("index.htm") {
+                        format!("{}l", rel)
+                    } else {
+                        rel.clone()
+                    }
+                };
+                let original = std::fs::read_to_string(dir.join(rel)).unwrap_or_default();
+                let produced = match std::fs::read_to_string(out.join(&produced_rel)) {
+                    Ok(t) => t,
+                    Err(_) => {
+                        println!("✗ {rel} : page non produite");
+                        continue;
+                    }
+                };
+                let diffs = revel_import::html::compare(&original, &produced, rel, limit);
+                if diffs.is_empty() {
+                    same += 1;
+                } else {
+                    println!("✗ {rel}");
+                    for d in diffs {
+                        println!("    {d}");
+                    }
+                }
+            }
+            println!("{same}/{} pages équivalentes", pages.len());
+            let _ = std::fs::remove_dir_all(&out);
         }
         Command::Apply { dir, commands } => {
             let text = if commands.as_os_str() == "-" {

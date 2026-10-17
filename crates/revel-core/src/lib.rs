@@ -20,6 +20,7 @@ pub mod domain;
 mod edit;
 mod fonts;
 mod github;
+mod import;
 pub mod pagescms;
 pub mod preview;
 mod publish;
@@ -98,6 +99,17 @@ pub enum CoreError {
     /// Pas de publication précédente gardée (5.5).
     #[error("aucune publication précédente")]
     NoPrevious,
+    /// Site à construire par son outil (D-80).
+    #[error("site à construire avec {0} : importer le dossier produit par sa construction")]
+    NeedsBuild(String),
+    #[error("aucune page HTML ni projet Eleventy dans ce dossier")]
+    NothingToImport,
+    #[error("adresse de dépôt non reconnue")]
+    BadRepoUrl,
+    #[error("copie du dépôt annulée")]
+    CloneCancelled,
+    #[error("ce dossier n'est pas une copie de dépôt en cours d'import")]
+    NotAClone,
     #[error("{0}")]
     Other(String),
 }
@@ -161,6 +173,13 @@ impl CoreError {
             Self::TranslateBusy => Failure::new("error-translate-busy"),
             Self::Font(detail) => Failure::new("error-font").arg("detail", detail.clone()),
             Self::Media(detail) => Failure::new("error-media").arg("detail", detail.clone()),
+            Self::NeedsBuild(tool) => {
+                Failure::new("error-import-needs-build").arg("tool", tool.clone())
+            }
+            Self::NothingToImport => Failure::new("error-import-nothing"),
+            Self::BadRepoUrl => Failure::new("error-git-url"),
+            Self::CloneCancelled => Failure::new("error-git-clone-cancelled"),
+            Self::NotAClone => Failure::new("error-not-a-clone"),
             Self::Other(detail) => Failure::detail(detail.clone()),
         }
     }
@@ -211,6 +230,9 @@ pub struct Core {
     /// Empreintes de publication par (site, environnement), avec l'état du site qu'elles décrivent.
     snapshots:
         Mutex<std::collections::HashMap<(String, String), (String, revel_project::Snapshot)>>,
+    /// Copies de dépôts faites pour un import et pas encore importées (7.2).
+    clones: Mutex<Vec<PathBuf>>,
+    clone_cancel: AtomicBool,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -265,6 +287,8 @@ impl Core {
             translate_cancel: AtomicBool::new(false),
             last_site: Mutex::new(None),
             snapshots: Mutex::new(Default::default()),
+            clones: Mutex::new(Vec::new()),
+            clone_cancel: AtomicBool::new(false),
         }
     }
 

@@ -19,6 +19,7 @@ mod files;
 mod help;
 mod home;
 mod icons;
+mod importer;
 mod insert;
 mod inspector;
 mod interactions;

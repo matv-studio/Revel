@@ -360,6 +360,59 @@ async fn import_eleventy(
     .map_err(err)
 }
 
+/// Nature d'un dossier avant import (7.1, 7.2).
+#[tauri::command]
+fn probe_site(s: State<AppState>, path: String) -> Res<revel_protocol::ImportProbe> {
+    s.core.probe_site(&PathBuf::from(path)).map_err(err)
+}
+
+/// Importe un site (Eleventy ou HTML statique) dans son dossier.
+#[tauri::command]
+async fn import_site(
+    s: State<'_, AppState>,
+    path: String,
+    overwrite: bool,
+    lang: String,
+) -> Res<ImportResult> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.import_site(&PathBuf::from(path), overwrite, &lang)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Copie un dépôt Git dans un nouveau dossier de `parent` (7.2).
+#[tauri::command]
+async fn git_clone(
+    s: State<'_, AppState>,
+    url: String,
+    parent: String,
+    on_event: Channel<revel_protocol::CloneEvent>,
+) -> Res<revel_protocol::ClonedRepo> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.git_clone(&url, &PathBuf::from(parent), |e| {
+            let _ = on_event.send(e);
+        })
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+#[tauri::command]
+fn git_clone_cancel(s: State<AppState>) {
+    s.core.git_clone_cancel();
+}
+
+/// Retire une copie de dépôt pas importée.
+#[tauri::command]
+fn discard_clone(s: State<AppState>, path: String) -> Res<()> {
+    s.core.discard_clone(&PathBuf::from(path)).map_err(err)
+}
+
 #[tauri::command]
 async fn build_site(
     s: State<'_, AppState>,
@@ -1112,6 +1165,11 @@ pub fn run() {
             cms_collections,
             cms_folders,
             import_eleventy,
+            probe_site,
+            import_site,
+            git_clone,
+            git_clone_cancel,
+            discard_clone,
             build_site,
             export_site,
             reveal_path,

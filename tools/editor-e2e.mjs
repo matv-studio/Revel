@@ -64,6 +64,75 @@ try {
     await page.waitForFunction(() => ![...document.querySelectorAll('.site-card')].some((c) => c.textContent.includes('Maison Oka')));
     check('accueil : site supprimé après confirmation', title);
   }
+  // Import (étape 7) : dossier de pages HTML examiné puis importé ; dépôt Git copié (site à
+  // construire signalé, dossier produit importable, licence absente signalée) ; copie abandonnée
+  // retirée ; dossier d'un dépôt nommé dans l'adresse (…/tree/main/docs).
+  {
+    const openImport = async () => {
+      await page.click('.page-head .toolbar .btn:has-text("Importer")');
+      await page.waitForSelector('.import-dialog');
+    };
+    await openImport();
+    const runOff = await page.$eval('.import-run', (b) => b.disabled);
+    await page.evaluate(() => { window.__revelPick = 'C:\\Sites\\maquette-html'; });
+    await page.click('.import-choose');
+    await page.waitForSelector('.import-kind.chip--ok');
+    const kind = (await page.textContent('.import-kind')).trim();
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-dossier.png` });
+    await page.click('.import-run');
+    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    await page.waitForSelector('.section h2:has-text("Import terminé")');
+    const listed = await page.locator('.site-card', { hasText: 'Maquette html' }).count();
+    const warned = await page.locator('.section .list-plain li').count();
+    check('import : dossier de pages HTML examiné puis importé', runOff && kind === 'Site HTML · 12 pages' && listed === 1 && warned === 1, kind);
+    // Dépôt Git : site à construire, sans licence ; son dossier produit s'importe.
+    await openImport();
+    await page.click('.import-source button[data-source="git"]');
+    await page.fill('.import-url', 'https://github.com/exemple/svelte-p3r');
+    await page.waitForFunction(() => /svelte-p3r$/.test(document.querySelector('.import-dialog .path-value:not(.import-folder)')?.textContent.trim() || ''));
+    await page.click('.import-run');
+    await page.waitForSelector('.import-kind.chip--warn');
+    const build = (await page.textContent('.import-kind')).trim();
+    const noLicense = await page.locator('.import-license').count() === 1;
+    const output = (await page.textContent('.import-output')).trim();
+    const help = await page.getAttribute('.import-kind', 'title');
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-git-a-construire.png` });
+    check('import : dépôt Git copié, site à construire signalé, licence absente, dossier produit proposé',
+      build === 'Site à construire · SvelteKit' && noLicense && output === 'Importer « build »' && /Node ou Bun/.test(help || ''), `${build} · ${output}`);
+    // Abandon : copie retirée.
+    await page.click('.import-cancel');
+    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    const discarded = await page.evaluate(() => window.__revelDiscarded || []);
+    check('import : copie abandonnée retirée', discarded.length === 1 && /svelte-p3r$/.test(discarded[0]), discarded.join());
+    // Dossier produit importé.
+    await openImport();
+    await page.click('.import-source button[data-source="git"]');
+    await page.fill('.import-url', 'https://github.com/exemple/svelte-p3r');
+    await page.click('.import-run');
+    await page.waitForSelector('.import-output');
+    await page.click('.import-output');
+    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    check('import : dossier produit par la construction importé', await page.locator('.site-card', { hasText: 'Build' }).count() === 1);
+    // Adresse d'un dossier sur GitHub : copie puis import direct de ce dossier.
+    await openImport();
+    await page.click('.import-source button[data-source="git"]');
+    await page.fill('.import-url', 'github.com/exemple/vitrine/tree/main/docs');
+    await page.press('.import-url', 'Enter');
+    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    check('import : dossier nommé dans l\'adresse du dépôt, importé directement', await page.locator('.site-card', { hasText: 'Docs' }).count() === 1);
+    // Adresse non reconnue : message, boîte gardée.
+    await openImport();
+    await page.click('.import-source button[data-source="git"]');
+    await page.fill('.import-url', 'ftp://exemple/depot');
+    await page.click('.import-run');
+    await page.waitForSelector('.import-dialog .import-error');
+    check('import : adresse non reconnue signalée dans la boîte', (await page.textContent('.import-error')).trim() === 'Adresse de dépôt non reconnue.');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    // Liste des sites d'origine pour la suite des essais.
+    await page.reload();
+    await page.waitForSelector('.site-card');
+  }
   // Un clic sur un site l'ouvre dans l'éditeur.
   await page.click('.site-open');
   await page.waitForSelector('iframe.canvas-frame');

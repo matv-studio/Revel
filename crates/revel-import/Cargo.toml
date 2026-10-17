@@ -1,6 +1,6 @@
 [package]
 name = "revel-import"
-description = "Import de sites existants (Eleventy) vers un projet Revel"
+description = "Import de sites existants (Eleventy, HTML statique) vers un projet Revel"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -16,6 +16,11 @@ serde_json.workspace = true
 thiserror.workspace = true
 regex = "1.13.1"
 serde-saphyr = "1.3.0"
+# Lecture du HTML comme un navigateur (html5ever), déjà présente par Tauri (wry).
+dom_query = { version = "0.28.0", default-features = false }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = "3"

@@ -7,8 +7,11 @@
 //! - [`versions`] : versions du site (dépôt Git du dossier du site), comparaison, restauration,
 //!   synchronisation avec son dépôt distant (D-25).
 //!
+//! - [`clone`] : copie d'un dépôt distant dans un dossier (import depuis Git, D-80).
+//!
 //! libgit2 est compilée dans Revel (D-12) : aucune installation de Git n'est nécessaire.
 
+pub mod clone;
 #[cfg(feature = "github")]
 pub mod github;
 pub mod publish;

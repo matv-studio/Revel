@@ -147,6 +147,35 @@
       // Sans pont : document minimal (vue CMS, captures) ; modifications non simulées.
       case "edit_open": return { site: { schema_version: 3, name: site.name, default_locale: "fr" }, state: { revision: 0, can_undo: false, can_redo: false } };
       case "has_site": return true;
+      // Import d'un site (étape 7) : nature d'après le nom du dossier (`svelte` : site à
+      // construire, `eleventy`, `vide` : rien à importer), copie de dépôt simulée.
+      case "plugin:dialog|open": return window.__revelPick ?? null;
+      case "probe_site": {
+        const p = args.path.toLowerCase();
+        const has_site = state.recents.some((r) => r.path === args.path);
+        if (p.includes("svelte")) return { kind: "needs_build", pages: 0, tool: "SvelteKit", outputs: ["build"], has_site };
+        if (p.includes("eleventy")) return { kind: "eleventy", pages: 0, has_site };
+        if (p.includes("vide")) return { kind: "unknown", pages: 0, has_site };
+        return { kind: "static", pages: 12, has_site };
+      }
+      case "git_clone": {
+        const u = args.url.trim().replace(/\/+$/, "");
+        if (!/^(https:\/\/|github\.com\/|git@)/.test(u)) throw { key: "error-git-url", args: [] };
+        const segs = u.replace(/^git@[^:]+:/, "").split("/").filter(Boolean);
+        const t = segs.indexOf("tree");
+        const name = (t > 0 ? segs[t - 1] : segs[segs.length - 1]).replace(/\.git$/, "");
+        const ch = args.onEvent;
+        for (let i = 0; i <= 10; i++) { await wait(params.get("cloneslow") ? 600 : 40); ch.onmessage({ received: i * 30, total: 300 }); }
+        return { path: args.parent + "\\" + slug(name), name, subdir: t > 0 && segs.length > t + 2 ? segs.slice(t + 2).join("/") : null, license: !u.includes("p3r") };
+      }
+      case "git_clone_cancel": return null;
+      case "discard_clone": window.__revelDiscarded = (window.__revelDiscarded || []).concat(args.path); return null;
+      case "import_site": {
+        const base = args.path.split(/[\\/]/).filter(Boolean).pop();
+        const name = base.replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+        state.recents = [{ path: args.path, name, opened_at: new Date().toISOString() }, ...state.recents.filter((r) => r.path !== args.path)];
+        return { site: { ...site, name, path: args.path }, warnings: args.path.includes("dist") ? [] : ["about.html : élément <base> gardé ; les adresses relatives sont lues depuis l'adresse de la page"] };
+      }
       case "list_profiles": return profiles;
       case "publish_state": return publishState();
       // Nom de domaine (5.7) : `domainko=1` : HTTPS absent, autre page.

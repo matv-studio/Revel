@@ -2270,3 +2270,107 @@ fn site_mis_a_la_corbeille() {
     assert!(!site.exists());
     assert!(c.recent_sites().iter().all(|r| r.path != path));
 }
+
+/// Import d'un dépôt Git de pages HTML (7.2) : copie par son adresse `file://` (jamais de dépôt en
+/// ligne dans les essais), examen, import, ouverture dans l'éditeur, page produite équivalente.
+#[test]
+fn depot_git_de_pages_html_importe() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let src = d.path().join("source");
+    std::fs::create_dir_all(src.join("css")).unwrap();
+    let page = |title: &str, main: &str| {
+        format!(
+            "<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><title>{title}</title><link rel=\"stylesheet\" href=\"/css/site.css\"></head><body><header class=\"tete\"><a href=\"/\">Atelier</a></header><main>{main}</main><footer class=\"pied\">©</footer></body></html>"
+        )
+    };
+    std::fs::write(src.join("index.html"), page("Accueil", "<h1>Bonjour</h1>")).unwrap();
+    std::fs::write(
+        src.join("contact.html"),
+        page("Contact", "<h1>Contact</h1>"),
+    )
+    .unwrap();
+    std::fs::write(src.join("css/site.css"), "h1 { color: red; }\n").unwrap();
+    revel_git::versions::init(&src, "Essai", "essai@example.invalid", "Pages").unwrap();
+    let p = src.display().to_string().replace('\\', "/");
+    let url = format!("file://{}{p}", if p.starts_with('/') { "" } else { "/" });
+
+    let parent = d.path().join("Projets");
+    std::fs::create_dir_all(&parent).unwrap();
+    let events = std::cell::Cell::new(0);
+    let cloned = c
+        .git_clone(&url, &parent, |_| events.set(events.get() + 1))
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(cloned.name, "source");
+    assert!(!cloned.license);
+    assert!(events.get() > 0);
+    let path = PathBuf::from(&cloned.path);
+    let probe = c.probe_site(&path).unwrap();
+    assert_eq!(probe.kind, revel_protocol::ImportKind::Static);
+    assert_eq!(probe.pages, 2);
+    // Adresse non reconnue, copie inconnue : refusées.
+    assert!(matches!(
+        c.git_clone("pas une adresse", &parent, |_| {}),
+        Err(CoreError::BadRepoUrl)
+    ));
+    assert!(matches!(c.discard_clone(&src), Err(CoreError::NotAClone)));
+
+    let r = c.import_site(&path, false, "en").unwrap();
+    assert_eq!(r.site.name, "Source");
+    assert!(path.join(".git").is_dir(), "historique gardé");
+    // Une copie importée n'est plus retirable.
+    assert!(matches!(c.discard_clone(&path), Err(CoreError::NotAClone)));
+    let doc = c.edit_open(&path).unwrap();
+    assert_eq!(doc.site.pages.len(), 2);
+    assert_eq!(doc.site.layouts.len(), 2);
+    let out = d.path().join("out");
+    revel_project::Project::open(&path)
+        .unwrap()
+        .build(
+            &out,
+            &revel_project::BuildOptions {
+                environment: "production".into(),
+                images: false,
+                progress: None,
+            },
+        )
+        .unwrap();
+    for f in ["index.html", "contact.html"] {
+        let a = std::fs::read_to_string(src.join(f)).unwrap();
+        let b = std::fs::read_to_string(out.join(f)).unwrap();
+        let diffs = revel_import::html::compare(&a, &b, f, 5);
+        assert!(diffs.is_empty(), "{f} : {diffs:?}\n{b}");
+    }
+    let css = std::fs::read_to_string(out.join("css/site.css")).unwrap();
+    assert!(css.contains("color: red"), "{css}");
+}
+
+/// Copie abandonnée : retirée ; site à construire : signalé, pas importé.
+#[test]
+fn copie_abandonnee_et_site_a_construire() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let src = d.path().join("appli");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(
+        src.join("package.json"),
+        r#"{"devDependencies":{"@sveltejs/kit":"2"}}"#,
+    )
+    .unwrap();
+    std::fs::write(src.join("README.md"), "# Appli").unwrap();
+    revel_git::versions::init(&src, "Essai", "essai@example.invalid", "Appli").unwrap();
+    let p = src.display().to_string().replace('\\', "/");
+    let url = format!("file://{}{p}", if p.starts_with('/') { "" } else { "/" });
+    let cloned = c.git_clone(&url, d.path(), |_| {}).unwrap();
+    let path = PathBuf::from(&cloned.path);
+    let probe = c.probe_site(&path).unwrap();
+    assert_eq!(probe.kind, revel_protocol::ImportKind::NeedsBuild);
+    assert_eq!(probe.tool.as_deref(), Some("SvelteKit"));
+    assert!(matches!(
+        c.import_site(&path, false, "fr"),
+        Err(CoreError::NeedsBuild(t)) if t == "SvelteKit"
+    ));
+    c.discard_clone(&path).unwrap();
+    assert!(!path.exists());
+    assert!(src.join("package.json").is_file(), "dépôt d'origine intact");
+}

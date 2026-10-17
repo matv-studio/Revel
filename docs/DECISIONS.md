@@ -545,6 +545,20 @@ listées directement, « Aucune langue installée » sinon ; les autres sous « 
 - Construction : étape « modeles » retirée du flux des installateurs, ressource `models/` retirée de
   `tauri.conf.json`.
 
+**D-80 — 17/10/2026 — prise (option 1 choisie par l'utilisateur).** **Import depuis Git : sites statiques et
+Eleventy seulement, sans construction.** Un dépôt est copié (libgit2, sans Git installé) dans le dossier des
+projets, puis importé comme un dossier : HTML statique (7.1) ou projet Eleventy. Un site à construire
+(application JavaScript : SvelteKit, Next, Nuxt, Astro, Vite, Gatsby…) n'est pas construit par Revel : il
+faudrait Node ou Bun sur l'ordinateur (contraire à D-36), et le résultat serait une application dont le contenu
+est produit par JavaScript, non modifiable dans l'éditeur. Revel le signale et propose d'importer le dossier
+produit par sa construction (`dist`, `build`, `out`, `_site`, `public`) s'il est dans le dépôt.
+- L'historique du dépôt est gardé (panneau Versions) et son adresse d'origine aussi : rien n'est envoyé au
+  dépôt sans « Synchroniser ». Dépôt privé sur github.com : jeton de la connexion GitHub (D-11).
+- Licence : un dépôt sans licence reste la propriété de son auteur ; l'import ne vérifie pas les droits de
+  reprise (avertissement quand aucun fichier `LICENSE` n'est trouvé).
+- Exemple étudié : `deltea/p3r-pause-menu` (SvelteKit, adaptateur Vercel, sans licence affichée) est un site à
+  construire, non importable par cette voie.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

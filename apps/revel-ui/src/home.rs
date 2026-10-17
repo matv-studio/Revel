@@ -1,6 +1,5 @@
 //! Liste des sites : ouvrir, importer, créer.
 
-use crate::dialog::Ask;
 use crate::{Ui, api, fmt_datetime, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -9,7 +8,6 @@ use revel_protocol::ImportResult;
 #[component]
 pub fn Home() -> impl IntoView {
     let ui = expect_context::<Ui>();
-    let busy = RwSignal::new(false);
     let import = RwSignal::new(None::<ImportResult>);
     let open_path = move |path: String| ui.open_path(path, crate::Tab::Editor);
     let open = move |_| {
@@ -21,43 +19,9 @@ pub fn Home() -> impl IntoView {
             }
         })
     };
-    let run_import = move |p: String, overwrite: bool| {
-        spawn_local(async move {
-            busy.set(true);
-            ui.activity.set(Some(0.3));
-            match api::import_eleventy(&p, overwrite).await {
-                Ok(r) => {
-                    import.set(Some(r));
-                    ui.reload_recents();
-                }
-                Err(e) => ui.fail(e),
-            }
-            ui.activity.set(None);
-            busy.set(false);
-        })
-    };
-    let do_import = move |_| {
-        spawn_local(async move {
-            let p = match api::pick_folder().await {
-                Ok(Some(p)) => p,
-                Ok(None) => return,
-                Err(e) => return ui.fail(e),
-            };
-            if let Ok(true) = api::has_site(&p).await {
-                ui.ask.set(Some(
-                    Ask::confirm(
-                        ui.now("import-overwrite-title", &[]),
-                        Some(ui.now("import-overwrite", &[])),
-                        ui.now("action-replace", &[]),
-                        move || run_import(p.clone(), true),
-                    )
-                    .danger(),
-                ));
-            } else {
-                run_import(p, false);
-            }
-        })
-    };
+    // Import d'un site (étape 7) : boîte Dossier / Dépôt Git.
+    let importing = RwSignal::new(false);
+    let do_import = move |_| importing.set(true);
     // Nouveau site : boîte de création (nom, langue, emplacement).
     let creating = RwSignal::new(false);
     let create = move |_| creating.set(true);
@@ -178,9 +142,9 @@ pub fn Home() -> impl IntoView {
             <header class="page-head">
                 <h1>{ui.t("home-title")}</h1>
                 <div class="toolbar">
-                    <button class="btn" title=ui.t("action-open-help") on:click=open disabled=move || busy.get()>{icons::folder()}{ui.t("action-open")}</button>
-                    <button class="btn" title=ui.t("action-import-help") on:click=do_import disabled=move || busy.get()>{icons::import()}{ui.t("action-import")}</button>
-                    <button class="btn btn--primary" on:click=create disabled=move || busy.get()>{icons::plus()}{ui.t("action-new")}</button>
+                    <button class="btn" title=ui.t("action-open-help") on:click=open>{icons::folder()}{ui.t("action-open")}</button>
+                    <button class="btn" title=ui.t("action-import-help") on:click=do_import>{icons::import()}{ui.t("action-import")}</button>
+                    <button class="btn btn--primary" on:click=create>{icons::plus()}{ui.t("action-new")}</button>
                 </div>
             </header>
             {move || import.get().map(|r| {
@@ -301,6 +265,10 @@ pub fn Home() -> impl IntoView {
             </Show>
             <Show when=move || creating.get()>
                 <NewSite close=Callback::new(move |()| creating.set(false))/>
+            </Show>
+            <Show when=move || importing.get()>
+                <crate::importer::ImportSite close=Callback::new(move |()| importing.set(false))
+                    done=Callback::new(move |r: ImportResult| import.set(Some(r)))/>
             </Show>
         </section>
     }

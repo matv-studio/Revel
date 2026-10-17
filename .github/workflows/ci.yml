@@ -202,6 +202,25 @@ jobs:
             --save captures-ecarts \
             --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
             | tee -a "$GITHUB_STEP_SUMMARY"
+      # Import d'un site HTML statique (7.1) : le site produit par Revel, importé comme un dossier
+      # de pages HTML, doit redonner les mêmes pages (structure de chaque page, styles calculés et
+      # captures).
+      - name: Import HTML statique
+        shell: bash
+        run: |
+          REVEL=target/release/revel
+          cp -r revel-production import-html
+          $REVEL import import-html --lang fr | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "## Import HTML statique" >> "$GITHUB_STEP_SUMMARY"
+          $REVEL import-check import-html | tee import-check.log
+          tail -1 import-check.log >> "$GITHUB_STEP_SUMMARY"
+          if grep -q "^✗" import-check.log; then exit 1; fi
+          $REVEL build import-html --out import-html-out --no-images
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          node tools/compare-styles.mjs import-html import-html-out --jobs 4 --shots --widths 1280,375 \
+            --save captures-ecarts \
+            --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/project/wattr/ \
+            | tee -a "$GITHUB_STEP_SUMMARY"
       # Canevas de l'éditeur (étape 2.2) : chaque page, repères retirés, identique à la page
       # générée ; servi comme par l'application, il donne les mêmes styles et captures que le site,
       # et répond à la souris et aux messages de l'interface.

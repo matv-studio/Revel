@@ -8,7 +8,10 @@ Revel construit un site sans écrire de code : vous placez des éléments sur la
 2. Donnez-lui un nom et choisissez un modèle : **Vide**, **Vitrine** ou **Blog**.
 3. Revel ouvre l'**Éditeur**. Vos sites récents restent sur l'accueil.
 
-Un site Revel s'ouvre avec **Ouvrir un site** ; un site Eleventy existant s'importe avec **Importer** : ses pages et ses contenus sont repris.
+Un site Revel s'ouvre avec **Ouvrir un site**. Un site existant se reprend avec **Importer** :
+
+- **Dossier** : un dossier de pages HTML (fait à la main ou exporté de Webflow) ou un projet Eleventy. Chaque page garde son adresse ; l'en-tête et le pied communs vont dans un gabarit, les styles dans le panneau Styles.
+- **Dépôt Git** : collez l'adresse d'un dépôt (`https://github.com/compte/site`, ou celle d'un dossier : `…/tree/main/docs`). Revel le copie dans le dossier des projets, historique compris, puis l'importe. Un site à construire (SvelteKit, Next…) n'est pas construit par Revel : importez le dossier produit par sa construction s'il est dans le dépôt.
 
 ## L'éditeur
 

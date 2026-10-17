@@ -272,6 +272,60 @@ pub struct ImportResult {
     pub warnings: Vec<String>,
 }
 
+/// Nature d'un dossier à importer (7.1, 7.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportKind {
+    /// Projet Eleventy.
+    Eleventy,
+    /// Site HTML statique.
+    Static,
+    /// Site à construire par son outil (SvelteKit, Next…), non importé (D-80).
+    NeedsBuild,
+    /// Rien d'importable à la racine.
+    Unknown,
+}
+
+/// Examen d'un dossier avant import.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportProbe {
+    pub kind: ImportKind,
+    /// Pages HTML trouvées (site statique).
+    #[serde(default)]
+    pub pages: usize,
+    /// Outil de construction (site à construire).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<String>,
+    /// Sous-dossiers de pages importables (`dist`, `docs`…).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<String>,
+    /// Le dossier contient déjà un site Revel.
+    #[serde(default)]
+    pub has_site: bool,
+}
+
+/// Dépôt copié depuis Git (7.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClonedRepo {
+    /// Dossier de la copie.
+    pub path: String,
+    /// Nom du dépôt.
+    pub name: String,
+    /// Sous-dossier nommé dans l'adresse (`…/tree/main/docs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subdir: Option<String>,
+    /// Un fichier de licence est présent à la racine du dépôt.
+    #[serde(default)]
+    pub license: bool,
+}
+
+/// Avancement d'une copie de dépôt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloneEvent {
+    pub received: usize,
+    pub total: usize,
+}
+
 /// Étape de génération.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

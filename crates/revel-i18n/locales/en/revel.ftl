@@ -1085,7 +1085,7 @@ nav-app-settings = Revel settings
 preview-help = Shows the site as it will be published, at the current page (Shift+click: in a new window)
 site-settings = Site settings
 action-open-help = Opens a folder containing a Revel site
-action-import-help = Import an existing site (Eleventy projects for now; HTML, Webflow, Framer, WordPress in step 7)
+action-import-help = Import an existing site: folder of HTML pages (Webflow export included), Eleventy project or Git repository
 home-sort = Sort
 home-sort-recent = Recent
 home-sort-name = Name
@@ -2060,3 +2060,39 @@ order-auto = None
 order-first = First
 order-last = Last
 order-custom = Other order (number)
+
+# Importing a site (step 7)
+import-title = Import a site
+import-source = Source
+import-source-folder = Folder
+import-source-folder-help = Folder of HTML pages, Webflow export or Eleventy project on this computer; only the site.revel.json file is added to it
+import-source-git = Git repository
+import-source-git-help = Copies a GitHub repository (or any Git repository over HTTPS) into the projects folder, history included, then imports it
+import-folder = Folder
+import-choose = Choose…
+import-url = Repository address
+import-url-placeholder = https://github.com/account/site
+import-url-help = github.com/account/repository, address of a branch or folder (…/tree/main/docs) or any HTTPS repository; private repository: GitHub connection in Settings
+import-kind-static = HTML site · { $count } { $count ->
+        [one] page
+       *[other] pages
+    }
+import-kind-static-help = Pages, shared layout, stylesheet in the Styles panel, files copied as they are
+import-kind-eleventy = Eleventy project
+import-kind-build = Site to build · { $tool }
+import-kind-build-help = This site is produced by { $tool }: Revel does not build it (that would need Node or Bun on the computer, and its pages would be produced by JavaScript). Import the folder produced by its build if it is in the repository.
+import-kind-unknown = Nothing to import
+import-kind-unknown-help = No HTML page at the root and no Eleventy project
+import-has-site = Already imported
+import-no-license = No license
+import-no-license-help = No license file in this repository: the site remains its author’s property. Check that you are allowed to reuse it.
+import-output = Import “{ $dir }”
+import-output-help = Folder of pages found in the repository
+import-run = Import
+import-cloning = Copying repository…
+import-importing = Importing…
+error-import-needs-build = Site to build with { $tool }: import the folder produced by its build (dist, build…).
+error-import-nothing = No HTML page or Eleventy project in this folder.
+error-git-url = Repository address not recognized.
+error-git-clone-cancelled = Repository copy cancelled.
+error-not-a-clone = This folder is not a repository copy being imported.

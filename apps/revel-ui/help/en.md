@@ -8,7 +8,10 @@ Revel builds a website without writing code: you place elements on the page, set
 2. Name it and pick a template: **Blank**, **Showcase** or **Blog**.
 3. Revel opens the **Editor**. Your recent sites stay on the home screen.
 
-A Revel site opens with **Open a site**; an existing Eleventy site comes in with **Import**: its pages and content are kept.
+A Revel site opens with **Open a site**. An existing site comes in with **Import**:
+
+- **Folder**: a folder of HTML pages (hand-made or exported from Webflow) or an Eleventy project. Each page keeps its address; the shared header and footer go into a layout, the styles into the Styles panel.
+- **Git repository**: paste a repository address (`https://github.com/account/site`, or a folder's: `…/tree/main/docs`). Revel copies it into the projects folder, history included, then imports it. A site that needs building (SvelteKit, Next…) is not built by Revel: import the folder produced by its build if it is in the repository.
 
 ## The editor
 

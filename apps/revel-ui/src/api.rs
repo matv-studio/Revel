@@ -229,17 +229,51 @@ pub async fn open_site(path: &str) -> Res<SiteSummary> {
     call("open_site", &PathArg { path }).await
 }
 
-pub async fn import_eleventy(path: &str, overwrite: bool) -> Res<ImportResult> {
+/// Nature d'un dossier avant import (7.1, 7.2).
+pub async fn probe_site(path: &str) -> Res<revel_protocol::ImportProbe> {
+    call("probe_site", &PathArg { path }).await
+}
+
+/// Importe le site d'un dossier (Eleventy ou HTML statique).
+pub async fn import_site(path: &str, overwrite: bool, lang: &str) -> Res<ImportResult> {
     #[derive(Serialize)]
     struct A<'a> {
         path: &'a str,
         overwrite: bool,
+        lang: &'a str,
     }
-    call("import_eleventy", &A { path, overwrite }).await
+    call(
+        "import_site",
+        &A {
+            path,
+            overwrite,
+            lang,
+        },
+    )
+    .await
 }
 
-pub async fn has_site(path: &str) -> Res<bool> {
-    call("has_site", &PathArg { path }).await
+/// Copie un dépôt Git dans un nouveau dossier de `parent`.
+pub async fn git_clone(
+    url: &str,
+    parent: &str,
+    on: impl Fn(revel_protocol::CloneEvent) + 'static,
+) -> Res<revel_protocol::ClonedRepo> {
+    call_with_channel(
+        "git_clone",
+        &serde_json::json!({ "url": url, "parent": parent }),
+        on,
+    )
+    .await
+}
+
+pub async fn git_clone_cancel() -> Res<()> {
+    call("git_clone_cancel", &NoArgs {}).await
+}
+
+/// Retire une copie de dépôt pas importée.
+pub async fn discard_clone(path: &str) -> Res<()> {
+    call("discard_clone", &PathArg { path }).await
 }
 
 /// Exporte le site dans un nouveau dossier de `parent` ; renvoie ce dossier.

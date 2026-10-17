@@ -1088,7 +1088,7 @@ nav-app-settings = Réglages de Revel
 preview-help = Affiche le site tel qu’il sera publié, à la page affichée (Maj+clic : dans une nouvelle fenêtre)
 site-settings = Paramètres du site
 action-open-help = Ouvre un dossier qui contient un site Revel
-action-import-help = Importer un site existant (projet Eleventy pour l’instant ; HTML, Webflow, Framer, WordPress à l’étape 7)
+action-import-help = Importer un site existant : dossier de pages HTML (export Webflow compris), projet Eleventy ou dépôt Git
 home-sort = Tri
 home-sort-recent = Récents
 home-sort-name = Nom
@@ -2063,3 +2063,39 @@ order-auto = Aucun
 order-first = Premier
 order-last = Dernier
 order-custom = Autre ordre (nombre)
+
+# Import d’un site (étape 7)
+import-title = Importer un site
+import-source = Source
+import-source-folder = Dossier
+import-source-folder-help = Dossier de pages HTML, export Webflow ou projet Eleventy sur cet ordinateur ; seul le fichier site.revel.json y est ajouté
+import-source-git = Dépôt Git
+import-source-git-help = Copie d’un dépôt GitHub (ou de tout dépôt Git en HTTPS) dans le dossier des projets, historique compris, puis import
+import-folder = Dossier
+import-choose = Choisir…
+import-url = Adresse du dépôt
+import-url-placeholder = https://github.com/compte/site
+import-url-help = github.com/compte/dépôt, adresse d’une branche ou d’un dossier (…/tree/main/docs) ou tout dépôt HTTPS ; dépôt privé : connexion GitHub des Réglages
+import-kind-static = Site HTML · { $count } { $count ->
+        [one] page
+       *[other] pages
+    }
+import-kind-static-help = Pages, gabarit commun, feuille de style dans le panneau Styles, fichiers copiés tels quels
+import-kind-eleventy = Projet Eleventy
+import-kind-build = Site à construire · { $tool }
+import-kind-build-help = Ce site est produit par { $tool } : Revel ne le construit pas (il faudrait Node ou Bun sur l’ordinateur, et ses pages seraient produites par JavaScript). Importez le dossier produit par sa construction s’il est dans le dépôt.
+import-kind-unknown = Rien à importer
+import-kind-unknown-help = Aucune page HTML à la racine ni projet Eleventy
+import-has-site = Déjà importé
+import-no-license = Sans licence
+import-no-license-help = Aucun fichier de licence dans ce dépôt : le site reste la propriété de son auteur. Vérifiez que vous avez le droit de le reprendre.
+import-output = Importer « { $dir } »
+import-output-help = Dossier de pages trouvé dans le dépôt
+import-run = Importer
+import-cloning = Copie du dépôt…
+import-importing = Import…
+error-import-needs-build = Site à construire avec { $tool } : importez le dossier produit par sa construction (dist, build…).
+error-import-nothing = Aucune page HTML ni projet Eleventy dans ce dossier.
+error-git-url = Adresse de dépôt non reconnue.
+error-git-clone-cancelled = Copie du dépôt annulée.
+error-not-a-clone = Ce dossier n’est pas une copie de dépôt en cours d’import.

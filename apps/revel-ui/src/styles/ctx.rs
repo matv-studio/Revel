@@ -93,6 +93,7 @@ const WATCHED: &[&str] = &[
     "transition",
     "white-space",
     "text-wrap",
+    "text-overflow",
 ];
 
 /// Propriétés suivies par le canevas.

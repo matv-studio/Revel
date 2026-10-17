@@ -274,7 +274,10 @@ fn raccourcis_modifies_sur_place() {
     );
     // Écart : lignes et colonnes réglées à part dans `gap`.
     let d = decls(&[("gap", "24px")]);
-    assert_eq!(read(&d, "column-gap").unwrap().value.as_deref(), Some("24px"));
+    assert_eq!(
+        read(&d, "column-gap").unwrap().value.as_deref(),
+        Some("24px")
+    );
     assert_eq!(
         edits(&d, "column-gap", Some("48px")).unwrap(),
         vec![e("gap", Some("24px 48px"))]

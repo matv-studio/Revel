@@ -155,6 +155,52 @@ fn sys(e: impl std::fmt::Display) -> Failure {
     Failure::detail(e.to_string())
 }
 
+/// Mises à jour actives : clé publique de vérification présente dans la configuration (ajoutée
+/// à la construction des installateurs officiels, 6.6).
+fn updates_enabled(app: &tauri::AppHandle) -> bool {
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|u| u.get("pubkey"))
+        .and_then(|k| k.as_str())
+        .is_some_and(|k| !k.trim().is_empty())
+}
+
+/// Version plus récente publiée, s'il y en a une (6.6).
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle) -> Res<revel_protocol::UpdateCheck> {
+    use tauri_plugin_updater::UpdaterExt;
+    if !updates_enabled(&app) {
+        return Ok(revel_protocol::UpdateCheck::default());
+    }
+    let found = app.updater().map_err(sys)?.check().await.map_err(sys)?;
+    Ok(revel_protocol::UpdateCheck {
+        enabled: true,
+        available: found.map(|u| revel_protocol::UpdateInfo {
+            version: u.version.clone(),
+            notes: u.body.clone(),
+        }),
+    })
+}
+
+/// Télécharge la version proposée, vérifie sa signature, l'installe et relance Revel (6.6).
+#[tauri::command]
+async fn update_install(app: tauri::AppHandle) -> Res<()> {
+    use tauri_plugin_updater::UpdaterExt;
+    if !updates_enabled(&app) {
+        return Ok(());
+    }
+    let Some(update) = app.updater().map_err(sys)?.check().await.map_err(sys)? else {
+        return Ok(());
+    };
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(sys)?;
+    app.restart()
+}
+
 #[tauri::command]
 fn get_settings(s: State<AppState>) -> AppSettings {
     s.core.settings()
@@ -271,6 +317,16 @@ async fn cms_collections(
 ) -> Res<Vec<revel_protocol::CmsCollection>> {
     let core = s.core.clone();
     tauri::async_runtime::spawn_blocking(move || core.cms(&PathBuf::from(path)))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Dossiers de contenus qu'aucune collection ne lit encore (création d'une collection).
+#[tauri::command]
+async fn cms_folders(s: State<'_, AppState>, path: String) -> Res<Vec<revel_protocol::CmsFolder>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.cms_folders(&PathBuf::from(path)))
         .await
         .map_err(sys)?
         .map_err(err)
@@ -994,6 +1050,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .register_asynchronous_uri_scheme_protocol("revel-canvas", |ctx, request, responder| {
             canvas_protocol(ctx.app_handle(), request, responder, false);
         })
@@ -1032,6 +1089,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
+            update_check,
+            update_install,
             get_settings,
             set_settings,
             recent_sites,
@@ -1043,6 +1102,7 @@ pub fn run() {
             site_folder,
             create_site,
             cms_collections,
+            cms_folders,
             import_eleventy,
             build_site,
             export_site,

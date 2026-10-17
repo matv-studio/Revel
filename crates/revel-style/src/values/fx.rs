@@ -105,9 +105,7 @@ pub fn parse_transitions(value: &str) -> Option<Vec<Transition>> {
                 } else if is_easing(&tok) && t.easing.is_empty() {
                     t.easing = tok;
                 } else if t.prop.is_empty()
-                    && tok
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+                    && tok.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
                 {
                     t.prop = tok;
                 } else {
@@ -276,7 +274,10 @@ mod tests {
 
     #[test]
     fn transitions() {
-        let l = parse_transitions("opacity 0.3s ease-out, transform 200ms cubic-bezier(.2,.8,.2,1) 50ms").unwrap();
+        let l = parse_transitions(
+            "opacity 0.3s ease-out, transform 200ms cubic-bezier(.2,.8,.2,1) 50ms",
+        )
+        .unwrap();
         assert_eq!(l[0].prop, "opacity");
         assert_eq!(l[0].delay, "0ms");
         assert_eq!(l[1].easing, "cubic-bezier(.2,.8,.2,1)");
@@ -291,29 +292,48 @@ mod tests {
 
     #[test]
     fn colonnes() {
-        assert_eq!(parse_tracks("repeat(3, minmax(0, 1fr))"), Some(Tracks::Equal(3)));
-        assert_eq!(parse_tracks("1fr 1fr"), Some(Tracks::List(vec!["1fr".into(); 2])));
+        assert_eq!(
+            parse_tracks("repeat(3, minmax(0, 1fr))"),
+            Some(Tracks::Equal(3))
+        );
+        assert_eq!(
+            parse_tracks("1fr 1fr"),
+            Some(Tracks::List(vec!["1fr".into(); 2]))
+        );
         assert_eq!(parse_tracks("repeat(2, 1fr)"), Some(Tracks::Equal(2)));
         assert_eq!(
             parse_tracks("minmax(0, 2fr) 1fr 240px"),
-            Some(Tracks::List(vec!["2fr".into(), "1fr".into(), "240px".into()]))
+            Some(Tracks::List(vec![
+                "2fr".into(),
+                "1fr".into(),
+                "240px".into()
+            ]))
         );
         assert_eq!(
             parse_tracks("repeat(auto-fill, minmax(240px, 1fr))"),
-            Some(Tracks::Auto { min: "240px".into(), fit: false })
+            Some(Tracks::Auto {
+                min: "240px".into(),
+                fit: false
+            })
         );
         assert_eq!(parse_tracks("[a] 1fr [b] 1fr"), None);
         assert_eq!(
             format_tracks(&Tracks::List(vec!["2fr".into(), "1fr".into()])),
             "minmax(0, 2fr) minmax(0, 1fr)"
         );
-        assert_eq!(format_tracks(&Tracks::List(vec!["200px".into(); 2])), "200px 200px");
+        assert_eq!(
+            format_tracks(&Tracks::List(vec!["200px".into(); 2])),
+            "200px 200px"
+        );
         assert_eq!(
             parse_tracks(&format_tracks(&Tracks::List(vec!["1fr".into(); 2]))),
             Some(Tracks::List(vec!["1fr".into(); 2]))
         );
         assert_eq!(
-            format_tracks(&Tracks::Auto { min: "18rem".into(), fit: true }),
+            format_tracks(&Tracks::Auto {
+                min: "18rem".into(),
+                fit: true
+            }),
             "repeat(auto-fit, minmax(18rem, 1fr))"
         );
         assert_eq!(span_of("span 2"), Some(2));

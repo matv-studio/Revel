@@ -408,11 +408,7 @@ pub const LETTER_UNITS: &[UnitOpt] = &[
 pub const PCT_UNITS: &[UnitOpt] = &[u("%", "unit-percent")];
 pub const DEG_UNITS: &[UnitOpt] = &[u("deg", "unit-deg"), u("turn", "unit-turn")];
 pub const TIME_UNITS: &[UnitOpt] = &[u("ms", "unit-ms"), u("s", "unit-s")];
-pub const BLUR_UNITS: &[UnitOpt] = &[
-    u("px", "unit-px"),
-    u("em", "unit-em"),
-    u("rem", "unit-rem"),
-];
+pub const BLUR_UNITS: &[UnitOpt] = &[u("px", "unit-px"), u("em", "unit-em"), u("rem", "unit-rem")];
 pub const MOVE_UNITS: &[UnitOpt] = &[
     u("px", "unit-px"),
     u("%", "unit-percent-self"),

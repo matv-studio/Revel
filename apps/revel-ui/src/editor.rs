@@ -425,6 +425,8 @@ pub struct Ed {
     /// Texte rendu des éléments liés à des données (identifiant, ou « utilisation/identifiant »
     /// dans un composant), envoyé par le canevas à chaque chargement.
     pub previews: RwSignal<std::collections::HashMap<String, String>>,
+    /// Libellés des collections (`.pages.yml`, « Actualités »), par identifiant de collection.
+    pub col_labels: RwSignal<std::collections::HashMap<String, String>>,
     /// Numéro de chargement du canevas (incrémenté pour le recharger).
     pub load: RwSignal<u64>,
     /// Défilement du canevas, rétabli après un rechargement.
@@ -524,6 +526,21 @@ fn literal_attrs(
             .collect(),
         _ => None,
     }
+}
+
+/// Documents qui s'affichent autrement dans le canevas (réglages sans effet sur la page ignorés :
+/// transition entre les pages, référencement, formulaires, redirections, rangement des panneaux).
+fn looks_different(a: &revel_model::Site, b: &revel_model::Site) -> bool {
+    let plain = |s: &revel_model::Site| {
+        let mut s = s.clone();
+        s.settings.page_transition = None;
+        s.settings.seo = Default::default();
+        s.settings.forms = Default::default();
+        s.redirects.clear();
+        s.library = Default::default();
+        s
+    };
+    plain(a) != plain(b)
 }
 
 pub fn style_only(c: &Command) -> bool {
@@ -838,6 +855,7 @@ impl Ed {
                     | Command::SetRedirects { .. }
                     | Command::SetSeoSettings { .. }
                     | Command::SetFormSettings { .. }
+                    | Command::SetPageTransition { .. }
             ) {
                 // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.
             } else if style_only(cmd) {
@@ -867,13 +885,31 @@ impl Ed {
     /// Document, historique et liste des pages relus (fichiers modifiés hors de l'éditeur : vue
     /// CMS, Pages CMS, éditeur de texte).
     fn reopen(self, ui: Ui) {
+        self.reopen_with(ui, None);
+    }
+
+    /// Relecture suivie du rechargement du canevas : toujours (`Some(true)` : fichiers du site
+    /// changés), ou seulement si la page peut s'afficher autrement (`Some(false)` : document
+    /// modifié par une autre vue ; une transition entre les pages ou des redirections ne
+    /// rechargent pas la page).
+    fn reopen_with(self, ui: Ui, canvas: Option<bool>) {
         let path = self.path.get_value();
         spawn_local(async move {
             match api::edit_open(&path).await {
                 Ok(o) => {
+                    let reload = match canvas {
+                        Some(true) => true,
+                        Some(false) => self.doc.with_untracked(|d| {
+                            d.as_ref().is_none_or(|d| looks_different(d, &o.site))
+                        }),
+                        None => false,
+                    };
                     ui.site_identity(&o.site);
                     self.doc.set(Some(o.site));
                     self.state.set(Some(o.state));
+                    if reload {
+                        self.load.update(|n| *n += 1);
+                    }
                 }
                 Err(e) => ui.fail(e),
             }
@@ -2120,8 +2156,11 @@ impl Ed {
         let Slot::Text { parent, .. } = slot else {
             return None;
         };
-        let tpl: web_sys::HtmlTemplateElement =
-            document().create_element("template").ok()?.dyn_into().ok()?;
+        let tpl: web_sys::HtmlTemplateElement = document()
+            .create_element("template")
+            .ok()?
+            .dyn_into()
+            .ok()?;
         tpl.set_inner_html(html);
         fn pieces(n: &web_sys::Node) -> Vec<Piece> {
             let kids = n.child_nodes();
@@ -2549,6 +2588,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         hovered: RwSignal::new(None),
         texts: RwSignal::new((None, Vec::new())),
         previews: RwSignal::new(std::collections::HashMap::new()),
+        col_labels: RwSignal::new(std::collections::HashMap::new()),
         load: RwSignal::new(0),
         scroll: RwSignal::new((0.0, 0.0)),
         live_scroll: RwSignal::new((0.0, 0.0)),
@@ -2891,21 +2931,23 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                     ed.apply(ui, cmd, false);
                 }
             }
-            FromCanvas::RichText { slot, id, html } => match ed.rich_text_command(&slot, &id, &html) {
-                Some((cmd, span)) => {
-                    // Span créé par la barre de mise en forme : sélectionné, prêt à styler.
-                    if let Some(span) = span {
-                        ed.selected.set(Some(Selection {
-                            id: span,
-                            tag: "span".into(),
-                            label: crate::names::type_name(ui, "span"),
-                        }));
+            FromCanvas::RichText { slot, id, html } => {
+                match ed.rich_text_command(&slot, &id, &html) {
+                    Some((cmd, span)) => {
+                        // Span créé par la barre de mise en forme : sélectionné, prêt à styler.
+                        if let Some(span) = span {
+                            ed.selected.set(Some(Selection {
+                                id: span,
+                                tag: "span".into(),
+                                label: crate::names::type_name(ui, "span"),
+                            }));
+                        }
+                        ed.apply(ui, cmd, false)
                     }
-                    ed.apply(ui, cmd, false)
+                    // Rien de changé (ou contenu refusé) : la page reprend son texte.
+                    None => ed.load.update(|n| *n += 1),
                 }
-                // Rien de changé (ou contenu refusé) : la page reprend son texte.
-                None => ed.load.update(|n| *n += 1),
-            },
+            }
             FromCanvas::Texts { id, items } => ed.texts.set((id, items)),
             FromCanvas::SpacingFocus { prop } => {
                 dock.layout.update(|l| l.open(crate::dock::PanelId::Styles));
@@ -2954,8 +2996,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         // Touche partie d'un champ, même s'il vient de disparaître (champ d'espacement validé
         // par Entrée) : pas un raccourci de l'éditeur (Entrée sélectionnerait l'enfant).
         let in_field = document().active_element().is_some_and(|el| is_field(&el))
-            || e
-                .target()
+            || e.target()
                 .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok())
                 .is_some_and(|el| is_field(&el));
         // Un menu ouvert (panneau de styles) se ferme d'abord avec Échap.
@@ -3012,6 +3053,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     // en cours d'envoi ; stable sur deux relevés, ou dès le retour dans l'éditeur). Hors de Revel
     // (Pages CMS, éditeur de texte) : même révision, fichiers différents.
     let stamp = StoredValue::new(None::<revel_edit::EditStamp>);
+    // Données ou contenus changés depuis la dernière relecture (la page affichée en dépend).
+    let content_seen = StoredValue::new(false);
     let act_seen = StoredValue::new(js_sys::Date::now());
     let path_poll = StoredValue::new(site.path.clone());
     let check = move |shown: bool| {
@@ -3031,9 +3074,18 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 && mine.is_some_and(|r| r != now.revision)
                 && ed.pending.get_untracked() == 0;
             let outside = same && before.files != now.files;
+            if before.content != now.content {
+                content_seen.set_value(true);
+            }
             if elsewhere || outside {
-                ed.reopen(ui);
-                ed.load.update(|n| *n += 1);
+                // Données ou contenus changés : la page change ; document seul : rechargée
+                // seulement si elle peut s'afficher autrement.
+                let content = content_seen.get_value();
+                content_seen.set_value(false);
+                ed.reopen_with(ui, Some(outside || content));
+            } else if mine == Some(now.revision) {
+                // Modifications de l'éditeur lui-même : déjà affichées.
+                content_seen.set_value(false);
             }
             // Modification d'un assistant : signalée dans la barre d'état.
             if elsewhere && let Ok(list) = api::mcp_activity().await {
@@ -3175,7 +3227,9 @@ fn Toolbar() -> impl IntoView {
     let can_undo = move || ed.state.with(|s| s.as_ref().is_some_and(|s| s.can_undo));
     let can_redo = move || ed.state.with(|s| s.as_ref().is_some_and(|s| s.can_redo));
     let pct = |z: f64| format!("{} %", (z * 100.0).round());
+    let help_open = RwSignal::new(false);
     view! {
+        <crate::help::Help open=help_open/>
         <div class="editor-toolbar">
             <crate::pagetree::PageContext/>
             <LocaleSwitch/>
@@ -3228,8 +3282,18 @@ fn Toolbar() -> impl IntoView {
             <div class="toolbar-spacer"></div>
             <crate::dock::PanelsMenu/>
             <details class="bp-menu shortcuts">
-                <summary class="icon-btn" title=ui.t("editor-shortcuts") aria-label=ui.t("editor-shortcuts")>"?"</summary>
+                <summary class="icon-btn" title=ui.t("help-menu") aria-label=ui.t("help-menu")>"?"</summary>
                 <div class="bp-pop bp-pop--right">
+                    // Aide intégrée (6.8) : guide « Premiers pas ».
+                    <button class="btn btn--small help-open" on:click=move |e: leptos::ev::MouseEvent| {
+                        help_open.set(true);
+                        if let Some(d) = e.target()
+                            .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok())
+                            .and_then(|t| t.closest("details").ok().flatten())
+                        {
+                            let _ = d.remove_attribute("open");
+                        }
+                    }>{icons::info()}{ui.t("help-title")}</button>
                     <p class="panel-title">{ui.t("editor-shortcuts")}</p>
                     {[
                         ("key-palette", "palette"),

@@ -47,7 +47,11 @@ pub enum Piece {
 
 /// Attribut sans expression ni condition.
 fn plain_attr(a: &Attr) -> bool {
-    a.when.is_none() && !a.value.as_deref().is_some_and(|v| v.contains("{{") || v.contains("{%"))
+    a.when.is_none()
+        && !a
+            .value
+            .as_deref()
+            .is_some_and(|v| v.contains("{{") || v.contains("{%"))
 }
 
 /// Contenu fait seulement de texte et d'éléments de mise en forme sans expression.
@@ -293,9 +297,7 @@ pub fn set_inline(
     };
     let mut kids = b.nodes(pieces);
     // Retour à la ligne final laissé par le navigateur : retiré.
-    while matches!(kids.last(), Some(Node::Element { tag, .. }) if tag == "br")
-        && kids.len() > 1
-    {
+    while matches!(kids.last(), Some(Node::Element { tag, .. }) if tag == "br") && kids.len() > 1 {
         kids.pop();
     }
     if kids == *children {

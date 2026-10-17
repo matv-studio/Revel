@@ -260,7 +260,11 @@ fn derive(sh: &str, v: &str, prop: &str) -> Option<Option<String>> {
             let t = split_top(v, ' ');
             Some(match t.as_slice() {
                 [a] => Some(a.clone()),
-                [r, c] => Some(if prop == "row-gap" { r.clone() } else { c.clone() }),
+                [r, c] => Some(if prop == "row-gap" {
+                    r.clone()
+                } else {
+                    c.clone()
+                }),
                 _ => None,
             })
         }
@@ -321,7 +325,9 @@ fn compose(sh: &str, v: &str, prop: &str, value: Option<&str>) -> Option<Option<
                 _ => return None,
             };
             // Écart retiré d'un seul sens : écart par défaut (`normal`) dans ce sens.
-            let x = value.map(|x| x.trim().to_string()).unwrap_or_else(|| "normal".into());
+            let x = value
+                .map(|x| x.trim().to_string())
+                .unwrap_or_else(|| "normal".into());
             if prop == "row-gap" {
                 r = x;
             } else {

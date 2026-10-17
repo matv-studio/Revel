@@ -627,67 +627,99 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     };
     // Nouvelle collection : nom demandé ; identifiant et dossier (à côté des autres collections)
     // tirés du nom ; champs de départ : titre et adresse ; ouverte dans « Champs ».
+    // Dossier de contenus repris d'un autre site, qu'aucune collection ne lit : proposé (ses
+    // champs sont déduits des contenus).
     let new_collection = move |_: ()| {
         let existing = cols.get_untracked().unwrap_or_default();
-        ui.ask.set(Some(Ask::input(
-            ui.now("cms-collection-new", &[]),
-            ui.now("cms-collection-name", &[]),
-            String::new(),
-            ui.now("action-create", &[]),
-            move |label| {
-                let label = label.trim().to_string();
-                if label.is_empty() {
-                    return;
-                }
-                let slug = cmsfields::slugify(&label);
-                let mut ids: Vec<String> = site_ids.get_value();
-                ids.extend(existing.iter().map(|c| c.id.clone()));
-                ids.extend(existing.iter().filter_map(|c| c.schema.clone()));
-                let base_id = slug.replace('-', "_");
-                let mut id = base_id.clone();
-                let mut n = 2;
-                while ids.contains(&id) {
-                    id = format!("{base_id}_{n}");
-                    n += 1;
-                }
-                // Dossier parent commun des collections (`src/content`), sinon `content`.
-                let parents: Vec<String> = existing
-                    .iter()
-                    .filter_map(|c| c.folder.rsplit_once('/').map(|(p, _)| p.to_string()))
-                    .collect();
-                let base = parents
-                    .first()
-                    .filter(|p| parents.iter().all(|x| x == *p))
-                    .or(parents.first())
-                    .cloned()
-                    .unwrap_or_else(|| "content".into());
-                let mut folder = format!("{base}/{slug}");
-                let mut n = 2;
-                while existing.iter().any(|c| c.folder == folder) {
-                    folder = format!("{base}/{slug}-{n}");
-                    n += 1;
-                }
-                let fields = serde_json::json!([
-                    { "name": "title", "label": ui.now("cms-new-title", &[]), "type": "string", "required": true },
-                    {
-                        "name": "slug",
-                        "label": ui.now("cms-new-slug", &[]),
-                        "type": "string",
-                        "required": true,
-                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-                        "description": ui.now("cms-new-slug-help", &[]),
+        let path = path.get_value();
+        leptos::task::spawn_local(async move {
+            let folders = crate::api::cms_folders(&path).await.unwrap_or_default();
+            let chosen = RwSignal::new(String::new());
+            let mut ask = Ask::input(
+                ui.now("cms-collection-new", &[]),
+                ui.now("cms-collection-name", &[]),
+                String::new(),
+                ui.now("action-create", &[]),
+                move |label| {
+                    let label = label.trim().to_string();
+                    if label.is_empty() {
+                        return;
                     }
-                ]);
-                apply.run(Command::CreateCmsCollection {
-                    id: id.clone(),
-                    label,
-                    folder,
-                    fields,
-                });
-                current.set(Some(id));
-                fields_mode.set(true);
-            },
-        )));
+                    let slug = cmsfields::slugify(&label);
+                    let mut ids: Vec<String> = site_ids.get_value();
+                    ids.extend(existing.iter().map(|c| c.id.clone()));
+                    ids.extend(existing.iter().filter_map(|c| c.schema.clone()));
+                    let base_id = slug.replace('-', "_");
+                    let mut id = base_id.clone();
+                    let mut n = 2;
+                    while ids.contains(&id) {
+                        id = format!("{base_id}_{n}");
+                        n += 1;
+                    }
+                    // Dossier parent commun des collections (`src/content`), sinon `content`.
+                    let parents: Vec<String> = existing
+                        .iter()
+                        .filter_map(|c| c.folder.rsplit_once('/').map(|(p, _)| p.to_string()))
+                        .collect();
+                    let base = parents
+                        .first()
+                        .filter(|p| parents.iter().all(|x| x == *p))
+                        .or(parents.first())
+                        .cloned()
+                        .unwrap_or_else(|| "content".into());
+                    let picked = chosen.get_untracked();
+                    let mut folder = format!("{base}/{slug}");
+                    let mut n = 2;
+                    while existing.iter().any(|c| c.folder == folder) {
+                        folder = format!("{base}/{slug}-{n}");
+                        n += 1;
+                    }
+                    if !picked.is_empty() {
+                        folder = picked;
+                    }
+                    let fields = serde_json::json!([
+                        { "name": "title", "label": ui.now("cms-new-title", &[]), "type": "string", "required": true },
+                        {
+                            "name": "slug",
+                            "label": ui.now("cms-new-slug", &[]),
+                            "type": "string",
+                            "required": true,
+                            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                            "description": ui.now("cms-new-slug-help", &[]),
+                        }
+                    ]);
+                    apply.run(Command::CreateCmsCollection {
+                        id: id.clone(),
+                        label,
+                        folder,
+                        fields,
+                    });
+                    current.set(Some(id));
+                    fields_mode.set(true);
+                },
+            );
+            if !folders.is_empty() {
+                let mut options = vec![(
+                    String::new(),
+                    ui.now("cms-collection-folder-new", &[]),
+                    String::new(),
+                )];
+                options.extend(folders.into_iter().map(|f| {
+                    let name = f.folder.rsplit('/').next().unwrap_or(&f.folder).to_string();
+                    let label = ui.now(
+                        "cms-collection-folder-existing",
+                        &[("folder", f.folder.clone()), ("count", f.count.to_string())],
+                    );
+                    (
+                        f.folder,
+                        label,
+                        crate::site::capitalize(&name.replace(['-', '_'], " ")),
+                    )
+                }));
+                ask = ask.with_choice(ui.now("cms-collection-folder", &[]), options, chosen);
+            }
+            let _ = ui.ask.try_set(Some(ask));
+        });
     };
     let delete = Callback::new(move |(folder, file, title): (String, String, String)| {
         ui.ask.set(Some(

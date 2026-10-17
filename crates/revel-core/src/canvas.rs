@@ -152,10 +152,42 @@ fn percent_decode(s: &str) -> String {
 /// Nombre de médias listés au plus (un dossier énorme ne bloque pas l'éditeur).
 const MEDIA_MAX: usize = 20_000;
 
-/// Ajoute le fichier `file` (adresse `url`) s'il s'agit d'un média.
+/// Animation d'une archive dotLottie (`.lottie` : fichier zip, `animations/<nom>.json`) : la
+/// première, telle qu'écrite.
+fn dotlottie_json(data: &[u8]) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(data)).ok()?;
+    let mut names: Vec<String> = zip
+        .file_names()
+        .filter(|n| n.starts_with("animations/") && n.ends_with(".json"))
+        .map(str::to_string)
+        .collect();
+    names.sort();
+    let mut f = zip.by_name(names.first()?).ok()?;
+    let mut out = Vec::new();
+    f.read_to_end(&mut out).ok()?;
+    revel_render::lottie::is_lottie(&out).then_some(out)
+}
+
+/// Fichier JSON d'une animation Lottie (début du fichier lu).
+fn lottie_file(file: &Path) -> bool {
+    use std::io::Read;
+    let mut head = vec![0u8; 64 * 1024];
+    let n = std::fs::File::open(file)
+        .and_then(|mut f| f.read(&mut head))
+        .unwrap_or(0);
+    revel_render::lottie::is_lottie(&head[..n])
+}
+
+/// Ajoute le fichier `file` (adresse `url`) s'il s'agit d'un média (une animation Lottie
+/// enregistrée en `.json` comprise).
 fn media_entry(file: &Path, url: &str, out: &mut Vec<revel_protocol::MediaFile>) {
-    let Some(kind) = revel_protocol::MediaKind::of(url) else {
-        return;
+    let kind = match revel_protocol::MediaKind::of(url) {
+        Some(k) => k,
+        None if url.to_ascii_lowercase().ends_with(".json") && lottie_file(file) => {
+            revel_protocol::MediaKind::Animation
+        }
+        None => return,
     };
     let meta = std::fs::metadata(file).ok();
     out.push(revel_protocol::MediaFile {
@@ -370,12 +402,26 @@ impl Core {
         name: &str,
         data: &[u8],
     ) -> Result<revel_protocol::MediaFile> {
-        let (stem, ext) = match name.rsplit_once('.') {
+        let (stem, mut ext) = match name.rsplit_once('.') {
             Some((s, e)) => (s, e.to_ascii_lowercase()),
             None => (name, String::new()),
         };
-        let kind = revel_protocol::MediaKind::of(&format!("x.{ext}"))
-            .ok_or_else(|| CoreError::Media(format!("type de fichier refusé : {name}")))?;
+        // Animation Lottie : fichier `.json` (Bodymovin), ou `.lottie` (archive de LottieFiles)
+        // dont l'animation est extraite en `.json` (lue par le lecteur du site).
+        let mut data = std::borrow::Cow::Borrowed(data);
+        if ext == "lottie" {
+            data =
+                std::borrow::Cow::Owned(dotlottie_json(&data).ok_or_else(|| {
+                    CoreError::Media(format!("animation Lottie illisible : {name}"))
+                })?);
+            ext = "json".into();
+        }
+        let kind = if ext == "json" {
+            revel_render::lottie::is_lottie(&data).then_some(revel_protocol::MediaKind::Animation)
+        } else {
+            revel_protocol::MediaKind::of(&format!("x.{ext}"))
+        }
+        .ok_or_else(|| CoreError::Media(format!("type de fichier refusé : {name}")))?;
         let (dir, prefix) = self.media_dir(path)?;
         let base = {
             let s = revel_model::slugify(stem);
@@ -388,7 +434,7 @@ impl Core {
             n += 1;
         }
         let target = dir.join(&file);
-        std::fs::write(&target, data)?;
+        std::fs::write(&target, &*data)?;
         let url = format!("{prefix}/{file}");
         let mut out = Vec::new();
         media_entry(&target, &url, &mut out);
@@ -470,6 +516,20 @@ impl Core {
             return Ok(Some(CanvasResponse::ok(
                 "text/javascript; charset=utf-8",
                 revel_render::animations::script().into_bytes(),
+            )));
+        }
+        // Interactions entre éléments (6.3) : aperçu du site.
+        if path == revel_render::actions::URL {
+            return Ok(Some(CanvasResponse::ok(
+                "text/javascript; charset=utf-8",
+                revel_render::actions::script().into_bytes(),
+            )));
+        }
+        // Lecteur des animations Lottie (6.2).
+        if path == revel_render::lottie::URL {
+            return Ok(Some(CanvasResponse::ok(
+                "text/javascript; charset=utf-8",
+                revel_render::lottie::script().into_bytes(),
             )));
         }
         let (site, pipeline, opts, environment) = {

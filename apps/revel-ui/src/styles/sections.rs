@@ -590,6 +590,28 @@ const TEXT_WRAP: &[Opt] = &[
     o("pretty", "tw-pretty"),
 ];
 
+/// Texte coupé sur une ligne avec des points de suspension (« Truncate » de Webflow) : trois
+/// déclarations posées ou retirées ensemble.
+#[component]
+fn Truncate(sx: Sx) -> impl IntoView {
+    let pv = Memo::new(move |_| sx.get("text-overflow"));
+    let on = move || pv.with(|p| p.current() == "ellipsis");
+    let ui = expect_context::<crate::Ui>();
+    view! {
+        <label class="switch" title=ui.t("styles-truncate-help")>
+            <input type="checkbox" aria-label=ui.t("styles-truncate") prop:checked=on on:change=move |e| {
+                let v = event_target_checked(&e);
+                sx.set_many(vec![
+                    ("text-overflow".into(), v.then(|| "ellipsis".into())),
+                    ("overflow".into(), v.then(|| "hidden".into())),
+                    ("white-space".into(), v.then(|| "nowrap".into())),
+                ], false);
+            }/>
+            <span class="switch-track"></span>
+        </label>
+    }
+}
+
 /// Valeur d'une variable CSS du site (`--font`), déclarée sur `:root` ou `html`.
 pub fn css_var(sheet: &revel_model::Stylesheet, name: &str) -> Option<String> {
     sheet.items.iter().find_map(|item| match item {
@@ -712,6 +734,7 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
         <Section sx key="styles-typography" open=true props=&[
             "font-family", "font-weight", "font-size", "line-height", "letter-spacing", "color",
             "text-align", "font-style", "text-decoration-line", "text-transform", "white-space", "text-wrap",
+            "text-overflow",
         ]>
             <Row sx props=&["font-family"] key="styles-font-family">
                 <Choice sx prop="font-family" options=font_options(sx)/>
@@ -749,6 +772,9 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
             </Row>
             <Row sx props=&["text-wrap"] key="styles-text-wrap">
                 <Choice sx prop="text-wrap" options=opts(sx, TEXT_WRAP)/>
+            </Row>
+            <Row sx props=&["text-overflow", "overflow", "white-space"] key="styles-truncate">
+                <Truncate sx/>
             </Row>
         </Section>
     }

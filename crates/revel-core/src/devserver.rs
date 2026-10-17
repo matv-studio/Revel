@@ -138,6 +138,7 @@ impl Core {
             "edit_undo" => json(self.edit_undo(site).map_err(f)?),
             "edit_redo" => json(self.edit_redo(site).map_err(f)?),
             "cms_collections" => json(self.cms(site).map_err(f)?),
+            "cms_folders" => json(self.cms_folders(site).map_err(f)?),
             "translate_can" => {
                 json(self.translate_can(&arg::<String>(args, "from")?, &arg::<String>(args, "to")?))
             }

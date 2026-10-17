@@ -975,7 +975,12 @@ fn schema_modifie_dans_pages_cms_et_annule() {
         false,
     )
     .unwrap();
-    let cl = c.cms(&site).unwrap().into_iter().find(|x| x.id == "clients").unwrap();
+    let cl = c
+        .cms(&site)
+        .unwrap()
+        .into_iter()
+        .find(|x| x.id == "clients")
+        .unwrap();
     let names: Vec<&str> = cl.fields.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(names, vec!["title", "slug", "logo", "ordre"]);
     assert_eq!(cl.fields[2].kind.as_deref(), Some("image"));
@@ -1410,6 +1415,12 @@ fn nouveau_site_pret_a_modifier() {
     let pages = c.edit_pages(&site).unwrap();
     assert_eq!(pages[0].url, "/");
     assert_eq!(pages[0].name.as_deref(), Some("Accueil"));
+    // Réglages lisibles : données écrites dans le document, sans dossier de données (exemple
+    // du titre de l'onglet dans Paramètres › Référencement).
+    let rd = c
+        .readable_data(&site, &[vec!["site".into(), "title".into()]], &[])
+        .unwrap();
+    assert_eq!(rd.values[0], Some(serde_json::json!("Atelier Lumière")));
     c.build(&site, "production", false, &|_| {}).unwrap();
     let out = out_dir(&site, "production");
     let html = std::fs::read_to_string(out.join("index.html")).unwrap();
@@ -1420,6 +1431,58 @@ fn nouveau_site_pret_a_modifier() {
     );
     assert!(out.join("assets/site.css").is_file());
     assert!(out.join("robots.txt").is_file());
+}
+
+#[test]
+fn animations_lottie_importees() {
+    use std::io::Write;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = d.path().join("atelier");
+    c.new_site(&site, "Atelier", "fr").unwrap();
+    c.edit_open(&site).unwrap();
+    let json = br#"{"v":"5.7.4","fr":30,"ip":0,"op":60,"w":200,"h":100,"nm":"x","layers":[]}"#;
+    // Fichier `.json` de Bodymovin : animation ; autre JSON : refusé.
+    let m = c.edit_import_media(&site, "Logo anime.json", json).unwrap();
+    assert_eq!(m.url, "/media/logo-anime.json");
+    assert_eq!(m.kind, revel_protocol::MediaKind::Animation);
+    assert!(
+        c.edit_import_media(&site, "donnees.json", b"{\"a\":1}")
+            .is_err()
+    );
+    // Archive `.lottie` de LottieFiles : animation extraite en `.json`.
+    let mut buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut z = zip::ZipWriter::new(&mut buf);
+        let o = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        z.start_file("manifest.json", o).unwrap();
+        z.write_all(br#"{"animations":[{"id":"a"}]}"#).unwrap();
+        z.start_file("animations/a.json", o).unwrap();
+        z.write_all(json).unwrap();
+        z.finish().unwrap();
+    }
+    let m2 = c
+        .edit_import_media(&site, "Bouton.lottie", buf.get_ref())
+        .unwrap();
+    assert_eq!(m2.url, "/media/bouton.json");
+    assert_eq!(std::fs::read(site.join("media/bouton.json")).unwrap(), json);
+    let list = c.edit_media(&site).unwrap();
+    assert_eq!(
+        list.iter()
+            .filter(|f| f.kind == revel_protocol::MediaKind::Animation)
+            .count(),
+        2
+    );
+    // Lecteur servi au canevas.
+    c.canvas_open(&site, Default::default()).unwrap();
+    let js = c.canvas_respond("/assets/revel-lottie.js");
+    assert_eq!(js.content_type, "text/javascript; charset=utf-8");
+    assert!(
+        String::from_utf8(js.body)
+            .unwrap()
+            .contains("window.RevelLottie")
+    );
 }
 
 #[test]

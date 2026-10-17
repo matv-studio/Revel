@@ -101,9 +101,8 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
             g.s
         )
     };
-    let shield = move || {
-        (ed.space.get() && ed.navigable()) || ed.panning.get() || ed.drag.get().is_some()
-    };
+    let shield =
+        move || (ed.space.get() && ed.navigable()) || ed.panning.get() || ed.drag.get().is_some();
 
     // Changement de taille d'écran (point de rupture) : le cadre glisse vers sa nouvelle largeur.
     let resizing = RwSignal::new(false);

@@ -250,6 +250,11 @@ pub enum Command {
     SetSeoSettings { seo: revel_model::SeoSettings },
     /// Formulaires du site (5.8) : adresse de réception, objet, message après l'envoi.
     SetFormSettings { forms: revel_model::FormSettings },
+    /// Transition entre les pages (6.4) : `fade`, `slide` ; `None` : aucune.
+    SetPageTransition {
+        #[serde(default)]
+        transition: Option<String>,
+    },
     /// Identité du site (3.9) : nom, adresse publique (`https://…`, sans `/` final ; vide :
     /// aucune), langue principale (code valide, différent des autres langues), typographie
     /// (`fr` ou aucune).
@@ -1134,6 +1139,20 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         Command::SetSeoSettings { seo } => Ok(Command::SetSeoSettings {
             seo: std::mem::replace(&mut site.settings.seo, seo.clone()),
         }),
+        Command::SetPageTransition { transition } => {
+            if transition
+                .as_deref()
+                .is_some_and(|t| !matches!(t, "fade" | "slide"))
+            {
+                return Err(EditError::WrongKind(transition.clone().unwrap_or_default()));
+            }
+            Ok(Command::SetPageTransition {
+                transition: std::mem::replace(
+                    &mut site.settings.page_transition,
+                    transition.clone(),
+                ),
+            })
+        }
         Command::SetFormSettings { forms } => {
             let mut forms = forms.clone();
             forms.recipient = forms.recipient.trim().to_string();

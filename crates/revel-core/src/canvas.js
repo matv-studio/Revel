@@ -526,8 +526,11 @@
         if (c.nodeType !== 1) c = c.parentElement;
         if (!c) continue;
         const ir = selectedInst ? rangeOfInst(selectedInst) : null;
+        // Utilisation dans une liste de collection : les textes d'un contenu de la liste restent
+        // dans le CMS (le panneau ne montre que ceux de l'utilisation).
+        const ofItem = !!sl.binding && !!sl.binding.source && sl.binding.source.kind === "entry_item";
         const ok = selectedInst
-          ? !!ir && ir.intersectsNode(c) && (propOf(sl, selectedInst) || dataOf(sl))
+          ? !!ir && ir.intersectsNode(c) && (propOf(sl, selectedInst) || (dataOf(sl) && !ofItem))
           : c.closest("[data-rv]") === selected;
         if (!ok) continue;
         const frag = r.cloneContents();
@@ -1761,8 +1764,16 @@
               try { el.setAttribute(n, v); } catch (_) { /* nom invalide */ }
             }
             for (const n of c.remove || []) el.removeAttribute(n);
+            // Animation Lottie : relue avec ses nouveaux réglages (fichier, lecture, boucle).
+            const lottie = [...Object.keys(c.set || {}), ...(c.remove || [])].some((n) => n.startsWith("data-lottie"));
+            if (lottie && el.__rvLottie) {
+              try { el.__rvLottie.destroy(); } catch (_) { /* déjà retirée */ }
+              el.__rvLottie = null;
+              el.style.aspectRatio = "";
+            }
           }
         }
+        if (window.RevelLottie) window.RevelLottie.refresh();
         redraw();
         break;
       case "rich":

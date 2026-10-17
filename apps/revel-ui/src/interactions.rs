@@ -413,6 +413,242 @@ fn Families(at: Target) -> impl IntoView {
     let at = StoredValue::new(at);
     view! {
         {FAMILIES.into_iter().map(|f| view! { <FamilySection f=f at=at/> }).collect_view()}
+        <ActionsSection at=at/>
+    }
+}
+
+const TRIGGERS: &[(&str, &str)] = &[
+    ("click", "act-trigger-click"),
+    ("hover", "act-trigger-hover"),
+    ("scroll", "act-trigger-scroll"),
+    ("view", "act-trigger-view"),
+    ("load", "act-trigger-load"),
+];
+const ACTS: &[(&str, &str)] = &[
+    ("class", "act-class"),
+    ("toggle", "act-toggle"),
+    ("show", "act-show"),
+    ("hide", "act-hide"),
+    ("play", "act-play"),
+    ("dismiss", "act-dismiss"),
+];
+
+/// Classes et identifiants du site (éléments visés).
+fn site_targets(d: &revel_model::Site) -> (Vec<String>, Vec<String>) {
+    let mut classes: Vec<String> = d
+        .style_rules()
+        .filter_map(|r| {
+            let s = r.selector.trim();
+            let c = s.strip_prefix('.')?;
+            c.chars()
+                .all(|x| x.is_alphanumeric() || x == '-' || x == '_')
+                .then(|| c.to_string())
+        })
+        .collect();
+    classes.sort();
+    classes.dedup();
+    let mut ids = Vec::new();
+    for (_, _, body) in d.owners() {
+        revel_model::ids::walk(body, &mut |n| {
+            if let Node::Element { attrs, .. } = n
+                && let Some(v) = attrs
+                    .iter()
+                    .find(|a| a.name == "id")
+                    .and_then(|a| a.value.clone())
+                && revel_edit::actions::target_ok(&format!("#{v}"))
+            {
+                ids.push(v);
+            }
+        });
+    }
+    ids.sort();
+    ids.dedup();
+    (classes, ids)
+}
+
+/// Interactions entre éléments (6.3) : déclencheur, action, élément visé (`data-revel-on`).
+#[component]
+fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
+    use revel_edit::actions::{Act, Rule, Trigger};
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let value = Memo::new(move |_| {
+        let at = at.get_value();
+        ed.doc.with(
+            |d| match revel_edit::address::node(d.as_ref()?, &at).ok()? {
+                Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
+                    .iter()
+                    .find(|a| a.name == "data-revel-on")
+                    .and_then(|a| a.value.clone()),
+                _ => None,
+            },
+        )
+    });
+    let rules = Memo::new(move |_| value.get().map(|v| revel_edit::actions::parse(&v)));
+    let write = move |list: Vec<Rule>| {
+        let at = at.get_value();
+        let cmd = if list.is_empty() {
+            Command::RemoveAttr {
+                at,
+                name: "data-revel-on".into(),
+            }
+        } else {
+            Command::SetAttr {
+                at,
+                name: "data-revel-on".into(),
+                value: Some(revel_edit::actions::write(&list)),
+            }
+        };
+        ed.apply(ui, cmd, false);
+    };
+    let edit = move |i: usize, f: Box<dyn Fn(&mut Rule)>| {
+        let mut l = rules.get_untracked().flatten().unwrap_or_default();
+        if let Some(r) = l.get_mut(i) {
+            f(r);
+        }
+        write(l);
+    };
+    let add = move |_| {
+        let mut l = rules.get_untracked().flatten().unwrap_or_default();
+        l.push(Rule {
+            trigger: Trigger::Click,
+            act: Act::Class("is-open".into()),
+            target: "self".into(),
+        });
+        write(l);
+    };
+    let targets = Memo::new(move |_| {
+        ed.doc
+            .with(|d| d.as_ref().map(site_targets).unwrap_or_default())
+    });
+    view! {
+        <section class="anim-family act-family" class:is-on=move || value.with(Option::is_some) data-family="actions">
+            <header class="anim-head">
+                <span class="anim-title" title=ui.t("act-help")>{ui.t("act-title")}</span>
+                <button class="icon-btn icon-btn--small anim-add" title=ui.t("act-add") aria-label=ui.t("act-add") on:click=add>{icons::plus()}</button>
+            </header>
+            {move || match rules.get() {
+                None => ().into_any(),
+                // Forme écrite à la main : modifiable en texte.
+                Some(None) => view! {
+                    <input class="input input--mono" prop:value=value.get().unwrap_or_default() on:change=move |e| {
+                        let v = event_target_value(&e);
+                        let at = at.get_value();
+                        ed.apply(ui, if v.trim().is_empty() {
+                            Command::RemoveAttr { at, name: "data-revel-on".into() }
+                        } else {
+                            Command::SetAttr { at, name: "data-revel-on".into(), value: Some(v) }
+                        }, false);
+                    }/>
+                }.into_any(),
+                Some(Some(list)) => list.into_iter().enumerate().map(|(i, r)| {
+                    let trig = match r.trigger { Trigger::Click => "click", Trigger::Hover => "hover", Trigger::Scroll(_) => "scroll", Trigger::View => "view", Trigger::Load => "load" };
+                    let px = match r.trigger { Trigger::Scroll(px) => Some(px), _ => None };
+                    let (act, class) = match &r.act {
+                        Act::Class(c) => ("class", Some(c.clone())),
+                        Act::Toggle => ("toggle", None),
+                        Act::Show => ("show", None),
+                        Act::Hide => ("hide", None),
+                        Act::Play => ("play", None),
+                        Act::Dismiss => ("dismiss", None),
+                    };
+                    let target = r.target.clone();
+                    let target2 = target.clone();
+                    view! {
+                        <div class="shadow-card act-card">
+                            <div class="ctl-line">
+                                <div class="select">
+                                    <select class="input" aria-label=ui.t("act-trigger") title=ui.t("act-trigger") on:change=move |e| {
+                                        let v = event_target_value(&e);
+                                        edit(i, Box::new(move |r| r.trigger = match v.as_str() {
+                                            "hover" => Trigger::Hover,
+                                            "scroll" => Trigger::Scroll(80),
+                                            "view" => Trigger::View,
+                                            "load" => Trigger::Load,
+                                            _ => Trigger::Click,
+                                        }));
+                                    }>
+                                        {TRIGGERS.iter().map(|(v, k)| view! { <option value=*v selected=*v == trig>{ui.t(k)}</option> }).collect_view()}
+                                    </select>
+                                </div>
+                                <button class="icon-btn icon-btn--small" title=ui.t("act-remove") aria-label=ui.t("act-remove")
+                                    on:click=move |_| { let mut l = rules.get_untracked().flatten().unwrap_or_default(); if i < l.len() { l.remove(i); } write(l); }>
+                                    {icons::trash()}
+                                </button>
+                            </div>
+                            {px.map(|px| view! {
+                                <label class="field">
+                                    <span class="label">{ui.t("act-scroll-px")}</span>
+                                    <input class="input" type="number" min="0" step="10" prop:value=px.to_string() on:change=move |e| {
+                                        let n = event_target_value(&e).trim().parse::<u32>().unwrap_or(0);
+                                        edit(i, Box::new(move |r| r.trigger = Trigger::Scroll(n)));
+                                    }/>
+                                </label>
+                            })}
+                            <div class="select">
+                                <select class="input" aria-label=ui.t("act-action") title=ui.t("act-action") on:change=move |e| {
+                                    let v = event_target_value(&e);
+                                    edit(i, Box::new(move |r| r.act = match v.as_str() {
+                                        "toggle" => Act::Toggle,
+                                        "show" => Act::Show,
+                                        "hide" => Act::Hide,
+                                        "play" => Act::Play,
+                                        "dismiss" => Act::Dismiss,
+                                        _ => Act::Class("is-open".into()),
+                                    }));
+                                }>
+                                    {ACTS.iter().map(|(v, k)| view! { <option value=*v selected=*v == act title=ui.tx(&format!("{k}-help"), &[])>{ui.t(k)}</option> }).collect_view()}
+                                </select>
+                            </div>
+                            {class.map(|c| view! {
+                                <label class="field">
+                                    <span class="label">{ui.t("act-class-name")}</span>
+                                    <input class="input input--mono" prop:value=c spellcheck="false" on:change=move |e| {
+                                        let v = event_target_value(&e).trim().trim_start_matches('.').to_string();
+                                        if !v.is_empty() && v.chars().all(|x| x.is_alphanumeric() || x == '-' || x == '_') {
+                                            edit(i, Box::new(move |r| r.act = Act::Class(v.clone())));
+                                        }
+                                    }/>
+                                </label>
+                            })}
+                            <label class="field">
+                                <span class="label">{ui.t("act-target")}</span>
+                                <div class="select">
+                                    <select class="input" on:change=move |e| {
+                                        let v = event_target_value(&e);
+                                        edit(i, Box::new(move |r| r.target = v.clone()));
+                                    }>
+                                        {[("self", "act-target-self"), ("parent", "act-target-parent"), ("next", "act-target-next"), ("body", "act-target-body")]
+                                            .into_iter().map(|(v, k)| view! { <option value=v selected=v == target>{ui.t(k)}</option> }).collect_view()}
+                                        {move || {
+                                            let (classes, ids) = targets.get();
+                                            let cur = target2.clone();
+                                            let known = matches!(cur.as_str(), "self" | "parent" | "next" | "body")
+                                                || classes.iter().any(|c| format!(".{c}") == cur)
+                                                || ids.iter().any(|x| format!("#{x}") == cur);
+                                            let extra = (!known).then(|| view! { <option value=cur.clone() selected=true>{cur.clone()}</option> });
+                                            view! {
+                                                {extra}
+                                                {ids.into_iter().map(|x| {
+                                                    let v = format!("#{x}");
+                                                    let on = v == cur;
+                                                    view! { <option value=v.clone() selected=on>{ui.tx("act-target-id", &[("id", x.clone())])}</option> }
+                                                }).collect_view()}
+                                                {classes.into_iter().map(|c| {
+                                                    let v = format!(".{c}");
+                                                    let on = v == cur;
+                                                    view! { <option value=v.clone() selected=on>{ui.tx("act-target-class", &[("class", c.clone())])}</option> }
+                                                }).collect_view()}
+                                            }
+                                        }}
+                                    </select>
+                                </div>
+                            </label>
+                        </div>
+                    }
+                }).collect_view().into_any(),
+            }}
+        </section>
     }
 }
 

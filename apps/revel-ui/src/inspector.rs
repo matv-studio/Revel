@@ -156,12 +156,18 @@ pub fn ContentSettings() -> impl IntoView {
             {move || current.get().map(|(at, node)| match node {
                 Node::Element { tag, attrs, .. } => element_content(ui, ed, apply, at, tag, attrs).into_any(),
                 Node::Image(img) => image(ui, ed, apply, at, img).into_any(),
-                Node::If { cond, .. } => view! {
-                    <div class="stack">
-                        <Field label=ui.t("inspector-condition") value=cond mono=true
-                            on_commit=move |v| apply(Command::SetLogic { at: at.clone(), cond: Some(v), expr: None, item: None })/>
-                    </div>
-                }.into_any(),
+                Node::If { cond, .. } => {
+                    // Champ du contenu (liste, modèle) : condition choisie dans une liste ;
+                    // l'expression reste modifiable dessous.
+                    let readable = crate::blocks::readable_condition(ui, ed, at.clone(), cond.clone());
+                    view! {
+                        <div class="stack">
+                            {readable}
+                            <Field label=ui.t("inspector-condition") value=cond mono=true
+                                on_commit=move |v| apply(Command::SetLogic { at: at.clone(), cond: Some(v), expr: None, item: None })/>
+                        </div>
+                    }.into_any()
+                }
                 Node::Each { expr, item, .. } => {
                     let (a1, a2) = (at.clone(), at.clone());
                     view! {
@@ -396,7 +402,12 @@ fn LinkTarget(
     // Pages fixes du site (adresse, nom).
     let pages: Vec<(String, String)> = ed.pages.with_untracked(|ps| {
         ps.iter()
-            .filter(|p| p.page.is_some() && !p.url.ends_with(".xml") && !p.url.ends_with(".txt") && !p.url.contains(".ht"))
+            .filter(|p| {
+                p.page.is_some()
+                    && !p.url.ends_with(".xml")
+                    && !p.url.ends_with(".txt")
+                    && !p.url.contains(".ht")
+            })
             .map(|p| (p.url.clone(), crate::pagetree::title_of(p)))
             .collect()
     });
@@ -417,7 +428,11 @@ fn LinkTarget(
             LinkKind::Email => h.strip_prefix("mailto:").unwrap_or_default().to_string(),
             LinkKind::Phone => h.strip_prefix("tel:").unwrap_or_default().to_string(),
             _ if link_kind(&h, &[]) == LinkKind::Url || k == LinkKind::Url => {
-                if h == "#" { String::new() } else { h }
+                if h == "#" {
+                    String::new()
+                } else {
+                    h
+                }
             }
             _ => h,
         }

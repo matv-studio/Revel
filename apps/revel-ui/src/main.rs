@@ -16,6 +16,7 @@ mod dock;
 mod domain;
 mod editor;
 mod files;
+mod help;
 mod home;
 mod icons;
 mod insert;
@@ -169,6 +170,8 @@ pub struct Ui {
     pub setup: RwSignal<bool>,
     /// Fenêtre « Nom de domaine » ouverte pour un hébergement (identifiant).
     pub domain_for: RwSignal<Option<String>>,
+    /// Version plus récente de Revel publiée (6.6), vérifiée au lancement.
+    pub update: RwSignal<Option<revel_protocol::UpdateInfo>>,
 }
 
 impl Ui {
@@ -398,8 +401,15 @@ fn App() -> impl IntoView {
         publish_panel: RwSignal::new(false),
         setup: RwSignal::new(false),
         domain_for: RwSignal::new(None),
+        update: RwSignal::new(None),
     };
     provide_context(ui);
+    // Mises à jour de Revel (6.6) : vérifiées une fois au lancement, sans bloquer l'ouverture.
+    spawn_local(async move {
+        if let Ok(c) = api::update_check().await {
+            ui.update.set(c.available);
+        }
+    });
     spawn_local(async move {
         if let Ok(s) = api::settings().await {
             ui.settings.set(s);
@@ -595,6 +605,13 @@ fn TopBar() -> impl IntoView {
                 }}
             </nav>
             <div class="topbar-actions">
+                // Version plus récente publiée : installée depuis les réglages.
+                {move || ui.update.get().map(|u| view! {
+                    <button class="btn btn--small update-pill" title=ui.t("update-pill-help")
+                        on:click=move |_| ui.route.set(Route::Settings)>
+                        {icons::download()}{ui.tx("update-pill", &[("version", u.version.clone())])}
+                    </button>
+                })}
                 <Show when=site_open>
                     <div class="split-btn preview-split" class:is-on=move || ui.preview.with(Option::is_some)>
                         <button class="btn split-main" title=ui.t("preview-help")

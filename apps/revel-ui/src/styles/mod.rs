@@ -302,7 +302,11 @@ pub fn Styles() -> impl IntoView {
         }
         // Classe ajoutée à côté d'autres : la combinaison est réglée (classe combinée de
         // Webflow), pour ne pas modifier tous les éléments qui portent la nouvelle classe seule.
-        selector.set(candidates(&list).pop().unwrap_or_else(|| format!(".{name}")));
+        selector.set(
+            candidates(&list)
+                .pop()
+                .unwrap_or_else(|| format!(".{name}")),
+        );
         if let Some(cmd) = class_command(at, &n, &list) {
             ed.apply(ui, cmd, false);
         }

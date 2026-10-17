@@ -21,7 +21,16 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
+      # Langues de traduction livrées jusqu'à la version 1.0 (D-46), téléchargées ensuite.
+      models: ${{ steps.v.outputs.models }}
     steps:
+      - uses: actions/checkout@v7
+      - id: v
+        shell: bash
+        run: |
+          v=$(jq -r .version apps/revel-app/tauri.conf.json)
+          if [ "${v%%.*}" -ge 1 ]; then echo "models=false" >> "$GITHUB_OUTPUT"; else echo "models=true" >> "$GITHUB_OUTPUT"; fi
+          echo "Version $v" >> "$GITHUB_STEP_SUMMARY"
       - id: m
         shell: bash
         env:
@@ -41,6 +50,8 @@ jobs:
   # crates/revel-translate/src/catalog.rs, comme depuis les réglages de l'application), préparées,
   # transmises aux installateurs.
   modeles:
+    needs: plan
+    if: needs.plan.outputs.models == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -64,6 +75,8 @@ jobs:
 
   bundle:
     needs: [plan, modeles]
+    # Version 1.0 : sans langue livrée (étape « modeles » sautée).
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.modeles.result == 'success' || needs.modeles.result == 'skipped') }}
     permissions:
       contents: write
     strategy:
@@ -74,6 +87,7 @@ jobs:
       - uses: actions/checkout@v7
       # Modèles de traduction inclus dans l'installateur (ressources Tauri, dossier models/).
       - uses: actions/download-artifact@v8
+        if: needs.plan.outputs.models == 'true'
         with:
           name: modeles
           path: apps/revel-app/models/
@@ -95,16 +109,89 @@ jobs:
           tool: trunk
       - name: Outil Tauri
         run: cargo install tauri-cli --version "^2" --locked
+      # Configuration ajoutée selon les secrets et variables déclarés dans le dépôt (aucun n'est
+      # obligatoire ; sans eux, installateurs non signés, sans mise à jour automatique) :
+      # - mises à jour (6.6) : secret TAURI_SIGNING_PRIVATE_KEY (et son mot de passe), variable
+      #   TAURI_UPDATER_PUBKEY ;
+      # - macOS (6.7) : secrets APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+      #   et pour la notarisation APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID ; sans certificat,
+      #   signature ad hoc ;
+      # - Windows (6.7) : Azure Artifact Signing, secrets AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
+      #   AZURE_TENANT_ID et variables ARTIFACT_SIGNING_ENDPOINT, ARTIFACT_SIGNING_ACCOUNT,
+      #   ARTIFACT_SIGNING_PROFILE.
+      - name: Signatures et mises à jour
+        id: conf
+        shell: bash
+        env:
+          MAJ: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && vars.TAURI_UPDATER_PUBKEY != '' }}
+          PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          MAC: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WIN: ${{ secrets.AZURE_CLIENT_ID != '' && vars.ARTIFACT_SIGNING_ACCOUNT != '' }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          SIGN_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          SIGN_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          SIGN_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+        run: |
+          conf='{}'
+          add() { conf=$(jq -c --argjson a "$1" '. * $a' <<< "$conf"); }
+          # Version 1.0 : installateur léger, langues de traduction téléchargées depuis les réglages.
+          if [ "${{ needs.plan.outputs.models }}" != "true" ]; then
+            add '{"bundle":{"resources":[]}}'
+            echo "- Langues de traduction : non livrées (téléchargées depuis Réglages)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$MAJ" = "true" ]; then
+            add "$(jq -nc --arg k "$PUBKEY" '{bundle: {createUpdaterArtifacts: true}, plugins: {updater: {pubkey: $k}}}')"
+            echo "- Mises à jour automatiques : actives" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Mises à jour automatiques : inactives (clé de signature absente)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            if [ "$MAC" = "true" ]; then
+              for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+                if [ -n "${!v}" ]; then { echo "$v<<FIN_REVEL"; echo "${!v}"; echo "FIN_REVEL"; } >> "$GITHUB_ENV"; fi
+              done
+              echo "- macOS : signé (Developer ID)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              add '{"bundle":{"macOS":{"signingIdentity":"-"}}}'
+              echo "- macOS : signature ad hoc (pas de certificat Developer ID)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if [ "$WIN" = "true" ]; then
+              for v in AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID; do { echo "$v<<FIN_REVEL"; echo "${!v}"; echo "FIN_REVEL"; } >> "$GITHUB_ENV"; done
+              cargo install artifact-signing-cli --locked
+              add "$(jq -nc --arg c "artifact-signing-cli -e $SIGN_ENDPOINT -a $SIGN_ACCOUNT -c $SIGN_PROFILE -d Revel %1" '{bundle: {windows: {signCommand: $c}}}')"
+              echo "- Windows : signé (Azure Artifact Signing)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- Windows : non signé (avertissement SmartScreen)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          args="${{ matrix.target && format('--target {0}', matrix.target) || '' }}"
+          if [ "$conf" != "{}" ]; then
+            echo "$conf" > apps/revel-app/tauri.ci.json
+            args="$args --config tauri.ci.json"
+          fi
+          echo "args=$args" >> "$GITHUB_OUTPUT"
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/revel-app
           tauriScript: cargo tauri
-          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+          args: ${{ steps.conf.outputs.args }}
           tagName: v__VERSION__
           releaseName: Revel v__VERSION__
-          releaseBody: Installateurs de test, non signés.
+          releaseBody: Installateurs de test ; signatures et mises à jour selon le résumé de la construction.
           releaseDraft: true
           prerelease: true
       # L'application ne doit dépendre que de bibliothèques présentes sur tout système

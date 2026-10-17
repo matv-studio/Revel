@@ -37,6 +37,8 @@ tower-http = { version = "0.6.11", features = ["fs"] }
 keyring = { version = "4.2.0", optional = true }
 # Polices Google téléchargées dans le site (D-24) : client HTTP synchrone, certificats du système.
 ureq = { version = "3.4.2", features = ["platform-verifier"] }
+# Animations Lottie en archive `.lottie` (LottieFiles) : animation extraite à l'import (6.2).
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
 tempfile = "3"

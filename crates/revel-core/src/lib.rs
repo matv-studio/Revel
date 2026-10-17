@@ -817,6 +817,76 @@ pub fn site_folder(parent: &Path, name: &str) -> PathBuf {
 
 impl Core {
     /// Collections de contenus du site, avec leurs entrées (vue CMS, lecture).
+    /// Dossiers de contenus (fichiers Markdown) qu'aucune collection ne lit encore : contenus
+    /// repris d'un autre site, proposés à la création d'une collection.
+    pub fn cms_folders(&self, path: &Path) -> Result<Vec<revel_protocol::CmsFolder>> {
+        let p = revel_project::Project::open(path)?;
+        let used: std::collections::HashSet<String> = p
+            .site
+            .collections
+            .iter()
+            .map(|c| c.folder.trim_matches('/').to_string())
+            .collect();
+        let mut out = Vec::new();
+        fn scan(
+            root: &Path,
+            dir: &Path,
+            depth: usize,
+            used: &std::collections::HashSet<String>,
+            out: &mut Vec<revel_protocol::CmsFolder>,
+        ) {
+            let Ok(rd) = std::fs::read_dir(dir) else {
+                return;
+            };
+            let mut count = 0;
+            let mut subs = Vec::new();
+            for e in rd.flatten() {
+                let path = e.path();
+                let name = e.file_name().to_string_lossy().into_owned();
+                if path.is_dir() {
+                    // Dossiers techniques et générés : jamais des contenus.
+                    if !name.starts_with('.')
+                        && !matches!(
+                            name.as_str(),
+                            "node_modules"
+                                | "_site"
+                                | "dist"
+                                | "public"
+                                | "assets"
+                                | "media"
+                                | "target"
+                                | "_data"
+                                | "_includes"
+                                | "_layouts"
+                        )
+                    {
+                        subs.push(path);
+                    }
+                } else if path
+                    .extension()
+                    .is_some_and(|x| x == "md" || x == "markdown")
+                    && !name.eq_ignore_ascii_case("readme.md")
+                {
+                    count += 1;
+                }
+            }
+            if let Ok(rel) = dir.strip_prefix(root) {
+                let rel = rel.to_string_lossy().replace('\\', "/");
+                if count > 0 && !rel.is_empty() && !used.contains(&rel) {
+                    out.push(revel_protocol::CmsFolder { folder: rel, count });
+                }
+            }
+            if depth < 4 {
+                subs.sort();
+                for s in subs {
+                    scan(root, &s, depth + 1, used, out);
+                }
+            }
+        }
+        scan(&p.dir, &p.dir, 0, &used, &mut out);
+        Ok(out)
+    }
+
     pub fn cms(&self, path: &Path) -> Result<Vec<revel_protocol::CmsCollection>> {
         let p = revel_project::Project::open(path)?;
         let entries = p.load_entries()?;

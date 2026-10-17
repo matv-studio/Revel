@@ -201,6 +201,25 @@ pub async fn cms_collections(path: &str) -> Res<Vec<revel_protocol::CmsCollectio
     call("cms_collections", &PathArg { path }).await
 }
 
+pub async fn cms_folders(path: &str) -> Res<Vec<revel_protocol::CmsFolder>> {
+    call("cms_folders", &PathArg { path }).await
+}
+
+/// Version de Revel, version du format des sites.
+pub async fn app_info() -> Res<(String, u32)> {
+    call("app_info", &serde_json::json!({})).await
+}
+
+/// Version plus récente publiée (6.6).
+pub async fn update_check() -> Res<revel_protocol::UpdateCheck> {
+    call("update_check", &serde_json::json!({})).await
+}
+
+/// Installe la version proposée et relance Revel.
+pub async fn update_install() -> Res<()> {
+    call("update_install", &serde_json::json!({})).await
+}
+
 pub async fn open_site(path: &str) -> Res<SiteSummary> {
     call("open_site", &PathArg { path }).await
 }

@@ -101,7 +101,9 @@ pub fn desktop() -> AnyView {
 /// Écrans côte à côte (ordinateur, tablette, téléphone).
 /// Canevas libre : flèches vers les quatre coins.
 pub fn expand() -> AnyView {
-    svg(r#"<path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10M2.5 2.5l4 4M13.5 2.5l-4 4M13.5 13.5l-4-4M2.5 13.5l4-4"/>"#)
+    svg(
+        r#"<path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10M2.5 2.5l4 4M13.5 2.5l-4 4M13.5 13.5l-4-4M2.5 13.5l4-4"/>"#,
+    )
 }
 
 pub fn screens() -> AnyView {
@@ -199,12 +201,16 @@ pub fn image() -> AnyView {
 /// Code (HTML brut, variable).
 /// Dégradé linéaire.
 pub fn gradient_linear() -> AnyView {
-    svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M5 2.5v11M8 2.5v11M11 2.5v11" stroke-opacity=".45"/>"#)
+    svg(
+        r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M5 2.5v11M8 2.5v11M11 2.5v11" stroke-opacity=".45"/>"#,
+    )
 }
 
 /// Dégradé radial.
 pub fn gradient_radial() -> AnyView {
-    svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><circle cx="8" cy="8" r="2"/><circle cx="8" cy="8" r="4" stroke-opacity=".45"/>"#)
+    svg(
+        r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><circle cx="8" cy="8" r="2"/><circle cx="8" cy="8" r="4" stroke-opacity=".45"/>"#,
+    )
 }
 
 /// Étiquette (sélecteur de balise : toutes les balises d'un type).
@@ -371,6 +377,13 @@ pub fn more() -> AnyView {
 pub fn layout() -> AnyView {
     svg(
         r#"<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M5.5 2.5v11M10.5 2.5v11"/>"#,
+    )
+}
+
+/// Onglets : rangée d'onglets au-dessus d'un panneau.
+pub fn tabs() -> AnyView {
+    svg(
+        r#"<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5V6h8.5M10.25 2.5V6"/>"#,
     )
 }
 

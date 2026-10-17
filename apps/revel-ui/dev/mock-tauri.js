@@ -4,6 +4,8 @@
   const params = new URLSearchParams(location.hash.slice(1));
   const state = {
     settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null },
+    // `update=1` : une version plus récente est proposée (Réglages › Mises à jour).
+    update: params.get("update") ? { enabled: true, available: { version: "0.5.0", notes: "Animations Lottie, actions, transitions entre les pages." } } : null,
     recents: params.get("empty") ? [] : [
       { path: "C:\\Sites\\alunites-revel-lab", name: "Alunites", opened_at: "2026-10-13T14:02:11+00:00" },
       { path: "C:\\Sites\\atelier-lumen", name: "Atelier Lumen", opened_at: "2026-10-11T09:40:00+00:00" },
@@ -62,7 +64,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_resolve", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
+  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_resolve", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
   // Nom de dossier d'un nouveau site (comme revel_core::site_folder, sans les suffixes).
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).
@@ -136,6 +138,10 @@
       case "site_folder": return args.parent + "\\" + slug(args.name || "");
       case "create_site": return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
       case "cms_collections": return cms;
+      case "cms_folders": return [];
+      case "app_info": return ["0.4.2", 3];
+      case "update_check": return state.update || { enabled: false };
+      case "update_install": return null;
       // Sans pont : document minimal (vue CMS, captures) ; modifications non simulées.
       case "edit_open": return { site: { schema_version: 3, name: site.name, default_locale: "fr" }, state: { revision: 0, can_undo: false, can_redo: false } };
       case "has_site": return true;

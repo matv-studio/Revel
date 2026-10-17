@@ -473,6 +473,17 @@ try {
         await page.waitForTimeout(400);
       }
       check('interactions : retirée puis tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === docA);
+      // Actions (6.3) : un appui ajoute une classe ; déclencheur changé ; tout annulé.
+      await page.click('.act-family .anim-add');
+      f = await waitFrame((v) => document.querySelector('section.hero')?.getAttribute('data-revel-on') === v, 'action ajoutée', 'click class:is-open self');
+      await page.locator('.act-card select').nth(0).selectOption('hover');
+      f = await waitFrame((v) => document.querySelector('section.hero')?.getAttribute('data-revel-on') === v, 'déclencheur changé', 'hover class:is-open self');
+      check('interactions : action ajoutée (appui, classe), déclencheur changé (survol)', true);
+      for (let i = 0; i < 4 && JSON.stringify((await invoke('edit_open')).site) !== docA; i++) {
+        await page.click('.editor-toolbar .btn-undo');
+        await page.waitForTimeout(400);
+      }
+      check('interactions : action annulée, document identique', JSON.stringify((await invoke('edit_open')).site) === docA);
       await page.click('.dock-tab[data-panel="styles"]');
     }
     // Variables : affectations de la page (plus dans les calques), valeur calculée au rendu ;
@@ -785,8 +796,28 @@ try {
       const block = await untilE(async () => (await frame.locator('.bloc-avantages .bloc-avantage .icone').count()) === 3);
       const blockCss = block && await frame.locator('.bloc-avantages__grille').evaluate((g) => getComputedStyle(g).display);
       check('éléments : bloc prêt à l\'emploi (avantages, icônes, styles)', block && blockCss === 'grid', String(blockCss));
+      // Onglets et accordéon (6.4), animation Lottie (6.2), ajoutés depuis le panneau Ajouter.
+      const addIn = async (key) => {
+        await page.click('.dock-tab[data-panel="layers"]');
+        await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
+        await page.click('.dock-tab[data-panel="insert"]');
+        await page.locator(`.insert-item[data-item="insert-${key}"]`).scrollIntoViewIfNeeded();
+        await page.click(`.insert-item[data-item="insert-${key}"]`);
+      };
+      await addIn('tabs');
+      const tabsIn = await untilE(async () => (await frame.locator('[data-revel-tabs] [data-revel-tab]').count()) === 2
+        && (await frame.locator('[data-revel-tabs] [data-revel-panel]').count()) === 2);
+      await addIn('accordion');
+      const accIn = await untilE(async () => (await frame.locator('details.accordeon > summary.accordeon__titre').count()) === 1);
+      check('éléments : onglets (deux boutons, deux panneaux), accordéon', tabsIn && accIn);
+      await addIn('lottie');
+      const lottieIn = await untilE(async () => (await frame.locator('.lottie[data-lottie]').count()) === 1);
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.locator('.styles label.field:has(> .label:text-is("Lecture")) select').selectOption('hover');
+      const hover = await untilE(async () => (await frame.locator('.lottie[data-lottie-play="hover"]').count()) === 1);
+      check('éléments : animation Lottie ajoutée, lecture au survol', lottieIn && hover);
       await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 20; i++) {
         if (JSON.stringify(await siteE()) === docE) break;
         await page.keyboard.press('Control+z');
         await page.waitForTimeout(300);
@@ -1118,9 +1149,32 @@ try {
     if (shots) await page.screenshot({ path: `${shots}/vue-cms.png` });
     await page.click('.view-tab[data-view="view-settings"]');
     await page.waitForSelector('.settings-nav');
+    // Transition entre les pages (6.4) : Paramètres › Général, choisie puis retirée.
+    const transition = async (v) => {
+      for (let i = 0; i < 40; i++) {
+        if (((await invoke('edit_open')).site.settings.page_transition ?? '') === v) return true;
+        await page.waitForTimeout(100);
+      }
+      return false;
+    };
+    await page.selectOption('#site-transition', 'slide');
+    const slide = await transition('slide');
+    await page.selectOption('#site-transition', '');
+    check('paramètres : transition entre les pages choisie puis retirée', slide && await transition(''));
     await page.click('.view-tab[data-view="view-editor"]');
     await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
     check('retour à l\'éditeur : canevas gardé (pas rechargé)', await frameOf().evaluate(() => window.__keep === 1));
+    // Guide intégré (6.8) : menu « ? », rubriques, fermé par Échap.
+    await page.click('.shortcuts > summary');
+    await page.click('.help-open');
+    await page.waitForSelector('.help-dialog');
+    const helpN = await page.locator('.help-nav-item').count();
+    await page.locator('.help-nav-item', { hasText: 'Contenus (CMS)' }).click();
+    const helpH = await page.locator('.help-body h2').first().textContent();
+    if (shots) await page.screenshot({ path: `${shots}/aide.png` });
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.help-dialog', { state: 'detached' });
+    check('aide : guide intégré (rubriques, rubrique affichée, Échap)', helpN >= 10 && helpH === 'Contenus (CMS)', `${helpN} rubriques`);
     // Contenu ouvert depuis la vue CMS : sa page s'affiche dans l'éditeur.
     await page.click('.view-tab[data-view="view-cms"]');
     await page.click('.cms-table tbody tr[data-entry] .icon-btn');

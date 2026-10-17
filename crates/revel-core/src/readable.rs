@@ -71,7 +71,11 @@ impl Core {
         collections: &[String],
     ) -> Result<ReadableData> {
         self.with_project(path, |p| {
-            let data = p.load_data()?;
+            // Données du document (prioritaires, comme à la génération), puis du dossier de données.
+            let mut data = p.site.data.clone();
+            for (k, v) in p.load_data()? {
+                data.entry(k).or_insert(v);
+            }
             let pages = std::fs::read_to_string(p.dir.join(".pages.yml"))
                 .ok()
                 .and_then(|t| revel_project::parse_yaml(&t).ok())

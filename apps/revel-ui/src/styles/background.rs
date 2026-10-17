@@ -779,22 +779,41 @@ mod tests {
 
     #[test]
     fn calques_lus_et_reecrits() {
-        let v = "linear-gradient(128deg, #4f1cb8 0%, #7c34c8 22%, #fe9d44 100%), url(\"/media/a.jpg\")";
+        let v =
+            "linear-gradient(128deg, #4f1cb8 0%, #7c34c8 22%, #fe9d44 100%), url(\"/media/a.jpg\")";
         let ls = parse_layers(v);
         assert_eq!(ls.len(), 2);
-        assert!(matches!(&ls[0], Layer::Linear { angle, stops } if *angle == 128.0 && stops.len() == 3));
+        assert!(
+            matches!(&ls[0], Layer::Linear { angle, stops } if *angle == 128.0 && stops.len() == 3)
+        );
         assert_eq!(ls[1], Layer::Image("/media/a.jpg".into()));
         assert_eq!(layers_css(&ls).unwrap(), v);
         let r = "radial-gradient(circle at 30% 30%, rgba(124, 52, 200, 0.35), transparent 60%)";
         let l = parse_layer(r);
-        assert!(matches!(&l, Layer::Radial { circle: true, x, y, stops } if *x == 30.0 && *y == 30.0 && stops[0].pos.is_none()));
+        assert!(
+            matches!(&l, Layer::Radial { circle: true, x, y, stops } if *x == 30.0 && *y == 30.0 && stops[0].pos.is_none())
+        );
         assert_eq!(layer_css(&l), r);
         // Sens écrit en mots : côté reconnu, coin gardé tel quel.
-        assert!(matches!(parse_layer("linear-gradient(to right, red, blue)"), Layer::Linear { angle, .. } if angle == 90.0));
-        assert!(matches!(parse_layer("linear-gradient(to top right, red, blue)"), Layer::Raw(_)));
-        assert!(matches!(parse_layer("linear-gradient(90deg, red 10px, blue)"), Layer::Raw(_)));
-        assert!(matches!(parse_layer("linear-gradient(var(--aube))"), Layer::Raw(_)));
-        assert!(matches!(parse_layer("radial-gradient(var(--a), var(--b))"), Layer::Radial { circle: false, .. }));
+        assert!(
+            matches!(parse_layer("linear-gradient(to right, red, blue)"), Layer::Linear { angle, .. } if angle == 90.0)
+        );
+        assert!(matches!(
+            parse_layer("linear-gradient(to top right, red, blue)"),
+            Layer::Raw(_)
+        ));
+        assert!(matches!(
+            parse_layer("linear-gradient(90deg, red 10px, blue)"),
+            Layer::Raw(_)
+        ));
+        assert!(matches!(
+            parse_layer("linear-gradient(var(--aube))"),
+            Layer::Raw(_)
+        ));
+        assert!(matches!(
+            parse_layer("radial-gradient(var(--a), var(--b))"),
+            Layer::Radial { circle: false, .. }
+        ));
         assert!(parse_layers("none").is_empty());
         assert_eq!(layers_css(&[]), None);
     }

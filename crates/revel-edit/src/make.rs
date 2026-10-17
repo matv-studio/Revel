@@ -100,6 +100,12 @@ pub enum Preset {
     Icon,
     /// Code HTML écrit tel quel.
     Embed,
+    /// Animation Lottie (6.2) : fichier `.json` des médias, lu par le lecteur du site.
+    Lottie,
+    /// Onglets (6.3) : un bouton par panneau, le script du site affiche le panneau choisi.
+    Tabs,
+    /// Accordéon (6.3) : titre qui ouvre son contenu (`details`, sans script).
+    Accordion,
     /// Liste de collection : un élément par contenu.
     CollectionList,
     /// Sélecteur de langue : un lien par langue du site vers la même page (3.8).
@@ -133,7 +139,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 24] = [
+    pub const ALL: [Preset; 27] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -148,6 +154,9 @@ impl Preset {
         Preset::Video,
         Preset::Icon,
         Preset::Embed,
+        Preset::Lottie,
+        Preset::Tabs,
+        Preset::Accordion,
         Preset::CollectionList,
         Preset::LocaleSwitch,
         Preset::BlockHero,
@@ -194,6 +203,58 @@ impl Preset {
             Preset::Video => vec![(
                 ".video",
                 vec![("display", "block"), ("width", "100%"), ("height", "auto")],
+            )],
+            Preset::Tabs => vec![
+                (
+                    ".onglets__liste",
+                    vec![
+                        ("display", "flex"),
+                        ("flex-wrap", "wrap"),
+                        ("gap", "4px"),
+                        ("border-bottom", "1px solid rgba(127, 127, 127, 0.35)"),
+                    ],
+                ),
+                (
+                    ".onglet",
+                    vec![
+                        ("padding", "10px 16px"),
+                        ("border", "0"),
+                        ("border-bottom", "2px solid transparent"),
+                        ("margin-bottom", "-1px"),
+                        ("background", "none"),
+                        ("color", "inherit"),
+                        ("font", "inherit"),
+                        ("cursor", "pointer"),
+                    ],
+                ),
+                (
+                    ".onglet.is-active",
+                    vec![("border-bottom-color", "currentColor")],
+                ),
+                (".onglets__panneau", vec![("padding", "16px 0")]),
+            ],
+            Preset::Accordion => vec![
+                (
+                    ".accordeon",
+                    vec![("border-bottom", "1px solid rgba(127, 127, 127, 0.35)")],
+                ),
+                (
+                    ".accordeon__titre",
+                    vec![
+                        ("padding", "14px 0"),
+                        ("font-weight", "600"),
+                        ("cursor", "pointer"),
+                    ],
+                ),
+                (".accordeon__contenu", vec![("padding-bottom", "14px")]),
+            ],
+            Preset::Lottie => vec![(
+                ".lottie",
+                vec![
+                    ("display", "block"),
+                    ("width", "100%"),
+                    ("max-width", "480px"),
+                ],
             )],
             Preset::Icon => vec![(
                 ".icone",
@@ -372,6 +433,81 @@ impl Preset {
                 vec![],
             ),
             Preset::Icon => icon_node(id(), "etoile"),
+            Preset::Tabs => {
+                let flag = |n: &str| Attr {
+                    name: n.into(),
+                    value: None,
+                    when: None,
+                };
+                let buttons: Vec<Node> = (1..=2)
+                    .map(|n| {
+                        el(
+                            id(),
+                            "button",
+                            vec![
+                                attr("class", "onglet"),
+                                attr("type", "button"),
+                                flag("data-revel-tab"),
+                            ],
+                            vec![txt(&format!("{text} {n}"))],
+                        )
+                    })
+                    .collect();
+                let mut kids = vec![el(
+                    id(),
+                    "div",
+                    vec![attr("class", "onglets__liste"), attr("role", "tablist")],
+                    buttons,
+                )];
+                for n in 1..=2 {
+                    kids.push(el(
+                        id(),
+                        "div",
+                        vec![attr("class", "onglets__panneau"), flag("data-revel-panel")],
+                        vec![el(id(), "p", vec![], vec![txt(&format!("{text} {n}"))])],
+                    ));
+                }
+                el(
+                    id(),
+                    "div",
+                    vec![attr("class", "onglets"), flag("data-revel-tabs")],
+                    kids,
+                )
+            }
+            Preset::Accordion => el(
+                id(),
+                "details",
+                vec![attr("class", "accordeon")],
+                vec![
+                    el(
+                        id(),
+                        "summary",
+                        vec![attr("class", "accordeon__titre")],
+                        vec![txt(text)],
+                    ),
+                    el(
+                        id(),
+                        "div",
+                        vec![attr("class", "accordeon__contenu")],
+                        vec![el(id(), "p", vec![], vec![txt(text)])],
+                    ),
+                ],
+            ),
+            Preset::Lottie => el(
+                id(),
+                "div",
+                vec![
+                    attr("class", "lottie"),
+                    attr("data-lottie", ""),
+                    attr("data-lottie-play", "auto"),
+                    Attr {
+                        name: "data-lottie-loop".into(),
+                        value: None,
+                        when: None,
+                    },
+                ],
+                vec![],
+            ),
             Preset::Embed => el(
                 id(),
                 "div",
@@ -518,7 +654,11 @@ pub fn own_layout_id(site: &Site, template: &str, file: &str) -> String {
 /// Modèle des pages d'une collection (page de collection de Webflow) : gabarit enfant du
 /// gabarit habituel des pages, avec le titre du contenu (`title_field`) et son texte.
 /// Identifiant libre `modele-<collection>`.
-pub fn collection_template(site: &Site, collection: &str, title_field: &str) -> revel_model::Layout {
+pub fn collection_template(
+    site: &Site,
+    collection: &str,
+    title_field: &str,
+) -> revel_model::Layout {
     let base = format!("modele-{}", collection.replace('_', "-"));
     let mut id = base.clone();
     let mut n = 2;

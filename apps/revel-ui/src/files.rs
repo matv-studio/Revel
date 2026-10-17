@@ -46,4 +46,4 @@ pub fn pick(accept: &str, multiple: bool, on: impl Fn(Vec<web_sys::File>) + 'sta
 }
 
 /// Types de fichiers acceptés pour les médias.
-pub const MEDIA_ACCEPT: &str = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.woff,.woff2,.ttf,.otf,.lottie,.zip";
+pub const MEDIA_ACCEPT: &str = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.woff,.woff2,.ttf,.otf,.lottie,.json,.zip";

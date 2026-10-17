@@ -699,9 +699,12 @@ fn write_entry(
 
 /// Empreinte des fichiers lus par le canevas (document, données, contenus) : change quand l'un
 /// d'eux est modifié, ajouté ou retiré.
-fn files_stamp(project: &Project) -> String {
+/// Empreintes des fichiers lus par le canevas : tous (document du site compris), et seulement
+/// les données et les contenus des collections.
+fn files_stamp(project: &Project) -> (String, String) {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut content = std::collections::hash_map::DefaultHasher::new();
     let mut dirs: Vec<std::path::PathBuf> = Vec::new();
     if let Some(d) = &project.site.data_dir {
         dirs.push(project.dir.join(d));
@@ -737,16 +740,26 @@ fn files_stamp(project: &Project) -> String {
         walk(d, &mut files, 0);
     }
     files.sort();
+    let site_file = project.dir.join(revel_project::SITE_FILE);
     for f in files {
-        f.hash(&mut h);
-        if let Ok(m) = std::fs::metadata(&f) {
-            m.len().hash(&mut h);
-            if let Ok(t) = m.modified() {
-                t.hash(&mut h);
+        let stamp = |h: &mut std::collections::hash_map::DefaultHasher| {
+            f.hash(h);
+            if let Ok(m) = std::fs::metadata(&f) {
+                m.len().hash(h);
+                if let Ok(t) = m.modified() {
+                    t.hash(h);
+                }
             }
+        };
+        stamp(&mut h);
+        if f != site_file {
+            stamp(&mut content);
         }
     }
-    format!("{:016x}", h.finish())
+    (
+        format!("{:016x}", h.finish()),
+        format!("{:016x}", content.finish()),
+    )
 }
 
 fn key(path: &Path) -> String {
@@ -872,9 +885,11 @@ impl Core {
     /// L'interface la compare régulièrement pour relire le document et recharger la page.
     pub fn edit_stamp(&self, path: &Path) -> Result<revel_edit::EditStamp> {
         self.with_session(path, |s| {
+            let (files, content) = files_stamp(&s.project);
             Ok(revel_edit::EditStamp {
                 revision: s.revision,
-                files: files_stamp(&s.project),
+                files,
+                content,
             })
         })
     }

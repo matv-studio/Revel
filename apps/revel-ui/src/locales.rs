@@ -494,7 +494,7 @@ pub fn Locales(site: SiteSummary) -> impl IntoView {
                 </table>
             </div>
             {move || (no_url() && !locales.with(Vec::is_empty)).then(|| view! {
-                <p class="muted help">{ui.t("locales-no-url")}</p>
+                <p class="muted help" title=ui.t("locales-no-url")>{crate::icons::warning()}{ui.t("locales-no-url-short")}</p>
             })}
             {move || sel.get().map(|code| view! {
                 <div class="section locales-texts">

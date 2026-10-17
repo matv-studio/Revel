@@ -8,8 +8,8 @@ use super::ctx::Sx;
 use crate::icons;
 use leptos::prelude::*;
 use revel_style::values::{
-    Func, Tracks, Transition, format_funcs, format_tracks, format_transitions,
-    length::parse_num, parse_funcs, parse_tracks, parse_transitions, span_of,
+    Func, Tracks, Transition, format_funcs, format_tracks, format_transitions, length::parse_num,
+    parse_funcs, parse_tracks, parse_transitions, span_of,
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -52,7 +52,14 @@ pub const FILTERS: &[FnDef] = &[
     f("saturate", "fx-saturate", "150%", "%", PCT_UNITS, 5.0),
     f("sepia", "fx-sepia", "100%", "%", PCT_UNITS, 5.0),
     f("invert", "fx-invert", "100%", "%", PCT_UNITS, 5.0),
-    f("hue-rotate", "fx-hue-rotate", "90deg", "deg", DEG_UNITS, 5.0),
+    f(
+        "hue-rotate",
+        "fx-hue-rotate",
+        "90deg",
+        "deg",
+        DEG_UNITS,
+        5.0,
+    ),
 ];
 
 pub const TRANSFORMS: &[FnDef] = &[
@@ -207,7 +214,10 @@ pub fn Transitions(sx: Sx) -> impl IntoView {
     let list = Memo::new(move |_| pv.get().here.and_then(|v| parse_transitions(&v)));
     let raw = move || pv.get().here.is_some() && list.get().is_none();
     let write = move |l: Vec<Transition>| {
-        sx.set("transition", (!l.is_empty()).then(|| format_transitions(&l)))
+        sx.set(
+            "transition",
+            (!l.is_empty()).then(|| format_transitions(&l)),
+        )
     };
     let edit = move |i: usize, f: Box<dyn Fn(&mut Transition)>| {
         let mut l = list.get_untracked().unwrap_or_default();
@@ -234,14 +244,20 @@ pub fn Transitions(sx: Sx) -> impl IntoView {
             </div>
         }
     };
-    let time = move |i: usize, get: fn(&Transition) -> String, put: fn(&mut Transition, String), key: &'static str, prefix: &'static str| view! {
-        <NumBox sx
-            value=Signal::derive(move || list.get().and_then(|l| l.get(i).map(get)))
-            hint=Signal::derive(|| "0ms".to_string())
-            start=Signal::derive(move || list.get().and_then(|l| l.get(i).map(get)).unwrap_or_else(|| "0ms".into()))
-            on_preview=Callback::new(|_: String| {})
-            on_commit=Callback::new(move |(v, _): (Option<String>, bool)| write(edit(i, Box::new(move |t| put(t, v.clone().unwrap_or_else(|| "0ms".into()))))))
-            unit="ms" units=TIME_UNITS step=50.0 prefix=Some(prefix) label=key/>
+    let time = move |i: usize,
+                     get: fn(&Transition) -> String,
+                     put: fn(&mut Transition, String),
+                     key: &'static str,
+                     prefix: &'static str| {
+        view! {
+            <NumBox sx
+                value=Signal::derive(move || list.get().and_then(|l| l.get(i).map(get)))
+                hint=Signal::derive(|| "0ms".to_string())
+                start=Signal::derive(move || list.get().and_then(|l| l.get(i).map(get)).unwrap_or_else(|| "0ms".into()))
+                on_preview=Callback::new(|_: String| {})
+                on_commit=Callback::new(move |(v, _): (Option<String>, bool)| write(edit(i, Box::new(move |t| put(t, v.clone().unwrap_or_else(|| "0ms".into()))))))
+                unit="ms" units=TIME_UNITS step=50.0 prefix=Some(prefix) label=key/>
+        }
     };
     view! {
         <div class="fx-list">
@@ -301,14 +317,10 @@ pub fn GridTracks(sx: Sx) -> impl IntoView {
         let p = pv.get();
         match &p.here {
             Some(v) => parse_tracks(v),
-            None => p
-                .inherited
-                .as_deref()
-                .and_then(parse_tracks)
-                .or_else(|| {
-                    let n = revel_style::values::split_top(&p.computed, ' ').len() as u32;
-                    (n > 0 && p.computed != "none").then_some(Tracks::Equal(n))
-                }),
+            None => p.inherited.as_deref().and_then(parse_tracks).or_else(|| {
+                let n = revel_style::values::split_top(&p.computed, ' ').len() as u32;
+                (n > 0 && p.computed != "none").then_some(Tracks::Equal(n))
+            }),
         }
     });
     let raw = move || pv.get().here.is_some() && tracks.get().is_none();
@@ -349,11 +361,13 @@ pub fn GridTracks(sx: Sx) -> impl IntoView {
         }
         write(Tracks::List(l));
     };
-    let seg = move |m: TrackMode, key: &'static str, help: &'static str| view! {
-        <button role="radio" class:is-on=move || mode() == m aria-checked=move || (mode() == m).to_string()
-            title=ui.t(help) on:click=move |_| if mode() != m { to_mode(m) }>
-            <span>{ui.t(key)}</span>
-        </button>
+    let seg = move |m: TrackMode, key: &'static str, help: &'static str| {
+        view! {
+            <button role="radio" class:is-on=move || mode() == m aria-checked=move || (mode() == m).to_string()
+                title=ui.t(help) on:click=move |_| if mode() != m { to_mode(m) }>
+                <span>{ui.t(key)}</span>
+            </button>
+        }
     };
     view! {
         <div class="stack-tight">
@@ -500,7 +514,11 @@ const SELF_Y: &[Opt] = &[
 #[component]
 fn Span(sx: Sx, prop: &'static str, label: &'static str, prefix: &'static str) -> impl IntoView {
     let pv = Memo::new(move |_| sx.get(prop));
-    let shown = move |v: &str| span_of(v).map(|n| n.to_string()).unwrap_or_else(|| v.to_string());
+    let shown = move |v: &str| {
+        span_of(v)
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| v.to_string())
+    };
     let to_css = |n: u32| {
         if n <= 1 {
             "auto".to_string()

@@ -723,13 +723,32 @@ fn list_name(expr: &str) -> String {
     crate::names::humanize(last)
 }
 
+/// Nom d'une liste de collection : libellé de la collection (« Actualités »), sinon le nom
+/// tiré de l'expression.
+fn list_label(expr: &str) -> String {
+    // Expression raccourcie pour l'affichage : collection lue au début (`collections.<id>`).
+    let id: Option<String> = expr.find("collections.").map(|i| {
+        expr[i + 12..]
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect()
+    });
+    id.filter(|id| !id.is_empty())
+        .and_then(|id| {
+            use_context::<Ed>()?
+                .col_labels
+                .with(|m| m.get(&id).cloned())
+        })
+        .unwrap_or_else(|| list_name(expr))
+}
+
 pub fn label(ui: Ui, k: &Kind) -> String {
     match k {
         Kind::Element { tag, class } => crate::names::element_name(ui, tag, class),
         Kind::Text(t) => format!("« {t} »"),
         Kind::Expr(e) => format!("{{{{ {e} }}}}"),
         Kind::If(c) => ui.tx("layers-if", &[("cond", condition_name(c))]),
-        Kind::Each { expr, .. } => ui.tx("layers-each", &[("list", list_name(expr))]),
+        Kind::Each { expr, .. } => ui.tx("layers-each", &[("list", list_label(expr))]),
         Kind::Branch(Branch::Otherwise) => ui.tx("layers-else", &[]),
         Kind::Branch(_) => ui.tx("layers-empty-list", &[]),
         Kind::Use(c) => c.rsplit('/').next().unwrap_or(c).to_string(),
@@ -793,6 +812,35 @@ pub fn Layers() -> impl IntoView {
     let drag = RwSignal::new(None::<Row>);
     let drop_at = RwSignal::new(None::<(String, Zone)>);
     let query = RwSignal::new(String::new());
+    // Libellés des collections (listes de collection nommées comme dans le panneau Pages).
+    let col_folders = Memo::new(move |_| {
+        ed.doc.with(|d| {
+            d.as_ref()
+                .map(|d| {
+                    d.collections
+                        .iter()
+                        .map(|c| (c.id.clone(), c.folder.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+    });
+    Effect::new(move |_| {
+        let cols = col_folders.get();
+        let path = ed.path.get_value();
+        leptos::task::spawn_local(async move {
+            if let Ok(cms) = crate::api::cms_collections(&path).await {
+                let map = cols
+                    .into_iter()
+                    .filter_map(|(id, folder)| {
+                        let l = cms.iter().find(|c| c.folder == folder)?.label.clone()?;
+                        Some((id, l))
+                    })
+                    .collect();
+                let _ = ed.col_labels.try_set(map);
+            }
+        });
+    });
 
     let all = Memo::new(move |_| {
         let url = ed.page.get();
@@ -1270,7 +1318,11 @@ pub fn Layers() -> impl IntoView {
                                     {if open { icons::chevron_down() } else { icons::chevron_right() }}
                                 </button>
                                 <span class="layer-icon">{icon(&kind, textual)}</span>
-                                <span class="layer-label">{label(ui, &kind)}</span>
+                                <span class="layer-label">{
+                                    // Liste de collection : nom suivi (libellés lus après coup).
+                                    let k = kind.clone();
+                                    move || label(ui, &k)
+                                }</span>
                                 {move || preview().map(|p| view! {
                                     <span class="layer-preview" class:is-bound=bound
                                         title=move || textual.then(|| ui.now("layers-edit-text", &[]))>{p}</span>

@@ -1182,6 +1182,12 @@ pub(crate) fn parse_date(s: &str) -> Option<DateTime<Utc>> {
         .and_then(DateTime::from_timestamp_millis)
 }
 
+/// Date en toutes lettres (filtre `date_text`).
+pub(crate) fn date_text(d: &DateTime<Utc>, locale: &str, style: &str) -> String {
+    use chrono::Datelike;
+    revel_edit::dates::text(d.year(), d.month(), d.day(), locale, style)
+}
+
 fn items_of(v: &Value) -> Vec<Value> {
     if v.is_undefined() || v.is_none() {
         return Vec::new();
@@ -1263,6 +1269,27 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
                 .unwrap_or_default(),
         ))
     });
+    // Date écrite en toutes lettres dans la langue donnée (D-73) : `long` (16 octobre 2026),
+    // `month` (octobre 2026), `short` (16 oct. 2026).
+    env.add_filter(
+        "date_text",
+        |v: Value, locale: Option<String>, style: Option<String>| -> Value {
+            if v.is_undefined() || v.is_none() {
+                return Value::from("");
+            }
+            Value::from(
+                parse_date(&v.to_string())
+                    .map(|d| {
+                        date_text(
+                            &d,
+                            locale.as_deref().unwrap_or("fr"),
+                            style.as_deref().unwrap_or("long"),
+                        )
+                    })
+                    .unwrap_or_default(),
+            )
+        },
+    );
     env.add_filter("iso_date", |v: Value| {
         Value::from(
             parse_date(&v.to_string())

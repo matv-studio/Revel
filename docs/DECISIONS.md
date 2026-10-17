@@ -431,6 +431,86 @@ canevas, une barre apparaît au-dessus de la sélection : gras, italique, lien, 
 la barre de texte de Webflow. Ctrl+B, Ctrl+I et Ctrl+U font de même. La mise en forme devient des éléments
 `strong`, `em`, `u`, `a` et `span` dans le document (une seule annulation pour la saisie) ; tout autre balise
 collée est réduite à son texte.
+- Complément du 17/10/2026 (recréation du site Alunites) : un élément qui ne contient que du texte et des éléments
+  de mise en forme (titre avec des spans, paragraphe avec du gras ou des retours à la ligne) se modifie **d'un
+  bloc**, sur la page comme dans le champ « Texte » du panneau. Les éléments déjà présents sont repris par leur
+  repère (classes, animations et autres attributs gardés) ; une copie collée reçoit un nouvel identifiant ; une
+  seule commande remplace le contenu de l'élément. Le gras, l'italique et le soulignement sont posés par Revel
+  (le navigateur poserait un « gras retiré » en style dans un titre déjà gras). Le double-clic sélectionne le mot
+  pointé. Hors de la langue principale, les textes restent traduits un par un.
+
+**D-73 — 17/10/2026 — prise.** **Réglages ajoutés après la recréation du site Alunites** (accueil et modèle d'un
+projet, refaits depuis l'interface seule) : ce qui obligeait à un détour devient un réglage.
+- Grille : colonnes **égales** (nombre), **sur mesure** (largeur de chaque colonne : `2fr`, `240px`, `auto`) ou
+  **automatiques** (autant que la place permet, largeur minimale, étirées ou non) ; écart des lignes et des
+  colonnes séparé par un cadenas (lu et écrit dans `gap` quand il y est) ; enfant d'une grille : cases
+  occupées, alignement propre, ordre ; enfant d'une pile : alignement propre, ordre.
+- Effets : mélange (`mix-blend-mode`), filtres et filtres de l'arrière-plan (flou, luminosité, contraste, noir et
+  blanc, saturation, sépia, inversion, teinte), transformations (déplacement, rotation, échelle, inclinaison),
+  transitions (ce qui change, durée, délai, courbe) ; une forme écrite à la main que Revel ne sait pas lire
+  reste modifiable en texte.
+- Texte : retour à la ligne (automatique, jamais, retours écrits gardés) et coupure des lignes (équilibrées, sans
+  mot seul à la fin).
+- Contenus (CMS) : écriture d'une date reliée choisie dans une liste (16.10.2026, 16 octobre 2026, octobre
+  2026…) ; les mois sont écrits dans la langue de la page (`date_text(locale, "long")`, filtre du moteur) ; texte
+  écrit avant et après une valeur reliée (« pour Volvo Trucks ») ; affichage d'un élément selon un champ rempli
+  ou vide (condition qui l'enveloppe, lisible aussi quand elle est sélectionnée) ; image de fond d'un bloc
+  reliée à un champ ; liste « sans le contenu affiché » sur la page d'un contenu (`without(page.url)`) ; liste
+  dans une liste tirée d'un champ à plusieurs valeurs (valeurs, ou contenus désignés par une référence) ; listes
+  nommées dans les calques d'après la collection ; à la création d'une collection, dossiers de contenus qu'aucune
+  collection ne lit proposés (champs déduits des contenus).
+- Une utilisation de composant dans une liste ne montre plus dans son champ « Texte » les textes du contenu de
+  la liste (ils se modifient dans le CMS).
+
+**D-74 — 17/10/2026 — prise.** **Animations Lottie (6.2) : lecteur lottie-web hébergé avec le site.** Bloc
+« Animation Lottie » du panneau Ajouter ; fichier choisi parmi les médias (fichier `.json` exporté d'After Effects
+par Bodymovin, ou archive `.lottie` de LottieFiles dont l'animation est extraite en `.json` à l'import) ; lecture à
+l'écran (pause hors de l'écran), au survol (avance puis revient), à l'appui ou au défilement ; boucle ; vitesse.
+- Lecteur : lottie-web 5.13.0 (Airbnb, licence MIT, `crates/revel-render/vendor/lottie-web/`), rendu SVG avec
+  expressions (`lottie_svg.min.js`, 243 Ko, environ 60 Ko compressé), plutôt que la version légère sans
+  expressions (168 Ko) : les animations d'After Effects qui en utilisent restent lues. Produit en
+  `/assets/revel-lottie.js` (lecteur et réglages) seulement si une page contient une animation ; aucun service
+  extérieur (D-36). Le canevas reçoit le même script : l'animation s'y voit et suit ses réglages sans recharger
+  la page.
+- Mouvement réduit demandé par le visiteur : pas de lecture automatique. Sans hauteur donnée par le style, la
+  proportion de l'animation est appliquée.
+- Un fichier `.json` des médias n'est rangé parmi les animations que s'il en a la forme (cadence, début, fin,
+  calques) ; un autre JSON est refusé à l'import des médias.
+
+**D-75 — 17/10/2026 — prise.** **Interactions entre éléments (6.3), sans code.** Rubrique « Actions » du panneau
+Interactions : déclencheur (à l'appui, au survol, au défilement au-delà de N pixels, à l'écran, au chargement),
+action (ajouter une classe, afficher ou masquer, afficher, masquer, lire ou mettre en pause une vidéo, fermer
+pour de bon), élément visé (cet élément, parent, suivant, page entière, éléments d'une classe, élément nommé).
+- Écrites dans l'attribut `data-revel-on` de l'élément déclencheur (`click class:is-open #menu; scroll:80
+  class:is-solid self`), lisible et modifiable à la main ; une forme non reconnue reste modifiable en texte.
+  Script `/assets/revel-actions.js` (quelques Ko) produit si une page en contient ; pas dans le canevas (un
+  clic y sélectionne), mais dans l'aperçu.
+- Couvre les comportements du site Alunites : menu ouvert par un bouton (classe sur la navigation), en-tête
+  opaque après le défilement, vidéo mise en pause, bandeau de consentement fermé pour de bon (souvenu par le
+  navigateur du visiteur).
+- Onglets prêts à l'emploi (panneau Ajouter) : un bouton par panneau, le premier ouvert ; sans JavaScript, tous
+  les panneaux restent lisibles. Accordéon prêt à l'emploi : élément `details` du navigateur, sans script.
+
+**D-76 — 17/10/2026 — prise.** **Transitions entre les pages (6.4) par les transitions de vue du navigateur.**
+Paramètres › Général : aucune, fondu ou glissement. Écrites en CSS dans chaque page (`@view-transition {
+navigation: auto }`), sans script : prises en charge par Chrome et Edge 126 et Safari 18.2 ; Firefox change de
+page sans transition (vérifié le 17/10/2026, https://developer.chrome.com/docs/web-platform/view-transitions).
+Coupées pour les visiteurs qui demandent moins de mouvement ; absentes du canevas.
+
+**D-77 — 17/10/2026 — prise.** **Mises à jour de Revel (6.6) : module de mise à jour de Tauri, versions publiées
+sur GitHub.** Revel cherche au lancement une version plus récente (`latest.json` de la dernière version publiée
+du dépôt `matv-studio/revel`) ; un bouton « Version x.y.z » apparaît alors dans la barre supérieure, et
+Réglages › Mises à jour montre la version installée, cherche, installe et relance (installation « passive »
+sous Windows).
+- Chaque mise à jour est vérifiée par sa signature avant d'être installée (clé publique dans la configuration,
+  clé privée seulement dans les secrets du dépôt). Une version construite sans clé (développement) ne cherche
+  rien et le dit.
+- À faire par l'utilisateur pour activer les mises à jour (réglages persistants du dépôt, non faits par
+  Claude) : créer la paire de clés sur son ordinateur (`cargo tauri signer generate -w ~/.tauri/revel.key`),
+  déclarer le secret `TAURI_SIGNING_PRIVATE_KEY` (contenu de la clé privée) et, s'il y en a un,
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, puis la variable `TAURI_UPDATER_PUBKEY` (contenu de la clé publique).
+  Perdre la clé privée empêche de publier des mises à jour pour les versions déjà installées. Une version
+  n'est proposée qu'une fois publiée (pas en brouillon ni en préversion).
 
 ## Décisions ouvertes
 
@@ -443,6 +523,19 @@ Basé sur le domaine `revel-studio.app`, libre mais non enregistré.
 versions déjà publiées sous cette licence.
 
 **D-09 — ouverte (étape 6).** Signature de code : certificat Windows (sinon avertissement SmartScreen), compte Apple Developer (sinon blocage Gatekeeper).
+- Préparé le 17/10/2026 (6.7) : la construction des installateurs signe dès que les secrets et variables du
+  dépôt sont déclarés (`.github/workflows/release.yml`, étape « Signatures et mises à jour ») ; sans eux,
+  installateurs non signés sous Windows et signés « ad hoc » sous macOS.
+- Options vérifiées le 17/10/2026, à choisir par l'utilisateur :
+  - Windows, Azure Artifact Signing (ex-Trusted Signing) : 9,99 USD par mois pour 5 000 signatures ;
+    ouvert aux organisations des États-Unis, du Canada, de l'Union européenne et du Royaume-Uni, aux
+    personnes seulement aux États-Unis et au Canada ; certificats de 24 h renouvelés seuls
+    (https://devclass.com/2026/01/14/code-signing-windows-apps-may-be-easier-and-more-secure-with-new-azure-artifact-service/).
+  - Windows, certificat OV ou EV d'une autorité : la réputation SmartScreen se construit de la même façon
+    avec l'un ou l'autre depuis 2024 (https://v2.tauri.app/distribute/sign/windows/).
+  - macOS, Apple Developer Program : 99 USD par an ; seul moyen d'obtenir un certificat Developer ID et la
+    notarisation ; sans lui, signature ad hoc et autorisation manuelle dans Confidentialité et sécurité
+    (https://v2.tauri.app/distribute/sign/macos/).
 
 **D-34 — 15/10/2026 — prise.** **Composants à propriétés, modification isolée (comme Webflow).** Un composant
 porte un nom affiché et des propriétés (`props` : nom d'expression, libellé, type texte, image, lien ou

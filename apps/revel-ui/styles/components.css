@@ -745,7 +745,8 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 /* --- Paramètres du site : code personnalisé, polices (3.9) ------------------------------- */
 .code-field { margin-bottom: var(--s-3); }
 .code-field:last-child { margin-bottom: 0; }
-.code-input { min-height: 120px; resize: vertical; font-size: var(--text-sm); line-height: 1.5; tab-size: 2; white-space: pre; }
+.code-input { min-height: 120px; padding-block: 6px; resize: vertical; font-size: var(--text-sm); line-height: 1.5; tab-size: 2; white-space: pre; }
+.robots-input { min-height: 96px; }
 .page-settings-code .code-input { min-height: 72px; }
 .font-list { list-style: none; margin: 0; padding: 0; }
 .font-row {
@@ -1076,3 +1077,26 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .settings-card > h2, .settings-card .mcp > h2 { margin: 0; }
 .settings-card--bare > .section { margin: 0; }
 .settings-card .packs { margin: 0; }
+
+/* --- Aide intégrée (6.8) ------------------------------------------------------------------------ */
+.help-open { width: 100%; justify-content: flex-start; gap: 6px; margin-bottom: 8px; }
+.help-dialog { display: grid; grid-template-columns: 220px minmax(0, 1fr); width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); padding: 0; overflow: hidden; }
+.help-nav { display: flex; flex-direction: column; gap: 2px; padding: 16px 8px; border-right: var(--border) solid var(--line); overflow: auto; background: var(--bg); }
+.help-nav-item { text-align: left; padding: 7px 10px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-muted); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.help-nav-item:hover { color: var(--text); background: var(--surface-hover); }
+.help-nav-item.is-on { color: var(--text); background: var(--surface-active); font-weight: var(--weight-medium); }
+.help-body { position: relative; padding: 24px 32px; overflow: auto; }
+.help-body h2 { margin: 0 0 12px; font-size: 20px; }
+.help-close { position: absolute; top: 12px; right: 12px; }
+.help-text { color: var(--text); line-height: 1.6; max-width: 640px; }
+.help-text p, .help-text ul, .help-text ol { margin: 0 0 12px; }
+.help-text li { margin-bottom: 4px; }
+.help-text table { border-collapse: collapse; margin: 8px 0 16px; }
+.help-text th, .help-text td { text-align: left; padding: 6px 12px 6px 0; border-bottom: var(--border) solid var(--line); }
+.help-text code { font-family: var(--font-mono); font-size: .92em; }
+
+/* --- Mises à jour (6.6) ------------------------------------------------------------------------- */
+.update-actions { margin-top: 12px; gap: 8px; }
+.update-status { margin: 10px 0 0; font-size: var(--text-sm); color: var(--text-muted); }
+.update-status.is-on { color: var(--text); }
+.update-pill { gap: 6px; margin-right: 8px; }

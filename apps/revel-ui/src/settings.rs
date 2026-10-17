@@ -28,11 +28,78 @@ pub fn Settings() -> impl IntoView {
                     </div>
                 </section>
                 <TranslatePacks/>
+                <Updates/>
                 <section class="settings-card settings-card--bare" data-section="assistants">
                     <crate::assistants::Assistants/>
                 </section>
             </div>
         </div>
+    }
+}
+
+/// Mises à jour de Revel (6.6) : version installée, recherche, installation et relance.
+#[component]
+fn Updates() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let version = RwSignal::new(String::new());
+    // `None` : pas encore cherché ; `Some(Err)` : échec.
+    let checked = RwSignal::new(None::<Result<revel_protocol::UpdateCheck, String>>);
+    let busy = RwSignal::new(false);
+    spawn_local(async move {
+        if let Ok((v, _)) = api::app_info().await {
+            let _ = version.try_set(v);
+        }
+    });
+    let check = move || {
+        busy.set(true);
+        spawn_local(async move {
+            let r = api::update_check().await;
+            if let Ok(c) = &r {
+                ui.update.set(c.available.clone());
+            }
+            let _ = checked.try_set(Some(r.map_err(|e| ui.failure(&e))));
+            let _ = busy.try_set(false);
+        });
+    };
+    let install = move || {
+        busy.set(true);
+        spawn_local(async move {
+            if let Err(e) = api::update_install().await {
+                ui.fail(e);
+            }
+            let _ = busy.try_set(false);
+        });
+    };
+    let status = move || match checked.get() {
+        None => ui
+            .update
+            .get()
+            .map(|u| (true, ui.tx("update-available", &[("version", u.version)]))),
+        Some(Ok(c)) if !c.enabled => Some((false, ui.tx("update-disabled", &[]))),
+        Some(Ok(c)) => Some(match c.available {
+            Some(u) => (true, ui.tx("update-available", &[("version", u.version)])),
+            None => (false, ui.tx("update-none", &[])),
+        }),
+        Some(Err(e)) => Some((false, e)),
+    };
+    let notes = move || ui.update.get().and_then(|u| u.notes).unwrap_or_default();
+    view! {
+        <section class="section settings-card" data-section="updates">
+            <h2 title=ui.t("update-help")>{ui.t("update-title")}</h2>
+            <div class="form-grid">
+                <span class="label">{ui.t("update-version")}</span>
+                <span class="mono">{move || version.get()}</span>
+            </div>
+            <div class="ctl-line update-actions">
+                <button class="btn" disabled=move || busy.get() on:click=move |_| check()>{ui.t("update-check")}</button>
+                {move || ui.update.get().map(|_| view! {
+                    <button class="btn btn--primary" disabled=move || busy.get() title=notes on:click=move |_| install()>
+                        {icons::download()}{ui.t("update-install")}
+                    </button>
+                })}
+            </div>
+            {move || status().map(|(on, t)| view! { <p class="update-status" class:is-on=on>{t}</p> })}
+        </section>
     }
 }
 

@@ -1116,6 +1116,8 @@ pub struct MediaPick {
     pub site: String,
     /// Images seulement.
     pub images: bool,
+    /// Un seul type de média (animations Lottie).
+    pub kind: Option<MediaKind>,
     /// Rangement des médias (dossiers), quand il est connu (éditeur).
     pub shelf: Option<Shelf>,
     /// Adresse choisie.
@@ -1136,6 +1138,25 @@ pub fn pick_media(
     ui.pick_media.set(Some(MediaPick {
         site,
         images,
+        kind: None,
+        shelf,
+        on_pick: std::sync::Arc::new(on_pick),
+    }));
+}
+
+/// Ouvre le choix d'une animation Lottie du site ouvert.
+pub fn pick_animation(
+    ui: Ui,
+    shelf: Option<Shelf>,
+    on_pick: impl Fn(String) + Send + Sync + 'static,
+) {
+    let Some(site) = ui.site_path() else {
+        return;
+    };
+    ui.pick_media.set(Some(MediaPick {
+        site,
+        images: false,
+        kind: Some(MediaKind::Animation),
         shelf,
         on_pick: std::sync::Arc::new(on_pick),
     }));
@@ -1207,6 +1228,7 @@ pub fn MediaPicker() -> impl IntoView {
             let req = StoredValue::new(req);
             let site = req.with_value(|r| r.site.clone());
             let images = req.with_value(|r| r.images);
+            let only = req.with_value(|r| r.kind);
             let files = RwSignal::new(Vec::<MediaFile>::new());
             let loaded = RwSignal::new(false);
             let q = RwSignal::new(String::new());
@@ -1237,6 +1259,7 @@ pub fn MediaPicker() -> impl IntoView {
                     files.with(|fs| {
                         fs.iter()
                             .filter(|f| !images || f.kind == MediaKind::Image)
+                            .filter(|f| only.is_none_or(|k| f.kind == k))
                             .filter(|f| ql.is_empty() || file_name(&f.url).to_lowercase().contains(&ql))
                             .filter(|f| match (&cur, &r.shelf) {
                                 (Some(c), Some(s)) => within(folder_of(s, &f.url), c),
@@ -1277,7 +1300,13 @@ pub fn MediaPicker() -> impl IntoView {
                     }
                 });
             };
-            let accept = if images { "image/*" } else { crate::files::MEDIA_ACCEPT };
+            let accept = if images {
+                "image/*"
+            } else if only == Some(MediaKind::Animation) {
+                ".json,.lottie"
+            } else {
+                crate::files::MEDIA_ACCEPT
+            };
             let tile = move |f: MediaFile| {
                 let url = f.url.clone();
                 let name = file_name(&f.url);

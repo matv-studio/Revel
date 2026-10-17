@@ -38,8 +38,13 @@ shrink, lift, shadow, dim, tilt, brighten, underline), `data-revel-press` (press
 `data-revel-loop` (spin, pulse, float, swing, shake, blink, bounce, heartbeat, ticker) and \
 `data-revel-scroll` (parallax, fade-in, zoom-in, rotate, slide-x, fade-out); value: the animation, then optional \
 settings such as `dur=0.8 delay=0.2 ease=smooth|bounce|ease|linear dist=32 stagger=0.1 trigger=view|load \
-replay split=chars|words|lines amount=100 mirror=on|off dir=left|right pause` (e.g. `up dur=0.8`). Keep the \
-site's language and tone.";
+replay split=chars|words|lines amount=100 mirror=on|off dir=left|right pause` (e.g. `up dur=0.8`). \
+Interactions between elements are the attribute `data-revel-on` on the triggering element: `<trigger> <action> \
+<target>` separated by `;`, trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss, \
+target self|parent|next|body|.<class>|#<id> (e.g. `click class:is-open #menu; scroll:80 class:is-solid self`). \
+Tabs: a `data-revel-tabs` container with `data-revel-tab` buttons and as many `data-revel-panel` panels. A Lottie \
+animation is an element with `data-lottie=\"/media/<file>.json\"`, `data-lottie-play=auto|hover|click|scroll`, \
+optional `data-lottie-loop` and `data-lottie-speed`. Keep the site's language and tone.";
 
 /// Assistant et outil d'une modification (dernières actions des assistants).
 #[derive(Debug, Clone, serde::Serialize)]

@@ -356,6 +356,10 @@ pub struct Settings {
     /// Formulaires du site reçus par l'hébergement (5.8).
     #[serde(default, skip_serializing_if = "FormSettings::is_default")]
     pub forms: FormSettings,
+    /// Transition entre les pages du site (6.4) : `fade` (fondu), `slide` (glissement) ; `None` :
+    /// aucune.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_transition: Option<String>,
 }
 
 /// Formulaires du site (5.8) : les messages des `<form data-revel-form>` sont transmis par

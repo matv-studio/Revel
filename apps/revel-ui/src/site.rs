@@ -401,7 +401,7 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                         "robots.txt"
                         {move || own("/robots.txt").then(|| view! { <span class="seo-warn">{icons::warning()}</span> })}
                     </span>
-                    <textarea class="input input--mono" rows="6" disabled=move || own("/robots.txt")
+                    <textarea class="input input--mono code-input robots-input" rows="6" disabled=move || own("/robots.txt")
                         placeholder="User-agent: *\nAllow: /"
                         prop:value=move || seo().robots.unwrap_or_default()
                         on:change=move |e| {
@@ -600,8 +600,7 @@ pub fn Export(site: SiteSummary) -> impl IntoView {
         <section class="page settings-page">
             <header class="page-head">
                 <div>
-                    <h1>{ui.t("export-title")}</h1>
-                    <p class="muted page-lead">{ui.t("export-lead")}</p>
+                    <h1 title=ui.t("export-lead")>{ui.t("export-title")}</h1>
                 </div>
             </header>
             <div class="section">

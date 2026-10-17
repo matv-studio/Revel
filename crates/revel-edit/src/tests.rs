@@ -1922,7 +1922,10 @@ fn pages_d_une_collection() {
         ],
     };
     let inv = apply(&mut s, &cmd).unwrap();
-    assert_eq!(s.collections[0].path.as_deref(), Some("/projets/{{ slug }}/"));
+    assert_eq!(
+        s.collections[0].path.as_deref(),
+        Some("/projets/{{ slug }}/")
+    );
     assert_eq!(s.collections[0].layout.as_deref(), Some("modele-projets"));
     apply(&mut s, &inv).unwrap();
     assert_eq!(json(&s), json(&base));
@@ -1958,7 +1961,10 @@ fn regle_ajoutee_deux_fois_reste_unique() {
     // Deuxième réglage envoyé avant que le panneau ne connaisse la règle : même règle modifiée.
     let e2 = expand(&s, &add("blue")).unwrap();
     let i2 = apply(&mut s, &e2).unwrap();
-    assert_eq!(s.style_rules().filter(|r| r.selector == ".bouton").count(), 1);
+    assert_eq!(
+        s.style_rules().filter(|r| r.selector == ".bouton").count(),
+        1
+    );
     assert!(css(&s).contains(".bouton { color: blue; }"), "{}", css(&s));
     apply(&mut s, &i2).unwrap();
     assert!(css(&s).contains(".bouton { color: red; }"));
@@ -1987,14 +1993,27 @@ fn texte_mis_en_forme_modifie_d_un_bloc() {
     s.pages[0].body.push(h2);
     s.ensure_ids();
     let h2_id = id_of(&s, "h2");
-    let span_id = match address::node(&s, &Target { owner: page(), node: h2_id.clone() }) {
+    let span_id = match address::node(
+        &s,
+        &Target {
+            owner: page(),
+            node: h2_id.clone(),
+        },
+    ) {
         Ok(Node::Element { children, .. }) => node_id(&children[1]).unwrap().to_string(),
         _ => panic!(),
     };
     let hosts = rich_hosts(&s);
     assert!(hosts.contains(&h2_id));
     // Texte avec une expression : modifié texte par texte.
-    let p = address::node(&s, &Target { owner: page(), node: id_of(&s, "p") }).unwrap();
+    let p = address::node(
+        &s,
+        &Target {
+            owner: page(),
+            node: id_of(&s, "p"),
+        },
+    )
+    .unwrap();
     assert!(!is_rich_host(p));
     let at = Target {
         owner: page(),
@@ -2010,7 +2029,11 @@ fn texte_mis_en_forme_modifie_d_un_bloc() {
         children: kids,
     };
     // Contenu inchangé (typographie de la page comprise) : pas de commande.
-    let same = vec![t("Le "), span(Some(&span_id), vec![t("bureau")]), t(" d’études")];
+    let same = vec![
+        t("Le "),
+        span(Some(&span_id), vec![t("bureau")]),
+        t(" d’études"),
+    ];
     assert_eq!(set_inline(&s, &at, &same, true).unwrap(), None);
     // Mot ajouté dans le span, mot mis en gras, copie du span collée à la fin.
     let base = json(&s);
@@ -2043,14 +2066,23 @@ fn texte_mis_en_forme_modifie_d_un_bloc() {
     assert_eq!(children.len(), 4, "{children:?}");
     // Span repris : même identifiant, mêmes attributs.
     assert_eq!(node_id(&children[1]), Some(span_id.as_str()));
-    let Node::Element { attrs, .. } = &children[1] else { panic!() };
+    let Node::Element { attrs, .. } = &children[1] else {
+        panic!()
+    };
     assert_eq!(attrs.len(), 2);
     // Gras : `strong`, apostrophe de la source rétablie.
-    let Node::Element { tag, children: b, .. } = &children[2] else { panic!() };
+    let Node::Element {
+        tag, children: b, ..
+    } = &children[2]
+    else {
+        panic!()
+    };
     assert_eq!(tag, "strong");
     assert_eq!(b, &vec![text(" d'études")]);
     // Copie : mêmes attributs, nouvel identifiant ; retour à la ligne final retiré.
-    let Node::Element { id, attrs, .. } = &children[3] else { panic!() };
+    let Node::Element { id, attrs, .. } = &children[3] else {
+        panic!()
+    };
     assert_ne!(id.as_deref(), Some(span_id.as_str()));
     assert_eq!(attrs.len(), 2);
     apply(&mut s, &inv).unwrap();
@@ -2069,7 +2101,9 @@ fn texte_mis_en_forme_modifie_d_un_bloc() {
     let Node::Element { children, .. } = address::node(&s, &at).unwrap().clone() else {
         panic!()
     };
-    let Node::Element { tag, attrs, .. } = &children[0] else { panic!() };
+    let Node::Element { tag, attrs, .. } = &children[0] else {
+        panic!()
+    };
     assert_eq!(tag, "a");
     assert_eq!(attrs[0].value.as_deref(), Some("/contact/"));
 }

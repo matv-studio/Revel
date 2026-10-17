@@ -46,7 +46,11 @@ pub fn SelectedTexts() -> impl IntoView {
             let html = v
                 .trim_end()
                 .split('\n')
-                .map(|l| l.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;"))
+                .map(|l| {
+                    l.replace('&', "&amp;")
+                        .replace('<', "&lt;")
+                        .replace('>', "&gt;")
+                })
                 .collect::<Vec<_>>()
                 .join("<br>");
             ed.text_html_command(&item.slot, &html)
@@ -143,7 +147,11 @@ fn InlineText(html: String, on_commit: Callback<String>) -> impl IntoView {
             d.set_inner_html(&html);
         }
     });
-    let read = move || node.get_untracked().map(|d| d.inner_html()).unwrap_or_default();
+    let read = move || {
+        node.get_untracked()
+            .map(|d| d.inner_html())
+            .unwrap_or_default()
+    };
     view! {
         <div class="input text-field-input text-field-rich" contenteditable="true" spellcheck="true"
             role="textbox" aria-label=ui.t("text-field") node_ref=node

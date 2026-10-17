@@ -22,6 +22,9 @@ pub struct Query {
     /// Nombre maximal de contenus.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
+    /// Sans le contenu affiché par la page (« autres projets » sur la page d'un projet).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exclude_current: bool,
 }
 
 fn ident(s: &str) -> bool {
@@ -131,6 +134,9 @@ impl Query {
                 None => e.push_str(&format!(" | selectattr({})", crate::canvas::quote(path))),
             }
         }
+        if self.exclude_current {
+            e.push_str(" | without(page.url)");
+        }
         if let Some((path, desc)) = &self.sort {
             if *desc {
                 e.push_str(&format!(
@@ -185,7 +191,7 @@ impl Query {
             let args = args.strip_suffix(')')?;
             let args = split_top(args, ',');
             match name.trim() {
-                "selectattr" if q.filter.is_none() && q.sort.is_none() => {
+                "selectattr" if q.filter.is_none() && q.sort.is_none() && !q.exclude_current => {
                     let path = crate::canvas::literal(args.first()?)?;
                     if !valid_path(&path) {
                         return None;
@@ -201,6 +207,14 @@ impl Query {
                         _ => return None,
                     };
                     q.filter = Some((path, value));
+                }
+                "without"
+                    if !q.exclude_current
+                        && q.sort.is_none()
+                        && args.len() == 1
+                        && args[0] == "page.url" =>
+                {
+                    q.exclude_current = true;
                 }
                 "sort" if q.sort.is_none() => {
                     let mut path = None;
@@ -227,6 +241,49 @@ impl Query {
     }
 }
 
+/// Liste tirée d'un champ du contenu (liste dans une liste, comme une liste de collection de
+/// Webflow sur un champ « référence multiple ») : valeurs du champ (`item.data.tags`), ou contenus
+/// d'une collection désignés par leurs adresses (`collections.expertises |
+/// by_slugs(item.data.expertises)`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FieldList {
+    Values { field: String },
+    Refs { collection: String, field: String },
+}
+
+impl FieldList {
+    pub fn to_expr(&self) -> String {
+        match self {
+            Self::Values { field } => field.clone(),
+            Self::Refs { collection, field } => {
+                format!("collections.{collection} | by_slugs({field})")
+            }
+        }
+    }
+
+    /// Forme écrite par [`FieldList::to_expr`] ; `None` pour une autre expression.
+    pub fn parse(expr: &str) -> Option<FieldList> {
+        let e = expr.trim();
+        if let Some((base, f)) = e.split_once('|') {
+            let id = base.trim().strip_prefix("collections.")?;
+            let field = f
+                .trim()
+                .strip_prefix("by_slugs(")?
+                .strip_suffix(')')?
+                .trim();
+            return (ident(id) && valid_path(field)).then(|| FieldList::Refs {
+                collection: id.to_string(),
+                field: field.to_string(),
+            });
+        }
+        (valid_path(e) && !e.starts_with("collections.") && e != "collections").then(|| {
+            FieldList::Values {
+                field: e.to_string(),
+            }
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -243,12 +300,21 @@ mod tests {
                 filter: Some(("data.une".into(), None)),
                 sort: Some(("date".into(), true)),
                 limit: Some(3),
+                exclude_current: false,
             },
             Query {
                 collection: "actualites-fr".into(),
                 filter: Some(("data.categorie".into(), Some("\"design, web\"".into()))),
                 sort: Some(("data.title".into(), false)),
                 limit: None,
+                exclude_current: false,
+            },
+            Query {
+                collection: "projets".into(),
+                sort: Some(("date".into(), true)),
+                limit: Some(3),
+                exclude_current: true,
+                ..Default::default()
             },
         ];
         for q in qs {
@@ -261,10 +327,24 @@ mod tests {
                 filter: Some(("data.une".into(), None)),
                 sort: Some(("date".into(), true)),
                 limit: Some(3),
+                exclude_current: false,
             }
             .to_expr(),
             r#"(collections.projets | selectattr("data.une") | sort(attribute="date", reverse=true))[:3]"#
         );
+        for f in [
+            FieldList::Values {
+                field: "item.data.tags".into(),
+            },
+            FieldList::Refs {
+                collection: "expertises".into(),
+                field: "expertises".into(),
+            },
+        ] {
+            assert_eq!(FieldList::parse(&f.to_expr()), Some(f.clone()));
+        }
+        assert_eq!(FieldList::parse("collections.projets"), None);
+        assert_eq!(FieldList::parse("collections.a | by_slugs(x | y)"), None);
         for other in [
             "collections.projets | reverse",
             "home.featured",

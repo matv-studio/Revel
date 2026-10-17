@@ -692,6 +692,7 @@ fn liste_de_collection() {
             filter,
             sort,
             limit,
+            exclude_current: false,
         }
         .to_expr()
     };
@@ -738,6 +739,54 @@ fn liste_de_collection() {
         "{home}"
     );
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+}
+
+#[test]
+fn lottie_interactions_et_transitions() {
+    let mut s = site();
+    s.settings.page_transition = Some("fade".into());
+    s.pages[0].body.extend(parse(
+        r#"<div class="lottie" data-lottie="/media/a.json" data-lottie-loop></div><button data-revel-on="click class:is-open #menu">Menu</button>"#,
+    ));
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(home.contains("/assets/revel-lottie.js"), "{home}");
+    assert!(home.contains("/assets/revel-actions.js"), "{home}");
+    assert!(home.contains("@view-transition{navigation:auto}"), "{home}");
+    for f in ["assets/revel-lottie.js", "assets/revel-actions.js"] {
+        assert!(out.files.iter().any(|x| x.path == f), "{f}");
+    }
+    // Sans animation Lottie ni interaction : aucun script produit.
+    let out = build(&input(&site(), vec![])).unwrap();
+    assert!(
+        !out.files
+            .iter()
+            .any(|x| x.path.contains("revel-lottie") || x.path.contains("revel-actions"))
+    );
+    assert!(!file(&out, "index.html").contains("view-transition"));
+}
+
+#[test]
+fn dates_en_toutes_lettres() {
+    use chrono::TimeZone;
+    let d = chrono::Utc.with_ymd_and_hms(2026, 10, 16, 0, 0, 0).unwrap();
+    assert_eq!(crate::eval::date_text(&d, "fr", "long"), "16 octobre 2026");
+    assert_eq!(crate::eval::date_text(&d, "fr", "month"), "octobre 2026");
+    assert_eq!(crate::eval::date_text(&d, "fr", "short"), "16 oct. 2026");
+    assert_eq!(crate::eval::date_text(&d, "en", "long"), "October 16, 2026");
+    assert_eq!(
+        crate::eval::date_text(&d, "de-CH", "long"),
+        "16. Oktober 2026"
+    );
+    // Filtre dans une page ; liste sans le contenu affiché.
+    let mut s = site();
+    s.pages[0].body.extend(parse(
+        r#"<p id="d">{{ "2026-10-16" | date_text("fr", "long") }}</p><p id="v">{{ none | date_text("fr") }}</p>"#,
+    ));
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(home.contains(r#"<p id="d">16 octobre 2026</p>"#), "{home}");
+    assert!(home.contains(r#"<p id="v"></p>"#), "{home}");
 }
 
 #[test]
@@ -961,14 +1010,28 @@ fn contenus_en_brouillon_ecartes_de_la_generation() {
     let out = build(&input(
         &s,
         vec![
-            entry("a", json!({"slug": "a", "title": "Publié", "date": "2026-01-02"})),
-            entry("b", json!({"slug": "b", "title": "Brouillon", "draft": true})),
-            entry("c", json!({"slug": "c", "title": "Masqué", "published": false})),
+            entry(
+                "a",
+                json!({"slug": "a", "title": "Publié", "date": "2026-01-02"}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "Brouillon", "draft": true}),
+            ),
+            entry(
+                "c",
+                json!({"slug": "c", "title": "Masqué", "published": false}),
+            ),
         ],
     ))
     .unwrap();
     let paths: Vec<&str> = out.files.iter().map(|f| f.path.as_str()).collect();
     assert!(paths.contains(&"project/a/index.html"), "{paths:?}");
-    assert!(!paths.iter().any(|p| p.starts_with("project/b") || p.starts_with("project/c")), "{paths:?}");
+    assert!(
+        !paths
+            .iter()
+            .any(|p| p.starts_with("project/b") || p.starts_with("project/c")),
+        "{paths:?}"
+    );
     assert!(!file(&out, "index.html").contains("Brouillon"));
 }

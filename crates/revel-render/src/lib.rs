@@ -13,11 +13,14 @@ use revel_model::{CollectionSource, Node, Site, SortKind};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+pub mod actions;
 pub mod animations;
 mod eval;
 mod forms;
 mod html;
+pub mod lottie;
 pub mod rebase;
+pub mod transitions;
 mod typography;
 
 pub use html::escape;
@@ -235,7 +238,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let mut pages: Vec<(String, bool)> = Vec::new();
     // Formulaires reçus par l'hébergement (5.8) trouvés dans les pages ; pages animées (6.1).
     let mut forms = 0usize;
-    let mut animated = false;
+    let mut used = Scripts::default();
     {
         let mut b = eval::Builder::new(input);
         b.lang = eval::Lang {
@@ -249,7 +252,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
             &mut files,
             &mut pages,
             &mut forms,
-            &mut animated,
+            &mut used,
             &mut warnings,
         )?;
     }
@@ -276,7 +279,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
             &mut files,
             &mut pages,
             &mut forms,
-            &mut animated,
+            &mut used,
             &mut warnings,
         )?;
     }
@@ -294,9 +297,19 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     }
     seo_files(site, &pages, &mut files, &mut warnings);
     forms::handler_file(site, forms, &mut files, &mut warnings);
-    animations::script_file(animated, &mut files);
+    animations::script_file(used.animations, &mut files);
+    lottie::script_file(used.lottie, &mut files);
+    actions::script_file(used.actions, &mut files);
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(BuildOutput { files, warnings })
+}
+
+/// Scripts du site utilisés par au moins une page (produits une fois pour le site).
+#[derive(Default)]
+struct Scripts {
+    animations: bool,
+    lottie: bool,
+    actions: bool,
 }
 
 /// Pages d'une langue : fichiers produits, adresses HTML (adresse, `noindex`) pour le plan du site.
@@ -306,7 +319,7 @@ fn build_pages(
     files: &mut Vec<OutputFile>,
     pages: &mut Vec<(String, bool)>,
     forms: &mut usize,
-    animated: &mut bool,
+    used: &mut Scripts,
     warnings: &mut Vec<String>,
 ) -> Result<(), RenderError> {
     let prepared = prepare(b, input, false)?;
@@ -319,8 +332,16 @@ fn build_pages(
             let (html, n) = forms::wire(input.site, finish_html(b, input.site, j, html), scripts);
             *forms += n;
             let (html, a) = animations::wire(html, scripts);
-            *animated |= a;
-            html
+            used.animations |= a;
+            let (html, l) = lottie::wire(html);
+            used.lottie |= l;
+            let (html, i) = actions::wire(html, scripts);
+            used.actions |= i;
+            transitions::wire(
+                html,
+                input.site.settings.page_transition.as_deref(),
+                scripts,
+            )
         } else {
             html
         };
@@ -781,6 +802,16 @@ fn editor_page(
     let mut warnings = Vec::new();
     let html = b.render_job(&prepared.globals, job, DocKind::Html, &mut warnings)?;
     let html = finish_html(&b, input.site, job, html);
+    // Scripts du site : animations Lottie aussi dans le canevas (elles s'y voient) ; animations,
+    // interactions et transitions dans l'aperçu seulement (`scripts`).
+    let (html, _) = animations::wire(html, opts.scripts);
+    let (html, _) = lottie::wire(html);
+    let (html, _) = actions::wire(html, opts.scripts);
+    let html = transitions::wire(
+        html,
+        input.site.settings.page_transition.as_deref(),
+        opts.scripts,
+    );
     warnings.extend(b.take_warnings());
     let (slots, vars) = b
         .editor

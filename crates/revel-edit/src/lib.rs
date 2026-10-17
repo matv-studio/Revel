@@ -8,10 +8,12 @@
 //!
 //! Ne dépend que de `revel-model` et `revel-style` (compilable pour l'interface en WebAssembly).
 
+pub mod actions;
 pub mod address;
 pub mod canvas;
 pub mod collection;
 pub mod command;
+pub mod dates;
 pub mod history;
 pub mod icons;
 pub mod inline;
@@ -126,11 +128,14 @@ pub struct EditState {
 
 /// Empreinte d'un site ouvert, comparée régulièrement par l'éditeur : `revision` change quand une
 /// autre vue ou un assistant (même session du cœur) modifie le document, `files` quand un fichier
-/// lu par le canevas change hors de Revel (Pages CMS, éditeur de texte).
+/// lu par le canevas change hors de Revel (Pages CMS, éditeur de texte), `content` quand une donnée
+/// ou un contenu de collection change (fichiers hors du document du site).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EditStamp {
     pub revision: u64,
     pub files: String,
+    #[serde(default)]
+    pub content: String,
 }
 
 /// Document ouvert pour l'édition.

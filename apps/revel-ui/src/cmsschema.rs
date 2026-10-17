@@ -1195,7 +1195,7 @@ fn SubFields(
             {(!locked).then(|| view! {
                 <button type="button" class="btn btn--small schema-sub-add" on:click=add>{icons::plus()}{ui.t("cms-sub-add")}</button>
             })}
-            {locked.then(|| view! { <p class="muted small">{ui.t("cms-sub-locked")}</p> })}
+            {locked.then(|| view! { <p class="muted small" title=ui.t("cms-sub-locked")>{ui.t("cms-sub-locked-short")}</p> })}
         </div>
     }
 }

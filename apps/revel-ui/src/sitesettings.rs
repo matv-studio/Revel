@@ -143,6 +143,21 @@ pub fn General(site: SiteSummary) -> impl IntoView {
                             on:change=move |e| { let on = event_target_checked(&e); set(&|i| i.typography = on.then(|| "fr".to_string())) }/>
                         <span class="switch-track"></span>
                     </span>
+                    <label class="label" for="site-transition" title=ui.t("settings-transition-help")>{ui.t("settings-transition")}</label>
+                    <div class="select">
+                        <select id="site-transition" class="input" on:change=move |e| {
+                            let v = event_target_value(&e);
+                            s.apply.run(Command::SetPageTransition { transition: (!v.is_empty()).then_some(v) });
+                        }>
+                            {move || {
+                                let cur = s.doc.with(|d| d.as_ref().and_then(|d| d.settings.page_transition.clone())).unwrap_or_default();
+                                [("", "transition-none"), ("fade", "transition-fade"), ("slide", "transition-slide")]
+                                    .into_iter()
+                                    .map(|(v, k)| view! { <option value=v selected=v == cur>{ui.t(k)}</option> })
+                                    .collect_view()
+                            }}
+                        </select>
+                    </div>
                     <span class="label">{ui.t("settings-site-folder")}</span>
                     <span class="muted path">{move || fresh.with(|s| s.path.clone())}</span>
                 </div>
@@ -319,7 +334,10 @@ fn is_variable(name: &str, data: &[u8]) -> bool {
     if lower.contains("wght") || lower.contains("variable") {
         return true;
     }
-    let u16_at = |i: usize| data.get(i..i + 2).map(|b| u16::from_be_bytes([b[0], b[1]]) as usize);
+    let u16_at = |i: usize| {
+        data.get(i..i + 2)
+            .map(|b| u16::from_be_bytes([b[0], b[1]]) as usize)
+    };
     // Entier de longueur variable de WOFF2 (UIntBase128) : position qui suit.
     let skip128 = |mut i: usize| -> Option<usize> {
         for _ in 0..5 {

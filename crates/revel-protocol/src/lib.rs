@@ -155,6 +155,16 @@ pub struct CollectionSummary {
     pub entries: usize,
 }
 
+/// Dossier de contenus (fichiers Markdown) du site qu'aucune collection ne lit encore : proposé
+/// à la création d'une collection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CmsFolder {
+    /// Dossier relatif au site (`src/content/actualites`).
+    pub folder: String,
+    /// Nombre de contenus.
+    pub count: usize,
+}
+
 /// Collection de contenus, telle que l'affiche la vue CMS.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CmsCollection {
@@ -580,6 +590,26 @@ impl Default for AppSettings {
             projects_dir: None,
         }
     }
+}
+
+/// Mises à jour de Revel (6.6) : vérifiées et signées, lues sur les versions publiées.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateCheck {
+    /// Mises à jour possibles pour cette version (installateur officiel, clé de vérification
+    /// présente) ; fausses pour une version construite à la main.
+    pub enabled: bool,
+    /// Version proposée, plus récente que celle-ci.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available: Option<UpdateInfo>,
+}
+
+/// Version proposée par les mises à jour.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateInfo {
+    pub version: String,
+    /// Notes de la version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 /// Texte à traduire automatiquement (D-36).

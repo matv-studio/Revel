@@ -10,6 +10,9 @@ use leptos::html;
 use leptos::prelude::*;
 use std::sync::Arc;
 
+/// Option d'un choix : valeur, libellé, valeur proposée pour le champ.
+pub type ChoiceOpt = (String, String, String);
+
 /// Demande affichée à l'utilisateur. Les textes sont déjà traduits.
 #[derive(Clone)]
 pub struct Ask {
@@ -21,6 +24,9 @@ pub struct Ask {
     pub confirm: String,
     /// Action destructrice : bouton de confirmation en rouge.
     pub danger: bool,
+    /// Choix au-dessus du champ (dossier d'une nouvelle collection) : libellé, options (valeur,
+    /// libellé, valeur proposée pour le champ), choix retenu.
+    pub choice: Option<(String, Vec<ChoiceOpt>, RwSignal<String>)>,
     /// Appelé avec la valeur saisie (vide sans champ) quand l'utilisateur confirme. Fonction
     /// simple (pas un `Callback` réactif) : la vue qui a ouvert la boîte peut avoir été
     /// redessinée entre-temps sans que l'action soit perdue.
@@ -40,8 +46,20 @@ impl Ask {
             input: None,
             confirm,
             danger: false,
+            choice: None,
             on_confirm: Arc::new(move |_: String| on_confirm()),
         }
+    }
+
+    /// Ajoute un choix au-dessus du champ ; choisir une option propose sa valeur dans le champ.
+    pub fn with_choice(
+        mut self,
+        label: String,
+        options: Vec<ChoiceOpt>,
+        value: RwSignal<String>,
+    ) -> Self {
+        self.choice = Some((label, options, value));
+        self
     }
 
     pub fn danger(mut self) -> Self {
@@ -62,6 +80,7 @@ impl Ask {
             input: Some((label, initial)),
             confirm,
             danger: false,
+            choice: None,
             on_confirm: Arc::new(on_confirm),
         }
     }
@@ -124,6 +143,33 @@ pub fn Dialog() -> impl IntoView {
                         on:submit=move |e| { e.prevent_default(); submit() }>
                         <h2 id="dialog-title">{a.title.clone()}</h2>
                         {a.body.clone().map(|b| view! { <p class="muted">{b}</p> })}
+                        {a.choice.clone().map(|(l, options, chosen)| {
+                            let opts = options.clone();
+                            view! {
+                                <label class="field">
+                                    <span class="label">{l}</span>
+                                    <div class="select">
+                                        <select class="input" on:change=move |e| {
+                                            let v = event_target_value(&e);
+                                            // Valeur proposée : remplace le champ s'il est vide ou
+                                            // s'il porte la proposition d'un autre choix.
+                                            let cur = value.get_untracked();
+                                            let proposed = |x: &str| opts.iter().any(|(_, _, n)| n == x);
+                                            if cur.trim().is_empty() || proposed(&cur) {
+                                                let n = opts.iter().find(|(o, _, _)| *o == v).map(|(_, _, n)| n.clone()).unwrap_or_default();
+                                                value.set(n);
+                                            }
+                                            chosen.set(v);
+                                        }>
+                                            {options.into_iter().map(|(v, l, _)| {
+                                                let on = chosen.get_untracked() == v;
+                                                view! { <option value=v selected=on>{l}</option> }
+                                            }).collect_view()}
+                                        </select>
+                                    </div>
+                                </label>
+                            }
+                        })}
                         <Show when=move || has_input>
                             <label class="field">
                                 <span class="label">{label.clone()}</span>

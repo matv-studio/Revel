@@ -267,6 +267,8 @@ const fn item(
     }
 }
 
+// Éléments prévus (visibles, désactivés, avec l'étape qui les apportera) : aucun pour l'instant.
+#[allow(dead_code)]
 const fn planned(key: &'static str, icon: fn() -> AnyView, step: u8) -> Item {
     Item {
         preset: None,
@@ -320,6 +322,24 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     "",
                     icons::layout,
                     "div",
+                    true,
+                ),
+                item(
+                    Preset::Tabs,
+                    "insert-tabs",
+                    "insert-help-tabs",
+                    "insert-text-tabs",
+                    icons::tabs,
+                    "div",
+                    true,
+                ),
+                item(
+                    Preset::Accordion,
+                    "insert-accordion",
+                    "insert-help-accordion",
+                    "insert-text-accordion",
+                    icons::chevron_down,
+                    "details",
                     true,
                 ),
             ],
@@ -413,7 +433,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     "svg",
                     false,
                 ),
-                planned("insert-lottie", icons::bolt, 6),
+                item(
+                    Preset::Lottie,
+                    "insert-lottie",
+                    "insert-help-lottie",
+                    "",
+                    icons::sparkle,
+                    "div",
+                    true,
+                ),
             ],
         ),
         (

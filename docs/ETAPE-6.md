@@ -131,14 +131,14 @@ Repères : effets Appear, Hover, Press, Loop, Text Effects, Scroll Speed et Scro
 | N | État |
 |---|---|
 | 6.1 | Terminée : panneau Interactions (six moments, grille de 44 animations dont la vignette s'anime au survol, réglages par animation, aperçu dans le canevas, retrait) ; attribut `data-revel-*` par moment ; script du site produit si une page est animée (contenu visible sans JavaScript, mouvement réduit respecté, texte découpé au chargement et gardé pour les lecteurs d'écran) ; éclair sur les éléments animés dans les calques ; images et composants animés par un bloc qui les entoure ; animations décrites aux assistants IA (D-59) |
-| 6.2 | À venir |
-| 6.3 | À venir |
-| 6.4 | À venir |
-| 6.5 | À venir |
-| 6.6 | À venir |
-| 6.7 | À venir |
-| 6.8 | À venir |
-| 6.9 | À venir |
+| 6.2 | Terminée : bloc « Animation Lottie » (Ajouter), fichier `.json` ou `.lottie` des médias, lecture à l'écran, au survol, à l'appui ou au défilement, boucle, vitesse ; lecteur lottie-web hébergé avec le site, visible dans le canevas (D-74) |
+| 6.3 | Terminée : rubrique « Actions » du panneau Interactions (déclencheur, action, élément visé), onglets et accordéon prêts à l'emploi, script produit seulement s'il sert (D-75) |
+| 6.4 | Terminée : transition entre les pages (fondu, glissement) dans Paramètres › Général, en CSS, coupée pour le mouvement réduit (D-76) |
+| 6.5 | Terminée (17/10/2026) : passe d'écran en écran (éditeur, Ajouter, Styles, Interactions, CMS, Localisation, Paramètres, accueil, Réglages, aide), en thème sombre et clair, comparée à Webflow, Framer et Figma ; corrigé : exemple du titre de l'onglet sans le nom du site quand les données sont dans le document, icône propre aux onglets, tuile « Lottie » à la hauteur des autres, « Tronquer » au lieu d'un libellé coupé, nombre de contenus (et non d'« entrées ») dans le CMS, « Adresse de la page » sans terme technique, champ robots.txt à sa taille, page de l'éditeur gardée (sans rechargement) après un réglage sans effet sur elle dans Paramètres (transition, référencement, formulaires, redirections) ; essais de bout en bout ajoutés (onglets, accordéon, Lottie, actions, transition, aide) |
+| 6.6 | Faite côté application et construction (D-77) : recherche au lancement, Réglages › Mises à jour, installation vérifiée et relance ; active dès que la clé de signature est déclarée dans le dépôt (à faire par l'utilisateur) |
+| 6.7 | Préparée (D-09) : signature Windows (Azure Artifact Signing) et macOS (Developer ID, notarisation) dès que les secrets sont déclarés ; signature ad hoc sous macOS sans certificat ; choix et achats à faire par l'utilisateur |
+| 6.8 | Terminée : aide intégrée « Premiers pas » (menu « ? » de l'éditeur), quatorze rubriques en français et en anglais (`apps/revel-ui/help/`), libellés vérifiés sur ceux de l'interface |
+| 6.9 | Prête : installateur Windows au logo de Revel (bandeau, barre latérale, icône, français et anglais selon le système), image disque macOS avec fond et emplacements ; à partir de la version 1.0, langues de traduction non livrées (étape sautée, ressources retirées) (D-46) |
 
 ## Passe complète du 16/10/2026 (après 6.1)
 
@@ -166,4 +166,8 @@ recréer le site depuis l'application seule pour prouver que les outils suffisen
 | Canevas libre ou vue verrouillée, bouton de la barre (D-70) | Fait |
 | Couleurs du site créées depuis le sélecteur ; paramètres du site en six rubriques (D-71) | Fait |
 | Mise en forme dans le texte : barre gras, italique, lien, span (D-72) | Fait |
-| Site Alunites recréé depuis l'application seule | En cours |
+| Accueil et modèle d'un projet recréés depuis l'application seule (17/10/2026) | Fait |
+| Texte mis en forme modifié d'un bloc, sur la page et dans le panneau (D-72) | Fait |
+| Grille, écarts, place d'un enfant, filtres, transformations, transitions, mélange, retour à la ligne (D-73) | Fait |
+| CMS : écriture des dates, texte avant et après une valeur, affichage selon un champ, image de fond reliée, liste sans le contenu affiché, liste d'un champ, dossiers de contenus proposés (D-73) | Fait |
+| Site Alunites entier recréé depuis l'application seule | Dernière étape (demande du 17/10/2026) |

@@ -917,7 +917,9 @@ pub fn PageTree(
                 .map(|d| {
                     d.collections
                         .iter()
-                        .filter(|c| c.path.is_none() && c.source.is_folder() && !c.folder.is_empty())
+                        .filter(|c| {
+                            c.path.is_none() && c.source.is_folder() && !c.folder.is_empty()
+                        })
                         .map(|c| (c.id.clone(), c.folder.clone()))
                         .collect::<Vec<_>>()
                 })

@@ -24,10 +24,14 @@ revel-edit.workspace = true
 # Serveur des assistants IA (MCP, étape 4) branché sur le cœur de l'application.
 revel-mcp = { workspace = true, features = ["core"] }
 serde.workspace = true
+# Lu par `tauri::generate_context!` pour la configuration des modules (mises à jour).
+serde_json.workspace = true
 tauri.workspace = true
 tauri-plugin-dialog = "2.8.2"
 # Ouverture d'adresses dans le navigateur (github.com/login/device, site publié).
 tauri-plugin-opener = "2.7.1"
+# Mises à jour de Revel (6.6) : versions publiées sur GitHub, vérifiées par signature.
+tauri-plugin-updater = "2.14.0"
 
 [features]
 # Interface intégrée à l'exécutable (au lieu du serveur de développement `devUrl`) : activée par

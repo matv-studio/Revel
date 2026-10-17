@@ -25,8 +25,8 @@ fois lus, des pages HTML, des feuilles de style et des fichiers.
 |---|---|---|
 | 7.1 | **Site HTML statique depuis un dossier** : pages (adresses gardées), gabarit commun (en-tête de document, début et fin du corps partagés par toutes les pages), titre et description dans le référencement de chaque page, feuilles de style locales fusionnées dans la feuille du site (D-18), fichiers copiés tels quels, scripts gardés, attributs propres à une page (`<body class>`) | `revel-import`, `revel-core`, `revel-ui` |
 | 7.2 | **Depuis un dépôt Git** (option 1 du 17/10/2026) : adresse HTTPS d'un dépôt public, ou dépôt privé avec la connexion GitHub ; copie dans le dossier des projets, puis import Eleventy ou HTML statique ; site à construire signalé | `revel-git`, `revel-core`, `revel-ui` |
-| 7.3 | **Webflow** : export du code (fichier .zip, offres Workspace) par 7.1, feuilles `normalize.css` et `webflow.css` comprises, formulaires repris en formulaires Revel ; contenus du CMS par l'API de Webflow (jeton) ou les fichiers CSV | `revel-import` |
-| 7.4 | **Site publié lu à son adresse** (Framer, qui n'exporte pas de HTML, et tout site en ligne) : pages suivies depuis l'accueil et le plan du site, fichiers téléchargés, puis 7.1 | `revel-import`, `revel-core` |
+| 7.3 | **Webflow** : export du code (offres Workspace), décompressé par l'utilisateur, importé comme un dossier (7.1) : feuilles `normalize.css` et `webflow.css` comprises, formulaires repris en formulaires Revel ; contenus du CMS par l'API de Webflow (jeton) ou les fichiers CSV. Pas d'outil pour le fichier .zip (décision de l'utilisateur, 17/10/2026) | `revel-import` |
+| 7.4 | **Import depuis un lien : site publié lu à son adresse** (Framer, qui n'exporte pas de HTML, et tout site en ligne) : pages suivies depuis l'accueil et le plan du site, fichiers téléchargés (images et polices des serveurs de l'outil comprises), puis 7.1 | `revel-import`, `revel-core` |
 | 7.5 | **Figma** : fichier lu par l'API (cadres en sections, mise en page automatique en flex, variables en couleurs et tailles du site, images) | `revel-import` |
 | 7.6 | **WordPress** : fichier d'export WXR (Outils › Exporter) : pages, articles en collection, médias, redirections | `revel-import`, `revel-cms` |
 | 7.7 | **Animations et interactions** propres à chaque outil (interactions Webflow, effets de Framer) : reprises en animations Revel quand elles correspondent, sinon scripts gardés | `revel-import`, `revel-render` |
@@ -80,3 +80,13 @@ est importé comme un dossier de pages HTML, puis comparé page par page (struct
 
 Écart trouvé par la comparaison des captures et corrigé : le type de document (`<!DOCTYPE html>`) n'était pas
 repris, ce qui faisait passer les pages en mode de compatibilité (hauteurs de ligne différentes).
+
+## Framer : voies étudiées (17/10/2026)
+
+Framer ne propose pas d'export HTML ni d'hébergement ailleurs que chez lui (article d'aide mis à jour le
+15/09/2026 : https://www.framer.com/help/articles/can-i-export-my-website-to-html-and-self-host-it/).
+
+| Voie | Ce qu'elle donne | Limites |
+|---|---|---|
+| Site publié lu à son adresse (7.4) | Pages déjà calculées par Framer (HTML complet), styles, images et polices téléchargés ; marche aussi pour tout site en ligne | Classes produites par Framer (`framer-abc123`) ; animations liées au moteur de Framer (scripts gardés ou remplacés par les animations de Revel en 7.7) ; formulaires à reprendre ; contenus du CMS lus comme des pages |
+| Module (plugin) Framer ou API serveur de Framer (bêta ouverte depuis le 12/02/2026 : https://www.framer.com/updates/server-api) | Calques, textes, composants et collections du CMS lus dans le projet (https://framer.com/developers/nodes) | Module à écrire et à faire accepter par Framer ; tout n'est pas lisible (animations, effets) ; API en bêta, susceptible de changer |

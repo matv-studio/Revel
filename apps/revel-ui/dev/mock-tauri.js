@@ -5,7 +5,7 @@
   const state = {
     settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null },
     // `update=1` : une version plus récente est proposée (Réglages › Mises à jour).
-    update: params.get("update") ? { enabled: true, available: { version: "0.5.0", notes: "Animations Lottie, actions, transitions entre les pages." } } : null,
+    update: params.get("update") ? { enabled: true, available: { version: "0.6.0", notes: "Version d’essai de la simulation." } } : null,
     recents: params.get("empty") ? [] : [
       { path: "C:\\Sites\\alunites-revel-lab", name: "Alunites", opened_at: "2026-10-13T14:02:11+00:00" },
       { path: "C:\\Sites\\atelier-lumen", name: "Atelier Lumen", opened_at: "2026-10-11T09:40:00+00:00" },
@@ -139,7 +139,7 @@
       case "create_site": return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
       case "cms_collections": return cms;
       case "cms_folders": return [];
-      case "app_info": return ["0.4.2", 3];
+      case "app_info": return ["0.5.0", 3];
       case "update_check": return state.update || { enabled: false };
       case "update_install": return null;
       // Sans pont : document minimal (vue CMS, captures) ; modifications non simulées.

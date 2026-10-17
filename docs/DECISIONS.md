@@ -536,6 +536,14 @@ versions déjà publiées sous cette licence.
   - macOS, Apple Developer Program : 99 USD par an ; seul moyen d'obtenir un certificat Developer ID et la
     notarisation ; sans lui, signature ad hoc et autorisation manuelle dans Confidentialité et sécurité
     (https://v2.tauri.app/distribute/sign/macos/).
+- Options gratuites vérifiées le 17/10/2026 : Microsoft Store avec un paquet MSIX (inscription gratuite pour
+  les particuliers, paquet re-signé par Microsoft, sans avertissement ; Tauri ne produit pas de MSIX, étape à
+  ajouter ; https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options) ;
+  SignPath Foundation (projets sous licence open source approuvée par l'OSI seulement, éditeur affiché
+  « SignPath Foundation » ; https://signpath.org/terms). macOS : aucune voie gratuite.
+- **17/10/2026 — choix de l'utilisateur : pas de signature pour l'instant** (installateurs non signés sous
+  Windows, signés ad hoc sous macOS). Les brouillons de versions antérieurs sont gardés comme historique du
+  développement.
 
 **D-34 — 15/10/2026 — prise.** **Composants à propriétés, modification isolée (comme Webflow).** Un composant
 porte un nom affiché et des propriétés (`props` : nom d'expression, libellé, type texte, image, lien ou

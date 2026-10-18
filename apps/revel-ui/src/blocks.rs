@@ -858,9 +858,11 @@ fn tabs_options(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
             </label>
         }
     };
-    let sound_name = sound
-        .as_deref()
-        .map(|u| u.rsplit('/').next().unwrap_or(u).to_string());
+    // Nom du fichier, sans le volume (`~50`).
+    let sound_name = sound.as_deref().map(|u| {
+        let u = u.rsplit_once('~').map_or(u, |(a, _)| a);
+        u.rsplit('/').next().unwrap_or(u).to_string()
+    });
     view! {
         <div class="insp-group">
             <p class="panel-title">{ui.t("tabs-title")}</p>

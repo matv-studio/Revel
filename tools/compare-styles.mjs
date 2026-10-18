@@ -98,6 +98,12 @@ async function settle(page) {
     await Promise.all([...document.images].map((i) => Promise.race([
       i.decode().catch(() => null), new Promise((r) => setTimeout(r, 8000)),
     ])));
+    // Image pas chargée (échec passager du serveur sous la charge) : redemandée une fois.
+    await Promise.all([...document.images].filter((i) => i.currentSrc && !(i.complete && i.naturalWidth)).map((i) => {
+      const src = i.currentSrc;
+      i.src = src + (src.includes('?') ? '&' : '?') + 'rv-retry=1';
+      return Promise.race([i.decode().catch(() => null), new Promise((r) => setTimeout(r, 8000))]);
+    }));
     // Toutes les polices déclarées, pas seulement celles déjà demandées (sinon une graisse chargée
     // tardivement change la mise en page d'une capture à l'autre).
     await Promise.all([...document.fonts].map((f) => f.load().catch(() => null)));

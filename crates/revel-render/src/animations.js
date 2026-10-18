@@ -45,13 +45,13 @@
     "loop:blink": { dur: 1.2 },
     "loop:bounce": { dur: 1.2 },
     "loop:heartbeat": { dur: 1.6 },
-    "loop:ticker": { ease: "linear", dur: 20, dir: "left" },
+    "loop:ticker": { ease: "linear", dir: "left", speed: 60, fade: 0 },
   };
   var STAGGER = { chars: 0.03, words: 0.06, lines: 0.12 };
 
   function parse(family, value) {
     var parts = String(value || "").trim().split(/\s+/);
-    var o = { preset: parts[0] || "" };
+    var o = { preset: parts[0] || "", given: {} };
     var base = DEFAULTS[family] || {};
     var k;
     for (k in base) o[k] = base[k];
@@ -60,7 +60,8 @@
     for (var i = 1; i < parts.length; i++) {
       var p = parts[i];
       var eq = p.indexOf("=");
-      if (eq < 0) { o[p] = true; continue; }
+      if (eq < 0) { o[p] = true; o.given[p] = true; continue; }
+      o.given[p.slice(0, eq)] = true;
       var v = p.slice(eq + 1);
       var n = Number(v);
       o[p.slice(0, eq)] = v !== "" && !isNaN(n) ? n : v;
@@ -315,36 +316,52 @@
     });
   }
 
-  // Bandeau défilant : enfants recopiés jusqu'à remplir deux largeurs, défilement d'une période.
+  // Bandeau défilant (élément « Défilement ») : enfants recopiés jusqu'à remplir deux longueurs,
+  // défilement d'une période. Sens `left`, `right` (horizontal), `up`, `down` (vertical : hauteur
+  // de l'élément fixée par son style) ; vitesse en px/s (`dur` écrit : durée d'une période) ;
+  // bords estompés (`fade`, px) ; arrêt au survol (`pause`).
   function ticker(el, o) {
     if (el.__rvTrack) return el.__rvTrack.anims;
     var cs = getComputedStyle(el);
-    var gap = parseFloat(cs.columnGap) || 0;
+    var vertical = o.dir === "up" || o.dir === "down";
+    var gap = parseFloat(vertical ? cs.rowGap : cs.columnGap) || 0;
     var track = doc.createElement("div");
     track.className = "rv-track";
-    track.style.cssText = "display:flex;flex-wrap:nowrap;width:max-content;gap:" + gap + "px;align-items:" + cs.alignItems;
+    track.style.cssText = "display:flex;flex-wrap:nowrap;gap:" + gap + "px;align-items:" + cs.alignItems +
+      (vertical ? ";flex-direction:column;height:max-content" : ";width:max-content");
     while (el.firstChild) track.appendChild(el.firstChild);
     el.appendChild(track);
     el.style.overflow = "hidden";
+    var fade = Number(o.fade) || 0;
+    if (fade > 0) {
+      var m = "linear-gradient(" + (vertical ? "to bottom" : "to right") + ",transparent,#000 " + fade + "px,#000 calc(100% - " + fade + "px),transparent)";
+      el.style.webkitMaskImage = m;
+      el.style.maskImage = m;
+    }
     var originals = Array.prototype.slice.call(track.children);
-    var period = track.getBoundingClientRect().width + gap;
-    var box = el.getBoundingClientRect().width;
+    var r = track.getBoundingClientRect();
+    var period = (vertical ? r.height : r.width) + gap;
+    var b = el.getBoundingClientRect();
+    var box = vertical ? b.height : b.width;
     var copies = Math.max(1, Math.ceil(box / Math.max(1, period)));
     for (var n = 0; n < copies; n++) {
       originals.forEach(function (c) {
         var d = c.cloneNode(true);
         d.setAttribute("aria-hidden", "true");
+        d.removeAttribute("data-rv");
         track.appendChild(d);
       });
     }
-    var left = o.dir !== "right";
-    var frames = [tr("translateX(" + (left ? 0 : -period) + "px)"), tr("translateX(" + (left ? -period : 0) + "px)")];
-    var anims = play(track, frames, { duration: o.dur * 1000, iterations: Infinity, easing: "linear" });
+    var axis = vertical ? "translateY(" : "translateX(";
+    var back = o.dir === "right" || o.dir === "down";
+    var frames = [tr(axis + (back ? -period : 0) + "px)"), tr(axis + (back ? 0 : -period) + "px)")];
+    var secs = o.given.dur || !(Number(o.speed) > 0) ? Number(o.dur) || 20 : period / Number(o.speed);
+    var anims = play(track, frames, { duration: Math.max(0.1, secs) * 1000, iterations: Infinity, easing: "linear" });
     if (o.pause) {
       el.addEventListener("pointerenter", function () { anims.forEach(function (a) { a.pause(); }); });
-      el.addEventListener("pointerleave", function () { anims.forEach(function (a) { a.play(); }); });
+      el.addEventListener("pointerleave", function () { if (!el.__rvTrack.stopped) anims.forEach(function (a) { a.play(); }); });
     }
-    el.__rvTrack = { anims: anims, track: track };
+    el.__rvTrack = { anims: anims, track: track, stopped: false };
     return anims;
   }
 

@@ -23,6 +23,13 @@ struct Cli {
 enum Command {
     /// Affiche la version et les hébergeurs compilés.
     Info,
+    /// Relevé de ce que l'interface ne crée ni ne règle dans un site (variables, expressions,
+    /// conditions et listes écrites…) ; `--json` : liste complète.
+    Audit {
+        dir: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
     /// Crée un projet vide.
     New {
         dir: PathBuf,
@@ -224,6 +231,26 @@ fn main() -> Result<()> {
             );
             for caps in providers::all() {
                 println!("  - {}", caps.id);
+            }
+        }
+        Command::Audit { dir, json } => {
+            let p = Project::open(&dir)?;
+            let issues = revel_edit::editable::audit(&p.site);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&issues)?);
+            } else {
+                for (k, n) in revel_edit::editable::summary(&issues) {
+                    println!("{k:?} : {n}");
+                }
+                for i in &issues {
+                    println!(
+                        "{} {:?} {} {}",
+                        i.owner,
+                        i.kind,
+                        i.node.as_deref().unwrap_or("-"),
+                        i.detail
+                    );
+                }
             }
         }
         Command::New {

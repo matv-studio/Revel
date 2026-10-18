@@ -1040,3 +1040,34 @@ fn contenus_en_brouillon_ecartes_de_la_generation() {
     );
     assert!(!file(&out, "index.html").contains("Brouillon"));
 }
+
+/// Calque masqué : absent du site publié, gardé (marqué) dans l'éditeur ; nom de calque jamais
+/// écrit.
+#[test]
+fn calques_masques_et_noms() {
+    let mut s = site();
+    s.pages[0].body = parse(
+        r#"<section data-revel-name="Bandeau"><p data-revel-hidden>secret</p><p>visible</p></section>"#,
+    );
+    s.pages[0].body.push(Node::Image(revel_model::ImageNode {
+        src: "\"/media/a.jpg\"".into(),
+        hidden: true,
+        name: Some("Photo".into()),
+        ..Default::default()
+    }));
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(home.contains("<section><p>visible</p></section>"), "{home}");
+    assert!(
+        !home.contains("secret") && !home.contains("a.jpg") && !home.contains("data-revel-name")
+    );
+    let e = render_editor(&input(&s, vec![]), "/", &EditorOptions { scripts: false })
+        .unwrap()
+        .unwrap();
+    assert!(
+        e.html.contains("data-revel-hidden") && e.html.contains("secret"),
+        "{}",
+        e.html
+    );
+    assert!(!e.html.contains("data-revel-name"));
+}

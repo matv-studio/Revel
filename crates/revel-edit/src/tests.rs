@@ -2107,3 +2107,60 @@ fn texte_mis_en_forme_modifie_d_un_bloc() {
     assert_eq!(tag, "a");
     assert_eq!(attrs[0].value.as_deref(), Some("/contact/"));
 }
+
+/// Éléments complexes du panneau Ajouter (Défilement, Carrousel, Diaporama, Barre de
+/// navigation) : leurs règles, celles de la barre de navigation aussi pour tablette (point de
+/// rupture le plus large du site) ; annulés à l'identique.
+#[test]
+fn elements_complexes() {
+    let mut s = sample();
+    let before = json(&s);
+    let parent = Parent::of(&at(&s, "main"), Branch::Children);
+    let mut inverses = Vec::new();
+    for (p, text) in [
+        (make::Preset::Ticker, "Élément"),
+        (make::Preset::Carousel, "Diapositive|Précédente|Suivante"),
+        (make::Preset::Slideshow, "Diapositive|Précédente|Suivante"),
+        (make::Preset::Navbar, "Marque|Menu|Accueil|Projets|Contact"),
+    ] {
+        inverses.push(
+            apply(
+                &mut s,
+                &Command::InsertPreset {
+                    parent: parent.clone(),
+                    index: 0,
+                    preset: p,
+                    text: text.into(),
+                },
+            )
+            .unwrap_or_else(|e| panic!("{p:?} : {e}")),
+        );
+    }
+    let c = css(&s);
+    for sel in [
+        ".defilement {",
+        ".carrousel__piste {",
+        ".diaporama__points button.is-active {",
+        ".barre-nav__menu {",
+    ] {
+        assert!(c.contains(sel), "{sel}\n{c}");
+    }
+    let tablet = s
+        .breakpoints
+        .iter()
+        .filter_map(|b| b.max_width)
+        .max()
+        .unwrap();
+    rule_id(
+        &s,
+        ".barre-nav.is-open .barre-nav__menu",
+        Some(&format!("(max-width: {tablet}px)")),
+    );
+    let html = serde_json::to_string(&s.pages[0].body).unwrap();
+    assert!(html.contains("ticker speed=60 pause") && html.contains("autoplay=5 loop"));
+    assert!(html.contains("click class:is-open parent") && html.contains("Projets"));
+    for inv in inverses.into_iter().rev() {
+        apply(&mut s, &inv).unwrap();
+    }
+    assert_eq!(json(&s), before);
+}

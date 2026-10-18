@@ -694,6 +694,10 @@ impl<'a> Builder<'a> {
         at: &At,
     ) -> Result<(), RenderError> {
         let marking = self.marking(at) && mode == Mode::Html;
+        // Calque masqué : absent du site (le canevas et l'aperçu le cachent par une règle).
+        if self.editor.is_none() && revel_model::is_hidden(n) {
+            return Ok(());
+        }
         match n {
             Node::Element {
                 id,
@@ -722,6 +726,9 @@ impl<'a> Builder<'a> {
                     out.push_str(" type=\"text/plain\" data-rv-script");
                 }
                 for a in attrs {
+                    if a.name == revel_model::LAYER_NAME_ATTR {
+                        continue;
+                    }
                     if let Some(w) = &a.when
                         && !self.eval(scope, w, ctx)?.is_true()
                     {
@@ -1023,10 +1030,17 @@ impl<'a> Builder<'a> {
                     return Ok(());
                 }
                 match self.input.hooks.image(&args) {
-                    Some(html) => match (marking, &img.id) {
-                        (true, Some(id)) => out.push_str(&with_marker(&html, id)),
-                        _ => out.push_str(&html),
-                    },
+                    Some(html) => {
+                        let html = if img.hidden {
+                            with_attr(&html, revel_model::HIDDEN_ATTR)
+                        } else {
+                            html
+                        };
+                        match (marking, &img.id) {
+                            (true, Some(id)) => out.push_str(&with_marker(&html, id)),
+                            _ => out.push_str(&html),
+                        }
+                    }
                     None => {
                         if let Some(c) = self.site.component("image-placeholder") {
                             let mut f: BTreeMap<String, Value> = BTreeMap::new();
@@ -1062,6 +1076,18 @@ impl<'a> Builder<'a> {
             }
         }
         Ok(())
+    }
+}
+
+/// Ajoute un attribut sans valeur à la première balise d'un fragment HTML.
+fn with_attr(html: &str, name: &str) -> String {
+    match html.find('<').and_then(|i| {
+        html[i..]
+            .find(|c: char| c.is_whitespace() || c == '>' || c == '/')
+            .map(|j| i + j)
+    }) {
+        Some(end) => format!("{} {name}{}", &html[..end], &html[end..]),
+        None => html.to_string(),
     }
 }
 

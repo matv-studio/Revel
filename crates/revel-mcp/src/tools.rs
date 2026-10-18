@@ -159,6 +159,48 @@ pub struct InsertHtmlArg {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct InsertPresetArg {
+    /// Element of Revel's Add panel: section, container, heading, paragraph, link, button, image,
+    /// list, grid, columns, rich_text, video, icon, embed, lottie, tabs, accordion,
+    /// collection_list, locale_switch, navbar, ticker, carousel, slideshow, block_hero,
+    /// block_features, block_text_image, block_cta, block_testimonial, block_faq, block_contact,
+    /// block_form.
+    pub preset: String,
+    /// Default text of the new element (site's language). navbar: "Brand|Menu|Link 1|Link 2|…";
+    /// carousel/slideshow: "Slide|Previous|Next".
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Insert at the end of this element (id).
+    #[serde(default)]
+    pub inside: Option<String>,
+    /// Insert just before this element (id).
+    #[serde(default)]
+    pub before: Option<String>,
+    /// Insert just after this element (id).
+    #[serde(default)]
+    pub after: Option<String>,
+    /// Otherwise: at the end of this page's own content (address, e.g. "/about/").
+    #[serde(default)]
+    pub page: Option<String>,
+    #[serde(default)]
+    pub site: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct LayerArg {
+    /// Element id.
+    pub id: String,
+    /// Layer name shown in Revel's Layers panel (empty: automatic name).
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Hidden layer: not on the published site, hidden on the canvas.
+    #[serde(default)]
+    pub hidden: Option<bool>,
+    #[serde(default)]
+    pub site: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CommandsArg {
     /// Revel edit commands (JSON objects tagged by "cmd"), applied together as one undo step.
     /// Example: [{"cmd": "set_attr", "at": {"owner": {"kind": "page", "id": "index"}, "node": "abc123"}, "name": "class", "value": "hero"}].
@@ -323,10 +365,102 @@ impl Revel {
         }
     }
 
+    /// Emplacement d'insertion : dans un élément, avant ou après lui, ou à la fin d'une page.
+    async fn place(
+        &self,
+        d: &Site,
+        site: &Option<String>,
+        inside: &Option<String>,
+        before: &Option<String>,
+        after: &Option<String>,
+        page: &Option<String>,
+    ) -> Option<(Parent, usize)> {
+        if let Some(id) = inside {
+            target_of(d, id).and_then(|t| match address::node(d, &t).ok()? {
+                Node::Element { children, .. } => {
+                    Some((Parent::of(&t, Branch::Children), children.len()))
+                }
+                _ => None,
+            })
+        } else if let Some(id) = before.as_ref().or(after.as_ref()) {
+            target_of(d, id).and_then(|t| {
+                let (p, i) = address::locate(d, &t).ok()?;
+                Some((p, if after.is_some() { i + 1 } else { i }))
+            })
+        } else if let Some(url) = page {
+            let pages = self.pages(site).await.unwrap_or_default();
+            pages
+                .iter()
+                .find(|p| &p.url == url)
+                .and_then(|p| p.page.clone())
+                .and_then(|id| {
+                    let n = d.pages.iter().find(|p| p.id == id)?.body.len();
+                    Some((Parent::root(Owner::Page(id)), n))
+                })
+        } else {
+            None
+        }
+    }
+
+    /// Résultat complété des points que l'interface ne sait pas régler, apparus avec la
+    /// modification : l'assistant reconstruit avec les outils de l'interface.
+    async fn with_audit(
+        &self,
+        site: &Option<String>,
+        before: Vec<revel_edit::editable::Issue>,
+        result: CallToolResult,
+    ) -> CallToolResult {
+        if result.is_error == Some(true) {
+            return result;
+        }
+        let Ok(d) = self.doc(site).await else {
+            return result;
+        };
+        let new: Vec<_> = revel_edit::editable::audit(&d)
+            .into_iter()
+            .filter(|i| !before.contains(i))
+            .collect();
+        if new.is_empty() {
+            return result;
+        }
+        let list = new
+            .iter()
+            .take(20)
+            .map(|i| format!("- {} {:?}: {}", i.owner, i.kind, i.detail))
+            .collect::<Vec<_>>()
+            .join("\n");
+        ok(format!(
+            "{}\n\nNot editable in Revel's interface (the user cannot change these without code); rebuild them with interface structures — literal text in elements, component properties, collection lists (`insert_preset` CollectionList), interactive presets, `data-revel-*` attributes:\n{list}",
+            text_of(&result)
+        ))
+    }
+
     async fn collections(&self, site: &Option<String>) -> Result<Vec<CmsCollection>, String> {
         let v = self.call("cms_collections", site, json!({})).await?;
         serde_json::from_value(v).map_err(|e| e.to_string())
     }
+}
+
+/// Texte par défaut d'un élément du panneau Ajouter, dans la langue du site (celui de
+/// l'interface).
+fn preset_text(p: revel_edit::make::Preset, locale: &str) -> String {
+    use revel_edit::make::Preset as P;
+    let key = match p {
+        P::Heading => "insert-text-heading",
+        P::Paragraph => "insert-text-paragraph",
+        P::Link => "insert-text-link",
+        P::Button => "insert-text-button",
+        P::List => "insert-text-list",
+        P::RichText => "insert-text-rich",
+        P::Image => "insert-text-image",
+        P::Tabs => "insert-text-tabs",
+        P::Accordion => "insert-text-accordion",
+        P::Navbar => "insert-text-navbar",
+        P::Ticker => "insert-text-ticker",
+        P::Carousel | P::Slideshow => "insert-text-slider",
+        _ => return String::new(),
+    };
+    revel_i18n::Localizer::new(locale).t(key, &[])
 }
 
 /// Arguments d'un outil appelé sans MCP.
@@ -367,6 +501,9 @@ impl Revel {
                 "set_attributes" => go!(set_attributes),
                 "set_styles" => go!(set_styles),
                 "insert_html" => go!(insert_html),
+                "insert_preset" => go!(insert_preset),
+                "set_layer" => go!(set_layer),
+                "check_site" => go!(check_site),
                 "remove_node" => go!(remove_node),
                 "apply_commands" => go!(apply_commands),
                 "undo" => go!(undo),
@@ -776,31 +913,9 @@ impl Revel {
             Ok(d) => d,
             Err(e) => return fail(e),
         };
-        let place = if let Some(id) = &a.inside {
-            target_of(&d, id).and_then(|t| match address::node(&d, &t).ok()? {
-                Node::Element { children, .. } => {
-                    Some((Parent::of(&t, Branch::Children), children.len()))
-                }
-                _ => None,
-            })
-        } else if let Some(id) = a.before.as_ref().or(a.after.as_ref()) {
-            target_of(&d, id).and_then(|t| {
-                let (p, i) = address::locate(&d, &t).ok()?;
-                Some((p, if a.after.is_some() { i + 1 } else { i }))
-            })
-        } else if let Some(url) = &a.page {
-            let pages = self.pages(&a.site).await.unwrap_or_default();
-            pages
-                .iter()
-                .find(|p| &p.url == url)
-                .and_then(|p| p.page.clone())
-                .and_then(|id| {
-                    let n = d.pages.iter().find(|p| p.id == id)?.body.len();
-                    Some((Parent::root(Owner::Page(id)), n))
-                })
-        } else {
-            None
-        };
+        let place = self
+            .place(&d, &a.site, &a.inside, &a.before, &a.after, &a.page)
+            .await;
         let Some((parent, index)) = place else {
             return fail(
                 "Say where to insert: `inside`, `before` or `after` an element id, or `page`.",
@@ -827,6 +942,11 @@ impl Revel {
         };
         if mode == revel_markup::Mode::Html {
             nodes.retain(|n| !matches!(n, Node::Text { text } if text.trim().is_empty()));
+        }
+        // Gabarit : `{{ content }}` devient l'emplacement de la page (la page reste dans les
+        // calques, comme un gabarit fait dans Revel).
+        if matches!(parent.owner, Owner::Layout(_)) {
+            revel_model::content_to_slot(&mut nodes);
         }
         if nodes.is_empty() {
             return fail("Nothing to insert.");
@@ -860,7 +980,113 @@ impl Revel {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        self.apply(&a.site, cmd, &what).await
+        let before = revel_edit::editable::audit(&d);
+        let result = self.apply(&a.site, cmd, &what).await;
+        self.with_audit(&a.site, before, result).await
+    }
+
+    #[tool(
+        description = "Insert an element of Revel's Add panel, exactly as the interface does (with its style rules): structure, text, media, collection list, interactive elements (navbar with mobile menu, ticker, carousel, slideshow, tabs, accordion) and ready-made blocks. Prefer this to insert_html for anything the panel offers."
+    )]
+    async fn insert_preset(&self, Parameters(a): Parameters<InsertPresetArg>) -> CallToolResult {
+        let d = match self.doc(&a.site).await {
+            Ok(d) => d,
+            Err(e) => return fail(e),
+        };
+        let want: String = a
+            .preset
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect::<String>()
+            .to_ascii_lowercase();
+        let Some(preset) = revel_edit::make::Preset::ALL
+            .into_iter()
+            .find(|p| format!("{p:?}").to_ascii_lowercase() == want)
+        else {
+            return fail(format!("Unknown preset `{}`.", a.preset));
+        };
+        let Some((parent, index)) = self
+            .place(&d, &a.site, &a.inside, &a.before, &a.after, &a.page)
+            .await
+        else {
+            return fail(
+                "Say where to insert: `inside`, `before` or `after` an element id, or `page`.",
+            );
+        };
+        let text = a
+            .text
+            .unwrap_or_else(|| preset_text(preset, &d.default_locale));
+        let before = revel_edit::editable::audit(&d);
+        let result = self
+            .apply(
+                &a.site,
+                Command::InsertPreset {
+                    parent,
+                    index,
+                    preset,
+                    text,
+                },
+                &format!("Inserted {preset:?} (see its ids with get_page)"),
+            )
+            .await;
+        self.with_audit(&a.site, before, result).await
+    }
+
+    #[tool(
+        description = "Rename a layer (name shown in Revel's Layers panel, never written in the pages) and/or hide it (hidden layers are not published)."
+    )]
+    async fn set_layer(&self, Parameters(a): Parameters<LayerArg>) -> CallToolResult {
+        let d = match self.doc(&a.site).await {
+            Ok(d) => d,
+            Err(e) => return fail(e),
+        };
+        let Some(at) = target_of(&d, &a.id) else {
+            return fail(format!("No element #{}.", a.id));
+        };
+        let mut commands = Vec::new();
+        if let Some(n) = &a.name {
+            match revel_edit::layer::rename(&d, &at, n) {
+                Ok(c) => commands.extend(c),
+                Err(e) => return fail(e.to_string()),
+            }
+        }
+        if let Some(h) = a.hidden {
+            match revel_edit::layer::set_hidden(&d, &at, h) {
+                Ok(c) => commands.extend(c),
+                Err(e) => return fail(e.to_string()),
+            }
+        }
+        if commands.is_empty() {
+            return ok("Nothing changed.");
+        }
+        self.apply(
+            &a.site,
+            Command::Batch { commands },
+            &format!("Layer #{} updated", a.id),
+        )
+        .await
+    }
+
+    #[tool(
+        description = "List what Revel's interface cannot edit in the site (variables, computed expressions, written conditions and lists, computed attributes…). Everything a user builds in the interface has zero issues: rebuild each listed place with interface structures (literal text, component properties, collection lists, presets, data-revel-* attributes)."
+    )]
+    async fn check_site(&self, Parameters(a): Parameters<SiteArg>) -> CallToolResult {
+        let d = match self.doc(&a.site).await {
+            Ok(d) => d,
+            Err(e) => return fail(e),
+        };
+        let issues = revel_edit::editable::audit(&d);
+        if issues.is_empty() {
+            return ok("Everything in this site is editable in Revel's interface.");
+        }
+        ok(serde_json::to_string_pretty(&json!({
+            "summary": revel_edit::editable::summary(&issues)
+                .into_iter()
+                .map(|(k, n)| json!({ "kind": k, "count": n }))
+                .collect::<Vec<_>>(),
+            "issues": issues,
+        }))
+        .unwrap_or_default())
     }
 
     #[tool(description = "Remove an element (and everything inside it).")]

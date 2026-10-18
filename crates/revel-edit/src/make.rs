@@ -76,6 +76,71 @@ pub fn wrap(site: &Site, at: &Target, tag: &str) -> Result<(Command, String), Ed
     ))
 }
 
+type Rules = Vec<(&'static str, Vec<(&'static str, &'static str)>)>;
+
+/// Règles d'un carrousel (`carousel`) ou d'un diaporama : boîte, piste, diapositive, commandes,
+/// flèche, flèche inactive.
+fn slider_rules(sel: [&'static str; 6], carousel: bool) -> Rules {
+    let [b, track, slide, bar, btn, off] = sel;
+    vec![
+        (b, vec![("position", "relative")]),
+        (
+            track,
+            vec![
+                ("display", "flex"),
+                ("gap", if carousel { "16px" } else { "0" }),
+                ("overflow-x", "auto"),
+                ("scroll-snap-type", "x mandatory"),
+                ("scrollbar-width", "none"),
+            ],
+        ),
+        (
+            slide,
+            vec![
+                (
+                    "flex",
+                    if carousel {
+                        "0 0 min(80%, 420px)"
+                    } else {
+                        "0 0 100%"
+                    },
+                ),
+                ("scroll-snap-align", "start"),
+                ("min-height", "240px"),
+                ("padding", "24px"),
+                ("background-color", "rgba(127, 127, 127, 0.12)"),
+            ],
+        ),
+        (
+            bar,
+            vec![
+                ("display", "flex"),
+                ("align-items", "center"),
+                (
+                    "justify-content",
+                    if carousel { "flex-start" } else { "center" },
+                ),
+                ("gap", "12px"),
+                ("margin-top", "12px"),
+            ],
+        ),
+        (
+            btn,
+            vec![
+                ("width", "40px"),
+                ("height", "40px"),
+                ("border", "1px solid currentColor"),
+                ("border-radius", "50%"),
+                ("background", "none"),
+                ("color", "inherit"),
+                ("font", "inherit"),
+                ("cursor", "pointer"),
+            ],
+        ),
+        (off, vec![("opacity", "0.35"), ("cursor", "default")]),
+    ]
+}
+
 /// Éléments proposés par le panneau « Ajouter ».
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -120,6 +185,18 @@ pub enum Preset {
     BlockContact,
     /// Formulaire de contact reçu par l'hébergement (5.8).
     BlockForm,
+    /// Défilement continu (comme le Ticker de Framer) : ses éléments défilent sans fin
+    /// (animation en boucle « ticker » : vitesse, sens, arrêt au survol, bords estompés).
+    Ticker,
+    /// Carrousel : diapositives côte à côte qui défilent (flèches, compteur), comme le Carousel
+    /// de Framer.
+    Carousel,
+    /// Diaporama : une diapositive à la fois, lecture automatique, points (Slideshow de Framer,
+    /// Slider de Webflow).
+    Slideshow,
+    /// Barre de navigation : marque, liens, bouton « Menu » qui ouvre les liens sur tablette et
+    /// téléphone (Navbar de Webflow).
+    Navbar,
 }
 
 impl Preset {
@@ -139,7 +216,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 27] = [
+    pub const ALL: [Preset; 31] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -167,10 +244,44 @@ impl Preset {
         Preset::BlockFaq,
         Preset::BlockContact,
         Preset::BlockForm,
+        Preset::Ticker,
+        Preset::Carousel,
+        Preset::Slideshow,
+        Preset::Navbar,
     ];
 
+    /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
+    /// (sélecteur, déclarations).
+    pub fn narrow_rules(self) -> Rules {
+        match self {
+            Preset::Navbar => vec![
+                (".barre-nav__bouton", vec![("display", "block")]),
+                (
+                    ".barre-nav__menu",
+                    vec![
+                        ("display", "none"),
+                        ("position", "absolute"),
+                        ("top", "100%"),
+                        ("left", "0"),
+                        ("right", "0"),
+                        ("flex-direction", "column"),
+                        ("align-items", "flex-start"),
+                        ("gap", "16px"),
+                        ("padding", "16px 24px 24px"),
+                        ("background-color", "inherit"),
+                    ],
+                ),
+                (
+                    ".barre-nav.is-open .barre-nav__menu",
+                    vec![("display", "flex")],
+                ),
+            ],
+            _ => Vec::new(),
+        }
+    }
+
     /// Règles de style dont l'élément a besoin (ajoutées si le site ne les a pas).
-    pub fn rules(self) -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+    pub fn rules(self) -> Rules {
         if let Some(b) = self.block() {
             return b.rules();
         }
@@ -285,6 +396,113 @@ impl Preset {
                 (
                     ".langue[aria-current=\"page\"]",
                     vec![("opacity", "1"), ("font-weight", "600")],
+                ),
+            ],
+            Preset::Ticker => vec![
+                (
+                    ".defilement",
+                    vec![
+                        ("display", "flex"),
+                        ("align-items", "center"),
+                        ("gap", "48px"),
+                        ("overflow", "hidden"),
+                    ],
+                ),
+                (
+                    ".defilement__element",
+                    vec![("flex", "none"), ("white-space", "nowrap")],
+                ),
+            ],
+            Preset::Carousel => slider_rules(
+                [
+                    ".carrousel",
+                    ".carrousel__piste",
+                    ".carrousel__diapo",
+                    ".carrousel__commandes",
+                    ".carrousel__fleche",
+                    ".carrousel__fleche:disabled",
+                ],
+                true,
+            ),
+            Preset::Slideshow => {
+                let mut v = slider_rules(
+                    [
+                        ".diaporama",
+                        ".diaporama__piste",
+                        ".diaporama__diapo",
+                        ".diaporama__commandes",
+                        ".diaporama__fleche",
+                        ".diaporama__fleche:disabled",
+                    ],
+                    false,
+                );
+                v.push((
+                    ".diaporama__points",
+                    vec![("display", "flex"), ("gap", "8px")],
+                ));
+                v.push((
+                    ".diaporama__points button",
+                    vec![
+                        ("width", "8px"),
+                        ("height", "8px"),
+                        ("padding", "0"),
+                        ("border", "0"),
+                        ("border-radius", "50%"),
+                        ("background-color", "currentColor"),
+                        ("opacity", "0.3"),
+                        ("cursor", "pointer"),
+                    ],
+                ));
+                v.push((
+                    ".diaporama__points button.is-active",
+                    vec![("opacity", "1")],
+                ));
+                v
+            }
+            Preset::Navbar => vec![
+                (
+                    ".barre-nav",
+                    vec![
+                        ("position", "relative"),
+                        ("display", "flex"),
+                        ("align-items", "center"),
+                        ("justify-content", "space-between"),
+                        ("gap", "24px"),
+                        ("padding", "16px 24px"),
+                    ],
+                ),
+                (
+                    ".barre-nav__marque",
+                    vec![
+                        ("font-weight", "700"),
+                        ("color", "inherit"),
+                        ("text-decoration", "none"),
+                    ],
+                ),
+                (
+                    ".barre-nav__menu",
+                    vec![
+                        ("display", "flex"),
+                        ("align-items", "center"),
+                        ("gap", "24px"),
+                    ],
+                ),
+                (
+                    ".barre-nav__lien",
+                    vec![("color", "inherit"), ("text-decoration", "none")],
+                ),
+                (
+                    ".barre-nav__bouton",
+                    vec![
+                        ("display", "none"),
+                        ("padding", "8px 12px"),
+                        ("border", "1px solid currentColor"),
+                        ("border-radius", "6px"),
+                        ("background", "none"),
+                        ("color", "inherit"),
+                        ("font", "inherit"),
+                        ("cursor", "pointer"),
+                    ],
                 ),
             ],
             Preset::CollectionList => vec![(
@@ -516,6 +734,159 @@ impl Preset {
                     html: format!("<p>{}</p>", html_escape(text)),
                 }],
             ),
+            Preset::Ticker => {
+                let items = (1..=4)
+                    .map(|n| {
+                        el(
+                            id(),
+                            "div",
+                            vec![attr("class", "defilement__element")],
+                            vec![txt(&format!("{text} {n}"))],
+                        )
+                    })
+                    .collect();
+                el(
+                    id(),
+                    "div",
+                    vec![
+                        attr("class", "defilement"),
+                        attr("data-revel-loop", "ticker speed=60 pause"),
+                    ],
+                    items,
+                )
+            }
+            Preset::Carousel | Preset::Slideshow => {
+                // `text` : « Diapositive|Précédente|Suivante ».
+                let mut parts = text.split('|');
+                let slide_text = parts.next().unwrap_or(text);
+                let prev = parts.next().unwrap_or("←");
+                let next = parts.next().unwrap_or("→");
+                let carousel = self == Preset::Carousel;
+                let b = if carousel { "carrousel" } else { "diaporama" };
+                let slides = (1..=if carousel { 4 } else { 3 })
+                    .map(|n| {
+                        el(
+                            id(),
+                            "div",
+                            vec![attr("class", &format!("{b}__diapo"))],
+                            vec![el(
+                                id(),
+                                "p",
+                                vec![],
+                                vec![txt(&format!("{slide_text} {n}"))],
+                            )],
+                        )
+                    })
+                    .collect();
+                let flag = |n: &str| Attr {
+                    name: n.into(),
+                    value: None,
+                    when: None,
+                };
+                let button = |id: Option<String>, flag_name: &str, label: &str, sign: &str| {
+                    el(
+                        id,
+                        "button",
+                        vec![
+                            attr("class", &format!("{b}__fleche")),
+                            attr("type", "button"),
+                            attr("aria-label", label),
+                            flag(flag_name),
+                        ],
+                        vec![txt(sign)],
+                    )
+                };
+                let middle = if carousel {
+                    el(
+                        id(),
+                        "p",
+                        vec![
+                            attr("class", "carrousel__compteur"),
+                            flag("data-revel-count"),
+                        ],
+                        vec![txt("1 / 4")],
+                    )
+                } else {
+                    el(
+                        id(),
+                        "div",
+                        vec![attr("class", "diaporama__points"), flag("data-revel-dots")],
+                        vec![],
+                    )
+                };
+                el(
+                    id(),
+                    "div",
+                    vec![
+                        attr("class", b),
+                        attr(
+                            "data-revel-slider",
+                            if carousel { "" } else { "autoplay=5 loop" },
+                        ),
+                    ],
+                    vec![
+                        el(
+                            id(),
+                            "div",
+                            vec![
+                                attr("class", &format!("{b}__piste")),
+                                flag("data-revel-track"),
+                            ],
+                            slides,
+                        ),
+                        el(
+                            id(),
+                            "div",
+                            vec![attr("class", &format!("{b}__commandes"))],
+                            vec![
+                                button(id(), "data-revel-prev", prev, "←"),
+                                middle,
+                                button(id(), "data-revel-next", next, "→"),
+                            ],
+                        ),
+                    ],
+                )
+            }
+            Preset::Navbar => {
+                // `text` : « Marque|Menu|Accueil|À propos|Contact ».
+                let parts: Vec<&str> = text.split('|').collect();
+                let get = |i: usize, d: &'static str| parts.get(i).copied().unwrap_or(d);
+                let links = (2..parts.len().max(5))
+                    .map(|i| {
+                        el(
+                            id(),
+                            "a",
+                            vec![attr("class", "barre-nav__lien"), attr("href", "/")],
+                            vec![txt(get(i, "Lien"))],
+                        )
+                    })
+                    .collect();
+                el(
+                    id(),
+                    "nav",
+                    vec![attr("class", "barre-nav")],
+                    vec![
+                        el(
+                            id(),
+                            "a",
+                            vec![attr("class", "barre-nav__marque"), attr("href", "/")],
+                            vec![txt(get(0, "Marque"))],
+                        ),
+                        el(
+                            id(),
+                            "button",
+                            vec![
+                                attr("class", "barre-nav__bouton"),
+                                attr("type", "button"),
+                                attr("aria-expanded", "false"),
+                                attr("data-revel-on", "click class:is-open parent"),
+                            ],
+                            vec![txt(get(1, "Menu"))],
+                        ),
+                        el(id(), "div", vec![attr("class", "barre-nav__menu")], links),
+                    ],
+                )
+            }
             Preset::LocaleSwitch => {
                 // `text` : nom du menu pour les lecteurs d'écran (« Langues »).
                 let nav = id();

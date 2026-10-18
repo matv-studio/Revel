@@ -285,6 +285,10 @@
 .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--thumb, 72px), 1fr)); gap: 8px; padding: 4px 10px 10px; }
 .asset-grid.is-small { gap: 4px; }
 .asset-grid.is-small figcaption { display: none; }
+/* Dossier de médias déplié sur place : médias en retrait sous sa ligne. */
+.asset-grid.is-nested { padding-left: calc(10px + var(--depth, 1) * 14px); padding-top: 2px; }
+.list-chevron--toggle { border: 0; background: none; padding: 0; height: 100%; cursor: pointer; border-radius: var(--radius-sm); }
+.list-chevron--toggle:hover { color: var(--text); background: var(--surface-hover); }
 /* Taille des vignettes : glissière courte dans le pied du panneau. */
 .thumb-size { flex: none; width: 64px; margin: 0 6px; }
 .asset { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }

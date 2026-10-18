@@ -2,6 +2,11 @@
    pastille d'origine : pleine = réglé ici, anneau = hérité. Voir docs/DESIGN.md. */
 
 .styles { display: flex; flex-direction: column; gap: var(--s-2); }
+/* Barre du calque, tout en haut : nom, bouton Masquer (œil). */
+.style-layerbar { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.style-layerbar-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
+.style-layerbar.is-hidden .style-layerbar-name { opacity: .45; }
+.style-hide.is-on { color: var(--set-text); background: var(--set-bg); }
 
 /* --- Cible : classes (pastilles), état, point de rupture ------------------- */
 .style-target { display: flex; flex-direction: column; gap: 6px; padding-bottom: var(--s-2); }

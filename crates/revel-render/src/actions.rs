@@ -36,9 +36,11 @@ pub fn script() -> String {
     out
 }
 
-/// La page contient une interaction ou des onglets.
+/// La page contient une interaction, des onglets, un carrousel ou un diaporama.
 pub fn uses(html: &str) -> bool {
-    html.contains(" data-revel-on=") || html.contains(" data-revel-tabs")
+    html.contains(" data-revel-on=")
+        || html.contains(" data-revel-tabs")
+        || html.contains(" data-revel-slider")
 }
 
 /// Page avec des interactions : script ajouté avant `</head>` (pas dans le canevas). Rend la page

@@ -965,6 +965,75 @@ pub struct ImageNode {
     /// N'affiche rien si la source est vide (au lieu d'un visuel de remplacement).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub optional: bool,
+    /// Nom du calque donné par l'utilisateur (panneau Calques).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Calque masqué : absent du site publié, invisible dans le canevas.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
+}
+
+/// Attribut du nom de calque donné par l'utilisateur (élément, utilisation de composant) ; jamais
+/// écrit dans les pages.
+pub const LAYER_NAME_ATTR: &str = "data-revel-name";
+/// Attribut d'un calque masqué : l'élément n'est pas écrit dans le site publié, le canevas et
+/// l'aperçu le cachent.
+pub const HIDDEN_ATTR: &str = "data-revel-hidden";
+
+/// `{{ content | safe }}` (ou `{{ content }}`) d'un gabarit -> emplacement de la page : la page
+/// apparaît dans les calques à cet endroit.
+pub fn content_to_slot(nodes: &mut [Node]) {
+    for n in nodes {
+        match n {
+            Node::Out { expr } => {
+                let e: String = expr.chars().filter(|c| !c.is_whitespace()).collect();
+                if e == "content|safe" || e == "content" {
+                    *n = Node::Slot;
+                }
+            }
+            Node::Element { children, .. } | Node::SetBlock { children, .. } => {
+                content_to_slot(children)
+            }
+            Node::If {
+                then, otherwise, ..
+            } => {
+                content_to_slot(then);
+                content_to_slot(otherwise);
+            }
+            Node::Each {
+                children, empty, ..
+            } => {
+                content_to_slot(children);
+                content_to_slot(empty);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Nom de calque donné par l'utilisateur.
+pub fn layer_name(n: &Node) -> Option<&str> {
+    match n {
+        Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
+            .iter()
+            .find(|a| a.name == LAYER_NAME_ATTR)
+            .and_then(|a| a.value.as_deref()),
+        Node::Image(img) => img.name.as_deref(),
+        _ => None,
+    }
+    .map(str::trim)
+    .filter(|v| !v.is_empty())
+}
+
+/// Calque masqué par l'utilisateur.
+pub fn is_hidden(n: &Node) -> bool {
+    match n {
+        Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
+            .iter()
+            .any(|a| a.name == HIDDEN_ATTR && a.when.is_none()),
+        Node::Image(img) => img.hidden,
+        _ => false,
+    }
 }
 
 /// Point de rupture : largeur d'écran à partir de laquelle des styles différents s'appliquent.

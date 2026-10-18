@@ -464,18 +464,33 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
             };
             // Règles de style de l'élément que le site n'a pas encore (après l'insertion : leurs
             // identifiants tiennent compte des nouveaux nœuds).
+            // Tablette et téléphone : point de rupture le plus large du site.
+            let narrow = site
+                .breakpoints
+                .iter()
+                .filter(|b| b.max_width.is_some())
+                .max_by_key(|b| b.max_width)
+                .and_then(|b| b.media());
             let rules: Vec<Command> = if site.stylesheet.is_some() {
-                preset
-                    .rules()
-                    .into_iter()
-                    .filter(|(sel, _)| {
+                let base = preset.rules().into_iter().map(|(s, d)| (s, d, None));
+                let small = narrow
+                    .iter()
+                    .flat_map(|m| {
+                        preset
+                            .narrow_rules()
+                            .into_iter()
+                            .map(move |(s, d)| (s, d, Some(m.clone())))
+                    })
+                    .collect::<Vec<_>>();
+                base.chain(small)
+                    .filter(|(sel, _, media)| {
                         !site
                             .style_rules()
-                            .any(|r| r.selector == *sel && r.media.is_none())
+                            .any(|r| r.selector == *sel && r.media == *media)
                     })
-                    .map(|(sel, decls)| Command::AddRule {
+                    .map(|(sel, decls, media)| Command::AddRule {
                         selector: sel.to_string(),
-                        media: None,
+                        media,
                         decls: decls
                             .into_iter()
                             .map(|(p, v)| Decl {

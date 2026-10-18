@@ -324,6 +324,49 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     "div",
                     true,
                 ),
+            ],
+        ),
+        // Éléments interactifs (Navbar, Slider, Tabs de Webflow ; Ticker, Carousel, Slideshow de
+        // Framer) : leurs parties sont des calques ordinaires, leurs réglages en tête de Styles.
+        (
+            "insert-group-interactive",
+            vec![
+                item(
+                    Preset::Navbar,
+                    "insert-navbar",
+                    "insert-help-navbar",
+                    "insert-text-navbar",
+                    icons::navbar,
+                    "nav",
+                    true,
+                ),
+                item(
+                    Preset::Ticker,
+                    "insert-ticker",
+                    "insert-help-ticker",
+                    "insert-text-ticker",
+                    icons::ticker,
+                    "div",
+                    true,
+                ),
+                item(
+                    Preset::Carousel,
+                    "insert-carousel",
+                    "insert-help-carousel",
+                    "insert-text-slider",
+                    icons::carousel,
+                    "div",
+                    true,
+                ),
+                item(
+                    Preset::Slideshow,
+                    "insert-slideshow",
+                    "insert-help-slideshow",
+                    "insert-text-slider",
+                    icons::slideshow,
+                    "div",
+                    true,
+                ),
                 item(
                     Preset::Tabs,
                     "insert-tabs",

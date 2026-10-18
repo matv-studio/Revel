@@ -60,6 +60,22 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         if attr(attrs, "data-lottie").is_some() {
             parts.push(lottie_options(ui, ed, at.clone(), attrs.clone()));
         }
+        // Défilement (animation en boucle « ticker »), carrousel et diaporama.
+        if attr(attrs, "data-revel-loop")
+            .and_then(|a| a.value.as_deref())
+            .is_some_and(|v| v.split_whitespace().next() == Some("ticker"))
+        {
+            let at = at.clone();
+            parts.push(view! { <crate::interactions::TickerSettings at=at/> }.into_any());
+        }
+        if let Some(v) = attr(attrs, "data-revel-slider") {
+            parts.push(slider_options(
+                ui,
+                ed,
+                at.clone(),
+                v.value.clone().unwrap_or_default(),
+            ));
+        }
         // Liste de collection : son conteneur (une seule boucle dedans).
         let loops: Vec<&Node> = children
             .iter()
@@ -219,6 +235,83 @@ fn video_options(ui: Ui, ed: Ed, at: Target, attrs: Vec<Attr>) -> AnyView {
             {row("block-video-controls", &["controls"], has("controls"))}
             {row("block-video-autoplay", &["autoplay", "muted", "playsinline"], has("autoplay"))}
             {row("block-video-loop", &["loop"], has("loop"))}
+        </div>
+    }
+    .into_any()
+}
+
+// ------------------------------------------------------------------ carrousel, diaporama
+
+/// Carrousel et diaporama : lecture automatique (secondes, vide : à la main) et boucle, écrits
+/// dans `data-revel-slider` (`autoplay=5 loop`).
+fn slider_options(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
+    let at = StoredValue::new(at);
+    let opts: Vec<String> = value.split_whitespace().map(str::to_string).collect();
+    let autoplay = opts
+        .iter()
+        .find_map(|o| o.strip_prefix("autoplay="))
+        .unwrap_or_default()
+        .to_string();
+    let looped = opts.iter().any(|o| o == "loop");
+    let write = move |autoplay: Option<String>, looped: Option<bool>| {
+        let cur = ed.doc.with_untracked(|d| {
+            d.as_ref()
+                .and_then(|d| revel_edit::address::node(d, &at.get_value()).ok())
+                .and_then(|n| match n {
+                    Node::Element { attrs, .. } => attr(attrs, "data-revel-slider")
+                        .and_then(|a| a.value.clone()),
+                    _ => None,
+                })
+                .unwrap_or_default()
+        });
+        let mut parts: Vec<String> = cur
+            .split_whitespace()
+            .filter(|o| {
+                !(autoplay.is_some() && o.starts_with("autoplay="))
+                    && !(looped.is_some() && *o == "loop")
+            })
+            .map(str::to_string)
+            .collect();
+        if let Some(a) = autoplay.filter(|a| a.parse::<f64>().is_ok_and(|n| n > 0.0)) {
+            parts.push(format!("autoplay={a}"));
+        }
+        if looped == Some(true) {
+            parts.push("loop".into());
+        }
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at: at.get_value(),
+                name: "data-revel-slider".into(),
+                value: Some(parts.join(" ")),
+            },
+            false,
+        );
+    };
+    view! {
+        <div class="insp-group slider-settings">
+            <p class="panel-title">{ui.t("slider-title")}</p>
+            <div class="style-row">
+                <span class="style-label" title=ui.t("slider-autoplay-help")><span class="style-label-text">{ui.t("slider-autoplay")}</span></span>
+                <div class="style-control">
+                    <div class="nbox has-units">
+                        <input class="nbox-input" type="text" inputmode="decimal" spellcheck="false"
+                            prop:value=autoplay aria-label=ui.t("slider-autoplay")
+                            on:change=move |e| {
+                                let v = event_target_value(&e).trim().replace(',', ".");
+                                write(Some(v.trim_end_matches('s').trim().to_string()), None);
+                            }/>
+                        <span class="nbox-suffix" aria-hidden="true">"s"</span>
+                    </div>
+                </div>
+            </div>
+            <label class="view-line">
+                <span>{ui.t("slider-loop")}</span>
+                <span class="switch">
+                    <input type="checkbox" prop:checked=looped on:change=move |e| write(None, Some(event_target_checked(&e)))/>
+                    <span class="switch-track"></span>
+                </span>
+            </label>
         </div>
     }
     .into_any()

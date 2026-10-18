@@ -203,6 +203,22 @@ fn media_entry(file: &Path, url: &str, out: &mut Vec<revel_protocol::MediaFile>)
 
 /// `rev` : révision de la session d'édition au moment du rendu (l'éditeur demande une mise à jour
 /// sur place d'une page rendue avant sa dernière modification).
+/// Règle qui cache les calques masqués (`data-revel-hidden`) dans le canevas et l'aperçu ; le site
+/// publié ne les contient pas.
+pub fn hide_hidden(html: &str) -> String {
+    let rule = format!(
+        "<style data-rv-hidden>[{}]{{display:none!important}}</style>",
+        revel_model::HIDDEN_ATTR
+    );
+    if !html.contains(revel_model::HIDDEN_ATTR) {
+        return html.to_string();
+    }
+    match html.to_ascii_lowercase().find("</head") {
+        Some(i) => format!("{}{rule}{}", &html[..i], &html[i..]),
+        None => format!("{rule}{html}"),
+    }
+}
+
 pub fn inject(html: &str, slots: &[Slot], vars: &[VarValue], rev: Option<u64>) -> String {
     // `</` échappé : la liste ne peut pas fermer l'élément <script>.
     let json = |v: String| v.replace("</", "<\\/");
@@ -603,7 +619,12 @@ impl Core {
                 )?)
             })?;
             return Ok(page.map(|page| {
-                let html = html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev));
+                let html = hide_hidden(&html_viewport_units(&inject(
+                    &page.html,
+                    &page.slots,
+                    &page.vars,
+                    rev,
+                )));
                 CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
             }));
         }
@@ -627,11 +648,11 @@ impl Core {
                 )?)
             })?;
             if let Some(page) = page {
-                let html = if preview {
+                let html = hide_hidden(&if preview {
                     revel_render::strip_editor_marks(&page.html)
                 } else {
                     html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
-                };
+                });
                 return Ok(Some(CanvasResponse::ok(
                     "text/html; charset=utf-8",
                     html.into_bytes(),

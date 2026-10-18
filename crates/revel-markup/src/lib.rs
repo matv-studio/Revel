@@ -351,6 +351,8 @@ impl<'a> Parser<'a> {
                     loading: get(5),
                     widths: get(6),
                     optional: kw == "imageOptional",
+                    name: None,
+                    hidden: false,
                 })
             }
             _ => {

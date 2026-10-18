@@ -677,3 +677,32 @@ pub fn order_first() -> AnyView {
 pub fn order_last() -> AnyView {
     svg(r#"<path d="M13 3v10M3 8h6.5M6.5 5l3 3-3 3"/>"#)
 }
+
+/// Défilement continu : trois éléments sur une ligne, flèche de sens.
+pub fn ticker() -> AnyView {
+    svg(
+        r#"<rect x="1.5" y="5" width="3.5" height="4" rx="1"/><rect x="6.25" y="5" width="3.5" height="4" rx="1"/><rect x="11" y="5" width="3.5" height="4" rx="1"/><path d="M4 12h8M10 10.5L12 12l-2 1.5"/>"#,
+    )
+}
+
+/// Carrousel : diapositive entière et voisines coupées.
+pub fn carousel() -> AnyView {
+    svg(
+        r#"<rect x="4" y="3" width="8" height="8" rx="1"/><path d="M1.5 4v6M14.5 4v6M6.5 13.5h3"/>"#,
+    )
+}
+
+/// Diaporama : diapositive et points.
+pub fn slideshow() -> AnyView {
+    svg(
+        r#"<rect x="1.5" y="2.5" width="13" height="8.5" rx="1.5"/><path d="M6 13.5h.01M8 13.5h.01M10 13.5h.01"/>"#,
+    )
+}
+
+/// Barre de navigation : barre et menu.
+pub fn navbar() -> AnyView {
+    svg(
+        r#"<rect x="1.5" y="3" width="13" height="4" rx="1"/><path d="M3.5 5h2.5M10 5h.01M12 5h.01M3 10h10M3 12.5h7"/>"#,
+    )
+}
+

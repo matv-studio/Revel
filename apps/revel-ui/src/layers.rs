@@ -67,6 +67,12 @@ pub struct Row {
     pub condition: Option<String>,
     /// Élément qui ne contient que du texte (icône de texte, double-clic pour le modifier).
     pub textual: bool,
+    /// Nom donné par l'utilisateur (renommer un calque).
+    pub name: Option<String>,
+    /// Calque masqué par l'utilisateur.
+    pub hidden: bool,
+    /// Calque dans un calque masqué (grisé aussi).
+    pub dimmed: bool,
 }
 
 /// Affichage d'une ligne dans l'arbre simplifié.
@@ -311,6 +317,9 @@ impl<'a> Builder<'a> {
                 bound: false,
                 condition: None,
                 textual: false,
+                name: revel_model::layer_name(n).map(str::to_string),
+                hidden: revel_model::is_hidden(n),
+                dimmed: false,
             });
             self.vis.push(vis);
             // Image : nom du fichier sur sa ligne ; adresse venue des données : ligne liée.
@@ -425,6 +434,9 @@ impl<'a> Builder<'a> {
             bound: false,
             condition: None,
             textual: false,
+            name: None,
+            hidden: false,
+            dimmed: false,
         });
         self.vis.push(Vis::Show);
         let mut anc = ancestors.to_vec();
@@ -607,6 +619,15 @@ fn simplify(mut rows: Vec<Row>, mut vis: Vec<Vis>) -> Vec<Row> {
             r.inside = None;
         }
         out.push(r);
+    }
+    // Calques dans un calque masqué : grisés.
+    let hidden_keys: HashSet<String> = out
+        .iter()
+        .filter(|r| r.hidden)
+        .map(|r| r.key.clone())
+        .collect();
+    for r in &mut out {
+        r.dimmed = r.hidden || r.ancestors.iter().any(|a| hidden_keys.contains(a));
     }
     let parents: HashSet<String> = out
         .iter()
@@ -810,6 +831,86 @@ fn icon(k: &Kind, textual: bool) -> AnyView {
     }
 }
 
+/// Le calque peut être renommé ou masqué (élément, utilisation de composant, image).
+fn nameable(r: &Row) -> bool {
+    r.id.is_some() && matches!(r.kind, Kind::Element { .. } | Kind::Use(_) | Kind::Image(_))
+}
+
+/// Nom affiché d'une ligne : nom donné, sinon nom automatique.
+fn shown_name(ui: Ui, r: &Row) -> String {
+    r.name.clone().unwrap_or_else(|| label(ui, &r.kind))
+}
+
+/// Donne un nom au calque `at` (vide : nom automatique).
+pub fn rename_layer(ui: Ui, ed: Ed, at: Target, name: &str) {
+    let cmd = ed.doc.with_untracked(|d| {
+        d.as_ref()
+            .and_then(|d| revel_edit::layer::rename(d, &at, name).ok().flatten())
+    });
+    if let Some(c) = cmd {
+        ed.apply(ui, c, false);
+    }
+}
+
+/// Masque ou affiche le calque `at`.
+pub fn toggle_hidden(ui: Ui, ed: Ed, at: Target) {
+    let cmd = ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let hidden = revel_model::is_hidden(revel_edit::address::node(d, &at).ok()?);
+        revel_edit::layer::set_hidden(d, &at, !hidden).ok().flatten()
+    });
+    if let Some(c) = cmd {
+        ed.apply(ui, c, false);
+    }
+}
+
+/// Champ du nom d'un calque, saisi sur place : Entrée ou sortie du champ appliquent, Échap
+/// abandonne ; vide : nom automatique.
+fn rename_input(
+    ui: Ui,
+    initial: String,
+    commit: impl Fn(String) + Copy + 'static,
+    cancel: impl Fn() + Copy + 'static,
+) -> impl IntoView {
+    let value = RwSignal::new(initial);
+    let node = NodeRef::<leptos::html::Input>::new();
+    Effect::new(move |_| {
+        if let Some(el) = node.get() {
+            let _ = el.focus();
+            el.select();
+        }
+    });
+    let closed = StoredValue::new(false);
+    let finish = move |ok: bool| {
+        if closed.try_get_value().unwrap_or(true) {
+            return;
+        }
+        closed.set_value(true);
+        if ok {
+            commit(value.get_untracked());
+        } else {
+            cancel();
+        }
+    };
+    view! {
+        <input class="layer-rename" node_ref=node aria-label=ui.t("layers-rename")
+            prop:value=move || value.get()
+            on:input=move |e| value.set(event_target_value(&e))
+            on:click=|e| e.stop_propagation()
+            on:dblclick=|e| e.stop_propagation()
+            on:pointerdown=|e| e.stop_propagation()
+            on:keydown=move |e: leptos::ev::KeyboardEvent| {
+                e.stop_propagation();
+                match e.key().as_str() {
+                    "Enter" => { e.prevent_default(); finish(true) }
+                    "Escape" => { e.prevent_default(); finish(false) }
+                    _ => {}
+                }
+            }
+            on:blur=move |_| finish(true)/>
+    }
+}
+
 #[component]
 pub fn Layers() -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -819,6 +920,8 @@ pub fn Layers() -> impl IntoView {
     let drag = RwSignal::new(None::<Row>);
     let drop_at = RwSignal::new(None::<(String, Zone)>);
     let query = RwSignal::new(String::new());
+    // Ligne en cours de renommage (clé).
+    let renaming = RwSignal::new(None::<String>);
     // Libellés des collections (listes de collection nommées comme dans le panneau Pages).
     let col_folders = Memo::new(move |_| {
         ed.doc.with(|d| {
@@ -886,7 +989,8 @@ pub fn Layers() -> impl IntoView {
                 let hits: Vec<&Row> = rows
                     .iter()
                     .filter(|r| {
-                        label(ui, &r.kind).to_lowercase().contains(&q)
+                        shown_name(ui, r).to_lowercase().contains(&q)
+                            || label(ui, &r.kind).to_lowercase().contains(&q)
                             || tooltip(ui, &r.kind).to_lowercase().contains(&q)
                             || r.preview
                                 .as_deref()
@@ -953,7 +1057,7 @@ pub fn Layers() -> impl IntoView {
         // Ligne sans identifiant (texte, expression) : son élément parent.
         let id = r.id.clone().or_else(|| r.parent.node.clone());
         let Some(id) = id else { return };
-        let label = label(ui, &r.kind);
+        let label = shown_name(ui, r);
         ed.selected.set(Some(Selection {
             id: id.clone(),
             tag: match &r.kind {
@@ -1001,6 +1105,13 @@ pub fn Layers() -> impl IntoView {
     // Clavier : ↑ ↓ ligne précédente ou suivante, ← replier (ou parent), → déplier.
     let on_key = move |e: leptos::ev::KeyboardEvent| {
         let key = e.key();
+        if key == "F2" {
+            if let Some(r) = selected_row().filter(nameable) {
+                e.prevent_default();
+                renaming.set(Some(r.key));
+            }
+            return;
+        }
         if !matches!(
             key.as_str(),
             "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"
@@ -1108,6 +1219,29 @@ pub fn Layers() -> impl IntoView {
             .icon(icons::copy)
             .key(ui.now("key-duplicate", &[]))
             .disabled(!has),
+            CtxItem::new(ui.now("layers-rename", &[]), move || {
+                if let Some(r) = selected_row().filter(nameable) {
+                    renaming.set(Some(r.key));
+                }
+            })
+            .icon(icons::edit)
+            .key("F2".to_string())
+            .disabled(!selected_row().is_some_and(|r| nameable(&r)))
+            .sep(),
+            CtxItem::new(
+                ui.now(
+                    if selected_row().is_some_and(|r| r.hidden) { "layers-show" } else { "layers-hide" },
+                    &[],
+                ),
+                move || {
+                    if let Some(at) = target() {
+                        toggle_hidden(ui, ed, at)
+                    }
+                },
+            )
+            .icon(if selected_row().is_some_and(|r| r.hidden) { icons::eye } else { icons::eye_off })
+            .key(ui.now("key-hide", &[]))
+            .disabled(!selected_row().is_some_and(|r| nameable(&r))),
         ];
         let mut items = items;
         // Composants, comme dans le Navigator de Webflow : créer à partir du calque ; ouvrir ou
@@ -1171,7 +1305,7 @@ pub fn Layers() -> impl IntoView {
             </label>
             <div class="layers-tree" role="tree" tabindex="0" on:keydown=on_key>
                 <For each=move || visible.get()
-                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}{}{:?}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated, r.bound, r.condition, r.textual))
+                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}{}{:?}{}{:?}{}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated, r.bound, r.condition, r.textual, r.name, r.hidden, r.dimmed))
                     let:item>
                     {
                         let (r, open) = item;
@@ -1189,6 +1323,11 @@ pub fn Layers() -> impl IntoView {
                         let textual = r.with_value(|r| r.textual);
                         let condition = r.with_value(|r| r.condition.clone());
                         let is_conditional = condition.is_some();
+                        let hidden = r.with_value(|r| r.hidden);
+                        let dimmed = r.with_value(|r| r.dimmed);
+                        let can_name = r.with_value(nameable);
+                        let k_ren = key.clone();
+                        let is_renaming = move || renaming.get().as_deref() == Some(k_ren.as_str());
                         // Texte affiché : texte écrit, sinon texte rendu dans la page (données du
                         // site, contenu), envoyé par le canevas — jamais l'expression.
                         let inst = r.with_value(|r| all.with_untracked(|rows| use_of(rows, r)));
@@ -1213,6 +1352,7 @@ pub fn Layers() -> impl IntoView {
                         });
                         let title = r.with_value(|r| match &r.kind {
                             Kind::Use(_) => format!("{} · {}", label(ui, &r.kind), ui.tx("layers-badge-component", &[])),
+                            k if r.name.is_some() => format!("{}\n{}", shown_name(ui, r), tooltip(ui, k)),
                             k => tooltip(ui, k),
                         });
                         let toggle = move |e: leptos::ev::MouseEvent| {
@@ -1245,6 +1385,7 @@ pub fn Layers() -> impl IntoView {
                                 class:is-logic=matches!(kind, Kind::If(_) | Kind::Branch(_))
                                 class:is-text=matches!(kind, Kind::Text(_) | Kind::Expr(_) | Kind::Html)
                                 class:is-conditional=is_conditional
+                                class:is-hidden-layer=dimmed
                                 class:drop-before=zone_class(Zone::Before)
                                 class:drop-after=zone_class(Zone::After)
                                 class:drop-inside=zone_class(Zone::Inside)
@@ -1333,11 +1474,38 @@ pub fn Layers() -> impl IntoView {
                                     {if open { icons::chevron_down() } else { icons::chevron_right() }}
                                 </button>
                                 <span class="layer-icon">{icon(&kind, textual)}</span>
-                                <span class="layer-label">{
-                                    // Liste de collection : nom suivi (libellés lus après coup).
+                                {let kind = kind.clone(); move || if is_renaming() {
+                                    let at = StoredValue::new(r.with_value(|r| r.id.clone().map(|id| Target { owner: r.owner.clone(), node: id })));
+                                    let initial = r.with_value(|r| shown_name(ui, r));
+                                    rename_input(ui, initial,
+                                        move |v: String| {
+                                            renaming.set(None);
+                                            if let Some(at) = at.get_value() {
+                                                // Nom identique au nom automatique : pas de nom propre.
+                                                let auto = r.with_value(|r| label(ui, &r.kind));
+                                                let v = if v.trim() == auto { String::new() } else { v };
+                                                rename_layer(ui, ed, at, &v);
+                                            }
+                                        },
+                                        move || renaming.set(None)).into_any()
+                                } else {
                                     let k = kind.clone();
-                                    move || label(ui, &k)
-                                }</span>
+                                    view! {
+                                        <span class="layer-label" class:is-named=r.with_value(|r| r.name.is_some())
+                                            // Double-clic sur le nom : renommer (sur l'icône ou le
+                                            // texte de l'élément : action habituelle).
+                                            on:dblclick=move |e: leptos::ev::MouseEvent| {
+                                                if can_name {
+                                                    e.stop_propagation();
+                                                    r.with_value(|r| select_row(r));
+                                                    renaming.set(Some(r.with_value(|r| r.key.clone())));
+                                                }
+                                            }>{
+                                            // Liste de collection : nom suivi (libellés lus après coup).
+                                            move || r.with_value(|r| r.name.clone()).unwrap_or_else(|| label(ui, &k))
+                                        }</span>
+                                    }.into_any()
+                                }}
                                 {move || preview().map(|p| view! {
                                     <span class="layer-preview" class:is-bound=bound
                                         title=move || textual.then(|| ui.now("layers-edit-text", &[]))>{p}</span>
@@ -1346,6 +1514,15 @@ pub fn Layers() -> impl IntoView {
                                     {bound.then(|| view! { <span class="layer-mark" title=ui.t("layers-bound")>{icons::database()}</span> })}
                                     {condition.map(|c| view! { <span class="layer-mark" title=ui.tx("layers-condition", &[("cond", c)])>{icons::branch()}</span> })}
                                     {animated.then(|| view! { <span class="layer-mark layer-anim" title=ui.t("layers-animated")>{icons::bolt()}</span> })}
+                                    {hidden.then(|| view! {
+                                        <button class="layer-mark layer-hidden" title=ui.t("layers-show") aria-label=ui.t("layers-show")
+                                            on:click=move |e: leptos::ev::MouseEvent| {
+                                                e.stop_propagation();
+                                                if let Some(at) = r.with_value(|r| r.id.clone().map(|id| Target { owner: r.owner.clone(), node: id })) {
+                                                    toggle_hidden(ui, ed, at);
+                                                }
+                                            }>{icons::eye_off()}</button>
+                                    })}
                                 </span>
                             </div>
                         }

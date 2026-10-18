@@ -970,6 +970,13 @@ impl Ed {
             // Palette de commandes (le canevas transmet Ctrl+K).
             ("k", true) if !k.shift => self.palette.set(true),
             ("d", true) => return self.duplicate_selection(ui),
+            // Masquer ou afficher le calque (Ctrl+Maj+H, comme Figma).
+            ("h", true) if k.shift => {
+                let Some(at) = self.selected_target() else {
+                    return false;
+                };
+                crate::layers::toggle_hidden(ui, self, at);
+            }
             // Envelopper dans un conteneur (Ctrl+G, comme Figma et Framer) ; Ctrl+Maj+G : retirer
             // l'enveloppe (les enfants prennent sa place).
             ("g", true) if !k.shift => return self.wrap_selection(ui),

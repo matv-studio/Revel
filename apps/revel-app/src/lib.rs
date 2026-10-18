@@ -1522,6 +1522,27 @@ mod tests {
             .into_iter()
     }
 
+    /// Images, vidéos et polices du site affichées par l'interface (vignettes des médias, des
+    /// champs du CMS, des fonds) : servies par le protocole du canevas, que la politique de
+    /// sécurité doit autoriser (sous Windows, `http://revel-canvas.localhost`).
+    #[test]
+    fn politique_de_securite_autorise_le_canevas() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let csp = conf["app"]["security"]["csp"].as_str().unwrap();
+        for directive in ["img-src", "media-src", "font-src", "frame-src"] {
+            let d = csp
+                .split(';')
+                .map(str::trim)
+                .find(|d| d.starts_with(&format!("{directive} ")))
+                .unwrap_or_else(|| panic!("{directive} absent"));
+            assert!(
+                d.contains(" revel-canvas:") && d.contains("http://revel-canvas.localhost"),
+                "{d}"
+            );
+        }
+    }
+
     #[test]
     fn argument_open() {
         assert_eq!(open_arg(args(&["--open", "/site"])), Some("/site".into()));

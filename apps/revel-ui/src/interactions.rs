@@ -34,7 +34,7 @@ pub const FAMILIES: [Family; 6] = [
 
 /// Réglage proposé.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Setting {
+pub(crate) enum Setting {
     Trigger,
     Split,
     Dur,
@@ -47,6 +47,10 @@ enum Setting {
     Dir,
     Pause,
     Replay,
+    /// Défilement : vitesse (px/s).
+    Speed,
+    /// Défilement : bords estompés (px).
+    Fade,
 }
 
 impl Family {
@@ -135,7 +139,7 @@ impl Family {
             Family::Hover => vec![Dur, Ease, Amount],
             Family::Press => vec![Dur, Amount],
             Family::Loop => match preset {
-                "ticker" => vec![Dur, Dir, Pause],
+                "ticker" => vec![Speed, Dir, Pause, Fade],
                 "spin" => vec![Dur, Delay, Mirror],
                 "pulse" | "float" | "swing" | "blink" => vec![Dur, Delay, Ease, Amount, Mirror],
                 _ => vec![Dur, Delay, Amount],
@@ -158,6 +162,8 @@ fn default_of(f: Family, preset: &str, key: &str) -> Option<&'static str> {
         (Family::Loop, "heartbeat", "dur") => Some("1.6"),
         (Family::Loop, "ticker", "dur") => Some("20"),
         (Family::Loop, "ticker", "dir") => Some("left"),
+        (Family::Loop, "ticker", "speed") => Some("60"),
+        (Family::Loop, "ticker", "fade") => Some("0"),
         (Family::Loop, "pulse" | "float" | "swing" | "blink", "mirror") => Some("on"),
         (Family::Loop, _, "mirror") => Some("off"),
         _ => None,
@@ -298,6 +304,8 @@ fn setting_key(s: Setting) -> &'static str {
         Setting::Dir => "dir",
         Setting::Pause => "pause",
         Setting::Replay => "replay",
+        Setting::Speed => "speed",
+        Setting::Fade => "fade",
     }
 }
 
@@ -652,6 +660,55 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
     }
 }
 
+/// Réglages de l'élément « Défilement » (animation en boucle `ticker`), en tête de l'onglet
+/// Styles : vitesse, sens, arrêt au survol, bords estompés.
+#[component]
+pub fn TickerSettings(at: Target) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let f = Family::Loop;
+    let at = StoredValue::new(at);
+    let anim = Memo::new(move |_| {
+        let at = at.get_value();
+        ed.doc.with(|d| match revel_edit::address::node(d.as_ref()?, &at).ok()? {
+            Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
+                .iter()
+                .find(|a| a.name == f.attr())
+                .and_then(|a| a.value.as_deref())
+                .map(Anim::parse)
+                .filter(|a| a.preset == "ticker"),
+            _ => None,
+        })
+    });
+    let write = StoredValue::new(move |a: Option<Anim>| {
+        let Some(a) = a else { return };
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at: at.get_value(),
+                name: f.attr(),
+                value: Some(a.write()),
+            },
+            false,
+        );
+        let id = at.get_value().node;
+        let v = a.write();
+        set_timeout(
+            move || ed.post(serde_json::json!({ "type": "animate", "id": id, "family": "loop", "value": v })),
+            std::time::Duration::from_millis(350),
+        );
+    });
+    view! {
+        <div class="insp-group ticker-settings">
+            <p class="panel-title">{ui.t("ticker-title")}</p>
+            {[Setting::Speed, Setting::Dir, Setting::Pause, Setting::Fade]
+                .into_iter()
+                .map(|s| setting_row(ui, f, s, anim, write))
+                .collect_view()}
+        </div>
+    }
+}
+
 #[component]
 fn FamilySection(f: Family, at: StoredValue<Target>) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -760,7 +817,7 @@ fn FamilySection(f: Family, at: StoredValue<Target>) -> impl IntoView {
 }
 
 /// Ligne d'un réglage : libellé (bleu si réglé ici), contrôle.
-fn setting_row(
+pub(crate) fn setting_row(
     ui: Ui,
     f: Family,
     s: Setting,
@@ -802,6 +859,8 @@ fn setting_row(
         Setting::Dir => ("anim-dir", None),
         Setting::Pause => ("anim-pause", None),
         Setting::Replay => ("anim-replay", Some("anim-replay-help")),
+        Setting::Speed => ("anim-speed", Some("anim-speed-help")),
+        Setting::Fade => ("anim-fade", Some("anim-fade-help")),
     };
     let label_view = view! {
         <span class="style-label" class:is-here=is_here title=move || help.map(|h| ui.tx(h, &[])).unwrap_or_default()>
@@ -817,7 +876,12 @@ fn setting_row(
                     ("words", "anim-split-words"),
                     ("lines", "anim-split-lines"),
                 ],
-                _ => &[("left", "anim-dir-left"), ("right", "anim-dir-right")],
+                _ => &[
+                    ("left", "anim-dir-left"),
+                    ("right", "anim-dir-right"),
+                    ("up", "anim-dir-up"),
+                    ("down", "anim-dir-down"),
+                ],
             };
             view! {
                 <div class="seg" role="radiogroup">
@@ -831,14 +895,28 @@ fn setting_row(
                         let implied = move || !is_here() && shown() == v;
                         view! {
                             <button role="radio" class:is-on=on class:is-implied=implied aria-checked=move || (shown() == v).to_string()
-                                title=move || if key == "trigger" { ui.tx(&format!("{k}-help"), &[]) } else { String::new() }
+                                title=move || match key {
+                                    "trigger" => ui.tx(&format!("{k}-help"), &[]),
+                                    "dir" => ui.tx(k, &[]),
+                                    _ => String::new(),
+                                }
+                                aria-label=move || ui.tx(k, &[])
                                 on:click=move |_| update(&|a| {
                                     a.set(f, key, Some(v.to_string()));
                                     // Découpe changée : décalage par défaut de la nouvelle découpe.
                                     if key == "split" {
                                         a.set(f, "stagger", None);
                                     }
-                                })><span>{ui.t(k)}</span></button>
+                                })>{
+                                    // Sens : flèches (libellé en info-bulle).
+                                    match (key, v) {
+                                        ("dir", "left") => icons::arrow_left(),
+                                        ("dir", "right") => icons::arrow_right(),
+                                        ("dir", "up") => icons::arrow_up(),
+                                        ("dir", "down") => icons::arrow_down(),
+                                        _ => view! { <span>{ui.t(k)}</span> }.into_any(),
+                                    }
+                                }</button>
                         }
                     }).collect_view()}
                 </div>
@@ -876,9 +954,16 @@ fn setting_row(
             </label>
         }
         .into_any(),
-        Setting::Dur | Setting::Delay | Setting::Dist | Setting::Stagger | Setting::Amount => {
+        Setting::Dur
+        | Setting::Delay
+        | Setting::Dist
+        | Setting::Stagger
+        | Setting::Amount
+        | Setting::Speed
+        | Setting::Fade => {
             let unit = match s {
-                Setting::Dist => "px",
+                Setting::Dist | Setting::Fade => "px",
+                Setting::Speed => "px/s",
                 Setting::Amount => "%",
                 _ => "s",
             };

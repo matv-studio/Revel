@@ -195,7 +195,7 @@ pub fn import(root: &Path, profile: &Profile) -> Result<(Site, Report), ImportEr
         let (fm, body) = split_front_matter(&text, &f)?;
         let mut nodes = conv.parse(body, Mode::Html, &f, &mut report)?;
         if id.starts_with("layouts/") {
-            content_to_slot(&mut nodes);
+            revel_model::content_to_slot(&mut nodes);
             let mut props = fm.clone();
             let parent = props
                 .remove("layout")
@@ -582,36 +582,6 @@ pub fn map_exprs(nodes: &mut [Node], f: &dyn Fn(&str) -> String) {
                 }
             }
             Node::Text { .. } | Node::Html { .. } | Node::Slot | Node::Use { .. } => {}
-        }
-    }
-}
-
-/// `{{ content | safe }}` -> emplacement de la page.
-fn content_to_slot(nodes: &mut [Node]) {
-    for n in nodes {
-        match n {
-            Node::Out { expr } => {
-                let e: String = expr.chars().filter(|c| !c.is_whitespace()).collect();
-                if e == "content|safe" || e == "content" {
-                    *n = Node::Slot;
-                }
-            }
-            Node::Element { children, .. } | Node::SetBlock { children, .. } => {
-                content_to_slot(children)
-            }
-            Node::If {
-                then, otherwise, ..
-            } => {
-                content_to_slot(then);
-                content_to_slot(otherwise);
-            }
-            Node::Each {
-                children, empty, ..
-            } => {
-                content_to_slot(children);
-                content_to_slot(empty);
-            }
-            _ => {}
         }
     }
 }

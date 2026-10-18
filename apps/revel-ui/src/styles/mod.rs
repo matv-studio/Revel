@@ -329,8 +329,36 @@ pub fn Styles() -> impl IntoView {
         }
     };
 
+    // Barre du calque, tout en haut : nom et bouton Masquer (élément, image, composant).
+    let layer_bar = move || {
+        let n = node.get()?;
+        if !revel_edit::layer::supported(&n) {
+            return None;
+        }
+        let at = ed.selected_target()?;
+        let name = revel_model::layer_name(&n)
+            .map(str::to_string)
+            .or_else(|| ed.selected.with(|s| s.as_ref().map(|s| s.label.clone())))
+            .unwrap_or_default();
+        let hidden = revel_model::is_hidden(&n);
+        let at = StoredValue::new(at);
+        Some(view! {
+            <div class="style-layerbar" class:is-hidden=hidden>
+                <span class="style-layerbar-name" title=name.clone()>{name.clone()}</span>
+                <button class="icon-btn icon-btn--small style-hide" class:is-on=hidden
+                    aria-pressed=hidden.to_string()
+                    title=move || format!("{} ({})", ui.tx(if hidden { "style-show" } else { "style-hide" }, &[]), ui.tx("key-hide", &[]))
+                    aria-label=ui.t(if hidden { "style-show" } else { "style-hide" })
+                    on:click=move |_| crate::layers::toggle_hidden(ui, ed, at.get_value())>
+                    {if hidden { icons::eye_off() } else { icons::eye() }}
+                </button>
+            </div>
+        })
+    };
+
     view! {
         <div class="styles">
+            {layer_bar}
             // Contenu de l'élément (lien, image, composant, condition, liste) en tête, avec ses
             // textes (ceux d'une utilisation de composant après son nom) ; ses paramètres avancés
             // en bas (onglet Réglages fondu dans Styles).

@@ -228,6 +228,17 @@
 .layer-mark { display: grid; place-items: center; color: var(--text-faint); }
 .layer-mark svg.icon { width: 12px; height: 12px; }
 .layer-mark.layer-anim { color: var(--set-text); }
+/* Calque masqué (et ce qu'il contient) : grisé ; l'œil barré le réaffiche. */
+.layer.is-hidden-layer .layer-icon, .layer.is-hidden-layer .layer-label,
+.layer.is-hidden-layer .layer-preview { opacity: .45; }
+button.layer-mark { border: 0; background: none; padding: 1px; border-radius: 3px; cursor: pointer; }
+button.layer-mark:hover { color: var(--text); background: var(--surface-active); }
+/* Nom saisi sur place (double-clic sur le nom, F2). */
+.layer-rename {
+  flex: 1 1 auto; min-width: 0; height: 20px; margin: 0; padding: 0 4px;
+  font: inherit; color: var(--text); background: var(--bg);
+  border: var(--border) solid var(--focus); border-radius: 3px; outline: none;
+}
 .layer-preview.is-bound { font-style: italic; }
 /* Composant utilisé : vert, comme Webflow. */
 .layer.is-component .layer-icon, .layer.is-component .layer-label { color: var(--comp); }

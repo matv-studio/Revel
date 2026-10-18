@@ -171,10 +171,44 @@ pub fn ensure(kind: Kind, ctx: &Ctx) -> Result<Installed, BuildError> {
     )
 }
 
+/// Module chargé par Node avant le projet : lien symbolique refusé (Windows sans droits
+/// d'administrateur ni Mode développeur, disque sans liens) remplacé par une jonction ou une copie.
+const LINKS_JS: &str = include_str!("links.cjs");
+
+fn links_file(ctx: &Ctx) -> PathBuf {
+    ctx.tools.join("revel-links.cjs")
+}
+
+/// Écrit le module des liens (s'il diffère) ; `false` s'il n'a pas pu l'être.
+fn write_links(ctx: &Ctx) -> bool {
+    let f = links_file(ctx);
+    if std::fs::read_to_string(&f).is_ok_and(|s| s == LINKS_JS) {
+        return true;
+    }
+    std::fs::create_dir_all(ctx.tools).is_ok() && std::fs::write(&f, LINKS_JS).is_ok()
+}
+
+/// Option `--require` de `NODE_OPTIONS` : chemin entre guillemets, `\` et `"` échappés (Node lit
+/// une barre oblique inverse entre guillemets comme un échappement).
+fn require_option(file: &Path) -> String {
+    let p = file
+        .display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
+    format!("--require \"{p}\"")
+}
+
 /// Variables communes aux commandes : caches dans le dossier de Revel, pas de questions, pas de
-/// mesure d'utilisation des outils.
+/// mesure d'utilisation des outils, module des liens chargé par Node.
 fn tool_env(cmd: Cmd, ctx: &Ctx) -> Cmd {
     let cache = |s: &str| ctx.cache.join(s).display().to_string();
+    let links = links_file(ctx);
+    let cmd = if links.is_file() {
+        cmd.env("NODE_OPTIONS", require_option(&links))
+    } else {
+        cmd
+    };
     cmd.env("CI", "1")
         .env("npm_config_cache", cache("npm"))
         .env("npm_config_update_notifier", "false")
@@ -271,6 +305,9 @@ pub fn build(dir: &Path, recipe: &Recipe, ctx: &Ctx) -> Result<Outcome, BuildErr
         return Err(BuildError::Missing(m));
     }
     let mut log = Log::new();
+    if !write_links(ctx) {
+        log.push("revel-links.cjs : écriture impossible");
+    }
     let node = if recipe.runtime == Runtime::Node || recipe.manager.is_some() {
         Some(ensure(Kind::Node, ctx)?)
     } else {
@@ -457,4 +494,104 @@ fn answers(port: u16) -> bool {
     }
     let mut head = [0u8; 16];
     matches!(s.read(&mut head), Ok(n) if n >= 12 && head.starts_with(b"HTTP/1."))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct NoNet;
+    impl Net for NoNet {
+        fn text(&self, _url: &str) -> Result<String, String> {
+            Err("hors ligne".into())
+        }
+        fn download(
+            &self,
+            _url: &str,
+            _to: &Path,
+            _progress: &mut dyn FnMut(u64, Option<u64>),
+            _cancel: &AtomicBool,
+        ) -> Result<String, BuildError> {
+            Err(BuildError::Download("hors ligne".into()))
+        }
+    }
+
+    /// Lien refusé (simulé : tout lien autre qu'une jonction échoue avec EPERM, comme sous
+    /// Windows sans droits) : jonction pour un dossier, copie pour un fichier, dans les trois
+    /// formes de l'API (synchrone, rappel, promesse) et par un import nommé.
+    #[test]
+    fn liens_refuses_remplaces() {
+        let Some(node) = run::which("node") else {
+            eprintln!("node absent : essai ignoré");
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        // Dossier avec une espace : guillemets de NODE_OPTIONS.
+        let tools = d.path().join("outils de Revel");
+        std::fs::create_dir_all(&tools).unwrap();
+        let cancel = AtomicBool::new(false);
+        let ctx = Ctx {
+            tools: &tools,
+            cache: d.path(),
+            net: &NoNet,
+            cancel: &cancel,
+            on: &|_| {},
+        };
+        assert!(write_links(&ctx) && write_links(&ctx));
+        let refuse = d.path().join("refus.cjs");
+        std::fs::write(
+            &refuse,
+            r#"const fs = require("fs");
+const deny = () => Object.assign(new Error("EPERM: operation not permitted"), { code: "EPERM" });
+const s = fs.symlinkSync, c = fs.symlink, p = fs.promises.symlink;
+fs.symlinkSync = (t, l, ty) => { if (ty !== "junction") throw deny(); return s(t, l, ty); };
+fs.symlink = (t, l, ty, cb) => { if (typeof ty === "function") { cb = ty; ty = undefined; } if (ty !== "junction") return process.nextTick(cb, deny()); return c(t, l, ty, cb); };
+fs.promises.symlink = async (t, l, ty) => { if (ty !== "junction") throw deny(); return p(t, l, ty); };
+"#,
+        )
+        .unwrap();
+        let work = d.path().join("projet");
+        std::fs::create_dir_all(work.join("fonctions/a.func")).unwrap();
+        std::fs::write(work.join("fonctions/a.func/index.js"), "ok").unwrap();
+        std::fs::write(work.join("f.txt"), "texte").unwrap();
+        std::fs::write(
+            work.join("essai.mjs"),
+            r#"import fs from "node:fs";
+import { symlinkSync } from "node:fs";
+symlinkSync("a.func", "fonctions/b.func");
+fs.symlinkSync("../f.txt", "fonctions/g.txt");
+await new Promise((ok, ko) => fs.symlink("a.func", "fonctions/c.func", (e) => (e ? ko(e) : ok())));
+await fs.promises.symlink("a.func", "fonctions/d.func");
+for (const n of ["b", "c", "d"]) console.log(n, fs.readFileSync(`fonctions/${n}.func/index.js`, "utf8"));
+console.log("g", fs.readFileSync("fonctions/g.txt", "utf8"), fs.lstatSync("fonctions/g.txt").isSymbolicLink());
+"#,
+        )
+        .unwrap();
+        let opts = format!(
+            "{} {}",
+            require_option(&refuse),
+            require_option(&links_file(&ctx))
+        );
+        let out = std::process::Command::new(node)
+            .arg("essai.mjs")
+            .current_dir(&work)
+            .env("NODE_OPTIONS", opts)
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success(),
+            "{text}\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(text.trim(), "b ok\nc ok\nd ok\ng texte false");
+    }
+
+    #[test]
+    fn option_require_echappee() {
+        assert_eq!(
+            require_option(Path::new(r"C:\Users\Jo D\revel-links.cjs")),
+            r#"--require "C:\\Users\\Jo D\\revel-links.cjs""#
+        );
+    }
 }

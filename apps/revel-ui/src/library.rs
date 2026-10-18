@@ -424,6 +424,20 @@ fn folder_row(
     chevron: Option<Signal<bool>>,
     open: impl Fn() + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
+    folder_row_with(sh, path, depth, count, chevron, open, None)
+}
+
+/// Ligne de dossier ; `toggle` : la flèche déplie le dossier sur place (le clic sur la ligne
+/// garde son action, entrer dans le dossier).
+fn folder_row_with(
+    sh: Shelves,
+    path: String,
+    depth: usize,
+    count: usize,
+    chevron: Option<Signal<bool>>,
+    open: impl Fn() + Copy + Send + Sync + 'static,
+    toggle: Option<Callback<()>>,
+) -> impl IntoView {
     let path = StoredValue::new(path);
     let drop = sh.drop_zone(path.get_value());
     let renaming = move || sh.renaming.get().as_deref() == Some(path.get_value().as_str());
@@ -451,7 +465,20 @@ fn folder_row(
             on:dragover=move |e: leptos::ev::DragEvent| drop(e, false)
             on:dragleave=move |_| sh.drop_on.set(None)
             on:drop=move |e: leptos::ev::DragEvent| drop(e, true)>
-            <span class="list-chevron">{chevron.map(|c| move || if c.get() { icons::chevron_down() } else { icons::chevron_right() })}</span>
+            {match toggle {
+                Some(t) => view! {
+                    <button class="list-chevron list-chevron--toggle" tabindex="-1"
+                        title=sh.ui.t("media-folder-expand")
+                        aria-expanded=move || chevron.is_some_and(|c| c.get()).to_string()
+                        on:click=move |e: leptos::ev::MouseEvent| { e.stop_propagation(); t.run(()) }
+                        on:dblclick=move |e: leptos::ev::MouseEvent| e.stop_propagation()>
+                        {move || if chevron.is_some_and(|c| c.get()) { icons::chevron_down() } else { icons::chevron_right() }}
+                    </button>
+                }.into_any(),
+                None => view! {
+                    <span class="list-chevron">{chevron.map(|c| move || if c.get() { icons::chevron_down() } else { icons::chevron_right() })}</span>
+                }.into_any(),
+            }}
             <span class="list-icon">{icons::folder()}</span>
             {move || if renaming() {
                 folder_input(sh.ui, name_of(&path.get_value()).to_string(), commit, move || sh.renaming.set(None)).into_any()
@@ -586,6 +613,27 @@ pub fn Media() -> impl IntoView {
             .unwrap_or(72)
             .clamp(THUMB_MIN, THUMB_MAX),
     );
+    // Dossiers dépliés sur place (flèche), gardés d'une session à l'autre.
+    let expanded = RwSignal::new(
+        crate::pref_get("media.open")
+            .map(|v| {
+                v.split('\n')
+                    .filter(|x| !x.is_empty())
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+    );
+    let toggle_folder = move |p: String| {
+        expanded.update(|e| {
+            if let Some(i) = e.iter().position(|x| *x == p) {
+                e.remove(i);
+            } else {
+                e.push(p);
+            }
+        });
+        crate::pref_set("media.open", &expanded.with_untracked(|e| e.join("\n")));
+    };
     // Liste relue à l'ouverture du panneau et après une modification de fichiers hors de Revel.
     let path = ed.path.get_value();
     let refresh = RwSignal::new(0u32);
@@ -623,39 +671,32 @@ pub fn Media() -> impl IntoView {
         });
     });
     let searching = move || !q.with(|q| q.trim().is_empty());
-    let shown = Memo::new(move |_| {
-        let ql = q.get().trim().to_lowercase();
-        let cur = folder.get();
+    // Médias d'un dossier (ou trouvés par la recherche), au filtre de type et à l'ordre choisis.
+    let select = move |dir: Option<&str>, ql: &str| {
         let k = kind.get();
         let mut v: Vec<MediaFile> = sh.shelf.with(|s| {
             files.with(|fs| {
                 fs.iter()
                     .filter(|f| k.is_none_or(|k| f.kind == k))
-                    .filter(|f| {
-                        if ql.is_empty() {
-                            folder_of(s, &f.url) == cur
-                        } else {
-                            file_name(&f.url).to_lowercase().contains(&ql)
-                        }
+                    .filter(|f| match dir {
+                        Some(d) => folder_of(s, &f.url) == d,
+                        None => file_name(&f.url).to_lowercase().contains(ql),
                     })
                     .cloned()
                     .collect()
             })
         });
-        let name = |f: &MediaFile| file_name(&f.url).to_lowercase();
-        match sort.get() {
-            MediaSort::Recent => {
-                v.sort_by(|a, b| b.modified.cmp(&a.modified).then(name(a).cmp(&name(b))))
-            }
-            MediaSort::Oldest => {
-                v.sort_by(|a, b| a.modified.cmp(&b.modified).then(name(a).cmp(&name(b))))
-            }
-            MediaSort::Name => v.sort_by_key(name),
-            MediaSort::NameDesc => v.sort_by_key(|f| std::cmp::Reverse(name(f))),
-            MediaSort::Kind => v.sort_by(|a, b| a.kind.cmp(&b.kind).then(name(a).cmp(&name(b)))),
-            MediaSort::Size => v.sort_by_key(|f| std::cmp::Reverse(f.size)),
-        }
+        sort_media(&mut v, sort.get());
         v
+    };
+    let shown = Memo::new(move |_| {
+        let ql = q.get().trim().to_lowercase();
+        let cur = folder.get();
+        if ql.is_empty() {
+            select(Some(&cur), "")
+        } else {
+            select(None, &ql)
+        }
     });
     // Nombre de médias de chaque dossier (sous-dossiers compris), au filtre de type près.
     let counts = Memo::new(move |_| {
@@ -893,11 +934,11 @@ pub fn Media() -> impl IntoView {
                     {move || {
                         let cur = folder.get();
                         let subs = sh.shelf.with(|s| children(s, &cur));
-                        subs.into_iter().map(|p| {
-                            let n = counts.with(|c| c.get(&p).copied().unwrap_or(0));
-                            let target = StoredValue::new(p.clone());
-                            folder_row(sh, p, 0, n, None, move || folder.set(target.get_value()))
-                        }).collect_view()
+                        subs.into_iter().map(|p| media_folder(MediaTree {
+                            sh, counts, expanded, folder, thumb,
+                            toggle: Callback::new(toggle_folder),
+                            files_in: Callback::new(move |d: String| select(Some(&d), "")),
+                        }, p, 0, tile)).collect_view()
                     }}
                 </Show>
                 {move || {
@@ -937,6 +978,67 @@ pub fn Media() -> impl IntoView {
             })}
         </div>
     }
+}
+
+/// Range des médias dans l'ordre choisi.
+fn sort_media(v: &mut [MediaFile], sort: MediaSort) {
+    let name = |f: &MediaFile| file_name(&f.url).to_lowercase();
+    match sort {
+        MediaSort::Recent => v.sort_by(|a, b| b.modified.cmp(&a.modified).then(name(a).cmp(&name(b)))),
+        MediaSort::Oldest => v.sort_by(|a, b| a.modified.cmp(&b.modified).then(name(a).cmp(&name(b)))),
+        MediaSort::Name => v.sort_by_key(name),
+        MediaSort::NameDesc => v.sort_by_key(|f| std::cmp::Reverse(name(f))),
+        MediaSort::Kind => v.sort_by(|a, b| a.kind.cmp(&b.kind).then(name(a).cmp(&name(b)))),
+        MediaSort::Size => v.sort_by_key(|f| std::cmp::Reverse(f.size)),
+    }
+}
+
+/// État partagé de l'arbre des dossiers de médias.
+#[derive(Clone, Copy)]
+struct MediaTree {
+    sh: Shelves,
+    counts: Memo<BTreeMap<String, usize>>,
+    /// Dossiers dépliés sur place.
+    expanded: RwSignal<Vec<String>>,
+    /// Dossier affiché (clic sur une ligne : on y entre).
+    folder: RwSignal<String>,
+    thumb: RwSignal<u32>,
+    toggle: Callback<String>,
+    files_in: Callback<String, Vec<MediaFile>>,
+}
+
+/// Dossier de médias : sa ligne, puis, s'il est déplié, ses sous-dossiers et ses médias en
+/// retrait (sans y entrer).
+fn media_folder<V: IntoView + 'static>(
+    t: MediaTree,
+    path: String,
+    depth: usize,
+    tile: impl Fn(MediaFile) -> V + Copy + Send + Sync + 'static,
+) -> AnyView {
+    let key = StoredValue::new(path.clone());
+    let n = t.counts.with(|c| c.get(&path).copied().unwrap_or(0));
+    let has_subs = t.sh.shelf.with(|s| !children(s, &path).is_empty());
+    let is_open = Signal::derive(move || key.with_value(|k| t.expanded.with(|e| e.contains(k))));
+    let toggle = (n > 0 || has_subs).then(|| Callback::new(move |_| t.toggle.run(key.get_value())));
+    view! {
+        {folder_row_with(t.sh, path, depth, n, toggle.is_some().then_some(is_open),
+            move || t.folder.set(key.get_value()), toggle)}
+        {move || is_open.get().then(|| {
+            let p = key.get_value();
+            let subs = t.sh.shelf.with(|s| children(s, &p));
+            let items = t.files_in.run(p);
+            view! {
+                {subs.into_iter().map(|s| media_folder(t, s, depth + 1, tile)).collect_view()}
+                {(!items.is_empty()).then(|| view! {
+                    <div class="asset-grid is-nested" class:is-small=move || t.thumb.get() < 60
+                        style=move || format!("--thumb:{}px;--depth:{}", t.thumb.get(), depth + 1)>
+                        {items.into_iter().map(tile).collect_view()}
+                    </div>
+                })}
+            }
+        })}
+    }
+    .into_any()
 }
 
 /// Élément glissé pour un média : image (texte alternatif par défaut) ou lien vers le fichier.

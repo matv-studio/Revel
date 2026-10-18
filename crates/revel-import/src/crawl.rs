@@ -34,6 +34,24 @@ pub trait Fetch: Sync {
     }
 }
 
+/// Lecture avec deux nouvelles tentatives en cas d'échec passager (réseau, serveur occupé :
+/// statut 429 ou 5xx).
+fn get_retry(fetch: &(impl Fetch + ?Sized), url: &Url) -> Result<Fetched, String> {
+    let mut last = fetch.get(url);
+    for attempt in 1..=2u64 {
+        let passing = match &last {
+            Err(_) => true,
+            Ok(r) => r.status == 429 || (500..600).contains(&r.status),
+        };
+        if !passing {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(300 * attempt));
+        last = fetch.get(url);
+    }
+    last
+}
+
 /// Lit un document JSON (API) : erreur si le statut n'est pas 2xx (statut et début du corps).
 pub fn get_json(
     fetch: &dyn Fetch,
@@ -1133,7 +1151,7 @@ pub fn crawl(
                     s.spawn(move || {
                         let r = match pre {
                             Some(p) => Ok(p),
-                            None => fetch.get(&u),
+                            None => get_retry(fetch, &u),
                         };
                         (u, r)
                     })
@@ -1217,7 +1235,7 @@ pub fn crawl(
                 .map(|u| {
                     let u = u.clone();
                     s.spawn(move || {
-                        let r = fetch.get(&u);
+                        let r = get_retry(fetch, &u);
                         (u, r)
                     })
                 })

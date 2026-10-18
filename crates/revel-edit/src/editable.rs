@@ -129,6 +129,8 @@ impl Ctx {
         let filter_ok = match tail {
             None => true,
             Some("safe") => true,
+            // Mots entre astérisques mis en valeur.
+            Some(t) if t.starts_with("emphasis(") => true,
             Some(t) => crate::dates::format_of(t).is_some(),
         };
         // Champ, sinon un autre champ : `(a or b)`.
@@ -240,8 +242,9 @@ impl Ctx {
                 }
             })
             // Clauses de l'interface (rempli, vide, égal à…) sur des champs ou des propriétés.
-            || crate::visibility::parse(cond).is_some_and(|cl| {
-                cl.iter()
+            || crate::visibility::read(cond).is_some_and(|c| {
+                c.clauses
+                    .iter()
                     .all(|k| self.field(&k.field) || self.prop(&k.field, None))
             })
     }
@@ -468,7 +471,7 @@ fn owner_name(o: &Owner) -> String {
 
 /// Variables de page réglées dans les paramètres de la page : référencement, indexation, classe
 /// du corps de page, thème.
-pub const PAGE_SETTINGS: &[&str] = &["seo", "noindex", "bodyClass", "theme"];
+pub const PAGE_SETTINGS: &[&str] = &["seo", "noindex", "bodyClass", "theme", "ogType"];
 
 /// Relevé du site entier, dans l'ordre : paramètres, gabarits, pages, composants.
 pub fn audit(site: &Site) -> Vec<Issue> {

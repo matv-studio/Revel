@@ -82,6 +82,14 @@ pub enum Command {
         index: usize,
     },
     /// Variable d'une page (`None` : supprimée).
+    /// Réglage d'un gabarit (modèle des pages d'une collection) : classe du corps, thème, type
+    /// de partage ; `None` : retiré.
+    SetLayoutProp {
+        layout: String,
+        key: String,
+        #[serde(default)]
+        value: Option<Value>,
+    },
     SetPageProp {
         page: String,
         key: String,
@@ -880,6 +888,22 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 },
                 to: from,
                 index: from_index,
+            })
+        }
+        Command::SetLayoutProp { layout, key, value } => {
+            let l = site
+                .layouts
+                .iter_mut()
+                .find(|l| &l.id == layout)
+                .ok_or_else(|| EditError::NotFound(format!("gabarit {layout}")))?;
+            let old = match value {
+                Some(v) => l.props.insert(key.clone(), v.clone()),
+                None => l.props.remove(key),
+            };
+            Ok(Command::SetLayoutProp {
+                layout: layout.clone(),
+                key: key.clone(),
+                value: old,
             })
         }
         Command::SetPageProp { page, key, value } => {

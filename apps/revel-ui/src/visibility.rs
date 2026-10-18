@@ -5,7 +5,7 @@
 
 use crate::Ui;
 use leptos::prelude::*;
-use revel_edit::visibility::{self, Clause, Lit, Test};
+use revel_edit::visibility::{self, Clause, Cond, Lit, Test};
 
 const TESTS: &[(&str, &str)] = &[
     ("set", "cond-set"),
@@ -27,7 +27,7 @@ pub fn condition_editor(
     optional: bool,
     on_change: impl Fn(Option<String>) + Copy + Send + Sync + 'static,
 ) -> AnyView {
-    let parsed = cond.as_deref().map(visibility::parse);
+    let parsed = cond.as_deref().map(visibility::read);
     // Condition écrite autrement : affichée telle quelle, remplaçable par des clauses.
     if let Some(None) = parsed {
         let raw = cond.clone().unwrap_or_default();
@@ -43,10 +43,16 @@ pub fn condition_editor(
         }
         .into_any();
     }
-    let clauses = RwSignal::new(parsed.flatten().unwrap_or_default());
+    let read = parsed.flatten().unwrap_or_default();
+    let clauses = RwSignal::new(read.clauses);
+    let any = RwSignal::new(read.any);
     let commit = move |list: Vec<Clause>| {
         clauses.set(list.clone());
-        on_change((!list.is_empty()).then(|| visibility::to_expr(&list)));
+        let c = Cond {
+            any: any.get_untracked(),
+            clauses: list,
+        };
+        on_change((!c.clauses.is_empty()).then(|| visibility::write(&c)));
     };
     let edit = move |i: usize, f: Box<dyn Fn(&mut Clause)>| {
         let mut list = clauses.get_untracked();
@@ -134,6 +140,18 @@ pub fn condition_editor(
     };
     view! {
         <div class="cond-editor">
+            // Plusieurs conditions : toutes vraies, ou une au moins.
+            {move || (clauses.with(|c| c.len()) > 1).then(|| view! {
+                <div class="select">
+                    <select class="input" aria-label=ui.t("cond-mode") on:change=move |e| {
+                        any.set(event_target_value(&e) == "any");
+                        commit(clauses.get_untracked());
+                    }>
+                        <option value="all" prop:selected=move || !any.get()>{ui.t("cond-mode-all")}</option>
+                        <option value="any" prop:selected=move || any.get()>{ui.t("cond-mode-any")}</option>
+                    </select>
+                </div>
+            })}
             {move || {
                 let list = clauses.get();
                 if list.is_empty() {

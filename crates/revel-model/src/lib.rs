@@ -435,6 +435,58 @@ pub struct SeoSettings {
     /// Texte de `robots.txt` ; `None` : tout autoriser et indiquer le plan du site.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub robots: Option<String>,
+    /// Nom affiché du site : ajouté au titre des pages (« Page | Nom »), nom au partage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub site_title: Option<String>,
+    /// Description des pages qui n'en ont pas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Image de partage des pages qui n'en ont pas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub share_image: Option<String>,
+    /// Couleur de la barre du navigateur (téléphones).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_color: Option<String>,
+    /// Icône du site (SVG ou PNG).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favicon: Option<String>,
+    /// Icône PNG de repli (192 px).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favicon_png: Option<String>,
+    /// Icône des écrans d'accueil (Apple, 180 px).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub touch_icon: Option<String>,
+    /// Fiche de l'organisation (données structurées schema.org de chaque page).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organization: Option<Organization>,
+}
+
+/// Organisation qui publie le site (`schema.org/Organization`) ; champs vides : omis.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Organization {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub alternate_name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub logo: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub email: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub telephone: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub founding_date: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub street: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub postcode: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub city: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub country: String,
+    /// Pages de l'organisation ailleurs (réseaux sociaux).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub same_as: Vec<String>,
 }
 
 impl SeoSettings {

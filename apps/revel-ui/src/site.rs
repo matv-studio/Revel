@@ -396,6 +396,32 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                 </label>
             </div>
             <div class="section">
+                <h2 title=ui.t("seo-share-help")>{ui.t("seo-share")}</h2>
+                <div class="form-grid">
+                    {text_row(ui, "seo-site-title", "seo-site-title-help", "Agence Exemple", Signal::derive(move || seo().site_title.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.site_title = some(&v))))}
+                    {text_row(ui, "seo-description", "seo-description-help", "", Signal::derive(move || seo().description.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.description = some(&v))))}
+                    {text_row(ui, "seo-share-image", "seo-share-image-help", "/media/partage.jpg", Signal::derive(move || seo().share_image.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.share_image = some(&v))))}
+                    {text_row(ui, "seo-theme-color", "seo-theme-color-help", "#16171B", Signal::derive(move || seo().theme_color.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.theme_color = some(&v))))}
+                    {text_row(ui, "seo-favicon", "seo-favicon-help", "/media/favicon.svg", Signal::derive(move || seo().favicon.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.favicon = some(&v))))}
+                    {text_row(ui, "seo-favicon-png", "seo-favicon-png-help", "/media/favicon.png", Signal::derive(move || seo().favicon_png.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.favicon_png = some(&v))))}
+                    {text_row(ui, "seo-touch-icon", "seo-touch-icon-help", "/media/apple-touch-icon.png", Signal::derive(move || seo().touch_icon.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.touch_icon = some(&v))))}
+                </div>
+            </div>
+            <div class="section">
+                <h2 title=ui.t("seo-org-help")>{ui.t("seo-org")}</h2>
+                <div class="form-grid">
+                    {org_rows(ui, Signal::derive(move || seo().organization.unwrap_or_default()),
+                        Callback::new(move |o: revel_model::Organization| set(&|x| x.organization = (o != revel_model::Organization::default()).then(|| o.clone()))))}
+                </div>
+            </div>
+            <div class="section">
                 <label class="field">
                     <span class="label" title=move || ui.tx(if own("/robots.txt") { "seo-robots-own" } else { "seo-robots-help" }, &[])>
                         "robots.txt"
@@ -411,6 +437,69 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                 </label>
             </div>
         </section>
+    }
+}
+
+/// Texte réglé (vide : retiré).
+fn some(v: &str) -> Option<String> {
+    let v = v.trim();
+    (!v.is_empty()).then(|| v.to_string())
+}
+
+/// Ligne « libellé : champ » d'un réglage texte.
+fn text_row(
+    ui: Ui,
+    label: &'static str,
+    help: &'static str,
+    placeholder: &'static str,
+    value: Signal<String>,
+    on_change: Callback<String>,
+) -> impl IntoView {
+    view! {
+        <span class="label" title=ui.t(help)>{ui.t(label)}</span>
+        <input class="input" spellcheck="false" placeholder=placeholder prop:value=move || value.get()
+            on:change=move |e| on_change.run(event_target_value(&e))/>
+    }
+}
+
+/// Fiche de l'organisation : nom, autre nom, logo, contact, adresse, réseaux (un lien par ligne).
+fn org_rows(
+    ui: Ui,
+    org: Signal<revel_model::Organization>,
+    set: Callback<revel_model::Organization>,
+) -> impl IntoView {
+    type Get = fn(&revel_model::Organization) -> String;
+    type Put = fn(&mut revel_model::Organization, String);
+    let fields: [(&'static str, &'static str, Get, Put); 10] = [
+        ("seo-org-name", "Alunites", |o| o.name.clone(), |o, v| o.name = v),
+        ("seo-org-alt", "", |o| o.alternate_name.clone(), |o, v| o.alternate_name = v),
+        ("seo-org-logo", "/media/logo.svg", |o| o.logo.clone(), |o, v| o.logo = v),
+        ("seo-org-email", "bonjour@exemple.fr", |o| o.email.clone(), |o, v| o.email = v),
+        ("seo-org-phone", "+33 1 23 45 67 89", |o| o.telephone.clone(), |o, v| o.telephone = v),
+        ("seo-org-founded", "2004", |o| o.founding_date.clone(), |o, v| o.founding_date = v),
+        ("seo-org-street", "", |o| o.street.clone(), |o, v| o.street = v),
+        ("seo-org-postcode", "", |o| o.postcode.clone(), |o, v| o.postcode = v),
+        ("seo-org-city", "", |o| o.city.clone(), |o, v| o.city = v),
+        ("seo-org-country", "FR", |o| o.country.clone(), |o, v| o.country = v),
+    ];
+    view! {
+        {fields.into_iter().map(|(label, ph, get, put)| view! {
+            <span class="label">{ui.t(label)}</span>
+            <input class="input" spellcheck="false" placeholder=ph prop:value=move || get(&org.get())
+                on:change=move |e| {
+                    let mut o = org.get_untracked();
+                    put(&mut o, event_target_value(&e).trim().to_string());
+                    set.run(o);
+                }/>
+        }).collect_view()}
+        <span class="label" title=ui.t("seo-org-social-help")>{ui.t("seo-org-social")}</span>
+        <textarea class="input input--mono" rows="4" spellcheck="false" placeholder="https://www.linkedin.com/company/…"
+            prop:value=move || org.get().same_as.join("\n")
+            on:change=move |e| {
+                let mut o = org.get_untracked();
+                o.same_as = event_target_value(&e).lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
+                set.run(o);
+            }></textarea>
     }
 }
 

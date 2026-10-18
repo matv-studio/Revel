@@ -439,6 +439,8 @@ const ACTS: &[(&str, &str)] = &[
     ("hide", "act-hide"),
     ("play", "act-play"),
     ("dismiss", "act-dismiss"),
+    ("random", "act-random"),
+    ("spin", "act-spin"),
 ];
 
 /// Classes et identifiants du site (éléments visés).
@@ -559,6 +561,14 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                         Act::Hide => ("hide", None),
                         Act::Play => ("play", None),
                         Act::Dismiss => ("dismiss", None),
+                        Act::Random(_) => ("random", None),
+                        Act::Spin(_) => ("spin", None),
+                    };
+                    // Délai (au hasard) ou angle (rotation) réglables.
+                    let amount = match &r.act {
+                        Act::Random(ms) => Some(("act-random-delay", *ms)),
+                        Act::Spin(deg) => Some(("act-spin-deg", *deg)),
+                        _ => None,
                     };
                     let target = r.target.clone();
                     let target2 = target.clone();
@@ -602,12 +612,26 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                                         "hide" => Act::Hide,
                                         "play" => Act::Play,
                                         "dismiss" => Act::Dismiss,
+                                        "random" => Act::Random(0),
+                                        "spin" => Act::Spin(360),
                                         _ => Act::Class("is-open".into()),
                                     }));
                                 }>
                                     {ACTS.iter().map(|(v, k)| view! { <option value=*v selected=*v == act title=ui.tx(&format!("{k}-help"), &[])>{ui.t(k)}</option> }).collect_view()}
                                 </select>
                             </div>
+                            {amount.map(|(k, n)| view! {
+                                <label class="field">
+                                    <span class="label">{ui.t(k)}</span>
+                                    <input class="input" type="number" min="0" step="10" prop:value=n.to_string() on:change=move |e| {
+                                        let n = event_target_value(&e).trim().parse::<u32>().unwrap_or(0);
+                                        edit(i, Box::new(move |r| r.act = match r.act {
+                                            Act::Random(_) => Act::Random(n),
+                                            _ => Act::Spin(n),
+                                        }));
+                                    }/>
+                                </label>
+                            })}
                             {class.map(|c| view! {
                                 <label class="field">
                                     <span class="label">{ui.t("act-class-name")}</span>

@@ -57,6 +57,22 @@
       }
       var v = el.tagName === "VIDEO" ? el : el.querySelector("video");
       if (v) { if (on && v.paused) v.play(); else if (!on || !v.paused) v.pause(); }
+    } else if (a.indexOf("random:") === 0) {
+      // Un enfant au hasard (autre que l'actuel), affiché seul après le délai.
+      var kids = Array.prototype.slice.call(el.children);
+      if (!kids.length) return;
+      var cur = kids.findIndex(function (k) { return !k.hidden && !k.classList.contains("rv-hide"); });
+      var next = cur;
+      while (kids.length > 1 && next === cur) next = Math.floor(Math.random() * kids.length);
+      var reveal = function () {
+        kids.forEach(function (k, i) { k.hidden = i !== next; k.classList.toggle("is-active", i === next); });
+      };
+      var wait = still ? 0 : parseInt(a.slice(7), 10) || 0;
+      if (wait) setTimeout(reveal, wait); else reveal();
+    } else if (a.indexOf("spin:") === 0) {
+      // Rotation ajoutée, plus un quart de tour au hasard (variable --turn et transformation).
+      el.__rvTurn = (el.__rvTurn || 0) + (parseInt(a.slice(5), 10) || 0) + Math.floor(Math.random() * 4) * 90;
+      el.style.setProperty("--turn", el.__rvTurn + "deg");
     } else if (a === "dismiss") {
       if (on) { el.classList.add("rv-hide"); store.set("rv-dismiss:" + key, "1"); }
     } else if (a.indexOf("class:") === 0) {
@@ -130,7 +146,9 @@
       }
       for (var k = 0; k < panels.length; k++) {
         panels[k].classList.toggle("rv-hide", k !== i);
-        var vs = panels[k].querySelectorAll("video");
+        // Panneaux masqués d'avance (`hidden`, sans attendre le script) : affichés à leur tour.
+        if (panels[k].hasAttribute("hidden") || k !== i) panels[k].hidden = k !== i;
+        var vs = panels[k].tagName === "VIDEO" ? [panels[k]] : panels[k].querySelectorAll("video");
         for (var v = 0; v < vs.length; v++) {
           if (k === i && vs[v].hasAttribute("autoplay") && !still && !box.classList.contains("is-paused")) {
             var p = vs[v].play();
@@ -247,8 +265,10 @@
   // Lecteur vidéo (`data-revel-video="<adresse>"`) : l'appui sur `data-revel-play` (couverture)
   // met la vidéo à sa place, lancée : YouTube (sans cookies), Vimeo (sans suivi) ou fichier.
   function player(url, label) {
-    var yt = url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
-    var vm = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
+    // Fichier vidéo (lien direct, « progressive_redirect » de Vimeo) : lu tel quel.
+    var file = /\.(mp4|webm|ogv|ogg|mov|m4v)(\?|#|$)/i.test(url) || url.indexOf("progressive_redirect") >= 0;
+    var yt = file ? null : url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
+    var vm = file ? null : url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
     var el;
     if (yt || vm) {
       el = document.createElement("iframe");
@@ -299,7 +319,10 @@
         buttons[b].setAttribute("aria-pressed", String(on));
       }
       var empty = document.querySelectorAll("[data-revel-filter-empty]");
-      for (var e = 0; e < empty.length; e++) empty[e].classList.toggle("rv-hide", visible > 0);
+      for (var e = 0; e < empty.length; e++) {
+        empty[e].classList.toggle("rv-hide", visible > 0);
+        empty[e].hidden = visible > 0;
+      }
       if (push && param && window.URL && history.replaceState) {
         var url = new URL(location.href);
         if (value) url.searchParams.set(param, value); else url.searchParams.delete(param);

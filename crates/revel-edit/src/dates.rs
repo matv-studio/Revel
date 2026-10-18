@@ -133,6 +133,8 @@ pub const FORMATS: &[(&str, &str)] = &[
     ("date_text(locale, \"short\")", ""),
     ("date_text(locale, \"month\")", ""),
     ("date(\"%Y\")", "2026"),
+    // Date et heure ISO 8601 (attribut `datetime` d'une balise `<time>`).
+    ("iso_date", "2026-10-16T00:00:00.000Z"),
 ];
 
 /// Exemple affiché d'une écriture (date du 16 octobre 2026).

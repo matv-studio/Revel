@@ -1,7 +1,7 @@
 //! Conditions d'affichage écrites par l'interface (« Conditional visibility » de Webflow) :
-//! clauses jointes par « et », chacune sur un champ du contenu, une valeur de liste ou une
-//! propriété de composant : rempli, vide, égal à, différent de, contient, plus de / moins de
-//! N valeurs.
+//! clauses jointes par « et » (toutes vraies) ou par « ou » (une au moins), chacune sur un champ
+//! du contenu, une valeur de liste ou une propriété de composant : rempli, vide, égal à,
+//! différent de, contient, plus de / moins de N valeurs.
 //!
 //! Formes écrites : `x`, `not x`, `x == "v"`, `x != "v"`, `"v" in x`, `x|length > 2`,
 //! `x|length < 3` ; `x|length` seul vaut « rempli ».
@@ -88,7 +88,43 @@ pub struct Clause {
     pub test: Test,
 }
 
+/// Condition complète : clauses toutes vraies (`and`) ou une au moins (`or`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Cond {
+    pub any: bool,
+    pub clauses: Vec<Clause>,
+}
+
+/// Condition lue (clauses jointes par `and`, ou toutes par `or`).
+pub fn read(cond: &str) -> Option<Cond> {
+    if let Some(c) = parse(cond) {
+        return Some(Cond {
+            any: false,
+            clauses: c,
+        });
+    }
+    let parts = split_kw(cond, " or ", " and ")?;
+    let clauses: Option<Vec<Clause>> = parts.iter().map(|p| clause(p)).collect();
+    Some(Cond {
+        any: true,
+        clauses: clauses?,
+    })
+}
+
 /// Condition écrite.
+pub fn write(c: &Cond) -> String {
+    if c.any {
+        c.clauses
+            .iter()
+            .map(|k| to_expr(std::slice::from_ref(k)))
+            .collect::<Vec<_>>()
+            .join(" or ")
+    } else {
+        to_expr(&c.clauses)
+    }
+}
+
+/// Condition écrite (clauses toutes vraies).
 pub fn to_expr(clauses: &[Clause]) -> String {
     clauses
         .iter()
@@ -116,6 +152,11 @@ pub fn parse(cond: &str) -> Option<Vec<Clause>> {
 
 /// Parties jointes par `and` au premier niveau (hors guillemets et parenthèses).
 fn split_and(s: &str) -> Option<Vec<String>> {
+    split_kw(s, " and ", " or ")
+}
+
+/// Parties jointes par `kw` au premier niveau ; `None` si `other` y paraît aussi (mélange).
+fn split_kw(s: &str, kw: &str, other: &str) -> Option<Vec<String>> {
     let s = strip_parens(s.trim());
     let b = s.as_bytes();
     let (mut depth, mut quote, mut start) = (0i32, None::<u8>, 0usize);
@@ -136,14 +177,14 @@ fn split_and(s: &str) -> Option<Vec<String>> {
                 b'"' | b'\'' => quote = Some(c),
                 b'(' | b'[' | b'{' => depth += 1,
                 b')' | b']' | b'}' => depth -= 1,
-                b' ' if depth == 0 && s[i..].starts_with(" and ") => {
+                b' ' if depth == 0 && s[i..].starts_with(kw) => {
                     out.push(s[start..i].trim().to_string());
-                    i += 5;
+                    i += kw.len();
                     start = i;
                     continue;
                 }
-                // « ou » : pas une forme de l'interface.
-                b' ' if depth == 0 && s[i..].starts_with(" or ") => return None,
+                // Mélange de « et » et de « ou » : pas une forme de l'interface.
+                b' ' if depth == 0 && s[i..].starts_with(other) => return None,
                 _ => {}
             }
         }
@@ -320,6 +361,11 @@ mod tests {
         let c = parse("x|length >= 2").unwrap();
         assert_eq!(c[0].test, Test::MoreThan(1));
         assert!(parse("a or b").is_none());
+        let c = read("hook|length or chapeau or (keywords | length)").unwrap();
+        assert!(c.any);
+        assert_eq!(c.clauses.len(), 3);
+        assert_eq!(write(&c), "hook or chapeau or keywords");
+        assert!(read("a and b or c").is_none());
         assert!(parse("a.b(1)").is_none());
         assert!(parse("x == y").is_none());
         // Toute forme écrite se relit à l'identique.

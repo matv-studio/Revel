@@ -225,6 +225,13 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                                         </select>
                                     </div>
                                 </label>
+                                {
+                                    let og = p.props.get("ogType").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                                    let q3 = pid.clone();
+                                    share_type(ui, Signal::derive(move || og.clone()), Callback::new(move |v: String| {
+                                        ed.apply(ui, Command::SetPageProp { page: q3.clone(), key: "ogType".into(), value: (!v.is_empty()).then(|| json!(v)) }, false)
+                                    }))
+                                }
                             }
                         }
                         <h3 class="page-settings-section">{ui.t("pages-seo")}</h3>
@@ -321,5 +328,84 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                 }
             })}
         </div>
+    }
+}
+
+/// Réglages du modèle des pages d'une collection (gabarit) : classe du corps de page, thème et
+/// type de partage, pour toutes les pages de la collection (une page peut les changer).
+#[component]
+pub fn TemplateSettings(layout: String, on_close: Callback<()>) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let layout = StoredValue::new(layout);
+    let props = Memo::new(move |_| {
+        ed.doc.with(|d| {
+            d.as_ref()?
+                .layouts
+                .iter()
+                .find(|l| layout.with_value(|i| l.id == *i))
+                .map(|l| l.props.clone())
+        })
+    });
+    let text = move |k: &str| {
+        props
+            .get()
+            .and_then(|p| p.get(k).and_then(|v| v.as_str()).map(str::to_string))
+            .unwrap_or_default()
+    };
+    let set = move |key: &'static str, v: String| {
+        let v = v.split_whitespace().collect::<Vec<_>>().join(" ");
+        ed.apply(
+            ui,
+            Command::SetLayoutProp {
+                layout: layout.get_value(),
+                key: key.into(),
+                value: (!v.is_empty()).then(|| json!(v)),
+            },
+            false,
+        );
+    };
+    view! {
+        <div class="page-settings">
+            <header class="page-settings-head">
+                <button class="icon-btn icon-btn--small" title=ui.t("action-back") aria-label=ui.t("action-back")
+                    on:click=move |_| on_close.run(())>{icons::back()}</button>
+                <span class="page-settings-title">{ui.t("template-settings")}</span>
+            </header>
+            <div class="page-settings-body">
+                <p class="muted small">{ui.t("template-settings-help")}</p>
+                <h3 class="page-settings-section">{ui.t("pages-look")}</h3>
+                <Field label=ui.t("pages-body-class") value=Signal::derive(move || text("bodyClass")) mono=true
+                    on_commit=move |v: String| set("bodyClass", v)/>
+                <label class="field">
+                    <span class="label" title=ui.t("pages-theme-help")>{ui.t("pages-theme")}</span>
+                    <div class="select">
+                        <select class="input" on:change=move |e| set("theme", event_target_value(&e))>
+                            <option value="" prop:selected=move || text("theme").is_empty()>{ui.t("pages-theme-site")}</option>
+                            <option value="light" prop:selected=move || text("theme") == "light">{ui.t("pages-theme-light")}</option>
+                            <option value="dark" prop:selected=move || text("theme") == "dark">{ui.t("pages-theme-dark")}</option>
+                        </select>
+                    </div>
+                </label>
+                <h3 class="page-settings-section">{ui.t("pages-seo")}</h3>
+                {share_type(ui, Signal::derive(move || text("ogType")), Callback::new(move |v: String| set("ogType", v)))}
+            </div>
+        </div>
+    }
+}
+
+/// Type de contenu annoncé au partage (`og:type`) : page ou article.
+fn share_type(ui: Ui, cur: Signal<String>, set: Callback<String>) -> impl IntoView {
+    view! {
+        <label class="field">
+            <span class="label" title=ui.t("pages-og-type-help")>{ui.t("pages-og-type")}</span>
+            <div class="select">
+                <select class="input" on:change=move |e| set.run(event_target_value(&e))>
+                    <option value="" prop:selected=move || cur.get().is_empty()>{ui.t("pages-og-type-auto")}</option>
+                    <option value="website" prop:selected=move || cur.get() == "website">{ui.t("pages-og-type-website")}</option>
+                    <option value="article" prop:selected=move || cur.get() == "article">{ui.t("pages-og-type-article")}</option>
+                </select>
+            </div>
+        </label>
     }
 }

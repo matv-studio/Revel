@@ -1064,6 +1064,11 @@ fn collection_view(
                             let (id, folder) = (c.id.clone(), c.folder.clone());
                             move || labels.with(|l| l.get(&folder).cloned()).unwrap_or_else(|| label_of(&id))
                         }</span>
+                        // Réglages du modèle des pages (apparence, partage), comme ceux d'une page.
+                        {tc.on_settings.zip(c.template.clone()).map(|(cb, t)| view! {
+                            <span class="row-action" role="button" title=ui.t("template-settings") aria-label=ui.t("template-settings")
+                                on:click=move |e| { e.stop_propagation(); cb.run(format!("layout:{t}")) }>{icons::settings()}</span>
+                        })}
                         <span class="list-count">{n}</span>
                     </div>
                     {move || {
@@ -1131,7 +1136,10 @@ pub fn Pages() -> impl IntoView {
         <div class="panel-list pages" node_ref=root>
             {move || settings.get().map(|id| view! {
                 <div class="page-settings-overlay" style=move || rect.get().map(|(x, y, w, h)| format!("left:{x}px;top:{y}px;width:{w}px;height:{h}px")).unwrap_or_default()>
-                    <crate::pagesettings::PageSettings id=id on_close=close/>
+                    {match id.strip_prefix("layout:") {
+                        Some(l) => view! { <crate::pagesettings::TemplateSettings layout=l.to_string() on_close=close/> }.into_any(),
+                        None => view! { <crate::pagesettings::PageSettings id=id on_close=close/> }.into_any(),
+                    }}
                 </div>
             })}
             {move || match settings.get() {

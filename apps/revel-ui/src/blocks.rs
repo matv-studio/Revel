@@ -1502,6 +1502,21 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                 </div>
             </label>
             {first_view}
+            {(!first_value.is_empty()).then(|| {
+                let full = q.with_value(|q| q.first_full);
+                view! {
+                    <label class="view-line" title=ui.t("block-list-first-full-help")>
+                        <span>{ui.t("block-list-first-full")}</span>
+                        <span class="switch">
+                            <input type="checkbox" prop:checked=full on:change=move |e| {
+                                let on = event_target_checked(&e);
+                                write(Box::new(move |q| q.first_full = on))
+                            }/>
+                            <span class="switch-track"></span>
+                        </span>
+                    </label>
+                }
+            })}
             <label class="field">
                 <span class="label">{ui.t("block-list-contains")}</span>
                 <div class="select">
@@ -1670,6 +1685,49 @@ fn enclosing_values(d: &Site, at: &Target) -> Option<String> {
     enclosing_values_at(d, at).map(|(v, _, _)| v)
 }
 
+/// Champ du contenu relié à une propriété liste d'un composant, d'après ses utilisations dans
+/// les pages et les gabarits : (collection, nom du champ). Sert à connaître les sous-champs
+/// d'une liste parcourue dans le composant (blocs d'un projet).
+pub(crate) fn list_prop_source(d: &Site, cid: &str, prop: &str) -> Option<(String, String)> {
+    let mut found: Option<(String, String)> = None;
+    let owners = d
+        .layouts
+        .iter()
+        .map(|l| (revel_edit::Owner::Layout(l.id.clone()), &l.body))
+        .chain(d.pages.iter().map(|p| (revel_edit::Owner::Page(p.id.clone()), &p.body)));
+    for (owner, body) in owners {
+        if found.is_some() {
+            break;
+        }
+        revel_model::ids::walk(body, &mut |n| {
+            if found.is_some() {
+                return;
+            }
+            if let Node::Use {
+                id: Some(id),
+                component,
+                args,
+                ..
+            } = n
+                && component == cid
+                && let Some(e) = args.get(prop)
+            {
+                let t = Target {
+                    owner: owner.clone(),
+                    node: id.clone(),
+                };
+                if let Some((col, prefix, _)) = binding_context(d, &t)
+                    && let Some(f) = e.trim().strip_prefix(prefix.as_str())
+                    && revel_model::valid_prop_name(f)
+                {
+                    found = Some((col, f.to_string()));
+                }
+            }
+        });
+    }
+    found
+}
+
 /// Liste des valeurs d'un champ qui contient le nœud : variable, champ (`activities`,
 /// `item.data.tags`) et boucle.
 fn enclosing_values_at(d: &Site, at: &Target) -> Option<(String, String, Target)> {
@@ -1719,6 +1777,8 @@ struct TextBind {
     safe: bool,
     /// Nombre de valeurs d'un champ liste (`x | length`).
     count: bool,
+    /// Mots entre astérisques mis en valeur : classe (`x | emphasis("accent")`).
+    emphasis: Option<String>,
     raw: Option<String>,
 }
 
@@ -1769,6 +1829,11 @@ fn text_bind(children: &[Node], field_of: &dyn Fn(&str) -> Option<String>) -> Op
             b.field = f;
             b.count = true;
         }
+        (Some(f), Some(t)) if t.starts_with("emphasis(") && t.ends_with(')') => {
+            b.field = f;
+            let arg = t["emphasis(".len()..t.len() - 1].trim();
+            b.emphasis = Some(revel_edit::canvas::literal(arg).unwrap_or_else(|| "accent".into()));
+        }
         (Some(f), Some(t)) if revel_edit::dates::format_of(t).is_some() => {
             b.field = f;
             b.format = revel_edit::dates::format_of(t);
@@ -1792,6 +1857,8 @@ fn text_children(b: &TextBind, prefix: &str) -> Vec<Node> {
     };
     if b.count {
         expr.push_str(" | length");
+    } else if let Some(c) = &b.emphasis {
+        expr.push_str(&format!(" | emphasis({})", revel_edit::canvas::quote(c)));
     } else if let Some(f) = &b.format {
         expr.push_str(" | ");
         expr.push_str(f);
@@ -2302,6 +2369,32 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                                 </div>
                             </label>
                         }})}
+                        // Mots entre *astérisques* mis en valeur (classe réglable).
+                        {(b.format.is_none() && !b.safe).then(|| {
+                            let on = b.emphasis.is_some();
+                            let cls = b.emphasis.clone().unwrap_or_else(|| "accent".into());
+                            view! {
+                                <label class="view-line" title=ui.t("block-bound-emphasis-help")>
+                                    <span>{ui.t("block-bound-emphasis")}</span>
+                                    <span class="switch">
+                                        <input type="checkbox" prop:checked=on on:change=move |e| {
+                                            let on = event_target_checked(&e);
+                                            set_text(Box::new(move |b| b.emphasis = on.then(|| "accent".to_string())));
+                                        }/>
+                                        <span class="switch-track"></span>
+                                    </span>
+                                </label>
+                                {on.then(|| view! {
+                                    <label class="field">
+                                        <span class="label">{ui.t("block-bound-emphasis-class")}</span>
+                                        <input class="input input--mono" prop:value=cls spellcheck="false" on:change=move |e| {
+                                            let v = event_target_value(&e).trim().trim_start_matches('.').to_string();
+                                            set_text(Box::new(move |b| b.emphasis = Some(if v.is_empty() { "accent".into() } else { v.clone() })));
+                                        }/>
+                                    </label>
+                                })}
+                            }
+                        })}
                         <div class="field-pair">
                             <label class="field">
                                 <span class="label">{ui.t("block-bound-before")}</span>
@@ -2343,9 +2436,17 @@ fn value_binding(ui: Ui, ed: Ed, at: &Target, node: &Node, var: String) -> Optio
         .with_untracked(|d| {
             let d = d.as_ref()?;
             let (_, field, each) = enclosing_values_at(d, at)?;
-            let (col, prefix, _) = binding_context(d, &each)?;
-            let name = field.strip_prefix(prefix.as_str()).unwrap_or(&field).to_string();
-            Some((col, name))
+            match binding_context(d, &each) {
+                Some((col, prefix, _)) => {
+                    let name = field.strip_prefix(prefix.as_str()).unwrap_or(&field).to_string();
+                    Some((col, name))
+                }
+                // Liste d'une propriété du composant : champ relié à ses utilisations.
+                None => match &at.owner {
+                    revel_edit::Owner::Component(cid) => list_prop_source(d, cid, &field),
+                    _ => None,
+                },
+            }
         })
         .and_then(|(col, name)| {
             collections(ed).with_untracked(|cs| {
@@ -2461,10 +2562,15 @@ pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, Strin
     let (values, content, props) = ed.doc.with_untracked(|d| {
         let d = d.as_ref()?;
         let values = enclosing_values_at(d, at).map(|(var, field, each)| {
-            let col = binding_context(d, &each).map(|(col, prefix, _)| {
-                let name = field.strip_prefix(prefix.as_str()).unwrap_or(&field).to_string();
-                (col, name)
-            });
+            let col = binding_context(d, &each)
+                .map(|(col, prefix, _)| {
+                    let name = field.strip_prefix(prefix.as_str()).unwrap_or(&field).to_string();
+                    (col, name)
+                })
+                .or_else(|| match &at.owner {
+                    revel_edit::Owner::Component(cid) => list_prop_source(d, cid, &field),
+                    _ => None,
+                });
             (var, col)
         });
         let content = binding_context(d, at).map(|(col, prefix, _)| (col, prefix));

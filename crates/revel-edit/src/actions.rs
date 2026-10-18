@@ -9,7 +9,8 @@
 //!   l'écran), `load` (au chargement) ;
 //! - action : `toggle` (afficher ou masquer), `show`, `hide`, `class:<nom>` (classe ajoutée),
 //!   `play` (lire ou mettre en pause une vidéo), `dismiss` (masquer et s'en souvenir : bandeau de
-//!   consentement) ;
+//!   consentement), `random:<ms>` (un enfant de l'élément visé, pris au hasard, affiché seul après
+//!   le délai), `spin:<degrés>` (rotation ajoutée à chaque fois, plus un quart de tour au hasard) ;
 //! - élément visé : `self`, `parent`, `next` (élément suivant), `body`, `.<classe>` (tous les
 //!   éléments de la classe), `#<identifiant>`.
 //!
@@ -34,6 +35,10 @@ pub enum Act {
     Class(String),
     Play,
     Dismiss,
+    /// Un enfant au hasard affiché seul, après un délai (ms).
+    Random(u32),
+    /// Rotation ajoutée (degrés), plus 0 à 3 quarts de tour au hasard.
+    Spin(u32),
 }
 
 /// Une interaction : déclencheur, action, élément visé.
@@ -73,6 +78,8 @@ impl Rule {
             Act::Class(c) => format!("class:{c}"),
             Act::Play => "play".to_string(),
             Act::Dismiss => "dismiss".to_string(),
+            Act::Random(ms) => format!("random:{ms}"),
+            Act::Spin(deg) => format!("spin:{deg}"),
         };
         format!("{t} {a} {}", self.target)
     }
@@ -96,6 +103,8 @@ impl Rule {
             "hide" => Act::Hide,
             "play" => Act::Play,
             "dismiss" => Act::Dismiss,
+            a if a.starts_with("random:") => Act::Random(a[7..].parse().ok()?),
+            a if a.starts_with("spin:") => Act::Spin(a[5..].parse().ok()?),
             a => Act::Class(
                 a.strip_prefix("class:")
                     .filter(|c| class_ok(c))?
@@ -131,9 +140,10 @@ mod tests {
 
     #[test]
     fn aller_retour() {
-        let v = "click class:is-open #menu; scroll:80 class:is-solid self; hover play .video; load dismiss #consentement";
+        let v = "click class:is-open #menu; scroll:80 class:is-solid self; hover play .video; load dismiss #consentement; click random:900 .mantras; click spin:540 .rosace";
         let r = parse(v).unwrap();
-        assert_eq!(r.len(), 4);
+        assert_eq!(r.len(), 6);
+        assert_eq!(r[4].act, Act::Random(900));
         assert_eq!(r[0].act, Act::Class("is-open".into()));
         assert_eq!(r[1].trigger, Trigger::Scroll(80));
         assert_eq!(write(&r), v);

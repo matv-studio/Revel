@@ -1975,7 +1975,9 @@ pub fn compare(original: &str, produced: &str, rel: &str, limit: usize) -> Vec<S
     // Partage et adresse canonique écrits par Revel quand la page ne les a pas : ajouts voulus.
     let automatic = |k: &str| {
         (k.contains(r#""tag":"meta""#)
-            && (k.contains(r#""value":"og:"#) || k.contains(r#""value":"twitter:"#)))
+            && (k.contains(r#""value":"og:"#)
+                || k.contains(r#""value":"twitter:"#)
+                || k.contains(r#""value":"max-image-preview:large""#)))
             || (k.contains(r#""tag":"link""#) && k.contains(r#""value":"canonical""#))
     };
     for k in &hb {

@@ -506,7 +506,9 @@ fn pages_brouillon_indexation_et_plan_du_site() {
         file(&out, "cachee/index.html")
             .contains(r#"<meta name="robots" content="noindex"></head>"#)
     );
-    assert!(!file(&out, "index.html").contains("robots"));
+    // Page indexée : pas de noindex, aperçus d'image en grand permis.
+    let home = file(&out, "index.html");
+    assert!(!home.contains("noindex") && home.contains("max-image-preview:large"), "{home}");
     let sm = file(&out, "sitemap.xml");
     assert!(
         sm.contains("<loc>https://exemple.fr/</loc>")
@@ -522,6 +524,7 @@ fn pages_brouillon_indexation_et_plan_du_site() {
     s2.settings.seo = revel_model::SeoSettings {
         no_sitemap: true,
         robots: Some("User-agent: *\nDisallow: /".into()),
+        ..Default::default()
     };
     let out2 = build(&input(&s2, Vec::new())).unwrap();
     assert!(!out2.files.iter().any(|f| f.path == "sitemap.xml"));
@@ -701,6 +704,7 @@ fn liste_de_collection() {
             pick: Vec::new(),
             contains: None,
             first: None,
+            first_full: false,
         }
         .to_expr()
     };
@@ -1234,8 +1238,12 @@ fn reconstruction_lien_actuel_theme_et_flux() {
     assert_eq!(rb.site.settings.feeds[0].link.as_deref(), Some("/actus/"));
     let after = build(&input(&rb.site, entries)).unwrap();
     let a = file(&before, "agence/index.html");
+    // Même page ; le flux devenu réglage du site est annoncé dans l'en-tête.
     let b = file(&after, "agence/index.html");
-    assert_eq!(a, b);
+    assert_eq!(
+        a,
+        b.replace(r#"<link rel="alternate" type="application/rss+xml" title="Actus" href="/feed.xml">"#, "")
+    );
     assert!(b.contains(r#"<a href="/agence/" aria-current="page">Agence</a>"#), "{b}");
     assert!(b.contains(r#"<body class="page-agence">"#), "{b}");
     assert!(b.contains(r#"data-theme="dark""#), "{b}");
@@ -1243,4 +1251,57 @@ fn reconstruction_lien_actuel_theme_et_flux() {
     assert!(json.contains("data-revel-current") && !json.contains("startingwith"), "{json}");
     let f = file(&after, "feed.xml");
     assert!(f.find("<title>B</title>").unwrap() < f.find("<title>A</title>").unwrap(), "{f}");
+}
+
+/// Réglages du site : titre complété du nom du site, partage, icônes, organisation, article.
+#[test]
+fn partage_et_navigateur_du_site() {
+    let mut s = Site::new("Test", "fr");
+    s.base_url = Some("https://exemple.fr".into());
+    let mut l = revel_edit::make::base_layout(&s);
+    // Gabarit sans titre : Revel l'écrit.
+    crate::flatten::walk_mut(&mut l.body, &mut |n| {
+        if let Node::Element { tag, children, .. } = n
+            && tag == "head"
+        {
+            children.retain(|c| !matches!(c, Node::Element { tag, .. } if tag == "title"));
+        }
+    });
+    let lid = l.id.clone();
+    s.layouts.push(l);
+    s.settings.seo.site_title = Some("Agence Test".into());
+    s.settings.seo.share_image = Some("/media/partage.jpg".into());
+    s.settings.seo.theme_color = Some("#111111".into());
+    s.settings.seo.favicon = Some("/media/icone.svg".into());
+    s.settings.seo.organization = Some(revel_model::Organization {
+        name: "Test".into(),
+        city: "Lyon".into(),
+        same_as: vec!["https://exemple.social/test".into()],
+        ..Default::default()
+    });
+    let mut p: Page = serde_json::from_value(json!({
+        "id": "actu", "path": "/actu/", "layout": lid,
+        "props": { "seo": { "title": "Une actu" }, "ogType": "article", "date": "2026-03-01" }
+    }))
+    .unwrap();
+    p.body = parse("<p>x</p>");
+    s.pages.push(p);
+    let out = build(&input(&s, vec![])).unwrap();
+    let h = file(&out, "actu/index.html");
+    for t in [
+        "<title>Une actu | Agence Test</title>",
+        r#"<meta property="og:title" content="Une actu | Agence Test">"#,
+        r#"<meta property="og:site_name" content="Agence Test">"#,
+        r#"<meta property="og:image" content="https://exemple.fr/media/partage.jpg">"#,
+        r#"<meta name="twitter:image" content="https://exemple.fr/media/partage.jpg">"#,
+        r#"<meta property="og:type" content="article">"#,
+        r#"<meta property="article:published_time" content="2026-03-01T00:00:00.000Z">"#,
+        r##"<meta name="theme-color" content="#111111">"##,
+        r#"<link rel="icon" href="/media/icone.svg" type="image/svg+xml">"#,
+        r#""@type":"Organization""#,
+        r#""addressLocality":"Lyon""#,
+        r#""@type":"Article""#,
+    ] {
+        assert!(h.contains(t), "{t}\n{h}");
+    }
 }

@@ -853,32 +853,36 @@ fn mark_current(html: &str, url: &str) -> String {
 /// Apparence de la page réglée dans ses paramètres : classe du corps de page (ajoutée aux
 /// classes de `<body>`) et thème (`data-theme` de `<html>`) ; sinon ceux de son gabarit (puis du
 /// gabarit parent).
+/// Réglage de la page (`bodyClass`, `theme`, `ogType`) : celui de la page, sinon de son gabarit
+/// (puis du gabarit parent).
+fn page_setting(site: &Site, j: &Job, key: &str) -> Option<String> {
+    data_text(&j.data, key).or_else(|| {
+        let mut at = j.layout.clone();
+        let mut seen = 0;
+        while let Some(id) = at.take() {
+            let l = site.layouts.iter().find(|l| l.id == id)?;
+            if let Some(v) = l
+                .props
+                .get(key)
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+            {
+                return Some(v);
+            }
+            seen += 1;
+            if seen > 16 {
+                break;
+            }
+            at = l.parent.clone();
+        }
+        None
+    })
+}
+
 fn page_look(site: &Site, j: &Job, html: String) -> String {
     let mut html = mark_current(&html, &j.url);
-    let look = |key: &str| {
-        data_text(&j.data, key).or_else(|| {
-            let mut at = j.layout.clone();
-            let mut seen = 0;
-            while let Some(id) = at.take() {
-                let l = site.layouts.iter().find(|l| l.id == id)?;
-                if let Some(v) = l
-                    .props
-                    .get(key)
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                {
-                    return Some(v);
-                }
-                seen += 1;
-                if seen > 16 {
-                    break;
-                }
-                at = l.parent.clone();
-            }
-            None
-        })
-    };
+    let look = |key: &str| page_setting(site, j, key);
     if let Some(cls) = look("bodyClass") {
         html = add_attr_class(&html, "body", &cls);
     }
@@ -970,9 +974,19 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     };
+    let cfg = &site.settings.seo;
+    let opt = |v: &Option<String>| v.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    let site_title = opt(&cfg.site_title);
     let title = seo_text("title").or_else(|| data_text(&j.data, "title"));
+    // Titre complet (« Page | Nom du site ») quand le nom affiché du site est réglé.
+    let full_title = match (&title, &site_title) {
+        (Some(t), Some(st)) if t != st => Some(format!("{t} | {st}")),
+        (None, Some(st)) => Some(st.clone()),
+        (t, _) => t.clone(),
+    };
     let description = seo_text("description")
         .or_else(|| data_text(&j.data, "description"))
+        .or_else(|| opt(&cfg.description))
         .or_else(|| site_text("description"));
     let base = site
         .base_url
@@ -983,6 +997,7 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
     let url = (!base.is_empty()).then(|| format!("{base}{}", j.url));
     let image = seo_text("image")
         .or_else(|| data_text(&j.data, "cover"))
+        .or_else(|| opt(&cfg.share_image))
         .or_else(|| site_text("share_image"))
         .map(|i| {
             if i.starts_with("http") || base.is_empty() {
@@ -998,13 +1013,23 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
         }
     };
     let e = escape_attr_value;
+    // Titre de la page : écrit par Revel quand le gabarit n'en a pas.
+    if let Some(t) = full_title.clone().or_else(|| Some(site.name.clone())).filter(|_| !has("<title")) {
+        add(true, format!("<title>{}</title>", crate::html::escape_text(&t)));
+    }
     if let Some(d) = &description {
         add(!has("name=\"description\""), format!("<meta name=\"description\" content=\"{}\">", e(d)));
         add(!has("og:description"), format!("<meta property=\"og:description\" content=\"{}\">", e(d)));
+        add(!has("twitter:description"), format!("<meta name=\"twitter:description\" content=\"{}\">", e(d)));
     }
-    if let Some(t) = &title {
+    if let Some(t) = &full_title {
         add(!has("og:title"), format!("<meta property=\"og:title\" content=\"{}\">", e(t)));
+        add(!has("twitter:title"), format!("<meta name=\"twitter:title\" content=\"{}\">", e(t)));
     }
+    if let Some(st) = &site_title {
+        add(!has("og:site_name"), format!("<meta property=\"og:site_name\" content=\"{}\">", e(st)));
+    }
+    add(!has("og:locale"), format!("<meta property=\"og:locale\" content=\"{}\">", e(&og_locale(&j_locale(site, j)))));
     if let Some(u) = &url {
         add(!has("rel=\"canonical\""), format!("<link rel=\"canonical\" href=\"{}\">", e(u)));
         add(!has("og:url"), format!("<meta property=\"og:url\" content=\"{}\">", e(u)));
@@ -1012,12 +1037,165 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
     if let Some(i) = &image {
         add(!has("og:image"), format!("<meta property=\"og:image\" content=\"{}\">", e(i)));
         add(!has("twitter:card"), "<meta name=\"twitter:card\" content=\"summary_large_image\">".to_string());
+        add(!has("twitter:image"), format!("<meta name=\"twitter:image\" content=\"{}\">", e(i)));
     }
-    add(!has("og:type"), format!("<meta property=\"og:type\" content=\"{}\">", if j.collection.is_some() { "article" } else { "website" }));
+    let og_type = page_setting(site, j, "ogType").unwrap_or_else(|| {
+        if j.collection.is_some() { "article" } else { "website" }.to_string()
+    });
+    add(!has("og:type"), format!("<meta property=\"og:type\" content=\"{}\">", escape_attr_value(&og_type)));
+    // Article : date de publication.
+    let published = j
+        .data
+        .get("date")
+        .map(|d| d.to_string())
+        .and_then(|d| eval::parse_date(&d))
+        .map(|d| d.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string());
+    if og_type == "article"
+        && let Some(p) = &published
+    {
+        add(!has("article:published_time"), format!("<meta property=\"article:published_time\" content=\"{}\">", e(p)));
+    }
+    // Aperçus d'image en grand dans les résultats de recherche (page indexée).
+    add(
+        !has("name=\"robots\"") && !j.data.get("noindex").is_some_and(|v| v.is_true()),
+        "<meta name=\"robots\" content=\"max-image-preview:large\">".to_string(),
+    );
+    // Navigateur : couleur, icônes.
+    if let Some(c) = opt(&cfg.theme_color) {
+        add(!has("theme-color"), format!("<meta name=\"theme-color\" content=\"{}\">", e(&c)));
+    }
+    if !has("rel=\"icon\"") {
+        if let Some(i) = opt(&cfg.favicon) {
+            let kind = if i.ends_with(".svg") { "image/svg+xml" } else { "image/png" };
+            add(true, format!("<link rel=\"icon\" href=\"{}\" type=\"{kind}\">", e(&i)));
+        }
+        if let Some(i) = opt(&cfg.favicon_png) {
+            add(true, format!("<link rel=\"icon\" href=\"{}\" type=\"image/png\" sizes=\"192x192\">", e(&i)));
+        }
+    }
+    if let Some(i) = opt(&cfg.touch_icon) {
+        add(!has("apple-touch-icon"), format!("<link rel=\"apple-touch-icon\" href=\"{}\">", e(&i)));
+    }
+    // Flux RSS du site.
+    for f in &site.settings.feeds {
+        let t = f.title.clone().or_else(|| site_title.clone()).unwrap_or_else(|| site.name.clone());
+        add(
+            !has(&format!("href=\"{}\"", f.path.to_ascii_lowercase())),
+            format!("<link rel=\"alternate\" type=\"application/rss+xml\" title=\"{}\" href=\"{}\">", e(&t), e(&f.path)),
+        );
+    }
+    // Données structurées : organisation, article.
+    if let Some(o) = &cfg.organization
+        && !has("\"@type\":\"organization\"")
+    {
+        add(true, format!("<script type=\"application/ld+json\">{}</script>", organization_ld(o, base)));
+        if og_type == "article"
+            && let (Some(t), Some(p), Some(u)) = (data_text(&j.data, "title").or(title.clone()), &published, &url)
+        {
+            let ld = serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": t,
+                "datePublished": p,
+                "mainEntityOfPage": u,
+                "publisher": { "@id": format!("{base}/#organisation") },
+            });
+            add(true, format!("<script type=\"application/ld+json\">{}</script>", ld.to_string().replace("</", "<\\/")));
+        }
+    }
     if tags.is_empty() {
         return html;
     }
     format!("{}{tags}{}", &html[..head_end], &html[head_end..])
+}
+
+/// Langue d'une page (préfixe de langue de son adresse, sinon celle du site).
+fn j_locale(site: &Site, j: &Job) -> String {
+    site.locales
+        .iter()
+        .find(|l| j.url.starts_with(&format!("/{}/", l.code)))
+        .map(|l| l.code.clone())
+        .unwrap_or_else(|| site.default_locale.clone())
+}
+
+/// Langue au format du partage (`fr` -> `fr_FR`).
+fn og_locale(code: &str) -> String {
+    let c = code.replace('-', "_");
+    if c.contains('_') {
+        return c;
+    }
+    let region = match c.as_str() {
+        "en" => "US",
+        "pt" => "PT",
+        "zh" => "CN",
+        "ja" => "JP",
+        "ko" => "KR",
+        "sv" => "SE",
+        "da" => "DK",
+        "cs" => "CZ",
+        "el" => "GR",
+        "uk" => "UA",
+        "ar" => "SA",
+        "he" => "IL",
+        "hi" => "IN",
+        "vi" => "VN",
+        "et" => "EE",
+        "ca" => "ES",
+        other => return format!("{other}_{}", other.to_ascii_uppercase()),
+    };
+    format!("{c}_{region}")
+}
+
+/// Organisation en données structurées (`schema.org/Organization`), adresses absolues.
+fn organization_ld(o: &revel_model::Organization, base: &str) -> String {
+    let abs = |u: &str| {
+        if u.starts_with("http") || base.is_empty() {
+            u.to_string()
+        } else {
+            format!("{base}/{}", u.trim_start_matches('/'))
+        }
+    };
+    let mut m = serde_json::Map::new();
+    m.insert("@context".into(), "https://schema.org".into());
+    m.insert("@type".into(), "Organization".into());
+    if !base.is_empty() {
+        m.insert("@id".into(), format!("{base}/#organisation").into());
+    }
+    let mut put = |k: &str, v: &str| {
+        if !v.trim().is_empty() {
+            m.insert(k.into(), v.trim().into());
+        }
+    };
+    put("name", &o.name);
+    put("alternateName", &o.alternate_name);
+    if !base.is_empty() {
+        put("url", &format!("{base}/"));
+    }
+    if !o.logo.is_empty() {
+        put("logo", &abs(&o.logo));
+    }
+    put("email", &o.email);
+    put("telephone", &o.telephone.replace([' ', '(', ')'], "").replace("+330", "+33"));
+    put("foundingDate", &o.founding_date);
+    if !(o.street.is_empty() && o.city.is_empty()) {
+        let mut a = serde_json::Map::new();
+        a.insert("@type".into(), "PostalAddress".into());
+        for (k, v) in [
+            ("streetAddress", &o.street),
+            ("postalCode", &o.postcode),
+            ("addressLocality", &o.city),
+            ("addressCountry", &o.country),
+        ] {
+            if !v.trim().is_empty() {
+                a.insert(k.into(), v.trim().into());
+            }
+        }
+        m.insert("address".into(), serde_json::Value::Object(a));
+    }
+    if !o.same_as.is_empty() {
+        m.insert("sameAs".into(), o.same_as.clone().into());
+    }
+    serde_json::Value::Object(m).to_string().replace("</", "<\\/")
 }
 
 /// Page `noindex` : balise `<meta name="robots" content="noindex">` ajoutée dans `<head>` si le

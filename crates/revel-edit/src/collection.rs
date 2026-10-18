@@ -38,6 +38,10 @@ pub struct Query {
     /// plus récents complètent les choisis.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub first: Option<String>,
+    /// Contenus mis en premier seulement s'ils remplissent la liste (nombre maximal atteint) ;
+    /// sinon la liste ordinaire.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub first_full: bool,
 }
 
 /// Contenus mis en premier écrits à la main : `["a", "b"]` -> identifiants.
@@ -190,7 +194,10 @@ impl Query {
             }
         }
         if let Some(f) = &self.first {
-            e.push_str(&format!(" | pick_first({f})"));
+            match (self.first_full, self.limit) {
+                (true, Some(n)) => e.push_str(&format!(" | pick_first({f}, {n})")),
+                _ => e.push_str(&format!(" | pick_first({f})")),
+            }
         }
         match self.limit {
             Some(n) => format!("({e})[:{n}]"),
@@ -295,12 +302,17 @@ impl Query {
                 {
                     q.exclude_current = true;
                 }
-                "pick_first" if q.first.is_none() && args.len() == 1 => {
+                "pick_first" if q.first.is_none() && (1..=2).contains(&args.len()) => {
                     let a = args[0].trim();
                     if !(valid_path(a) || first_picks(a).is_some()) {
                         return None;
                     }
                     q.first = Some(a.to_string());
+                    if let Some(n) = args.get(1) {
+                        // Minimum : le nombre maximal de la liste (relu après).
+                        n.trim().parse::<usize>().ok()?;
+                        q.first_full = true;
+                    }
                 }
                 "sort" if q.sort.is_none() && q.first.is_none() => {
                     let mut path = None;
@@ -321,6 +333,13 @@ impl Query {
                     q.sort = Some((path, desc));
                 }
                 _ => return None,
+            }
+        }
+        // `pick_first(f, n)` : n est le nombre maximal de la liste.
+        if q.first_full {
+            let n = q.limit?;
+            if !e.contains(&format!(", {n})")) {
+                return None;
             }
         }
         Some(q)
@@ -390,6 +409,7 @@ mod tests {
                 pick: Vec::new(),
                 contains: None,
                 first: None,
+                first_full: false,
             },
             Query {
                 collection: "actualites-fr".into(),
@@ -400,6 +420,7 @@ mod tests {
                 pick: Vec::new(),
                 contains: None,
                 first: None,
+                first_full: false,
             },
             Query {
                 collection: "projets".into(),
@@ -433,6 +454,15 @@ mod tests {
                 ..Default::default()
             },
             Query {
+                collection: "projets".into(),
+                sort: Some(("date".into(), true)),
+                exclude_current: true,
+                first: Some("suggestions".into()),
+                first_full: true,
+                limit: Some(3),
+                ..Default::default()
+            },
+            Query {
                 collection: "actus".into(),
                 first: Some(first_expr(&["a".into(), "b".into()])),
                 limit: Some(3),
@@ -453,6 +483,7 @@ mod tests {
                 pick: Vec::new(),
                 contains: None,
                 first: None,
+                first_full: false,
             }
             .to_expr(),
             r#"(collections.projets | selectattr("data.une") | sort(attribute="date", reverse=true))[:3]"#

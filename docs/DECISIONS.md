@@ -565,6 +565,8 @@ produit par sa construction (`dist`, `build`, `out`, `_site`, `public`) s'il est
   reprise (avertissement quand aucun fichier `LICENSE` n'est trouvé).
 - Exemple étudié : `deltea/p3r-pause-menu` (SvelteKit, adaptateur Vercel, sans licence affichée) est un site à
   construire, non importable par cette voie.
+- Révisée par D-88 (18/10/2026, demande de l'utilisateur) : la construction est proposée, jamais automatique ;
+  Revel télécharge alors lui-même Node.js ou Hugo (vérifiés) dans ses données, sans installation sur le système.
 
 **D-81 — 17/10/2026 — prise.** **Import depuis un lien (7.4) : le site publié est lu, pas l'outil.** Pages
 suivies depuis l'accueil, les liens et le plan du site (`sitemap.xml`), règles de `robots.txt` respectées
@@ -646,6 +648,66 @@ avec son `.msi` ou son `.rpm` ne trouverait plus de mise à jour du même type (
 - Annulée (17/10/2026) : la 0.6.0 a été publiée (préversion) avec son `.msi` et son `.rpm` ; l'utilisateur garde
   les installateurs de remplacement. `bundle.targets` revient à `"all"`, pour que les installations faites avec
   ces fichiers continuent de recevoir les mises à jour de leur type.
+
+**D-88 — 18/10/2026 — prise (trois options demandées par l'utilisateur).** **Site à construire : Revel le
+construit sur demande, le site publié s'importe, le lien garde les scripts du site.** Demande du 17/10/2026 après
+l'import bloqué du dépôt `deltea/p3r-pause-menu` (SvelteKit) : « on laisse le choix à l'utilisateur de laisser
+Revel télécharger les dépendances, les installer et construire le site ». Revient sur la partie « sans être
+construit par Revel » de D-80.
+- **Construire avec Revel** (bouton du panneau « Site à construire » de l'import Git, jamais automatique) :
+  plan montré d'abord (outil reconnu, outils à télécharger et leur taille, gestionnaire de paquets, ce qui
+  manque). Node.js : version LTS la plus récente de `nodejs.org/dist/index.json`, archive vérifiée par
+  `SHASUMS256.txt`, rangée dans les données de Revel (`tools/node-<version>`) ; Hugo : édition « extended » de
+  la dernière version, vérifiée par son fichier de sommes ; Jekyll : Ruby et Bundler du système seulement
+  (absents : signalé, pas d'installation de Ruby par Revel). npm livré avec Node.js ; pnpm et Yarn par
+  `corepack` à la version demandée par le dépôt ; `bun.lock` seul : npm, signalé (versions des dépendances
+  choisies par npm). Construction dans une copie de travail (`tools/work`), variables d'environnement réduites
+  (aucun jeton transmis), processus arrêtés avec tous leurs enfants à l'annulation, journal gardé et copiable en
+  cas d'échec. Dossier produit trouvé (`build`, `dist`, `out`, `public`, `.output/public`, `_site`…) : importé
+  comme un dossier ; site qui n'en produit pas (SvelteKit avec serveur, Nuxt, Remix…) : servi par sa propre
+  commande d'aperçu sur `127.0.0.1`, lu comme un lien (7.4) puis ses fichiers client ajoutés. Outils gardés,
+  retirables, paquets en cache vidables : Réglages › Outils de construction. Outils reconnus : SvelteKit,
+  Next.js, Nuxt, Astro, Gatsby, Remix, React Router, Angular, SolidStart, Docusaurus, VitePress, Create React
+  App, Vite, Parcel, webpack, Hugo, Jekyll. Sources :
+  [index des versions de Node.js](https://nodejs.org/dist/index.json),
+  [versions de Hugo](https://github.com/gohugoio/hugo/releases), [Corepack](https://nodejs.org/api/corepack.html).
+- **Importer le site publié** : adresse trouvée dans le dépôt (`homepage` de `package.json`, fichier `CNAME`,
+  `site` d'Astro, `baseURL` de Hugo, `url` de Docusaurus ou de Jekyll, liens du README, page GitHub Pages du
+  dépôt) puis vérifiée en ligne (deux au plus) ; import comme un lien (7.4). Plus d'impasse : le panneau propose
+  toujours la construction, le site publié s'il y en a un et le dossier produit s'il existe.
+- **Lien d'un site animé par son programme** (SvelteKit, Next.js, Nuxt, Astro…) : modules JavaScript et leurs
+  fichiers (imports, images et polices citées dans le code) gardés au lieu d'être retirés ; signalé dans le bilan.
+- Vérifié le 17/10/2026 sur `deltea/p3r-pause-menu` : Node.js 24.22.0 téléchargé et vérifié, `npm install`,
+  `vite build`, aperçu servi puis lu ; site importé identique à `p3r.deltea.space` (0,0 % de pixels différents,
+  écran d'accueil et menu ouvert), seul écart : script de mesure d'audience de Vercel absent (sans effet visible).
+
+**D-89 — 18/10/2026 — prise.** **Travail à plusieurs : dossier partagé du réseau local ou dépôt en ligne, au
+choix, différences montrées à l'activation (Paramètres › Versions).** Demande de l'utilisateur : « On laisse le
+choix, soit travailler sur le NAS/réseau local soit via Git ». Chacun travaille sur sa copie du site (son
+ordinateur, hors ligne si besoin) puis synchronise : versions des autres récupérées, les siennes envoyées.
+- **Seul** (par défaut) : versions dans le dossier du site. **Dossier partagé** : Revel crée
+  `<dossier>/<nom-du-site>.git` (dépôt Git sans copie de travail, branche du site) puis y envoie les versions ;
+  aucun compte, aucun prestataire ; chemins `\\serveur\partage\…`, lecteur réseau (`Z:\…`) ou dossier monté
+  (`/Volumes/…`), lus par libgit2 (chemins UNC pris en charge :
+  [`path_w32.c`](https://github.com/libgit2/libgit2/blob/main/src/util/win32/path_w32.c)). **Dépôt en ligne** :
+  GitHub, GitLab ou tout dépôt HTTPS, comme avant (Pages CMS possible). Choisir l'un des deux ouvre une fenêtre
+  qui compare les deux façons (versions communes, comptes, hors du bureau, contenus modifiés dans un navigateur,
+  copies du site, prestataire), la façon choisie mise en avant, puis le dossier ou l'adresse ; « Seul » retire
+  le dépôt commun après confirmation (versions gardées). Adresse à donner à l'équipe copiable ; les autres
+  ouvrent le site avec Accueil › Importer › Git (bouton « Dossier… » pour un dossier partagé).
+- **Fusion par endroit** du document du site (`site.revel.json`) et des autres fichiers JSON : modifications
+  faites à des endroits différents (pages, gabarits, composants, éléments par leur identifiant, textes entre
+  eux, règles de style par plages, réglages) combinées sans rien demander, y compris sur des lignes voisines ;
+  ajouts des deux côtés au même endroit gardés tous les deux. Endroit modifié des deux côtés : liste « Page /,
+  `<h1>.titre` — Ma version / Version reçue », choix un par un ou « Toutes les miennes / Toutes les reçues »,
+  puis « Appliquer » (résultat enregistré et envoyé). Autres fichiers modifiés des deux côtés : un choix pour
+  tous. Rien n'est changé tant que les choix ne sont pas appliqués.
+- **Nom de l'auteur** : Réglages › Comptes › « Votre nom », inscrit sur les versions faites depuis cet
+  ordinateur (un nom par personne même avec un compte GitHub commun) ; sans nom : celui réglé dans Git, sinon
+  le compte GitHub.
+- Pas de serveur ni de service de Revel : le dossier partagé ne demande qu'un accès en lecture et écriture ; le
+  NAS n'a pas besoin d'avoir Git. Limite : deux personnes ne voient pas les modifications de l'autre en direct
+  (synchroniser pour les recevoir).
 
 ## Décisions ouvertes
 

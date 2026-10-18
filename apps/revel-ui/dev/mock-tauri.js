@@ -12,6 +12,9 @@
       { path: "C:\\Sites\\maison-oka", name: "Maison Oka", opened_at: "2026-10-02T17:12:00+00:00" },
     ],
   };
+  // Outils de construction gardés sur le disque : retrouvés après un rechargement de la page.
+  try { Object.assign(state, JSON.parse(sessionStorage.getItem("__revelBuild") || "{}")); } catch (_) {}
+  const saveBuild = () => { try { sessionStorage.setItem("__revelBuild", JSON.stringify({ buildTools: state.buildTools, buildCache: state.buildCache })); } catch (_) {} };
   const site = {
     path: "C:\\Sites\\alunites-revel-lab", name: "Alunites", base_url: "https://alunites.com",
     pages: 11, layouts: 4, components: 14,
@@ -64,7 +67,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_resolve", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
+  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_resolve", "versions_resolve_items", "versions_set_shared", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
   // Nom de dossier d'un nouveau site (comme revel_core::site_folder, sans les suffixes).
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).
@@ -166,7 +169,7 @@
       case "probe_site": {
         const p = args.path.toLowerCase();
         const has_site = state.recents.some((r) => r.path === args.path);
-        if (p.includes("svelte")) return { kind: "needs_build", pages: 0, tool: "SvelteKit", outputs: ["build"], has_site };
+        if (p.includes("svelte") || p.includes("p3r")) return { kind: "needs_build", pages: 0, tool: "SvelteKit", outputs: p.includes("svelte") ? ["build"] : [], has_site };
         if (p.includes("eleventy")) return { kind: "eleventy", pages: 0, has_site };
         if (p.includes("vide")) return { kind: "unknown", pages: 0, has_site };
         if (p.includes("webflow")) return { kind: "static", pages: 8, has_site, made_with: "Webflow", csv: [args.path + "\\Atelier - Blog Posts - 65f0.csv"] };
@@ -218,6 +221,50 @@
         };
       }
       case "import_cancel": window.__revelCancelImport = true; return null;
+      // Construction par Revel (D-88) : plan (Node.js à télécharger, `ruby` dans le nom :
+      // Ruby absent), adresses du site publié, construction simulée avec ses étapes.
+      case "project_build_plan": {
+        await wait(60);
+        const p = args.path.toLowerCase();
+        if (p.includes("jekyll")) return { tool: "Jekyll", tools: [], missing: "ruby" };
+        const node = (state.buildTools || []).find((t) => t.name === "Node.js");
+        return { tool: "SvelteKit", tools: [{ name: "Node.js", version: "24.22.0", size: node ? null : 58256361, installed: !!node, system: false }], manager: "npm", lock_ignored: "bun.lock" };
+      }
+      case "published_sites": {
+        await wait(80);
+        return args.path.toLowerCase().includes("p3r") ? ["https://p3r.deltea.space/"] : [];
+      }
+      case "project_build_import": {
+        const ch = args.onEvent;
+        window.__revelCancelImport = false;
+        const slow = params.get("buildslow") || window.__revelBuildSlow ? 500 : 30;
+        const step = async (e) => { await wait(slow); if (window.__revelCancelImport) throw { key: "error-import-cancelled", args: [] }; ch.onmessage(e); };
+        if (!(state.buildTools || []).length) {
+          await step({ step: "download", detail: "Node.js 24.22.0" });
+          for (let i = 1; i <= 4; i++) await step({ step: "download", done: i * 14564090, total: 58256361 });
+          state.buildTools = [{ id: "node-24.22.0", name: "Node.js", version: "24.22.0", size: 207618048 }];
+        }
+        await step({ step: "install", detail: "npm" });
+        await step({ step: "install", line: "added 187 packages in 12s" });
+        await step({ step: "build", detail: "SvelteKit" });
+        await step({ step: "build", line: "✓ built in 2.41s" });
+        if (args.path.toLowerCase().includes("echec")) throw { key: "error-build-step", args: [["step", "build"], ["code", "1"], ["log", "$ node npm-cli.js run build\nError: Cannot find module './config'"]] };
+        await step({ step: "serve", detail: "127.0.0.1:41733" });
+        for (let i = 1; i <= 3; i++) await step({ step: "read", done: 1, total: i * 14 });
+        const name = args.path.split(/[\\/]/).filter(Boolean).pop();
+        state.recents = [{ path: args.path, name, opened_at: new Date().toISOString() }, ...state.recents];
+        state.buildCache = 312000000;
+        saveBuild();
+        return {
+          site: { ...site, name, path: args.path },
+          warnings: ["site construit par Revel (SvelteKit, Node.js 24.22.0, npm)", "bun.lock ignoré : versions des dépendances choisies par npm, elles peuvent différer de celles de l'auteur"],
+          stats: { tool: "SvelteKit", pages: 1, layouts: 1, style_rules: 0, animations: 0, forms: 0, collections: 0, entries: 0, files: 42 },
+        };
+      }
+      case "build_tools": return { tools: state.buildTools || [], cache: state.buildCache || 0 };
+      case "build_tool_remove": state.buildTools = (state.buildTools || []).filter((t) => t.id !== args.id); saveBuild(); return null;
+      case "build_cache_clear": state.buildCache = 0; saveBuild(); return null;
+
       case "probe_wordpress": {
         if (!args.file.toLowerCase().endsWith(".xml")) throw { key: "error-import-wxr", args: [["detail", "ce fichier n'est pas un export WordPress (WXR)"]] };
         return { title: "Atelier Lumen", url: "https://atelier.example", pages: 6, posts: 48, media: 120 };

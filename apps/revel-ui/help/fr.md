@@ -12,7 +12,7 @@ Un site Revel s'ouvre avec **Ouvrir un site**. Un site existant se reprend avec 
 
 - **Dossier** : un dossier de pages HTML (fait à la main, ou export du code de Webflow décompressé) ou un projet Eleventy. Chaque page garde son adresse ; l'en-tête et le pied communs vont dans un gabarit, les styles dans le panneau Styles. Export Webflow : ajoutez les fichiers CSV des collections (CMS › collection › Export) ou un jeton de l'API de Webflow pour reprendre les contenus du CMS.
 - **Lien** : l'adresse d'un site en ligne (fait avec Framer, Webflow ou autre). Revel lit ses pages et copie ses images, polices et styles dans le dossier des projets ; les animations d'apparition deviennent des animations Revel.
-- **Dépôt Git** : collez l'adresse d'un dépôt (`https://github.com/compte/site`, ou celle d'un dossier : `…/tree/main/docs`). Revel le copie dans le dossier des projets, historique compris, puis l'importe. Un site à construire (SvelteKit, Next…) n'est pas construit par Revel : importez le dossier produit par sa construction s'il est dans le dépôt.
+- **Dépôt Git** : collez l'adresse d'un dépôt (`https://github.com/compte/site`, ou celle d'un dossier : `…/tree/main/docs`). Revel le copie dans le dossier des projets, historique compris, puis l'importe. Un site à construire (SvelteKit, Next, Astro, Hugo, Jekyll…) peut être construit par Revel (**Construire** : les outils nécessaires sont téléchargés une fois, puis gardés dans **Réglages › Outils de construction**) ; vous pouvez aussi importer son site publié ou le dossier produit par sa construction. Le dépôt de votre équipe dans un dossier partagé se choisit avec **Dossier…**.
 - **Figma** : le lien du fichier (Partager › Copier le lien) et un jeton personnel (Figma › Settings › Security › Personal access tokens). Choisissez les cadres : chacun devient une page, le premier est l'accueil.
 - **WordPress** : le fichier d'export (Outils › Exporter › Tout le contenu). Les articles deviennent une collection, les pages gardent leur adresse, les images sont copiées depuis le site.
 
@@ -96,6 +96,13 @@ Une date reliée s'écrit comme vous le voulez (16 octobre 2026, 16.10.2026…) 
 
 - **Ctrl+Z** annule, **Ctrl+Maj+Z** rétablit.
 - **Paramètres › Versions** garde l'historique du site : enregistrez une version, comparez, revenez en arrière.
+
+## Travailler à plusieurs
+
+- **Paramètres › Versions › Travail à plusieurs** : choisissez **Dossier partagé** (un dossier du réseau de l'équipe, NAS ou serveur : sans compte) ou **Dépôt en ligne** (GitHub, GitLab : utilisable partout). La fenêtre d'activation compare les deux.
+- Chacun travaille sur sa copie du site puis clique **Synchroniser** : les versions des autres arrivent, les siennes partent. Les modifications faites à des endroits différents se combinent.
+- Un même endroit modifié par deux personnes : choisissez **Ma version** ou **Version reçue** pour chacun, puis **Appliquer**.
+- Les autres ouvrent le site avec **Importer › Dépôt Git**, en collant l'adresse copiée ou avec **Dossier…**. **Réglages › Comptes › Votre nom** inscrit le nom de chacun sur ses versions.
 
 ## Mises à jour de Revel
 

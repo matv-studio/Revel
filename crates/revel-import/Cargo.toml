@@ -12,6 +12,8 @@ revel-markup.workspace = true
 revel-render.workspace = true
 revel-style.workspace = true
 revel-project.workspace = true
+# Outil qui construit un site (SvelteKit, Hugo…) : reconnu comme pour sa construction.
+revel-build.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

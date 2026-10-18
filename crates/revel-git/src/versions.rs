@@ -87,6 +87,109 @@ pub struct SyncReport {
     pub merged: bool,
     /// Fichiers en conflit : rien n'a été changé, à régler (garder l'une des deux versions).
     pub conflicts: Vec<String>,
+    /// Endroits du document de site (fichiers JSON) modifiés des deux côtés, à choisir un par
+    /// un (D-89) ; leurs fichiers figurent aussi dans `conflicts`.
+    pub items: Vec<ItemConflict>,
+}
+
+/// Endroit d'un fichier JSON modifié des deux côtés (D-89).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItemConflict {
+    pub file: String,
+    /// Chemin dans le document (`/pages/@index/body/@a1b2/children/#0/text`).
+    pub id: String,
+    /// Aperçus : version locale, version récupérée (`None` : retirée).
+    pub ours: Option<String>,
+    pub theirs: Option<String>,
+}
+
+/// Aperçu court d'une valeur du document.
+fn preview(v: &Option<serde_json::Value>) -> Option<String> {
+    use serde_json::Value;
+    let v = v.as_ref()?;
+    let s = match v {
+        Value::String(s) => s.clone(),
+        Value::Object(o) => {
+            if let Some(t) = o.get("text").and_then(Value::as_str) {
+                t.to_string()
+            } else if let Some(t) = o.get("tag").and_then(Value::as_str) {
+                format!("<{t}>")
+            } else {
+                v.to_string()
+            }
+        }
+        other => other.to_string(),
+    };
+    let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    Some(if s.chars().count() > 140 {
+        format!("{}…", s.chars().take(140).collect::<String>())
+    } else {
+        s
+    })
+}
+
+/// Fusion à trois des fichiers JSON en conflit dans `idx` (D-89). `choice(fichier, chemin)` :
+/// version locale (`Some(true)`), récupérée (`Some(false)`) ou à choisir (`None`). Les fichiers
+/// fusionnés entièrement sortent des conflits ; renvoie les endroits restant à choisir.
+fn merge_json_conflicts(
+    repo: &Repository,
+    idx: &mut git2::Index,
+    choice: &dyn Fn(&str, &str) -> Option<bool>,
+) -> Result<Vec<ItemConflict>, GitError> {
+    let entries: Vec<git2::IndexConflict> = idx.conflicts()?.filter_map(|c| c.ok()).collect();
+    let mut items = Vec::new();
+    for c in entries {
+        let (Some(a), Some(o), Some(t)) = (&c.ancestor, &c.our, &c.their) else {
+            continue;
+        };
+        let path = String::from_utf8_lossy(&o.path).to_string();
+        if !path.ends_with(".json") {
+            continue;
+        }
+        let parse = |id: git2::Oid| -> Option<serde_json::Value> {
+            serde_json::from_slice(repo.find_blob(id).ok()?.content()).ok()
+        };
+        let (Some(av), Some(ov), Some(tv)) = (parse(a.id), parse(o.id), parse(t.id)) else {
+            continue;
+        };
+        let (merged, conflicts) = crate::merge::merge3(&av, &ov, &tv, &|id| choice(&path, id));
+        if !conflicts.is_empty() {
+            items.extend(conflicts.into_iter().map(|c| ItemConflict {
+                file: path.clone(),
+                id: crate::merge::path_id(&c.path),
+                ours: preview(&c.ours),
+                theirs: preview(&c.theirs),
+            }));
+            continue;
+        }
+        // Même mise en forme que l'écriture du document par Revel.
+        let text = serde_json::to_string_pretty(&merged)
+            .map_err(|e| GitError::Rejected(e.to_string()))?
+            + "\n";
+        idx.conflict_remove(Path::new(&path))?;
+        // Index de fusion en mémoire : contenu écrit dans le dépôt, puis entrée ajoutée.
+        let id = repo.blob(text.as_bytes())?;
+        idx.add(&entry(o.mode, text.len(), id, o.path.clone()))?;
+    }
+    Ok(items)
+}
+
+/// Entrée d'index d'un contenu déjà écrit dans le dépôt.
+fn entry(mode: u32, size: usize, id: git2::Oid, path: Vec<u8>) -> git2::IndexEntry {
+    git2::IndexEntry {
+        ctime: git2::IndexTime::new(0, 0),
+        mtime: git2::IndexTime::new(0, 0),
+        dev: 0,
+        ino: 0,
+        mode,
+        uid: 0,
+        gid: 0,
+        file_size: size as u32,
+        id,
+        flags: 0,
+        flags_extended: 0,
+        path,
+    }
 }
 
 /// Le dossier est un dépôt Git (racine).
@@ -418,6 +521,24 @@ pub fn set_remote(dir: &Path, url: &str) -> Result<(), GitError> {
     Ok(())
 }
 
+/// Dossier contenant un dépôt sans copie de travail (dépôt central).
+pub fn is_bare(dir: &Path) -> bool {
+    Repository::open_bare(dir).is_ok_and(|r| r.is_bare())
+}
+
+/// Dépôt central dans un dossier partagé (NAS, réseau local, D-89) : dépôt sans copie de
+/// travail, branche du site (`branch`), créé s'il n'existe pas.
+pub fn init_shared(dir: &Path, branch: &str) -> Result<(), GitError> {
+    if is_bare(dir) {
+        return Ok(());
+    }
+    std::fs::create_dir_all(dir)
+        .map_err(|e| GitError::Rejected(format!("{} : {e}", dir.display())))?;
+    let repo = Repository::init_bare(dir)?;
+    repo.set_head(&format!("refs/heads/{branch}"))?;
+    Ok(())
+}
+
 /// Restaure les fichiers d'une version : l'état actuel est d'abord enregistré (s'il a changé),
 /// puis les fichiers de la version remis en place et enregistrés comme nouvelle version.
 pub fn restore(
@@ -498,6 +619,10 @@ pub fn sync(
             let theirs_c = repo.find_commit(theirs)?;
             report.pulled = repo.graph_ahead_behind(theirs, ours_c.id())?.0;
             let mut idx = repo.merge_commits(&ours_c, &theirs_c, None)?;
+            if idx.has_conflicts() {
+                // Document de site : modifications à des endroits différents combinées.
+                report.items = merge_json_conflicts(&repo, &mut idx, &|_, _| None)?;
+            }
             if idx.has_conflicts() {
                 report.conflicts = idx
                     .conflicts()?
@@ -581,6 +706,29 @@ pub fn resolve(
     email: &str,
     message: &str,
 ) -> Result<SyncReport, GitError> {
+    resolve_items(
+        dir,
+        token,
+        keep_ours,
+        &std::collections::HashMap::new(),
+        name,
+        email,
+        message,
+    )
+}
+
+/// Règle les conflits : endroits du document choisis un par un (`items` : `fichier#chemin` →
+/// version locale ou non, D-89), les autres selon `keep_ours` ; fichiers non fusionnables
+/// entiers selon `keep_ours`.
+pub fn resolve_items(
+    dir: &Path,
+    token: Option<&str>,
+    keep_ours: bool,
+    items: &std::collections::HashMap<String, bool>,
+    name: &str,
+    email: &str,
+    message: &str,
+) -> Result<SyncReport, GitError> {
     {
         let repo = open(dir)?;
         let branch = branch_name(&repo);
@@ -592,13 +740,48 @@ pub fn resolve(
         let ours_c =
             head_commit(&repo).ok_or_else(|| GitError::Rejected("aucune version".into()))?;
         let theirs_c = repo.find_commit(theirs)?;
-        let mut mo = git2::MergeOptions::new();
-        mo.file_favor(if keep_ours {
-            git2::FileFavor::Ours
-        } else {
-            git2::FileFavor::Theirs
-        });
-        let mut idx = repo.merge_commits(&ours_c, &theirs_c, Some(&mo))?;
+        let mut idx = repo.merge_commits(&ours_c, &theirs_c, None)?;
+        if idx.has_conflicts() {
+            merge_json_conflicts(&repo, &mut idx, &|file, id| {
+                Some(
+                    items
+                        .get(&format!("{file}#{id}"))
+                        .copied()
+                        .unwrap_or(keep_ours),
+                )
+            })?;
+        }
+        if idx.has_conflicts() {
+            // Autres fichiers : fusion ligne à ligne en privilégiant la version choisie.
+            let mut mo = git2::MergeOptions::new();
+            mo.file_favor(if keep_ours {
+                git2::FileFavor::Ours
+            } else {
+                git2::FileFavor::Theirs
+            });
+            let favored = repo.merge_commits(&ours_c, &theirs_c, Some(&mo))?;
+            let resolved: Vec<git2::IndexEntry> = favored.iter().collect();
+            let conflicted: Vec<Vec<u8>> = idx
+                .conflicts()?
+                .filter_map(|c| c.ok())
+                .filter_map(|c| c.our.or(c.their).or(c.ancestor))
+                .map(|e| e.path)
+                .collect();
+            for p in conflicted {
+                if favored.conflicts()?.filter_map(|c| c.ok()).any(|c| {
+                    c.our
+                        .or(c.their)
+                        .or(c.ancestor)
+                        .is_some_and(|e| e.path == p)
+                }) {
+                    continue;
+                }
+                if let Some(e) = resolved.iter().find(|e| e.path == p) {
+                    idx.conflict_remove(Path::new(&String::from_utf8_lossy(&p).to_string()))?;
+                    idx.add(&entry(e.mode, e.file_size as usize, e.id, p.clone()))?;
+                }
+            }
+        }
         if idx.has_conflicts() {
             // Conflits de structure (fichier supprimé d'un côté) : version choisie entière.
             let pick = if keep_ours { &ours_c } else { &theirs_c };
@@ -612,25 +795,9 @@ pub fn resolve(
             for p in conflicted {
                 let path = String::from_utf8_lossy(&p).to_string();
                 idx.conflict_remove(Path::new(&path))?;
-                if let Ok(entry) = pick_tree.get_path(Path::new(&path)) {
-                    let blob = repo.find_blob(entry.id())?;
-                    idx.add_frombuffer(
-                        &git2::IndexEntry {
-                            ctime: git2::IndexTime::new(0, 0),
-                            mtime: git2::IndexTime::new(0, 0),
-                            dev: 0,
-                            ino: 0,
-                            mode: entry.filemode() as u32,
-                            uid: 0,
-                            gid: 0,
-                            file_size: blob.size() as u32,
-                            id: entry.id(),
-                            flags: 0,
-                            flags_extended: 0,
-                            path: p.clone(),
-                        },
-                        blob.content(),
-                    )?;
+                if let Ok(t) = pick_tree.get_path(Path::new(&path)) {
+                    let size = repo.find_blob(t.id())?.size();
+                    idx.add(&entry(t.filemode() as u32, size, t.id(), p.clone()))?;
                 }
             }
         }
@@ -726,6 +893,69 @@ mod tests {
         assert_eq!(h[0].id, r.id);
         assert_eq!(h[1].message, "Avant restauration");
         assert_eq!(status(site).unwrap().changes, 0);
+    }
+
+    #[test]
+    fn document_fusionne_par_endroit() {
+        let d = tempfile::tempdir().unwrap();
+        let bare = d.path().join("partage").join("central.git");
+        init_shared(&bare, "main").unwrap();
+        assert!(is_bare(&bare) && !is_bare(d.path()));
+        let doc = |a: &str, b: &str| {
+            format!(
+                "{{\n  \"name\": \"Atelier\",\n  \"pages\": [\n    {{\n      \"id\": \"index\",\n      \"title\": \"{a}\"\n    }},\n    {{\n      \"id\": \"contact\",\n      \"title\": \"{b}\"\n    }}\n  ]\n}}\n"
+            )
+        };
+        // Poste A : premier envoi ; poste B : copie du dépôt central (dossier partagé).
+        let a = d.path().join("a");
+        write(&a, "site.revel.json", &doc("Accueil", "Contact"));
+        init(&a, "Anne", "anne@local", "Début").unwrap();
+        open(&a)
+            .unwrap()
+            .remote("origin", bare.to_str().unwrap())
+            .unwrap();
+        sync(&a, None, "Anne", "anne@local", "m", "f").unwrap();
+        let b = d.path().join("b");
+        drop(Repository::clone(bare.to_str().unwrap(), &b).unwrap());
+        // Pages différentes modifiées, lignes voisines : fusion sans rien demander.
+        write(&b, "site.revel.json", &doc("Accueil", "Nous écrire"));
+        sync(&b, None, "Bruno", "bruno@local", "m", "f").unwrap();
+        write(&a, "site.revel.json", &doc("Bienvenue", "Contact"));
+        let r = sync(&a, None, "Anne", "anne@local", "m", "f").unwrap();
+        assert!(r.merged && r.conflicts.is_empty(), "{r:?}");
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(a.join("site.revel.json")).unwrap())
+                .unwrap();
+        assert_eq!(
+            (
+                v["pages"][0]["title"].as_str(),
+                v["pages"][1]["title"].as_str()
+            ),
+            (Some("Bienvenue"), Some("Nous écrire"))
+        );
+        // Même endroit des deux côtés : point à choisir, rien de changé.
+        sync(&b, None, "Bruno", "bruno@local", "m", "f").unwrap();
+        write(&b, "site.revel.json", &doc("Bienvenue !", "Nous écrire"));
+        sync(&b, None, "Bruno", "bruno@local", "m", "f").unwrap();
+        write(&a, "site.revel.json", &doc("Bonjour", "Nous écrire"));
+        let r = sync(&a, None, "Anne", "anne@local", "m", "f").unwrap();
+        assert_eq!(r.conflicts, vec!["site.revel.json".to_string()]);
+        assert_eq!(r.items.len(), 1);
+        assert_eq!(r.items[0].id, "/pages/@index/title");
+        assert_eq!(
+            (r.items[0].ours.as_deref(), r.items[0].theirs.as_deref()),
+            (Some("Bonjour"), Some("Bienvenue !"))
+        );
+        // Choix : la version de Bruno pour ce point.
+        let mut items = std::collections::HashMap::new();
+        items.insert("site.revel.json#/pages/@index/title".to_string(), false);
+        let r = resolve_items(&a, None, true, &items, "Anne", "anne@local", "Fusion").unwrap();
+        assert!(r.conflicts.is_empty());
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(a.join("site.revel.json")).unwrap())
+                .unwrap();
+        assert_eq!(v["pages"][0]["title"], "Bienvenue !");
+        assert_eq!(status(&a).unwrap().changes, 0);
     }
 
     #[test]

@@ -26,6 +26,23 @@ pub struct RepoUrl {
 /// `git@github.com:compte/depot.git`, adresse d'une branche ou d'un dossier sur GitHub
 /// (`…/tree/main/docs`), tout dépôt HTTPS (`https://gitlab.com/…/depot.git`) ou `file://` (essais).
 pub fn parse_url(input: &str) -> Option<RepoUrl> {
+    // Dépôt central dans un dossier partagé (NAS, réseau local, D-89) : chemin du dossier.
+    let raw = input.trim();
+    if is_local_path(raw) {
+        let p = raw.trim_end_matches(['/', '\\']);
+        let name = p
+            .rsplit(['/', '\\'])
+            .next()?
+            .trim_end_matches(".git")
+            .to_string();
+        return (!name.is_empty()).then(|| RepoUrl {
+            url: p.to_string(),
+            name,
+            branch: None,
+            subdir: None,
+            github: None,
+        });
+    }
     let s = input.trim().trim_end_matches('/');
     if s.is_empty() || s.contains(char::is_whitespace) {
         return None;
@@ -86,6 +103,17 @@ pub fn parse_url(input: &str) -> Option<RepoUrl> {
         subdir: None,
         github: None,
     })
+}
+
+/// Chemin d'un dossier : `/…`, `\\\\serveur\\partage\\…`, `C:\\…` ou `C:/…`.
+pub fn is_local_path(s: &str) -> bool {
+    let b = s.as_bytes();
+    s.starts_with('/')
+        || s.starts_with("\\\\")
+        || (b.len() > 2
+            && b[0].is_ascii_alphabetic()
+            && b[1] == b':'
+            && (b[2] == b'\\' || b[2] == b'/'))
 }
 
 fn repo_name(path: &str) -> Option<String> {
@@ -153,6 +181,15 @@ mod tests {
         assert!(parse_url("http://exemple.com/depot.git").is_none());
         assert!(parse_url("pas une adresse").is_none());
         assert!(parse_url("https://github.com/seul").is_none());
+        // Dossier partagé (NAS, réseau local).
+        let nas = parse_url(r"\\nas\equipe\Sites Revel\atelier.git\").unwrap();
+        assert_eq!(nas.url, r"\\nas\equipe\Sites Revel\atelier.git");
+        assert_eq!(nas.name, "atelier");
+        assert_eq!(
+            parse_url(r"Z:\partage\vitrine.git").unwrap().name,
+            "vitrine"
+        );
+        assert_eq!(parse_url("/Volumes/Equipe/blog.git").unwrap().name, "blog");
     }
 
     /// Dépôt local avec une version, copié par son adresse `file://` (jamais de dépôt en ligne

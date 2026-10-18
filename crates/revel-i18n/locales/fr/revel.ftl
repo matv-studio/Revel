@@ -467,6 +467,9 @@ settings-projects-help = Les nouveaux sites y sont créés, chacun dans son doss
 settings-projects-reset = Revenir au dossier par défaut
 settings-accounts = Comptes
 settings-github-help = Utilisé pour publier sur GitHub Pages. Revel demande l’accès à vos dépôts ; le jeton est conservé dans le trousseau du système.
+settings-author = Votre nom
+settings-author-help = Nom inscrit sur les versions enregistrées depuis cet ordinateur : chacun le sien quand l’équipe travaille à plusieurs, même avec un compte GitHub commun. Sans nom : celui réglé dans Git, sinon le compte GitHub.
+settings-author-placeholder = Prénom Nom
 error-github-signed-out = Aucun compte GitHub connecté, ou la connexion a expiré. Connectez-vous à GitHub, puis recommencez.
 error-github-repo = Dépôt GitHub introuvable : « { $repo } ». Vérifiez le nom (proprietaire/depot) et que le compte connecté y a accès.
 error-github-no-push = Le compte GitHub connecté ne peut pas écrire dans le dépôt { $repo }.
@@ -1158,6 +1161,72 @@ versions-deleted = Supprimé
 versions-modified = Modifié
 versions-binary = Fichier binaire
 versions-more-lines = { $n } lignes de plus
+
+# Travail à plusieurs (D-89)
+versions-team = Travail à plusieurs
+versions-team-help = Chacun travaille sur sa copie du site puis synchronise : les versions des autres sont récupérées, les siennes envoyées. Les modifications faites à des endroits différents se combinent ; un endroit modifié des deux côtés est à choisir.
+versions-team-title = Travailler à plusieurs
+versions-mode-solo = Seul
+versions-mode-solo-help = Versions gardées dans le dossier du site, sur cet ordinateur
+versions-mode-shared = Dossier partagé
+versions-mode-shared-help = Versions communes dans un dossier du réseau local (NAS, serveur, partage Windows) : sans compte ni prestataire
+versions-mode-online = Dépôt en ligne
+versions-mode-online-help = Versions communes sur GitHub, GitLab ou un autre service Git : accessibles partout, contenus modifiables dans un navigateur avec Pages CMS
+versions-compare-where = Versions communes
+versions-compare-where-help = Endroit où chacun envoie et récupère les versions ; chaque ordinateur garde aussi une copie complète du site et peut travailler sans réseau
+versions-compare-where-shared = Dossier du réseau (NAS, serveur)
+versions-compare-where-online = GitHub, GitLab…
+versions-compare-accounts = Comptes
+versions-compare-accounts-help = Ce qu’il faut pour envoyer et récupérer les versions. Un même compte GitHub peut servir à toute l’équipe : les versions portent alors le nom réglé par chacun (Réglages › Comptes › Votre nom).
+versions-compare-accounts-shared = Aucun, accès au dossier
+versions-compare-accounts-online = Compte GitHub, commun ou personnel
+versions-compare-remote = Hors du bureau
+versions-compare-remote-help = Synchroniser depuis un autre endroit que le réseau local
+versions-compare-remote-shared = Non, sauf par VPN
+versions-compare-remote-online = Oui
+versions-compare-browser = Contenus modifiés dans un navigateur
+versions-compare-browser-help = Pages CMS modifie les contenus (articles, fiches…) directement dans le dépôt en ligne, sans Revel
+versions-compare-browser-shared = Non
+versions-compare-browser-online = Oui, avec Pages CMS
+versions-compare-backup = Copies du site
+versions-compare-backup-help = Endroits où se trouvent toutes les versions du site
+versions-compare-backup-shared = Le NAS et chaque ordinateur
+versions-compare-backup-online = En ligne et chaque ordinateur
+versions-compare-provider = Prestataire
+versions-compare-provider-help = Service extérieur dont dépend le travail à plusieurs
+versions-compare-provider-shared = Aucun
+versions-compare-provider-online = GitHub, GitLab…
+versions-shared-folder = Dossier partagé
+versions-shared-folder-help = Dossier du réseau où ranger les versions communes : Revel y crée « nom-du-site.git » puis y envoie les versions. Les autres ouvrent le site avec Accueil › Importer › Git en donnant ce dossier.
+versions-shared-choose = Choisir…
+versions-online-url = Adresse du dépôt
+versions-online-url-help = Adresse HTTPS du dépôt (GitHub, GitLab…) ; dépôt GitHub privé : compte GitHub connecté dans les Réglages
+versions-team-on = Activer
+versions-team-off-title = Arrêter le travail à plusieurs ?
+versions-team-off = Arrêter
+versions-team-copy = Copier l’adresse pour l’équipe (Importer › Git)
+versions-team-copied = Adresse copiée
+versions-items = { $n ->
+    [one] Un endroit modifié des deux côtés
+   *[other] { $n } endroits modifiés des deux côtés
+}
+versions-items-help = Les autres modifications ont été combinées. Choisissez la version à garder pour chaque endroit puis appliquez : le résultat est enregistré et envoyé.
+versions-pick-ours = Ma version
+versions-pick-theirs = Version reçue
+versions-pick-all-ours = Toutes les miennes
+versions-pick-all-theirs = Toutes les reçues
+versions-apply = Appliquer
+versions-removed = Retiré
+versions-other-files = Autres fichiers
+versions-resolved-items = Endroits modifiés des deux côtés réglés
+versions-area-page = Page { $name }
+versions-area-layout = Gabarit « { $name } »
+versions-area-component = Composant « { $name } »
+versions-area-collection = Collection « { $name } »
+versions-area-styles = Styles du site
+versions-area-settings = Paramètres du site
+versions-area-site = Site
+versions-area-data = Fichier { $name }
 time-now = À l’instant
 time-min = il y a { $n } min
 time-hours = { $n ->
@@ -2075,12 +2144,14 @@ import-source = Source
 import-source-folder = Dossier
 import-source-folder-help = Dossier de pages HTML, export Webflow (décompressé) ou projet Eleventy sur cet ordinateur ; seul le fichier site.revel.json y est ajouté (et les contenus du CMS de Webflow)
 import-source-git = Dépôt Git
-import-source-git-help = Copie d’un dépôt GitHub (ou de tout dépôt Git en HTTPS) dans le dossier des projets, historique compris, puis import
+import-source-git-help = Copie d’un dépôt GitHub, de tout dépôt Git en HTTPS ou du dépôt de l’équipe dans un dossier partagé, dans le dossier des projets, historique compris, puis import
 import-folder = Dossier
 import-choose = Choisir…
 import-url = Adresse du dépôt
 import-url-placeholder = https://github.com/compte/site
-import-url-help = github.com/compte/dépôt, adresse d’une branche ou d’un dossier (…/tree/main/docs) ou tout dépôt HTTPS ; dépôt privé : connexion GitHub des Réglages
+import-url-help = github.com/compte/dépôt, adresse d’une branche ou d’un dossier (…/tree/main/docs), tout dépôt HTTPS ou dossier partagé de l’équipe (NAS, réseau local) ; dépôt privé : connexion GitHub des Réglages
+import-git-folder = Dossier…
+import-git-folder-help = Dépôt de l’équipe dans un dossier partagé (NAS, réseau local) : Paramètres › Versions › Travail à plusieurs › Dossier partagé
 import-kind-static = Site HTML · { $count } { $count ->
         [one] page
        *[other] pages
@@ -2088,7 +2159,7 @@ import-kind-static = Site HTML · { $count } { $count ->
 import-kind-static-help = Pages, gabarit commun, feuille de style dans le panneau Styles, fichiers copiés tels quels
 import-kind-eleventy = Projet Eleventy
 import-kind-build = Site à construire · { $tool }
-import-kind-build-help = Ce site est produit par { $tool } : Revel ne le construit pas (il faudrait Node ou Bun sur l’ordinateur, et ses pages seraient produites par JavaScript). Importez le dossier produit par sa construction s’il est dans le dépôt.
+import-kind-build-help = Ce site est produit par { $tool } : ses pages naissent d'une construction. « Construire avec Revel » la lance sur cet ordinateur ; sinon, importez le dossier produit s'il est dans le dépôt, ou le site publié
 import-kind-unknown = Rien à importer
 import-kind-unknown-help = Aucune page HTML à la racine ni projet Eleventy
 import-has-site = Déjà importé
@@ -2164,3 +2235,55 @@ error-figma-token = Jeton Figma absent ou refusé.
 error-figma-not-found = Fichier Figma introuvable ou inaccessible avec ce jeton.
 error-figma = Figma : { $detail }
 error-webflow-token = Jeton de l’API de Webflow refusé.
+import-build = Construire avec Revel
+import-build-help = Revel télécharge les outils et les dépendances du projet, le construit sur cet ordinateur, puis importe les pages produites
+import-build-checking = Lecture des outils nécessaires…
+import-build-missing-ruby = Jekyll a besoin de Ruby et de Bundler installés sur l'ordinateur (ruby-lang.org) : Revel ne peut pas les installer seul
+import-build-missing-go = Ce site Hugo utilise des modules : il faut Go installé sur l'ordinateur (go.dev)
+import-build-missing-build-script = Aucun script « build » dans package.json : rien à construire
+import-build-title = Construire le site { $tool }
+import-build-risk = Exécute le code du projet
+import-build-risk-help = La construction lance le code du projet et de ses dépendances sur cet ordinateur, comme le fait son auteur : seulement pour un dépôt de confiance
+import-build-system = sur l'ordinateur
+import-build-ready = déjà téléchargé
+import-build-download = à télécharger
+import-build-deps = Dépendances ({ $manager })
+import-build-lock = { $file } ignoré
+import-build-lock-help = Fichier d'un autre gestionnaire de paquets (Bun) : npm choisit lui-même les versions des dépendances, qui peuvent différer de celles de l'auteur
+import-build-run = Construire
+import-build-log = Journal
+import-build-step-start = Préparation…
+import-build-step-download = Téléchargement de { $tool } · { $done } / { $total }
+import-build-step-download-start = Téléchargement de { $tool }…
+import-build-step-install = Installation des dépendances ({ $manager })…
+import-build-step-build = Construction du site ({ $tool })…
+import-build-step-serve = Démarrage du site construit…
+import-build-step-read = Lecture des pages · { $pages } pages · { $files } fichiers
+import-published = Importer le site publié · { $host }
+import-published-help = Adresse trouvée dans les fichiers du projet ou sur sa page : le site en ligne est lu comme avec la source « Lien »
+error-build-download = Téléchargement impossible : { $detail }.
+error-build-integrity = Fichier téléchargé altéré, installation refusée : { $detail }.
+error-build-archive = Archive illisible : { $detail }.
+error-build-platform = Outil non disponible pour cet ordinateur.
+error-build-needs-ruby = Jekyll a besoin de Ruby et de Bundler installés sur l'ordinateur.
+error-build-needs-go = Ce site Hugo a besoin de Go installé sur l'ordinateur.
+error-build-no-script = Aucun script « build » dans package.json.
+error-build-step = Échec { $step ->
+    [install] de l'installation des dépendances
+    [build] de la construction
+    [serve] du démarrage du site construit
+   *[other] de l'étape { $step }
+} (code { $code }).
+error-build-timeout = { $step ->
+    [install] Installation des dépendances
+    [build] Construction
+    [serve] Démarrage du site construit
+   *[other] Étape { $step }
+} trop longue, arrêtée.
+error-build-no-output = La construction n'a produit aucune page.
+settings-build-tools = Outils de construction
+settings-build-tools-help = Outils téléchargés par Revel pour construire les sites importés (Node.js, Hugo), et paquets gardés en cache pour les constructions suivantes
+build-tools-none = Aucun outil téléchargé
+build-tools-cache = Paquets en cache
+build-tools-clear = Vider
+build-tools-remove = Retirer

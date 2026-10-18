@@ -14,7 +14,7 @@ use std::sync::atomic::Ordering;
 const FIGMA_TOKEN: &str = "figma:token";
 
 /// Bilan d'un import pour l'interface.
-fn stats(r: &revel_import::Report) -> ImportStats {
+pub(crate) fn stats(r: &revel_import::Report) -> ImportStats {
     ImportStats {
         tool: r.tool.clone(),
         pages: r.pages,
@@ -709,7 +709,7 @@ fn figma_error(e: revel_import::figma::FigmaError) -> CoreError {
 }
 
 /// Nom lisible d'un dossier (`mon-site_v2` → `Mon site v2`).
-fn pretty_name(folder: &str) -> String {
+pub(crate) fn pretty_name(folder: &str) -> String {
     let s: String = folder
         .chars()
         .map(|c| if c == '-' || c == '_' { ' ' } else { c })

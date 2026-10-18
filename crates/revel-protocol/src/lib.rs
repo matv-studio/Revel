@@ -312,6 +312,77 @@ pub struct ImportEvent {
     pub bytes: u64,
 }
 
+/// Construction d'un site par Revel (D-88) : ce qui sera utilisé et téléchargé.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildPlan {
+    /// Outil qui produit le site (« SvelteKit », « Hugo »…).
+    pub tool: String,
+    /// Outils nécessaires (Node.js, Hugo, Ruby de l'ordinateur).
+    #[serde(default)]
+    pub tools: Vec<BuildToolInfo>,
+    /// Gestionnaire de paquets (`npm`, `pnpm`, `Yarn`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manager: Option<String>,
+    /// Ce qui manque sur l'ordinateur : `ruby`, `go`, `build-script` ; construction impossible.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub missing: Option<String>,
+    /// Fichier de verrouillage ignoré (`bun.lock`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock_ignored: Option<String>,
+}
+
+/// Outil de construction : version, taille du téléchargement, déjà présent.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildToolInfo {
+    pub name: String,
+    #[serde(default)]
+    pub version: String,
+    /// Taille à télécharger (octets), quand elle est connue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    /// Déjà téléchargé par Revel.
+    #[serde(default)]
+    pub installed: bool,
+    /// Outil de l'ordinateur (Ruby), pas téléchargé par Revel.
+    #[serde(default)]
+    pub system: bool,
+}
+
+/// Avancement d'une construction : étape (`download`, `install`, `build`, `serve`, `read`),
+/// détail, octets ou pages, dernière ligne du journal.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildProgress {
+    pub step: String,
+    #[serde(default)]
+    pub detail: String,
+    #[serde(default)]
+    pub done: u64,
+    #[serde(default)]
+    pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<String>,
+}
+
+/// Outil de construction téléchargé par Revel (Réglages › Outils de construction).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstalledBuildTool {
+    /// Identifiant (nom du dossier).
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub size: u64,
+}
+
+/// Outils de construction et caches de Revel.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildTools {
+    #[serde(default)]
+    pub tools: Vec<InstalledBuildTool>,
+    /// Taille des caches (paquets téléchargés).
+    #[serde(default)]
+    pub cache: u64,
+}
+
 /// Réglages d'un import de dossier.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportOptions {
@@ -727,6 +798,9 @@ pub struct AppSettings {
     /// Mises à jour : préversions proposées aussi (versions d'essai publiées sur GitHub, D-86).
     #[serde(default)]
     pub prereleases: bool,
+    /// Nom qui signe les versions enregistrées du site (travail à plusieurs, D-89).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
 }
 
 fn default_theme() -> String {
@@ -746,6 +820,7 @@ impl Default for AppSettings {
             accent_scope: default_accent_scope(),
             projects_dir: None,
             prereleases: false,
+            author: None,
         }
     }
 }
@@ -913,6 +988,29 @@ pub struct SyncInfo {
     /// Fichiers modifiés des deux côtés : rien n'a été changé, choix à faire.
     #[serde(default)]
     pub conflicts: Vec<String>,
+    /// Endroits du site modifiés des deux côtés, à choisir un par un (D-89).
+    #[serde(default)]
+    pub items: Vec<SyncConflictItem>,
+}
+
+/// Endroit du site modifié des deux côtés (D-89) : où, et les deux versions en aperçu.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SyncConflictItem {
+    /// Fichier (`site.revel.json`) et chemin dans le document : identifiant du choix.
+    pub file: String,
+    pub id: String,
+    /// `page`, `layout`, `component`, `collection`, `styles`, `settings`, `site`, `data`.
+    pub area: String,
+    /// Nom de l'endroit (adresse de la page, nom du composant…).
+    #[serde(default)]
+    pub name: String,
+    /// Élément concerné (`<h1>`, `.hero`), s'il y en a un.
+    #[serde(default)]
+    pub detail: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ours: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theirs: Option<String>,
 }
 
 #[cfg(test)]

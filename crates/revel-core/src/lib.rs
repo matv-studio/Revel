@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 
+mod build;
 pub mod canvas;
 mod checks;
 pub mod devserver;
@@ -131,11 +132,45 @@ pub enum CoreError {
     Figma(String),
     #[error("jeton de l'API de Webflow refusé")]
     WebflowToken,
+    /// Construction d'un site par Revel (D-88).
+    #[error("{0}")]
+    Build(#[from] revel_build::BuildError),
     #[error("{0}")]
     Other(String),
 }
 
 pub type Result<T> = std::result::Result<T, CoreError>;
+
+/// Échec d'une construction : clé de traduction, étape, fin du journal (D-88).
+fn build_failure(e: &revel_build::BuildError) -> Failure {
+    use revel_build::{BuildError as B, Missing};
+    let with_log = |f: Failure, log: &str| f.arg("log", log.to_string());
+    match e {
+        B::Download(d) => Failure::new("error-build-download").arg("detail", d.clone()),
+        B::Integrity(d) => Failure::new("error-build-integrity").arg("detail", d.clone()),
+        B::Archive(d) => Failure::new("error-build-archive").arg("detail", d.clone()),
+        B::Platform => Failure::new("error-build-platform"),
+        B::Missing(Missing::Ruby) => Failure::new("error-build-needs-ruby"),
+        B::Missing(Missing::Go) => Failure::new("error-build-needs-go"),
+        B::Missing(Missing::BuildScript) => Failure::new("error-build-no-script"),
+        B::Failed { step, code, log } => with_log(
+            Failure::new("error-build-step")
+                .arg("step", step.id().to_string())
+                .arg(
+                    "code",
+                    code.map(|c| c.to_string()).unwrap_or_else(|| "-".into()),
+                ),
+            log,
+        ),
+        B::Timeout { step, log } => with_log(
+            Failure::new("error-build-timeout").arg("step", step.id().to_string()),
+            log,
+        ),
+        B::NoOutput { log } => with_log(Failure::new("error-build-no-output"), log),
+        B::Cancelled => Failure::new("error-import-cancelled"),
+        B::Io(e) => Failure::new("error-io").arg("detail", e.to_string()),
+    }
+}
 
 impl CoreError {
     /// Échec à afficher dans la langue de l'utilisateur (clés `error-…` de `revel-i18n`).
@@ -198,6 +233,7 @@ impl CoreError {
                 Failure::new("error-import-needs-build").arg("tool", tool.clone())
             }
             Self::NothingToImport => Failure::new("error-import-nothing"),
+            Self::Build(e) => build_failure(e),
             Self::BadRepoUrl => Failure::new("error-git-url"),
             Self::CloneCancelled => Failure::new("error-git-clone-cancelled"),
             Self::NotAClone => Failure::new("error-not-a-clone"),

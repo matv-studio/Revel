@@ -25,10 +25,20 @@ pub fn Settings() -> impl IntoView {
                     <div class="form-grid">
                         <span class="label" title=ui.t("settings-github-help")>"GitHub"</span>
                         <crate::account::GithubAccount/>
+                        // Nom inscrit sur les versions (travail à plusieurs, D-89).
+                        <label class="label" for="settings-author" title=ui.t("settings-author-help")>{ui.t("settings-author")}</label>
+                        <input id="settings-author" class="input settings-author" spellcheck="false" autocomplete="name"
+                            placeholder=ui.t("settings-author-placeholder") title=ui.t("settings-author-help")
+                            prop:value=move || ui.settings.with(|s| s.author.clone().unwrap_or_default())
+                            on:change=move |e| {
+                                let v = event_target_value(&e).trim().to_string();
+                                update(ui, &|s| s.author = (!v.is_empty()).then(|| v.clone()));
+                            }/>
                     </div>
                 </section>
                 <TranslatePacks/>
                 <Updates/>
+                <BuildToolsCard/>
                 <section class="settings-card settings-card--bare" data-section="assistants">
                     <crate::assistants::Assistants/>
                 </section>
@@ -445,6 +455,83 @@ fn TranslatePacks() -> impl IntoView {
                         ui.now("settings-translate-more", &[("count", others().to_string())])
                     }}
                 </button>
+            })}
+        </section>
+    }
+}
+
+/// Outils de construction téléchargés par Revel (D-88) : version, taille, retrait ; paquets en
+/// cache, vidés à la demande.
+#[component]
+fn BuildToolsCard() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let state = RwSignal::new(None::<revel_protocol::BuildTools>);
+    let busy = RwSignal::new(false);
+    let reload = move || {
+        spawn_local(async move {
+            if let Ok(t) = api::build_tools().await
+                && !state.is_disposed()
+            {
+                state.set(Some(t));
+            }
+            let _ = busy.try_set(false);
+        });
+    };
+    reload();
+    let remove = move |id: String| {
+        busy.set(true);
+        spawn_local(async move {
+            if let Err(e) = api::build_tool_remove(&id).await {
+                ui.fail(e);
+            }
+            reload();
+        });
+    };
+    let clear = move || {
+        busy.set(true);
+        spawn_local(async move {
+            if let Err(e) = api::build_cache_clear().await {
+                ui.fail(e);
+            }
+            reload();
+        });
+    };
+    view! {
+        <section class="section settings-card" data-section="build-tools">
+            <h2 title=ui.t("settings-build-tools-help")>{ui.t("settings-build-tools")}</h2>
+            {move || state.get().map(|t| {
+                let none = t.tools.is_empty();
+                view! {
+                    {none.then(|| view! { <p class="muted packs-none">{ui.t("build-tools-none")}</p> })}
+                    <ul class="packs build-tools">
+                        {t.tools.into_iter().map(|tool| {
+                            let id = tool.id.clone();
+                            view! {
+                                <li class="pack is-on" data-tool=tool.id.clone()>
+                                    <span class="pack-name">{tool.name.clone()}</span>
+                                    <span class="muted path pack-code">{tool.version.clone()}</span>
+                                    <span class="pack-side">
+                                        <span class="muted pack-size">{size(ui, tool.size)}</span>
+                                        <button class="icon-btn icon-btn--small pack-remove build-tool-remove"
+                                            title=ui.t("build-tools-remove") aria-label=ui.t("build-tools-remove")
+                                            disabled=move || busy.get()
+                                            on:click=move |_| remove(id.clone())>{icons::trash()}</button>
+                                    </span>
+                                </li>
+                            }
+                        }).collect_view()}
+                        {(t.cache > 0).then(|| view! {
+                            <li class="pack build-cache">
+                                <span class="pack-name">{ui.t("build-tools-cache")}</span>
+                                <span class="pack-side">
+                                    <span class="muted pack-size">{size(ui, t.cache)}</span>
+                                    <button class="btn btn--small build-cache-clear" disabled=move || busy.get()
+                                        on:click=move |_| clear()>{ui.t("build-tools-clear")}</button>
+                                </span>
+                            </li>
+                        })}
+                    </ul>
+                }
             })}
         </section>
     }

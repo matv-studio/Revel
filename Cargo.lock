@@ -5438,6 +5438,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "revel-build"
+version = "0.6.0"
+dependencies = [
+ "flate2",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.21",
+ "ureq",
+ "zip 8.6.0",
+]
+
+[[package]]
 name = "revel-cli"
 version = "0.6.0"
 dependencies = [
@@ -5472,6 +5488,7 @@ dependencies = [
  "chrono",
  "keyring",
  "revel-assets",
+ "revel-build",
  "revel-deploy",
  "revel-edit",
  "revel-git",
@@ -5552,6 +5569,7 @@ dependencies = [
  "dom_query",
  "percent-encoding",
  "regex",
+ "revel-build",
  "revel-markup",
  "revel-model",
  "revel-project",

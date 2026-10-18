@@ -12,8 +12,8 @@ fois lus, des pages HTML, des feuilles de style et des fichiers.
    Revel s'affiche comme l'original.
 2. Un dépôt Git (adresse HTTPS, ou dépôt du compte GitHub connecté) s'importe sans installer Git : copie dans
    le dossier des projets, historique gardé (panneau Versions), puis import comme un dossier. Un site à
-   construire (SvelteKit, Next, Astro, Vite…) est signalé avec la marche à suivre (dossier produit par sa
-   construction), sans être construit par Revel (D-80).
+   construire (SvelteKit, Next, Astro, Hugo, Jekyll…) est signalé ; au choix de l'utilisateur, Revel le
+   construit (outils téléchargés et vérifiés), importe son site publié ou son dossier produit (D-80, D-88).
 3. Rien n'est modifié dans les fichiers d'origine : l'import ajoute `site.revel.json` et le dossier `.revel/`.
 4. Ce qui n'est pas repris tel quel est dit à la fin de l'import (avertissements), sans bloquer.
 5. Webflow, site publié (Framer et autres), Figma, WordPress : sources propres à chaque outil, puis
@@ -31,6 +31,7 @@ fois lus, des pages HTML, des feuilles de style et des fichiers.
 | 7.6 | **WordPress** : fichier d'export WXR (Outils › Exporter) : pages, articles en collection, médias, redirections | `revel-import`, `revel-cms` |
 | 7.7 | **Animations et interactions** propres à chaque outil (interactions Webflow, effets de Framer) : reprises en animations Revel quand elles correspondent, sinon scripts gardés | `revel-import`, `revel-render` |
 | 7.8 | **Passe de vérification** sur des sites réels : rendu de l'original et du site produit par Revel comparés page par page | outils d'essai |
+| 7.9 | **Site à construire** (demande du 17/10/2026, version 0.6.1) : construction par Revel sur demande (Node.js, Hugo téléchargés et vérifiés ; Ruby du système pour Jekyll), site publié importé, lien qui garde les scripts du site (D-88) | `revel-build`, `revel-import`, `revel-core`, `revel-ui` |
 
 ## État
 
@@ -44,6 +45,7 @@ fois lus, des pages HTML, des feuilles de style et des fichiers.
 | 7.6 | Terminée (17/10/2026) : `revel_import::wordpress`, boîte « Importer › WordPress » (fichier examiné, images), commande `revel import-wordpress` (D-84) |
 | 7.7 | Terminée (17/10/2026) : `revel_import::adapt` : apparitions Framer, interactions d'apparition Webflow, AOS → animations Revel (D-82) |
 | 7.8 | Terminée (17/10/2026) : quatre sites en ligne (deux Framer, un Webflow, un statique) et un export WordPress de référence ; écarts trouvés corrigés (section ci-dessous) |
+| 7.9 | Terminée (18/10/2026) : crate `revel-build` (recettes de 17 outils, téléchargement vérifié, construction, aperçu servi), panneau « Site à construire » (plan, « Construire avec Revel », « Importer le site publié », dossier produit, avancement par étape, journal copiable), Réglages › Outils de construction, commande `revel import-build` ; vérifié sur `deltea/p3r-pause-menu` : 0,0 % d'écart avec le site en ligne (D-88) |
 
 ## Règles de l'import HTML statique (7.1)
 
@@ -127,6 +129,11 @@ l’éditeur ». Captures des essais de l’éditeur : `import-*.png` (`tools/ed
   `[embed]` → lien, paragraphes de l'éditeur classique), liens internes depuis la racine, médias de
   `/wp-content/uploads/` ou de `<site>.files.wordpress.com` copiés (variantes `?w=` distinctes).
 - **Figma (7.5)** : D-85.
+- **Site à construire (7.9)** : D-88. Panneau ouvert après la copie du dépôt : outil reconnu, ce qu'il faut
+  télécharger (taille), risques (fichier de versions ignoré, outil absent) ; « Construire avec Revel » montre
+  les étapes (téléchargement, installation des paquets, construction, lecture) et peut être annulé ; en cas
+  d'échec, la fin du journal est affichée et copiable. « Importer le site publié » lit l'adresse trouvée dans le
+  dépôt. Le dépôt de l'équipe dans un dossier partagé s'importe aussi (bouton « Dossier… », D-89).
 
 ## Vérification sur des sites réels (7.8, 17/10/2026)
 

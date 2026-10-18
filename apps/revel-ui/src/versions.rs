@@ -1,12 +1,17 @@
 //! Paramètres › Versions (3.10, D-25) : versions enregistrées du site (dépôt Git du dossier),
 //! comparaison fichier par fichier, restauration, synchronisation avec le dépôt GitHub du site
-//! (récupérer les enregistrements de Pages CMS, envoyer ceux de Revel).
+//! (récupérer les enregistrements de Pages CMS, envoyer ceux de Revel). Travail à plusieurs
+//! (D-89) : seul, dossier partagé du réseau local ou dépôt en ligne, différences montrées à
+//! l'activation ; endroits modifiés des deux côtés choisis un par un.
 
 use crate::dialog::Ask;
 use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use revel_protocol::{DiffLine, FileChange, SiteSummary, VersionInfo, VersionsStatus};
+use revel_protocol::{
+    DiffLine, FileChange, SiteSummary, SyncConflictItem, VersionInfo, VersionsStatus,
+};
+use std::collections::HashMap;
 
 /// Versions affichées (les plus récentes).
 const LIMIT: usize = 200;
@@ -65,6 +70,42 @@ fn change_mark(c: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// Dépôt distant dans un dossier (NAS, réseau local) plutôt qu'en ligne.
+fn is_folder(remote: &str) -> bool {
+    let b = remote.as_bytes();
+    remote.starts_with('/')
+        || remote.starts_with("\\\\")
+        || remote.starts_with("file://")
+        || (b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/'))
+}
+
+/// Façon de travailler : `solo`, `shared` (dossier partagé) ou `online` (dépôt en ligne).
+fn mode_of(remote: Option<&str>) -> &'static str {
+    match remote {
+        None => "solo",
+        Some(r) if is_folder(r) => "shared",
+        Some(_) => "online",
+    }
+}
+
+/// Lignes de la comparaison des deux façons de travailler à plusieurs : libellé et valeurs.
+const COMPARE: &[&str] = &["where", "accounts", "remote", "browser", "backup", "provider"];
+
+/// Endroit modifié des deux côtés : où (page, composant…) et élément.
+fn item_place(ui: Ui, i: &SyncConflictItem) -> String {
+    let key = match i.area.as_str() {
+        "page" => "versions-area-page",
+        "layout" => "versions-area-layout",
+        "component" => "versions-area-component",
+        "collection" => "versions-area-collection",
+        "styles" => "versions-area-styles",
+        "settings" => "versions-area-settings",
+        "data" => "versions-area-data",
+        _ => "versions-area-site",
+    };
+    ui.now(key, &[("name", i.name.clone())])
+}
+
 /// Sélection : changements en cours (`None`) ou une version.
 #[derive(Clone, PartialEq)]
 enum Sel {
@@ -85,7 +126,14 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
     let diff = RwSignal::new(None::<Option<Vec<DiffLine>>>);
     let busy = RwSignal::new(None::<&'static str>);
     let conflicts = RwSignal::new(Vec::<String>::new());
+    // Endroits modifiés des deux côtés (D-89) et choix faits (`fichier#chemin` → ma version).
+    let items = RwSignal::new(Vec::<SyncConflictItem>::new());
+    let picks = RwSignal::new(HashMap::<String, bool>::new());
+    let others_ours = RwSignal::new(None::<bool>);
     let saving = RwSignal::new(None::<String>);
+    // Travail à plusieurs : façon choisie dans la fenêtre d'activation.
+    let team = RwSignal::new(None::<&'static str>);
+    let copied = RwSignal::new(false);
 
     let load_files = move || {
         let Some(p) = path.try_get_value() else {
@@ -185,6 +233,9 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
             match r {
                 Ok(Some(info)) => {
                     let _ = conflicts.try_set(info.conflicts);
+                    let _ = items.try_set(info.items);
+                    let _ = picks.try_set(HashMap::new());
+                    let _ = others_ours.try_set(None);
                 }
                 Ok(None) => {}
                 Err(e) => ui.fail(e),
@@ -243,6 +294,21 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
             Box::pin(async move { api::versions_resolve(&p, ours, &m).await.map(Some) }),
         );
     };
+    // Choix appliqués : endroits un par un, autres fichiers entiers.
+    let apply = move || {
+        let p = path.get_value();
+        let chosen: Vec<(String, bool)> = picks.get_untracked().into_iter().collect();
+        let keep = others_ours.get_untracked().unwrap_or(true);
+        let m = ui.now("versions-resolved-items", &[]);
+        run(
+            "sync",
+            Box::pin(async move {
+                api::versions_resolve_items(&p, keep, &chosen, &m)
+                    .await
+                    .map(Some)
+            }),
+        );
+    };
     let restore = move |v: VersionInfo| {
         ui.ask.set(Some(
             Ask::confirm(
@@ -276,10 +342,48 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
             reload();
         });
     };
+    // Travail à plusieurs : dossier partagé (dépôt central créé puis premier envoi) ou dépôt en
+    // ligne ; « Seul » retire le dépôt commun (versions gardées sur cet ordinateur).
+    let set_shared = move |folder: String| {
+        let p = path.get_value();
+        team.set(None);
+        busy.set(Some("sync"));
+        spawn_local(async move {
+            match api::versions_set_shared(&p, &folder).await {
+                Ok(_) => {
+                    let _ = busy.try_set(None);
+                    sync();
+                }
+                Err(e) => {
+                    let _ = busy.try_set(None);
+                    ui.fail(e);
+                    reload();
+                }
+            }
+        });
+    };
+    let set_online = move |url: String| {
+        team.set(None);
+        set_remote(url);
+    };
+    let go_solo = move || {
+        ui.ask.set(Some(
+            Ask::confirm(
+                ui.now("versions-team-off-title", &[]),
+                None,
+                ui.now("versions-team-off", &[]),
+                move || set_remote(String::new()),
+            )
+            .danger(),
+        ));
+    };
     let esc = window_event_listener(leptos::ev::keydown, move |e| {
         if e.key() == "Escape" && saving.with_untracked(Option::is_some) {
             e.prevent_default();
             saving.set(None);
+        } else if e.key() == "Escape" && team.with_untracked(Option::is_some) {
+            e.prevent_default();
+            team.set(None);
         }
     });
     on_cleanup(move || esc.remove());
@@ -324,17 +428,117 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                             on:click=move |_| init()>{icons::branch()}{ui.t("versions-init")}</button>
                     </div>
                 }.into_any(),
-                Some(Some(s)) => view! {
-                    <div class="section versions-remote">
-                        <label class="label" for="versions-remote" title=ui.t("versions-remote-help")>{ui.t("versions-remote")}</label>
-                        <input id="versions-remote" class="input input--mono" spellcheck="false" placeholder="https://github.com/compte/site.git"
-                            prop:value=s.remote.clone().unwrap_or_default() on:change=move |e| set_remote(event_target_value(&e))/>
+                Some(Some(s)) => {
+                    let mode = mode_of(s.remote.as_deref());
+                    let remote = s.remote.clone().unwrap_or_default();
+                    let remote2 = remote.clone();
+                    view! {
+                    <div class="section versions-team">
+                        <span class="label" title=ui.t("versions-team-help")>{ui.t("versions-team")}</span>
+                        <div class="segmented versions-mode" role="radiogroup" aria-label=ui.t("versions-team")>
+                            {[("solo", "versions-mode-solo", "versions-mode-solo-help"),
+                              ("shared", "versions-mode-shared", "versions-mode-shared-help"),
+                              ("online", "versions-mode-online", "versions-mode-online-help")]
+                                .into_iter().map(|(m, key, help)| view! {
+                                    <button role="radio" data-mode=m class:is-on=mode == m aria-checked=(mode == m).to_string()
+                                        title=ui.t(help) disabled=move || busy.get().is_some()
+                                        on:click=move |_| if m != mode { if m == "solo" { go_solo() } else { team.set(Some(m)) } }>{ui.t(key)}</button>
+                                }).collect_view()}
+                        </div>
+                        {(mode != "solo").then(|| view! {
+                            <span class="path-value versions-remote-value" title=remote.clone()>{remote.clone()}</span>
+                            <button type="button" class="icon-btn icon-btn--small versions-remote-copy"
+                                title=move || ui.tx(if copied.get() { "versions-team-copied" } else { "versions-team-copy" }, &[])
+                                aria-label=ui.t("versions-team-copy")
+                                on:click=move |_| {
+                                    api::copy_text(&remote2);
+                                    copied.set(true);
+                                    set_timeout(move || { let _ = copied.try_set(false); }, std::time::Duration::from_millis(1600));
+                                }>{move || if copied.get() { icons::check().into_any() } else { icons::copy().into_any() }}</button>
+                            <button type="button" class="btn btn--small versions-remote-change" disabled=move || busy.get().is_some()
+                                on:click=move |_| team.set(Some(mode))>{ui.t("new-site-change")}</button>
+                        })}
                         <span class="chip" title=ui.t("versions-branch")>{icons::branch()}{s.branch.clone()}</span>
                         {move || no_account().then(|| view! {
                             <span class="seo-warn" title=ui.t("versions-sync-account")>{icons::warning()}</span>
                         })}
                     </div>
-                    {move || (!conflicts.get().is_empty()).then(|| view! {
+                    {move || (!items.get().is_empty()).then(|| {
+                        let n = items.with(Vec::len);
+                        // Fichiers en conflit hors des endroits choisis un par un.
+                        let others: Vec<String> = conflicts.get().into_iter()
+                            .filter(|f| !items.with(|l| l.iter().any(|i| &i.file == f)))
+                            .collect();
+                        let has_others = !others.is_empty();
+                        let ready = move || items.with(|l| picks.with(|p| l.iter().all(|i| p.contains_key(&format!("{}#{}", i.file, i.id)))))
+                            && (!has_others || others_ours.get().is_some());
+                        let pick_all = move |ours: bool| {
+                            picks.set(items.with_untracked(|l| l.iter().map(|i| (format!("{}#{}", i.file, i.id), ours)).collect()));
+                            if has_others { others_ours.set(Some(ours)); }
+                        };
+                        view! {
+                            <div class="section versions-items" role="alert">
+                                <header class="versions-items-head">
+                                    <strong title=ui.t("versions-items-help")>{ui.now("versions-items", &[("n", n.to_string())])}</strong>
+                                    <span class="spacer"></span>
+                                    <button class="btn btn--small versions-pick-all-ours" disabled=move || busy.get().is_some()
+                                        on:click=move |_| pick_all(true)>{ui.t("versions-pick-all-ours")}</button>
+                                    <button class="btn btn--small versions-pick-all-theirs" disabled=move || busy.get().is_some()
+                                        on:click=move |_| pick_all(false)>{ui.t("versions-pick-all-theirs")}</button>
+                                    <button class="btn btn--small btn--primary versions-apply" disabled=move || busy.get().is_some() || !ready()
+                                        on:click=move |_| apply()>{icons::check()}{ui.t("versions-apply")}</button>
+                                </header>
+                                <ul class="versions-item-list">
+                                    {items.get().into_iter().map(|i| {
+                                        let key = format!("{}#{}", i.file, i.id);
+                                        let (k1, k2, k3, k4) = (key.clone(), key.clone(), key.clone(), key.clone());
+                                        let removed = ui.now("versions-removed", &[]);
+                                        let ours = i.ours.clone().unwrap_or_else(|| removed.clone());
+                                        let theirs = i.theirs.clone().unwrap_or(removed);
+                                        view! {
+                                            <li class="versions-item" data-item=key.clone()>
+                                                <span class="versions-item-place" title=i.id.clone()>
+                                                    <span class="versions-item-area">{item_place(ui, &i)}</span>
+                                                    {(!i.detail.is_empty()).then(|| view! { <span class="path versions-item-detail">{i.detail.clone()}</span> })}
+                                                </span>
+                                                <button class="versions-pick versions-pick--ours" role="radio"
+                                                    class:is-on=move || picks.with(|p| p.get(&k1) == Some(&true))
+                                                    aria-checked=move || picks.with(|p| (p.get(&k2) == Some(&true)).to_string())
+                                                    on:click=move |_| picks.update(|p| { p.insert(k3.clone(), true); })>
+                                                    <span class="versions-pick-label">{ui.t("versions-pick-ours")}</span>
+                                                    <span class="versions-pick-value" class:is-removed=i.ours.is_none() title=ours.clone()>{ours.clone()}</span>
+                                                </button>
+                                                <button class="versions-pick versions-pick--theirs" role="radio"
+                                                    class:is-on={let k = key.clone(); move || picks.with(|p| p.get(&k) == Some(&false))}
+                                                    aria-checked={let k = key.clone(); move || picks.with(|p| (p.get(&k) == Some(&false)).to_string())}
+                                                    on:click=move |_| picks.update(|p| { p.insert(k4.clone(), false); })>
+                                                    <span class="versions-pick-label">{ui.t("versions-pick-theirs")}</span>
+                                                    <span class="versions-pick-value" class:is-removed=i.theirs.is_none() title=theirs.clone()>{theirs.clone()}</span>
+                                                </button>
+                                            </li>
+                                        }
+                                    }).collect_view()}
+                                    {has_others.then(|| view! {
+                                        <li class="versions-item versions-item--files">
+                                            <span class="versions-item-place">
+                                                <span class="versions-item-area">{ui.t("versions-other-files")}</span>
+                                                <span class="path versions-item-detail" title=others.join("\n")>{others.join(" · ")}</span>
+                                            </span>
+                                            <button class="versions-pick versions-pick--ours" role="radio" class:is-on=move || others_ours.get() == Some(true)
+                                                on:click=move |_| others_ours.set(Some(true))>
+                                                <span class="versions-pick-label">{ui.t("versions-pick-ours")}</span>
+                                            </button>
+                                            <button class="versions-pick versions-pick--theirs" role="radio" class:is-on=move || others_ours.get() == Some(false)
+                                                on:click=move |_| others_ours.set(Some(false))>
+                                                <span class="versions-pick-label">{ui.t("versions-pick-theirs")}</span>
+                                            </button>
+                                        </li>
+                                    })}
+                                </ul>
+                            </div>
+                        }
+                    })}
+                    {move || (!conflicts.get().is_empty() && items.with(Vec::is_empty)).then(|| view! {
                         <div class="notice notice--warning versions-conflict" role="alert">
                             <div class="versions-conflict-text">
                                 <strong>{ui.t("versions-conflict")}</strong>
@@ -456,8 +660,13 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                             })}
                         </div>
                     </div>
-                }.into_any(),
+                }.into_any()
+                }
             }}
+            {move || team.get().map(|target| {
+                let remote = status.get_untracked().flatten().and_then(|s| s.remote);
+                team_dialog(ui, team, target, remote, set_shared, set_online)
+            })}
             {move || saving.get().map(|_| {
                 let msg = RwSignal::new(String::new());
                 view! {
@@ -479,5 +688,121 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                 }
             })}
         </section>
+    }
+}
+
+/// Fenêtre d'activation du travail à plusieurs : les deux façons comparées (la choisie mise en
+/// avant), puis le dossier partagé ou l'adresse du dépôt en ligne.
+fn team_dialog(
+    ui: Ui,
+    team: RwSignal<Option<&'static str>>,
+    target: &'static str,
+    remote: Option<String>,
+    set_shared: impl Fn(String) + Copy + 'static,
+    set_online: impl Fn(String) + Copy + 'static,
+) -> impl IntoView {
+    let current = mode_of(remote.as_deref());
+    let choice = RwSignal::new(target);
+    let initial = |m: &str| {
+        if current == m {
+            remote.clone().unwrap_or_default()
+        } else {
+            String::new()
+        }
+    };
+    let (shared0, online0) = (initial("shared"), initial("online"));
+    let folder = RwSignal::new(shared0.clone());
+    let url = RwSignal::new(online0.clone());
+    let pick = move |_| {
+        let start = folder.get_untracked();
+        spawn_local(async move {
+            let start = (!start.trim().is_empty()).then_some(start);
+            match api::pick_folder_at(start.as_deref()).await {
+                Ok(Some(d)) => {
+                    let _ = folder.try_set(d);
+                }
+                Ok(None) => {}
+                Err(e) => ui.fail(e),
+            }
+        });
+    };
+    let (shared0, online0) = (StoredValue::new(shared0), StoredValue::new(online0));
+    let ready = move || match choice.get() {
+        "shared" => folder.with(|f| !f.trim().is_empty() && shared0.with_value(|s| f.trim() != s)),
+        _ => url.with(|u| !u.trim().is_empty() && online0.with_value(|s| u.trim() != s)),
+    };
+    let activate = move || {
+        if !ready() {
+            return;
+        }
+        match choice.get_untracked() {
+            "shared" => set_shared(folder.get_untracked().trim().to_string()),
+            _ => set_online(url.get_untracked().trim().to_string()),
+        }
+    };
+    let col = move |m: &'static str| {
+        view! {
+            <button type="button" role="radio" class="team-col" data-mode=m
+                class:is-on=move || choice.get() == m aria-checked=move || (choice.get() == m).to_string()
+                title=ui.t(if m == "shared" { "versions-mode-shared-help" } else { "versions-mode-online-help" })
+                on:click=move |_| choice.set(m)>
+                {ui.t(if m == "shared" { "versions-mode-shared" } else { "versions-mode-online" })}
+            </button>
+        }
+    };
+    view! {
+        <div class="overlay" on:mousedown=move |e| if e.target() == e.current_target() { team.set(None) }>
+            <form class="dialog dialog--wide team-dialog" role="dialog" aria-modal="true" aria-labelledby="team-title"
+                on:submit=move |e| { e.prevent_default(); activate() }>
+                <h2 id="team-title" title=ui.t("versions-team-help")>{ui.t("versions-team-title")}</h2>
+                <table class="team-compare" role="radiogroup" aria-labelledby="team-title">
+                    <thead>
+                        <tr><th></th><th>{col("shared")}</th><th>{col("online")}</th></tr>
+                    </thead>
+                    <tbody>
+                        {COMPARE.iter().map(|row| {
+                            let row: &'static str = row;
+                            let k = move |suffix: &str| {
+                                let key = format!("versions-compare-{row}{suffix}");
+                                move || ui.tx(&key, &[])
+                            };
+                            view! {
+                                <tr data-row=row>
+                                    <th scope="row" title=k("-help")>{k("")}</th>
+                                    <td class:is-on=move || choice.get() == "shared">{k("-shared")}</td>
+                                    <td class:is-on=move || choice.get() == "online">{k("-online")}</td>
+                                </tr>
+                            }
+                        }).collect_view()}
+                    </tbody>
+                </table>
+                {move || if choice.get() == "shared" {
+                    view! {
+                        <label class="field team-field">
+                            <span class="label" title=ui.t("versions-shared-folder-help")>{ui.t("versions-shared-folder")}</span>
+                            <span class="team-folder-row">
+                                <input class="input input--mono team-folder" spellcheck="false" autocomplete="off"
+                                    placeholder=r"\\NAS\Equipe\Sites" title=ui.t("versions-shared-folder-help")
+                                    prop:value=move || folder.get() on:input=move |e| folder.set(event_target_value(&e))/>
+                                <button type="button" class="btn btn--small team-folder-pick" on:click=pick>{ui.t("versions-shared-choose")}</button>
+                            </span>
+                        </label>
+                    }.into_any()
+                } else {
+                    view! {
+                        <label class="field team-field">
+                            <span class="label" title=ui.t("versions-online-url-help")>{ui.t("versions-online-url")}</span>
+                            <input class="input input--mono team-url" spellcheck="false" autocomplete="off"
+                                placeholder="https://github.com/compte/site.git" title=ui.t("versions-online-url-help")
+                                prop:value=move || url.get() on:input=move |e| url.set(event_target_value(&e))/>
+                        </label>
+                    }.into_any()
+                }}
+                <div class="dialog-actions">
+                    <button type="button" class="btn" on:click=move |_| team.set(None)>{ui.t("action-cancel")}</button>
+                    <button type="submit" class="btn btn--primary team-on" disabled=move || !ready()>{ui.t("versions-team-on")}</button>
+                </div>
+            </form>
+        </div>
     }
 }

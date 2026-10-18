@@ -14,6 +14,7 @@
 pub mod clone;
 #[cfg(feature = "github")]
 pub mod github;
+pub mod merge;
 pub mod publish;
 pub mod versions;
 

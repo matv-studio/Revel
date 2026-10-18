@@ -62,6 +62,22 @@ enum Command {
         #[arg(long)]
         raw: bool,
     },
+    /// Construit un projet (SvelteKit, Astro, Next.js, Hugo, Jekyll…) puis importe le site
+    /// produit dans un nouveau dossier de `parent` (D-88) : Node.js ou Hugo téléchargés au besoin
+    /// dans `--tools` (par défaut le dossier de Revel en ligne de commande), dépendances
+    /// installées. Le code du projet s'exécute sur cet ordinateur.
+    ImportBuild {
+        dir: PathBuf,
+        parent: PathBuf,
+        #[arg(long, default_value = "en")]
+        lang: String,
+        /// Dossier de réglages de Revel (outils, caches).
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Plan seulement (outils, gestionnaire), sans construire.
+        #[arg(long)]
+        plan: bool,
+    },
     /// Importe un site WordPress depuis son fichier d'export (WXR) dans un nouveau dossier de
     /// `parent` (7.6).
     ImportWordpress {
@@ -352,6 +368,63 @@ fn main() -> Result<()> {
                 })
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             eprintln!();
+            print_import(&r);
+        }
+        Command::ImportBuild {
+            dir,
+            parent,
+            lang,
+            config,
+            plan,
+        } => {
+            let core = revel_core::Core::new(
+                &config.unwrap_or_else(|| std::env::temp_dir().join("revel-cli-config")),
+                Box::new(revel_core::secrets::Memory::default()),
+            );
+            let p = core.build_plan(&dir).map_err(|e| anyhow::anyhow!("{e}"))?;
+            println!(
+                "{} · {} · {}{}",
+                p.tool,
+                p.tools
+                    .iter()
+                    .map(|t| format!(
+                        "{} {}{}",
+                        t.name,
+                        t.version,
+                        if t.installed {
+                            " (présent)".to_string()
+                        } else {
+                            t.size
+                                .map(|s| format!(" ({} Mo)", s / 1_000_000))
+                                .unwrap_or_default()
+                        }
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                p.manager.as_deref().unwrap_or("-"),
+                p.missing
+                    .as_deref()
+                    .map(|m| format!(" · manque : {m}"))
+                    .unwrap_or_default()
+            );
+            if plan {
+                return Ok(());
+            }
+            std::fs::create_dir_all(&parent)?;
+            let r = core.build_import(&dir, &parent, &lang, |e| match &e.line {
+                Some(l) => eprintln!("  {l}"),
+                None if e.step == "download" && e.total > 0 => {
+                    eprint!("\r  {} / {} Mo   ", e.done / 1_000_000, e.total / 1_000_000)
+                }
+                None => eprintln!("== {} {}", e.step, e.detail),
+            });
+            let r = r.map_err(|e| {
+                let f = e.failure();
+                if let Some(log) = f.args.iter().find(|(k, _)| k == "log").map(|(_, v)| v) {
+                    eprintln!("{log}");
+                }
+                anyhow::anyhow!("{e}")
+            })?;
             print_import(&r);
         }
         Command::ImportWordpress {

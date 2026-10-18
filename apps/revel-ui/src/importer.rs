@@ -15,8 +15,8 @@ use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_protocol::{
-    ClonedRepo, FigmaFile, ImportEvent, ImportKind, ImportOptions, ImportProbe, ImportResult,
-    WxrProbe,
+    BuildPlan, BuildProgress, ClonedRepo, Failure, FigmaFile, ImportEvent, ImportKind,
+    ImportOptions, ImportProbe, ImportResult, WxrProbe,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -52,6 +52,8 @@ enum Phase {
     Reading,
     /// Import ; avancement des imports lus en ligne (pages, fichiers).
     Importing(Option<ImportEvent>),
+    /// Construction du site par Revel (D-88) ; avancement dans `build_prog`.
+    Building,
 }
 
 /// Contenus du CMS de Webflow : fichiers CSV ou API.
@@ -74,11 +76,12 @@ fn join(a: &str, b: &str) -> String {
 /// Nom du dépôt d'une adresse (nom du dossier créé) : `…/compte/site(.git)`,
 /// `…/compte/site/tree/main/docs`, `git@github.com:compte/site.git`.
 fn repo_name(url: &str) -> String {
-    let u = url.trim().trim_end_matches('/');
+    let u = url.trim().trim_end_matches(['/', '\\']);
     let u = u
         .rsplit_once(':')
         .map_or(u, |(a, b)| if a.starts_with("git@") { b } else { u });
-    let segs: Vec<&str> = u.split('/').filter(|s| !s.is_empty()).collect();
+    // Dossier partagé (`\\nas\equipe\site.git`, `Z:\site.git`) : séparateurs des deux sortes.
+    let segs: Vec<&str> = u.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
     let name = match segs.iter().position(|s| *s == "tree") {
         Some(i) if i > 0 => segs[i - 1],
         _ => segs.last().copied().unwrap_or(""),
@@ -151,6 +154,13 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
     let wxr = RwSignal::new(String::new());
     let wxr_probe = RwSignal::new(None::<WxrProbe>);
     let wp_media = RwSignal::new(true);
+    // Site à construire (D-88) : plan de construction, sites publiés trouvés, confirmation,
+    // avancement et journal.
+    let plan = RwSignal::new(None::<Result<BuildPlan, Failure>>);
+    let published = RwSignal::new(Vec::<String>::new());
+    let build_open = RwSignal::new(false);
+    let build_prog = RwSignal::new(None::<BuildProgress>);
+    let build_log = RwSignal::new(Vec::<String>::new());
     let first_input = NodeRef::<leptos::html::Input>::new();
     spawn_local(async move {
         if let Ok(d) = api::default_sites_dir().await {
@@ -196,6 +206,33 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
             });
         }
     });
+    // Après l'examen d'un site à construire : plan de construction et adresse du site publié.
+    let after_probe = move |path: String, p: &ImportProbe| {
+        plan.set(None);
+        published.set(Vec::new());
+        build_open.set(false);
+        if p.kind == ImportKind::NeedsBuild {
+            let path = path.clone();
+            spawn_local(async move {
+                let r = api::project_build_plan(&path).await;
+                if probed.get_untracked() == path {
+                    plan.set(Some(r));
+                }
+            });
+        }
+        if matches!(p.kind, ImportKind::NeedsBuild | ImportKind::Unknown) {
+            let repo = cloned
+                .with_untracked(|c| c.is_some())
+                .then(|| url.get_untracked().trim().to_string());
+            spawn_local(async move {
+                if let Ok(list) = api::published_sites(&path, repo.as_deref()).await
+                    && probed.get_untracked() == path
+                {
+                    published.set(list);
+                }
+            });
+        }
+    };
     let examine = move |path: String| {
         error.set(None);
         probe.set(None);
@@ -205,6 +242,7 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                 Ok(p) => {
                     if probed.get_untracked() == path {
                         csv.set(p.csv.clone());
+                        after_probe(path, &p);
                         probe.set(Some(p));
                     }
                 }
@@ -229,7 +267,7 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                 });
                 return;
             }
-            Phase::Importing(_) | Phase::Reading => {
+            Phase::Importing(_) | Phase::Reading | Phase::Building => {
                 spawn_local(async {
                     let _ = api::import_cancel().await;
                 });
@@ -402,6 +440,7 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
             match api::probe_site(&path).await {
                 Ok(p) => {
                     let ready = matches!(p.kind, ImportKind::Static | ImportKind::Eleventy);
+                    after_probe(path.clone(), &p);
                     probe.set(Some(p));
                     if ready {
                         run(path, false);
@@ -422,6 +461,48 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
         spawn_local(async move {
             finish(api::import_url(&u, &p, &ui.lang(), progress).await);
         });
+    };
+    // Construction par Revel, une fois acceptée (D-88).
+    let start_build = move || {
+        let (path, p) = (probed.get_untracked(), parent.get_untracked());
+        error.set(None);
+        build_open.set(false);
+        build_log.set(Vec::new());
+        build_prog.set(None);
+        phase.set(Phase::Building);
+        ui.activity.set(Some(0.3));
+        spawn_local(async move {
+            let r = api::project_build_import(&path, &p, &ui.lang(), move |e: BuildProgress| {
+                if let Some(l) = e.line.clone() {
+                    build_log.update(|v| {
+                        v.push(l);
+                        if v.len() > 300 {
+                            v.remove(0);
+                        }
+                    });
+                }
+                build_prog.update(|cur| match cur {
+                    // Ligne du journal : étape et avancement gardés.
+                    Some(c) if e.line.is_some() => c.line = e.line.clone(),
+                    Some(c) if e.step == c.step && e.detail.is_empty() => {
+                        c.done = e.done;
+                        c.total = e.total;
+                    }
+                    _ => *cur = Some(e),
+                });
+            })
+            .await;
+            finish(r);
+        });
+    };
+    // Site publié trouvé : importé depuis son adresse (copie du dépôt retirée).
+    let import_published = move |u: String| {
+        discard();
+        probe.set(None);
+        probed.set(String::new());
+        link.set(u);
+        source.set(Source::Link);
+        import_link();
     };
     let read_figma = move || {
         let u = fig_url.get_untracked().trim().to_string();
@@ -564,6 +645,60 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
         }
         source.set(s);
     };
+    // Accord avant la construction : outils téléchargés, dépendances, code exécuté (D-88).
+    let build_panel = move || {
+        if !build_open.get() || busy() {
+            return None;
+        }
+        let p = plan.get()?.ok()?;
+        Some(view! {
+            <div class="import-build-panel">
+                <div class="import-build-head">
+                    <span class="label">{ui.tx("import-build-title", &[("tool", p.tool.clone())])}</span>
+                    <span class="chip chip--warn import-build-risk" title=ui.t("import-build-risk-help")>
+                        {icons::warning()}{ui.t("import-build-risk")}
+                    </span>
+                </div>
+                <ul class="import-build-list">
+                    {p.tools.iter().map(|t| {
+                        let state = if t.system {
+                            ui.tx("import-build-system", &[])
+                        } else if t.installed {
+                            ui.tx("import-build-ready", &[])
+                        } else {
+                            t.size
+                                .map(|n| crate::settings::size(ui, n))
+                                .unwrap_or_else(|| ui.tx("import-build-download", &[]))
+                        };
+                        view! {
+                            <li class="import-build-item" data-tool=t.name.clone()>
+                                <span>{format!("{} {}", t.name, t.version).trim().to_string()}</span>
+                                <span class="muted">{state}</span>
+                            </li>
+                        }
+                    }).collect_view()}
+                    {p.manager.clone().map(|m| view! {
+                        <li class="import-build-item" data-tool="deps">
+                            <span>{ui.tx("import-build-deps", &[("manager", m)])}</span>
+                            <span class="muted">{ui.t("import-build-download")}</span>
+                        </li>
+                    })}
+                    {p.lock_ignored.clone().map(|l| view! {
+                        <li class="import-build-item import-build-note" title=ui.t("import-build-lock-help")>
+                            <span>{ui.tx("import-build-lock", &[("file", l)])}</span>
+                            {icons::info()}
+                        </li>
+                    })}
+                </ul>
+                <div class="import-build-actions">
+                    <button type="button" class="btn btn--small import-build-cancel" on:click=move |_| build_open.set(false)>{ui.t("action-cancel")}</button>
+                    <button type="button" class="btn btn--small btn--primary import-build-run" on:click=move |_| start_build()>
+                        {icons::bolt()}{ui.t("import-build-run")}
+                    </button>
+                </div>
+            </div>
+        })
+    };
     // Nature du dossier examiné : pastilles, puis dossiers produits importables.
     let status = move || {
         let p = probe.get()?;
@@ -592,6 +727,7 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
         let base = probed.get();
         let outputs = if ok { Vec::new() } else { p.outputs.clone() };
         let made_with = p.made_with.clone();
+        let needs_build = p.kind == ImportKind::NeedsBuild;
         Some(view! {
             <div class="import-status">
                 <div class="chips">
@@ -602,8 +738,40 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                         <span class="chip chip--warn import-license" title=ui.t("import-no-license-help")>{ui.t("import-no-license")}</span>
                     })}
                 </div>
-                {(!outputs.is_empty()).then(|| view! {
-                    <div class="import-outputs">
+                {(!ok).then(|| view! {
+                    <div class="import-outputs import-actions">
+                        // Construction par Revel : possible quand le plan est lu et que rien ne manque.
+                        {needs_build.then(|| view! {
+                            {move || {
+                                let (enabled, title) = match plan.get() {
+                                    None => (false, ui.tx("import-build-checking", &[])),
+                                    Some(Err(e)) => (false, ui.failure(&e)),
+                                    Some(Ok(p)) => match p.missing.as_deref() {
+                                        Some(m) => (false, ui.tx(&format!("import-build-missing-{m}"), &[])),
+                                        None => (true, ui.tx("import-build-help", &[])),
+                                    },
+                                };
+                                view! {
+                                    <button type="button" class="btn btn--small import-build" title=title
+                                        class:is-on=move || build_open.get()
+                                        disabled=move || busy() || !enabled
+                                        on:click=move |_| build_open.update(|o| *o = !*o)>
+                                        {icons::bolt()}{ui.t("import-build")}
+                                    </button>
+                                }
+                            }}
+                        })}
+                        // Site publié trouvé (README, configuration, page du dépôt).
+                        {move || published.get().into_iter().map(|u| {
+                            let host = host_name(&u);
+                            let go = u.clone();
+                            view! {
+                                <button type="button" class="btn btn--small import-published" title=format!("{} · {}", ui.tx("import-published-help", &[]), u)
+                                    disabled=busy on:click=move |_| import_published(go.clone())>
+                                    {icons::globe()}{ui.tx("import-published", &[("host", host)])}
+                                </button>
+                            }
+                        }).collect_view()}
                         {outputs.into_iter().map(|dir| {
                             let path = join(&base, &dir);
                             view! {
@@ -616,6 +784,7 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                         }).collect_view()}
                     </div>
                 })}
+                {build_panel}
             </div>
         })
     };
@@ -858,13 +1027,25 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                             {location}
                         }.into_any(),
                         Source::Git => view! {
-                            <label class="field">
-                                <span class="label" title=ui.t("import-url-help")>{ui.t("import-url")}</span>
-                                <input class="input import-url" type="text" inputmode="url" node_ref=first_input spellcheck="false" autocomplete="off"
-                                    placeholder=ui.t("import-url-placeholder") title=ui.t("import-url-help")
-                                    disabled=move || busy() || cloned.with(Option::is_some)
-                                    prop:value=move || url.get() on:input=move |e| url.set(event_target_value(&e))/>
-                            </label>
+                            <div class="field">
+                                <label class="label" for="import-url" title=ui.t("import-url-help")>{ui.t("import-url")}</label>
+                                <span class="import-url-row">
+                                    <input id="import-url" class="input import-url" type="text" inputmode="url" node_ref=first_input spellcheck="false" autocomplete="off"
+                                        placeholder=ui.t("import-url-placeholder") title=ui.t("import-url-help")
+                                        disabled=move || busy() || cloned.with(Option::is_some)
+                                        prop:value=move || url.get() on:input=move |e| url.set(event_target_value(&e))/>
+                                    // Dépôt de l'équipe dans un dossier partagé (NAS, réseau local, D-89).
+                                    <button type="button" class="btn btn--small import-git-folder" title=ui.t("import-git-folder-help")
+                                        disabled=move || busy() || cloned.with(Option::is_some)
+                                        on:click=move |_| spawn_local(async move {
+                                            match api::pick_folder().await {
+                                                Ok(Some(d)) => { let _ = url.try_set(d); }
+                                                Ok(None) => {}
+                                                Err(e) => ui.fail(e),
+                                            }
+                                        })>{ui.t("import-git-folder")}</button>
+                                </span>
+                            </div>
                             {location}
                         }.into_any(),
                         Source::Figma => view! {
@@ -966,12 +1147,57 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                                 </div>
                             }.into_any())
                         }
+                        Phase::Building => {
+                            let e = build_prog.get().unwrap_or_default();
+                            let mb = |b: u64| crate::settings::size(ui, b);
+                            let (label, frac) = match e.step.as_str() {
+                                "download" if e.total > 0 => (
+                                    ui.now("import-build-step-download", &[("tool", e.detail.clone()), ("done", mb(e.done)), ("total", mb(e.total))]),
+                                    Some(e.done as f32 / e.total as f32),
+                                ),
+                                "download" => (ui.now("import-build-step-download-start", &[("tool", e.detail.clone())]), None),
+                                "install" => (ui.now("import-build-step-install", &[("manager", e.detail.clone())]), None),
+                                "build" => (ui.now("import-build-step-build", &[("tool", e.detail.clone())]), None),
+                                "serve" => (ui.now("import-build-step-serve", &[]), None),
+                                "read" => (ui.now("import-build-step-read", &[("pages", e.done.to_string()), ("files", e.total.to_string())]), None),
+                                _ => (ui.now("import-build-step-start", &[]), None),
+                            };
+                            Some(view! {
+                                <div class="import-progress import-build-progress" data-step=e.step.clone()>
+                                    <span class="muted import-progress-label">{label}</span>
+                                    <span class="meter-bar" class:is-busy=frac.is_none()>
+                                        <span class="meter-fill" style:width=format!("{:.1}%", frac.unwrap_or(1.0) * 100.0)></span>
+                                    </span>
+                                    <span class="import-build-line" title=e.line.clone().unwrap_or_default()>{e.line.clone().unwrap_or_default()}</span>
+                                    <details class="import-build-log">
+                                        <summary>{ui.t("import-build-log")}</summary>
+                                        <pre>{move || build_log.get().join("\n")}</pre>
+                                    </details>
+                                </div>
+                            }.into_any())
+                        }
                         Phase::Idle => None,
                     }}
                     {status}
                     {cms_field}
-                    {move || error.get().map(|f| view! {
-                        <div class="notice notice--error import-error" role="alert">{ui.failure(&f)}</div>
+                    {move || error.get().map(|f| {
+                        let log = f.args.iter().find(|(k, _)| k == "log").map(|(_, v)| v.clone()).filter(|l| !l.trim().is_empty());
+                        view! {
+                            <div class="notice notice--error import-error" role="alert">
+                                <span>{ui.failure(&f)}</span>
+                                {log.map(|l| {
+                                    let copy = l.clone();
+                                    view! {
+                                        <details class="import-build-log">
+                                            <summary>{ui.t("import-build-log")}</summary>
+                                            <pre>{l}</pre>
+                                            <button type="button" class="btn btn--small import-log-copy"
+                                                on:click=move |_| api::copy_text(&copy)>{icons::copy()}{ui.t("action-copy")}</button>
+                                        </details>
+                                    }
+                                })}
+                            </div>
+                        }
                     })}
                     <div class="dialog-actions">
                         <button type="button" class="btn import-cancel" on:click=move |_| quit()>{ui.t("action-cancel")}</button>
@@ -1001,6 +1227,8 @@ mod tests {
         assert_eq!(repo_name("https://github.com/compte/site.git/"), "site");
         assert_eq!(repo_name("github.com/compte/site/tree/main/docs"), "site");
         assert_eq!(repo_name("git@github.com:compte/site.git"), "site");
+        assert_eq!(repo_name(r"\\nas\Equipe\Sites\vitrine.git\"), "vitrine");
+        assert_eq!(repo_name(r"Z:\Sites\vitrine.git"), "vitrine");
         assert_eq!(repo_name(""), "");
         assert_eq!(join("C:\\Projets\\site", "dist"), "C:\\Projets\\site\\dist");
         assert_eq!(join("/home/a/site/", "docs/web"), "/home/a/site/docs/web");

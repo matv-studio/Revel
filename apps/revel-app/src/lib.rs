@@ -456,6 +456,81 @@ async fn import_url(
     .map_err(err)
 }
 
+/// Ce que la construction d'un projet par Revel utilisera et téléchargera (D-88).
+#[tauri::command]
+async fn project_build_plan(
+    s: State<'_, AppState>,
+    path: String,
+) -> Res<revel_protocol::BuildPlan> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.build_plan(&PathBuf::from(path)))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Construit un projet puis importe le site produit (D-88).
+#[tauri::command]
+async fn project_build_import(
+    s: State<'_, AppState>,
+    path: String,
+    parent: String,
+    lang: String,
+    on_event: Channel<revel_protocol::BuildProgress>,
+) -> Res<ImportResult> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.build_import(&PathBuf::from(path), &PathBuf::from(parent), &lang, |e| {
+            let _ = on_event.send(e);
+        })
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Adresses du site publié d'un projet, vérifiées en ligne.
+#[tauri::command]
+async fn published_sites(
+    s: State<'_, AppState>,
+    path: String,
+    repo: Option<String>,
+) -> Res<Vec<String>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.published_sites(&PathBuf::from(path), repo.as_deref())
+    })
+    .await
+    .map_err(sys)
+}
+
+/// Outils de construction téléchargés (Réglages).
+#[tauri::command]
+async fn build_tools(s: State<'_, AppState>) -> Res<revel_protocol::BuildTools> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.build_tools())
+        .await
+        .map_err(sys)
+}
+
+#[tauri::command]
+async fn build_tool_remove(s: State<'_, AppState>, id: String) -> Res<()> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.build_tool_remove(&id))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+#[tauri::command]
+async fn build_cache_clear(s: State<'_, AppState>) -> Res<()> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.build_cache_clear())
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
 /// Interrompt l'import en cours.
 #[tauri::command]
 fn import_cancel(s: State<AppState>) {
@@ -1052,6 +1127,36 @@ async fn versions_resolve(
     .map_err(err)
 }
 
+/// Endroits modifiés des deux côtés choisis un par un, puis envoi (D-89).
+#[tauri::command]
+async fn versions_resolve_items(
+    s: State<'_, AppState>,
+    path: String,
+    keep_ours: bool,
+    items: Vec<(String, bool)>,
+    message: String,
+) -> Res<revel_protocol::SyncInfo> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.versions_resolve_items(&PathBuf::from(path), keep_ours, &items, &message)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Dépôt central dans un dossier partagé (NAS, réseau local, D-89).
+#[tauri::command]
+async fn versions_set_shared(s: State<'_, AppState>, path: String, folder: String) -> Res<String> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.versions_set_shared(&PathBuf::from(path), &PathBuf::from(folder))
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
 #[tauri::command]
 fn versions_set_remote(s: State<AppState>, path: String, url: String) -> Res<()> {
     s.core
@@ -1327,6 +1432,12 @@ pub fn run() {
             import_site,
             import_url,
             import_cancel,
+            project_build_plan,
+            project_build_import,
+            published_sites,
+            build_tools,
+            build_tool_remove,
+            build_cache_clear,
             probe_wordpress,
             import_wordpress,
             figma_has_token,
@@ -1381,6 +1492,8 @@ pub fn run() {
             versions_restore,
             versions_sync,
             versions_resolve,
+            versions_resolve_items,
+            versions_set_shared,
             versions_set_remote,
             fonts_google,
             fonts_add_google,

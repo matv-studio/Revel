@@ -12,7 +12,7 @@ A Revel site opens with **Open a site**. An existing site comes in with **Import
 
 - **Folder**: a folder of HTML pages (hand-made, or an unzipped Webflow code export) or an Eleventy project. Each page keeps its address; the shared header and footer go into a layout, the styles into the Styles panel. Webflow export: add the collections' CSV files (CMS › collection › Export) or a Webflow API token to bring in the CMS content.
 - **Link**: the address of a live site (made with Framer, Webflow or anything else). Revel reads its pages and copies its images, fonts and styles into the projects folder; appear animations become Revel animations.
-- **Git repository**: paste a repository address (`https://github.com/account/site`, or a folder's: `…/tree/main/docs`). Revel copies it into the projects folder, history included, then imports it. A site that needs building (SvelteKit, Next…) is not built by Revel: import the folder produced by its build if it is in the repository.
+- **Git repository**: paste a repository address (`https://github.com/account/site`, or a folder's: `…/tree/main/docs`). Revel copies it into the projects folder, history included, then imports it. A site that needs building (SvelteKit, Next, Astro, Hugo, Jekyll…) can be built by Revel (**Build**: the tools it needs are downloaded once, then kept in **Settings › Build tools**); you can also import its published site or the folder produced by its build. Your team's repository in a shared folder is picked with **Folder…**.
 - **Figma**: the file link (Share › Copy link) and a personal access token (Figma › Settings › Security › Personal access tokens). Choose the frames: each one becomes a page, the first one is the home page.
 - **WordPress**: the export file (Tools › Export › All content). Posts become a collection, pages keep their address, images are copied from the site.
 
@@ -96,6 +96,13 @@ A linked date is written the way you want (October 16, 2026, 16.10.2026…); an 
 
 - **Ctrl+Z** undoes, **Ctrl+Shift+Z** redoes.
 - **Settings › Versions** keeps the site's history: save a version, compare, go back.
+
+## Work as a team
+
+- **Settings › Versions › Team work**: choose **Shared folder** (a folder on the team's network, NAS or server: no account) or **Online repository** (GitHub, GitLab: usable anywhere). The window that turns it on compares both.
+- Everyone works on their own copy of the site, then clicks **Sync**: the others' versions come in, theirs go out. Changes made in different places are combined.
+- One place changed by two people: choose **Mine** or **Received** for each, then **Apply**.
+- The others open the site with **Import › Git repository**, pasting the copied address or using **Folder…**. **Settings › Accounts › Your name** puts each person's name on their versions.
 
 ## Revel updates
 

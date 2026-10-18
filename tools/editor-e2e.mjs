@@ -9,6 +9,8 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const [ui, bridge, shots, siteDir] = process.argv.slice(2);
@@ -152,6 +154,18 @@ try {
     check('import : site lu depuis un lien (avancement, annulation sans message, bilan Framer)',
       linkOff && firstText.trim() === 'Lecture du site…' && /^Lecture du site… \d+ pages · \d+ fichiers · [\d,]+ Mo$/.test(progressText) && stillOpen && framer === 'Fait avec Framer' && anims === '37',
       `${progressText} · ${framer} · ${anims}`);
+    // Dépôt de l'équipe dans un dossier partagé (D-89) : choisi avec « Dossier… ».
+    await openImport();
+    await page.click('.import-sources .import-tile[data-source="git"]');
+    await page.evaluate(() => { window.__revelPick = '\\\\NAS\\Equipe\\Sites\\vitrine.git'; });
+    await page.click('.import-git-folder');
+    await page.waitForFunction(() => /vitrine$/.test(document.querySelector('.import-target')?.textContent.trim() || ''));
+    const nasUrl = await page.inputValue('.import-url');
+    const nasRun = await page.$eval('.import-run', (b) => !b.disabled);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    check('import : dépôt de l\'équipe dans un dossier partagé (chemin réseau, nom du site)',
+      nasUrl === '\\\\NAS\\Equipe\\Sites\\vitrine.git' && nasRun, nasUrl);
     // Dépôt Git : site à construire, sans licence ; son dossier produit s'importe.
     await openImport();
     await page.click('.import-sources .import-tile[data-source="git"]');
@@ -165,7 +179,7 @@ try {
     const help = await page.getAttribute('.import-kind', 'title');
     if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-git-a-construire.png` });
     check('import : dépôt Git copié, site à construire signalé, licence absente, dossier produit proposé',
-      build === 'Site à construire · SvelteKit' && noLicense && output === 'Importer « build »' && /Node ou Bun/.test(help || ''), `${build} · ${output}`);
+      build === 'Site à construire · SvelteKit' && noLicense && output === 'Importer « build »' && /Construire avec Revel/.test(help || ''), `${build} · ${output}`);
     // Abandon : copie retirée.
     await page.click('.import-cancel');
     await page.waitForFunction(() => !document.querySelector('.import-dialog'));
@@ -180,6 +194,65 @@ try {
     await page.click('.import-output');
     await closeSummary();
     check('import : dossier produit par la construction importé', await page.locator('.site-card', { hasText: 'Build' }).count() === 1);
+    // Construction par Revel (D-88) : accord (outils, dépendances, code exécuté), étapes, bilan.
+    await openImport();
+    await page.click('.import-sources .import-tile[data-source="git"]');
+    await page.fill('.import-url', 'https://github.com/deltea/p3r-pause-menu');
+    await page.click('.import-run');
+    await page.waitForSelector('.import-build:not([disabled])');
+    await page.waitForSelector('.import-published');
+    const pub = (await page.textContent('.import-published')).trim();
+    await page.click('.import-build');
+    await page.waitForSelector('.import-build-panel');
+    const items = await page.$$eval('.import-build-item', (l) => l.map((x) => [...x.children].map((c) => c.textContent.trim()).filter(Boolean).join(' ')));
+    const risk = (await page.textContent('.import-build-risk')).trim();
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-construire.png` });
+    await page.evaluate(() => { window.__revelBuildSlow = true; });
+    await page.click('.import-build-run');
+    await page.waitForSelector('.import-build-progress[data-step="download"]');
+    await page.waitForFunction(() => /Mo \/ 58 Mo$/.test(document.querySelector('.import-progress-label')?.textContent || ''));
+    const dl = (await page.textContent('.import-progress-label')).trim();
+    await page.waitForSelector('.import-build-progress[data-step="build"]');
+    const buildLabel = (await page.textContent('.import-progress-label')).trim();
+    if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-construction.png` });
+    await page.evaluate(() => { window.__revelBuildSlow = false; });
+    await page.waitForSelector('.import-summary');
+    const builtWarn = (await page.textContent('.import-warnings')).includes('site construit par Revel');
+    await closeSummary();
+    check('import : dépôt construit par Revel (site publié proposé, accord, téléchargement, construction, bilan)',
+      pub === 'Importer le site publié · p3r.deltea.space'
+        && items[0] === 'Node.js 24.22.0 58 Mo' && items[1] === 'Dépendances (npm) à télécharger' && /bun\.lock ignoré/.test(items[2] || '')
+        && risk === 'Exécute le code du projet' && /^Téléchargement de Node\.js 24\.22\.0 · \d+ Mo \/ 58 Mo$/.test(dl)
+        && buildLabel === 'Construction du site (SvelteKit)…' && builtWarn,
+      `${items.join(' | ')} · ${dl} · ${buildLabel}`);
+    // Site publié trouvé : importé depuis son adresse (copie retirée).
+    await openImport();
+    await page.click('.import-sources .import-tile[data-source="git"]');
+    await page.fill('.import-url', 'https://github.com/deltea/p3r-pause-menu');
+    await page.click('.import-run');
+    await page.waitForSelector('.import-published');
+    const before = (await page.evaluate(() => window.__revelDiscarded || [])).length;
+    await page.click('.import-published');
+    await page.waitForSelector('.import-summary');
+    await closeSummary();
+    const after = (await page.evaluate(() => window.__revelDiscarded || [])).length;
+    check('import : site publié importé depuis son adresse, copie du dépôt retirée',
+      after === before + 1 && await page.locator('.site-card', { hasText: 'p3r.deltea.space' }).count() === 1);
+    // Échec de construction : message et journal dans la boîte.
+    await openImport();
+    await page.click('.import-sources .import-tile[data-source="git"]');
+    await page.fill('.import-url', 'https://github.com/exemple/svelte-echec');
+    await page.click('.import-run');
+    await page.waitForSelector('.import-build:not([disabled])');
+    await page.click('.import-build');
+    await page.click('.import-build-run');
+    await page.waitForSelector('.import-error .import-build-log');
+    const failText = (await page.textContent('.import-error > span')).trim();
+    await page.click('.import-error .import-build-log summary');
+    const failLog = (await page.textContent('.import-error pre')).trim();
+    await page.click('.import-cancel');
+    await page.waitForFunction(() => !document.querySelector('.import-dialog'));
+    check('import : échec de construction expliqué, journal affiché', failText === 'Échec de la construction (code 1).' && /Cannot find module/.test(failLog), failText);
     // Adresse d'un dossier sur GitHub : copie puis import direct de ce dossier.
     await openImport();
     await page.click('.import-sources .import-tile[data-source="git"]');
@@ -2173,6 +2246,68 @@ try {
       await page.waitForFunction(() => /Restauration/.test(document.querySelector('.ver-item:not(.ver-item--current) .ver-msg')?.textContent || ''), null, { timeout: 60000 });
       check('versions : version précédente restaurée (document identique, nouvelle version)', true,
         (await page.textContent('.ver-item:not(.ver-item--current) .ver-msg')).trim());
+
+      // Travail à plusieurs (D-89) : dossier partagé (dépôt central créé, premier envoi), équipier
+      // qui modifie d'autres endroits (fusion sans rien demander) et un même endroit (choisi).
+      {
+        const shared = fs.mkdtempSync(path.join(os.tmpdir(), 'revel-partage-'));
+        const mate = fs.mkdtempSync(path.join(os.tmpdir(), 'revel-equipier-'));
+        const central = path.join(shared, path.basename(siteDir) + '.git');
+        const git = (args, cwd) => execFileSync('git', ['-c', 'user.name=Bruno', '-c', 'user.email=bruno@exemple.invalid', ...args], { cwd, encoding: 'utf8' }).trim();
+        const head = (dir) => { try { return git(['--git-dir', dir, 'rev-parse', 'HEAD']); } catch (_) { return ''; } };
+        const edit = (dir, f) => {
+          const p = path.join(dir, 'site.revel.json');
+          const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+          f(Object.fromEntries(d.pages.map((x) => [x.id, x.props])));
+          fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+        };
+        await page.click('.versions-mode button[data-mode="shared"]');
+        await page.waitForSelector('.team-dialog .team-compare');
+        const rows = await page.$$eval('.team-compare tbody tr', (l) => l.length);
+        const chosen = (await page.textContent('.team-col.is-on')).trim();
+        const disabled = await page.$eval('.team-on', (b) => b.disabled);
+        await page.fill('.team-folder', shared);
+        if (shots) await page.locator('.team-dialog').screenshot({ path: `${shots}/versions-plusieurs.png` });
+        await page.click('.team-on');
+        await page.waitForSelector('.versions-mode button[data-mode="shared"].is-on', { timeout: 60000 });
+        await until(() => head(central) !== '' && head(central) === head(path.join(siteDir, '.git')), 'premier envoi au dépôt central');
+        const shown = (await page.textContent('.versions-remote-value')).trim();
+        check('versions : travail à plusieurs, dossier partagé (comparaison, dépôt central créé, premier envoi)',
+          rows === 6 && chosen === 'Dossier partagé' && disabled && shown === central, `${rows} lignes · ${chosen} · ${shown}`);
+        // Équipier : copie du dépôt central, autre page et même endroit modifiés, envoi.
+        git(['clone', '-q', central, mate]);
+        edit(mate, (p) => { p.agence.e2eEquipe = 'Bruno'; p.index.bodyClass = 'page-home bruno'; });
+        git(['commit', '-qam', 'Bruno : agence et accueil'], mate);
+        git(['push', '-q', 'origin', 'HEAD'], mate);
+        // Ici : contact et le même endroit de l'accueil.
+        edit(siteDir, (p) => { p.contact.e2eEquipe = 'Anne'; p.index.bodyClass = 'page-home anne'; });
+        await page.waitForTimeout(400);
+        await page.click('.versions-sync');
+        await page.waitForSelector('.versions-item', { timeout: 60000 });
+        const place = (await page.textContent('.versions-item .versions-item-area')).trim();
+        const ours = (await page.textContent('.versions-item .versions-pick--ours .versions-pick-value')).trim();
+        const theirs = (await page.textContent('.versions-item .versions-pick--theirs .versions-pick-value')).trim();
+        const waiting = await page.$eval('.versions-apply', (b) => b.disabled);
+        if (shots) await page.screenshot({ path: `${shots}/versions-endroits.png` });
+        await page.click('.versions-item .versions-pick--theirs');
+        await page.click('.versions-apply');
+        await page.waitForSelector('.versions-item', { state: 'detached', timeout: 60000 });
+        await until(() => head(central) === head(path.join(siteDir, '.git')), 'choix envoyé');
+        const props = Object.fromEntries(JSON.parse(docV()).pages.map((x) => [x.id, x.props]));
+        check('versions : endroits différents combinés, même endroit choisi un par un puis envoyé',
+          place === 'Page /' && /page-home anne/.test(ours) && /page-home bruno/.test(theirs) && waiting
+            && props.agence.e2eEquipe === 'Bruno' && props.contact.e2eEquipe === 'Anne' && props.index.bodyClass === 'page-home bruno',
+          `${place} · ${ours} / ${theirs} · ${JSON.stringify([props.agence.e2eEquipe, props.contact.e2eEquipe, props.index.bodyClass])}`);
+        // Retour au travail seul : dépôt commun retiré, versions gardées.
+        await page.click('.versions-mode button[data-mode="solo"]');
+        await page.click('.dialog .btn--danger');
+        await page.waitForSelector('.versions-mode button[data-mode="solo"].is-on');
+        check('versions : retour au travail seul (dépôt commun retiré)', !(await page.$('.versions-remote-value')));
+        fs.writeFileSync(path.join(siteDir, 'site.revel.json'), docv0);
+        await until(() => docV() === docv0, 'document d\'origine');
+        fs.rmSync(shared, { recursive: true, force: true });
+        fs.rmSync(mate, { recursive: true, force: true });
+      }
     }
 
     // ---------------------------------------------------------------- Canevas, suite (3.11)
@@ -2631,38 +2766,70 @@ try {
   // ---------------------------------------------------------------- Langues de traduction (D-36)
   await page.click('.topbar button.logo');
   await page.click('.view-tab[data-view="nav-settings"]');
-  await page.waitForSelector('.section[data-section="translate"] :is(.packs-more, .packs-none, .pack)');
+  const TR = '.section[data-section="translate"]';
+  await page.waitForSelector(`${TR} :is(.packs-more, .packs-none, .pack)`);
   // Langues installées seulement ; les autres sous « Plus de langues ».
-  const shownFirst = await page.$$eval('.pack', (l) => l.every((x) => !!x.querySelector('.pack-remove')));
+  const shownFirst = await page.$$eval(`${TR} .pack`, (l) => l.every((x) => !!x.querySelector('.pack-remove')));
   // Aucune langue installée : dit sans ouvrir la liste.
-  const noneLine = (await page.$('.packs-none')) !== null;
-  const nShown = (await page.$$('.pack')).length;
-  await page.click('.packs-more');
-  await page.waitForSelector('.packs .pack .pack-get');
+  const noneLine = (await page.$(`${TR} .packs-none`)) !== null;
+  const nShown = (await page.$$(`${TR} .pack`)).length;
+  await page.click(`${TR} .packs-more`);
+  await page.waitForSelector(`${TR} .packs .pack .pack-get`);
   check('réglages : langues installées, puis « Plus de langues »', shownFirst && noneLine === (nShown === 0), `${nShown} installée(s)`);
-  const packs = await page.$$eval('.pack', (l) => l.map((x) => [x.dataset.pack, x.querySelector('.pack-get') ? 'get' : x.querySelector('.pack-remove') ? 'rm' : '?']));
+  const packs = await page.$$eval(`${TR} .pack`, (l) => l.map((x) => [x.dataset.pack, x.querySelector('.pack-get') ? 'get' : x.querySelector('.pack-remove') ? 'rm' : '?']));
   const bundled = packs.filter(([, a]) => a === 'rm').map(([c]) => c);
   check('réglages : langues de traduction (catalogue, chacune retirable ou téléchargeable)', packs.length >= 20
     && packs.every(([, a]) => a !== '?'), packs.map(([c, a]) => c + (a === 'rm' ? '✓' : '')).join(' '));
   // Langue livrée retirée puis remise en service (sans téléchargement).
   if (bundled.includes('fr')) {
-    await page.click('.pack[data-pack="fr"] .pack-remove');
+    await page.click(`${TR} .pack[data-pack="fr"] .pack-remove`);
     await page.click('.dialog .btn--danger');
-    await page.waitForSelector('.pack[data-pack="fr"] .pack-get');
-    const off = await page.textContent('.pack[data-pack="fr"] .pack-get');
-    await page.click('.pack[data-pack="fr"] .pack-get');
-    await page.waitForSelector('.pack[data-pack="fr"] .pack-remove');
+    await page.waitForSelector(`${TR} .pack[data-pack="fr"] .pack-get`);
+    const off = await page.textContent(`${TR} .pack[data-pack="fr"] .pack-get`);
+    await page.click(`${TR} .pack[data-pack="fr"] .pack-get`);
+    await page.waitForSelector(`${TR} .pack[data-pack="fr"] .pack-remove`);
     check('réglages : langue livrée retirée, puis remise sans téléchargement', true, off.trim());
   }
   // Téléchargement simulé (sans `dl=1`, l'interface ne télécharge pas réellement) : avancement.
-  const getBtn = '.pack:has(.pack-get) .pack-get';
+  const getBtn = `${TR} .pack:has(.pack-get) .pack-get`;
   const getCode = await page.$eval(getBtn, (b) => b.closest('.pack').dataset.pack);
   await page.click(getBtn);
-  await page.waitForSelector(`.pack[data-pack="${getCode}"] .pack-bar`);
-  const others = await page.$$eval('.pack-get', (l) => l.every((b) => b.disabled));
+  await page.waitForSelector(`${TR} .pack[data-pack="${getCode}"] .pack-bar`);
+  const others = await page.$$eval(`${TR} .pack-get`, (l) => l.every((b) => b.disabled));
   if (shots) await page.screenshot({ path: `${shots}/reglages-traduction.png` });
-  await page.waitForSelector(`.pack[data-pack="${getCode}"] .pack-bar`, { state: 'detached', timeout: 20000 });
+  await page.waitForSelector(`${TR} .pack[data-pack="${getCode}"] .pack-bar`, { state: 'detached', timeout: 20000 });
   check('réglages : téléchargement d\'une langue (avancement, un seul à la fois)', others, getCode);
+
+  // Réglages › Comptes : nom inscrit sur les versions (travail à plusieurs, D-89).
+  {
+    await page.locator('.settings-author').scrollIntoViewIfNeeded();
+    const help = await page.getAttribute('.settings-author', 'title');
+    await page.fill('.settings-author', 'Anne Martin');
+    await page.locator('.settings-author').blur();
+    await page.waitForFunction(() => window.__revelSettings?.author === 'Anne Martin');
+    await page.fill('.settings-author', '');
+    await page.locator('.settings-author').blur();
+    await page.waitForFunction(() => window.__revelSettings && !window.__revelSettings.author);
+    check('réglages : nom inscrit sur les versions (enregistré puis retiré)', /compte GitHub commun/.test(help || ''));
+  }
+
+  // Réglages › Outils de construction (D-88) : Node.js téléchargé pour l'import construit,
+  // paquets en cache vidés, outil retiré.
+  {
+    const card = '.section[data-section="build-tools"]';
+    await page.locator(card).scrollIntoViewIfNeeded();
+    await page.waitForSelector(`${card} .pack[data-tool="node-24.22.0"]`);
+    const words = (sel) => page.$$eval(`${sel} *`, (l) => l.filter((x) => !x.children.length).map((x) => x.textContent.trim()).filter(Boolean).join(' '));
+    const row = await words(`${card} .pack[data-tool="node-24.22.0"]`);
+    const cache = await words(`${card} .build-cache`);
+    if (shots) await page.locator(card).screenshot({ path: `${shots}/reglages-outils.png` });
+    await page.click(`${card} .build-cache-clear`);
+    await page.waitForSelector(`${card} .build-cache`, { state: 'detached' });
+    await page.click(`${card} .build-tool-remove`);
+    await page.waitForSelector(`${card} .packs-none`);
+    check('réglages : outils de construction (taille, paquets en cache vidés, outil retiré)',
+      /^Node\.js 24\.22\.0 \d+ Mo$/.test(row) && /^Paquets en cache \d+ Mo Vider$/.test(cache), `${row} · ${cache}`);
+  }
 
   // Réglages › Mises à jour : préversions demandées puis retirées (D-86), recherche relancée.
   {

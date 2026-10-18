@@ -267,6 +267,48 @@ pub async fn import_cancel() -> Res<()> {
     call("import_cancel", &NoArgs {}).await
 }
 
+/// Ce que la construction d'un projet par Revel utilisera et téléchargera (D-88).
+pub async fn project_build_plan(path: &str) -> Res<revel_protocol::BuildPlan> {
+    call("project_build_plan", &PathArg { path }).await
+}
+
+/// Construit un projet puis importe le site produit (D-88).
+pub async fn project_build_import(
+    path: &str,
+    parent: &str,
+    lang: &str,
+    on: impl Fn(revel_protocol::BuildProgress) + 'static,
+) -> Res<ImportResult> {
+    call_with_channel(
+        "project_build_import",
+        &serde_json::json!({ "path": path, "parent": parent, "lang": lang }),
+        on,
+    )
+    .await
+}
+
+/// Adresses du site publié d'un projet, vérifiées en ligne.
+pub async fn published_sites(path: &str, repo: Option<&str>) -> Res<Vec<String>> {
+    call(
+        "published_sites",
+        &serde_json::json!({ "path": path, "repo": repo }),
+    )
+    .await
+}
+
+/// Outils de construction téléchargés (Réglages).
+pub async fn build_tools() -> Res<revel_protocol::BuildTools> {
+    call("build_tools", &NoArgs {}).await
+}
+
+pub async fn build_tool_remove(id: &str) -> Res<()> {
+    call("build_tool_remove", &serde_json::json!({ "id": id })).await
+}
+
+pub async fn build_cache_clear() -> Res<()> {
+    call("build_cache_clear", &NoArgs {}).await
+}
+
 /// Examine un fichier d'export WordPress (7.6).
 pub async fn probe_wordpress(file: &str) -> Res<revel_protocol::WxrProbe> {
     call("probe_wordpress", &serde_json::json!({ "file": file })).await
@@ -667,6 +709,30 @@ pub async fn versions_resolve(
     call(
         "versions_resolve",
         &serde_json::json!({ "path": path, "keepOurs": keep_ours, "message": message }),
+    )
+    .await
+}
+
+/// Endroits modifiés des deux côtés choisis un par un (`fichier#chemin` → ma version), autres
+/// fichiers selon `keep_ours` (D-89).
+pub async fn versions_resolve_items(
+    path: &str,
+    keep_ours: bool,
+    items: &[(String, bool)],
+    message: &str,
+) -> Res<revel_protocol::SyncInfo> {
+    call(
+        "versions_resolve_items",
+        &serde_json::json!({ "path": path, "keepOurs": keep_ours, "items": items, "message": message }),
+    )
+    .await
+}
+
+/// Dépôt central dans un dossier partagé (NAS, réseau local) ; renvoie son chemin (D-89).
+pub async fn versions_set_shared(path: &str, folder: &str) -> Res<String> {
+    call(
+        "versions_set_shared",
+        &serde_json::json!({ "path": path, "folder": folder }),
     )
     .await
 }

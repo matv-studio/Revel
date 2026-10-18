@@ -76,30 +76,6 @@ const OUTPUT_DIRS: &[&str] = &[
     "dist", "build", "out", "_site", "public", "docs", "www", "site", "html",
 ];
 
-/// Outils dont le site se construit (dépendances de `package.json`), du plus précis au plus
-/// général.
-const BUILD_TOOLS: &[(&str, &str)] = &[
-    ("@sveltejs/kit", "SvelteKit"),
-    ("next", "Next.js"),
-    ("nuxt", "Nuxt"),
-    ("astro", "Astro"),
-    ("gatsby", "Gatsby"),
-    ("@remix-run/react", "Remix"),
-    ("@react-router/dev", "React Router"),
-    ("@angular/core", "Angular"),
-    ("@solidjs/start", "SolidStart"),
-    ("@docusaurus/core", "Docusaurus"),
-    ("vitepress", "VitePress"),
-    ("react-scripts", "Create React App"),
-    ("svelte", "Svelte"),
-    ("vue", "Vue"),
-    ("react", "React"),
-    ("solid-js", "Solid"),
-    ("vite", "Vite"),
-    ("parcel", "Parcel"),
-    ("webpack", "webpack"),
-];
-
 /// Reconnaît la nature du dossier `dir`.
 pub fn detect(dir: &Path) -> SiteKind {
     if is_eleventy(dir) {
@@ -121,32 +97,7 @@ pub fn detect(dir: &Path) -> SiteKind {
     SiteKind::Unknown { outputs }
 }
 
-/// Outil de construction du site, d'après `package.json` ou les fichiers de configuration de
-/// générateurs connus (Hugo, Jekyll).
+/// Outil de construction du site (dépendances de `package.json`, Hugo, Jekyll).
 fn build_tool(dir: &Path) -> Option<String> {
-    if let Ok(text) = std::fs::read_to_string(dir.join("package.json"))
-        && let Ok(v) = serde_json::from_str::<serde_json::Value>(&text)
-    {
-        let has = |name: &str| {
-            ["dependencies", "devDependencies"]
-                .iter()
-                .any(|k| v.get(k).and_then(|d| d.get(name)).is_some())
-        };
-        if let Some((_, tool)) = BUILD_TOOLS.iter().find(|(dep, _)| has(dep)) {
-            return Some((*tool).to_string());
-        }
-    }
-    if ["hugo.toml", "hugo.yaml", "hugo.json"]
-        .iter()
-        .any(|f| dir.join(f).is_file())
-        || (dir.join("config.toml").is_file() && dir.join("layouts").is_dir())
-    {
-        return Some("Hugo".into());
-    }
-    if dir.join("_config.yml").is_file()
-        && (dir.join("_layouts").is_dir() || dir.join("Gemfile").is_file())
-    {
-        return Some("Jekyll".into());
-    }
-    None
+    revel_build::recipe::tool_name(dir)
 }

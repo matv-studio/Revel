@@ -207,6 +207,22 @@ impl Core {
                 )
                 .map_err(f)?,
             ),
+            "versions_resolve_items" => json(
+                self.versions_resolve_items(
+                    site,
+                    arg::<bool>(args, "keepOurs")?,
+                    &arg::<Vec<(String, bool)>>(args, "items")?,
+                    &arg::<String>(args, "message")?,
+                )
+                .map_err(f)?,
+            ),
+            "versions_set_shared" => json(
+                self.versions_set_shared(
+                    site,
+                    std::path::Path::new(&arg::<String>(args, "folder")?),
+                )
+                .map_err(f)?,
+            ),
             "versions_set_remote" => json(
                 self.versions_set_remote(site, &arg::<String>(args, "url")?)
                     .map_err(f)?,

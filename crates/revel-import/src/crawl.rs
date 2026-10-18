@@ -218,6 +218,8 @@ pub struct Report {
     pub bytes: u64,
     /// Outil qui a produit le site (balise `generator`) : `Framer`, `Webflow`, `WordPress`…
     pub tool: Option<String>,
+    /// Programme qui affiche les pages dans le navigateur (SvelteKit, Next.js…), gardé.
+    pub runtime: Option<String>,
     pub warnings: Vec<String>,
 }
 
@@ -686,10 +688,14 @@ fn scan_page(doc: &Document, base: &Url, site: &Site) -> Found {
                                 | "mask-icon"
                                 | "manifest"
                                 | "preload"
+                                | "modulepreload"
                         )
                     });
-                    if keep && !(rel.contains("preload") && attr("as").as_deref() == Some("script"))
-                    {
+                    // Scripts du moteur de Framer : retirés à l'import (animations reprises).
+                    let framer = u.host_str().is_some_and(|h| h.contains("framer"));
+                    let script = rel.contains("modulepreload")
+                        || (rel.contains("preload") && attr("as").as_deref() == Some("script"));
+                    if keep && !(script && framer) {
                         f.files.push(u);
                     }
                 }
@@ -730,6 +736,15 @@ fn scan_page(doc: &Document, base: &Url, site: &Site) -> Found {
                 if tag == "style" {
                     for u in css_refs(&n.text()) {
                         if let Some(u) = join(&u) {
+                            f.files.push(u);
+                        }
+                    }
+                }
+                // Script écrit dans la page : modules qu'il charge (`import("./app.js")`).
+                if tag == "script" && attr("src").is_none() {
+                    let text = n.text();
+                    for m in js_modules(&text) {
+                        if let Some(u) = join(&m) {
                             f.files.push(u);
                         }
                     }
@@ -825,6 +840,113 @@ fn rewrite_page(doc: &Document, base: &Url, site: &Site, map: &HashMap<String, S
 }
 
 /// Outil d'origine d'après la balise `generator` (ou ses marques) de la page de départ.
+/// Modules cités par un script : `import … from "…"`, `export … from "…"`, `import("…")`,
+/// `new URL("…", import.meta.url)`, `import "…"` (adresses relatives ou absolues seulement : les
+/// noms de paquets nus ne sont pas des fichiers).
+pub(crate) fn js_modules(js: &str) -> Vec<String> {
+    static RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(
+            r#"(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|new\s+URL\s*\(\s*)["'`]([^"'`\s]+)["'`]"#,
+        )
+        .expect("expression des modules")
+    });
+    let mut out: Vec<String> = Vec::new();
+    for c in RE.captures_iter(js) {
+        let spec = &c[1];
+        if (spec.starts_with("./")
+            || spec.starts_with("../")
+            || spec.starts_with('/')
+            || spec.starts_with("http://")
+            || spec.starts_with("https://"))
+            && !spec.contains("${")
+            && !out.iter().any(|o| o == spec)
+        {
+            out.push(spec.to_string());
+        }
+    }
+    out
+}
+
+/// Extensions des fichiers qu'un script charge par leur adresse (sons, vidéos, images, données,
+/// polices, modèles 3D, animations).
+const SCRIPT_ASSETS: &str = "mp3|wav|ogg|oga|m4a|aac|flac|mp4|webm|mov|png|jpe?g|gif|webp|avif|svg|ico|json|woff2?|ttf|otf|glb|gltf|bin|wasm|lottie|riv|css|js|mjs|txt|xml|pdf";
+
+/// Fichiers cités par une adresse depuis la racine dans un script (`"/sfx/navigation.wav"`).
+pub(crate) fn js_root_assets(js: &str) -> Vec<String> {
+    static RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(&format!(
+            r#"["'`](/[^"'`\s<>{{}}$\\]+?\.(?:{SCRIPT_ASSETS}))(?:\?[^"'`\s]*)?["'`]"#
+        ))
+        .expect("expression des fichiers")
+    });
+    let mut out: Vec<String> = Vec::new();
+    for c in RE.captures_iter(js) {
+        let p = c[1].to_string();
+        if !p.starts_with("//") && !out.contains(&p) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// Fichiers dont l'adresse est composée dans un script (`` `/music/${pistes[i]}` ``) : chaque
+/// début d'adresse est essayé avec les noms de fichiers cités dans le même script. Adresses
+/// supposées, ignorées si le site ne les a pas.
+pub(crate) fn js_composed_assets(js: &str) -> Vec<String> {
+    static PREFIX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r#"`(/[^`$\s]*/)\$\{"#).expect("expression des débuts d'adresse")
+    });
+    static NAME: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(&format!(
+            r#"["']([^"'/\\\n<>]{{1,120}}\.(?:{SCRIPT_ASSETS}))["']"#
+        ))
+        .expect("expression des noms de fichiers")
+    });
+    let prefixes: Vec<&str> = PREFIX
+        .captures_iter(js)
+        .filter_map(|c| c.get(1).map(|m| m.as_str()))
+        .collect();
+    if prefixes.is_empty() {
+        return Vec::new();
+    }
+    let names: Vec<&str> = NAME
+        .captures_iter(js)
+        .filter_map(|c| c.get(1).map(|m| m.as_str()))
+        .filter(|n| !n.starts_with('.'))
+        .collect();
+    let mut out: Vec<String> = Vec::new();
+    for p in &prefixes {
+        for n in &names {
+            let u = format!("{p}{n}");
+            if !out.contains(&u) && out.len() < 300 {
+                out.push(u);
+            }
+        }
+    }
+    out
+}
+
+/// Programme qui affiche et anime les pages dans le navigateur (gardé avec le site).
+pub(crate) fn app_runtime(html: &str) -> Option<&'static str> {
+    [
+        ("__sveltekit_", "SvelteKit"),
+        ("data-sveltekit", "SvelteKit"),
+        ("__NEXT_DATA__", "Next.js"),
+        ("self.__next_f", "Next.js"),
+        ("window.__NUXT__", "Nuxt"),
+        ("id=\"__nuxt\"", "Nuxt"),
+        ("<astro-island", "Astro"),
+        ("ng-version=", "Angular"),
+        ("data-server-rendered", "Vue"),
+        ("__remixContext", "Remix"),
+        ("__reactRouterContext", "React Router"),
+        ("___gatsby", "Gatsby"),
+    ]
+    .iter()
+    .find(|(m, _)| html.contains(m))
+    .map(|(_, n)| *n)
+}
+
 fn detect_tool(doc: &Document) -> Option<String> {
     let gen_text = doc
         .select("meta[name=generator]")
@@ -975,6 +1097,9 @@ pub fn crawl(
     let mut used_paths: HashSet<String> = HashSet::new();
     let mut prog = Progress::default();
     let mut warned_size = false;
+    // Adresses supposées (composées dans un script) : absentes sans avertissement.
+    let mut guessed: HashSet<String> = HashSet::new();
+    let mut runtime: Option<&'static str> = None;
 
     let mut prefetched = Some(first);
     // Pages, par lots lus en parallèle.
@@ -1030,6 +1155,9 @@ pub fn crawl(
             }
             let text = String::from_utf8_lossy(&r.body).into_owned();
             let doc = Document::from(text.as_str());
+            if runtime.is_none() {
+                runtime = app_runtime(&text);
+            }
             if report.pages == 0 {
                 report.tool = detect_tool(&doc);
                 let words = doc.select("body").text().split_whitespace().count();
@@ -1100,7 +1228,9 @@ pub fn crawl(
             let r = match r {
                 Ok(r) if r.status < 400 => r,
                 _ => {
-                    report.warnings.push(format!("{u} : fichier introuvable"));
+                    if !guessed.contains(u.as_str()) {
+                        report.warnings.push(format!("{u} : fichier introuvable"));
+                    }
                     continue;
                 }
             };
@@ -1121,6 +1251,40 @@ pub fn crawl(
                 };
             }
             map.insert(u.as_str().to_string(), encode_path(&format!("/{path}")));
+            // Script : modules qu'il charge et fichiers qu'il cite, copiés aux mêmes adresses
+            // (le script n'est pas réécrit).
+            let is_js = r.content_type.contains("javascript")
+                || path.ends_with(".js")
+                || path.ends_with(".mjs");
+            if is_js {
+                let text = String::from_utf8_lossy(&r.body);
+                let mut add = |cu: Url, guess: bool| {
+                    if matches!(cu.scheme(), "http" | "https")
+                        && seen_files.insert(cu.as_str().to_string())
+                    {
+                        if guess {
+                            guessed.insert(cu.as_str().to_string());
+                        }
+                        files.push_back(cu);
+                    }
+                };
+                for m in js_modules(&text) {
+                    if let Ok(mut cu) = r.url.join(&m) {
+                        cu.set_fragment(None);
+                        add(cu, false);
+                    }
+                }
+                for a in js_root_assets(&text) {
+                    if let Some(cu) = root(&a) {
+                        add(cu, true);
+                    }
+                }
+                for a in js_composed_assets(&text) {
+                    if let Some(cu) = root(&a) {
+                        add(cu, true);
+                    }
+                }
+            }
             let is_css = r.content_type.contains("css") || path.ends_with(".css");
             if is_css {
                 let text = String::from_utf8_lossy(&r.body).into_owned();
@@ -1182,6 +1346,12 @@ pub fn crawl(
                 .warnings
                 .push(format!("{u} : page non écrite ({path})"));
         }
+    }
+    if let Some(rt) = runtime {
+        report.runtime = Some(rt.to_string());
+        report.warnings.push(format!(
+            "pages affichées et animées par le programme du site ({rt}) : ses scripts sont gardés ; dans le site publié, il peut réafficher les parties qu'il produit et remplacer les modifications faites dans Revel"
+        ));
     }
     report.bytes = prog.bytes;
     Ok(report)
@@ -1255,6 +1425,96 @@ mod tests {
     }
 
     const HTML: &str = "text/html; charset=utf-8";
+
+    #[test]
+    fn modules_et_fichiers_des_scripts() {
+        let entry = r#"import{l as o,a as r}from"../chunks/B6.js";export{o as load_css}from"./x.js";const n=()=>import("../nodes/0.js");import "./side.js";new URL("./w.wasm",import.meta.url);import x from "svelte";"#;
+        assert_eq!(
+            js_modules(entry),
+            vec![
+                "../chunks/B6.js",
+                "./x.js",
+                "../nodes/0.js",
+                "./side.js",
+                "./w.wasm"
+            ]
+        );
+        let page = r#"const s=new Howl({src:["/sfx/navigation.wav"]});const t=["Changing Seasons -Reload-.mp3","Full Moon Full Life.mp3"];h(`/music/${t[i]}`);fetch("/api/data");el.src="//cdn.x/a.png""#;
+        assert_eq!(js_root_assets(page), vec!["/sfx/navigation.wav"]);
+        assert_eq!(
+            js_composed_assets(page),
+            vec![
+                "/music/Changing Seasons -Reload-.mp3",
+                "/music/Full Moon Full Life.mp3"
+            ]
+        );
+        assert_eq!(
+            app_runtime("<script>__sveltekit_1we8 = {}</script>"),
+            Some("SvelteKit")
+        );
+        assert_eq!(app_runtime("<p>simple</p>"), None);
+    }
+
+    #[test]
+    fn programme_du_site_garde() {
+        let f = mem(&[
+            (
+                "https://app.fr/",
+                HTML,
+                r#"<html><head><link rel="modulepreload" href="/_app/entry/start.js"></head><body><h1>Menu</h1><div>
+<script>__sveltekit_x={};Promise.all([import("./_app/entry/start.js"),import("./_app/entry/app.js")])</script></div></body></html>"#,
+            ),
+            (
+                "https://app.fr/_app/entry/start.js",
+                "text/javascript",
+                r#"import{a}from"../chunks/c1.js";"#,
+            ),
+            (
+                "https://app.fr/_app/entry/app.js",
+                "text/javascript",
+                r#"const n=()=>import("../nodes/2.js");"#,
+            ),
+            (
+                "https://app.fr/_app/chunks/c1.js",
+                "text/javascript",
+                "export const a=1;",
+            ),
+            (
+                "https://app.fr/_app/nodes/2.js",
+                "text/javascript",
+                r#"const s=["/sfx/nav.wav"];const t=["Piste un.mp3","Absente.mp3"];play(`/music/${t[0]}`);"#,
+            ),
+            ("https://app.fr/sfx/nav.wav", "audio/wav", "RIFF"),
+            ("https://app.fr/music/Piste%20un.mp3", "audio/mpeg", "ID3"),
+        ]);
+        let d = tempfile::tempdir().unwrap();
+        let r = crawl(
+            &parse_start("app.fr").unwrap(),
+            d.path(),
+            &f,
+            &Options::default(),
+            &mut |_| {},
+        )
+        .unwrap();
+        for p in [
+            "_app/entry/start.js",
+            "_app/entry/app.js",
+            "_app/chunks/c1.js",
+            "_app/nodes/2.js",
+            "sfx/nav.wav",
+            "music/Piste un.mp3",
+        ] {
+            assert!(d.path().join(p).is_file(), "{p} absent");
+        }
+        assert_eq!(r.runtime.as_deref(), Some("SvelteKit"));
+        // Adresse supposée absente : pas d'avertissement « fichier introuvable ».
+        assert!(
+            !r.warnings.iter().any(|w| w.contains("Absente")),
+            "{:?}",
+            r.warnings
+        );
+        assert!(r.warnings.iter().any(|w| w.contains("SvelteKit")));
+    }
 
     #[test]
     fn adresses_de_depart() {

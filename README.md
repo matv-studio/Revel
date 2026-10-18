@@ -33,10 +33,14 @@ ligne payant au mois. Si vous connaissez Webflow, Framer ou Figma, vous retrouve
   relier votre nom de domaine et à recevoir par courriel les messages des formulaires du site.
 - **Reprendre un site existant.** Un dossier de pages HTML, un site en ligne à partir de son adresse (y compris
   un site Framer), un export Webflow et les contenus de son CMS, un fichier Figma, un export WordPress, un dépôt
-  Git ou un projet Eleventy.
+  Git ou un projet Eleventy. Un site à construire (SvelteKit, Next.js, Astro, Hugo, Jekyll…) peut être construit
+  par Revel, qui télécharge alors lui-même les outils nécessaires.
 - **Travailler avec un assistant IA.** Claude, ChatGPT, LM Studio, Open WebUI… peuvent modifier votre site à
   votre demande, par la conversation, depuis votre ordinateur.
 - **Garder l'historique.** Enregistrez des versions de votre site, comparez-les, revenez en arrière.
+- **Travailler à plusieurs.** Chacun modifie sa copie du site puis synchronise, par un dossier partagé de votre
+  réseau (NAS, serveur, sans compte) ou par un dépôt en ligne (GitHub, GitLab). Les modifications faites à des
+  endroits différents se combinent ; un même endroit modifié par deux personnes se choisit en un clic.
 
 Le site produit est fait de fichiers standards (pages HTML, feuilles de style, images) : vous pouvez l'héberger où
 vous voulez, et il continue de fonctionner sans Revel.
@@ -128,8 +132,9 @@ Revel is a free desktop app (Windows, macOS, Linux) to build a website visually,
 the host of your choice. It works offline on your computer, with no account or subscription; the result is plain
 HTML, CSS and images that you own. The interface is available in English and French (Settings › General). It
 includes a visual editor, a CMS, components, animations, multilingual sites with on-device machine translation,
-one-click publishing (SFTP hosts or GitHub Pages), imports from Webflow, Framer, Figma, WordPress, static HTML and
-Eleventy, and a local connector for AI assistants. Download the installer for your system from the
+one-click publishing (SFTP hosts or GitHub Pages), imports from Webflow, Framer, Figma, WordPress, static HTML,
+Eleventy and Git repositories (sites that need building are built by Revel on request), team work through a shared
+network folder or an online repository, and a local connector for AI assistants. Download the installer for your system from the
 [releases page](https://github.com/matv-studio/Revel/releases). Revel is a pre-release (0.6.0): expect rough
 edges, and keep a copy of important sites.
 
@@ -153,7 +158,8 @@ Revel est écrit en Rust : une application de bureau [Tauri 2](https://tauri.app
 | `crates/revel-import` | Import : Eleventy, HTML statique, site en ligne, Webflow, Figma, WordPress |
 | `crates/revel-deploy` | Publication : hébergeurs, capacités, avertissements |
 | `crates/revel-dns` | Noms de domaine |
-| `crates/revel-git` | Git et GitHub : publication sur une branche, connexion, GitHub Pages |
+| `crates/revel-git` | Git et GitHub : versions, travail à plusieurs, publication sur une branche, connexion, GitHub Pages |
+| `crates/revel-build` | Construction des sites à construire (Node.js, Hugo, Jekyll) avant leur import |
 | `crates/revel-translate` | Traduction automatique hors ligne (modèles OPUS-MT) |
 | `crates/revel-mcp` | Serveur MCP pour les assistants IA |
 | `crates/revel-i18n` | Textes de l'interface en français et en anglais (Fluent) |

@@ -273,6 +273,9 @@ fn element_content(
         apply(cmd);
     };
     let set_href = set.clone();
+    // Lien marqué « page actuelle » aussi sur les pages dont l'adresse commence par la sienne.
+    let section = attr(&attrs, "data-revel-current").and_then(|a| a.value.as_deref()) == Some("section");
+    let set_section = set.clone();
     let media = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
     let is_img = lower == "img";
     let src = attr(&attrs, "src")
@@ -351,6 +354,15 @@ fn element_content(
                         <span class="switch-track"></span>
                     </span>
                     <span>{ui.t("inspector-new-tab")}</span>
+                </label>
+                <label class="row-switch" title=ui.t("inspector-current-section-help")>
+                    <span class="switch">
+                        <input type="checkbox" prop:checked=section on:change=move |e| {
+                            set_section("data-revel-current", if event_target_checked(&e) { "section".into() } else { String::new() })
+                        }/>
+                        <span class="switch-track"></span>
+                    </span>
+                    <span>{ui.t("inspector-current-section")}</span>
                 </label>
             </div>
         })}

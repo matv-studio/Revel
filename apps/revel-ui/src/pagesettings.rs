@@ -170,6 +170,63 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                                 <span class="switch-track"></span>
                             </span>
                         </label>
+                        {(!p.path.ends_with('/') && !p.path.ends_with(".html") && !p.path.ends_with(".xml")).then(|| {
+                            // Fichier du serveur (`.htaccess`, `robots.txt`, `.php`) : texte écrit tel quel.
+                            let text: String = p.body.iter().map(|n| match n {
+                                revel_model::Node::Html { html } => html.clone(),
+                                revel_model::Node::Text { text } => text.clone(),
+                                _ => String::new(),
+                            }).collect();
+                            let n = p.body.len();
+                            let pid = pid.clone();
+                            view! {
+                                <label class="field page-settings-file">
+                                    <span class="label" title=ui.t("pages-file-help")>{ui.t("pages-file")}</span>
+                                    <textarea class="input input--mono" rows="14" spellcheck="false" prop:value=text
+                                        on:change=move |e| {
+                                            let v = event_target_value(&e);
+                                            let root = revel_edit::Parent::root(revel_edit::Owner::Page(pid.clone()));
+                                            let mut commands = vec![Command::Replace {
+                                                parent: root.clone(),
+                                                index: 0,
+                                                node: revel_model::Node::Html { html: v },
+                                            }];
+                                            commands.extend((1..n).map(|i| Command::Replace {
+                                                parent: root.clone(),
+                                                index: i,
+                                                node: revel_model::Node::Text { text: String::new() },
+                                            }));
+                                            ed.apply(ui, Command::Batch { commands }, false);
+                                        }></textarea>
+                                </label>
+                            }
+                        })}
+                        <h3 class="page-settings-section">{ui.t("pages-look")}</h3>
+                        {
+                            let body_class = p.props.get("bodyClass").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                            let theme = p.props.get("theme").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                            let (q1, q2) = (pid.clone(), pid.clone());
+                            view! {
+                                <Field label=ui.t("pages-body-class") value=Signal::derive(move || body_class.clone()) mono=true
+                                    on_commit=move |v: String| {
+                                        let v = v.split_whitespace().collect::<Vec<_>>().join(" ");
+                                        ed.apply(ui, Command::SetPageProp { page: q1.clone(), key: "bodyClass".into(), value: (!v.is_empty()).then(|| json!(v)) }, false)
+                                    }/>
+                                <label class="field">
+                                    <span class="label" title=ui.t("pages-theme-help")>{ui.t("pages-theme")}</span>
+                                    <div class="select">
+                                        <select class="input" on:change=move |e| {
+                                            let v = event_target_value(&e);
+                                            ed.apply(ui, Command::SetPageProp { page: q2.clone(), key: "theme".into(), value: (!v.is_empty()).then(|| json!(v)) }, false)
+                                        }>
+                                            <option value="" prop:selected=theme.is_empty()>{ui.t("pages-theme-site")}</option>
+                                            <option value="light" prop:selected=theme == "light">{ui.t("pages-theme-light")}</option>
+                                            <option value="dark" prop:selected=theme == "dark">{ui.t("pages-theme-dark")}</option>
+                                        </select>
+                                    </div>
+                                </label>
+                            }
+                        }
                         <h3 class="page-settings-section">{ui.t("pages-seo")}</h3>
                         {lang.clone().map(|code| {
                             // Autre langue : titre et description traduits (variable de la page) ; ceux

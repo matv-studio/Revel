@@ -266,3 +266,34 @@ pub fn style_command(
         },
     })
 }
+
+/// Classe d'un élément ajoutée selon une condition : `carte{% if c %} carte--x{% endif %}` ->
+/// (`carte`, [(`c`, `carte--x`)]) ; `None` pour une autre forme.
+pub fn cond_classes(v: &str) -> Option<(String, Vec<(String, String)>)> {
+    let mut base = String::new();
+    let mut out = Vec::new();
+    let mut rest = v;
+    while let Some(i) = rest.find("{%") {
+        base.push_str(&rest[..i]);
+        let after = &rest[i + 2..];
+        let j = after.find("%}")?;
+        let cond = after[..j].trim().strip_prefix("if ")?.trim().to_string();
+        let body = &after[j + 2..];
+        let k = body.find("{%")?;
+        let cls = body[..k].trim().to_string();
+        let end = &body[k + 2..];
+        let e = end.find("%}")?;
+        if end[..e].trim() != "endif" || cls.contains("{{") {
+            return None;
+        }
+        out.push((cond, cls));
+        rest = &end[e + 2..];
+    }
+    if rest.contains("{{") {
+        return None;
+    }
+    base.push_str(rest);
+    Some((base.split_whitespace().collect::<Vec<_>>().join(" "), out))
+}
+
+

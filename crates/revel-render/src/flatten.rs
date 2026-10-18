@@ -1176,7 +1176,7 @@ fn prune_sets(nodes: &mut Vec<Node>, keep: &dyn Fn(&str) -> bool) {
 }
 
 /// Parcourt les nœuds (et leurs enfants) en les modifiant.
-fn walk_mut(nodes: &mut [Node], f: &mut dyn FnMut(&mut Node)) {
+pub(crate) fn walk_mut(nodes: &mut [Node], f: &mut dyn FnMut(&mut Node)) {
     for n in nodes {
         f(n);
         for list in revel_model::ids::child_lists_mut(n) {
@@ -1421,6 +1421,251 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
 // ------------------------------------------------------------------------------------------------
 
 /// Reconstruit le site de `input` dans la forme de l'interface (même rendu).
+/// `<body class="{{ bodyClass }}">` et `<html data-theme="{{ theme or 'dark' }}">` des gabarits :
+/// la génération pose ces réglages de la page (Apparence) ; l'attribut garde la valeur par
+/// défaut écrite.
+fn page_look_attrs(site: &mut Site, notes: &mut Vec<String>) {
+    let body_re =
+        regex::Regex::new(r"^\s*\{\{-?\s*bodyClass\s*-?\}\}\s*$").expect("regex");
+    let theme_re = regex::Regex::new(
+        r#"^\s*\{\{-?\s*\(?\s*theme\s*(?:or\s*(?:'([^']*)'|"([^"]*)"))?\s*\)?\s*-?\}\}\s*$"#,
+    )
+    .expect("regex");
+    for l in &mut site.layouts {
+        let mut changed = false;
+        walk_mut(&mut l.body, &mut |n| {
+            let Node::Element { tag, attrs, .. } = n else {
+                return;
+            };
+            match tag.as_str() {
+                "body" => {
+                    let before = attrs.len();
+                    attrs.retain(|a| {
+                        !(a.name == "class"
+                            && a.when.is_none()
+                            && a.value.as_deref().is_some_and(|v| body_re.is_match(v)))
+                    });
+                    changed |= attrs.len() != before;
+                }
+                "html" => {
+                    let mut drop = false;
+                    for a in attrs.iter_mut().filter(|a| a.name == "data-theme" && a.when.is_none()) {
+                        if let Some(c) = a.value.as_deref().and_then(|v| theme_re.captures(v)) {
+                            match c.get(1).or(c.get(2)) {
+                                Some(d) => a.value = Some(d.as_str().to_string()),
+                                None => drop = true,
+                            }
+                            changed = true;
+                        }
+                    }
+                    if drop {
+                        attrs.retain(|a| a.name != "data-theme");
+                    }
+                }
+                _ => {}
+            }
+        });
+        if changed {
+            notes.push(format!(
+                "gabarit {} : classe du corps et thème réglés par page (Réglages de la page > Apparence)",
+                l.id
+            ));
+        }
+    }
+}
+
+/// `aria-current="page"` d'un lien sous condition « adresse de la page = adresse du lien »
+/// (ou « commence par ») : retiré, la génération le pose ; « commence par » devient le réglage
+/// « Actif sur les sous-pages » du lien.
+fn current_links(site: &mut Site, notes: &mut Vec<String>) {
+    let norm = |s: &str| -> String {
+        let t: String = s.split_whitespace().collect::<Vec<_>>().join(" ");
+        let t = t.trim();
+        let t = t
+            .strip_prefix("{{")
+            .and_then(|t| t.strip_suffix("}}"))
+            .map(|t| t.trim_matches('-').trim().to_string())
+            .unwrap_or_else(|| format!("{t:?}"));
+        t.replace('\'', "\"")
+    };
+    let url = r#"(?:\(\s*page\.url\s+or\s+(?:""|'')\s*\)|page\.url)"#;
+    let exact = regex::Regex::new(&format!(r"^\s*(?:{url}\s*==\s*(.+?)|(.+?)\s*==\s*{url})\s*$"))
+        .expect("regex");
+    let prefix = regex::Regex::new(&format!(
+        r"^\s*{url}\s*(?:is\s+startingwith\s*\(\s*(.+?)\s*\)|\.startswith\s*\(\s*(.+?)\s*\))\s*$"
+    ))
+    .expect("regex");
+    let mut n = 0usize;
+    let mut fix = |body: &mut Vec<Node>| {
+        walk_mut(body, &mut |node| {
+            let Node::Element { tag, attrs, .. } = node else {
+                return;
+            };
+            if tag != "a" {
+                return;
+            }
+            let Some(href) = attrs
+                .iter()
+                .find(|a| a.name == "href" && a.when.is_none())
+                .and_then(|a| a.value.clone())
+            else {
+                return;
+            };
+            let target = norm(&href);
+            let Some(i) = attrs.iter().position(|a| {
+                a.name == "aria-current" && a.value.as_deref() == Some("page") && a.when.is_some()
+            }) else {
+                return;
+            };
+            let when = attrs[i].when.clone().unwrap_or_default();
+            let same = |c: &regex::Captures| {
+                c.iter()
+                    .skip(1)
+                    .flatten()
+                    .next()
+                    .is_some_and(|m| norm(&format!("{{{{ {} }}}}", m.as_str())) == target)
+            };
+            if exact.captures(&when).is_some_and(|c| same(&c)) {
+                attrs.remove(i);
+                n += 1;
+            } else if prefix.captures(&when).is_some_and(|c| same(&c)) {
+                attrs.remove(i);
+                if !attrs.iter().any(|a| a.name == "data-revel-current") {
+                    attrs.push(Attr {
+                        name: "data-revel-current".into(),
+                        value: Some("section".into()),
+                        when: None,
+                    });
+                }
+                n += 1;
+            }
+        });
+    };
+    for l in &mut site.layouts {
+        fix(&mut l.body);
+    }
+    for p in &mut site.pages {
+        fix(&mut p.body);
+    }
+    for c in &mut site.components {
+        fix(&mut c.body);
+    }
+    if n > 0 {
+        notes.push(format!(
+            "{n} lien(s) « page actuelle » : marqués par la génération (état Page actuelle des styles)"
+        ));
+    }
+}
+
+/// Page de flux RSS écrite à la main (une boucle sur une collection dans `<rss>`) :
+/// remplacée par un flux des réglages du site quand celui-ci liste les mêmes contenus.
+fn convert_feeds(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
+    let col_re = regex::Regex::new(r"collections\.([A-Za-z0-9_]+)").expect("regex");
+    let limit_re = regex::Regex::new(r"\blimit\(\s*(\d+)\s*\)").expect("regex");
+    let cands: Vec<(String, String, Option<usize>)> = site
+        .pages
+        .iter()
+        .filter(|p| p.path.ends_with(".xml") && !site.settings.feeds.iter().any(|f| f.path == p.path))
+        .filter_map(|p| {
+            let (mut rss, mut col, mut limit) = (false, None, None);
+            revel_model::ids::walk(&p.body, &mut |n| match n {
+                Node::Element { tag, .. } if tag == "rss" => rss = true,
+                Node::Each { expr, .. } if col.is_none() => {
+                    col = col_re.captures(expr).map(|c| c[1].to_string());
+                    limit = limit_re.captures(expr).and_then(|c| c[1].parse().ok());
+                }
+                _ => {}
+            });
+            Some((p.id.clone(), col.filter(|_| rss)?, limit))
+        })
+        .collect();
+    if cands.is_empty() {
+        return;
+    }
+    let Ok(out) = crate::build(input) else {
+        return;
+    };
+    let tag = |xml: &str, t: &str| {
+        regex::Regex::new(&format!(r"(?s)<{t}>(.*?)</{t}>"))
+            .ok()?
+            .captures(xml)
+            .map(|c| unescape(c[1].trim()))
+    };
+    let links = |xml: &str| -> Vec<String> {
+        xml.split("<item>")
+            .skip(1)
+            .filter_map(|it| tag(it, "link"))
+            .collect()
+    };
+    for (pid, col, limit) in cands {
+        let Some(page) = site.pages.iter().find(|p| p.id == pid) else {
+            continue;
+        };
+        let path = page.path.clone();
+        let Ok(file) = crate::output_path(&path) else {
+            continue;
+        };
+        let Some(f) = out.files.iter().find(|f| f.path == file) else {
+            continue;
+        };
+        let xml = String::from_utf8_lossy(&f.bytes).to_string();
+        let head = xml.split("<item>").next().unwrap_or_default().to_string();
+        let base = site
+            .base_url
+            .clone()
+            .or_else(|| {
+                site.data
+                    .get("site")
+                    .and_then(|s| s.get("url"))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            })
+            .unwrap_or_default();
+        let base = base.trim_end_matches('/');
+        let feed = revel_model::FeedSettings {
+            collection: col.clone(),
+            path: path.clone(),
+            title: tag(&head, "title"),
+            description: tag(&head, "description").filter(|d| !d.is_empty()),
+            link: tag(&head, "link")
+                .map(|l| l.strip_prefix(base).unwrap_or(&l).to_string())
+                .filter(|l| l.starts_with('/') && l != "/"),
+            limit: limit.filter(|n| *n != 20),
+        };
+        // Même liste de contenus, dans le même ordre : flux remplacé.
+        let mut test = input.site.clone();
+        test.settings.feeds = vec![feed.clone()];
+        let tinput = BuildInput {
+            site: &test,
+            entries: input.entries.clone(),
+            locales: Vec::new(),
+            environment: input.environment.clone(),
+            version: input.version.clone(),
+            hooks: input.hooks.clone(),
+            now: input.now,
+        };
+        let (mut files, mut warns) = (Vec::new(), Vec::new());
+        if crate::feeds(&tinput, &mut files, &mut warns).is_err() {
+            continue;
+        }
+        let same = files
+            .iter()
+            .find(|f| f.path == file)
+            .is_some_and(|f| links(&String::from_utf8_lossy(&f.bytes)) == links(&xml));
+        if same {
+            site.pages.retain(|p| p.id != pid);
+            site.settings.feeds.push(feed);
+            notes.push(format!(
+                "flux RSS {path} : réglage du site (collection {col}, Paramètres > Général)"
+            ));
+        } else {
+            notes.push(format!(
+                "flux RSS {path} laissé en page : ses contenus diffèrent du flux de la collection {col}"
+            ));
+        }
+    }
+}
+
 pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
     let b = Builder::new(input);
     let prepared = crate::prepare(&b, input, true)?;
@@ -1432,6 +1677,12 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         .collect();
     let mut site = input.site.clone();
     let mut notes = Vec::new();
+    // Flux RSS écrits à la main : réglages du site (un interrupteur par collection).
+    convert_feeds(input, &mut site, &mut notes);
+    // Classe du corps et thème lus dans la page : posés par la génération (réglages de la page).
+    page_look_attrs(&mut site, &mut notes);
+    // Lien « page actuelle » écrit en condition : marqué par la génération.
+    current_links(&mut site, &mut notes);
     // Contenus choisis et contenus reliés écrits à la main : listes de collection.
     for l in &mut site.layouts {
         rewrite_picks(&mut l.body);
@@ -1585,7 +1836,9 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         });
     }
     for p in &mut site.pages {
-        p.props.retain(|k, _| k == "seo" || used.contains(k));
+        p.props.retain(|k, _| {
+            revel_edit::editable::PAGE_SETTINGS.contains(&k.as_str()) || used.contains(k)
+        });
         p.computed.retain(|k, _| used.contains(k));
     }
     // Filtres propres au site qui ne servent plus.

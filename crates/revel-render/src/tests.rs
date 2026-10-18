@@ -879,7 +879,8 @@ fn langues() {
     assert!(en.contains(r#"<a href="/en/project/b/">Project B</a></li><li class="i"><a href="/en/project/a/">Projet &lt;A&gt;</a>"#), "{en}");
     assert!(file(&out, "en/project/a/index.html").contains("<h1>Projet &lt;A&gt;</h1>"));
     let l = file(&out, "en/langues/index.html");
-    assert!(l.contains(r#"<a href="/langues/" hreflang="fr">Français</a><a href="/en/langues/" hreflang="en">English</a><a href="/en/project/a/#x">a</a><a href="/media/f.pdf">f</a><p>en</p>"#), "{l}");
+    assert!(l.contains(r#"<link rel="canonical" href="https://alunites.com/en/langues/">"#), "{l}");
+    assert!(l.contains(r#"<a href="/langues/" hreflang="fr">Français</a><a href="/en/langues/" hreflang="en" aria-current="page">English</a><a href="/en/project/a/#x">a</a><a href="/media/f.pdf">f</a><p>en</p>"#), "{l}");
     assert!(file(&out, "langues/index.html").contains("<p>fr</p>"));
 
     // Éditeur : page d'une langue en préparation, valeurs reliées aux fichiers de la langue.
@@ -1112,4 +1113,133 @@ fn reconstruction_meme_rendu() {
         "{json}"
     );
     assert!(json.contains("experts") && !json.contains("chiffres"));
+}
+
+/// Paramètres de la page : classe du corps de page et thème ajoutés par Revel ; référencement
+/// écrit quand le gabarit ne l'écrit pas.
+#[test]
+fn apparence_et_referencement_de_la_page() {
+    let mut s = Site::new("Test", "fr");
+    s.base_url = Some("https://exemple.fr".into());
+    s.layouts.push(revel_edit::make::base_layout(&s));
+    let lid = s.layouts[0].id.clone();
+    let mut p: Page = serde_json::from_value(json!({
+        "id": "agence", "path": "/agence/", "layout": lid,
+        "props": {
+            "bodyClass": "page-agence",
+            "theme": "light",
+            "seo": { "title": "L'agence", "description": "Qui nous sommes", "image": "/media/a.jpg" }
+        }
+    }))
+    .unwrap();
+    p.body = parse("<h1>Agence</h1>");
+    s.pages.push(p);
+    let out = build(&input(&s, vec![])).unwrap();
+    let html = file(&out, "agence/index.html");
+    assert!(html.contains(r#"<html lang="fr" data-theme="light">"#), "{html}");
+    assert!(html.contains(r#"<body class="page-agence">"#), "{html}");
+    for t in [
+        r#"<meta name="description" content="Qui nous sommes">"#,
+        r#"<link rel="canonical" href="https://exemple.fr/agence/">"#,
+        r#"<meta property="og:image" content="https://exemple.fr/media/a.jpg">"#,
+        r#"<meta property="og:type" content="website">"#,
+    ] {
+        assert!(html.contains(t), "{t}\n{html}");
+    }
+}
+
+#[test]
+fn liens_page_actuelle_et_flux() {
+    let mut s = Site::new("Test", "fr");
+    s.base_url = Some("https://exemple.fr".into());
+    s.layouts.push(revel_edit::make::base_layout(&s));
+    let lid = s.layouts[0].id.clone();
+    let mut p: Page = serde_json::from_value(json!({
+        "id": "projet", "path": "/projets/un/", "layout": lid
+    }))
+    .unwrap();
+    p.body = parse(
+        r#"<nav><a href="/">Accueil</a><a href="/projets/" data-revel-current="section">Projets</a><a href="/projets/un/">Un</a><a href="/agence/">Agence</a></nav>"#,
+    );
+    s.pages.push(p);
+    let out = build(&input(&s, vec![])).unwrap();
+    let html = file(&out, "projets/un/index.html");
+    assert!(html.contains(r#"<a href="/">Accueil</a>"#), "{html}");
+    assert!(html.contains(r#"<a href="/projets/" aria-current="page">Projets</a>"#), "{html}");
+    assert!(html.contains(r#"<a href="/projets/un/" aria-current="page">Un</a>"#), "{html}");
+    assert!(html.contains(r#"<a href="/agence/">Agence</a>"#), "{html}");
+    assert!(!html.contains("data-revel-current"), "{html}");
+}
+
+#[test]
+fn reconstruction_lien_actuel_theme_et_flux() {
+    let mut s = Site::new("Test", "fr");
+    s.base_url = Some("https://exemple.fr".into());
+    let mut l = revel_edit::make::base_layout(&s);
+    crate::flatten::walk_mut(&mut l.body, &mut |n| {
+        if let Node::Element { tag, attrs, .. } = n {
+            let (name, value) = match tag.as_str() {
+                "body" => ("class", "{{ bodyClass }}"),
+                "html" => ("data-theme", "{{ theme or 'dark' }}"),
+                _ => return,
+            };
+            attrs.push(revel_model::Attr {
+                name: name.into(),
+                value: Some(value.into()),
+                when: None,
+            });
+        }
+    });
+    let lid = l.id.clone();
+    s.layouts.push(l);
+    let mut p: Page = serde_json::from_value(json!({
+        "id": "agence", "path": "/agence/", "layout": lid, "props": { "bodyClass": "page-agence" }
+    }))
+    .unwrap();
+    p.body = parse(
+        r#"{% set nav = [{"url": "/agence/", "label": "Agence"}, {"url": "/projets/", "label": "Projets"}] %}<nav>{% for item in nav %}<a href="{{ item.url }}"{% if (page.url or "") is startingwith(item.url) %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}</nav>"#,
+    );
+    s.pages.push(p);
+    let mut feed: Page = serde_json::from_value(json!({ "id": "feed", "path": "/feed.xml" })).unwrap();
+    feed.body = revel_markup::parse(
+        r#"<rss version="2.0"><channel><title>Actus</title><link>https://exemple.fr/actus/</link>{% for item in (collections.actus | sort(attribute="date", reverse=true)) | limit(5) %}<item><title>{{ item.data.title }}</title><link>{{ item.url | absolute_url("https://exemple.fr") }}</link></item>{% endfor %}</channel></rss>"#,
+        &revel_markup::Options {
+            mode: revel_markup::Mode::Xml,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .nodes;
+    s.pages.push(feed);
+    s.collections.push(serde_json::from_value(json!({
+        "id": "actus", "folder": "content/actus", "path": "/actus/{{ slug }}/"
+    })).unwrap());
+    let entries: Vec<Entry> = ["a", "b"]
+        .iter()
+        .enumerate()
+        .map(|(i, slug)| Entry {
+            folder: "content/actus".into(),
+            file_stem: slug.to_string(),
+            data: json!({ "title": slug.to_uppercase(), "date": format!("2026-0{}-01", i + 1) }),
+            body: String::new(),
+        })
+        .collect();
+    let inp = input(&s, entries.clone());
+    let before = build(&inp).unwrap();
+    let rb = crate::flatten::rebuild(&inp).unwrap();
+    assert!(rb.site.pages.iter().all(|p| p.path != "/feed.xml"), "{:?}", rb.notes);
+    assert_eq!(rb.site.settings.feeds.len(), 1);
+    assert_eq!(rb.site.settings.feeds[0].limit, Some(5));
+    assert_eq!(rb.site.settings.feeds[0].link.as_deref(), Some("/actus/"));
+    let after = build(&input(&rb.site, entries)).unwrap();
+    let a = file(&before, "agence/index.html");
+    let b = file(&after, "agence/index.html");
+    assert_eq!(a, b);
+    assert!(b.contains(r#"<a href="/agence/" aria-current="page">Agence</a>"#), "{b}");
+    assert!(b.contains(r#"<body class="page-agence">"#), "{b}");
+    assert!(b.contains(r#"data-theme="dark""#), "{b}");
+    let json = serde_json::to_string(&rb.site.pages).unwrap();
+    assert!(json.contains("data-revel-current") && !json.contains("startingwith"), "{json}");
+    let f = file(&after, "feed.xml");
+    assert!(f.find("<title>B</title>").unwrap() < f.find("<title>A</title>").unwrap(), "{f}");
 }

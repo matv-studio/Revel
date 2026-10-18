@@ -302,6 +302,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
                 .into(),
         );
     }
+    feeds(input, &mut files, &mut warnings)?;
     seo_files(site, &pages, &mut files, &mut warnings);
     forms::handler_file(site, forms, &mut files, &mut warnings);
     animations::script_file(used.animations, &mut files);
@@ -309,6 +310,139 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     actions::script_file(used.actions, &mut files);
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(BuildOutput { files, warnings })
+}
+
+/// Flux RSS des collections (paramètres du site) : contenus publiés dans l'ordre de la
+/// collection ; résumé tiré du premier champ rempli parmi `description`, `excerpt`, `summary`,
+/// `chapeau`, `intro`, sans balises, 300 caractères au plus.
+pub(crate) fn feeds(
+    input: &BuildInput,
+    files: &mut Vec<OutputFile>,
+    warnings: &mut Vec<String>,
+) -> Result<(), RenderError> {
+    let site = input.site;
+    if site.settings.feeds.is_empty() {
+        return Ok(());
+    }
+    let b = eval::Builder::new(input);
+    let prepared = prepare(&b, input, false)?;
+    let cols = prepared.globals.get("collections").cloned().unwrap_or(Value::UNDEFINED);
+    let site_data = |k: &str| {
+        site.data
+            .get("site")
+            .and_then(|s| s.get(k))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    };
+    let base = site
+        .base_url
+        .clone()
+        .or_else(|| site_data("url"))
+        .unwrap_or_default()
+        .trim_end_matches('/')
+        .to_string();
+    if base.is_empty() {
+        warnings.push("flux RSS non produit : adresse du site absente (paramètres du site)".into());
+        return Ok(());
+    }
+    let esc = |s: &str| {
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    };
+    let strip = regex::Regex::new(r"<[^>]*>").expect("regex");
+    for f in &site.settings.feeds {
+        let Ok(items) = cols.get_attr(&f.collection) else {
+            continue;
+        };
+        let name = f
+            .title
+            .clone()
+            .or_else(|| site_data("title"))
+            .unwrap_or_else(|| site.name.clone());
+        let link = format!("{base}{}", f.link.as_deref().unwrap_or("/"));
+        let mut out = format!(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<rss version=\"2.0\" xmlns:atom=\"http://www.w3.org/2005/Atom\">\n  <channel>\n    <title>{}</title>\n    <link>{}</link>\n    <atom:link href=\"{}{}\" rel=\"self\" type=\"application/rss+xml\"/>\n",
+            esc(&name),
+            esc(&link),
+            esc(&base),
+            esc(&f.path)
+        );
+        if let Some(d) = f
+            .description
+            .clone()
+            .or_else(|| site_data("description"))
+            .filter(|d| !d.trim().is_empty())
+        {
+            out.push_str(&format!("    <description>{}</description>\n", esc(&d)));
+        }
+        out.push_str(&format!("    <language>{}</language>\n", esc(&site.default_locale)));
+        // Les plus récents d'abord (usage des flux) quand chaque contenu a une date.
+        let mut list: Vec<(Option<DateTime<Utc>>, Value)> = items
+            .try_iter()
+            .into_iter()
+            .flatten()
+            .map(|it| {
+                let d = it
+                    .get_attr("date")
+                    .ok()
+                    .filter(|d| !d.is_undefined() && !d.is_none())
+                    .and_then(|d| eval::parse_date(&d.to_string()));
+                (d, it)
+            })
+            .collect();
+        if list.iter().all(|(d, _)| d.is_some()) {
+            list.sort_by_key(|a| std::cmp::Reverse(a.0));
+        }
+        for it in list.into_iter().map(|(_, it)| it).take(f.limit.unwrap_or(20)) {
+            let data = it.get_attr("data").unwrap_or(Value::UNDEFINED);
+            let text = |k: &str| {
+                data.get_attr(k)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .filter(|s| !s.trim().is_empty())
+            };
+            let url = format!(
+                "{base}{}",
+                it.get_attr("url").ok().and_then(|u| u.as_str().map(str::to_string)).unwrap_or_default()
+            );
+            out.push_str("    <item>\n");
+            out.push_str(&format!("      <title>{}</title>\n", esc(&text("title").unwrap_or_default())));
+            out.push_str(&format!("      <link>{}</link>\n      <guid>{}</guid>\n", esc(&url), esc(&url)));
+            let date = it
+                .get_attr("date")
+                .ok()
+                .and_then(|d| eval::parse_date(&d.to_string()));
+            if let Some(d) = date {
+                out.push_str(&format!(
+                    "      <pubDate>{}</pubDate>\n",
+                    d.format("%a, %d %b %Y %H:%M:%S GMT")
+                ));
+            }
+            let summary = ["description", "excerpt", "summary", "chapeau", "intro"]
+                .iter()
+                .find_map(|k| text(k))
+                .map(|s| {
+                    let t = strip.replace_all(&s, "").trim().to_string();
+                    if t.chars().count() > 300 {
+                        t.chars().take(300).collect::<String>()
+                    } else {
+                        t
+                    }
+                });
+            if let Some(sm) = summary {
+                out.push_str(&format!("      <description>{}</description>\n", esc(&sm)));
+            }
+            out.push_str("    </item>\n");
+        }
+        out.push_str("  </channel>\n</rss>\n");
+        files.push(OutputFile {
+            path: f.path.trim_start_matches('/').to_string(),
+            bytes: out.into_bytes(),
+        });
+    }
+    Ok(())
 }
 
 /// Scripts du site utilisés par au moins une page (produits une fois pour le site).
@@ -406,6 +540,8 @@ pub(crate) fn insert_before(html: &str, tag: &str, code: &str, at_end: bool) -> 
 
 /// Dernières retouches d'une page HTML : `noindex`, typographie, langues, code ajouté.
 fn finish_html(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String {
+    let html = page_look(site, j, html);
+    let html = seo_meta(site, j, html);
     let html = noindex_meta(j, html);
     let html = stylesheet_link(site, html);
     // Typographie française : pour la langue principale et les autres langues françaises.
@@ -654,6 +790,224 @@ fn stylesheet_link(site: &Site, html: String) -> String {
         html::escape(&sheet.url)
     );
     insert_before(&html, "</head>", &link, false)
+}
+
+/// Texte d'une variable de la page (chaîne non vide).
+fn data_text(data: &BTreeMap<String, Value>, key: &str) -> Option<String> {
+    data.get(key)
+        .and_then(|v| v.as_str().map(str::to_string))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Liens vers la page affichée : `aria-current="page"` (état « Page actuelle » des styles), comme
+/// la classe `w--current` de Webflow. Avec `data-revel-current="section"`, aussi sur les pages
+/// dont l'adresse commence par celle du lien (sauf l'accueil). Le réglage n'est pas publié.
+fn mark_current(html: &str, url: &str) -> String {
+    if !html.contains("<a ") {
+        return html.to_string();
+    }
+    let tag_re = regex::Regex::new(r"(?s)<a\s[^>]*>").expect("regex");
+    let href_re = regex::Regex::new(r#"\shref="([^"]*)""#).expect("regex");
+    let section_re = regex::Regex::new(r#"\s+data-revel-current="[^"]*""#).expect("regex");
+    tag_re
+        .replace_all(html, |c: &regex::Captures| {
+            let tag = &c[0];
+            let section = tag.contains(r#"data-revel-current="section""#);
+            let mut out = section_re.replace_all(tag, "").into_owned();
+            if out.contains(" aria-current=") {
+                return out;
+            }
+            let Some(h) = href_re.captures(&out) else {
+                return out;
+            };
+            let path = h[1]
+                .replace("&amp;", "&")
+                .split(['?', '#'])
+                .next()
+                .unwrap_or_default()
+                .to_string();
+            if !path.starts_with('/') || path.starts_with("//") {
+                return out;
+            }
+            let hit = path == url || (section && path != "/" && url.starts_with(&path));
+            if hit {
+                let at = if out.ends_with("/>") { out.len() - 2 } else { out.len() - 1 };
+                out.insert_str(at, r#" aria-current="page""#);
+            }
+            out
+        })
+        .into_owned()
+}
+
+/// Apparence de la page réglée dans ses paramètres : classe du corps de page (ajoutée aux
+/// classes de `<body>`) et thème (`data-theme` de `<html>`) ; sinon ceux de son gabarit (puis du
+/// gabarit parent).
+fn page_look(site: &Site, j: &Job, html: String) -> String {
+    let mut html = mark_current(&html, &j.url);
+    let look = |key: &str| {
+        data_text(&j.data, key).or_else(|| {
+            let mut at = j.layout.clone();
+            let mut seen = 0;
+            while let Some(id) = at.take() {
+                let l = site.layouts.iter().find(|l| l.id == id)?;
+                if let Some(v) = l
+                    .props
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                {
+                    return Some(v);
+                }
+                seen += 1;
+                if seen > 16 {
+                    break;
+                }
+                at = l.parent.clone();
+            }
+            None
+        })
+    };
+    if let Some(cls) = look("bodyClass") {
+        html = add_attr_class(&html, "body", &cls);
+    }
+    if let Some(theme) = look("theme") {
+        html = set_attr(&html, "html", "data-theme", &theme);
+    }
+    html
+}
+
+/// Première balise `<tag …>` : position de son début et de sa fin (`>`).
+fn open_tag(html: &str, tag: &str) -> Option<(usize, usize)> {
+    let lower = html.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(i) = lower[from..].find(&format!("<{tag}")) {
+        let at = from + i;
+        let next = lower.as_bytes().get(at + tag.len() + 1).copied();
+        if matches!(next, Some(b' ' | b'>' | b'\n' | b'\t' | b'\r')) {
+            let end = at + html[at..].find('>')?;
+            return Some((at, end));
+        }
+        from = at + 1;
+    }
+    None
+}
+
+/// Classes ajoutées à la première balise `tag` (sans doublon).
+fn add_attr_class(html: &str, tag: &str, cls: &str) -> String {
+    let Some((start, end)) = open_tag(html, tag) else {
+        return html.to_string();
+    };
+    let head = &html[start..end];
+    let re = regex::Regex::new(r#"\sclass="([^"]*)""#).expect("regex");
+    let new_head = match re.captures(head) {
+        Some(c) => {
+            let mut list: Vec<String> = c[1].split_whitespace().map(str::to_string).collect();
+            for x in cls.split_whitespace() {
+                if !list.iter().any(|y| y == x) {
+                    list.push(x.to_string());
+                }
+            }
+            re.replace(head, format!(" class=\"{}\"", list.join(" ")).as_str())
+                .into_owned()
+        }
+        None => format!("{head} class=\"{}\"", escape_attr_value(cls)),
+    };
+    format!("{}{new_head}{}", &html[..start], &html[end..])
+}
+
+/// Attribut de la première balise `tag` remplacé ou ajouté.
+fn set_attr(html: &str, tag: &str, name: &str, value: &str) -> String {
+    let Some((start, end)) = open_tag(html, tag) else {
+        return html.to_string();
+    };
+    let head = &html[start..end];
+    let re = regex::Regex::new(&format!(r#"\s{}="[^"]*""#, regex::escape(name))).expect("regex");
+    let attr = format!(" {name}=\"{}\"", escape_attr_value(value));
+    let new_head = if re.is_match(head) {
+        re.replace(head, attr.as_str()).into_owned()
+    } else {
+        format!("{head}{attr}")
+    };
+    format!("{}{new_head}{}", &html[..start], &html[end..])
+}
+
+fn escape_attr_value(v: &str) -> String {
+    v.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;")
+}
+
+/// Référencement écrit par Revel quand le gabarit ne l'écrit pas (comme Webflow) : description,
+/// adresse officielle, aperçu de partage (Open Graph, X) tirés des paramètres de la page et du
+/// site.
+fn seo_meta(site: &Site, j: &Job, html: String) -> String {
+    let lower = html.to_ascii_lowercase();
+    let Some(head_end) = lower.find("</head") else {
+        return html;
+    };
+    let has = |needle: &str| lower[..head_end].contains(needle);
+    let seo = j.data.get("seo");
+    let seo_text = |k: &str| {
+        seo.and_then(|v| v.get_attr(k).ok())
+            .and_then(|v| v.as_str().map(|s| s.trim().to_string()))
+            .filter(|s| !s.is_empty())
+    };
+    let site_text = |k: &str| {
+        site.data
+            .get("site")
+            .and_then(|s| s.get(k))
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    let title = seo_text("title").or_else(|| data_text(&j.data, "title"));
+    let description = seo_text("description")
+        .or_else(|| data_text(&j.data, "description"))
+        .or_else(|| site_text("description"));
+    let base = site
+        .base_url
+        .clone()
+        .or_else(|| site_text("url"))
+        .unwrap_or_default();
+    let base = base.trim_end_matches('/');
+    let url = (!base.is_empty()).then(|| format!("{base}{}", j.url));
+    let image = seo_text("image")
+        .or_else(|| data_text(&j.data, "cover"))
+        .or_else(|| site_text("share_image"))
+        .map(|i| {
+            if i.starts_with("http") || base.is_empty() {
+                i
+            } else {
+                format!("{base}/{}", i.trim_start_matches('/'))
+            }
+        });
+    let mut tags = String::new();
+    let mut add = |cond: bool, tag: String| {
+        if cond {
+            tags.push_str(&tag);
+        }
+    };
+    let e = escape_attr_value;
+    if let Some(d) = &description {
+        add(!has("name=\"description\""), format!("<meta name=\"description\" content=\"{}\">", e(d)));
+        add(!has("og:description"), format!("<meta property=\"og:description\" content=\"{}\">", e(d)));
+    }
+    if let Some(t) = &title {
+        add(!has("og:title"), format!("<meta property=\"og:title\" content=\"{}\">", e(t)));
+    }
+    if let Some(u) = &url {
+        add(!has("rel=\"canonical\""), format!("<link rel=\"canonical\" href=\"{}\">", e(u)));
+        add(!has("og:url"), format!("<meta property=\"og:url\" content=\"{}\">", e(u)));
+    }
+    if let Some(i) = &image {
+        add(!has("og:image"), format!("<meta property=\"og:image\" content=\"{}\">", e(i)));
+        add(!has("twitter:card"), "<meta name=\"twitter:card\" content=\"summary_large_image\">".to_string());
+    }
+    add(!has("og:type"), format!("<meta property=\"og:type\" content=\"{}\">", if j.collection.is_some() { "article" } else { "website" }));
+    if tags.is_empty() {
+        return html;
+    }
+    format!("{}{tags}{}", &html[..head_end], &html[head_end..])
 }
 
 /// Page `noindex` : balise `<meta name="robots" content="noindex">` ajoutée dans `<head>` si le

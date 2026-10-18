@@ -29,6 +29,112 @@ fn info(s: DocSession) -> Option<Info> {
     })
 }
 
+/// Flux RSS : un interrupteur par collection, l'adresse du flux et le nombre de contenus.
+fn feeds_section(ui: Ui, s: DocSession) -> AnyView {
+    let Some((cols, feeds)) = s.doc.with(|d| {
+        d.as_ref().map(|d| {
+            (
+                d.collections.iter().map(|c| c.id.clone()).collect::<Vec<_>>(),
+                d.settings.feeds.clone(),
+            )
+        })
+    }) else {
+        return ().into_any();
+    };
+    if cols.is_empty() {
+        return view! { <p class="muted">{ui.t("settings-feeds-none")}</p> }.into_any();
+    }
+    let feeds = StoredValue::new(feeds);
+    // Remplace (ou retire) le flux d'une collection.
+    let put = move |id: String, f: Option<revel_model::FeedSettings>| {
+        let mut all = feeds.get_value();
+        match all.iter().position(|x| x.collection == id) {
+            Some(i) => match f {
+                Some(f) => all[i] = f,
+                None => {
+                    all.remove(i);
+                }
+            },
+            None => all.extend(f),
+        }
+        s.apply.run(Command::SetFeeds { feeds: all });
+    };
+    let rows = cols
+        .into_iter()
+        .map(|id| {
+            let cur = feeds.with_value(|all| all.iter().find(|f| f.collection == id).cloned());
+            let label = crate::pagetree::label_of(&id);
+            let (id1, id2, id3) = (id.clone(), id.clone(), id.clone());
+            let default_path = if feeds.with_value(|a| a.is_empty()) {
+                "/feed.xml".to_string()
+            } else {
+                format!("/{id}/feed.xml")
+            };
+            let on = cur.is_some();
+            let detail = cur.map(|f| {
+                let (f1, f2, f3, f4) = (f.clone(), f.clone(), f.clone(), f.clone());
+                let (id4, id5) = (id.clone(), id.clone());
+                let text = move |base: &revel_model::FeedSettings, v: String, desc: bool| {
+                    let mut f = base.clone();
+                    let v = Some(v.trim().to_string()).filter(|v| !v.is_empty());
+                    if desc { f.description = v } else { f.title = v }
+                    f
+                };
+                view! {
+                    <label class="label label--sub" for=format!("feed-title-{id}")>{ui.t("settings-feed-title")}</label>
+                    <input id=format!("feed-title-{id}") class="input" placeholder=ui.t("settings-feed-site")
+                        prop:value=f.title.clone().unwrap_or_default()
+                        on:change=move |e| put(id4.clone(), Some(text(&f3, event_target_value(&e), false)))/>
+                    <label class="label label--sub" for=format!("feed-desc-{id}")>{ui.t("settings-feed-description")}</label>
+                    <input id=format!("feed-desc-{id}") class="input" placeholder=ui.t("settings-feed-site-desc")
+                        prop:value=f.description.clone().unwrap_or_default()
+                        on:change=move |e| put(id5.clone(), Some(text(&f4, event_target_value(&e), true)))/>
+                    <label class="label label--sub" for=format!("feed-path-{id}")>{ui.t("settings-feed-path")}</label>
+                    <input id=format!("feed-path-{id}") class="input input--mono" spellcheck="false"
+                        prop:value=f.path.clone()
+                        on:change=move |e| {
+                            let mut v = event_target_value(&e).trim().to_string();
+                            if !v.starts_with('/') { v.insert(0, '/') }
+                            if !v.ends_with(".xml") { v.push_str(".xml") }
+                            let mut f = f1.clone();
+                            f.path = v;
+                            put(id2.clone(), Some(f));
+                        }/>
+                    <label class="label label--sub" for=format!("feed-limit-{id}")>{ui.t("settings-feed-limit")}</label>
+                    <input id=format!("feed-limit-{id}") class="input input--narrow" type="number" min="1" max="500"
+                        prop:value=f.limit.unwrap_or(20).to_string()
+                        on:change=move |e| {
+                            let n = event_target_value(&e).trim().parse::<usize>().ok().filter(|n| *n > 0);
+                            let mut f = f2.clone();
+                            f.limit = n.filter(|n| *n != 20);
+                            put(id3.clone(), Some(f));
+                        }/>
+                }
+            });
+            view! {
+                <span class="label">{label}</span>
+                <span class="switch">
+                    <input type="checkbox" aria-label=ui.t("settings-feeds") prop:checked=on
+                        on:change=move |e| {
+                            let f = event_target_checked(&e).then(|| revel_model::FeedSettings {
+                                collection: id1.clone(),
+                                path: default_path.clone(),
+                                title: None,
+                                description: None,
+                                link: None,
+                                limit: None,
+                            });
+                            put(id1.clone(), f);
+                        }/>
+                    <span class="switch-track"></span>
+                </span>
+                {detail}
+            }
+        })
+        .collect_view();
+    view! { <div class="form-grid">{rows}</div> }.into_any()
+}
+
 /// Paramètres généraux : identité modifiable, structure, environnements.
 #[component]
 pub fn General(site: SiteSummary) -> impl IntoView {
@@ -161,6 +267,10 @@ pub fn General(site: SiteSummary) -> impl IntoView {
                     <span class="label">{ui.t("settings-site-folder")}</span>
                     <span class="muted path">{move || fresh.with(|s| s.path.clone())}</span>
                 </div>
+            </div>
+            <div class="section">
+                <h2 title=ui.t("settings-feeds-help")>{ui.t("settings-feeds")}</h2>
+                {move || feeds_section(ui, s)}
             </div>
             <div class="section">
                 <h2>{ui.t("overview-structure")}</h2>

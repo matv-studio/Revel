@@ -468,6 +468,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     true,
                 ),
                 item(
+                    Preset::VideoPlayer,
+                    "insert-video-player",
+                    "insert-help-video-player",
+                    "insert-text-video-player",
+                    icons::play,
+                    "figure",
+                    true,
+                ),
+                item(
                     Preset::Icon,
                     "insert-icon",
                     "insert-help-icon",

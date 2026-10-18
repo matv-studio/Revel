@@ -126,7 +126,7 @@ pub fn collections(ed: Ed) -> Vec<CollectionInfo> {
 }
 
 /// Libellé d'une collection (`projets` -> `Projets`).
-fn label_of(id: &str) -> String {
+pub(crate) fn label_of(id: &str) -> String {
     let mut c = id.chars();
     c.next()
         .map(|f| f.to_uppercase().collect::<String>() + c.as_str())

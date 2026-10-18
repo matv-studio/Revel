@@ -880,6 +880,7 @@ impl Ed {
                     | Command::SetSeoSettings { .. }
                     | Command::SetFormSettings { .. }
                     | Command::SetPageTransition { .. }
+                    | Command::SetFeeds { .. }
             ) {
                 // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.
             } else if style_only(cmd) {

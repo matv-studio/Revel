@@ -360,6 +360,30 @@ pub struct Settings {
     /// aucune.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page_transition: Option<String>,
+    /// Flux RSS des collections (abonnement aux actualités), produits à la génération.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub feeds: Vec<FeedSettings>,
+}
+
+/// Flux RSS d'une collection : derniers contenus publiés (titre, adresse, date, résumé).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FeedSettings {
+    /// Collection (identifiant).
+    pub collection: String,
+    /// Adresse du flux (`/feed.xml`).
+    pub path: String,
+    /// Titre du flux ; sinon le nom du site.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Description du flux ; sinon celle du site.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Page de la liste (adresse) ; sinon l'accueil.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
+    /// Nombre de contenus (20 par défaut).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
 }
 
 /// Formulaires du site (5.8) : les messages des `<form data-revel-form>` sont transmis par

@@ -35,6 +35,8 @@ const STATES: &[(&str, &str)] = &[
     (":hover", "styles-state-hover"),
     (":active", "styles-state-active"),
     (":focus-visible", "styles-state-focus"),
+    // Lien vers la page affichée (marqué à la génération).
+    ("[aria-current=\"page\"]", "styles-state-current"),
 ];
 
 /// Classes littérales de l'élément ou de l'image (pas d'expression). Les champs d'une image
@@ -48,15 +50,56 @@ pub(crate) fn classes_of(n: &Node) -> Vec<String> {
         Node::Image(img) => img.class.as_deref().and_then(revel_edit::canvas::literal),
         _ => None,
     };
-    value
-        .filter(|v| !v.contains("{{") && !v.contains("{%"))
-        .map(|v| v.split_whitespace().map(str::to_string).collect())
-        .unwrap_or_default()
+    let Some(v) = value else {
+        return Vec::new();
+    };
+    // Classes ajoutées selon un champ : avec les autres (réglables en classes combinées).
+    if v.contains("{%") {
+        return revel_edit::style::cond_classes(&v)
+            .map(|(base, conds)| {
+                base.split_whitespace()
+                    .map(str::to_string)
+                    .chain(conds.into_iter().flat_map(|(_, c)| {
+                        c.split_whitespace().map(str::to_string).collect::<Vec<_>>()
+                    }))
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+    if v.contains("{{") {
+        return Vec::new();
+    }
+    v.split_whitespace().map(str::to_string).collect()
 }
 
 /// Commande qui remplace les classes d'un élément ou d'une image (`None` : plus de classe).
 pub(crate) fn class_command(at: revel_edit::Target, n: &Node, list: &[String]) -> Option<Command> {
-    let value = (!list.is_empty()).then(|| list.join(" "));
+    // Classes ajoutées selon un champ gardées telles quelles ; les autres réécrites.
+    let conds = match n {
+        Node::Element { attrs, .. } => attrs
+            .iter()
+            .find(|a| a.name == "class")
+            .and_then(|a| a.value.as_deref())
+            .filter(|v| v.contains("{%"))
+            .and_then(revel_edit::style::cond_classes)
+            .map(|(_, c)| c)
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    let base: Vec<&str> = list
+        .iter()
+        .map(String::as_str)
+        .filter(|c| {
+            !conds
+                .iter()
+                .any(|(_, x)| x.split_whitespace().any(|y| y == *c))
+        })
+        .collect();
+    let mut value = base.join(" ");
+    for (cond, cls) in &conds {
+        value.push_str(&format!("{{% if {cond} %}} {cls}{{% endif %}}"));
+    }
+    let value = (!value.trim().is_empty()).then_some(value);
     match n {
         Node::Element { .. } => Some(Command::SetAttr {
             at,

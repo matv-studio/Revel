@@ -1,11 +1,11 @@
 /* Interactions entre éléments (6.3) : attribut `data-revel-on` de l'élément déclencheur,
    « déclencheur action élément » séparés par des points-virgules (voir revel-edit, actions.rs) ;
    onglets (`data-revel-tabs`) : un bouton `data-revel-tab` par panneau `data-revel-panel` ;
-   carrousels et diaporamas (`data-revel-slider`).
+   carrousels et diaporamas (`data-revel-slider`), lecteurs vidéo (`data-revel-video`).
    Sans JavaScript, la page reste lisible : rien n'est masqué d'avance par le script. */
 (function () {
   var css = document.createElement("style");
-  css.textContent = ".rv-hide{display:none!important}";
+  css.textContent = ".rv-hide{display:none!important}.rv-video{display:block;width:100%;height:100%;border:0}";
   document.head.appendChild(css);
   var store = {
     get: function (k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
@@ -185,6 +185,41 @@
       }, secs * 1000);
     }
   }
+  // Lecteur vidéo (`data-revel-video="<adresse>"`) : l'appui sur `data-revel-play` (couverture)
+  // met la vidéo à sa place, lancée : YouTube (sans cookies), Vimeo (sans suivi) ou fichier.
+  function player(url, label) {
+    var yt = url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
+    var vm = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
+    var el;
+    if (yt || vm) {
+      el = document.createElement("iframe");
+      el.src = yt
+        ? "https://www.youtube-nocookie.com/embed/" + yt[1] + "?autoplay=1&rel=0"
+        : "https://player.vimeo.com/video/" + vm[1] + "?autoplay=1&dnt=1";
+      el.setAttribute("allow", "autoplay; fullscreen; picture-in-picture");
+      el.setAttribute("allowfullscreen", "");
+      el.title = label;
+    } else {
+      el = document.createElement("video");
+      el.src = url;
+      el.controls = true;
+      el.autoplay = true;
+      el.playsInline = true;
+    }
+    el.className = "rv-video";
+    return el;
+  }
+  function video(box) {
+    var btn = box.querySelector("[data-revel-play]");
+    var url = (box.getAttribute("data-revel-video") || "").trim();
+    if (!btn || !url) return;
+    btn.addEventListener("click", function () {
+      var el = player(url, btn.getAttribute("aria-label") || "Video");
+      btn.parentNode.replaceChild(el, btn);
+      box.classList.add("is-playing");
+      if (el.focus) el.focus();
+    });
+  }
   function all() {
     var els = document.querySelectorAll("[data-revel-on]");
     for (var i = 0; i < els.length; i++) {
@@ -195,6 +230,8 @@
     for (var j = 0; j < t.length; j++) tabs(t[j]);
     var sl = document.querySelectorAll("[data-revel-slider]");
     for (var k = 0; k < sl.length; k++) slider(sl[k]);
+    var vs = document.querySelectorAll("[data-revel-video]");
+    for (var v = 0; v < vs.length; v++) video(vs[v]);
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", all);
   else all();

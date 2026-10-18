@@ -178,8 +178,8 @@ impl Ctx {
         }
         // Classe ajoutée selon un champ ou une propriété : `carte{% if x %} carte--y{% endif %}`.
         if name == "class" && v.contains("{%") && !v.contains("{{") {
-            return conditional_classes(v)
-                .is_some_and(|conds| conds.iter().all(|c| self.condition(c)));
+            return crate::style::cond_classes(v)
+                .is_some_and(|(_, conds)| conds.iter().all(|(c, _)| self.condition(c)));
         }
         let Some(e) = inner(v) else { return false };
         self.field(&e)
@@ -214,32 +214,6 @@ impl Ctx {
 /// Expression sans espaces (comparaison de formes).
 fn squash(e: &str) -> String {
     e.chars().filter(|c| !c.is_whitespace()).collect()
-}
-
-/// Conditions d'une classe ajoutée selon un champ : `a{% if x %} b{% endif %}` -> `["x"]` ;
-/// `None` pour une autre forme (sinon, expression…).
-pub fn conditional_classes(v: &str) -> Option<Vec<String>> {
-    let mut conds = Vec::new();
-    let mut rest = v;
-    while let Some(i) = rest.find("{%") {
-        let after = &rest[i + 2..];
-        let j = after.find("%}")?;
-        let tag = after[..j].trim().trim_matches('-').trim();
-        let cond = tag.strip_prefix("if ")?.trim().to_string();
-        let body_start = &after[j + 2..];
-        let k = body_start.find("{%")?;
-        let end = body_start[k + 2..]
-            .trim_start()
-            .trim_start_matches('-')
-            .trim_start();
-        if !end.starts_with("endif") {
-            return None;
-        }
-        let close = body_start[k..].find("%}")?;
-        conds.push(cond);
-        rest = &body_start[k + close + 2..];
-    }
-    (!conds.is_empty()).then_some(conds)
 }
 
 struct Audit<'a> {

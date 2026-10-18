@@ -126,6 +126,9 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
   align-items: center;
   gap: var(--s-3) var(--s-4);
 }
+/* Réglage subordonné à la ligne au-dessus (flux d'une collection) */
+.form-grid .label--sub { padding-left: var(--s-4); color: var(--text-muted); }
+.form-grid .input--narrow { max-width: 96px; }
 /* Formulaire en colonnes de champs empilés */
 .form-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3) var(--s-4); }
 

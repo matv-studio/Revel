@@ -197,6 +197,9 @@ pub enum Preset {
     /// Barre de navigation : marque, liens, bouton « Menu » qui ouvre les liens sur tablette et
     /// téléphone (Navbar de Webflow).
     Navbar,
+    /// Lecteur vidéo : image de couverture et bouton de lecture ; l'appui lance la vidéo
+    /// (YouTube, Vimeo ou fichier) à leur place, comme le composant YouTube de Framer.
+    VideoPlayer,
 }
 
 impl Preset {
@@ -216,7 +219,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 31] = [
+    pub const ALL: [Preset; 32] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -248,6 +251,7 @@ impl Preset {
         Preset::Carousel,
         Preset::Slideshow,
         Preset::Navbar,
+        Preset::VideoPlayer,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -397,6 +401,57 @@ impl Preset {
                     ".langue[aria-current=\"page\"]",
                     vec![("opacity", "1"), ("font-weight", "600")],
                 ),
+            ],
+            Preset::VideoPlayer => vec![
+                (
+                    ".lecteur",
+                    vec![
+                        ("position", "relative"),
+                        ("margin", "0"),
+                        ("aspect-ratio", "16 / 9"),
+                        ("overflow", "hidden"),
+                        ("background-color", "#000000"),
+                    ],
+                ),
+                (
+                    ".lecteur__couverture",
+                    vec![
+                        ("display", "block"),
+                        ("position", "relative"),
+                        ("width", "100%"),
+                        ("height", "100%"),
+                        ("padding", "0"),
+                        ("border", "0"),
+                        ("background", "none"),
+                        ("color", "#ffffff"),
+                        ("cursor", "pointer"),
+                    ],
+                ),
+                (
+                    ".lecteur__image",
+                    vec![
+                        ("display", "block"),
+                        ("width", "100%"),
+                        ("height", "100%"),
+                        ("object-fit", "cover"),
+                    ],
+                ),
+                (
+                    ".lecteur__bouton",
+                    vec![
+                        ("position", "absolute"),
+                        ("top", "50%"),
+                        ("left", "50%"),
+                        ("display", "grid"),
+                        ("place-items", "center"),
+                        ("width", "72px"),
+                        ("height", "72px"),
+                        ("border-radius", "50%"),
+                        ("background-color", "rgba(0, 0, 0, 0.6)"),
+                        ("transform", "translate(-50%, -50%)"),
+                    ],
+                ),
+                (".lecteur__bouton svg", vec![("width", "32px"), ("height", "32px")]),
             ],
             Preset::Ticker => vec![
                 (
@@ -734,6 +789,54 @@ impl Preset {
                     html: format!("<p>{}</p>", html_escape(text)),
                 }],
             ),
+            Preset::VideoPlayer => {
+                let flag = |n: &str| Attr {
+                    name: n.into(),
+                    value: None,
+                    when: None,
+                };
+                let (fig, btn, img, icon, svg, path) = (id(), id(), id(), id(), id(), id());
+                el(
+                    fig,
+                    "figure",
+                    vec![attr("class", "lecteur"), attr("data-revel-video", "")],
+                    vec![el(
+                        btn,
+                        "button",
+                        vec![
+                            attr("class", "lecteur__couverture"),
+                            attr("type", "button"),
+                            attr("aria-label", text),
+                            flag("data-revel-play"),
+                        ],
+                        vec![
+                            Node::Image(ImageNode {
+                                id: img,
+                                src: "\"\"".into(),
+                                alt: Some("\"\"".into()),
+                                class: Some("\"lecteur__image\"".into()),
+                                ..Default::default()
+                            }),
+                            el(
+                                icon,
+                                "span",
+                                vec![attr("class", "lecteur__bouton"), attr("aria-hidden", "true")],
+                                vec![el(
+                                    svg,
+                                    "svg",
+                                    vec![attr("viewBox", "0 0 24 24")],
+                                    vec![el(
+                                        path,
+                                        "path",
+                                        vec![attr("d", "M8 5v14l11-7z"), attr("fill", "currentColor")],
+                                        vec![],
+                                    )],
+                                )],
+                            ),
+                        ],
+                    )],
+                )
+            }
             Preset::Ticker => {
                 let items = (1..=4)
                     .map(|n| {

@@ -458,6 +458,7 @@ fn preset_text(p: revel_edit::make::Preset, locale: &str) -> String {
         P::Navbar => "insert-text-navbar",
         P::Ticker => "insert-text-ticker",
         P::Carousel | P::Slideshow => "insert-text-slider",
+        P::VideoPlayer => "insert-text-video-player",
         _ => return String::new(),
     };
     revel_i18n::Localizer::new(locale).t(key, &[])

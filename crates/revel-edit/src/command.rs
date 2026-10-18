@@ -255,6 +255,11 @@ pub enum Command {
         #[serde(default)]
         transition: Option<String>,
     },
+    /// Flux RSS des collections (adresse en `.xml`, collection existante).
+    SetFeeds {
+        #[serde(default)]
+        feeds: Vec<revel_model::FeedSettings>,
+    },
     /// Identité du site (3.9) : nom, adresse publique (`https://…`, sans `/` final ; vide :
     /// aucune), langue principale (code valide, différent des autres langues), typographie
     /// (`fr` ou aucune).
@@ -1166,6 +1171,19 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                     &mut site.settings.page_transition,
                     transition.clone(),
                 ),
+            })
+        }
+        Command::SetFeeds { feeds } => {
+            for f in feeds {
+                if !f.path.starts_with('/')
+                    || !f.path.ends_with(".xml")
+                    || !site.collections.iter().any(|c| c.id == f.collection)
+                {
+                    return Err(EditError::WrongKind(f.path.clone()));
+                }
+            }
+            Ok(Command::SetFeeds {
+                feeds: std::mem::replace(&mut site.settings.feeds, feeds.clone()),
             })
         }
         Command::SetFormSettings { forms } => {

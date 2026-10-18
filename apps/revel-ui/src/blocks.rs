@@ -3,7 +3,7 @@
 //! éléments d'une liste reliés aux champs du contenu (texte, image, lien).
 
 use crate::editor::Ed;
-use crate::{Ui, api};
+use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_edit::collection::{FieldList, Query};
@@ -59,6 +59,14 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         }
         if attr(attrs, "data-lottie").is_some() {
             parts.push(lottie_options(ui, ed, at.clone(), attrs.clone()));
+        }
+        if let Some(v) = attr(attrs, "data-revel-video") {
+            parts.push(video_player_options(
+                ui,
+                ed,
+                at.clone(),
+                v.value.clone().unwrap_or_default(),
+            ));
         }
         // Défilement (animation en boucle « ticker »), carrousel et diaporama.
         if attr(attrs, "data-revel-loop")
@@ -235,6 +243,54 @@ fn video_options(ui: Ui, ed: Ed, at: Target, attrs: Vec<Attr>) -> AnyView {
             {row("block-video-controls", &["controls"], has("controls"))}
             {row("block-video-autoplay", &["autoplay", "muted", "playsinline"], has("autoplay"))}
             {row("block-video-loop", &["loop"], has("loop"))}
+        </div>
+    }
+    .into_any()
+}
+
+// ------------------------------------------------------------------ lecteur vidéo
+
+/// Lecteur vidéo : adresse YouTube, Vimeo ou fichier du site (`data-revel-video`), lancée à
+/// l'appui sur la couverture (image et bouton : calques ordinaires).
+fn video_player_options(ui: Ui, ed: Ed, at: Target, url: String) -> AnyView {
+    let at = StoredValue::new(at);
+    let set = move |v: String| {
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at: at.get_value(),
+                name: "data-revel-video".into(),
+                value: Some(v.trim().to_string()),
+            },
+            false,
+        );
+    };
+    let pick = move || crate::library::pick_media(ui, false, crate::library::media_shelf(ed), set);
+    let kind = if url.contains("youtu") {
+        "YouTube"
+    } else if url.contains("vimeo.com") {
+        "Vimeo"
+    } else if url.is_empty() {
+        ""
+    } else {
+        "file"
+    };
+    view! {
+        <div class="insp-group">
+            <p class="panel-title">{ui.t("block-video-player")}</p>
+            <div class="field">
+                <span class="label" title=ui.t("block-video-player-help")>{ui.t("block-video-player-url")}</span>
+                <span class="field-line">
+                    <input class="input input--mono" spellcheck="false" prop:value=url.clone()
+                        placeholder="https://www.youtube.com/watch?v=…"
+                        on:change=move |e| set(event_target_value(&e))/>
+                    <button type="button" class="icon-btn icon-btn--small" title=ui.t("block-video-player-file")
+                        aria-label=ui.t("block-video-player-file") on:click=move |_| pick()>{crate::icons::play()}</button>
+                </span>
+            </div>
+            {(!kind.is_empty()).then(|| view! {
+                <p class="muted small">{if kind == "file" { ui.tx("block-video-player-file", &[]) } else { kind.to_string() }}</p>
+            })}
         </div>
     }
     .into_any()
@@ -620,6 +676,75 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     let has_filter = !filter_field.is_empty();
     let has_sort = !sort_field.is_empty();
     let (ff, sf) = (filter_field.clone(), sort_field.clone());
+    // Contenus choisis à la main (ordre affiché) : contenus de la collection proposés par titre.
+    let picked = q.with_value(|q| q.pick.clone());
+    let picking = RwSignal::new(!picked.is_empty());
+    let entries = RwSignal::new(Vec::<revel_protocol::PickEntry>::new());
+    {
+        let col = q.with_value(|q| q.collection.clone());
+        let path = ed.path.get_value();
+        spawn_local(async move {
+            if let Ok(d) = crate::api::readable_data(&path, &[], &[col]).await {
+                let _ = entries.try_set(d.entries);
+            }
+        });
+    }
+    let picked = StoredValue::new(picked);
+    let set_pick = move |v: Vec<String>| write(Box::new(move |q| q.pick = v.clone()));
+    let pick_view = move || {
+        picking.get().then(|| {
+            let list = picked.get_value();
+            let n = list.len();
+            view! {
+                <ul class="pick-list list-picks">
+                    {list.into_iter().enumerate().map(|(i, slug)| {
+                        let title = entries.with(|es| es.iter().find(|e| e.slug == slug).map(|e| e.title.clone()));
+                        let missing = title.is_none();
+                        let shift = move |d: isize| {
+                            let mut all = picked.get_value();
+                            let j = i as isize + d;
+                            if j >= 0 && (j as usize) < all.len() {
+                                all.swap(i, j as usize);
+                                set_pick(all);
+                            }
+                        };
+                        view! {
+                            <li class="pick-item" class:is-missing=missing title=slug.clone()>
+                                <span class="pick-title">{title.unwrap_or_else(|| slug.clone())}</span>
+                                <button class="icon-btn icon-btn--small" title=ui.t("layers-up") aria-label=ui.t("layers-up")
+                                    disabled=i == 0 on:click=move |_| shift(-1)>{icons::arrow_up()}</button>
+                                <button class="icon-btn icon-btn--small" title=ui.t("layers-down") aria-label=ui.t("layers-down")
+                                    disabled=i + 1 == n on:click=move |_| shift(1)>{icons::arrow_down()}</button>
+                                <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
+                                    on:click=move |_| { let mut all = picked.get_value(); all.remove(i); set_pick(all); }>{icons::close()}</button>
+                            </li>
+                        }
+                    }).collect_view()}
+                </ul>
+                <div class="select pick-add">
+                    <select class="input" aria-label=ui.t("picks-add") on:change=move |e| {
+                        let v = event_target_value(&e);
+                        if !v.is_empty() {
+                            let mut all = picked.get_value();
+                            all.push(v);
+                            set_pick(all);
+                        }
+                    }>
+                        <option value="" selected=true>{ui.t("picks-add")}</option>
+                        {move || entries.with(|es| es.iter()
+                            .filter(|e| !picked.with_value(|p| p.contains(&e.slug)))
+                            .map(|e| view! { <option value=e.slug.clone()>{e.title.clone()}</option> })
+                            .collect_view())}
+                    </select>
+                </div>
+            }
+        })
+    };
+    // Filtre « contient » (champ liste, comme « Projets dont les expertises contiennent la page
+    // affichée ») : sur la page d'un contenu, la page affichée ; sinon une valeur écrite.
+    let contains = q.with_value(|q| q.contains.clone());
+    let contains_field = contains.as_ref().map(|c| c.0.clone()).unwrap_or_default();
+    let contains_value = contains.map(|c| c.1).unwrap_or_default();
     view! {
         <div class="insp-group collection-list">
             <p class="panel-title">{ui.t("block-list")}</p>
@@ -649,6 +774,60 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                     </select>
                 </div>
             </label>
+            <label class="field" class:is-hidden=nested>
+                <span class="label">{ui.t("block-list-items")}</span>
+                <div class="select">
+                    <select class="input" on:change=move |e| {
+                        let on = event_target_value(&e) == "pick";
+                        picking.set(on);
+                        if !on {
+                            set_pick(Vec::new());
+                        }
+                    }>
+                        <option value="all" prop:selected=move || !picking.get()>{ui.t("block-list-items-all")}</option>
+                        <option value="pick" prop:selected=move || picking.get()>{ui.t("block-list-items-pick")}</option>
+                    </select>
+                </div>
+            </label>
+            {pick_view}
+            <label class="field">
+                <span class="label">{ui.t("block-list-contains")}</span>
+                <div class="select">
+                    <select class="input" title=ui.t("block-list-contains-help") on:change=move |e| {
+                        let v = event_target_value(&e);
+                        write(Box::new(move |q| {
+                            q.contains = (!v.is_empty()).then(|| (v.clone(), if on_template { "page.fileSlug".into() } else { "\"\"".into() }))
+                        }))
+                    }>
+                        <option value="" prop:selected=contains_field.is_empty()>{ui.t("block-list-contains-none")}</option>
+                        {move || fields().into_iter().filter(|(p, _)| p != "date").map(|(p, l)| {
+                            let on = p == contains_field;
+                            view! { <option value=p prop:selected=on>{l}</option> }
+                        }).collect_view()}
+                    </select>
+                </div>
+            </label>
+            {(!contains_value.is_empty()).then(|| {
+                let shown = if contains_value == "page.fileSlug" {
+                    String::new()
+                } else {
+                    revel_edit::canvas::literal(&contains_value).unwrap_or(contains_value.clone())
+                };
+                view! {
+                    <label class="field">
+                        <span class="label">{ui.t("block-list-contains-value")}</span>
+                        <input class="input" prop:value=shown placeholder=ui.t("block-list-contains-current")
+                            on:change=move |e| {
+                                let v = event_target_value(&e).trim().to_string();
+                                write(Box::new(move |q| {
+                                    if let Some(c) = q.contains.as_mut() {
+                                        c.1 = if v.is_empty() { "page.fileSlug".into() } else { revel_edit::canvas::quote(&v) };
+                                    }
+                                }))
+                            }/>
+                    </label>
+                }
+            })}
             <label class="field">
                 <span class="label">{ui.t("block-list-filter")}</span>
                 <div class="select">
@@ -776,6 +955,12 @@ pub(crate) fn enclosing_list(d: &Site, at: &Target) -> Option<(Query, String)> {
 /// Liste des valeurs d'un champ (`item.data.tags`) la plus proche qui contient le nœud : nom de
 /// sa variable (chaque valeur).
 fn enclosing_values(d: &Site, at: &Target) -> Option<String> {
+    enclosing_values_at(d, at).map(|(v, _, _)| v)
+}
+
+/// Liste des valeurs d'un champ qui contient le nœud : variable, champ (`activities`,
+/// `item.data.tags`) et boucle.
+fn enclosing_values_at(d: &Site, at: &Target) -> Option<(String, String, Target)> {
     let mut cur = at.clone();
     for _ in 0..64 {
         let (parent, _) = revel_edit::address::locate(d, &cur).ok()?;
@@ -787,10 +972,13 @@ fn enclosing_values(d: &Site, at: &Target) -> Option<String> {
         if let Ok(Node::Each { expr, item, .. }) = revel_edit::address::node(d, &t)
             && parent.branch == Branch::Children
         {
-            let item = item.trim();
-            return matches!(FieldList::parse(expr), Some(FieldList::Values { .. }))
-                .then(|| item.to_string())
-                .filter(|i| revel_model::valid_prop_name(i));
+            let item = item.trim().to_string();
+            return match FieldList::parse(expr) {
+                Some(FieldList::Values { field }) if revel_model::valid_prop_name(&item) => {
+                    Some((item, field, t))
+                }
+                _ => None,
+            };
         }
         cur = t;
     }
@@ -813,6 +1001,8 @@ struct TextBind {
     before: String,
     after: String,
     field: String,
+    /// Champ lu quand le premier est vide (`(a or b)`).
+    fallback: Option<String>,
     format: Option<String>,
     safe: bool,
     raw: Option<String>,
@@ -837,10 +1027,24 @@ fn text_bind(children: &[Node], field_of: &dyn Fn(&str) -> Option<String>) -> Op
         after: after.to_string(),
         ..Default::default()
     };
+    let mut b_fallback = None;
     let (head, tail) = match out.split_once('|') {
         Some((h, t)) => (h.trim(), Some(t.trim())),
         None => (out.trim(), None),
     };
+    // Champ, sinon un autre : `(a or b)`.
+    let inner = head
+        .strip_prefix('(')
+        .and_then(|h| h.strip_suffix(')'))
+        .unwrap_or(head);
+    let head = match inner.split(" or ").map(str::trim).collect::<Vec<_>>().as_slice() {
+        [a, b] if field_of(a).is_some() && field_of(b).is_some() => {
+            b_fallback = field_of(b);
+            *a
+        }
+        _ => head,
+    };
+    b.fallback = b_fallback;
     match (field_of(head), tail) {
         (Some(f), None) => b.field = f,
         (Some(f), Some("safe")) => {
@@ -864,7 +1068,10 @@ fn text_children(b: &TextBind, prefix: &str) -> Vec<Node> {
             text: b.before.clone(),
         });
     }
-    let mut expr = format!("{prefix}{}", b.field);
+    let mut expr = match &b.fallback {
+        Some(fb) => format!("({prefix}{} or {prefix}{fb})", b.field),
+        None => format!("{prefix}{}", b.field),
+    };
     if let Some(f) = &b.format {
         expr.push_str(" | ");
         expr.push_str(f);
@@ -1256,6 +1463,74 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let text_extra = text
         .with_value(|t| t.clone())
         .filter(|t| !t.field.is_empty() && t.raw.is_none());
+    // Classe ajoutée quand un champ est rempli (`person__photo--swap` si « Photo au survol »).
+    let class_attr = match node {
+        Node::Element { attrs, .. } => Some(
+            attr(attrs, "class")
+                .and_then(|a| a.value.clone())
+                .unwrap_or_default(),
+        ),
+        _ => None,
+    };
+    let cond_class_view = class_attr.and_then(|v| revel_edit::style::cond_classes(&v)).map(|(base, conds)| {
+        let p = prefix.get_value();
+        let (cur_field, cur_cls) = conds
+            .first()
+            .map(|(c, cls)| {
+                (
+                    c.strip_prefix(p.as_str()).unwrap_or(c).to_string(),
+                    cls.clone(),
+                )
+            })
+            .unwrap_or_default();
+        let state = StoredValue::new((base, cur_field.clone(), cur_cls.clone()));
+        let write = move |field: Option<String>, cls: Option<String>| {
+            let (base, f0, c0) = state.get_value();
+            let f = field.unwrap_or(f0);
+            let c = cls.unwrap_or(c0);
+            let p = prefix.get_value();
+            let value = if f.is_empty() || c.trim().is_empty() {
+                base.clone()
+            } else {
+                format!("{base}{{% if {p}{f} %}} {}{{% endif %}}", c.trim())
+            };
+            let cmd = if value.trim().is_empty() {
+                Command::RemoveAttr {
+                    at: at.get_value(),
+                    name: "class".into(),
+                }
+            } else {
+                Command::SetAttr {
+                    at: at.get_value(),
+                    name: "class".into(),
+                    value: Some(value),
+                }
+            };
+            ed.apply(ui, cmd, false);
+        };
+        let cf = cur_field.clone();
+        view! {
+            <div class="field-pair" data-bound="block-bound-class">
+                <label class="field">
+                    <span class="label" title=ui.t("block-bound-class-help")>{ui.t("block-bound-class")}</span>
+                    <div class="select">
+                        <select class="input" on:change=move |e| write(Some(event_target_value(&e)), None)>
+                            <option value="" prop:selected=cf.is_empty()>"—"</option>
+                            {move || all_fields().into_iter().map(|(n, l)| {
+                                let on = n == cur_field;
+                                view! { <option value=n prop:selected=on>{ui.tx("block-bound-if-set", &[("field", l)])}</option> }
+                            }).collect_view()}
+                        </select>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">{ui.t("block-bound-class-name")}</span>
+                    <input class="input input--mono" prop:value=cur_cls spellcheck="false"
+                        on:change=move |e| write(None, Some(event_target_value(&e).trim().trim_start_matches('.').to_string()))/>
+                </label>
+            </div>
+        }
+    });
     Some(
         view! {
             <div class="insp-group">
@@ -1310,7 +1585,24 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     });
                     let cur_fmt = b.format.clone().unwrap_or_default();
                     let lang = site_lang.clone();
+                    let fb = b.fallback.clone().unwrap_or_default();
+                    let main = b.field.clone();
                     view! {
+                        <label class="field" data-bound="block-bound-fallback">
+                            <span class="label" title=ui.t("block-bound-fallback-help")>{ui.t("block-bound-fallback")}</span>
+                            <div class="select">
+                                <select class="input" on:change=move |e| {
+                                    let v = event_target_value(&e);
+                                    set_text(Box::new(move |b| b.fallback = (!v.is_empty()).then(|| v.clone())));
+                                }>
+                                    <option value="" prop:selected=fb.is_empty()>"—"</option>
+                                    {move || fields(Slot::Text).into_iter().filter(|(n, _)| *n != main).map(|(n, l)| {
+                                        let on = n == fb;
+                                        view! { <option value=n prop:selected=on>{l}</option> }
+                                    }).collect_view()}
+                                </select>
+                            </div>
+                        </label>
                         {move || is_date().then(|| {
                             let cur_fmt = cur_fmt.clone();
                             let lang = lang.clone();
@@ -1349,6 +1641,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                         </div>
                     }
                 })}
+                {cond_class_view}
                 <label class="field" data-bound="block-bound-visibility">
                     <span class="label">{ui.t("block-bound-visibility")}</span>
                     <div class="select">
@@ -1385,13 +1678,58 @@ fn value_binding(ui: Ui, ed: Ed, at: &Target, node: &Node, var: String) -> Optio
     let Node::Element { children, .. } = node else {
         return None;
     };
-    let bound = match children.as_slice() {
-        [Node::Out { expr }] => expr.trim() == var,
-        [] | [Node::Text { .. }] => false,
+    // Sous-champs d'une liste d'objets (« Activités » : titre, texte).
+    let subs: Vec<(String, String, bool)> = ed
+        .doc
+        .with_untracked(|d| {
+            let d = d.as_ref()?;
+            let (_, field, each) = enclosing_values_at(d, at)?;
+            let (col, prefix, _) = binding_context(d, &each)?;
+            let name = field.strip_prefix(prefix.as_str()).unwrap_or(&field).to_string();
+            Some((col, name))
+        })
+        .and_then(|(col, name)| {
+            collections(ed).with_untracked(|cs| {
+                let f = cs
+                    .iter()
+                    .find(|c| c.id == col)?
+                    .fields
+                    .iter()
+                    .find(|f| f.name == name)?
+                    .clone();
+                Some(
+                    f.fields
+                        .iter()
+                        .filter(|x| !x.list)
+                        .map(|x| {
+                            (
+                                x.name.clone(),
+                                x.label.clone().unwrap_or_else(|| x.name.clone()),
+                                matches!(x.kind.as_deref(), Some("rich-text" | "rich_text" | "markdown")),
+                            )
+                        })
+                        .collect(),
+                )
+            })
+        })
+        .unwrap_or_default();
+    // Valeur reliée : la valeur, ou un sous-champ (`a.title`, `a.body | safe`).
+    let cur: Option<String> = match children.as_slice() {
+        [Node::Out { expr }] => {
+            let e = expr.trim().trim_end_matches("| safe").trim();
+            if e == var {
+                Some(String::new())
+            } else {
+                e.strip_prefix(&format!("{var}.")).map(str::to_string)
+            }
+        }
+        [] | [Node::Text { .. }] => None,
         _ => return None,
     };
+    let bound = cur.as_deref() == Some("");
     let at = StoredValue::new(at.clone());
-    let set = move |on: bool| {
+    let rich = StoredValue::new(subs.clone());
+    let set = move |choice: String| {
         let at = at.get_value();
         let cmd = ed.doc.with_untracked(|d| {
             let d = d.as_ref()?;
@@ -1399,11 +1737,21 @@ fn value_binding(ui: Ui, ed: Ed, at: &Target, node: &Node, var: String) -> Optio
                 return None;
             };
             let (parent, index) = revel_edit::address::locate(d, &at).ok()?;
-            let kid = if on {
-                Node::Out { expr: var.clone() }
-            } else {
-                Node::Text {
+            let kid = match choice.as_str() {
+                "" => Node::Text {
                     text: ui.now("block-bound-text", &[]),
+                },
+                "value" => Node::Out { expr: var.clone() },
+                sub => {
+                    // Texte riche d'un objet : écrit tel quel (HTML).
+                    let long = rich.with_value(|r| r.iter().any(|(n, _, rich)| n == sub && *rich));
+                    Node::Out {
+                        expr: if long {
+                            format!("{var}.{sub} | safe")
+                        } else {
+                            format!("{var}.{sub}")
+                        },
+                    }
                 }
             };
             Some(Command::Replace {
@@ -1428,9 +1776,15 @@ fn value_binding(ui: Ui, ed: Ed, at: &Target, node: &Node, var: String) -> Optio
                 <label class="field" data-bound="block-bound-text-label">
                     <span class="label">{ui.t("block-bound-text-label")}</span>
                     <div class="select">
-                        <select class="input" on:change=move |e| set(event_target_value(&e) == "value")>
-                            <option value="" prop:selected=!bound>{ui.t("block-bound-written")}</option>
-                            <option value="value" prop:selected=bound>{ui.t("block-bound-value")}</option>
+                        <select class="input" on:change=move |e| set(event_target_value(&e))>
+                            <option value="" prop:selected=cur.is_none()>{ui.t("block-bound-written")}</option>
+                            {subs.is_empty().then(|| view! {
+                                <option value="value" prop:selected=bound>{ui.t("block-bound-value")}</option>
+                            })}
+                            {subs.iter().map(|(n, l, _)| {
+                                let on = cur.as_deref() == Some(n.as_str());
+                                view! { <option value=n.clone() prop:selected=on>{l.clone()}</option> }
+                            }).collect_view()}
                         </select>
                     </div>
                 </label>

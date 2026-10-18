@@ -1972,8 +1972,14 @@ pub fn compare(original: &str, produced: &str, rel: &str, limit: usize) -> Vec<S
             ));
         }
     }
+    // Partage et adresse canonique écrits par Revel quand la page ne les a pas : ajouts voulus.
+    let automatic = |k: &str| {
+        (k.contains(r#""tag":"meta""#)
+            && (k.contains(r#""value":"og:"#) || k.contains(r#""value":"twitter:"#)))
+            || (k.contains(r#""tag":"link""#) && k.contains(r#""value":"canonical""#))
+    };
     for k in &hb {
-        if !ha.contains(k) {
+        if !ha.contains(k) && !automatic(k) {
             out.push(format!(
                 "en-tête : ajouté dans la page produite : {}",
                 short(k)
@@ -2041,6 +2047,10 @@ fn norm(n: Node, pre: bool) -> Node {
                 }
             }
             attrs.sort_by(|x, y| x.name.cmp(&y.name));
+            // Lien vers la page affichée : marqué par Revel à la génération.
+            if tag == "a" {
+                attrs.retain(|a| !(a.name == "aria-current" && a.value.as_deref() == Some("page")));
+            }
             let children = children
                 .into_iter()
                 .map(|c| norm(c, pre))

@@ -740,3 +740,9 @@ fn SiteMenu() -> impl IntoView {
         </div>
     }
 }
+
+/// Chemin affiché dans un champ de chemin (`.path-value`, écrit de droite à gauche pour garder la fin
+/// visible) : marque de gauche à droite en tête, sinon `/` ou `\` du début passe à la fin.
+pub(crate) fn ltr(path: &str) -> String {
+    format!("\u{200E}{path}")
+}

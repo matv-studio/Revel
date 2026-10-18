@@ -254,7 +254,7 @@ fn General() -> impl IntoView {
                     </div>
                     <span class="label" title=ui.t("settings-projects-help")>{ui.t("settings-projects")}</span>
                     <div class="path-field projects-dir">
-                        <span class="path-value" title=move || dir.get()>{move || dir.get()}</span>
+                        <span class="path-value" title=move || dir.get()>{move || crate::ltr(&dir.get())}</span>
                         <Show when=custom>
                             <button type="button" class="icon-btn icon-btn--small" title=ui.t("settings-projects-reset")
                                 aria-label=ui.t("settings-projects-reset") on:click=reset>{icons::reset()}</button>

@@ -845,7 +845,7 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                 <span class="label">{ui.t("new-site-location")}</span>
                 <div class="path-field">
                     <span class="path-value import-target" title=move || target.get()>
-                        {move || if target.get().is_empty() { parent.get() } else { target.get() }}
+                        {move || crate::ltr(&if target.get().is_empty() { parent.get() } else { target.get() })}
                     </span>
                     <button type="button" class="btn btn--small" on:click=change_parent
                         disabled=move || busy() || cloned.with(Option::is_some)>{ui.t("new-site-change")}</button>
@@ -1011,7 +1011,7 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                                 <span class="label">{ui.t("import-folder")}</span>
                                 <div class="path-field">
                                     <span class="path-value import-folder" class:is-empty=move || folder.with(String::is_empty) title=move || folder.get()>
-                                        {move || folder.get()}
+                                        {move || crate::ltr(&folder.get())}
                                     </span>
                                     <button type="button" class="btn btn--small import-choose" on:click=choose disabled=busy>{ui.t("import-choose")}</button>
                                 </div>
@@ -1091,7 +1091,7 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
                                 <span class="label" title=ui.t("import-wp-file-help")>{ui.t("import-wp-file")}</span>
                                 <div class="path-field">
                                     <span class="path-value import-wxr" class:is-empty=move || wxr.with(String::is_empty) title=move || wxr.get()>
-                                        {move || wxr.get()}
+                                        {move || crate::ltr(&wxr.get())}
                                     </span>
                                     <button type="button" class="btn btn--small import-choose-wxr" on:click=choose_wxr disabled=busy>{ui.t("import-choose")}</button>
                                 </div>

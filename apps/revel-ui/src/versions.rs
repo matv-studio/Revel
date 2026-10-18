@@ -451,7 +451,7 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                                 }).collect_view()}
                         </div>
                         {(mode != "solo").then(|| view! {
-                            <span class="path-value versions-remote-value" title=remote.clone()>{remote.clone()}</span>
+                            <span class="path-value versions-remote-value" title=remote.clone()>{crate::ltr(&remote)}</span>
                             <button type="button" class="icon-btn icon-btn--small versions-remote-copy"
                                 title=move || ui.tx(if copied.get() { "versions-team-copied" } else { "versions-team-copy" }, &[])
                                 aria-label=ui.t("versions-team-copy")

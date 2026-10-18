@@ -416,7 +416,7 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                     <span class="label">{ui.t("new-site-location")}</span>
                     <div class="path-field">
                         <span class="path-value" title=move || folder.get()>
-                            {move || if folder.get().is_empty() { parent.get() } else { folder.get() }}
+                            {move || crate::ltr(&if folder.get().is_empty() { parent.get() } else { folder.get() })}
                         </span>
                         <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
                     </div>

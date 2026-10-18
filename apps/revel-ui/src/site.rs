@@ -623,7 +623,7 @@ pub fn Export(site: SiteSummary) -> impl IntoView {
                     </label>
                     <span class="label">{ui.t("export-where")}</span>
                     <div class="path-field">
-                        <span class="path-value" title=move || parent.get()>{move || parent.get()}</span>
+                        <span class="path-value" title=move || parent.get()>{move || crate::ltr(&parent.get())}</span>
                         <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
                     </div>
                 </div>

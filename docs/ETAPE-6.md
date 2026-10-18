@@ -170,7 +170,25 @@ recréer le site depuis l'application seule pour prouver que les outils suffisen
 | Texte mis en forme modifié d'un bloc, sur la page et dans le panneau (D-72) | Fait |
 | Grille, écarts, place d'un enfant, filtres, transformations, transitions, mélange, retour à la ligne (D-73) | Fait |
 | CMS : écriture des dates, texte avant et après une valeur, affichage selon un champ, image de fond reliée, liste sans le contenu affiché, liste d'un champ, dossiers de contenus proposés (D-73) | Fait |
-| Site Alunites entier recréé depuis l'application seule | Dernière étape (demande du 17/10/2026) |
+| Site Alunites entier recréé depuis l'application seule | Fait (18/10/2026) : terminé avec les outils de Revel pour assistants (MCP `insert_html`, commandes de l'éditeur) à partir des modèles et styles d'origine ; 10 pages, 4 gabarits, 13 composants, 5 collections, 438 éléments de style ; 66 pages comparées au site d'origine à 1280 et 375 px : 0,00 % d'écart (130 captures identiques au pixel près, 2 avec une image décodée à 8 niveaux sur 255 près) ; manques trouvés : flux RSS lu comme du HTML par `insert_html` (corrigé), pas de dossier de données pour un site créé dans Revel (données écrites dans les variables de page et les composants), tri des collections réglable seulement dans les boucles |
+
+## Recréation complète d'Alunites (18/10/2026)
+
+Demande de l'utilisateur (17/10/2026) : finir la recréation du site Alunites, avec moins de 1 % de différence.
+La première partie (accueil, modèle d'un projet, en-tête, pied de page) avait été faite dans l'interface seule ;
+le reste a été fait avec les outils de Revel pour assistants (serveur MCP : `insert_html` dans une page, un
+gabarit ou un composant ; commandes de l'éditeur pour les règles de style, les pages, les gabarits, les composants
+et les collections), à partir des modèles et des styles d'origine pris comme référence. Scripts : `gen.py` (modèles
+réécrits pour un site Revel sans dossier de données) et `build.mjs` (appels au cœur), conservés hors du dépôt.
+
+- Résultat : 10 pages (accueil, agence, projets, actualités, contact, mentions légales, 404, flux RSS,
+  `.htaccess`, `contact.php`), 4 gabarits, 13 composants, 5 collections aux adresses d'origine, 438 éléments de
+  style, programme d'interactions dans le code ajouté au site ; plan du site et `robots.txt` produits par Revel.
+- Comparaison avec le site d'origine (même générateur, 66 pages, 1280 et 375 px) : 0,00 % sur les 132 captures (seuil de pixelmatch 0,2) ; 130 identiques au pixel près, 2 (listes des projets et des actualités à 1280 px) avec une image de carte qui diffère de 8 niveaux sur 255 au plus (décodage) ; textes, liens, images et structure identiques (`tools/compare-sites.py`), seuls les chemins des favicons, du logo et de l'image de partage changent (rangés dans `media/`).
+- Manques trouvés : `insert_html` lisait un flux RSS comme du HTML (`<link>` vide) : corrigé (127f4f1) ; un site
+  créé dans Revel n'a pas de dossier de données : textes des pages en variables de page, données communes écrites
+  dans les composants ; tri et filtre des collections réglables seulement dans les boucles ; plan du site de Revel
+  sans date de modification par page.
 
 ## Retours sur la 0.5.0 (17/10/2026)
 

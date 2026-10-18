@@ -2271,7 +2271,7 @@ try {
         await page.click('.team-on');
         await page.waitForSelector('.versions-mode button[data-mode="shared"].is-on', { timeout: 60000 });
         await until(() => head(central) !== '' && head(central) === head(path.join(siteDir, '.git')), 'premier envoi au dépôt central');
-        const shown = (await page.textContent('.versions-remote-value')).trim();
+        const shown = (await page.textContent('.versions-remote-value')).replace(/\u200e/g, '').trim();
         check('versions : travail à plusieurs, dossier partagé (comparaison, dépôt central créé, premier envoi)',
           rows === 6 && chosen === 'Dossier partagé' && disabled && shown === central, `${rows} lignes · ${chosen} · ${shown}`);
         // Équipier : copie du dépôt central, autre page et même endroit modifiés, envoi.

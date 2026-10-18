@@ -930,6 +930,7 @@ pages-og-type-help = What the page announces to social networks (og:type): a sit
 pages-og-type-auto = Automatic
 pages-og-type-website = Page
 pages-og-type-article = Article
+pages-date = Publication date
 pages-look = Appearance
 pages-body-class = Body class
 pages-theme = Theme

@@ -1263,12 +1263,17 @@ fn reconstruction_lien_actuel_theme_et_flux() {
     let a = file(&before, "agence/index.html");
     // Même page ; le flux devenu réglage du site est annoncé dans l'en-tête.
     let b = file(&after, "agence/index.html");
+    // Titre écrit par le gabarit, puis d'après les réglages : même balise, ailleurs dans
+    // l'en-tête.
+    let title = "<title>Test</title>";
+    assert!(a.contains(title) && b.contains(title), "{b}");
     assert_eq!(
-        a,
+        a.replace(title, ""),
         b.replace(
             r#"<link rel="alternate" type="application/rss+xml" title="Actus" href="/feed.xml">"#,
             ""
         )
+        .replace(title, "")
     );
     assert!(
         b.contains(r#"<a href="/agence/" aria-current="page">Agence</a>"#),
@@ -1339,4 +1344,85 @@ fn partage_et_navigateur_du_site() {
     ] {
         assert!(h.contains(t), "{t}\n{h}");
     }
+    // Balise déjà écrite dans le code ajouté de la page : pas écrite une seconde fois.
+    s.pages[0].code.head = r#"<meta property="og:title" content="Autre titre">"#.into();
+    let out = build(&input(&s, vec![])).unwrap();
+    let h = file(&out, "actu/index.html");
+    assert_eq!(h.matches("og:title").count(), 1, "{h}");
+    assert!(h.contains("Autre titre"));
+}
+
+/// En-tête écrit à la main (gabarit, code ajouté d'une page) : réglages du site et de la page,
+/// site produit identique.
+#[test]
+fn en_tete_ecrit_a_la_main_devient_reglages() {
+    let mut s = Site::new("Atelier", "fr");
+    s.base_url = Some("https://exemple.fr".into());
+    s.layouts.push(Layout {
+        id: "base".into(),
+        parent: None,
+        props: Default::default(),
+        body: parse(
+            r##"<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{{ seo.title if seo and seo.title else "Atelier" }}</title><meta property="og:site_name" content="Atelier"><meta name="theme-color" content="#123456"><link rel="icon" href="/icone.svg" type="image/svg+xml"><link rel="stylesheet" href="/s.css"></head><body>{{ content | safe }}</body></html>"##,
+        ),
+    });
+    let mut p: Page = serde_json::from_value(json!({
+        "id": "contact", "path": "/contact/", "layout": "base",
+        "props": { "seo": { "title": "Contact | Atelier" } }
+    }))
+    .unwrap();
+    p.body = parse("<p>Écrire</p>");
+    p.code.head = concat!(
+        r#"<meta property="og:title" content="Contact | Atelier">"#,
+        "\n",
+        r#"<meta property="og:image" content="https://exemple.fr/media/a.jpg">"#,
+        "\n",
+        r#"<link rel="canonical" href="https://exemple.fr/contact/">"#,
+        "\n",
+        r#"<script>suivi()</script>"#
+    )
+    .into();
+    s.pages.push(p);
+    let before = build(&input(&s, vec![])).unwrap();
+    let r = crate::flatten::rebuild(&input(&s, vec![])).unwrap();
+    let seo = &r.site.settings.seo;
+    assert_eq!(seo.theme_color.as_deref(), Some("#123456"));
+    assert_eq!(seo.favicon.as_deref(), Some("/icone.svg"));
+    assert_eq!(seo.site_title.as_deref(), Some("Atelier"));
+    let page = &r.site.pages[0];
+    assert_eq!(page.props["seo"]["title"], "Contact");
+    assert_eq!(page.props["seo"]["image"], "/media/a.jpg");
+    assert_eq!(page.code.head, "<script>suivi()</script>");
+    let head = serde_json::to_string(&r.site.layouts[0].body).unwrap();
+    assert!(
+        !head.contains("theme-color") && !head.contains("og:site_name"),
+        "{head}"
+    );
+    assert!(!head.contains("\"title\""), "{head}");
+    // Même site produit (en-tête comparé sans l'ordre des balises).
+    let after = build(&input(&r.site, vec![])).unwrap();
+    let h1 = file(&before, "contact/index.html");
+    let h2 = file(&after, "contact/index.html");
+    let tags = |h: &str| {
+        let mut v: Vec<String> = h[..h.find("</head>").unwrap()]
+            .split('<')
+            .skip(1)
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty() && !t.starts_with('/'))
+            .collect();
+        v.sort();
+        v
+    };
+    // Balises d'avant toutes là ; en plus, celles que l'image de partage réglée apporte.
+    let (t1, t2) = (tags(h1), tags(h2));
+    let extra: Vec<&String> = t2.iter().filter(|t| !t1.contains(t)).collect();
+    assert!(t1.iter().all(|t| t2.contains(t)), "{h1}\n{h2}");
+    assert_eq!(
+        extra,
+        [
+            r#"meta name="twitter:card" content="summary_large_image">"#,
+            r#"meta name="twitter:image" content="https://exemple.fr/media/a.jpg">"#
+        ]
+    );
+    assert_eq!(h2.matches("og:title").count(), 1);
 }

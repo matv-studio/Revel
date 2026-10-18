@@ -232,6 +232,19 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                                         ed.apply(ui, Command::SetPageProp { page: q3.clone(), key: "ogType".into(), value: (!v.is_empty()).then(|| json!(v)) }, false)
                                     }))
                                 }
+                                {
+                                    // Date de publication : annoncée au partage d'un article.
+                                    let date = p.props.get("date").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                                    let q4 = pid.clone();
+                                    view! {
+                                        <Field label=ui.t("pages-date") value=Signal::derive(move || date.clone()) mono=true
+                                            placeholder="2026-03-01".to_string()
+                                            on_commit=move |v: String| {
+                                                let v = v.trim().to_string();
+                                                ed.apply(ui, Command::SetPageProp { page: q4.clone(), key: "date".into(), value: (!v.is_empty()).then(|| json!(v)) }, false)
+                                            }/>
+                                    }
+                                }
                             }
                         }
                         <h3 class="page-settings-section">{ui.t("pages-seo")}</h3>

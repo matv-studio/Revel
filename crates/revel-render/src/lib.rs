@@ -18,6 +18,7 @@ pub mod animations;
 mod eval;
 pub mod flatten;
 mod forms;
+mod head;
 mod html;
 pub mod lottie;
 pub mod rebase;
@@ -522,6 +523,32 @@ fn build_pages(
     Ok(())
 }
 
+/// Valeur (`content`) de la balise `<meta>` de nom ou propriété `key` dans `head` (en
+/// minuscules).
+fn meta_content(head: &str, key: &str) -> Option<String> {
+    let tag = regex::Regex::new(r"<meta\s[^>]*>").expect("regex");
+    let content = regex::Regex::new(r#"\scontent\s*=\s*"([^"]*)""#).expect("regex");
+    tag.find_iter(head)
+        .map(|m| m.as_str())
+        .find(|t| {
+            t.contains(&format!("property=\"{key}\"")) || t.contains(&format!("name=\"{key}\""))
+        })
+        .and_then(|t| content.captures(t))
+        .map(|c| c[1].trim().to_string())
+}
+
+/// Code ajouté à l'en-tête (site, puis page), en minuscules : ce qu'il contient n'est pas écrit
+/// une seconde fois d'après les réglages.
+fn added_head_code(site: &Site, j: &Job) -> String {
+    let page = j
+        .page_id
+        .as_deref()
+        .and_then(|id| site.pages.iter().find(|p| p.id == id))
+        .map(|p| p.code.head.as_str())
+        .unwrap_or("");
+    format!("{}\n{page}", site.settings.code.head).to_ascii_lowercase()
+}
+
 /// Code ajouté (3.9) : celui du site puis celui de la page, avant `</head>` et `</body>`. Pas
 /// dans le canevas de l'éditeur (scripts arrêtés), seulement dans l'aperçu et le site publié.
 fn custom_code(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String {
@@ -569,7 +596,7 @@ pub(crate) fn insert_before(html: &str, tag: &str, code: &str, at_end: bool) -> 
 fn finish_html(b: &eval::Builder, site: &Site, j: &Job, html: String) -> String {
     let html = page_look(site, j, html);
     let html = seo_meta(site, j, html);
-    let html = noindex_meta(j, html);
+    let html = noindex_meta(site, j, html);
     let html = stylesheet_link(site, html);
     // Typographie française : pour la langue principale et les autres langues françaises.
     let html = if site.settings.typography.as_deref() == Some("fr")
@@ -992,7 +1019,9 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
     let Some(head_end) = lower.find("</head") else {
         return html;
     };
-    let has = |needle: &str| lower[..head_end].contains(needle);
+    // Balises déjà là : dans le gabarit ou dans le code ajouté à l'en-tête (site, page).
+    let code = added_head_code(site, j);
+    let has = |needle: &str| lower[..head_end].contains(needle) || code.contains(needle);
     let seo = j.data.get("seo");
     let seo_text = |k: &str| {
         seo.and_then(|v| v.get_attr(k).ok())
@@ -1123,14 +1152,20 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
             format!("<meta name=\"twitter:image\" content=\"{}\">", e(i)),
         );
     }
-    let og_type = page_setting(site, j, "ogType").unwrap_or_else(|| {
-        if j.collection.is_some() {
-            "article"
-        } else {
-            "website"
-        }
-        .to_string()
-    });
+    // Type déjà annoncé par la page : celui qui compte (date d'article seulement pour un
+    // article).
+    let written =
+        meta_content(&lower[..head_end], "og:type").or_else(|| meta_content(&code, "og:type"));
+    let og_type = written
+        .or_else(|| page_setting(site, j, "ogType"))
+        .unwrap_or_else(|| {
+            if j.collection.is_some() {
+                "article"
+            } else {
+                "website"
+            }
+            .to_string()
+        });
     add(
         !has("og:type"),
         format!(
@@ -1351,12 +1386,16 @@ fn organization_ld(o: &revel_model::Organization, base: &str) -> String {
 
 /// Page `noindex` : balise `<meta name="robots" content="noindex">` ajoutée dans `<head>` si le
 /// gabarit n'en écrit pas déjà une.
-fn noindex_meta(j: &Job, html: String) -> String {
+fn noindex_meta(site: &Site, j: &Job, html: String) -> String {
     if !truthy(&j.data, "noindex") {
         return html;
     }
     let lower = html.to_ascii_lowercase();
-    if lower.contains("name=\"robots\"") || lower.contains("name=robots") {
+    let code = added_head_code(site, j);
+    if [&lower, &code]
+        .iter()
+        .any(|t| t.contains("name=\"robots\"") || t.contains("name=robots"))
+    {
         return html;
     }
     match lower.find("</head") {

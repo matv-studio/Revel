@@ -58,7 +58,7 @@ panels; slider: `data-revel-slider` (`autoplay=5 loop`) with `data-revel-track`,
 `data-revel-consent-open`; forms: `<form data-revel-form=\"contact\">` (sent by e-mail, Settings › Forms). \
 Animations: `data-revel-appear|text|hover|press|loop|scroll` (e.g. `data-revel-appear=\"up dur=0.8\"`, \
 `data-revel-loop=\"ticker speed=60 pause\"`). Lottie: `data-lottie=\"/media/x.json\"` with `data-lottie-play`.\n\
-- Page settings (title, description, share image, body class, theme, share type) and site settings (site name, \
+- Page settings (title, description, share image, body class, theme, share type, publication date) and site settings (site name, \
 icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`.\n\
 Existing sites may still contain {{ expressions }} from data files: read them with `get_data`/`set_data`; CMS entries \
 with `list_collections`, `get_entry`, `set_entry_field`. Keep the site's language and tone.";

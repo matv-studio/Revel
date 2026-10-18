@@ -744,6 +744,13 @@ langue, date d'article, `max-image-preview:large`, icônes, flux RSS et données
 les a pas. Les liens vers la page affichée reçoivent `aria-current="page"` (comme la classe `w--current` de
 Webflow, [forum Webflow](https://discourse.webflow.com/t/force-apply-current-class-to-nav-bar-link/36871)) ; le
 réglage « Actif sur les sous-pages » d'un lien couvre les pages dont l'adresse commence par la sienne.
+Une balise déjà écrite par le gabarit ou par le code ajouté (site, page) n'est jamais écrite une seconde fois ;
+le type annoncé par la page décide de la date d'article. À la reconstruction (`revel rebuild`, et donc à
+chaque import), l'en-tête écrit à la main devient ces réglages, groupe par groupe (adresse, robots, langue,
+icônes et couleur, flux, description, image, type, date, titre ; image, type et date de chaque page depuis son
+code ajouté) : un groupe n'est remplacé que si le site produit reste le même, à l'ordre des balises près et
+hormis les balises de partage que Revel ajoute là où la page n'en avait pas ; sinon il reste dans le gabarit.
+Date de publication : réglage de la page (Apparence).
 
 **D-93 — 18/10/2026 — prise.** **Alunites recréé dans la forme de l'interface, relevé vide.** Le script propre au
 site est retiré : chaque comportement est un réglage (en-tête au défilement, menu, onglets « À la une »,

@@ -2189,6 +2189,9 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         site.settings.filters.remove(&f);
         notes.push(format!("filtre {f} retiré (remplacé par sa définition)"));
     }
+    // En-tête écrit à la main : réglages du site et des pages, là où le site produit reste le
+    // même.
+    crate::head::head_settings(input, &mut site, &mut notes);
     Ok(Rebuilt { site, notes })
 }
 

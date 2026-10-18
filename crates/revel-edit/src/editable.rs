@@ -472,7 +472,7 @@ fn owner_name(o: &Owner) -> String {
 
 /// Variables de page réglées dans les paramètres de la page : référencement, indexation, classe
 /// du corps de page, thème.
-pub const PAGE_SETTINGS: &[&str] = &["seo", "noindex", "bodyClass", "theme", "ogType"];
+pub const PAGE_SETTINGS: &[&str] = &["seo", "noindex", "bodyClass", "theme", "ogType", "date"];
 
 /// Relevé du site entier, dans l'ordre : paramètres, gabarits, pages, composants.
 pub fn audit(site: &Site) -> Vec<Issue> {

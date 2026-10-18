@@ -933,6 +933,7 @@ pages-og-type-help = Ce que la page annonce aux réseaux sociaux (og:type) : une
 pages-og-type-auto = Automatique
 pages-og-type-website = Page
 pages-og-type-article = Article
+pages-date = Date de publication
 pages-look = Apparence
 pages-body-class = Classe du corps de page
 pages-theme = Thème

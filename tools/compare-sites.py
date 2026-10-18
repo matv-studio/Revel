@@ -13,7 +13,8 @@ suite de règles et de valeurs, mise en forme et commentaires ignorés) si la va
 d'environnement REVEL_BIN désigne la commande `revel` (feuilles générées par Revel, D-18).
 Les différences attendues sont neutralisées : paramètre de version `?v=…`,
 variantes d'images (`<picture>`, `srcset`, noms `nom-abc123-800.webp`), liens « page
-actuelle » (`aria-current="page"`, posé par Revel).
+actuelle » (`aria-current="page"`, posé par Revel), balises de l'en-tête que Revel ajoute
+d'après les réglages du site quand la page ne les a pas (partage, date d'article, icônes…).
 Code de sortie 0 si aucune différence.
 """
 import os
@@ -93,6 +94,26 @@ def html_facts(text: str) -> dict:
     }
 
 
+# Balises que Revel écrit d'après les réglages du site quand la page ne les a pas (D-92) :
+# partage, date d'article, robots, couleur du navigateur, icônes, flux, données structurées.
+AUTO_META = ("og:", "twitter:", "article:")
+AUTO_META_NAMES = ("robots", "theme-color")
+AUTO_LINKS = ("canonical", "icon", "apple-touch-icon", "alternate")
+
+
+def drop_automatic(fa: dict, fb: dict) -> None:
+    """Retire de `fb` les balises automatiques absentes de la référence `fa`."""
+    keys_a = {k for k, _ in fa["metas"]}
+    fb["metas"] = [
+        m for m in fb["metas"]
+        if m[0] in keys_a or not (m[0].startswith(AUTO_META) or m[0] in AUTO_META_NAMES)
+    ]
+    rels_a = {r for r, _ in fa["links"]}
+    fb["links"] = [l for l in fb["links"] if l[0] in rels_a or l[0] not in AUTO_LINKS]
+    if not fa["jsonld"]:
+        fb["jsonld"] = []
+
+
 def text_facts(text: str) -> list:
     return [norm(l) for l in text.splitlines() if norm(l)]
 
@@ -130,6 +151,7 @@ def main() -> int:
         b = (rev / f).read_text(encoding="utf-8", errors="replace")
         if f.endswith(".html"):
             fa, fb = html_facts(a), html_facts(b)
+            drop_automatic(fa, fb)
             diffs = [k for k in fa if fa[k] != fb[k]]
             if diffs:
                 problems += 1

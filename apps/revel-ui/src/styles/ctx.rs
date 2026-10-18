@@ -93,6 +93,9 @@ const WATCHED: &[&str] = &[
     "filter",
     "backdrop-filter",
     "transform",
+    "transform-origin",
+    "clip-path",
+    "text-shadow",
     "transition",
     "white-space",
     "text-wrap",
@@ -216,14 +219,15 @@ fn scoped(
     sel: &str,
     state: &str,
 ) -> String {
+    use super::with_state;
     match scope {
-        None => format!("{sel}{state}"),
+        None => with_state(sel, state),
         Some((root, suffix, _, _)) if root_selected => {
             // Racine : la variante s'ajoute à sa classe (`.carte.is-sombre`, `.carte:hover`).
             let rest = sel.strip_prefix(root.as_str()).unwrap_or(sel);
-            format!("{root}{suffix}{rest}{state}")
+            with_state(&format!("{root}{suffix}{rest}"), state)
         }
-        Some((root, suffix, _, _)) => format!("{root}{suffix} {sel}{state}"),
+        Some((root, suffix, _, _)) => format!("{root}{suffix} {}", with_state(sel, state)),
     }
 }
 
@@ -292,7 +296,7 @@ impl Sx {
                         wide.iter().map(|b| (full.clone(), *b)).collect();
                     // Variante : valeurs de la variante principale héritées (même état).
                     if sc.is_some() {
-                        let base = format!("{sel}{st}");
+                        let base = super::with_state(&sel, &st);
                         chain.push((base.clone(), cur));
                         chain.extend(wide.iter().map(|b| (base.clone(), *b)));
                     }

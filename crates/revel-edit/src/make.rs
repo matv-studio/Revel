@@ -205,6 +205,8 @@ pub enum Preset {
     ListFilters,
     /// Bandeau de consentement aux cookies (mesure d'audience chargée après accord).
     Consent,
+    /// Interrupteur de la musique ou des sons du site (« On / Off »).
+    Switch,
 }
 
 impl Preset {
@@ -224,7 +226,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 34] = [
+    pub const ALL: [Preset; 35] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -259,6 +261,7 @@ impl Preset {
         Preset::VideoPlayer,
         Preset::ListFilters,
         Preset::Consent,
+        Preset::Switch,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -407,6 +410,38 @@ impl Preset {
                 (
                     ".langue[aria-current=\"page\"]",
                     vec![("opacity", "1"), ("font-weight", "600")],
+                ),
+            ],
+            Preset::Switch => vec![
+                (
+                    ".interrupteur",
+                    vec![
+                        ("display", "inline-flex"),
+                        ("align-items", "center"),
+                        ("gap", "12px"),
+                        ("padding", "8px 8px 8px 16px"),
+                        ("border", "0"),
+                        ("border-radius", "999px"),
+                        ("background-color", "#f1f1f1"),
+                        ("color", "inherit"),
+                        ("font", "inherit"),
+                        ("cursor", "pointer"),
+                    ],
+                ),
+                (
+                    ".interrupteur__etat",
+                    vec![
+                        ("min-width", "48px"),
+                        ("padding", "2px 10px"),
+                        ("border-radius", "999px"),
+                        ("background-color", "#111111"),
+                        ("color", "#ffffff"),
+                        ("text-align", "center"),
+                    ],
+                ),
+                (
+                    "[aria-pressed=\"false\"] .interrupteur__etat",
+                    vec![("background-color", "#8a8a8a")],
                 ),
             ],
             Preset::Consent => vec![
@@ -843,6 +878,39 @@ impl Preset {
                     html: format!("<p>{}</p>", html_escape(text)),
                 }],
             ),
+            Preset::Switch => {
+                // `text` : « Libellé|On|Off ».
+                let mut parts = text.split('|');
+                let label = parts.next().unwrap_or(text).to_string();
+                let on = parts.next().unwrap_or("On").to_string();
+                let off = parts.next().unwrap_or("Off").to_string();
+                el(
+                    id(),
+                    "button",
+                    vec![
+                        attr("type", "button"),
+                        attr("class", "interrupteur"),
+                        attr("data-revel-switch", "music"),
+                    ],
+                    vec![
+                        el(
+                            id(),
+                            "span",
+                            vec![attr("class", "interrupteur__libelle")],
+                            vec![txt(&label)],
+                        ),
+                        el(
+                            id(),
+                            "span",
+                            vec![
+                                attr("class", "interrupteur__etat"),
+                                attr("data-revel-switch-text", &format!("{on}|{off}")),
+                            ],
+                            vec![txt(&on)],
+                        ),
+                    ],
+                )
+            }
             Preset::Consent => {
                 // `text` : « Message|Refuser|Accepter ».
                 let mut parts = text.split('|');

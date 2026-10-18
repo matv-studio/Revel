@@ -377,6 +377,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     true,
                 ),
                 item(
+                    Preset::Switch,
+                    "insert-switch",
+                    "insert-help-switch",
+                    "insert-text-switch",
+                    icons::toggle,
+                    "button",
+                    true,
+                ),
+                item(
                     Preset::ListFilters,
                     "insert-filters",
                     "insert-help-filters",

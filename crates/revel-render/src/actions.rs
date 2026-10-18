@@ -44,6 +44,7 @@ pub fn uses(html: &str) -> bool {
         || html.contains(" data-revel-video")
         || html.contains(" data-revel-filters")
         || html.contains(" data-revel-consent")
+        || html.contains(" data-revel-switch")
 }
 
 /// Page avec des interactions : script ajouté avant `</head>` (pas dans le canevas). Rend la page
@@ -91,7 +92,12 @@ mod tests {
             "<html><head></head><body><div class=\"onglets\" data-revel-tabs></div></body></html>";
         assert!(wire(tabs.to_string(), true).1);
         assert!(!wire("<html><head></head><body></body></html>".into(), true).1);
+        // Interrupteur des sons : le script est ajouté.
+        let sw =
+            "<html><head></head><body><button data-revel-switch=\"music\">M</button></body></html>";
+        assert!(wire(sw.to_string(), true).1);
         let s = script();
         assert!(s.contains("data-revel-on") && !s.contains("Sans JavaScript, la page"));
+        assert!(s.contains("rv-switch:") && s.contains("sound=") && s.contains("music:"));
     }
 }

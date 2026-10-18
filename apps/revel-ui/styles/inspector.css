@@ -332,6 +332,11 @@
 }
 .shadow-card .nbox, .shadow-card .color-input { background: var(--surface); }
 .shadow-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+/* Découpe (clip-path) : points du polygone. */
+.clip-path { display: grid; gap: 6px; }
+.clip-points { display: grid; gap: 4px; }
+.clip-point { display: grid; grid-template-columns: 16px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px; align-items: center; }
+.clip-point-n { font-size: var(--text-xs, 11px); text-align: center; }
 
 /* --- Filtres, transformations, transitions, grille (D-73) -------------------------------------- */
 .fx-list { display: flex; flex-direction: column; gap: 6px; }
@@ -600,3 +605,10 @@
 .cond-class { display: flex; flex-direction: column; gap: var(--s-1); padding-left: var(--s-2); border-left: 2px solid var(--line); margin-bottom: var(--s-2); }
 .cond-class .field-line { display: flex; gap: var(--s-1); align-items: center; }
 .cond-class .field-line .input { flex: 1; min-width: 0; }
+
+/* Sons d'une action, son des onglets. */
+.act-sounds { display: grid; gap: 4px; }
+.act-sound { justify-content: space-between; }
+.act-sound-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1; color: var(--text-muted); }
+.act-sound-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-sound-name svg.icon { flex: none; width: 13px; height: 13px; }

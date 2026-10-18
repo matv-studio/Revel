@@ -2,7 +2,9 @@
  *
  * Chaque élément animé porte un attribut par moment, réglé dans le panneau Interactions :
  *   data-revel-appear="monter dur=0.6 delay=0 ease=smooth dist=32 stagger=0 trigger=view replay"
- *   data-revel-text, data-revel-hover, data-revel-press, data-revel-loop, data-revel-scroll
+ *   data-revel-text, data-revel-hover, data-revel-press, data-revel-loop, data-revel-scroll,
+ *   data-revel-active (joue chaque fois que l'élément, ou l'onglet, le filtre ou l'interrupteur
+ *   qui le contient, devient actif)
  * Premier mot : l'animation ; ensuite les réglages (clé=valeur, ou drapeau seul).
  *
  * Web Animations (transformations ajoutées à celles de l'élément : `composite: "add"`),
@@ -16,7 +18,7 @@
   if (window.RevelAnimations) return;
   var doc = document;
   var root = doc.documentElement;
-  var FAMILIES = ["appear", "text", "hover", "press", "loop", "scroll"];
+  var FAMILIES = ["appear", "text", "hover", "press", "loop", "scroll", "active"];
   var EASE = {
     smooth: "cubic-bezier(.22,1,.36,1)",
     bounce: "cubic-bezier(.34,1.56,.64,1)",
@@ -35,6 +37,7 @@
     press: { dur: 0.12, ease: "smooth", amount: 100 },
     loop: { dur: 2, delay: 0, ease: "ease", amount: 100 },
     scroll: { amount: 100 },
+    active: { dur: 0.25, ease: "bounce", amount: 100 },
   };
   var PRESET_DEFAULTS = {
     "appear:pop": { ease: "bounce" },
@@ -148,6 +151,26 @@
       }
       default: return null;
     }
+  }
+
+  // Devenu actif : un aller-retour joué une fois.
+  function once(preset, k) {
+    switch (preset) {
+      case "pop": return [tr("scale(1)"), tr("scale(" + (1 + 0.5 * k) + ")"), tr("scale(1)")];
+      case "jump": return [tr("translateY(0px)"), tr("translateY(" + -12 * k + "px)"), tr("translateY(0px)")];
+      case "shake": {
+        var x = 6 * k;
+        return [0, -x, x, -x, x, 0].map(function (v) { return tr("translateX(" + v + "px)"); });
+      }
+      case "flash": return [{ opacity: 1 }, { opacity: Math.max(0, 1 - 0.7 * k) }, { opacity: 1 }];
+      case "spin": return [tr("rotate(0deg)"), tr("rotate(360deg)")];
+      default: return null;
+    }
+  }
+  function activeAnim(el, o) {
+    var frames = once(o.preset, o.k);
+    if (!frames) return [];
+    return play(el, frames, { duration: o.dur * 1000, easing: o.easing, fill: "none" });
   }
 
   // Défilement : de l'arrivée de l'élément en bas de la fenêtre à sa sortie en haut.
@@ -429,7 +452,7 @@
         var v = el.getAttribute("data-revel-" + f);
         if (v !== null) st[f] = parse(f, v);
       });
-      if (st.appear || st.hover || st.press || st.loop || st.scroll) ensureBox(el);
+      if (st.appear || st.hover || st.press || st.loop || st.scroll || st.active) ensureBox(el);
       if (st.appear && st.appear.trigger === "load") { st.appear.played = true; st.appear.anims = appear(el, st.appear); }
       if (st.text && st.text.trigger === "load") { st.text.played = true; st.text.anims = text(el, st.text); }
       if (st.hover) {
@@ -443,6 +466,17 @@
         ["pointerup", "pointerleave", "pointercancel"].forEach(function (n) { el.addEventListener(n, function () { p(false); }); });
       }
       if (st.loop) st.loop.anims = loop(el, st.loop);
+      if (st.active) {
+        // Élément suivi : l'onglet, le filtre ou l'interrupteur qui contient l'élément (ou
+        // lui-même) ; joué quand il reçoit la classe `is-active`.
+        var w = el.closest("[data-revel-tab],[data-revel-filter],[data-revel-switch]") || el;
+        var was = w.classList.contains("is-active");
+        new MutationObserver(function () {
+          var now = w.classList.contains("is-active");
+          if (now && !was) { stopAll(st.active.anims || []); st.active.anims = activeAnim(el, st.active); }
+          was = now;
+        }).observe(w, { attributes: true, attributeFilter: ["class"] });
+      }
       if (st.scroll) {
         var anims = scrollAnims(el, st.scroll);
         if (anims.length) scrolls.push({ el: el, anims: anims });
@@ -485,6 +519,7 @@
       later(function () { stopAll(anims); restore(); }, ms + (extra || 0));
     };
     if (family === "appear") { o.trigger = "load"; done(appear(el, o), 200); }
+    else if (family === "active") { done(activeAnim(el, o), 100); }
     else if (family === "text") { html = el.innerHTML; o.trigger = "load"; done(text(el, o), 400); }
     else if (family === "hover" || family === "press") {
       var t = toggler(el, family, o);

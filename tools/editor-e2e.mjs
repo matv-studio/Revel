@@ -1024,7 +1024,7 @@ try {
       const listed = await untilE(async () => (await frame.locator('.liste-collection__element').count()) > 2);
       await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.collection-list select');
-      await page.selectOption('.collection-list select >> nth=2', 'date');
+      await page.selectOption('.collection-list select[data-list="sort"]', 'date');
       await untilE(async () => (await pageJson()).includes('sort(attribute=\\"date\\", reverse=true)'));
       await page.fill('.collection-list input[type=number]', '2');
       await page.keyboard.press('Tab');

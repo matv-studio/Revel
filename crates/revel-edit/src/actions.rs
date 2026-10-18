@@ -10,7 +10,10 @@
 //! - action : `toggle` (afficher ou masquer), `show`, `hide`, `class:<nom>` (classe ajoutée),
 //!   `play` (lire ou mettre en pause une vidéo), `dismiss` (masquer et s'en souvenir : bandeau de
 //!   consentement), `random:<ms>` (un enfant de l'élément visé, pris au hasard, affiché seul après
-//!   le délai), `spin:<degrés>` (rotation ajoutée à chaque fois, plus un quart de tour au hasard) ;
+//!   le délai), `spin:<degrés>` (rotation ajoutée à chaque fois, plus un quart de tour au hasard),
+//!   `sound:<adresse>|<adresse>…[~<volume %>]` (un son, pris au hasard s'il y en a plusieurs),
+//!   `music:<adresse>|…[~<volume %>]` (une musique au hasard, jouée en boucle ; remplace la
+//!   précédente) : sons et musique se coupent avec les interrupteurs `data-revel-switch` ;
 //! - élément visé : `self`, `parent`, `next` (élément suivant), `body`, `.<classe>` (tous les
 //!   éléments de la classe), `#<identifiant>`.
 //!
@@ -39,6 +42,67 @@ pub enum Act {
     Random(u32),
     /// Rotation ajoutée (degrés), plus 0 à 3 quarts de tour au hasard.
     Spin(u32),
+    /// Son joué une fois (pris au hasard parmi les adresses).
+    Sound(Audio),
+    /// Musique jouée en boucle (prise au hasard parmi les adresses).
+    Music(Audio),
+}
+
+/// Sons d'une action : adresses (un fichier pris au hasard) et volume (%).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Audio {
+    pub urls: Vec<String>,
+    pub volume: u32,
+}
+
+impl Audio {
+    fn write(&self) -> String {
+        let mut s = self
+            .urls
+            .iter()
+            .map(|u| url_token(u))
+            .collect::<Vec<_>>()
+            .join("|");
+        if self.volume != 100 {
+            s.push_str(&format!("~{}", self.volume));
+        }
+        s
+    }
+
+    fn parse(v: &str) -> Option<Audio> {
+        let (list, volume) = match v.rsplit_once('~') {
+            Some((l, n)) => (l, n.parse::<u32>().ok().filter(|n| *n <= 100)?),
+            None => (v, 100),
+        };
+        let urls: Vec<String> = list
+            .split('|')
+            .filter(|u| !u.is_empty())
+            .map(|u| {
+                u.replace("%20", " ")
+                    .replace("%3B", ";")
+                    .replace("%7C", "|")
+                    .replace("%7E", "~")
+            })
+            .collect();
+        // Liste vide : action choisie, fichier pas encore choisi (rien n'est joué).
+        Some(Audio { urls, volume })
+    }
+}
+
+/// Adresse écrite sans blanc ni séparateur (`;`, `|`, `~`) : encodés (`%20`…).
+pub fn url_token(u: &str) -> String {
+    let mut out = String::with_capacity(u.len());
+    for c in u.trim().chars() {
+        match c {
+            ' ' => out.push_str("%20"),
+            ';' => out.push_str("%3B"),
+            '|' => out.push_str("%7C"),
+            '~' => out.push_str("%7E"),
+            c if c.is_whitespace() => out.push_str("%20"),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Une interaction : déclencheur, action, élément visé.
@@ -80,6 +144,8 @@ impl Rule {
             Act::Dismiss => "dismiss".to_string(),
             Act::Random(ms) => format!("random:{ms}"),
             Act::Spin(deg) => format!("spin:{deg}"),
+            Act::Sound(a) => format!("sound:{}", a.write()),
+            Act::Music(a) => format!("music:{}", a.write()),
         };
         format!("{t} {a} {}", self.target)
     }
@@ -105,6 +171,8 @@ impl Rule {
             "dismiss" => Act::Dismiss,
             a if a.starts_with("random:") => Act::Random(a[7..].parse().ok()?),
             a if a.starts_with("spin:") => Act::Spin(a[5..].parse().ok()?),
+            a if a.starts_with("sound:") => Act::Sound(Audio::parse(&a[6..])?),
+            a if a.starts_with("music:") => Act::Music(Audio::parse(&a[6..])?),
             a => Act::Class(
                 a.strip_prefix("class:")
                     .filter(|c| class_ok(c))?
@@ -148,6 +216,31 @@ mod tests {
         assert_eq!(r[1].trigger, Trigger::Scroll(80));
         assert_eq!(write(&r), v);
         assert_eq!(parse("").unwrap(), vec![]);
+        // Sons : adresses encodées, volume.
+        let s = parse(
+            "hover sound:/sfx/nav.wav~50 self; click music:/music/a%20b.mp3|/music/c.mp3 self",
+        )
+        .unwrap();
+        assert_eq!(
+            s[0].act,
+            Act::Sound(Audio {
+                urls: vec!["/sfx/nav.wav".into()],
+                volume: 50
+            })
+        );
+        let Act::Music(m) = &s[1].act else { panic!() };
+        assert_eq!(m.urls.len(), 2);
+        assert_eq!(m.volume, 100);
+        let r = Rule {
+            trigger: Trigger::Click,
+            act: Act::Music(Audio {
+                urls: vec!["/music/Full Moon.mp3".into()],
+                volume: 40,
+            }),
+            target: "self".into(),
+        };
+        assert_eq!(r.write(), "click music:/music/Full%20Moon.mp3~40 self");
+        assert_eq!(parse(&r.write()).unwrap()[0], r);
         for bad in [
             "click",
             "click explode self",
@@ -155,6 +248,7 @@ mod tests {
             "click toggle a b",
             "click class: self",
             "click toggle #a.b",
+            "click sound:/a.wav~150 self",
         ] {
             assert_eq!(parse(bad), None, "{bad}");
         }

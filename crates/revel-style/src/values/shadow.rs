@@ -1,4 +1,4 @@
-//! Ombres (`box-shadow`) : liste de calques modifiables un par un.
+//! Ombres (`box-shadow`, `text-shadow`) : liste de calques modifiables un par un.
 
 use super::{color::is_color, is_var, length::parse_num, split_top};
 
@@ -98,4 +98,38 @@ pub fn format_shadows(list: &[Shadow]) -> String {
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// Écrit une ombre de texte (`text-shadow` : ni intérieure ni étendue) ; vide -> `none`.
+pub fn format_text_shadows(list: &[Shadow]) -> String {
+    if list.is_empty() {
+        return "none".into();
+    }
+    list.iter()
+        .map(|s| {
+            let mut parts = vec![s.x.clone(), s.y.clone(), s.blur.clone()];
+            if !s.color.is_empty() {
+                parts.push(s.color.clone());
+            }
+            parts.join(" ")
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+
+    #[test]
+    fn ombre_de_texte() {
+        let v = "0 1px 6px rgba(0,0,0,0.5), 0 -1px 6px rgba(0,0,0,0.5)";
+        let l = parse_shadows(v).unwrap();
+        assert_eq!(l.len(), 2);
+        assert_eq!(
+            format_text_shadows(&l),
+            "0 1px 6px rgba(0,0,0,0.5), 0 -1px 6px rgba(0,0,0,0.5)"
+        );
+        assert_eq!(format_text_shadows(&[]), "none");
+    }
 }

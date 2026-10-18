@@ -21,15 +21,18 @@ pub enum Family {
     Press,
     Loop,
     Scroll,
+    /// Devenu actif (onglet, filtre, interrupteur).
+    Active,
 }
 
-pub const FAMILIES: [Family; 6] = [
+pub const FAMILIES: [Family; 7] = [
     Family::Appear,
     Family::Text,
     Family::Hover,
     Family::Press,
     Family::Loop,
     Family::Scroll,
+    Family::Active,
 ];
 
 /// Réglage proposé.
@@ -62,6 +65,7 @@ impl Family {
             Family::Press => "press",
             Family::Loop => "loop",
             Family::Scroll => "scroll",
+            Family::Active => "active",
         }
     }
     pub fn attr(self) -> String {
@@ -75,6 +79,7 @@ impl Family {
             Family::Press => "anim-press",
             Family::Loop => "anim-loop",
             Family::Scroll => "anim-scroll",
+            Family::Active => "anim-active",
         }
     }
     fn help(self) -> &'static str {
@@ -85,6 +90,7 @@ impl Family {
             Family::Press => "anim-press-help",
             Family::Loop => "anim-loop-help",
             Family::Scroll => "anim-scroll-help",
+            Family::Active => "anim-active-help",
         }
     }
     /// Animations proposées, dans l'ordre de la grille.
@@ -120,6 +126,7 @@ impl Family {
             Family::Scroll => &[
                 "parallax", "fade-in", "zoom-in", "rotate", "slide-x", "fade-out",
             ],
+            Family::Active => &["pop", "jump", "shake", "flash", "spin"],
         }
     }
     /// Réglages montrés pour une animation.
@@ -145,6 +152,7 @@ impl Family {
                 _ => vec![Dur, Delay, Amount],
             },
             Family::Scroll => vec![Amount],
+            Family::Active => vec![Dur, Ease, Amount],
         }
     }
 }
@@ -179,6 +187,8 @@ fn default_of(f: Family, preset: &str, key: &str) -> Option<&'static str> {
         (Family::Text, "split") => Some("words"),
         (Family::Hover, "dur") => Some("0.25"),
         (Family::Press, "dur") => Some("0.12"),
+        (Family::Active, "dur") => Some("0.25"),
+        (Family::Active, "ease") => Some("bounce"),
         (Family::Loop, "dur") => Some("2"),
         (Family::Loop, "ease") => Some("ease"),
         (_, "delay") => Some("0"),
@@ -441,6 +451,8 @@ const ACTS: &[(&str, &str)] = &[
     ("dismiss", "act-dismiss"),
     ("random", "act-random"),
     ("spin", "act-spin"),
+    ("sound", "act-sound"),
+    ("music", "act-music"),
 ];
 
 /// Classes et identifiants du site (éléments visés).
@@ -563,6 +575,13 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                         Act::Dismiss => ("dismiss", None),
                         Act::Random(_) => ("random", None),
                         Act::Spin(_) => ("spin", None),
+                        Act::Sound(_) => ("sound", None),
+                        Act::Music(_) => ("music", None),
+                    };
+                    // Sons : fichiers (un pris au hasard) et volume.
+                    let sounds = match &r.act {
+                        Act::Sound(a) | Act::Music(a) => Some(a.clone()),
+                        _ => None,
                     };
                     // Délai (au hasard) ou angle (rotation) réglables.
                     let amount = match &r.act {
@@ -614,6 +633,8 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                                         "dismiss" => Act::Dismiss,
                                         "random" => Act::Random(0),
                                         "spin" => Act::Spin(360),
+                                        "sound" => Act::Sound(revel_edit::actions::Audio { urls: Vec::new(), volume: 100 }),
+                                        "music" => Act::Music(revel_edit::actions::Audio { urls: Vec::new(), volume: 100 }),
                                         _ => Act::Class("is-open".into()),
                                     }));
                                 }>
@@ -632,6 +653,7 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                                     }/>
                                 </label>
                             })}
+                            {sounds.map(|a| audio_settings(ui, ed, i, a, edit))}
                             {class.map(|c| view! {
                                 <label class="field">
                                     <span class="label">{ui.t("act-class-name")}</span>
@@ -682,6 +704,61 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
             }}
         </section>
     }
+}
+
+/// Sons d'une action « Son » ou « Musique » : fichiers (un pris au hasard à chaque fois) et
+/// volume.
+fn audio_settings(
+    ui: Ui,
+    ed: Ed,
+    i: usize,
+    a: revel_edit::actions::Audio,
+    edit: impl Fn(usize, Box<dyn Fn(&mut revel_edit::actions::Rule)>) + Copy + Send + Sync + 'static,
+) -> AnyView {
+    use revel_edit::actions::{Act, Audio};
+    let change = move |f: Box<dyn Fn(&mut Audio)>| {
+        edit(
+            i,
+            Box::new(move |r| match &mut r.act {
+                Act::Sound(x) | Act::Music(x) => f(x),
+                _ => {}
+            }),
+        )
+    };
+    let name = |u: &str| {
+        u.rsplit('/')
+            .next()
+            .unwrap_or(u)
+            .replace("%20", " ")
+            .to_string()
+    };
+    let vol = a.volume;
+    view! {
+        <div class="act-sounds">
+            {a.urls.iter().enumerate().map(|(k, u)| view! {
+                <div class="ctl-line act-sound">
+                    <span class="act-sound-name" title=u.clone()>{icons::audio()}<span>{name(u)}</span></span>
+                    <button class="icon-btn icon-btn--small" title=ui.t("act-sound-remove") aria-label=ui.t("act-sound-remove")
+                        on:click=move |_| change(Box::new(move |x| { if k < x.urls.len() { x.urls.remove(k); } }))>
+                        {icons::close()}</button>
+                </div>
+            }).collect_view()}
+            <button class="link-btn" on:click=move |_| {
+                crate::library::pick_audio(ui, crate::library::media_shelf(ed), move |url| {
+                    change(Box::new(move |x| x.urls.push(url.clone())));
+                })
+            }>{ui.t("act-sound-add")}</button>
+            <label class="field">
+                <span class="label">{ui.t("act-sound-volume")}</span>
+                <input class="input" type="number" min="0" max="100" step="5" prop:value=vol.to_string()
+                    on:change=move |e| {
+                        let n = event_target_value(&e).trim().parse::<u32>().unwrap_or(100).min(100);
+                        change(Box::new(move |x| x.volume = n));
+                    }/>
+            </label>
+        </div>
+    }
+    .into_any()
 }
 
 /// Réglages de l'élément « Défilement » (animation en boucle `ticker`), en tête de l'onglet

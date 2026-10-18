@@ -18,7 +18,7 @@ pub use fx::{
     parse_tracks, parse_transitions, span_of,
 };
 pub use length::{Num, eval, fmt_num, step};
-pub use shadow::{Shadow, format_shadows, parse_shadows};
+pub use shadow::{Shadow, format_shadows, format_text_shadows, parse_shadows};
 pub use shorthand::{Edit, Found, edits, read};
 
 /// Découpe `s` au premier niveau (hors parenthèses et guillemets) sur `sep` ; `' '` découpe sur

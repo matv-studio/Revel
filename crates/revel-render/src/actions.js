@@ -2,7 +2,8 @@
    « déclencheur action élément » séparés par des points-virgules (voir revel-edit, actions.rs) ;
    onglets (`data-revel-tabs`) : un bouton `data-revel-tab` par panneau `data-revel-panel` ;
    carrousels et diaporamas (`data-revel-slider`), lecteurs vidéo (`data-revel-video`), filtres de
-   liste (`data-revel-filters`), bandeau de consentement (`data-revel-consent`).
+   liste (`data-revel-filters`), bandeau de consentement (`data-revel-consent`), sons et musique
+   (actions `sound:` et `music:`) coupés par les interrupteurs `data-revel-switch`.
    Sans JavaScript, la page reste lisible : rien n'est masqué d'avance par le script. */
 (function () {
   var css = document.createElement("style");
@@ -20,6 +21,69 @@
     try { return Array.prototype.slice.call(document.querySelectorAll(t)); } catch (_) { return []; }
   }
   function shown(el) { return getComputedStyle(el).display !== "none"; }
+  // Sons et musique : `sound:<adresse>|<adresse>~<volume %>` (une adresse au hasard). Les
+  // interrupteurs `data-revel-switch="music"` ou `"sounds"` les coupent (choix gardé).
+  var audio = { music: store.get("rv-switch:music") !== "off", sounds: store.get("rv-switch:sounds") !== "off" };
+  var song = null, songWanted = null;
+  function pickAudio(spec) {
+    var vol = 100, list = spec;
+    var t = spec.lastIndexOf("~");
+    if (t > 0 && /^\d+$/.test(spec.slice(t + 1))) { vol = parseInt(spec.slice(t + 1), 10); list = spec.slice(0, t); }
+    var urls = list.split("|").filter(Boolean);
+    return { url: urls[Math.floor(Math.random() * urls.length)], vol: Math.min(100, vol) / 100 };
+  }
+  function playSound(spec) {
+    if (!audio.sounds || !spec) return;
+    var a = pickAudio(spec);
+    if (!a.url) return;
+    var s = new Audio(a.url);
+    s.volume = a.vol;
+    var p = s.play();
+    if (p && p.catch) p.catch(function () {});
+  }
+  function playMusic(spec) {
+    songWanted = spec;
+    if (song) { song.pause(); song = null; }
+    if (!audio.music) return;
+    var a = pickAudio(spec);
+    if (!a.url) return;
+    song = new Audio(a.url);
+    song.loop = true;
+    song.volume = a.vol;
+    var p = song.play();
+    if (p && p.catch) p.catch(function () {});
+  }
+  function switches() {
+    var sws = document.querySelectorAll("[data-revel-switch]");
+    var paint = function () {
+      for (var i = 0; i < sws.length; i++) {
+        var on = audio[sws[i].getAttribute("data-revel-switch")] !== false;
+        sws[i].setAttribute("aria-pressed", String(on));
+        sws[i].classList.toggle("is-active", on);
+        var txt = sws[i].querySelectorAll("[data-revel-switch-text]");
+        for (var j = 0; j < txt.length; j++) {
+          var parts = (txt[j].getAttribute("data-revel-switch-text") || "On|Off").split("|");
+          txt[j].textContent = on ? parts[0] : (parts[1] || "");
+        }
+      }
+    };
+    for (var i = 0; i < sws.length; i++) {
+      (function (b) {
+        b.addEventListener("click", function () {
+          var name = b.getAttribute("data-revel-switch");
+          if (!(name in audio)) return;
+          audio[name] = !audio[name];
+          store.set("rv-switch:" + name, audio[name] ? "on" : "off");
+          if (name === "music") {
+            if (!audio.music && song) { song.pause(); song = null; }
+            else if (audio.music && songWanted && !song) playMusic(songWanted);
+          }
+          paint();
+        });
+      })(sws[i]);
+    }
+    paint();
+  }
   function show(el, on) {
     if (on) {
       el.classList.remove("rv-hide");
@@ -73,6 +137,10 @@
       // Rotation ajoutée, plus un quart de tour au hasard (variable --turn et transformation).
       el.__rvTurn = (el.__rvTurn || 0) + (parseInt(a.slice(5), 10) || 0) + Math.floor(Math.random() * 4) * 90;
       el.style.setProperty("--turn", el.__rvTurn + "deg");
+    } else if (a.indexOf("sound:") === 0) {
+      if (on) playSound(a.slice(6));
+    } else if (a.indexOf("music:") === 0) {
+      if (on) playMusic(a.slice(6));
     } else if (a === "dismiss") {
       if (on) { el.classList.add("rv-hide"); store.set("rv-dismiss:" + key, "1"); }
     } else if (a.indexOf("class:") === 0) {
@@ -134,26 +202,35 @@
   function tabs(box) {
     var opts = String(box.getAttribute("data-revel-tabs") || "").split(/\s+/);
     var hover = opts.indexOf("hover") >= 0;
+    // `keys` : flèches et W/A/S/D n'importe où dans la page ; `sound=<adresse>` : son à chaque
+    // changement.
+    var keys = opts.indexOf("keys") >= 0;
+    var sound = "";
+    opts.forEach(function (o) { if (o.indexOf("sound=") === 0) sound = o.slice(6); });
     var btns = box.querySelectorAll("[data-revel-tab]");
     var panels = box.querySelectorAll("[data-revel-panel]");
+    // Plusieurs séries de panneaux (texte, numéro…) : chacune suit les onglets dans l'ordre.
+    var nb = btns.length || 1;
     var cur = -1;
     var pick = function (i) {
       if (i === cur) return;
+      if (cur >= 0 && sound) playSound(sound);
       cur = i;
       for (var j = 0; j < btns.length; j++) {
         btns[j].classList.toggle("is-active", j === i);
         if (btns[j].tagName !== "A") btns[j].setAttribute("aria-selected", String(j === i));
       }
       for (var k = 0; k < panels.length; k++) {
-        panels[k].classList.toggle("rv-hide", k !== i);
+        var off = k % nb !== i;
+        panels[k].classList.toggle("rv-hide", off);
         // Panneaux masqués d'avance (`hidden`, sans attendre le script) : affichés à leur tour.
-        if (panels[k].hasAttribute("hidden") || k !== i) panels[k].hidden = k !== i;
+        if (panels[k].hasAttribute("hidden") || off) panels[k].hidden = off;
         var vs = panels[k].tagName === "VIDEO" ? [panels[k]] : panels[k].querySelectorAll("video");
         for (var v = 0; v < vs.length; v++) {
-          if (k === i && vs[v].hasAttribute("autoplay") && !still && !box.classList.contains("is-paused")) {
+          if (!off && vs[v].hasAttribute("autoplay") && !still && !box.classList.contains("is-paused")) {
             var p = vs[v].play();
             if (p && p.catch) p.catch(function () {});
-          } else if (k !== i) {
+          } else if (off) {
             vs[v].pause();
           }
         }
@@ -177,6 +254,19 @@
           pick(m);
         });
       })(i);
+    }
+    if (keys && btns.length) {
+      document.addEventListener("keydown", function (e) {
+        var t = e.target, tag = t && t.tagName;
+        if (e.altKey || e.ctrlKey || e.metaKey || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable)) return;
+        if (!box.offsetParent && getComputedStyle(box).position !== "fixed") return;
+        var k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        var d = k === "ArrowDown" || k === "ArrowRight" || k === "s" || k === "d" ? 1
+          : k === "ArrowUp" || k === "ArrowLeft" || k === "w" || k === "a" ? -1 : 0;
+        if (!d) return;
+        e.preventDefault();
+        pick((Math.max(cur, 0) + d + btns.length) % btns.length);
+      });
     }
     var start = 0;
     for (var a = 0; a < btns.length; a++) if (btns[a].classList.contains("is-active")) { start = a; break; }
@@ -406,6 +496,7 @@
     for (var f = 0; f < fs.length; f++) filters(fs[f]);
     var vs = document.querySelectorAll("[data-revel-video]");
     for (var v = 0; v < vs.length; v++) video(vs[v]);
+    switches();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", all);
   else all();

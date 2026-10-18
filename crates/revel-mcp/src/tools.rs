@@ -31,7 +31,8 @@ the panels (Layers, Styles, Add, CMS), without code: never write `{% set %}`, co
 than those listed here, or site scripts. After your changes call `check_site`: it must list no issue for what you \
 built; rebuild anything it lists with the forms below.\n\
 - Structure: elements with classes; texts written in the elements (`set_text`); CSS on classes per breakpoint and \
-state (`set_styles`, states :hover :active :focus-visible [aria-current=\"page\"]). Prefer `insert_preset` (Add panel) \
+state (`set_styles`, states :hover :active :focus-visible [aria-current=\"page\"] .is-active [aria-pressed=\"false\"], or \
+inside an active element `.is-active .x`); text-shadow, transform-origin and clip-path are panel controls. Prefer `insert_preset` (Add panel) \
 for sections, grids, buttons, images, video, video player (YouTube/Vimeo/file with cover), icons, navbar, ticker \
 (endless scroll of logos/team), carousel, slideshow, tabs, accordion, list filters, collection list, blocks.\n\
 - Repeated content (projects, team, logos, articles): a CMS collection and a collection list: `{% for item in \
@@ -49,14 +50,19 @@ fields are read without prefix (`{{ title }}`).\n\
 use sets; variants for alternate looks.\n\
 - Behaviour without code: `data-revel-on` on the triggering element, `<trigger> <action> <target>` separated by \
 `;`: trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss|random:<ms>|spin:<deg>, \
-target self|parent|next|body|.<class>|#<id> (e.g. `click class:menu-open body; scroll:40 class:is-solid self`). \
-Tabs: `data-revel-tabs` (value `hover` to switch on hover) with `data-revel-tab` triggers and `data-revel-panel` \
-panels; slider: `data-revel-slider` (`autoplay=5 loop`) with `data-revel-track`, `data-revel-prev`, `data-revel-next`, \
+target self|parent|next|body|.<class>|#<id> (e.g. `click class:menu-open body; scroll:40 class:is-solid self`); \
+sound: `hover sound:/media/a.wav~50 self` (several files `a.wav|b.wav`: one at random; `~50` volume %), music on a loop: \
+`click music:/media/x.mp3|/media/y.mp3 self` (spaces as %20); music/sound switches: `<button data-revel-switch=\"music|sounds\">` \
+with a `data-revel-switch-text=\"On|Off\"` child (insert_preset switch). \
+Tabs: `data-revel-tabs` (options `hover`, `keys` for arrows/WASD anywhere, `sound=<url>`) with `data-revel-tab` \
+triggers and `data-revel-panel` panels (several series of panels each follow the tabs in order; the active tab and \
+filter get the class `is-active`); slider: `data-revel-slider` (`autoplay=5 loop`) with `data-revel-track`, `data-revel-prev`, `data-revel-next`, \
 `data-revel-count`; video player: `data-revel-video=\"<url>\"` with a `data-revel-play` cover; list filters: \
 `data-revel-filters=\"<url param>\"` group of `data-revel-filter=\"<value>\"` buttons, items `data-revel-tags`, \
 `data-revel-filter-empty`; cookie consent: `data-revel-consent=\"G-…\"` banner, `data-revel-consent-choice=accept|refuse`, \
 `data-revel-consent-open`; forms: `<form data-revel-form=\"contact\">` (sent by e-mail, Settings › Forms). \
-Animations: `data-revel-appear|text|hover|press|loop|scroll` (e.g. `data-revel-appear=\"up dur=0.8\"`, \
+Animations: `data-revel-appear|text|hover|press|loop|scroll|active` (e.g. `data-revel-appear=\"up dur=0.8\"`, \
+`data-revel-active=\"pop\"` plays when its tab, filter or switch becomes active), \
 `data-revel-loop=\"ticker speed=60 pause\"`). Lottie: `data-lottie=\"/media/x.json\"` with `data-lottie-play`.\n\
 - Page settings (title, description, share image, body class, theme, share type, publication date) and site settings (site name, \
 icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`.\n\
@@ -148,7 +154,9 @@ pub struct SetStylesArg {
     /// Breakpoint id from get_site (e.g. "max-900"); omit for the base (desktop) styles.
     #[serde(default)]
     pub breakpoint: Option<String>,
-    /// Pseudo-class state, e.g. ":hover"; omit for the normal state.
+    /// State, e.g. ":hover", ".is-active" (active tab, filter or switch), "[aria-pressed=\"false\"]"
+    /// (switch off); starting with "^", a state of an enclosing element ("^.is-active": inside the
+    /// active tab). Omit for the normal state.
     #[serde(default)]
     pub state: Option<String>,
     #[serde(default)]
@@ -478,6 +486,7 @@ fn preset_text(p: revel_edit::make::Preset, locale: &str) -> String {
         P::VideoPlayer => "insert-text-video-player",
         P::ListFilters => "insert-text-filters",
         P::Consent => "insert-text-consent",
+        P::Switch => "insert-text-switch",
         _ => return String::new(),
     };
     revel_i18n::Localizer::new(locale).t(key, &[])
@@ -905,11 +914,11 @@ impl Revel {
                 }
             },
         };
-        let full = format!(
-            "{}{}",
-            a.selector.trim(),
-            a.state.clone().unwrap_or_default()
-        );
+        let state = a.state.clone().unwrap_or_default();
+        let full = match state.strip_prefix('^') {
+            Some(outer) => format!("{} {}", outer.trim(), a.selector.trim()),
+            None => format!("{}{state}", a.selector.trim()),
+        };
         let rule = revel_edit::style::find_rule(&d, &full, &media);
         match revel_edit::style::style_command(
             rule,

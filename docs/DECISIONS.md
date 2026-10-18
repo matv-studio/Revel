@@ -760,6 +760,19 @@ propriétés du composant « Chiffres ». Écarts voulus avec la version Elevent
 référencement devient « Titre du contenu | Nom du site » au lieu du seul nom du site, et les bandeaux défilent
 aussi sur téléphone.
 
+**D-94 — 18/10/2026 — prise.** **Outils pour les sites animés et sonores (exemple : menu de jeu p3r).**
+Styles : ombre du texte (calques X, Y, flou, couleur, comme les ombres de bloc), point d'appui des
+transformations (grille 3 × 3 ou valeur), découpe (`clip-path` : formes proposées, puis points du polygone
+un par un) ; états « Actif » (`.is-active`, posé par les onglets, filtres, interrupteurs), « Dans un élément
+actif » (`.is-active .x`), « Éteint » et « Dans un interrupteur éteint » (`[aria-pressed="false"]`).
+Interactions : actions « Jouer un son » et « Lancer une musique » (fichiers des médias, un pris au hasard,
+volume ; musique en boucle, une à la fois), interrupteurs « Musique » et « Sons » (élément du panneau
+Ajouter, texte « On / Off » de leur état, choix gardé par le navigateur) ; onglets : touches du clavier
+dans toute la page (flèches, W/A/S/D), son à chaque changement, plusieurs séries de panneaux qui suivent
+les onglets dans l'ordre (texte, numéro) ; animation « Devenu actif » (rebond, saut, secousse, éclair,
+tour) jouée quand l'onglet, le filtre ou l'interrupteur qui contient l'élément devient actif. Rien de
+propre à un site : chaque réglage est un attribut `data-revel-*` lu par le script commun.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

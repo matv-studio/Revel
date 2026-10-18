@@ -1268,6 +1268,20 @@ pub fn pick_animation(
     }));
 }
 
+/// Ouvre le choix d'un son ou d'une musique du site ouvert.
+pub fn pick_audio(ui: Ui, shelf: Option<Shelf>, on_pick: impl Fn(String) + Send + Sync + 'static) {
+    let Some(site) = ui.site_path() else {
+        return;
+    };
+    ui.pick_media.set(Some(MediaPick {
+        site,
+        images: false,
+        kind: Some(MediaKind::Audio),
+        shelf,
+        on_pick: std::sync::Arc::new(on_pick),
+    }));
+}
+
 /// Ouvre le choix d'une image du site ouvert.
 pub fn pick_image(ui: Ui, shelf: Option<Shelf>, on_pick: impl Fn(String) + Send + Sync + 'static) {
     pick_media(ui, true, shelf, on_pick);

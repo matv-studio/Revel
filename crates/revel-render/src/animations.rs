@@ -1,6 +1,7 @@
 //! Animations prêtes à l'emploi (6.1) : les éléments portent un attribut par moment
 //! (`data-revel-appear`, `data-revel-text`, `data-revel-hover`, `data-revel-press`,
-//! `data-revel-loop`, `data-revel-scroll`), réglé dans le panneau Interactions. Les pages qui en
+//! `data-revel-loop`, `data-revel-scroll`, `data-revel-active`), réglé dans le panneau
+//! Interactions. Les pages qui en
 //! contiennent reçoivent, dans `<head>`, la règle qui masque les éléments en attente d'apparition
 //! (seulement quand le script est actif et que le visiteur accepte le mouvement) et le script
 //! `/assets/revel-animations.js`, produit une fois pour le site.
@@ -14,7 +15,9 @@ pub const URL: &str = "/assets/revel-animations.js";
 pub const SOURCE: &str = include_str!("animations.js");
 
 /// Moments d'animation : suffixes des attributs `data-revel-…`.
-pub const FAMILIES: &[&str] = &["appear", "text", "hover", "press", "loop", "scroll"];
+pub const FAMILIES: &[&str] = &[
+    "appear", "text", "hover", "press", "loop", "scroll", "active",
+];
 
 /// Ajouté dans `<head>` : éléments à faire apparaître masqués jusqu'à leur animation, seulement si
 /// le visiteur accepte le mouvement ; montrés au bout de 3 s si le script ne s'est pas chargé.

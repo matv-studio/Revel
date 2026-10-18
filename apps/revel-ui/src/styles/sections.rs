@@ -11,7 +11,8 @@ use leptos::prelude::*;
 use revel_edit::Command;
 use revel_model::{Decl, StyleItem, StyleRule};
 use revel_style::values::{
-    Shadow, first_family, format_shadows, length::parse_num, parse_shadows, split_top,
+    Shadow, first_family, format_shadows, format_text_shadows, length::parse_num, parse_shadows,
+    split_top,
 };
 use wasm_bindgen::JsCast;
 
@@ -498,7 +499,7 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
         <Section sx key="styles-typography" open=true props=&[
             "font-family", "font-weight", "font-size", "line-height", "letter-spacing", "color",
             "text-align", "font-style", "text-decoration-line", "text-transform", "white-space", "text-wrap",
-            "text-overflow",
+            "text-overflow", "text-shadow",
         ]>
             <Row sx props=&["font-family"] key="styles-font-family">
                 <Choice sx prop="font-family" options=font_options(sx)/>
@@ -540,6 +541,7 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
             <Row sx props=&["text-overflow", "overflow", "white-space"] key="styles-truncate">
                 <Truncate sx/>
             </Row>
+            <Row sx props=&["text-shadow"] key="styles-text-shadow" stack=true><Shadows sx prop="text-shadow"/></Row>
         </Section>
     }
 }
@@ -808,16 +810,24 @@ fn Opacity(sx: Sx) -> impl IntoView {
     }
 }
 
-/// Ombres : liste de calques (portée ou intérieure, X, Y, flou, étendue, couleur).
+/// Ombres : liste de calques (portée ou intérieure, X, Y, flou, étendue, couleur) ; ombre du
+/// texte (`text-shadow`) : X, Y, flou et couleur.
 #[component]
-fn Shadows(sx: Sx) -> impl IntoView {
+fn Shadows(sx: Sx, #[prop(default = "box-shadow")] prop: &'static str) -> impl IntoView {
     let ui = sx.ui;
-    let pv = Memo::new(move |_| sx.get("box-shadow"));
+    let text = prop == "text-shadow";
+    let fmt = move |l: &[Shadow]| {
+        if text {
+            format_text_shadows(l)
+        } else {
+            format_shadows(l)
+        }
+    };
+    let pv = Memo::new(move |_| sx.get(prop));
     let list = Memo::new(move |_| pv.get().here.and_then(|v| parse_shadows(&v)));
     let raw = move || pv.get().here.is_some() && list.get().is_none();
-    let write =
-        move |l: Vec<Shadow>| sx.set("box-shadow", (!l.is_empty()).then(|| format_shadows(&l)));
-    let preview = move |l: Vec<Shadow>| sx.preview(&[("box-shadow".into(), format_shadows(&l))]);
+    let write = move |l: Vec<Shadow>| sx.set(prop, (!l.is_empty()).then(|| fmt(&l)));
+    let preview = move |l: Vec<Shadow>| sx.preview(&[(prop.into(), fmt(&l))]);
     let edit = move |i: usize, f: Box<dyn Fn(&mut Shadow)>| {
         let mut l = list.get_untracked().unwrap_or_default();
         if let Some(s) = l.get_mut(i) {
@@ -833,13 +843,19 @@ fn Shadows(sx: Sx) -> impl IntoView {
                     if h.is_empty() || h == "none" { ui.tx("shadow-none", &[]) } else { ui.tx("shadow-inherited", &[]) }
                 } else { String::new() }}</span>
                 <button class="icon-btn icon-btn--small" title=ui.t("shadow-add") aria-label=ui.t("shadow-add")
-                    on:click=move |_| { let mut l = list.get_untracked().unwrap_or_default(); l.push(Shadow::default()); write(l); }>
+                    on:click=move |_| {
+                        let mut l = list.get_untracked().unwrap_or_default();
+                        // Ombre du texte : douce, sous les lettres.
+                        let s = if text { Shadow { y: "1px".into(), blur: "6px".into(), color: "rgba(0, 0, 0, 0.5)".into(), ..Shadow::default() } } else { Shadow::default() };
+                        l.push(s);
+                        write(l);
+                    }>
                     {icons::plus()}
                 </button>
             </div>
             <Show when=raw>
                 <input class="input input--mono" prop:value=move || pv.get().here.unwrap_or_default()
-                    on:change=move |e| { let v = event_target_value(&e); sx.set("box-shadow", (!v.trim().is_empty()).then_some(v)); }/>
+                    on:change=move |e| { let v = event_target_value(&e); sx.set(prop, (!v.trim().is_empty()).then_some(v)); }/>
             </Show>
             {move || list.get().unwrap_or_default().into_iter().enumerate().map(|(i, s)| {
                 let field = move |get: fn(&Shadow) -> String, put: fn(&mut Shadow, String), key: &'static str, prefix: &'static str| view! {
@@ -853,7 +869,8 @@ fn Shadows(sx: Sx) -> impl IntoView {
                 };
                 view! {
                     <div class="shadow-card">
-                        <div class="ctl-line">
+                        <div class="ctl-line" class:ctl-line--end=text>
+                            {(!text).then(|| view! {
                             <div class="select">
                                 <select class="input" aria-label=ui.t("shadow-type") on:change=move |e| {
                                     let inset = event_target_value(&e) == "inset";
@@ -863,6 +880,7 @@ fn Shadows(sx: Sx) -> impl IntoView {
                                     <option value="inset" selected=s.inset>{ui.t("shadow-inner")}</option>
                                 </select>
                             </div>
+                            })}
                             <button class="icon-btn icon-btn--small" title=ui.t("shadow-remove") aria-label=ui.t("shadow-remove")
                                 on:click=move |_| { let mut l = list.get_untracked().unwrap_or_default(); if i < l.len() { l.remove(i); } write(l); }>
                                 {icons::trash()}
@@ -872,7 +890,7 @@ fn Shadows(sx: Sx) -> impl IntoView {
                             {field(|s| s.x.clone(), |s, v| s.x = v, "shadow-x", "X")}
                             {field(|s| s.y.clone(), |s, v| s.y = v, "shadow-y", "Y")}
                             {field(|s| s.blur.clone(), |s, v| s.blur = v, "shadow-blur", "⌀")}
-                            {field(|s| s.spread.clone(), |s, v| s.spread = v, "shadow-spread", "±")}
+                            {(!text).then(|| field(|s| s.spread.clone(), |s, v| s.spread = v, "shadow-spread", "±"))}
                         </div>
                         <ColorInput sx
                             value=Signal::derive(move || list.get().and_then(|l| l.get(i).map(|s| s.color.clone())).filter(|c| !c.is_empty()))
@@ -888,16 +906,189 @@ fn Shadows(sx: Sx) -> impl IntoView {
     }
 }
 
+/// Point d'appui des transformations (`transform-origin`) : grille 3 × 3, ou valeur écrite
+/// (`25% 50%`).
+#[component]
+fn TransformOrigin(sx: Sx) -> impl IntoView {
+    let ui = sx.ui;
+    let pv = Memo::new(move |_| sx.get("transform-origin"));
+    const X: [&str; 3] = ["left", "center", "right"];
+    const Y: [&str; 3] = ["top", "center", "bottom"];
+    let at = move || {
+        let v = pv.get().current();
+        let t = split_top(&v, ' ');
+        let pos = |s: &str, axis: [&str; 3]| -> Option<usize> {
+            match s {
+                "0%" | "0px" | "0" => Some(0),
+                "50%" => Some(1),
+                "100%" => Some(2),
+                s => axis.iter().position(|a| *a == s),
+            }
+        };
+        match t.as_slice() {
+            [x, y] | [x, y, _] => (pos(x, X), pos(y, Y)),
+            [c] if c == "center" => (Some(1), Some(1)),
+            _ => (None, None),
+        }
+    };
+    view! {
+        <div class="ctl-line">
+            <div class="align-box align-box--small" role="group" aria-label=ui.t("styles-transform-origin")>
+                {(0..3).flat_map(|r| (0..3).map(move |c| (c, r))).map(|(c, r)| view! {
+                    <button class="align-cell" class:is-on=move || at() == (Some(c), Some(r))
+                        title=format!("{} {}", X[c], Y[r])
+                        on:click=move |_| {
+                            let v = if (c, r) == (1, 1) { "center".to_string() } else { format!("{} {}", X[c], Y[r]) };
+                            sx.set("transform-origin", Some(v))
+                        }><i></i></button>
+                }).collect_view()}
+            </div>
+            <input class="input input--mono" aria-label=ui.t("styles-transform-origin")
+                placeholder=move || pv.get().hint()
+                prop:value=move || pv.get().here.unwrap_or_default()
+                on:change=move |e| { let v = event_target_value(&e); sx.set("transform-origin", (!v.trim().is_empty()).then(|| v.trim().to_string())); }/>
+        </div>
+    }
+}
+
+/// Découpes proposées (`clip-path`).
+const CLIP_SHAPES: &[(&str, &str)] = &[
+    ("circle(50% at 50% 50%)", "clip-circle"),
+    ("ellipse(50% 50% at 50% 50%)", "clip-ellipse"),
+    ("inset(0% 0% 0% 0% round 16px)", "clip-inset"),
+    ("polygon(50% 0%, 100% 100%, 0% 100%)", "clip-triangle"),
+    (
+        "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+        "clip-rhombus",
+    ),
+    (
+        "polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)",
+        "clip-parallelogram",
+    ),
+    (
+        "polygon(0% 0%, 75% 0%, 100% 50%, 75% 100%, 0% 100%)",
+        "clip-arrow",
+    ),
+    ("polygon(0% 0%, 100% 0%, 100% 80%, 0% 100%)", "clip-slant"),
+];
+
+/// Points d'un polygone (`polygon(x y, …)`) ; `None` : autre forme.
+fn polygon_points(v: &str) -> Option<Vec<(String, String)>> {
+    let inner = v.trim().strip_prefix("polygon(")?.strip_suffix(')')?;
+    split_top(inner, ',')
+        .iter()
+        .map(|p| {
+            let t = split_top(p.trim(), ' ');
+            match t.as_slice() {
+                [x, y] => Some((x.clone(), y.clone())),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+fn polygon_of(points: &[(String, String)]) -> String {
+    format!(
+        "polygon({})",
+        points
+            .iter()
+            .map(|(x, y)| format!("{x} {y}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// Découpe de l'élément (`clip-path`) : forme proposée, puis points du polygone modifiables un
+/// par un (X et Y en % de l'élément).
+#[component]
+fn ClipPath(sx: Sx) -> impl IntoView {
+    let ui = sx.ui;
+    let pv = Memo::new(move |_| sx.get("clip-path"));
+    let here = move || pv.get().here;
+    let points = Memo::new(move |_| here().as_deref().and_then(polygon_points));
+    let write = move |l: Vec<(String, String)>| {
+        sx.set("clip-path", (!l.is_empty()).then(|| polygon_of(&l)))
+    };
+    let edit = move |i: usize, x: bool, v: String| {
+        let mut l = points.get_untracked().unwrap_or_default();
+        if let Some(p) = l.get_mut(i) {
+            if x {
+                p.0 = v;
+            } else {
+                p.1 = v;
+            }
+        }
+        write(l);
+    };
+    view! {
+        <div class="clip-path">
+            <div class="select" class:is-unset=move || here().is_none()>
+                <select class="input" aria-label=ui.t("styles-clip-path") on:change=move |e| {
+                    let v = event_target_value(&e);
+                    sx.set("clip-path", (!v.is_empty() && v != "none").then_some(v));
+                }>
+                    <option value="none" selected=move || here().is_none()>{ui.t("clip-none")}</option>
+                    {move || {
+                        let cur = here();
+                        let known = cur.as_deref().is_some_and(|c| CLIP_SHAPES.iter().any(|(v, _)| *v == c));
+                        let custom = cur.clone().filter(|_| !known).map(|c| {
+                            let label = if c.starts_with("polygon(") { ui.tx("clip-custom", &[]) } else { c.clone() };
+                            view! { <option value=c.clone() selected=true>{label}</option> }
+                        });
+                        view! {
+                            {custom}
+                            {CLIP_SHAPES.iter().map(|(v, k)| {
+                                let on = cur.as_deref() == Some(*v);
+                                view! { <option value=*v selected=on>{ui.t(k)}</option> }
+                            }).collect_view()}
+                        }
+                    }}
+                </select>
+            </div>
+            {move || points.get().map(|list| {
+                let n = list.len();
+                view! {
+                    <div class="clip-points">
+                        {list.into_iter().enumerate().map(|(i, (x, y))| view! {
+                            <div class="ctl-line clip-point">
+                                <span class="muted clip-point-n">{i + 1}</span>
+                                <input class="input input--mono" aria-label=ui.t("clip-x") prop:value=x
+                                    on:change=move |e| edit(i, true, event_target_value(&e).trim().to_string())/>
+                                <input class="input input--mono" aria-label=ui.t("clip-y") prop:value=y
+                                    on:change=move |e| edit(i, false, event_target_value(&e).trim().to_string())/>
+                                <button class="icon-btn icon-btn--small" title=ui.t("clip-remove") aria-label=ui.t("clip-remove")
+                                    disabled=n <= 3
+                                    on:click=move |_| {
+                                        let mut l = points.get_untracked().unwrap_or_default();
+                                        if i < l.len() && l.len() > 3 { l.remove(i); }
+                                        write(l);
+                                    }>{icons::trash()}</button>
+                            </div>
+                        }).collect_view()}
+                        <button class="link-btn" on:click=move |_| {
+                            let mut l = points.get_untracked().unwrap_or_default();
+                            l.push(("50%".into(), "50%".into()));
+                            write(l);
+                        }>{ui.t("clip-add")}</button>
+                    </div>
+                }
+            })}
+        </div>
+    }
+}
+
 #[component]
 pub fn EffectsSection(sx: Sx) -> impl IntoView {
     view! {
-        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transition"]>
+        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transform-origin", "clip-path", "transition"]>
             <Row sx props=&["mix-blend-mode"] key="styles-blend"><Choice sx prop="mix-blend-mode" options=opts(sx, BLEND)/></Row>
             <Row sx props=&["opacity"] key="styles-opacity"><Opacity sx/></Row>
             <Row sx props=&["box-shadow"] key="styles-box-shadow" stack=true><Shadows sx/></Row>
             <Row sx props=&["transform"] key="styles-transform" stack=true>
                 <FuncList sx prop="transform" defs=TRANSFORMS add_key="fx-transform-add" none_key="fx-transform-none"/>
             </Row>
+            <Row sx props=&["transform-origin"] key="styles-transform-origin"><TransformOrigin sx/></Row>
+            <Row sx props=&["clip-path"] key="styles-clip-path" stack=true><ClipPath sx/></Row>
             <Row sx props=&["transition"] key="styles-transition" stack=true><Transitions sx/></Row>
             <Row sx props=&["filter"] key="styles-filter" stack=true>
                 <FuncList sx prop="filter" defs=FILTERS add_key="fx-filter-add" none_key="fx-filter-none"/>

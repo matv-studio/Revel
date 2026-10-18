@@ -37,7 +37,23 @@ const STATES: &[(&str, &str)] = &[
     (":focus-visible", "styles-state-focus"),
     // Lien vers la page affichée (marqué à la génération).
     ("[aria-current=\"page\"]", "styles-state-current"),
+    // Onglet, filtre, élément pris au hasard : classe posée par le script du site.
+    (".is-active", "styles-state-is-active"),
+    // Élément placé dans un élément actif (le texte d'un onglet actif…).
+    ("^.is-active", "styles-state-in-active"),
+    // Interrupteur éteint (son, musique), et ce qu'il contient.
+    ("[aria-pressed=\"false\"]", "styles-state-off"),
+    ("^[aria-pressed=\"false\"]", "styles-state-in-off"),
 ];
+
+/// Sélecteur d'une classe dans un état : ajouté à la classe (`.onglet:hover`), ou, commençant par
+/// `^`, porté par un élément qui la contient (`.is-active .onglet-texte`).
+pub(crate) fn with_state(sel: &str, state: &str) -> String {
+    match state.strip_prefix('^') {
+        Some(outer) => format!("{outer} {sel}"),
+        None => format!("{sel}{state}"),
+    }
+}
 
 /// Classes littérales de l'élément ou de l'image (pas d'expression). Les champs d'une image
 /// sont des expressions : sa classe est un texte entre guillemets (`"carte__image"`).

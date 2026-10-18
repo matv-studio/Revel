@@ -92,6 +92,10 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         if let Some(v) = consent_settings(ui, ed, &at, &lower, attrs) {
             parts.push(v);
         }
+        // Interrupteur des sons ou de la musique, et texte de son état.
+        if let Some(v) = switch_settings(ui, ed, &at, &lower, attrs) {
+            parts.push(v);
+        }
         // Élément dans des onglets : onglet (bouton ou lien) ou panneau.
         if attr(attrs, "data-revel-tabs").is_none()
             && ed
@@ -652,10 +656,138 @@ fn consent_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> O
     .into()
 }
 
+/// Le site joue des sons ou de la musique (actions, onglets).
+fn site_has_sound(d: &Site) -> bool {
+    let mut found = false;
+    let mut look = |nodes: &[Node]| {
+        revel_model::ids::walk(nodes, &mut |n| {
+            if let Node::Element { attrs, .. } | Node::Use { attrs, .. } = n
+                && attrs.iter().any(|a| {
+                    let v = a.value.as_deref().unwrap_or_default();
+                    (a.name == "data-revel-on" && (v.contains("sound:") || v.contains("music:")))
+                        || (a.name == "data-revel-tabs" && v.contains("sound="))
+                })
+            {
+                found = true;
+            }
+        });
+    };
+    for p in &d.pages {
+        look(&p.body);
+    }
+    for l in &d.layouts {
+        look(&l.body);
+    }
+    for c in &d.components {
+        look(&c.body);
+    }
+    found
+}
+
+/// Interrupteur (`data-revel-switch` : musique ou sons, allumé par défaut, choix gardé par le
+/// navigateur) et texte de son état (`data-revel-switch-text` : « On | Off »). Proposé aux
+/// boutons quand le site joue des sons, et à ce qui est dans un interrupteur.
+fn switch_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Option<AnyView> {
+    let channel = attr(attrs, "data-revel-switch").map(|a| a.value.clone().unwrap_or_default());
+    let text = attr(attrs, "data-revel-switch-text").map(|a| a.value.clone().unwrap_or_default());
+    let (sound, inside) = ed.doc.with_untracked(|d| {
+        d.as_ref().map_or((false, false), |d| {
+            (site_has_sound(d), inside_attr(d, at, "data-revel-switch"))
+        })
+    });
+    let offer_switch = channel.is_some() || (sound && matches!(tag, "button" | "a"));
+    let offer_text = text.is_some() || inside;
+    if !offer_switch && !offer_text {
+        return None;
+    }
+    let at = StoredValue::new(at.clone());
+    let set = move |name: &'static str, v: Option<String>| {
+        let at = at.get_value();
+        ed.apply(
+            ui,
+            match v {
+                Some(v) => Command::SetAttr {
+                    at,
+                    name: name.into(),
+                    value: Some(v),
+                },
+                None => Command::RemoveAttr {
+                    at,
+                    name: name.into(),
+                },
+            },
+            false,
+        );
+    };
+    let cur = channel.clone().unwrap_or_default();
+    let parts: Vec<String> = text
+        .clone()
+        .unwrap_or_else(|| "On|Off".into())
+        .split('|')
+        .map(str::to_string)
+        .collect();
+    let (on_text, off_text) = (
+        parts.first().cloned().unwrap_or_default(),
+        parts.get(1).cloned().unwrap_or_default(),
+    );
+    let texts = StoredValue::new((on_text.clone(), off_text.clone()));
+    let write_text = move |on: Option<String>, off: Option<String>| {
+        let (a, b) = texts.get_value();
+        let v = format!("{}|{}", on.unwrap_or(a), off.unwrap_or(b));
+        set("data-revel-switch-text", Some(v));
+    };
+    Some(
+        view! {
+            <div class="insp-group">
+                {offer_switch.then(|| view! {
+                    <label class="field" title=ui.t("switch-role-help")>
+                        <span class="label">{ui.t("switch-role")}</span>
+                        <div class="select">
+                            <select class="input" on:change=move |e| {
+                                let v = event_target_value(&e);
+                                set("data-revel-switch", (!v.is_empty()).then_some(v));
+                            }>
+                                <option value="" prop:selected=cur.is_empty()>{ui.t("switch-none")}</option>
+                                <option value="music" prop:selected={cur == "music"}>{ui.t("switch-music")}</option>
+                                <option value="sounds" prop:selected={cur == "sounds"}>{ui.t("switch-sounds")}</option>
+                            </select>
+                        </div>
+                    </label>
+                })}
+                {offer_text.then(|| match text.is_some() {
+                    true => view! {
+                        <label class="field">
+                            <span class="label">{ui.t("switch-text-on")}</span>
+                            <input class="input" prop:value=on_text.clone()
+                                on:change=move |e| write_text(Some(event_target_value(&e)), None)/>
+                        </label>
+                        <label class="field">
+                            <span class="label">{ui.t("switch-text-off")}</span>
+                            <input class="input" prop:value=off_text.clone()
+                                on:change=move |e| write_text(None, Some(event_target_value(&e)))/>
+                        </label>
+                        <button class="link-btn" on:click=move |_| set("data-revel-switch-text", None)>{ui.t("switch-text-remove")}</button>
+                    }.into_any(),
+                    false => view! {
+                        <button class="link-btn" title=ui.t("switch-text-help")
+                            on:click=move |_| set("data-revel-switch-text", Some("On|Off".into()))>{ui.t("switch-text-add")}</button>
+                    }.into_any(),
+                })}
+            </div>
+        }
+        .into_any(),
+    )
+}
+
 // ------------------------------------------------------------------ onglets
 
 /// Un parent de `at` porte `data-revel-tabs`.
 fn inside_tabs(d: &Site, at: &Target) -> bool {
+    inside_attr(d, at, "data-revel-tabs")
+}
+
+/// Un parent de `at` porte l'attribut `name`.
+fn inside_attr(d: &Site, at: &Target, name: &str) -> bool {
     let mut cur = at.clone();
     for _ in 0..64 {
         let Ok((parent, _)) = revel_edit::address::locate(d, &cur) else {
@@ -669,7 +801,7 @@ fn inside_tabs(d: &Site, at: &Target) -> bool {
             node: id,
         };
         if let Ok(Node::Element { attrs, .. }) = revel_edit::address::node(d, &t)
-            && attr(attrs, "data-revel-tabs").is_some()
+            && attr(attrs, name).is_some()
         {
             return true;
         }
@@ -678,39 +810,73 @@ fn inside_tabs(d: &Site, at: &Target) -> bool {
     false
 }
 
-/// Onglets : changement au survol (sinon à l'appui).
+/// Onglets : changement au survol (sinon à l'appui), touches du clavier dans toute la page
+/// (flèches, W/A/S/D), son joué à chaque changement.
 fn tabs_options(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
     let at = StoredValue::new(at);
-    let hover = value.split_whitespace().any(|o| o == "hover");
-    let set = move |on: bool| {
-        let mut opts: Vec<String> = value
+    let opts = StoredValue::new(value.clone());
+    let has = |k: &str| value.split_whitespace().any(|o| o == k);
+    let (hover, keys) = (has("hover"), has("keys"));
+    let sound = value
+        .split_whitespace()
+        .find_map(|o| o.strip_prefix("sound="))
+        .map(|u| u.replace("%20", " "));
+    // Réglage `key` (drapeau, ou `key=valeur`) remplacé ou retiré.
+    let put = move |key: &'static str, v: Option<String>| {
+        let mut list: Vec<String> = opts
+            .get_value()
             .split_whitespace()
-            .filter(|o| *o != "hover")
+            .filter(|o| *o != key && !o.starts_with(&format!("{key}=")))
             .map(str::to_string)
             .collect();
-        if on {
-            opts.push("hover".into());
+        if let Some(v) = v {
+            list.push(if v.is_empty() {
+                key.to_string()
+            } else {
+                format!("{key}={}", revel_edit::actions::url_token(&v))
+            });
         }
         ed.apply(
             ui,
             Command::SetAttr {
                 at: at.get_value(),
                 name: "data-revel-tabs".into(),
-                value: (!opts.is_empty()).then(|| opts.join(" ")),
+                value: Some(list.join(" ")),
             },
             false,
         );
     };
-    view! {
-        <div class="insp-group">
-            <p class="panel-title">{ui.t("tabs-title")}</p>
-            <label class="view-line" title=ui.t("tabs-hover-help")>
-                <span>{ui.t("tabs-hover")}</span>
+    let flag = move |key: &'static str, title: &'static str, help: &'static str, on: bool| {
+        view! {
+            <label class="view-line" title=ui.t(help)>
+                <span>{ui.t(title)}</span>
                 <span class="switch">
-                    <input type="checkbox" prop:checked=hover on:change=move |e| set(event_target_checked(&e))/>
+                    <input type="checkbox" prop:checked=on
+                        on:change=move |e| put(key, event_target_checked(&e).then(String::new))/>
                     <span class="switch-track"></span>
                 </span>
             </label>
+        }
+    };
+    let sound_name = sound
+        .as_deref()
+        .map(|u| u.rsplit('/').next().unwrap_or(u).to_string());
+    view! {
+        <div class="insp-group">
+            <p class="panel-title">{ui.t("tabs-title")}</p>
+            {flag("hover", "tabs-hover", "tabs-hover-help", hover)}
+            {flag("keys", "tabs-keys", "tabs-keys-help", keys)}
+            <div class="view-line" title=ui.t("tabs-sound-help")>
+                <span>{ui.t("tabs-sound")}</span>
+                <span class="act-sound-name">{sound_name.map(|n| view! { {icons::audio()}<span>{n}</span> })}</span>
+                <button class="icon-btn icon-btn--small" title=ui.t("act-sound-add") aria-label=ui.t("act-sound-add")
+                    on:click=move |_| crate::library::pick_audio(ui, crate::library::media_shelf(ed), move |url| put("sound", Some(url)))>
+                    {icons::audio()}</button>
+                {sound.is_some().then(|| view! {
+                    <button class="icon-btn icon-btn--small" title=ui.t("act-sound-remove") aria-label=ui.t("act-sound-remove")
+                        on:click=move |_| put("sound", None)>{icons::close()}</button>
+                })}
+            </div>
         </div>
     }
     .into_any()
@@ -1622,7 +1788,7 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                 <label class="field">
                     <span class="label">{ui.t("block-list-sort")}</span>
                     <div class="select">
-                        <select class="input" on:change=move |e| {
+                        <select class="input" data-list="sort" on:change=move |e| {
                             let v = event_target_value(&e);
                             write(Box::new(move |q| {
                                 let desc = q.sort.as_ref().map(|s| s.1).unwrap_or(v == "date");

@@ -1457,7 +1457,7 @@ impl Ed {
                     commands: vec![
                         set_class,
                         Command::AddRule {
-                            selector: format!(".{name}{state}"),
+                            selector: crate::styles::with_state(&format!(".{name}"), &state),
                             media,
                             decls,
                         },
@@ -1467,7 +1467,7 @@ impl Ed {
             );
             return;
         };
-        let full = format!("{sel}{state}");
+        let full = crate::styles::with_state(&sel, &state);
         let rule = self
             .doc
             .with_untracked(|d| crate::styles::find_rule(d.as_ref()?, &full, &media));

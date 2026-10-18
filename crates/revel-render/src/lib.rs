@@ -22,6 +22,7 @@ mod head;
 mod html;
 pub mod lottie;
 pub mod rebase;
+mod redirects;
 pub mod transitions;
 mod typography;
 
@@ -305,6 +306,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     }
     feeds(input, &mut files, &mut warnings)?;
     seo_files(site, &pages, &mut files, &mut warnings);
+    redirects::redirect_files(site, &mut files, &mut warnings);
     forms::handler_file(site, forms, &mut files, &mut warnings);
     animations::script_file(used.animations, &mut files);
     lottie::script_file(used.lottie, &mut files);

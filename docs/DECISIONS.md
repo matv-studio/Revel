@@ -776,6 +776,18 @@ recréant p3r.deltea.space avec les seuls outils des assistants (MCP) : relevé 
 l'écran d'accueil, 0,2 à 0,34 % sur le menu (1440 × 900) ; icône « flèche épaisse » ajoutée, élément
 « Icône » réglable par son nom pour les assistants.
 
+**D-95 — 18/10/2026 — prise.** **Redirections écrites dans le site produit.** La liste de Paramètres ›
+Navigation › Redirections (et celles qu'ajoute un changement d'adresse de page) n'était qu'enregistrée : la
+génération l'écrit désormais. Apache : règles `mod_rewrite` dans `.htaccess` (créé s'il n'existe pas, sinon
+placées avant la première règle du fichier), seules capables de lire les paramètres d'une ancienne adresse
+(`/?p=12`) — `Redirect` de `mod_alias` ne lit pas la chaîne de requête
+([S. Carletti](https://simonecarletti.com/blog/2009/01/apache-query-string-redirects/)). Tout hébergeur
+(GitHub Pages ignore `.htaccess`) : page de redirection immédiate à l'ancienne adresse (`meta refresh` à
+0 seconde, lu comme permanent par Google,
+[Google Search Central](https://developers.google.com/search/docs/crawling-indexing/301-redirects)), avec
+`noindex` et adresse canonique ; jamais à la place d'une page existante. Les assistants (MCP) lisent la liste
+dans `get_site` et la remplacent par `apply_commands` (`set_redirects`).
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

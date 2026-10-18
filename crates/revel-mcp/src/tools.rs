@@ -65,7 +65,10 @@ Animations: `data-revel-appear|text|hover|press|loop|scroll|active` (e.g. `data-
 `data-revel-active=\"pop\"` plays when its tab, filter or switch becomes active), \
 `data-revel-loop=\"ticker speed=60 pause\"`). Lottie: `data-lottie=\"/media/x.json\"` with `data-lottie-play`.\n\
 - Page settings (title, description, share image, body class, theme, share type, publication date) and site settings (site name, \
-icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`.\n\
+icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`. Redirections \
+(old address, with or without `?parameters`, to a new one) are a site setting: `apply_commands` with \
+`{\"cmd\": \"set_redirects\", \"redirects\": [{\"from\": \"/old/\", \"to\": \"/new/\"}]}` (the whole list); Revel writes the \
+`.htaccess` rules and a redirect page at the old address.\n\
 Existing sites may still contain {{ expressions }} from data files: read them with `get_data`/`set_data`; CMS entries \
 with `list_collections`, `get_entry`, `set_entry_field`. Keep the site's language and tone.";
 
@@ -679,6 +682,16 @@ impl Revel {
                 d.components
                     .iter()
                     .map(|c| format!("{} ({})", c.label(), c.id))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if !d.redirects.is_empty() {
+            out.push(format!(
+                "Redirections: {}",
+                d.redirects
+                    .iter()
+                    .map(|r| format!("{} → {}", r.from, r.to))
                     .collect::<Vec<_>>()
                     .join(", ")
             ));

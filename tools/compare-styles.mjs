@@ -108,7 +108,25 @@ async function settle(page) {
     // tardivement change la mise en page d'une capture à l'autre).
     await Promise.all([...document.fonts].map((f) => f.load().catch(() => null)));
     await document.fonts.ready;
-    for (const v of document.querySelectorAll('video')) { v.pause(); v.currentTime = 0; }
+    // Vidéos à leur première image : le retour au début est asynchrone, attendu jusqu'à
+    // l'événement `seeked` (sinon la capture peut montrer une image intermédiaire du décodage).
+    // Une vidéo en cours de chargement (lecture automatique) est d'abord attendue : `pause()`
+    // empêche ensuite la lecture automatique.
+    const once = (v, ev) => new Promise((r) => {
+      const t = setTimeout(r, 8000);
+      v.addEventListener(ev, () => { clearTimeout(t); r(); }, { once: true });
+    });
+    await Promise.all([...document.querySelectorAll('video')].map(async (v) => {
+      v.pause();
+      if (v.readyState < 2 && v.networkState === HTMLMediaElement.NETWORK_LOADING) {
+        await once(v, 'loadeddata');
+        v.pause();
+      }
+      if (v.readyState === 0) return; // rien de chargé : l'affiche est montrée
+      const seeked = once(v, 'seeked');
+      v.currentTime = 0;
+      await seeked;
+    }));
   });
   await page.waitForTimeout(200);
   await page.evaluate(async () => {

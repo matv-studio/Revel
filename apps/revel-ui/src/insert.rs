@@ -368,6 +368,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     true,
                 ),
                 item(
+                    Preset::ListFilters,
+                    "insert-filters",
+                    "insert-help-filters",
+                    "insert-text-filters",
+                    icons::filter,
+                    "div",
+                    true,
+                ),
+                item(
                     Preset::Tabs,
                     "insert-tabs",
                     "insert-help-tabs",

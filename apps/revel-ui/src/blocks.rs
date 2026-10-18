@@ -76,6 +76,30 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
             let at = at.clone();
             parts.push(view! { <crate::interactions::TickerSettings at=at/> }.into_any());
         }
+        if let Some(v) = attr(attrs, "data-revel-tabs") {
+            parts.push(tabs_options(ui, ed, at.clone(), v.value.clone().unwrap_or_default()));
+        }
+        // Filtres de liste : groupe, bouton, élément filtré, message sans résultat.
+        if let Some(v) = filter_settings(ui, ed, &at, attrs) {
+            parts.push(v);
+        }
+        // Consentement : bandeau (identifiant de mesure), boutons, lien qui le rouvre.
+        if let Some(v) = consent_settings(ui, ed, &at, attrs) {
+            parts.push(v);
+        }
+        // Élément dans des onglets : onglet (bouton ou lien) ou panneau.
+        if attr(attrs, "data-revel-tabs").is_none()
+            && ed.doc.with_untracked(|d| d.as_ref().is_some_and(|d| inside_tabs(d, &at)))
+        {
+            let role = if attr(attrs, "data-revel-tab").is_some() {
+                "tab"
+            } else if attr(attrs, "data-revel-panel").is_some() {
+                "panel"
+            } else {
+                ""
+            };
+            parts.push(tab_role(ui, ed, at.clone(), role));
+        }
         if let Some(v) = attr(attrs, "data-revel-slider") {
             parts.push(slider_options(
                 ui,
@@ -111,6 +135,12 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
     } = &node
     {
         parts.push(collection_list(ui, ed, at.clone(), expr.clone()));
+    }
+    // Utilisation d'un composant dans une liste : élément filtré par les filtres de la page.
+    if let Node::Use { attrs, .. } = &node
+        && let Some(v) = filter_settings(ui, ed, &at, attrs)
+    {
+        parts.push(v);
     }
     if let Some(b) = item_bindings(ui, ed, &at, &node) {
         parts.push(b);
@@ -291,6 +321,418 @@ fn video_player_options(ui: Ui, ed: Ed, at: Target, url: String) -> AnyView {
             {(!kind.is_empty()).then(|| view! {
                 <p class="muted small">{if kind == "file" { ui.tx("block-video-player-file", &[]) } else { kind.to_string() }}</p>
             })}
+        </div>
+    }
+    .into_any()
+}
+
+// ------------------------------------------------------------------ filtres de liste
+
+/// Le site contient un élément qui porte l'attribut `name` (groupe de filtres, bandeau).
+fn site_has_attr(d: &Site, name: &str) -> bool {
+    let mut found = false;
+    let mut look = |nodes: &[Node]| {
+        revel_model::ids::walk(nodes, &mut |n| {
+            if let Node::Element { attrs, .. } = n
+                && attrs.iter().any(|a| a.name == name)
+            {
+                found = true;
+            }
+        });
+    };
+    for p in &d.pages {
+        look(&p.body);
+    }
+    for l in &d.layouts {
+        look(&l.body);
+    }
+    for c in &d.components {
+        look(&c.body);
+    }
+    found
+}
+
+/// Rôle d'un élément dans les filtres de liste (« Filtres » de Finsweet pour Webflow) : groupe
+/// (paramètre de l'adresse), bouton (valeur écrite ou champ), élément filtré (champ liste du
+/// contenu), message sans résultat. Proposé quand l'élément a un rôle ou que le site a un groupe.
+fn filter_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyView> {
+    let value = |n: &str| attr(attrs, n).map(|a| a.value.clone().unwrap_or_default());
+    let role = if attr(attrs, "data-revel-filters").is_some() {
+        "group"
+    } else if attr(attrs, "data-revel-filter").is_some() {
+        "button"
+    } else if attr(attrs, "data-revel-tags").is_some() {
+        "item"
+    } else if attr(attrs, "data-revel-filter-empty").is_some() {
+        "empty"
+    } else {
+        ""
+    };
+    let (has_group, list) = ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        Some((site_has_attr(d, "data-revel-filters"), binding_context(d, at)))
+    })?;
+    if role.is_empty() && !has_group {
+        return None;
+    }
+    let names = [
+        ("group", "data-revel-filters"),
+        ("button", "data-revel-filter"),
+        ("item", "data-revel-tags"),
+        ("empty", "data-revel-filter-empty"),
+    ];
+    let at = StoredValue::new(at.clone());
+    let set_role = move |v: String| {
+        let at = at.get_value();
+        let mut commands = Vec::new();
+        for (r, name) in names {
+            if r == role && v != r {
+                commands.push(Command::RemoveAttr {
+                    at: at.clone(),
+                    name: name.into(),
+                });
+            }
+            if r == v && role != r {
+                commands.push(Command::SetAttr {
+                    at: at.clone(),
+                    name: name.into(),
+                    value: match r {
+                        "group" => Some("filtre".into()),
+                        "button" | "item" => Some(String::new()),
+                        _ => None,
+                    },
+                });
+            }
+        }
+        if !commands.is_empty() {
+            ed.apply(ui, Command::Batch { commands }, false);
+        }
+    };
+    let set_value = move |name: &'static str, v: String| {
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at: at.get_value(),
+                name: name.into(),
+                value: Some(v),
+            },
+            false,
+        );
+    };
+    // Champs du contenu de la liste qui entoure l'élément (valeur d'un bouton, étiquettes).
+    let cols = collections(ed);
+    let fields = move |many: bool| -> Vec<(String, String)> {
+        let Some((col, prefix, _)) = list.clone() else {
+            return Vec::new();
+        };
+        cols.with(|cs| {
+            cs.iter()
+                .find(|c| c.id == col)
+                .map(|c| {
+                    c.fields
+                        .iter()
+                        .filter(|f| f.list == many)
+                        .map(|f| {
+                            (
+                                format!("{prefix}{}", f.name),
+                                f.label.clone().unwrap_or_else(|| f.name.clone()),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    };
+    let inner = |v: &str| {
+        v.trim()
+            .strip_prefix("{{")
+            .and_then(|x| x.strip_suffix("}}"))
+            .map(|x| x.trim().to_string())
+    };
+    let detail = match role {
+        "group" => {
+            let param = value("data-revel-filters").unwrap_or_default();
+            Some(view! {
+                <label class="field" title=ui.t("filters-param-help")>
+                    <span class="label">{ui.t("filters-param")}</span>
+                    <input class="input input--mono" spellcheck="false" prop:value=param
+                        on:change=move |e| set_value("data-revel-filters", event_target_value(&e).trim().to_string())/>
+                </label>
+            }.into_any())
+        }
+        "button" => {
+            let v = value("data-revel-filter").unwrap_or_default();
+            let bound = inner(&v);
+            let written = if bound.is_some() { String::new() } else { v.clone() };
+            let cur = bound.clone().unwrap_or_default();
+            Some(view! {
+                <label class="field">
+                    <span class="label" title=ui.t("filters-value-help")>{ui.t("filters-value")}</span>
+                    <div class="select">
+                        <select class="input" on:change=move |e| {
+                            let f = event_target_value(&e);
+                            set_value("data-revel-filter", if f.is_empty() { String::new() } else { format!("{{{{ {f} }}}}") });
+                        }>
+                            <option value="" prop:selected=cur.is_empty()>{ui.t("filters-value-written")}</option>
+                            {move || fields(false).into_iter().map(|(e, l)| {
+                                let on = e == cur;
+                                view! { <option value=e prop:selected=on>{l}</option> }
+                            }).collect_view()}
+                        </select>
+                    </div>
+                </label>
+                {bound.is_none().then(|| view! {
+                    <input class="input" prop:value=written placeholder=ui.t("filters-value-all")
+                        aria-label=ui.t("filters-value")
+                        on:change=move |e| set_value("data-revel-filter", event_target_value(&e).trim().to_string())/>
+                })}
+            }.into_any())
+        }
+        "item" => {
+            let v = value("data-revel-tags").unwrap_or_default();
+            let cur = inner(&v)
+                .and_then(|e| {
+                    let (h, t) = e.split_once('|')?;
+                    t.trim().starts_with("join").then(|| h.trim().to_string())
+                })
+                .unwrap_or_default();
+            Some(view! {
+                <label class="field">
+                    <span class="label" title=ui.t("filters-tags-help")>{ui.t("filters-tags")}</span>
+                    <div class="select">
+                        <select class="input" on:change=move |e| {
+                            let f = event_target_value(&e);
+                            set_value("data-revel-tags", if f.is_empty() { String::new() } else { format!("{{{{ {f} | join(' ') }}}}") });
+                        }>
+                            <option value="" prop:selected=cur.is_empty()>"—"</option>
+                            {move || fields(true).into_iter().map(|(e, l)| {
+                                let on = e == cur;
+                                view! { <option value=e prop:selected=on>{l}</option> }
+                            }).collect_view()}
+                        </select>
+                    </div>
+                </label>
+            }.into_any())
+        }
+        _ => None,
+    };
+    Some(
+        view! {
+            <div class="insp-group">
+                <label class="field" title=ui.t("filters-role-help")>
+                    <span class="label">{ui.t("filters-role")}</span>
+                    <div class="select">
+                        <select class="input" on:change=move |e| set_role(event_target_value(&e))>
+                            <option value="" prop:selected=role.is_empty()>{ui.t("filters-role-none")}</option>
+                            <option value="group" prop:selected={role == "group"}>{ui.t("filters-role-group")}</option>
+                            <option value="button" prop:selected={role == "button"}>{ui.t("filters-role-button")}</option>
+                            <option value="item" prop:selected={role == "item"}>{ui.t("filters-role-item")}</option>
+                            <option value="empty" prop:selected={role == "empty"}>{ui.t("filters-role-empty")}</option>
+                        </select>
+                    </div>
+                </label>
+                {detail}
+            </div>
+        }
+        .into_any(),
+    )
+}
+
+// ------------------------------------------------------------------ consentement
+
+/// Rôle d'un élément dans le consentement aux cookies : bandeau (affiché tant que le visiteur
+/// n'a pas choisi ; identifiant Google Analytics 4 chargé après accord), bouton Accepter,
+/// bouton Refuser, lien qui rouvre le bandeau.
+fn consent_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyView> {
+    let choice = attr(attrs, "data-revel-consent-choice").and_then(|a| a.value.clone());
+    let role = if attr(attrs, "data-revel-consent").is_some() {
+        "banner"
+    } else if choice.as_deref() == Some("accept") {
+        "accept"
+    } else if choice.as_deref() == Some("refuse") {
+        "refuse"
+    } else if attr(attrs, "data-revel-consent-open").is_some() {
+        "open"
+    } else {
+        ""
+    };
+    let has_banner = ed
+        .doc
+        .with_untracked(|d| d.as_ref().is_some_and(|d| site_has_attr(d, "data-revel-consent")));
+    if role.is_empty() && !has_banner {
+        return None;
+    }
+    let ga = attr(attrs, "data-revel-consent")
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    let at = StoredValue::new(at.clone());
+    let set_role = move |v: String| {
+        let at = at.get_value();
+        let mut commands = Vec::new();
+        let current_attr = match role {
+            "banner" => Some("data-revel-consent"),
+            "accept" | "refuse" => Some("data-revel-consent-choice"),
+            "open" => Some("data-revel-consent-open"),
+            _ => None,
+        };
+        if let Some(n) = current_attr {
+            commands.push(Command::RemoveAttr {
+                at: at.clone(),
+                name: n.into(),
+            });
+        }
+        let (name, value) = match v.as_str() {
+            "banner" => ("data-revel-consent", Some(String::new())),
+            "accept" => ("data-revel-consent-choice", Some("accept".to_string())),
+            "refuse" => ("data-revel-consent-choice", Some("refuse".to_string())),
+            "open" => ("data-revel-consent-open", None),
+            _ => ("", None),
+        };
+        if !name.is_empty() {
+            commands.push(Command::SetAttr {
+                at: at.clone(),
+                name: name.into(),
+                value,
+            });
+        }
+        if !commands.is_empty() {
+            ed.apply(ui, Command::Batch { commands }, false);
+        }
+    };
+    view! {
+        <div class="insp-group">
+            <label class="field" title=ui.t("consent-role-help")>
+                <span class="label">{ui.t("consent-role")}</span>
+                <div class="select">
+                    <select class="input" on:change=move |e| set_role(event_target_value(&e))>
+                        <option value="" prop:selected=role.is_empty()>{ui.t("consent-role-none")}</option>
+                        <option value="banner" prop:selected={role == "banner"}>{ui.t("consent-role-banner")}</option>
+                        <option value="accept" prop:selected={role == "accept"}>{ui.t("consent-role-accept")}</option>
+                        <option value="refuse" prop:selected={role == "refuse"}>{ui.t("consent-role-refuse")}</option>
+                        <option value="open" prop:selected={role == "open"}>{ui.t("consent-role-open")}</option>
+                    </select>
+                </div>
+            </label>
+            {(role == "banner").then(|| view! {
+                <label class="field" title=ui.t("consent-ga-help")>
+                    <span class="label">{ui.t("consent-ga")}</span>
+                    <input class="input input--mono" spellcheck="false" placeholder="G-XXXXXXXXXX" prop:value=ga
+                        on:change=move |e| {
+                            ed.apply(ui, Command::SetAttr {
+                                at: at.get_value(),
+                                name: "data-revel-consent".into(),
+                                value: Some(event_target_value(&e).trim().to_string()),
+                            }, false);
+                        }/>
+                </label>
+            })}
+        </div>
+    }
+    .into_any()
+    .into()
+}
+
+// ------------------------------------------------------------------ onglets
+
+/// Un parent de `at` porte `data-revel-tabs`.
+fn inside_tabs(d: &Site, at: &Target) -> bool {
+    let mut cur = at.clone();
+    for _ in 0..64 {
+        let Ok((parent, _)) = revel_edit::address::locate(d, &cur) else {
+            return false;
+        };
+        let Some(id) = parent.node else {
+            return false;
+        };
+        let t = Target {
+            owner: at.owner.clone(),
+            node: id,
+        };
+        if let Ok(Node::Element { attrs, .. }) = revel_edit::address::node(d, &t)
+            && attr(attrs, "data-revel-tabs").is_some()
+        {
+            return true;
+        }
+        cur = t;
+    }
+    false
+}
+
+/// Onglets : changement au survol (sinon à l'appui).
+fn tabs_options(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
+    let at = StoredValue::new(at);
+    let hover = value.split_whitespace().any(|o| o == "hover");
+    let set = move |on: bool| {
+        let mut opts: Vec<String> = value
+            .split_whitespace()
+            .filter(|o| *o != "hover")
+            .map(str::to_string)
+            .collect();
+        if on {
+            opts.push("hover".into());
+        }
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at: at.get_value(),
+                name: "data-revel-tabs".into(),
+                value: (!opts.is_empty()).then(|| opts.join(" ")),
+            },
+            false,
+        );
+    };
+    view! {
+        <div class="insp-group">
+            <p class="panel-title">{ui.t("tabs-title")}</p>
+            <label class="view-line" title=ui.t("tabs-hover-help")>
+                <span>{ui.t("tabs-hover")}</span>
+                <span class="switch">
+                    <input type="checkbox" prop:checked=hover on:change=move |e| set(event_target_checked(&e))/>
+                    <span class="switch-track"></span>
+                </span>
+            </label>
+        </div>
+    }
+    .into_any()
+}
+
+/// Rôle d'un élément dans des onglets : onglet, panneau ou aucun.
+fn tab_role(ui: Ui, ed: Ed, at: Target, role: &'static str) -> AnyView {
+    let at = StoredValue::new(at);
+    let set = move |v: String| {
+        let at = at.get_value();
+        let mut commands = Vec::new();
+        for (name, key) in [("data-revel-tab", "tab"), ("data-revel-panel", "panel")] {
+            if v == key && role != key {
+                commands.push(Command::SetAttr {
+                    at: at.clone(),
+                    name: name.into(),
+                    value: None,
+                });
+            } else if v != key && role == key {
+                commands.push(Command::RemoveAttr {
+                    at: at.clone(),
+                    name: name.into(),
+                });
+            }
+        }
+        if commands.is_empty() {
+            return;
+        }
+        ed.apply(ui, Command::Batch { commands }, false);
+    };
+    view! {
+        <div class="insp-group">
+            <label class="field" title=ui.t("tabs-role-help")>
+                <span class="label">{ui.t("tabs-role")}</span>
+                <div class="select">
+                    <select class="input" on:change=move |e| set(event_target_value(&e))>
+                        <option value="" prop:selected=role.is_empty()>{ui.t("tabs-role-none")}</option>
+                        <option value="tab" prop:selected={role == "tab"}>{ui.t("tabs-role-tab")}</option>
+                        <option value="panel" prop:selected={role == "panel"}>{ui.t("tabs-role-panel")}</option>
+                    </select>
+                </div>
+            </label>
         </div>
     }
     .into_any()
@@ -611,6 +1053,107 @@ fn list_source(ui: Ui, ed: Ed, each_at: Target, expr: String) -> Option<AnyView>
     )
 }
 
+/// Classes d'un élément relié : selon des conditions, ou tirée de la valeur d'un champ.
+fn class_editors(
+    ui: Ui,
+    ed: Ed,
+    at: StoredValue<Target>,
+    node: &Node,
+    fields: Signal<Vec<(String, String)>>,
+) -> Option<AnyView> {
+    let Node::Element { attrs, .. } = node else {
+        return None;
+    };
+    let v = attr(attrs, "class")
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    if let Some((base, prefix, field, default)) = revel_edit::style::value_class(&v) {
+        return Some(value_class_editor(ui, ed, at, base, prefix, field, default, fields));
+    }
+    let (base, conds) = revel_edit::style::cond_classes(&v)?;
+    Some(cond_classes_editor(ui, ed, at, base, conds, fields))
+}
+
+/// Classe tirée d'un champ : début écrit autour, préfixe, champ, valeur par défaut.
+type ValueClass = (String, String, String, Option<String>);
+
+/// Classe tirée de la valeur d'un champ (`block--{{ b.style or 'plein' }}`) : champ, début de
+/// la classe, valeur quand le champ est vide.
+#[allow(clippy::too_many_arguments)]
+fn value_class_editor(
+    ui: Ui,
+    ed: Ed,
+    at: StoredValue<Target>,
+    base: String,
+    prefix: String,
+    field: String,
+    default: Option<String>,
+    fields: Signal<Vec<(String, String)>>,
+) -> AnyView {
+    let state = StoredValue::new((base, prefix.clone(), field.clone(), default.clone()));
+    let write = move |f: Box<dyn Fn(&mut ValueClass)>| {
+        let mut st = state.get_value();
+        f(&mut st);
+        state.set_value(st.clone());
+        let (b, p, fi, d) = st;
+        let value = if fi.is_empty() {
+            b
+        } else {
+            revel_edit::style::value_class_expr(&b, &p, &fi, d.as_deref())
+        };
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at: at.get_value(),
+                name: "class".into(),
+                value: Some(value),
+            },
+            false,
+        );
+    };
+    let cur = field.clone();
+    view! {
+        <div class="field" data-bound="block-bound-value-class">
+            <span class="label" title=ui.t("block-bound-value-class-help")>{ui.t("block-bound-value-class")}</span>
+            <div class="select">
+                <select class="input" on:change=move |e| {
+                    let v = event_target_value(&e);
+                    write(Box::new(move |s| s.2 = v.clone()));
+                }>
+                    <option value="">{ui.t("block-bound-value-class-none")}</option>
+                    {move || {
+                        let known = fields.with(|fs| fs.iter().any(|(e, _)| *e == cur));
+                        let extra = (!known).then(|| view! { <option value=cur.clone() selected=true>{cur.clone()}</option> });
+                        view! {
+                            {extra}
+                            {fields.with(|fs| fs.iter().map(|(e, l)| {
+                                let on = *e == cur;
+                                view! { <option value=e.clone() selected=on>{l.clone()}</option> }
+                            }).collect_view())}
+                        }
+                    }}
+                </select>
+            </div>
+            <div class="field-pair">
+                <label class="field">
+                    <span class="label">{ui.t("block-bound-value-class-prefix")}</span>
+                    <input class="input input--mono" spellcheck="false" prop:value=prefix
+                        on:change=move |e| { let v = event_target_value(&e).trim().to_string(); write(Box::new(move |s| s.1 = v.clone())) }/>
+                </label>
+                <label class="field">
+                    <span class="label">{ui.t("block-bound-value-class-default")}</span>
+                    <input class="input input--mono" spellcheck="false" prop:value=default.unwrap_or_default()
+                        on:change=move |e| {
+                            let v = event_target_value(&e).trim().to_string();
+                            write(Box::new(move |s| s.3 = (!v.is_empty()).then(|| v.clone())))
+                        }/>
+                </label>
+            </div>
+        </div>
+    }
+    .into_any()
+}
+
 /// Classes ajoutées selon des conditions (`carte{% if item.data.une %} carte--une{% endif %}`) :
 /// une ligne par classe, avec ses conditions (champ rempli, égal à…).
 fn cond_classes_editor(
@@ -645,6 +1188,7 @@ fn cond_classes_editor(
         ed.apply(ui, cmd, false);
     };
     let first_class = conds_base_first(&rows);
+    let no_rows = rows.with_value(|r| r.is_empty());
     view! {
         <div class="field" data-bound="block-bound-class">
             <span class="label" title=ui.t("block-bound-class-help")>{ui.t("block-bound-class")}</span>
@@ -683,6 +1227,18 @@ fn cond_classes_editor(
                 list.push((f, format!("{}--option", first_class.clone())));
                 write(list);
             }>{ui.t("cond-class-add")}</button>
+            {no_rows.then(|| view! {
+                <button type="button" class="link-btn cond-add" on:click=move |_| {
+                    let Some(f) = fields.with_untracked(|fs| fs.first().map(|(e, _)| e.clone())) else { return };
+                    let b = base.get_value();
+                    let first = b.split_whitespace().next().unwrap_or("classe").to_string();
+                    ed.apply(ui, Command::SetAttr {
+                        at: at.get_value(),
+                        name: "class".into(),
+                        value: Some(revel_edit::style::value_class_expr(&b, &format!("{first}--"), &f, None)),
+                    }, false);
+                }>{ui.t("block-bound-value-class-add")}</button>
+            })}
         </div>
     }
     .into_any()
@@ -1161,6 +1717,8 @@ struct TextBind {
     fallback: Option<String>,
     format: Option<String>,
     safe: bool,
+    /// Nombre de valeurs d'un champ liste (`x | length`).
+    count: bool,
     raw: Option<String>,
 }
 
@@ -1207,6 +1765,10 @@ fn text_bind(children: &[Node], field_of: &dyn Fn(&str) -> Option<String>) -> Op
             b.field = f;
             b.safe = true;
         }
+        (Some(f), Some("length")) => {
+            b.field = f;
+            b.count = true;
+        }
         (Some(f), Some(t)) if revel_edit::dates::format_of(t).is_some() => {
             b.field = f;
             b.format = revel_edit::dates::format_of(t);
@@ -1228,7 +1790,9 @@ fn text_children(b: &TextBind, prefix: &str) -> Vec<Node> {
         Some(fb) => format!("({prefix}{} or {prefix}{fb})", b.field),
         None => format!("{prefix}{}", b.field),
     };
-    if let Some(f) = &b.format {
+    if b.count {
+        expr.push_str(" | length");
+    } else if let Some(f) = &b.format {
         expr.push_str(" | ");
         expr.push_str(f);
     } else if b.safe {
@@ -1311,7 +1875,13 @@ fn template_collection(d: &Site, at: &Target) -> Option<String> {
 /// ou vide (« Conditional visibility »).
 fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     if let Some(var) = ed.doc.with_untracked(|d| enclosing_values(d.as_ref()?, at)) {
-        return value_binding(ui, ed, at, node, var);
+        let main = value_binding(ui, ed, at, node, var);
+        let fields = condition_fields(ed, at).unwrap_or_else(|| Signal::derive(Vec::new));
+        let classes = class_editors(ui, ed, StoredValue::new(at.clone()), node, fields);
+        return match (main, classes) {
+            (None, None) => None,
+            (m, c) => Some(view! { {m} {c.map(|c| view! { <div class="insp-group">{c}</div> })} }.into_any()),
+        };
     }
     let (collection_id, prefix, url_expr) = ed
         .doc
@@ -1332,6 +1902,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     };
     let mut slots: Vec<(Slot, Option<String>)> = Vec::new();
     let mut text: Option<TextBind> = None;
+    let mut link_affix: Option<(String, String)> = None;
     match node {
         Node::Element {
             tag,
@@ -1343,10 +1914,15 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
             if let Some(b) = text_bind(children, &field_of)
                 && !(is_link && children.is_empty())
             {
-                let cur = b
-                    .raw
-                    .clone()
-                    .or_else(|| (!b.field.is_empty()).then(|| b.field.clone()));
+                let cur = b.raw.clone().or_else(|| {
+                    (!b.field.is_empty()).then(|| {
+                        if b.count {
+                            format!("count:{}", b.field)
+                        } else {
+                            b.field.clone()
+                        }
+                    })
+                });
                 slots.push((Slot::Text, cur));
                 text = Some(b);
             }
@@ -1354,12 +1930,19 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                 let href = attr(attrs, "href")
                     .and_then(|a| a.value.clone())
                     .unwrap_or_default();
-                let inner = href
-                    .trim()
-                    .strip_prefix("{{")
-                    .and_then(|t| t.strip_suffix("}}"))
-                    .map(str::trim)
-                    .map(str::to_string);
+                // Adresse : `avant{{ champ }}après` (texte écrit autour du champ).
+                let (inner, affix) = match (href.find("{{"), href.rfind("}}")) {
+                    (Some(i), Some(j))
+                        if i < j && !href[..i].contains('{') && !href[j + 2..].contains('{') =>
+                    {
+                        (
+                            Some(href[i + 2..j].trim().to_string()),
+                            (href[..i].to_string(), href[j + 2..].to_string()),
+                        )
+                    }
+                    _ => (None, (String::new(), String::new())),
+                };
+                link_affix = Some(affix);
                 let cur = match inner {
                     Some(e) if e == url_expr => Some("@url".to_string()),
                     Some(e) => Some(field_of(&e).unwrap_or(e)),
@@ -1389,6 +1972,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let at = StoredValue::new(at.clone());
     let prefix = StoredValue::new(prefix.clone());
     let url_expr = StoredValue::new(url_expr);
+    let link_affix = StoredValue::new(link_affix.unwrap_or_default());
     let collection = StoredValue::new(collection_id);
     let text = StoredValue::new(text);
     let site_lang = ed.doc.with_untracked(|d| {
@@ -1430,6 +2014,16 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                                 f.label.clone().unwrap_or_else(|| f.name.clone()),
                             )
                         })
+                        // Texte : aussi le nombre de valeurs d'un champ liste.
+                        .chain(c.fields.iter().filter(|f| f.list && slot == Slot::Text).map(|f| {
+                            (
+                                format!("count:{}", f.name),
+                                ui.now(
+                                    "block-bound-count",
+                                    &[("field", f.label.clone().unwrap_or_else(|| f.name.clone()))],
+                                ),
+                            )
+                        }))
                         .collect()
                 })
                 .unwrap_or_default()
@@ -1482,23 +2076,31 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     Some("rich-text" | "rich_text" | "markdown")
                 );
                 let date = matches!(kind.as_deref(), Some("date" | "datetime"));
+                let (field, count) = match v.strip_prefix("count:") {
+                    Some(f) => (f.to_string(), true),
+                    None => (v.clone(), false),
+                };
                 set_text(Box::new(move |b| {
-                    b.field = v.clone();
+                    b.field = field.clone();
                     b.raw = None;
-                    b.safe = rich;
-                    b.format = date.then(|| revel_edit::dates::FORMATS[0].0.to_string());
+                    b.count = count;
+                    b.safe = rich && !count;
+                    b.format = (date && !count).then(|| revel_edit::dates::FORMATS[0].0.to_string());
                 }));
                 return;
             }
-            Slot::Href => Command::SetAttr {
-                at: at.clone(),
-                name: "href".into(),
-                value: Some(match v.as_str() {
-                    "" => "#".into(),
-                    "@url" => format!("{{{{ {} }}}}", url_expr.get_value()),
-                    f => format!("{{{{ {} }}}}", expr(f)),
-                }),
-            },
+            Slot::Href => {
+                let (before, after) = link_affix.get_value();
+                Command::SetAttr {
+                    at: at.clone(),
+                    name: "href".into(),
+                    value: Some(match v.as_str() {
+                        "" => "#".into(),
+                        "@url" => format!("{{{{ {} }}}}", url_expr.get_value()),
+                        f => format!("{before}{{{{ {} }}}}{after}", expr(f)),
+                    }),
+                }
+            }
             Slot::Bg if v.is_empty() => Command::RemoveAttr {
                 at: at.clone(),
                 name: "style".into(),
@@ -1580,18 +2182,9 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let text_extra = text
         .with_value(|t| t.clone())
         .filter(|t| !t.field.is_empty() && t.raw.is_none());
-    // Classe ajoutée quand un champ est rempli (`person__photo--swap` si « Photo au survol »).
-    let class_attr = match node {
-        Node::Element { attrs, .. } => Some(
-            attr(attrs, "class")
-                .and_then(|a| a.value.clone())
-                .unwrap_or_default(),
-        ),
-        _ => None,
-    };
-    let cond_class_view = class_attr
-        .and_then(|v| revel_edit::style::cond_classes(&v))
-        .map(|(base, conds)| cond_classes_editor(ui, ed, at, base, conds, cond_fields));
+    // Classe ajoutée quand un champ est rempli (`person__photo--swap` si « Photo au survol »),
+    // ou tirée de la valeur d'un champ.
+    let cond_class_view = class_editors(ui, ed, at, node, cond_fields);
     Some(
         view! {
             <div class="insp-group">
@@ -1605,6 +2198,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     };
                     let cur = cur.unwrap_or_default();
                     let cur2 = cur.clone();
+                    let cur3 = cur.clone();
                     view! {
                         <label class="field" data-bound=key>
                             <span class="label">{ui.t(key)}</span>
@@ -1632,6 +2226,30 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                                 </select>
                             </div>
                         </label>
+                        {(slot == Slot::Href && !cur.is_empty() && cur != "@url").then(|| {
+                            let (before, after) = link_affix.get_value();
+                            let write_affix = move |b: Option<String>, a: Option<String>| {
+                                let (b0, a0) = link_affix.get_value();
+                                let (b1, a1) = (b.unwrap_or(b0), a.unwrap_or(a0));
+                                link_affix.set_value((b1, a1));
+                                set(Slot::Href, cur3.clone());
+                            };
+                            let w2 = write_affix.clone();
+                            view! {
+                                <div class="field-pair">
+                                    <label class="field">
+                                        <span class="label">{ui.t("block-bound-before")}</span>
+                                        <input class="input input--mono" spellcheck="false" prop:value=before
+                                            on:change=move |e| write_affix(Some(event_target_value(&e)), None)/>
+                                    </label>
+                                    <label class="field">
+                                        <span class="label">{ui.t("block-bound-after")}</span>
+                                        <input class="input input--mono" spellcheck="false" prop:value=after
+                                            on:change=move |e| w2(None, Some(event_target_value(&e)))/>
+                                    </label>
+                                </div>
+                            }
+                        })}
                     }
                 }).collect_view()}
                 {text_extra.map(|b| {

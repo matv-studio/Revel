@@ -122,6 +122,10 @@ impl Ctx {
             Some((h, t)) => (h.trim(), Some(t.trim())),
             None => (e, None),
         };
+        // Nombre de valeurs d'un champ liste ou d'une propriété liste.
+        if tail == Some("length") && (self.field(head) || self.prop(head, Some(PropKind::List))) {
+            return true;
+        }
         let filter_ok = match tail {
             None => true,
             Some("safe") => true,
@@ -176,12 +180,37 @@ impl Ctx {
             }
             return false;
         }
+        // Classe tirée de la valeur d'un champ : `block block--{{ b.style or 'plein' }}`.
+        if name == "class"
+            && let Some((_, _, f, _)) = crate::style::value_class(v)
+        {
+            return self.field(&f) || self.prop(&f, Some(PropKind::Text));
+        }
         // Classe ajoutée selon un champ ou une propriété : `carte{% if x %} carte--y{% endif %}`.
         if name == "class" && v.contains("{%") && !v.contains("{{") {
             return crate::style::cond_classes(v)
                 .is_some_and(|(_, conds)| conds.iter().all(|(c, _)| self.condition(c)));
         }
+        // Adresse écrite autour d'un champ (`/projets/?expertise={{ slug }}`).
+        if name == "href"
+            && let (Some(i), Some(j)) = (v.find("{{"), v.rfind("}}"))
+            && i < j
+            && !v[..i].contains('{')
+            && !v[j + 2..].contains('{')
+            && (i > 0 || j + 2 < v.len())
+        {
+            let e = v[i + 2..j].trim();
+            return self.field(e) || self.prop(e, Some(PropKind::Text));
+        }
         let Some(e) = inner(v) else { return false };
+        // Étiquettes d'un élément filtré : valeurs d'un champ liste (`x | join(' ')`).
+        if name == "data-revel-tags"
+            && let Some((h, t)) = e.split_once('|')
+            && t.trim().starts_with("join(")
+        {
+            let h = h.trim();
+            return self.field(h) || self.prop(h, Some(PropKind::List));
+        }
         self.field(&e)
             || self.url.as_deref() == Some(e.as_str())
             || (name == "href" && self.prop(&e, Some(PropKind::Link)))

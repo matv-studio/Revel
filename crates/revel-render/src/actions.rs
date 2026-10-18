@@ -42,6 +42,8 @@ pub fn uses(html: &str) -> bool {
         || html.contains(" data-revel-tabs")
         || html.contains(" data-revel-slider")
         || html.contains(" data-revel-video")
+        || html.contains(" data-revel-filters")
+        || html.contains(" data-revel-consent")
 }
 
 /// Page avec des interactions : script ajouté avant `</head>` (pas dans le canevas). Rend la page
@@ -53,7 +55,11 @@ pub fn wire(html: String, scripts: bool) -> (String, bool) {
     if !scripts {
         return (html, true);
     }
-    let code = format!("<script src=\"{URL}\" defer></script>");
+    let mut code = format!("<script src=\"{URL}\" defer></script>");
+    // Bandeau de consentement : masqué dès l'affichage, ouvert par le script s'il le faut.
+    if html.contains(" data-revel-consent=") || html.contains(" data-revel-consent>") {
+        code.push_str("<style>[data-revel-consent]:not(.rv-open){display:none}</style>");
+    }
     (crate::insert_before(&html, "</head>", &code, false), true)
 }
 

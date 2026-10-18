@@ -1,11 +1,12 @@
 /* Interactions entre éléments (6.3) : attribut `data-revel-on` de l'élément déclencheur,
    « déclencheur action élément » séparés par des points-virgules (voir revel-edit, actions.rs) ;
    onglets (`data-revel-tabs`) : un bouton `data-revel-tab` par panneau `data-revel-panel` ;
-   carrousels et diaporamas (`data-revel-slider`), lecteurs vidéo (`data-revel-video`).
+   carrousels et diaporamas (`data-revel-slider`), lecteurs vidéo (`data-revel-video`), filtres de
+   liste (`data-revel-filters`), bandeau de consentement (`data-revel-consent`).
    Sans JavaScript, la page reste lisible : rien n'est masqué d'avance par le script. */
 (function () {
   var css = document.createElement("style");
-  css.textContent = ".rv-hide{display:none!important}.rv-video{display:block;width:100%;height:100%;border:0}";
+  css.textContent = ".rv-hide{display:none!important}.rv-video{display:block;width:100%;height:100%;border:0}[data-revel-consent]:not(.rv-open){display:none!important}";
   document.head.appendChild(css);
   var store = {
     get: function (k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
@@ -43,6 +44,17 @@
         el.classList.toggle("is-paused", t.stopped);
         return;
       }
+      // Onglets : vidéo du panneau affiché arrêtée ou relancée (vidéo de fond d'un en-tête).
+      if (el.hasAttribute("data-revel-tabs")) {
+        var stop = !el.classList.contains("is-paused");
+        el.classList.toggle("is-paused", stop);
+        var vids = el.querySelectorAll("[data-revel-panel] video");
+        for (var q = 0; q < vids.length; q++) {
+          if (stop) vids[q].pause();
+          else if (!vids[q].closest(".rv-hide")) { var pr = vids[q].play(); if (pr && pr.catch) pr.catch(function () {}); }
+        }
+        return;
+      }
       var v = el.tagName === "VIDEO" ? el : el.querySelector("video");
       if (v) { if (on && v.paused) v.play(); else if (!on || !v.paused) v.pause(); }
     } else if (a === "dismiss") {
@@ -67,7 +79,19 @@
         state = !state;
         each(act.indexOf("class:") === 0 ? state : true);
         if (act === "toggle" || act.indexOf("class:") === 0) src.setAttribute("aria-expanded", String(state));
+        if (act === "play") src.setAttribute("aria-pressed", String(state));
       });
+      // Menu ouvert à l'appui : refermé par Échap, le focus revient au bouton.
+      if (act === "toggle" || act.indexOf("class:") === 0) {
+        document.addEventListener("keydown", function (e) {
+          if (e.key !== "Escape" || !state) return;
+          state = false;
+          if (act === "toggle") targets(src, key).forEach(function (t) { run("hide", t, true, key); });
+          else each(false);
+          src.setAttribute("aria-expanded", "false");
+          if (src.focus) src.focus();
+        });
+      }
     } else if (trig === "hover") {
       src.addEventListener("mouseenter", function () { each(true); });
       src.addEventListener("mouseleave", function () { each(false); });
@@ -87,23 +111,58 @@
       each(true);
     }
   }
+  // Onglets (`data-revel-tabs`, réglage `hover` : au survol et au focus, sinon à l'appui) : un
+  // bouton ou lien `data-revel-tab` par panneau `data-revel-panel` ; flèches du clavier entre les
+  // boutons ; les vidéos du panneau affiché sont lancées, les autres arrêtées.
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   function tabs(box) {
+    var opts = String(box.getAttribute("data-revel-tabs") || "").split(/\s+/);
+    var hover = opts.indexOf("hover") >= 0;
     var btns = box.querySelectorAll("[data-revel-tab]");
     var panels = box.querySelectorAll("[data-revel-panel]");
+    var cur = -1;
     var pick = function (i) {
+      if (i === cur) return;
+      cur = i;
       for (var j = 0; j < btns.length; j++) {
         btns[j].classList.toggle("is-active", j === i);
-        btns[j].setAttribute("aria-selected", String(j === i));
+        if (btns[j].tagName !== "A") btns[j].setAttribute("aria-selected", String(j === i));
       }
-      for (var k = 0; k < panels.length; k++) panels[k].classList.toggle("rv-hide", k !== i);
+      for (var k = 0; k < panels.length; k++) {
+        panels[k].classList.toggle("rv-hide", k !== i);
+        var vs = panels[k].querySelectorAll("video");
+        for (var v = 0; v < vs.length; v++) {
+          if (k === i && vs[v].hasAttribute("autoplay") && !still && !box.classList.contains("is-paused")) {
+            var p = vs[v].play();
+            if (p && p.catch) p.catch(function () {});
+          } else if (k !== i) {
+            vs[v].pause();
+          }
+        }
+      }
     };
     for (var i = 0; i < btns.length; i++) {
       (function (n) {
-        btns[n].setAttribute("role", "tab");
-        btns[n].addEventListener("click", function () { pick(n); });
+        var b = btns[n];
+        if (b.tagName !== "A") b.setAttribute("role", "tab");
+        b.addEventListener("click", function () { pick(n); });
+        if (hover) {
+          b.addEventListener("mouseenter", function () { pick(n); });
+          b.addEventListener("focus", function () { pick(n); });
+        }
+        b.addEventListener("keydown", function (e) {
+          var d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+          if (!d || b.tagName === "A") return;
+          e.preventDefault();
+          var m = (n + d + btns.length) % btns.length;
+          btns[m].focus();
+          pick(m);
+        });
       })(i);
     }
-    if (btns.length) pick(0);
+    var start = 0;
+    for (var a = 0; a < btns.length; a++) if (btns[a].classList.contains("is-active")) { start = a; break; }
+    if (btns.length) pick(start);
   }
   // Carrousel et diaporama (`data-revel-slider`) : piste `data-revel-track` défilante (accroche
   // par diapositive), boutons `data-revel-prev` / `data-revel-next`, compteur `data-revel-count`,
@@ -220,6 +279,94 @@
       if (el.focus) el.focus();
     });
   }
+  // Filtres de liste (`data-revel-filters="<paramètre>"`) : boutons `data-revel-filter="<valeur>"`
+  // (vide : tout) ; éléments filtrés `data-revel-tags="a b"` de la page ; message
+  // `data-revel-filter-empty` sans résultat ; valeur gardée dans l'adresse (`?<paramètre>=`).
+  function filters(group) {
+    var param = (group.getAttribute("data-revel-filters") || "").trim();
+    var buttons = group.querySelectorAll("[data-revel-filter]");
+    var apply = function (value, push) {
+      var items = document.querySelectorAll("[data-revel-tags]");
+      var visible = 0;
+      for (var i = 0; i < items.length; i++) {
+        var ok = !value || (" " + items[i].getAttribute("data-revel-tags") + " ").indexOf(" " + value + " ") >= 0;
+        items[i].classList.toggle("rv-hide", !ok);
+        if (ok) visible++;
+      }
+      for (var b = 0; b < buttons.length; b++) {
+        var on = (buttons[b].getAttribute("data-revel-filter") || "") === value;
+        buttons[b].classList.toggle("is-active", on);
+        buttons[b].setAttribute("aria-pressed", String(on));
+      }
+      var empty = document.querySelectorAll("[data-revel-filter-empty]");
+      for (var e = 0; e < empty.length; e++) empty[e].classList.toggle("rv-hide", visible > 0);
+      if (push && param && window.URL && history.replaceState) {
+        var url = new URL(location.href);
+        if (value) url.searchParams.set(param, value); else url.searchParams.delete(param);
+        history.replaceState(null, "", url);
+      }
+    };
+    for (var i = 0; i < buttons.length; i++) {
+      (function (btn) {
+        btn.addEventListener("click", function () { apply(btn.getAttribute("data-revel-filter") || "", true); });
+      })(buttons[i]);
+    }
+    var empty0 = document.querySelectorAll("[data-revel-filter-empty]");
+    for (var k = 0; k < empty0.length; k++) empty0[k].classList.add("rv-hide");
+    var initial = param && window.URL ? new URL(location.href).searchParams.get(param) : null;
+    if (initial) apply(initial, false);
+  }
+  // Consentement (`data-revel-consent="G-…"`, identifiant Google Analytics 4 facultatif) : le
+  // bandeau s'affiche tant que le visiteur n'a pas choisi ; `data-revel-consent-choice="accept"`
+  // ou `"refuse"` ; `data-revel-consent-open` le rouvre. Mesure chargée après l'accord seulement.
+  var KEY = "revel-consent";
+  function analytics(id) {
+    if (!id || window.__rvGa) return;
+    window.__rvGa = true;
+    var sc = document.createElement("script");
+    sc.async = true;
+    sc.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id);
+    document.head.appendChild(sc);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    window.gtag("js", new Date());
+    window.gtag("config", id, { anonymize_ip: true });
+  }
+  function consent(box) {
+    var id = (box.getAttribute("data-revel-consent") || "").trim();
+    var choice = store.get(KEY);
+    if (choice === "accept") analytics(id);
+    box.classList.toggle("rv-open", !choice);
+    var btns = box.querySelectorAll("[data-revel-consent-choice]");
+    for (var i = 0; i < btns.length; i++) {
+      (function (b) {
+        b.addEventListener("click", function () {
+          var v = b.getAttribute("data-revel-consent-choice");
+          store.set(KEY, v);
+          box.classList.remove("rv-open");
+          if (v === "accept") { analytics(id); return; }
+          // Refus : cookies de mesure retirés (accord précédent).
+          document.cookie.split(";").map(function (c) { return c.trim().split("=")[0]; })
+            .filter(function (n) { return /^_ga/.test(n); })
+            .forEach(function (n) {
+              var host = location.hostname.replace(/^www\./, "");
+              document.cookie = n + "=; Max-Age=0; path=/; domain=." + host;
+              document.cookie = n + "=; Max-Age=0; path=/";
+            });
+          if (window.__rvGa) location.reload();
+        });
+      })(btns[i]);
+    }
+    var opens = document.querySelectorAll("[data-revel-consent-open]");
+    for (var j = 0; j < opens.length; j++) {
+      opens[j].addEventListener("click", function (e) {
+        e.preventDefault();
+        box.classList.add("rv-open");
+        var f = box.querySelector("button, a");
+        if (f) f.focus();
+      });
+    }
+  }
   function all() {
     var els = document.querySelectorAll("[data-revel-on]");
     for (var i = 0; i < els.length; i++) {
@@ -230,6 +377,10 @@
     for (var j = 0; j < t.length; j++) tabs(t[j]);
     var sl = document.querySelectorAll("[data-revel-slider]");
     for (var k = 0; k < sl.length; k++) slider(sl[k]);
+    var cs = document.querySelectorAll("[data-revel-consent]");
+    for (var c = 0; c < cs.length; c++) consent(cs[c]);
+    var fs = document.querySelectorAll("[data-revel-filters]");
+    for (var f = 0; f < fs.length; f++) filters(fs[f]);
     var vs = document.querySelectorAll("[data-revel-video]");
     for (var v = 0; v < vs.length; v++) video(vs[v]);
   }

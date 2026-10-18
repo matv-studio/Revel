@@ -200,6 +200,9 @@ pub enum Preset {
     /// Lecteur vidéo : image de couverture et bouton de lecture ; l'appui lance la vidéo
     /// (YouTube, Vimeo ou fichier) à leur place, comme le composant YouTube de Framer.
     VideoPlayer,
+    /// Filtres de liste : boutons qui n'affichent que les éléments d'une liste dont les
+    /// étiquettes contiennent leur valeur.
+    ListFilters,
 }
 
 impl Preset {
@@ -219,7 +222,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 32] = [
+    pub const ALL: [Preset; 33] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -252,6 +255,7 @@ impl Preset {
         Preset::Slideshow,
         Preset::Navbar,
         Preset::VideoPlayer,
+        Preset::ListFilters,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -400,6 +404,28 @@ impl Preset {
                 (
                     ".langue[aria-current=\"page\"]",
                     vec![("opacity", "1"), ("font-weight", "600")],
+                ),
+            ],
+            Preset::ListFilters => vec![
+                (
+                    ".filtres",
+                    vec![("display", "flex"), ("flex-wrap", "wrap"), ("gap", "8px")],
+                ),
+                (
+                    ".filtre",
+                    vec![
+                        ("padding", "8px 16px"),
+                        ("border", "1px solid currentColor"),
+                        ("border-radius", "999px"),
+                        ("background", "none"),
+                        ("color", "inherit"),
+                        ("font", "inherit"),
+                        ("cursor", "pointer"),
+                    ],
+                ),
+                (
+                    ".filtre.is-active",
+                    vec![("background-color", "currentColor")],
                 ),
             ],
             Preset::VideoPlayer => vec![
@@ -789,6 +815,45 @@ impl Preset {
                     html: format!("<p>{}</p>", html_escape(text)),
                 }],
             ),
+            Preset::ListFilters => {
+                // `text` : « Tout|Option 1|Option 2 ».
+                let mut parts = text.split('|');
+                let all = parts.next().unwrap_or(text).to_string();
+                let rest: Vec<String> = parts.map(str::to_string).collect();
+                let rest = if rest.is_empty() {
+                    vec!["1".to_string(), "2".to_string()]
+                } else {
+                    rest
+                };
+                let mut buttons = vec![el(
+                    id(),
+                    "button",
+                    vec![
+                        attr("class", "filtre"),
+                        attr("type", "button"),
+                        attr("data-revel-filter", ""),
+                    ],
+                    vec![txt(&all)],
+                )];
+                for (i, label) in rest.iter().enumerate() {
+                    buttons.push(el(
+                        id(),
+                        "button",
+                        vec![
+                            attr("class", "filtre"),
+                            attr("type", "button"),
+                            attr("data-revel-filter", &format!("option-{}", i + 1)),
+                        ],
+                        vec![txt(label)],
+                    ));
+                }
+                el(
+                    id(),
+                    "div",
+                    vec![attr("class", "filtres"), attr("data-revel-filters", "filtre")],
+                    buttons,
+                )
+            }
             Preset::VideoPlayer => {
                 let flag = |n: &str| Attr {
                     name: n.into(),

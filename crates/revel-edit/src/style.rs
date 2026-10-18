@@ -296,4 +296,64 @@ pub fn cond_classes(v: &str) -> Option<(String, Vec<(String, String)>)> {
     Some((base.split_whitespace().collect::<Vec<_>>().join(" "), out))
 }
 
+/// Classe tirée de la valeur d'un champ : `block block--{{ b.style or 'fullscreen' }}` ->
+/// (`block`, `block--`, `b.style`, `Some("fullscreen")`) ; `None` pour une autre forme.
+pub fn value_class(v: &str) -> Option<(String, String, String, Option<String>)> {
+    let i = v.find("{{")?;
+    let j = v.find("}}")?;
+    if j < i || !v[j + 2..].trim().is_empty() || v[..i].contains('{') {
+        return None;
+    }
+    let head = &v[..i];
+    // Préfixe collé à la valeur : dernier mot avant `{{`.
+    let (base, prefix) = match head.rfind(char::is_whitespace) {
+        Some(k) => (head[..k].trim().to_string(), head[k + 1..].to_string()),
+        None => (String::new(), head.to_string()),
+    };
+    let inner = v[i + 2..j].trim().trim_matches('-').trim();
+    let inner = inner
+        .strip_prefix('(')
+        .and_then(|x| x.strip_suffix(')'))
+        .unwrap_or(inner)
+        .trim();
+    let (field, default) = match inner.split_once(" or ") {
+        Some((f, d)) => {
+            let d = d.trim();
+            let lit = crate::canvas::literal(d)?;
+            (f.trim().to_string(), Some(lit))
+        }
+        None => (inner.to_string(), None),
+    };
+    crate::visibility::is_path(&field).then_some((base, prefix, field, default))
+}
 
+/// Valeur `class` écrite pour une classe tirée d'un champ.
+pub fn value_class_expr(base: &str, prefix: &str, field: &str, default: Option<&str>) -> String {
+    let e = match default.filter(|d| !d.is_empty()) {
+        Some(d) => format!("{field} or {}", crate::canvas::quote(d)),
+        None => field.to_string(),
+    };
+    let lead = if base.trim().is_empty() {
+        String::new()
+    } else {
+        format!("{} ", base.trim())
+    };
+    format!("{lead}{prefix}{{{{ {e} }}}}")
+}
+
+#[cfg(test)]
+mod value_class_tests {
+    use super::*;
+
+    #[test]
+    fn classe_selon_la_valeur() {
+        let (b, p, f, d) = value_class("block block--{{ b.style or 'fullscreen' }}").unwrap();
+        assert_eq!((b.as_str(), p.as_str(), f.as_str(), d.as_deref()), ("block", "block--", "b.style", Some("fullscreen")));
+        assert_eq!(
+            value_class(&value_class_expr(&b, &p, &f, d.as_deref())),
+            Some((b, p, f, d))
+        );
+        assert!(value_class("a {{ x | upper }}").is_none());
+        assert!(value_class("a{% if x %} b{% endif %}").is_none());
+    }
+}

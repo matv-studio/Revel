@@ -700,6 +700,7 @@ fn liste_de_collection() {
             exclude_current: false,
             pick: Vec::new(),
             contains: None,
+            first: None,
         }
         .to_expr()
     };

@@ -611,6 +611,148 @@ fn list_source(ui: Ui, ed: Ed, each_at: Target, expr: String) -> Option<AnyView>
     )
 }
 
+/// Classes ajoutées selon des conditions (`carte{% if item.data.une %} carte--une{% endif %}`) :
+/// une ligne par classe, avec ses conditions (champ rempli, égal à…).
+fn cond_classes_editor(
+    ui: Ui,
+    ed: Ed,
+    at: StoredValue<Target>,
+    base: String,
+    conds: Vec<(String, String)>,
+    fields: Signal<Vec<(String, String)>>,
+) -> AnyView {
+    let rows = StoredValue::new(conds.clone());
+    let base = StoredValue::new(base);
+    let write = move |list: Vec<(String, String)>| {
+        let base = base.get_value();
+        rows.set_value(list.clone());
+        let mut value = base.clone();
+        for (c, cls) in list.iter().filter(|(c, cls)| !c.trim().is_empty() && !cls.trim().is_empty()) {
+            value.push_str(&format!("{{% if {c} %}} {}{{% endif %}}", cls.trim()));
+        }
+        let cmd = if value.trim().is_empty() {
+            Command::RemoveAttr {
+                at: at.get_value(),
+                name: "class".into(),
+            }
+        } else {
+            Command::SetAttr {
+                at: at.get_value(),
+                name: "class".into(),
+                value: Some(value.trim_start().to_string()),
+            }
+        };
+        ed.apply(ui, cmd, false);
+    };
+    let first_class = conds_base_first(&rows);
+    view! {
+        <div class="field" data-bound="block-bound-class">
+            <span class="label" title=ui.t("block-bound-class-help")>{ui.t("block-bound-class")}</span>
+            {conds.into_iter().enumerate().map(|(i, (c, cls))| {
+                let set_cond = move |nc: Option<String>| {
+                    if let Some(nc) = nc {
+                        let mut list = rows.get_value();
+                        if let Some(r) = list.get_mut(i) { r.0 = nc; }
+                        write(list);
+                    }
+                };
+                view! {
+                    <div class="cond-class">
+                        <div class="field-line">
+                            <input class="input input--mono" prop:value=cls spellcheck="false" aria-label=ui.t("block-bound-class-name")
+                                on:change=move |e| {
+                                    let v = event_target_value(&e).trim().trim_start_matches('.').to_string();
+                                    let mut list = rows.get_value();
+                                    if let Some(r) = list.get_mut(i) { r.1 = v; }
+                                    write(list);
+                                }/>
+                            <button type="button" class="icon-btn icon-btn--small" title=ui.t("cond-class-remove") aria-label=ui.t("cond-class-remove")
+                                on:click=move |_| {
+                                    let mut list = rows.get_value();
+                                    if i < list.len() { list.remove(i); }
+                                    write(list);
+                                }>{icons::close()}</button>
+                        </div>
+                        {crate::visibility::condition_editor(ui, fields, Some(c), false, set_cond)}
+                    </div>
+                }
+            }).collect_view()}
+            <button type="button" class="link-btn cond-add" on:click=move |_| {
+                let Some(f) = fields.with_untracked(|fs| fs.first().map(|(e, _)| e.clone())) else { return };
+                let mut list = rows.get_value();
+                list.push((f, format!("{}--option", first_class.clone())));
+                write(list);
+            }>{ui.t("cond-class-add")}</button>
+        </div>
+    }
+    .into_any()
+}
+
+fn conds_base_first(rows: &StoredValue<Vec<(String, String)>>) -> String {
+    rows.with_value(|r| {
+        r.first()
+            .and_then(|(_, c)| c.split("--").next().map(str::to_string))
+    })
+    .unwrap_or_else(|| "classe".into())
+}
+
+/// Contenus choisis à la main, dans l'ordre : monter, descendre, retirer, ajouter (titres des
+/// contenus de la collection).
+fn picks_editor(
+    ui: Ui,
+    entries: RwSignal<Vec<revel_protocol::PickEntry>>,
+    list: Vec<String>,
+    set: impl Fn(Vec<String>) + Copy + Send + Sync + 'static,
+) -> AnyView {
+    let picked = StoredValue::new(list.clone());
+    let n = list.len();
+    view! {
+        <ul class="pick-list list-picks">
+            {list.into_iter().enumerate().map(|(i, slug)| {
+                let title = entries.with_untracked(|es| es.iter().find(|e| e.slug == slug).map(|e| e.title.clone()));
+                let missing = title.is_none();
+                let shift = move |d: isize| {
+                    let mut all = picked.get_value();
+                    let j = i as isize + d;
+                    if j >= 0 && (j as usize) < all.len() {
+                        all.swap(i, j as usize);
+                        set(all);
+                    }
+                };
+                let slug2 = slug.clone();
+                view! {
+                    <li class="pick-item" class:is-missing=missing title=slug.clone()>
+                        <span class="pick-title">{move || entries.with(|es| es.iter().find(|e| e.slug == slug2).map(|e| e.title.clone())).unwrap_or_else(|| slug2.clone())}</span>
+                        <button class="icon-btn icon-btn--small" title=ui.t("layers-up") aria-label=ui.t("layers-up")
+                            disabled=i == 0 on:click=move |_| shift(-1)>{icons::arrow_up()}</button>
+                        <button class="icon-btn icon-btn--small" title=ui.t("layers-down") aria-label=ui.t("layers-down")
+                            disabled=i + 1 == n on:click=move |_| shift(1)>{icons::arrow_down()}</button>
+                        <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
+                            on:click=move |_| { let mut all = picked.get_value(); all.remove(i); set(all); }>{icons::close()}</button>
+                    </li>
+                }
+            }).collect_view()}
+        </ul>
+        <div class="select pick-add">
+            <select class="input" aria-label=ui.t("picks-add") on:change=move |e| {
+                let v = event_target_value(&e);
+                if !v.is_empty() {
+                    let mut all = picked.get_value();
+                    all.push(v);
+                    set(all);
+                }
+            }>
+                <option value="" selected=true>{ui.t("picks-add")}</option>
+                {move || entries.with(|es| es.iter()
+                    .filter(|e| !picked.with_value(|p| p.contains(&e.slug)))
+                    .map(|e| view! { <option value=e.slug.clone()>{e.title.clone()}</option> })
+                    .collect_view())}
+            </select>
+        </div>
+    }
+    .into_any()
+}
+
 fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     let source = list_source(ui, ed, each_at.clone(), expr.clone());
     let Some(q) = Query::parse(&expr) else {
@@ -689,57 +831,41 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
             }
         });
     }
-    let picked = StoredValue::new(picked);
     let set_pick = move |v: Vec<String>| write(Box::new(move |q| q.pick = v.clone()));
     let pick_view = move || {
-        picking.get().then(|| {
-            let list = picked.get_value();
-            let n = list.len();
-            view! {
-                <ul class="pick-list list-picks">
-                    {list.into_iter().enumerate().map(|(i, slug)| {
-                        let title = entries.with(|es| es.iter().find(|e| e.slug == slug).map(|e| e.title.clone()));
-                        let missing = title.is_none();
-                        let shift = move |d: isize| {
-                            let mut all = picked.get_value();
-                            let j = i as isize + d;
-                            if j >= 0 && (j as usize) < all.len() {
-                                all.swap(i, j as usize);
-                                set_pick(all);
-                            }
-                        };
-                        view! {
-                            <li class="pick-item" class:is-missing=missing title=slug.clone()>
-                                <span class="pick-title">{title.unwrap_or_else(|| slug.clone())}</span>
-                                <button class="icon-btn icon-btn--small" title=ui.t("layers-up") aria-label=ui.t("layers-up")
-                                    disabled=i == 0 on:click=move |_| shift(-1)>{icons::arrow_up()}</button>
-                                <button class="icon-btn icon-btn--small" title=ui.t("layers-down") aria-label=ui.t("layers-down")
-                                    disabled=i + 1 == n on:click=move |_| shift(1)>{icons::arrow_down()}</button>
-                                <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
-                                    on:click=move |_| { let mut all = picked.get_value(); all.remove(i); set_pick(all); }>{icons::close()}</button>
-                            </li>
-                        }
-                    }).collect_view()}
-                </ul>
-                <div class="select pick-add">
-                    <select class="input" aria-label=ui.t("picks-add") on:change=move |e| {
-                        let v = event_target_value(&e);
-                        if !v.is_empty() {
-                            let mut all = picked.get_value();
-                            all.push(v);
-                            set_pick(all);
-                        }
-                    }>
-                        <option value="" selected=true>{ui.t("picks-add")}</option>
-                        {move || entries.with(|es| es.iter()
-                            .filter(|e| !picked.with_value(|p| p.contains(&e.slug)))
-                            .map(|e| view! { <option value=e.slug.clone()>{e.title.clone()}</option> })
-                            .collect_view())}
-                    </select>
-                </div>
-            }
-        })
+        picking
+            .get()
+            .then(|| picks_editor(ui, entries, picked.clone(), set_pick))
     };
+    // Contenus mis en premier : champ du contenu affiché (liste de contenus reliés) ou
+    // contenus choisis, puis les autres.
+    let first = q.with_value(|q| q.first.clone());
+    let first_picks = first.as_deref().and_then(revel_edit::collection::first_picks);
+    let first_value = match (&first, &first_picks) {
+        (None, _) => String::new(),
+        (Some(_), Some(_)) => "pick".to_string(),
+        (Some(f), None) => format!("field:{f}"),
+    };
+    let first_fields: Vec<(String, String)> = ed.doc.with_untracked(|d| {
+        d.as_ref()
+            .and_then(|d| template_collection(d, &at.get_value()))
+            .map(|col| {
+                cols.with_untracked(|cs| {
+                    list_fields(cs.iter().find(|c| c.id == col))
+                        .into_iter()
+                        .map(|(n, l, _)| (n, l))
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    });
+    let first_fields = StoredValue::new(first_fields);
+    let set_first = move |v: Vec<String>| {
+        write(Box::new(move |q| {
+            q.first = Some(revel_edit::collection::first_expr(&v))
+        }))
+    };
+    let first_view = first_picks.map(|list| picks_editor(ui, entries, list, set_first));
     // Filtre « contient » (champ liste, comme « Projets dont les expertises contiennent la page
     // affichée ») : sur la page d'un contenu, la page affichée ; sinon une valeur écrite.
     let contains = q.with_value(|q| q.contains.clone());
@@ -790,6 +916,36 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                 </div>
             </label>
             {pick_view}
+            <label class="field" class:is-hidden=nested title=ui.t("block-list-first-help")>
+                <span class="label">{ui.t("block-list-first")}</span>
+                <div class="select">
+                    <select class="input" on:change=move |e| {
+                        let v = event_target_value(&e);
+                        write(Box::new(move |q| {
+                            q.first = if v.is_empty() {
+                                None
+                            } else if v == "pick" {
+                                Some("[]".to_string())
+                            } else {
+                                v.strip_prefix("field:").map(str::to_string)
+                            };
+                        }))
+                    }>
+                        <option value="" prop:selected=first_value.is_empty()>{ui.t("block-list-first-none")}</option>
+                        <option value="pick" prop:selected={first_value == "pick"}>{ui.t("block-list-first-pick")}</option>
+                        {first_fields.get_value().into_iter().map(|(n, l)| {
+                            let v = format!("field:{n}");
+                            let on = v == first_value;
+                            view! { <option value=v prop:selected=on>{ui.tx("block-list-first-field", &[("field", l)])}</option> }
+                        }).collect_view()}
+                        {(first_value.starts_with("field:") && !first_fields.with_value(|f| f.iter().any(|(n, _)| format!("field:{n}") == first_value))).then(|| {
+                            let v = first_value.clone();
+                            view! { <option value=v.clone() prop:selected=true>{v[6..].to_string()}</option> }
+                        })}
+                    </select>
+                </div>
+            </label>
+            {first_view}
             <label class="field">
                 <span class="label">{ui.t("block-list-contains")}</span>
                 <div class="select">
@@ -1279,25 +1435,6 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                 .unwrap_or_default()
         })
     };
-    // Tous les champs (affichage selon un champ rempli).
-    let all_fields = move || -> Vec<(String, String)> {
-        cols.with(|cs| {
-            cs.iter()
-                .find(|c| collection.with_value(|id| c.id == *id))
-                .map(|c| {
-                    c.fields
-                        .iter()
-                        .map(|f| {
-                            (
-                                f.name.clone(),
-                                f.label.clone().unwrap_or_else(|| f.name.clone()),
-                            )
-                        })
-                        .collect()
-                })
-                .unwrap_or_default()
-        })
-    };
     // Élément entier remplacé par le même avec un autre contenu (même identifiant).
     let set_children = move |kids: Vec<Node>| {
         let at = at.get_value();
@@ -1392,31 +1529,10 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let vis = ed
         .doc
         .with_untracked(|d| d.as_ref().and_then(|d| visibility_of(d, &at.get_value())));
-    let vis_value = vis.as_ref().map(|(_, cond)| {
-        let p = prefix.get_value();
-        let c = cond.trim();
-        match c.strip_prefix("not ") {
-            Some(f) => f
-                .trim()
-                .strip_prefix(p.as_str())
-                .filter(|f| is_field(f))
-                .map(|f| format!("empty:{f}")),
-            None => c
-                .strip_prefix(p.as_str())
-                .filter(|f| is_field(f))
-                .map(|f| format!("set:{f}")),
-        }
-        .unwrap_or_else(|| format!("raw:{c}"))
-    });
+    let vis_cond = vis.as_ref().map(|(_, c)| c.clone());
     let vis_target = StoredValue::new(vis.map(|(t, _)| t));
-    let set_vis = move |v: String| {
+    let set_vis = move |cond: Option<String>| {
         let at = at.get_value();
-        let p = prefix.get_value();
-        let cond = if let Some(f) = v.strip_prefix("set:") {
-            Some(format!("{p}{f}"))
-        } else {
-            v.strip_prefix("empty:").map(|f| format!("not {p}{f}"))
-        };
         let cmd = ed.doc.with_untracked(|d| {
             let d = d.as_ref()?;
             match (vis_target.get_value(), cond) {
@@ -1460,6 +1576,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
             ed.apply(ui, cmd, false);
         }
     };
+    let cond_fields = condition_fields(ed, &at.get_value()).unwrap_or_else(|| Signal::derive(Vec::new));
     let text_extra = text
         .with_value(|t| t.clone())
         .filter(|t| !t.field.is_empty() && t.raw.is_none());
@@ -1472,65 +1589,9 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
         ),
         _ => None,
     };
-    let cond_class_view = class_attr.and_then(|v| revel_edit::style::cond_classes(&v)).map(|(base, conds)| {
-        let p = prefix.get_value();
-        let (cur_field, cur_cls) = conds
-            .first()
-            .map(|(c, cls)| {
-                (
-                    c.strip_prefix(p.as_str()).unwrap_or(c).to_string(),
-                    cls.clone(),
-                )
-            })
-            .unwrap_or_default();
-        let state = StoredValue::new((base, cur_field.clone(), cur_cls.clone()));
-        let write = move |field: Option<String>, cls: Option<String>| {
-            let (base, f0, c0) = state.get_value();
-            let f = field.unwrap_or(f0);
-            let c = cls.unwrap_or(c0);
-            let p = prefix.get_value();
-            let value = if f.is_empty() || c.trim().is_empty() {
-                base.clone()
-            } else {
-                format!("{base}{{% if {p}{f} %}} {}{{% endif %}}", c.trim())
-            };
-            let cmd = if value.trim().is_empty() {
-                Command::RemoveAttr {
-                    at: at.get_value(),
-                    name: "class".into(),
-                }
-            } else {
-                Command::SetAttr {
-                    at: at.get_value(),
-                    name: "class".into(),
-                    value: Some(value),
-                }
-            };
-            ed.apply(ui, cmd, false);
-        };
-        let cf = cur_field.clone();
-        view! {
-            <div class="field-pair" data-bound="block-bound-class">
-                <label class="field">
-                    <span class="label" title=ui.t("block-bound-class-help")>{ui.t("block-bound-class")}</span>
-                    <div class="select">
-                        <select class="input" on:change=move |e| write(Some(event_target_value(&e)), None)>
-                            <option value="" prop:selected=cf.is_empty()>"—"</option>
-                            {move || all_fields().into_iter().map(|(n, l)| {
-                                let on = n == cur_field;
-                                view! { <option value=n prop:selected=on>{ui.tx("block-bound-if-set", &[("field", l)])}</option> }
-                            }).collect_view()}
-                        </select>
-                    </div>
-                </label>
-                <label class="field">
-                    <span class="label">{ui.t("block-bound-class-name")}</span>
-                    <input class="input input--mono" prop:value=cur_cls spellcheck="false"
-                        on:change=move |e| write(None, Some(event_target_value(&e).trim().trim_start_matches('.').to_string()))/>
-                </label>
-            </div>
-        }
-    });
+    let cond_class_view = class_attr
+        .and_then(|v| revel_edit::style::cond_classes(&v))
+        .map(|(base, conds)| cond_classes_editor(ui, ed, at, base, conds, cond_fields));
     Some(
         view! {
             <div class="insp-group">
@@ -1642,30 +1703,10 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     }
                 })}
                 {cond_class_view}
-                <label class="field" data-bound="block-bound-visibility">
+                <div class="field" data-bound="block-bound-visibility">
                     <span class="label">{ui.t("block-bound-visibility")}</span>
-                    <div class="select">
-                        <select class="input" on:change=move |e| set_vis(event_target_value(&e))>
-                            <option value="" prop:selected=vis_value.is_none()>{ui.t("block-bound-always")}</option>
-                            {vis_value.clone().filter(|v| v.starts_with("raw:")).map(|v| {
-                                let c = v[4..].to_string();
-                                view! { <option value=v.clone() prop:selected=true>{c}</option> }
-                            })}
-                            {move || {
-                                let cur = vis_value.clone().unwrap_or_default();
-                                all_fields().into_iter().flat_map(|(n, l)| {
-                                    let set_v = format!("set:{n}");
-                                    let empty_v = format!("empty:{n}");
-                                    let (on1, on2) = (cur == set_v, cur == empty_v);
-                                    [
-                                        view! { <option value=set_v prop:selected=on1>{ui.tx("block-bound-if-set", &[("field", l.clone())])}</option> },
-                                        view! { <option value=empty_v prop:selected=on2>{ui.tx("block-bound-if-empty", &[("field", l.clone())])}</option> },
-                                    ]
-                                }).collect_view()
-                            }}
-                        </select>
-                    </div>
-                </label>
+                    {crate::visibility::condition_editor(ui, cond_fields, vis_cond, true, set_vis)}
+                </div>
             </div>
         }
         .into_any(),
@@ -1794,82 +1835,96 @@ fn value_binding(ui: Ui, ed: Ed, at: &Target, node: &Node, var: String) -> Optio
     )
 }
 
-/// Condition d'affichage choisie dans une liste (« Si « Client » est rempli ») quand elle porte
-/// sur un champ du contenu ; `None` hors d'une liste de collection ou d'un modèle.
-pub fn readable_condition(ui: Ui, ed: Ed, at: Target, cond: String) -> Option<AnyView> {
-    let (collection_id, prefix, _) = ed
-        .doc
-        .with_untracked(|d| binding_context(d.as_ref()?, &at))?;
-    let is_field = |f: &str| {
-        !f.is_empty()
-            && f.chars()
-                .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
-    };
-    let c = cond.trim();
-    let cur = match c.strip_prefix("not ") {
-        Some(f) => f
-            .trim()
-            .strip_prefix(prefix.as_str())
-            .filter(|f| is_field(f))
-            .map(|f| format!("empty:{f}")),
-        None => c
-            .strip_prefix(prefix.as_str())
-            .filter(|f| is_field(f))
-            .map(|f| format!("set:{f}")),
-    };
-    let cols = collections(ed);
-    let collection = StoredValue::new(collection_id);
-    let at = StoredValue::new(at);
-    let set = move |v: String| {
-        let cond = if let Some(f) = v.strip_prefix("set:") {
-            format!("{prefix}{f}")
-        } else if let Some(f) = v.strip_prefix("empty:") {
-            format!("not {prefix}{f}")
-        } else {
-            return;
+/// Champs qu'une condition peut tester à l'endroit de `at` : valeur d'une liste tirée d'un
+/// champ (et ses sous-champs), champs du contenu (liste, modèle de collection), propriétés du
+/// composant ouvert. (expression, libellé).
+pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, String)>>> {
+    // Endroit : liste de valeurs (variable, collection, champ), contenu relié, propriétés.
+    let (values, content, props) = ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let values = enclosing_values_at(d, at).map(|(var, field, each)| {
+            let col = binding_context(d, &each).map(|(col, prefix, _)| {
+                let name = field.strip_prefix(prefix.as_str()).unwrap_or(&field).to_string();
+                (col, name)
+            });
+            (var, col)
+        });
+        let content = binding_context(d, at).map(|(col, prefix, _)| (col, prefix));
+        let props: Vec<(String, String)> = match &at.owner {
+            revel_edit::Owner::Component(cid) => d
+                .components
+                .iter()
+                .find(|c| c.id == *cid)
+                .map(|c| {
+                    c.props
+                        .iter()
+                        .map(|p| (p.name.clone(), p.label.clone().unwrap_or_else(|| p.name.clone())))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            _ => Vec::new(),
         };
-        ed.apply(
-            ui,
-            Command::SetLogic {
-                at: at.get_value(),
-                cond: Some(cond),
-                expr: None,
-                item: None,
-            },
-            false,
-        );
+        Some((values, content, props))
+    })?;
+    if values.is_none() && content.is_none() && props.is_empty() {
+        return None;
+    }
+    let cols = collections(ed);
+    let label = |f: &revel_protocol::CmsField| f.label.clone().unwrap_or_else(|| f.name.clone());
+    Some(Signal::derive(move || {
+        let mut out: Vec<(String, String)> = Vec::new();
+        cols.with(|cs| {
+            if let Some((var, col)) = &values {
+                out.push((var.clone(), var.clone()));
+                if let Some((col, name)) = col
+                    && let Some(f) = cs
+                        .iter()
+                        .find(|c| c.id == *col)
+                        .and_then(|c| c.fields.iter().find(|f| f.name == *name))
+                {
+                    for sub in &f.fields {
+                        out.push((format!("{var}.{}", sub.name), format!("{var} › {}", label(sub))));
+                    }
+                }
+            }
+            if let Some((col, prefix)) = &content
+                && let Some(c) = cs.iter().find(|c| c.id == *col)
+            {
+                for f in &c.fields {
+                    out.push((format!("{prefix}{}", f.name), label(f)));
+                }
+            }
+        });
+        out.extend(props.iter().cloned());
+        out
+    }))
+}
+
+/// Condition d'un bloc « Si » : clauses sur les champs de l'endroit (rempli, vide, égal à…) ;
+/// l'expression reste modifiable dessous.
+pub fn readable_condition(ui: Ui, ed: Ed, at: Target, cond: String) -> Option<AnyView> {
+    let fields = condition_fields(ed, &at)?;
+    let at = StoredValue::new(at);
+    let set = move |c: Option<String>| {
+        if let Some(c) = c {
+            ed.apply(
+                ui,
+                Command::SetLogic {
+                    at: at.get_value(),
+                    cond: Some(c),
+                    expr: None,
+                    item: None,
+                },
+                false,
+            );
+        }
     };
-    let raw = cur.is_none().then(|| c.to_string());
-    let cur = cur.unwrap_or_default();
     Some(
         view! {
-            <label class="field" data-bound="block-bound-visibility">
+            <div class="field" data-bound="block-bound-visibility">
                 <span class="label">{ui.t("block-bound-visibility")}</span>
-                <div class="select">
-                    <select class="input" on:change=move |e| set(event_target_value(&e))>
-                        {raw.map(|r| view! { <option value="" selected=true>{r}</option> })}
-                        {move || {
-                            let cur = cur.clone();
-                            cols.with(|cs| {
-                                cs.iter()
-                                    .find(|c| collection.with_value(|id| c.id == *id))
-                                    .map(|c| c.fields.iter().map(|f| (f.name.clone(), f.label.clone().unwrap_or_else(|| f.name.clone()))).collect::<Vec<_>>())
-                                    .unwrap_or_default()
-                            })
-                            .into_iter()
-                            .flat_map(|(n, l)| {
-                                let (a, b) = (format!("set:{n}"), format!("empty:{n}"));
-                                let (on1, on2) = (cur == a, cur == b);
-                                [
-                                    view! { <option value=a prop:selected=on1>{ui.tx("block-bound-if-set", &[("field", l.clone())])}</option> },
-                                    view! { <option value=b prop:selected=on2>{ui.tx("block-bound-if-empty", &[("field", l.clone())])}</option> },
-                                ]
-                            })
-                            .collect_view()
-                        }}
-                    </select>
-                </div>
-            </label>
+                {crate::visibility::condition_editor(ui, fields, Some(cond), false, set)}
+            </div>
         }
         .into_any(),
     )

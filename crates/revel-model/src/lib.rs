@@ -730,6 +730,9 @@ pub enum PropKind {
     Link,
     /// Élément affiché ou masqué.
     Switch,
+    /// Liste parcourue dans le composant (valeurs d'un champ, adresses de contenus reliés) :
+    /// chaque utilisation la relie à un champ liste de son contenu.
+    List,
 }
 
 /// Identifiant de variante valide : lettres minuscules, chiffres, tirets (classe `is-<id>`).

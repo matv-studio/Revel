@@ -33,6 +33,27 @@ pub struct Query {
     /// (expression : `slug`, `page.fileSlug`, `"design"`) ; les projets d'une expertise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contains: Option<(String, String)>,
+    /// Contenus mis en premier, puis les autres dans l'ordre de la liste : champ du contenu
+    /// affiché (`suggestions`) ou contenus choisis (`["a", "b"]`) ; avec un nombre maximal, les
+    /// plus récents complètent les choisis.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first: Option<String>,
+}
+
+/// Contenus mis en premier écrits à la main : `["a", "b"]` -> identifiants.
+pub fn first_picks(e: &str) -> Option<Vec<String>> {
+    let inner = e.trim().strip_prefix('[')?.strip_suffix(']')?;
+    split_top(inner, ',')
+        .iter()
+        .filter(|x| !x.is_empty())
+        .map(|x| crate::canvas::literal(x))
+        .collect()
+}
+
+/// Liste écrite des contenus mis en premier.
+pub fn first_expr(picks: &[String]) -> String {
+    let list: Vec<String> = picks.iter().map(|p| crate::canvas::quote(p)).collect();
+    format!("[{}]", list.join(", "))
 }
 
 fn ident(s: &str) -> bool {
@@ -168,6 +189,9 @@ impl Query {
                 ));
             }
         }
+        if let Some(f) = &self.first {
+            e.push_str(&format!(" | pick_first({f})"));
+        }
         match self.limit {
             Some(n) => format!("({e})[:{n}]"),
             None => e,
@@ -227,7 +251,11 @@ impl Query {
                         return None;
                     }
                 }
-                "selectattr" if q.filter.is_none() && q.sort.is_none() && !q.exclude_current => {
+                "selectattr"
+                    if q.filter.is_none()
+                        && q.sort.is_none()
+                        && !q.exclude_current
+                        && q.first.is_none() => {
                     let path = crate::canvas::literal(args.first()?)?;
                     if !valid_path(&path) {
                         return None;
@@ -246,6 +274,7 @@ impl Query {
                 }
                 "where_contains"
                     if q.contains.is_none()
+                        && q.first.is_none()
                         && q.sort.is_none()
                         && !q.exclude_current
                         && args.len() == 2 =>
@@ -259,13 +288,21 @@ impl Query {
                 }
                 "without"
                     if !q.exclude_current
+                        && q.first.is_none()
                         && q.sort.is_none()
                         && args.len() == 1
                         && args[0] == "page.url" =>
                 {
                     q.exclude_current = true;
                 }
-                "sort" if q.sort.is_none() => {
+                "pick_first" if q.first.is_none() && args.len() == 1 => {
+                    let a = args[0].trim();
+                    if !(valid_path(a) || first_picks(a).is_some()) {
+                        return None;
+                    }
+                    q.first = Some(a.to_string());
+                }
+                "sort" if q.sort.is_none() && q.first.is_none() => {
                     let mut path = None;
                     let mut desc = false;
                     for a in &args {
@@ -352,6 +389,7 @@ mod tests {
                 exclude_current: false,
                 pick: Vec::new(),
                 contains: None,
+                first: None,
             },
             Query {
                 collection: "actualites-fr".into(),
@@ -361,6 +399,7 @@ mod tests {
                 exclude_current: false,
                 pick: Vec::new(),
                 contains: None,
+                first: None,
             },
             Query {
                 collection: "projets".into(),
@@ -384,6 +423,21 @@ mod tests {
                 limit: Some(3),
                 ..Default::default()
             },
+            // Suggestions du contenu affiché, complétées par les plus récents.
+            Query {
+                collection: "projets".into(),
+                sort: Some(("date".into(), true)),
+                exclude_current: true,
+                first: Some("suggestions".into()),
+                limit: Some(3),
+                ..Default::default()
+            },
+            Query {
+                collection: "actus".into(),
+                first: Some(first_expr(&["a".into(), "b".into()])),
+                limit: Some(3),
+                ..Default::default()
+            },
         ];
         for q in qs {
             let e = q.to_expr();
@@ -398,6 +452,7 @@ mod tests {
                 exclude_current: false,
                 pick: Vec::new(),
                 contains: None,
+                first: None,
             }
             .to_expr(),
             r#"(collections.projets | selectattr("data.une") | sort(attribute="date", reverse=true))[:3]"#

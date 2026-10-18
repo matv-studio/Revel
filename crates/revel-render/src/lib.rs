@@ -793,6 +793,16 @@ fn stylesheet_link(site: &Site, html: String) -> String {
 }
 
 /// Texte d'une variable de la page (chaîne non vide).
+/// Première classe écrite d'une valeur `class` (avant toute condition).
+pub(crate) fn style_base(class: &str) -> Option<String> {
+    class
+        .split("{%")
+        .next()?
+        .split_whitespace()
+        .next()
+        .map(str::to_string)
+}
+
 fn data_text(data: &BTreeMap<String, Value>, key: &str) -> Option<String> {
     data.get(key)
         .and_then(|v| v.as_str().map(str::to_string))

@@ -14,11 +14,12 @@ use revel_model::{Component, Node, PropDef, PropKind, Variant, VariantKind};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-const KINDS: [PropKind; 4] = [
+const KINDS: [PropKind; 5] = [
     PropKind::Text,
     PropKind::Image,
     PropKind::Link,
     PropKind::Switch,
+    PropKind::List,
 ];
 
 fn kind_key(k: PropKind) -> &'static str {
@@ -27,6 +28,7 @@ fn kind_key(k: PropKind) -> &'static str {
         PropKind::Image => "prop-kind-image",
         PropKind::Link => "prop-kind-link",
         PropKind::Switch => "prop-kind-switch",
+        PropKind::List => "prop-kind-list",
     }
 }
 
@@ -36,6 +38,7 @@ fn kind_icon(k: PropKind) -> AnyView {
         PropKind::Image => icons::image(),
         PropKind::Link => icons::link(),
         PropKind::Switch => icons::eye(),
+        PropKind::List => icons::list(),
     }
 }
 
@@ -45,6 +48,7 @@ fn kind_icon_fn(k: PropKind) -> fn() -> AnyView {
         PropKind::Image => icons::image,
         PropKind::Link => icons::link,
         PropKind::Switch => icons::eye,
+        PropKind::List => icons::list,
     }
 }
 
@@ -55,6 +59,7 @@ fn base_name(k: PropKind) -> &'static str {
         PropKind::Image => "image",
         PropKind::Link => "lien",
         PropKind::Switch => "visible",
+        PropKind::List => "liste",
     }
 }
 
@@ -403,8 +408,10 @@ fn prop_value_row(
                 .map(|c| {
                     c.fields
                         .iter()
+                        // Propriété liste : champs à plusieurs valeurs ; sinon une valeur.
                         .filter(|f| {
                             !matches!(f.kind.as_deref(), Some("object" | "block" | "boolean"))
+                                && f.list == (p.kind == PropKind::List)
                         })
                         .map(|f| {
                             let expr = format!("{item}.data.{}", f.name);
@@ -453,7 +460,7 @@ fn prop_value_row(
         .into_any();
     }
     // Valeur calculée (expression) : modifiée telle quelle.
-    let expr = arg.as_deref().is_some_and(|a| literal(a).is_none());
+    let expr = p.kind == PropKind::List || arg.as_deref().is_some_and(|a| literal(a).is_none());
     let shown = match &arg {
         Some(a) => literal(a).unwrap_or_else(|| a.clone()),
         None => String::new(),

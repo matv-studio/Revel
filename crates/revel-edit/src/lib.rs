@@ -24,6 +24,7 @@ pub mod make;
 pub mod readable;
 pub mod ready;
 pub mod style;
+pub mod visibility;
 
 pub use address::{Branch, Owner, Parent, Target};
 pub use command::{Command, ShelfKind, apply, expand};

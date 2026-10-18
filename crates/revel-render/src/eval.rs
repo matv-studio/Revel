@@ -1304,6 +1304,25 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
                 .collect::<Vec<_>>(),
         )
     });
+    // Contenus désignés mis en premier (dans l'ordre des adresses), puis les autres.
+    env.add_filter("pick_first", |v: Value, slugs: Value| {
+        let items = items_of(&v);
+        let slugs = if slugs.as_str().is_some() {
+            vec![slugs]
+        } else {
+            items_of(&slugs)
+        };
+        let mut out: Vec<Value> = slugs
+            .iter()
+            .filter_map(|s| items.iter().find(|i| &path(i, "data.slug") == s).cloned())
+            .collect();
+        for i in items {
+            if !slugs.contains(&path(&i, "data.slug")) {
+                out.push(i);
+            }
+        }
+        Value::from(out)
+    });
     env.add_filter(
         "where_contains",
         |v: Value, field: String, needle: Value| {
@@ -1462,6 +1481,7 @@ fn prop_default(p: &revel_model::PropDef) -> Value {
     match &p.default {
         Some(d) => from_json(d),
         None if p.kind == revel_model::PropKind::Switch => Value::from(false),
+        None if p.kind == revel_model::PropKind::List => Value::from(Vec::<Value>::new()),
         None => Value::from(""),
     }
 }

@@ -359,6 +359,22 @@ fn inline_filters(expr: &str, filters: &BTreeMap<String, revel_model::CustomFilt
     if changed { base } else { expr.to_string() }
 }
 
+/// `(collections.x | sort(…)) | by_slugs(f)` : le tri ne change rien (contenus dans l'ordre des
+/// adresses) ; écrit comme une liste de contenus reliés de l'interface.
+fn simplify_refs(nodes: &mut [Node]) {
+    let re = regex::Regex::new(
+        r"^\(\s*collections\.([A-Za-z0-9_]+)\s*\|\s*sort\([^()]*\)\s*\)\s*\|\s*by_slugs\(\s*([A-Za-z0-9_.]+)\s*\)$",
+    )
+    .expect("regex");
+    walk_mut(nodes, &mut |n| {
+        if let Node::Each { expr, .. } = n
+            && let Some(c) = re.captures(expr.trim())
+        {
+            *expr = format!("collections.{} | by_slugs({})", &c[1], &c[2]);
+        }
+    });
+}
+
 /// Contenus choisis écrits à la main, réécrits en liste de collection (avant l'aplatissement) :
 /// - `for slug in L` puis `set it = collections.x | by_slug(slug)` et `if it` -> liste des
 ///   contenus `collections.x | by_slugs(L)` ;
@@ -1239,29 +1255,72 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
         // Expression -> (propriété, nature).
         let mut found: Vec<(String, String, PropKind)> = Vec::new();
         let mut taken: HashSet<String> = own.clone();
-        // Valeurs parcourues en liste dans le composant : pas de propriété (texte, image, lien,
-        // affichage) pour elles, elles restent lues chez l'utilisateur.
-        let mut listy: HashSet<String> = HashSet::new();
         // Variables du composant lui-même (`{% set %}`) : pas lues chez l'utilisateur.
         let mut sets: HashSet<String> = HashSet::new();
-        revel_model::ids::walk(&c.body, &mut |n| match n {
-            Node::Each { expr, .. } => listy.extend(refs(expr).into_iter().map(|r| r.name)),
-            Node::Set { name, .. } | Node::SetBlock { name, .. } => {
+        revel_model::ids::walk(&c.body, &mut |n| {
+            if let Node::Set { name, .. } | Node::SetBlock { name, .. } = n {
                 sets.insert(name.clone());
             }
-            _ => {}
         });
+        let outside = |name: &str, local: &HashSet<String>| {
+            !own.contains(name)
+                && !sets.contains(name)
+                && !local.contains(name)
+                && !globals.contains(name)
+                && !KEEP.contains(&name)
+        };
+        // Listes parcourues dans le composant et lues chez l'utilisateur (`item.data.expertises`,
+        // `blocks`) : propriétés « liste », reliées à chaque utilisation.
+        let mut list_paths: Vec<String> = Vec::new();
+        walk_body(&mut c.body.clone(), &mut Vec::new(), &mut |n, local| {
+            if let Node::Each { expr, .. } = n {
+                for r in refs(expr) {
+                    let path = expr[r.start..r.path_end].to_string();
+                    if outside(&r.name, local) && !list_paths.contains(&path) {
+                        list_paths.push(path);
+                    }
+                }
+            }
+        });
+        let mut lists: Vec<(String, String)> = Vec::new();
+        for path in &list_paths {
+            let p = prop_name(path, &taken);
+            taken.insert(p.clone());
+            lists.push((path.clone(), p));
+        }
+        // Chemin d'une liste remplacé par sa propriété (sources de boucles, conditions).
+        let subst = |e: &str, local: &HashSet<String>| -> Option<String> {
+            let mut out = String::new();
+            let mut at = 0;
+            for r in refs(e) {
+                if !outside(&r.name, local) {
+                    continue;
+                }
+                if let Some((_, p)) = lists.iter().find(|(path, _)| *path == e[r.start..r.path_end]) {
+                    out.push_str(&e[at..r.start]);
+                    out.push_str(p);
+                    at = r.path_end;
+                }
+            }
+            (at > 0).then(|| {
+                out.push_str(&e[at..]);
+                out
+            })
+        };
+        let list_names: HashSet<String> = lists.iter().map(|(_, p)| p.clone()).collect();
+        // Expression lue chez l'utilisateur ; pas celle qui lit un objet dont une liste est
+        // parcourue (l'objet entier reste lu chez l'utilisateur).
         let external = |e: &str, local: &HashSet<String>| {
             let rs = refs(e);
-            rs.iter().any(|r| {
-                !own.contains(&r.name)
-                    && !sets.contains(&r.name)
-                    && !local.contains(&r.name)
-                    && !globals.contains(&r.name)
-                    && !KEEP.contains(&r.name.as_str())
-            }) && !rs
-                .iter()
-                .any(|r| listy.contains(&r.name) && !local.contains(&r.name))
+            rs.iter()
+                .any(|r| outside(&r.name, local) && !list_names.contains(&r.name))
+                && !rs.iter().any(|r| {
+                    let path = &e[r.start..r.path_end];
+                    outside(&r.name, local)
+                        && list_paths
+                            .iter()
+                            .any(|l| l.starts_with(&format!("{path}.")))
+                })
         };
         fn walk_body(
             nodes: &mut [Node],
@@ -1303,8 +1362,20 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
         }
         let mut prop_for =
             |e: &str, kind: PropKind, found: &mut Vec<(String, String, PropKind)>| {
-                let key = e.trim().to_string();
-                if let Some((_, p, _)) = found.iter().find(|(x, _, _)| *x == key) {
+                // `x or ""` : vide si absent, comme `x` (valeur reliée telle quelle).
+                let t = e.trim();
+                let key = t
+                    .strip_suffix("or \"\"")
+                    .or_else(|| t.strip_suffix("or ''"))
+                    .map(str::trim)
+                    .filter(|h| revel_edit::visibility::is_path(h))
+                    .unwrap_or(t)
+                    .to_string();
+                if let Some((_, p, k)) = found.iter_mut().find(|(x, _, _)| *x == key) {
+                    // Lu comme condition et comme valeur : une valeur (vraie si remplie).
+                    if *k == PropKind::Switch && kind != PropKind::Switch {
+                        *k = kind;
+                    }
                     return p.clone();
                 }
                 let p = prop_name(&key, &taken);
@@ -1313,6 +1384,28 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
                 p
             };
         let mut body = std::mem::take(&mut c.body);
+        if !lists.is_empty() {
+            walk_body(&mut body, &mut Vec::new(), &mut |n, local| match n {
+                Node::Each { expr, .. } => {
+                    if let Some(e) = subst(expr, local) {
+                        *expr = e;
+                    }
+                }
+                Node::If { cond, .. } => {
+                    if let Some(e) = subst(cond, local) {
+                        *cond = e;
+                    }
+                }
+                Node::Element { attrs, .. } => {
+                    for a in attrs.iter_mut() {
+                        if let Some(w) = a.when.as_deref().and_then(|w| subst(w, local)) {
+                            a.when = Some(w);
+                        }
+                    }
+                }
+                _ => {}
+            });
+        }
         walk_body(&mut body, &mut Vec::new(), &mut |n, local| match n {
             Node::Element { tag, attrs, .. } => {
                 for a in attrs.iter_mut() {
@@ -1369,6 +1462,9 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
             _ => {}
         });
         c.body = body;
+        for (path, p) in &lists {
+            found.push((path.clone(), p.clone(), PropKind::List));
+        }
         if found.is_empty() {
             continue;
         }
@@ -1420,7 +1516,213 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
 
 // ------------------------------------------------------------------------------------------------
 
-/// Reconstruit le site de `input` dans la forme de l'interface (même rendu).
+/// `{% for e in <liste> %}{% if e.url != page.url %}…{% endif %}{% endfor %}` (sans nombre
+/// maximal) : liste de collection réglée « sans le contenu affiché ».
+fn exclude_current_ifs(site: &mut Site, notes: &mut Vec<String>) {
+    let mut n = 0usize;
+    let mut fix = |body: &mut Vec<Node>| {
+        walk_mut(body, &mut |node| {
+            let Node::Each {
+                expr,
+                item,
+                children,
+                empty,
+                ..
+            } = node
+            else {
+                return;
+            };
+            let Some(mut q) = Query::parse(expr) else {
+                return;
+            };
+            if q.limit.is_some() || q.exclude_current || !empty.is_empty() || q.first.is_some() {
+                return;
+            }
+            let idx: Vec<usize> = children
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| !matches!(c, Node::Text { text } if text.trim().is_empty()))
+                .map(|(i, _)| i)
+                .collect();
+            let [i] = idx.as_slice() else {
+                return;
+            };
+            let Node::If {
+                cond,
+                then,
+                otherwise,
+                ..
+            } = &children[*i]
+            else {
+                return;
+            };
+            let it = item.trim();
+            let c: String = cond.split_whitespace().collect::<Vec<_>>().join(" ");
+            let ok = c == format!("{it}.url != page.url") || c == format!("page.url != {it}.url");
+            let uses_loop = exprs_of(then).iter().any(|e| refs(e).iter().any(|r| r.name == "loop"));
+            if !ok || !otherwise.is_empty() || uses_loop {
+                return;
+            }
+            let then = then.clone();
+            q.exclude_current = true;
+            *expr = q.to_expr();
+            *children = then;
+            n += 1;
+        });
+    };
+    for l in &mut site.layouts {
+        fix(&mut l.body);
+    }
+    for p in &mut site.pages {
+        fix(&mut p.body);
+    }
+    for c in &mut site.components {
+        fix(&mut c.body);
+    }
+    if n > 0 {
+        notes.push(format!(
+            "{n} liste(s) qui sautaient le contenu affiché : réglage « sans le contenu affiché »"
+        ));
+    }
+}
+
+/// `style="--dot:{{ {"orange": "#F4684D", …}[ex.data.color] }}"` (valeur choisie dans un tableau
+/// selon un champ) : une classe par valeur du champ, ajoutée sous condition (« Classe selon un
+/// champ »), et sa règle de style (`.tag--orange { --dot: #F4684D }`), réglable dans Styles.
+fn map_styles(site: &mut Site, notes: &mut Vec<String>) {
+    let style_re =
+        regex::Regex::new(r"^\s*(--[A-Za-z0-9_-]+|[a-z-]+)\s*:\s*\{\{-?\s*(.+?)\s*-?\}\}\s*;?\s*$")
+            .expect("regex");
+    let map_re = regex::Regex::new(r"^\(?\s*(\{.*\})\s*\)?\s*\[\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\]$")
+        .expect("regex");
+    let slug = |k: &str| -> String {
+        let mut out = String::new();
+        for c in k.chars() {
+            if c.is_ascii_uppercase() {
+                if !out.is_empty() {
+                    out.push('-');
+                }
+                out.push(c.to_ascii_lowercase());
+            } else if c.is_ascii_alphanumeric() {
+                out.push(c);
+            } else if !out.ends_with('-') {
+                out.push('-');
+            }
+        }
+        out.trim_matches('-').to_string()
+    };
+    let mut rules: Vec<(String, String, String)> = Vec::new();
+    let mut n = 0usize;
+    let mut fix = |body: &mut Vec<Node>| {
+        walk_mut(body, &mut |node| {
+            let Node::Element { attrs, .. } = node else {
+                return;
+            };
+            let Some(si) = attrs
+                .iter()
+                .position(|a| a.name == "style" && a.when.is_none() && a.value.is_some())
+            else {
+                return;
+            };
+            let v = attrs[si].value.clone().unwrap_or_default();
+            let Some(c) = style_re.captures(&v) else {
+                return;
+            };
+            let (prop, expr) = (c[1].to_string(), c[2].to_string());
+            let Some(m) = map_re.captures(expr.trim()) else {
+                return;
+            };
+            let Ok(map) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&m[1])
+            else {
+                return;
+            };
+            let path = m[2].to_string();
+            if map.is_empty() || !map.values().all(|v| v.is_string()) {
+                return;
+            }
+            let class = attrs
+                .iter()
+                .find(|a| a.name == "class" && a.when.is_none())
+                .and_then(|a| a.value.clone())
+                .unwrap_or_default();
+            if class.contains("{{") {
+                return;
+            }
+            let base = crate::style_base(&class).unwrap_or_else(|| slug(prop.trim_start_matches('-')));
+            let mut value = class.clone();
+            for (k, val) in &map {
+                let cls = format!("{base}--{}", slug(k));
+                value.push_str(&format!(
+                    "{{% if {path} == {} %}} {cls}{{% endif %}}",
+                    serde_json::to_string(k).unwrap_or_default()
+                ));
+                let decl_value = val.as_str().unwrap_or_default().to_string();
+                if !rules.iter().any(|(s, _, _)| *s == format!(".{cls}")) {
+                    rules.push((format!(".{cls}"), prop.clone(), decl_value));
+                }
+            }
+            attrs.remove(si);
+            match attrs.iter_mut().find(|a| a.name == "class" && a.when.is_none()) {
+                Some(a) => a.value = Some(value.trim_start().to_string()),
+                None => attrs.push(Attr {
+                    name: "class".into(),
+                    value: Some(value.trim_start().to_string()),
+                    when: None,
+                }),
+            }
+            n += 1;
+        });
+    };
+    for l in &mut site.layouts {
+        fix(&mut l.body);
+    }
+    for p in &mut site.pages {
+        fix(&mut p.body);
+    }
+    for c in &mut site.components {
+        fix(&mut c.body);
+    }
+    if n == 0 {
+        return;
+    }
+    let sheet = site.stylesheet.get_or_insert_with(|| revel_model::Stylesheet {
+        url: "/assets/css/site.css".into(),
+        source: None,
+        items: Vec::new(),
+    });
+    let mut taken: HashSet<String> = sheet
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            revel_model::StyleItem::Rule(r) => r.id.clone(),
+            _ => None,
+        })
+        .collect();
+    for (sel, prop, value) in rules {
+        let exists = sheet.items.iter().any(|i| {
+            matches!(i, revel_model::StyleItem::Rule(r) if r.selector == sel && r.media.is_none())
+        });
+        if exists {
+            continue;
+        }
+        let id = revel_model::ids::fresh(&taken);
+        taken.insert(id.clone());
+        sheet.items.push(revel_model::StyleItem::Rule(revel_model::StyleRule {
+            id: Some(id),
+            selector: sel,
+            media: None,
+            decls: vec![revel_model::Decl {
+                prop,
+                value,
+                important: false,
+            }],
+        }));
+    }
+    notes.push(format!(
+        "{n} valeur(s) de style selon un champ : classes conditionnelles (Styles)"
+    ));
+}
+
 /// `<body class="{{ bodyClass }}">` et `<html data-theme="{{ theme or 'dark' }}">` des gabarits :
 /// la génération pose ces réglages de la page (Apparence) ; l'attribut garde la valeur par
 /// défaut écrite.
@@ -1666,6 +1968,7 @@ fn convert_feeds(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
     }
 }
 
+/// Reconstruit le site de `input` dans la forme de l'interface (même rendu).
 pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
     let b = Builder::new(input);
     let prepared = crate::prepare(&b, input, true)?;
@@ -1686,12 +1989,15 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
     // Contenus choisis et contenus reliés écrits à la main : listes de collection.
     for l in &mut site.layouts {
         rewrite_picks(&mut l.body);
+        simplify_refs(&mut l.body);
     }
     for p in &mut site.pages {
         rewrite_picks(&mut p.body);
+        simplify_refs(&mut p.body);
     }
     for c in &mut site.components {
         rewrite_picks(&mut c.body);
+        simplify_refs(&mut c.body);
     }
     let mut taken = site.node_ids();
     let fl = |known: HashSet<String>, ctx: String, taken: &mut HashSet<String>| Fl {
@@ -1763,6 +2069,10 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         taken = std::mem::take(&mut f.taken);
         notes.append(&mut f.notes);
     }
+    // Valeurs de style choisies dans un tableau selon un champ : classes conditionnelles.
+    map_styles(&mut site, &mut notes);
+    // Liste dont la boucle saute le contenu affiché : réglage « sans le contenu affiché ».
+    exclude_current_ifs(&mut site, &mut notes);
     // Variables vivantes qui ne servent plus (remplacées là où elles servaient) : retirées,
     // sauf celles qu'un composant lit chez son utilisateur.
     let mut read_by_components: HashSet<String> = HashSet::new();

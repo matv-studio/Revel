@@ -1595,6 +1595,7 @@ fn prop_expr(
         Some(v @ serde_json::Value::Number(_)) => v.to_string(),
         Some(v) => v.to_string(),
         None if p.kind == revel_model::PropKind::Switch => "false".into(),
+        None if p.kind == revel_model::PropKind::List => "[]".into(),
         None => "\"\"".into(),
     }
 }

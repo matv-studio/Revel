@@ -44,6 +44,7 @@ mod styles;
 mod textfield;
 mod variables;
 mod versions;
+mod visibility;
 
 use dialog::Ask;
 use leptos::prelude::*;

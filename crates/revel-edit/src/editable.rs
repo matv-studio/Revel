@@ -206,7 +206,14 @@ impl Ctx {
             || self.prop(c, Some(PropKind::Switch))
             || Query::parse(c).is_some()
             || FieldList::parse(c).is_some_and(|fl| match fl {
-                FieldList::Values { field } | FieldList::Refs { field, .. } => self.field(&field),
+                FieldList::Values { field } | FieldList::Refs { field, .. } => {
+                    self.field(&field) || self.prop(&field, Some(PropKind::List))
+                }
+            })
+            // Clauses de l'interface (rempli, vide, égal à…) sur des champs ou des propriétés.
+            || crate::visibility::parse(cond).is_some_and(|cl| {
+                cl.iter()
+                    .all(|k| self.field(&k.field) || self.prop(&k.field, None))
             })
     }
 }
@@ -321,12 +328,21 @@ impl Audit<'_> {
                 ..
             } => {
                 let mut inner = ctx.clone();
-                if Query::parse(expr).is_some() {
+                if let Some(q) = Query::parse(expr) {
+                    // Contenus mis en premier : champ du contenu affiché ou contenus choisis.
+                    if let Some(f) = q.first.as_deref()
+                        && crate::collection::first_picks(f).is_none()
+                        && !(ctx.field(f) || ctx.prop(f, Some(PropKind::List)))
+                    {
+                        self.push(id, Kind::List, short(expr));
+                    }
                     inner.fields = Some(format!("{item}.data."));
                     inner.url = Some(format!("{item}.url"));
                     inner.value = None;
                 } else if let Some(fl) = FieldList::parse(expr).filter(|fl| match fl {
-                    FieldList::Values { field } | FieldList::Refs { field, .. } => ctx.field(field),
+                    FieldList::Values { field } | FieldList::Refs { field, .. } => {
+                        ctx.field(field) || ctx.prop(field, Some(PropKind::List))
+                    }
                 }) {
                     match fl {
                         FieldList::Values { .. } => inner.value = Some(item.trim().to_string()),
@@ -365,6 +381,8 @@ impl Audit<'_> {
                     let kind = props.iter().find(|p| &p.name == name).map(|p| p.kind);
                     let bound = ctx.output(e)
                         || (kind == Some(PropKind::Link) && ctx.url.as_deref() == Some(e.trim()))
+                        || (kind == Some(PropKind::List)
+                            && (ctx.field(e) || ctx.prop(e, Some(PropKind::List))))
                         || (kind == Some(PropKind::Switch) && ctx.condition(e));
                     if !literal && !bound {
                         self.push(id, Kind::Argument, format!("{name} = {}", short(e)));
@@ -373,8 +391,11 @@ impl Audit<'_> {
             }
             Node::Image(img) => {
                 let ok = |e: &Option<String>| {
-                    e.as_deref()
-                        .is_none_or(|e| crate::canvas::literal(e).is_some() || ctx.field(e))
+                    e.as_deref().is_none_or(|e| {
+                        crate::canvas::literal(e).is_some()
+                            || ctx.field(e)
+                            || ctx.prop(e, Some(PropKind::Text))
+                    })
                 };
                 let src_ok = crate::canvas::literal(&img.src).is_some()
                     || ctx.field(&img.src)

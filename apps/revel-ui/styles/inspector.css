@@ -588,3 +588,15 @@
 
 /* Enfant d'une grille ou d'un flex. */
 .parent-edit { width: 100%; justify-content: center; }
+
+/* Conditions d'affichage : une ligne par clause (champ, test, valeur). */
+.cond-editor { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.cond-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
+.cond-row .select { flex: 1 1 96px; min-width: 0; }
+.cond-row > .input { flex: 1 1 80px; min-width: 0; }
+.cond-row > .input--narrow { flex: 0 0 64px; }
+.cond-raw { margin: 0; font-size: var(--text-xs); word-break: break-word; color: var(--text-muted); }
+.cond-add { align-self: flex-start; font-size: var(--text-xs); }
+.cond-class { display: flex; flex-direction: column; gap: var(--s-1); padding-left: var(--s-2); border-left: 2px solid var(--line); margin-bottom: var(--s-2); }
+.cond-class .field-line { display: flex; gap: var(--s-1); align-items: center; }
+.cond-class .field-line .input { flex: 1; min-width: 0; }

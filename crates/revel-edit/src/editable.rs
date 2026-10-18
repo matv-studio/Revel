@@ -87,8 +87,15 @@ impl Ctx {
     /// Champ relié (`item.data.titre`, `titre` dans un modèle) ou valeur d'une liste de champ.
     fn field(&self, e: &str) -> bool {
         let e = e.trim();
-        if self.value.as_deref() == Some(e) {
-            return true;
+        if let Some(v) = self.value.as_deref() {
+            // Valeur d'une liste de champ, ou sous-champ d'une liste d'objets (`a.title`).
+            if e == v
+                || e.strip_prefix(v)
+                    .and_then(|r| r.strip_prefix('.'))
+                    .is_some_and(is_field)
+            {
+                return true;
+            }
         }
         self.fields
             .as_deref()
@@ -103,16 +110,33 @@ impl Ctx {
     }
     /// Valeur affichée reconnue : champ (écriture de date, `| safe`), propriété, langue.
     fn output(&self, expr: &str) -> bool {
-        let (head, tail) = match expr.split_once('|') {
+        let e = expr.trim();
+        // Année en cours (pied de page).
+        if matches!(
+            squash(e).as_str(),
+            "now()|date(\"%Y\")" | "now()|date('%Y')"
+        ) {
+            return true;
+        }
+        let (head, tail) = match e.split_once('|') {
             Some((h, t)) => (h.trim(), Some(t.trim())),
-            None => (expr.trim(), None),
+            None => (e, None),
         };
         let filter_ok = match tail {
             None => true,
             Some("safe") => true,
             Some(t) => crate::dates::format_of(t).is_some(),
         };
-        if filter_ok && self.field(head) {
+        // Champ, sinon un autre champ : `(a or b)`.
+        let fallback = || {
+            let inner = head
+                .strip_prefix('(')
+                .and_then(|h| h.strip_suffix(')'))
+                .unwrap_or(head);
+            let parts: Vec<&str> = inner.split(" or ").map(str::trim).collect();
+            parts.len() == 2 && parts.iter().all(|p| self.field(p))
+        };
+        if filter_ok && (self.field(head) || fallback()) {
             return true;
         }
         if tail.is_none() && self.prop(head, Some(PropKind::Text)) {
@@ -152,6 +176,11 @@ impl Ctx {
             }
             return false;
         }
+        // Classe ajoutée selon un champ ou une propriété : `carte{% if x %} carte--y{% endif %}`.
+        if name == "class" && v.contains("{%") && !v.contains("{{") {
+            return conditional_classes(v)
+                .is_some_and(|conds| conds.iter().all(|c| self.condition(c)));
+        }
         let Some(e) = inner(v) else { return false };
         self.field(&e)
             || self.url.as_deref() == Some(e.as_str())
@@ -161,8 +190,56 @@ impl Ctx {
     fn condition(&self, cond: &str) -> bool {
         let c = cond.trim();
         let c = c.strip_prefix("not ").map(str::trim).unwrap_or(c);
-        self.field(c) || self.prop(c, Some(PropKind::Switch))
+        // Liste non vide : champ liste, liste de collection.
+        let c = c
+            .strip_suffix("|length")
+            .or_else(|| c.strip_suffix("| length"))
+            .map(|x| {
+                let x = x.trim();
+                x.strip_prefix('(')
+                    .and_then(|y| y.strip_suffix(')'))
+                    .unwrap_or(x)
+                    .trim()
+            })
+            .unwrap_or(c);
+        self.field(c)
+            || self.prop(c, Some(PropKind::Switch))
+            || Query::parse(c).is_some()
+            || FieldList::parse(c).is_some_and(|fl| match fl {
+                FieldList::Values { field } | FieldList::Refs { field, .. } => self.field(&field),
+            })
     }
+}
+
+/// Expression sans espaces (comparaison de formes).
+fn squash(e: &str) -> String {
+    e.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// Conditions d'une classe ajoutée selon un champ : `a{% if x %} b{% endif %}` -> `["x"]` ;
+/// `None` pour une autre forme (sinon, expression…).
+pub fn conditional_classes(v: &str) -> Option<Vec<String>> {
+    let mut conds = Vec::new();
+    let mut rest = v;
+    while let Some(i) = rest.find("{%") {
+        let after = &rest[i + 2..];
+        let j = after.find("%}")?;
+        let tag = after[..j].trim().trim_matches('-').trim();
+        let cond = tag.strip_prefix("if ")?.trim().to_string();
+        let body_start = &after[j + 2..];
+        let k = body_start.find("{%")?;
+        let end = body_start[k + 2..]
+            .trim_start()
+            .trim_start_matches('-')
+            .trim_start();
+        if !end.starts_with("endif") {
+            return None;
+        }
+        let close = body_start[k..].find("%}")?;
+        conds.push(cond);
+        rest = &body_start[k + close + 2..];
+    }
+    (!conds.is_empty()).then_some(conds)
 }
 
 struct Audit<'a> {
@@ -210,7 +287,13 @@ impl Audit<'_> {
                     return;
                 }
                 let html = tag.eq_ignore_ascii_case("html");
-                for a in attrs.iter().filter(|_| !html) {
+                let body = tag.eq_ignore_ascii_case("body");
+                for a in attrs.iter().filter(|a| {
+                    !html
+                        && !(body
+                            && a.name == "class"
+                            && squash(a.value.as_deref().unwrap_or("")) == "{{bodyClass}}")
+                }) {
                     if let Some(w) = &a.when {
                         let locale_current = ctx
                             .locale
@@ -306,8 +389,9 @@ impl Audit<'_> {
                     let literal =
                         crate::canvas::literal(e).is_some() || matches!(e.trim(), "true" | "false");
                     let kind = props.iter().find(|p| &p.name == name).map(|p| p.kind);
-                    let bound = ctx.field(e)
-                        || (kind == Some(PropKind::Link) && ctx.url.as_deref() == Some(e.trim()));
+                    let bound = ctx.output(e)
+                        || (kind == Some(PropKind::Link) && ctx.url.as_deref() == Some(e.trim()))
+                        || (kind == Some(PropKind::Switch) && ctx.condition(e));
                     if !literal && !bound {
                         self.push(id, Kind::Argument, format!("{name} = {}", short(e)));
                     }
@@ -358,6 +442,10 @@ fn owner_name(o: &Owner) -> String {
     }
 }
 
+/// Variables de page réglées dans les paramètres de la page : référencement, indexation, classe
+/// du corps de page, thème.
+pub const PAGE_SETTINGS: &[&str] = &["seo", "noindex", "bodyClass", "theme"];
+
 /// Relevé du site entier, dans l'ordre : paramètres, gabarits, pages, composants.
 pub fn audit(site: &Site) -> Vec<Issue> {
     let mut a = Audit {
@@ -365,9 +453,8 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         out: Vec::new(),
         owner: "site".into(),
     };
-    for name in site.settings.filters.keys() {
-        a.push(None, Kind::Filter, name.clone());
-    }
+    // Filtres propres au site : relevés là où une expression les emploie (le titre de l'onglet,
+    // dans `<head>`, se règle dans Paramètres › Référencement).
     for l in &site.layouts {
         a.owner = owner_name(&Owner::Layout(l.id.clone()));
         let mut ctx = Ctx::default();
@@ -386,14 +473,33 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         if !slot && !template {
             a.push(None, Kind::NoSlot, l.id.clone());
         }
-        for k in l.props.keys() {
+        for k in l
+            .props
+            .keys()
+            .filter(|k| !PAGE_SETTINGS.contains(&k.as_str()))
+        {
             a.push(None, Kind::PageData, k.clone());
         }
         a.nodes(&l.body, &ctx);
     }
     for p in &site.pages {
         a.owner = owner_name(&Owner::Page(p.id.clone()));
-        for k in p.props.keys().filter(|k| *k != "seo") {
+        // Fichier du serveur (`.htaccess`, `robots.txt`, `.php`) : texte écrit tel quel, réglé
+        // dans les paramètres de la page.
+        let html_page = p.path.ends_with('/') || p.path.ends_with(".html");
+        if !html_page
+            && !p.path.ends_with(".xml")
+            && p.body
+                .iter()
+                .all(|n| matches!(n, Node::Text { .. } | Node::Html { .. }))
+        {
+            continue;
+        }
+        for k in p
+            .props
+            .keys()
+            .filter(|k| !PAGE_SETTINGS.contains(&k.as_str()))
+        {
             a.push(None, Kind::PageData, k.clone());
         }
         for (k, e) in &p.computed {

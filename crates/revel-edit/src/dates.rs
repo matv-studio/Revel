@@ -153,7 +153,15 @@ pub fn example(format: &str, lang: &str) -> String {
 /// Écriture (forme de [`FORMATS`]) d'un filtre lu dans une expression (`date_text("fr",
 /// "long")` est lu comme `date_text(locale, "long")`) ; `None` : autre filtre.
 pub fn format_of(filter: &str) -> Option<String> {
+    // Guillemets simples acceptés (`date('%d.%m.%Y')`).
     let f = filter.trim();
+    let dq;
+    let f = if f.contains('\'') && !f.contains('"') {
+        dq = f.replace('\'', "\"");
+        dq.as_str()
+    } else {
+        f
+    };
     if FORMATS.iter().any(|(x, _)| *x == f) {
         return Some(f.to_string());
     }

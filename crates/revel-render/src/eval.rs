@@ -54,7 +54,7 @@ impl Scope {
         self
     }
 
-    fn push(&mut self, m: BTreeMap<String, Value>) {
+    pub(crate) fn push(&mut self, m: BTreeMap<String, Value>) {
         self.frames.push(Arc::new(m));
         self.origins.push(None);
     }
@@ -64,12 +64,12 @@ impl Scope {
         self.origins.push((!o.is_empty()).then(|| Arc::new(o)));
     }
 
-    fn pop(&mut self) {
+    pub(crate) fn pop(&mut self) {
         self.frames.pop();
         self.origins.pop();
     }
 
-    fn get(&self, k: &str) -> Option<Value> {
+    pub(crate) fn get(&self, k: &str) -> Option<Value> {
         self.frames.iter().rev().find_map(|f| f.get(k).cloned())
     }
 
@@ -80,7 +80,7 @@ impl Scope {
     }
 
     /// Met à jour la variable existante la plus proche, sinon la crée dans la portée courante.
-    fn set(&mut self, k: &str, v: Value, origin: Option<Binding>) {
+    pub(crate) fn set(&mut self, k: &str, v: Value, origin: Option<Binding>) {
         let n = self.frames.len();
         let i = (1..n)
             .rev()
@@ -516,6 +516,36 @@ impl<'a> Builder<'a> {
         let mut out = String::new();
         let mut s = scope.clone();
         self.nodes(&nodes, &mut s, &mut out, Mode::Text, ctx, &At::NONE)?;
+        Ok(out)
+    }
+
+    /// Filtres propres au site (paramètres du site).
+    pub(crate) fn site_filters(&self) -> BTreeMap<String, revel_model::CustomFilter> {
+        self.site.settings.filters.clone()
+    }
+
+    /// Valeur d'attribut écrite avec des expressions (`card {{ x }}`), rendue en texte.
+    pub(crate) fn render_attr(
+        &self,
+        scope: &mut Scope,
+        src: &str,
+        ctx: &str,
+    ) -> Result<String, RenderError> {
+        let nodes = self.template_nodes(src)?;
+        let mut out = String::new();
+        self.nodes(&nodes, scope, &mut out, Mode::Text, ctx, &At::NONE)?;
+        Ok(out)
+    }
+
+    /// Nœuds rendus en HTML (bloc capturé `{% set %}…{% endset %}`).
+    pub(crate) fn render_html(
+        &self,
+        nodes: &[Node],
+        scope: &mut Scope,
+        ctx: &str,
+    ) -> Result<String, RenderError> {
+        let mut out = String::new();
+        self.nodes(nodes, scope, &mut out, Mode::Html, ctx, &At::NONE)?;
         Ok(out)
     }
 
@@ -1160,7 +1190,7 @@ pub(crate) fn shown(v: &Value) -> Shown {
     }
 }
 
-fn display(v: &Value, escape_unsafe: bool) -> String {
+pub(crate) fn display(v: &Value, escape_unsafe: bool) -> String {
     if v.is_undefined() || v.is_none() {
         return String::new();
     }
@@ -1259,10 +1289,16 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
             .find(|i| path(i, "data.slug") == slug)
             .unwrap_or(Value::UNDEFINED)
     });
+    // Champ de référence simple (texte) ou multiple (liste) : contenus désignés, dans l'ordre.
     env.add_filter("by_slugs", |v: Value, slugs: Value| {
         let items = items_of(&v);
-        Value::from(
+        let slugs = if slugs.as_str().is_some() {
+            vec![slugs]
+        } else {
             items_of(&slugs)
+        };
+        Value::from(
+            slugs
                 .iter()
                 .filter_map(|s| items.iter().find(|i| &path(i, "data.slug") == s).cloned())
                 .collect::<Vec<_>>(),

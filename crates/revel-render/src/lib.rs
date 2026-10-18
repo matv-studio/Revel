@@ -16,6 +16,7 @@ use std::sync::Arc;
 pub mod actions;
 pub mod animations;
 mod eval;
+pub mod flatten;
 mod forms;
 mod html;
 pub mod lottie;

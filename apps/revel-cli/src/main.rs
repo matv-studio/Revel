@@ -30,6 +30,13 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Reconstruit un site dans la forme de l'interface (données et calculs écrits, listes de
+    /// collection et propriétés de composants gardées) ; `--dry-run` : relevé avant et après.
+    Rebuild {
+        dir: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Crée un projet vide.
     New {
         dir: PathBuf,
@@ -251,6 +258,23 @@ fn main() -> Result<()> {
                         i.detail
                     );
                 }
+            }
+        }
+        Command::Rebuild { dir, dry_run } => {
+            let mut p = Project::open(&dir)?;
+            let before = revel_edit::editable::audit(&p.site).len();
+            let (site, notes) = p.rebuilt().map_err(|e| anyhow::anyhow!("{e}"))?;
+            let issues = revel_edit::editable::audit(&site);
+            for n in &notes {
+                println!("{n}");
+            }
+            for (k, n) in revel_edit::editable::summary(&issues) {
+                println!("{k:?} : {n}");
+            }
+            println!("relevé : {before} -> {}", issues.len());
+            if !dry_run {
+                p.site = site;
+                p.save()?;
             }
         }
         Command::New {

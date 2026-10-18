@@ -25,6 +25,14 @@ pub struct Query {
     /// Sans le contenu affiché par la page (« autres projets » sur la page d'un projet).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exclude_current: bool,
+    /// Contenus choisis à la main (identifiants `data.slug`), dans l'ordre affiché ; vide :
+    /// tous les contenus.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pick: Vec<String>,
+    /// Filtre « contient » : chemin d'un champ liste (`data.expertises`) et valeur cherchée
+    /// (expression : `slug`, `page.fileSlug`, `"design"`) ; les projets d'une expertise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contains: Option<(String, String)>,
 }
 
 fn ident(s: &str) -> bool {
@@ -125,6 +133,10 @@ impl Query {
             format!("collections[{}]", crate::canvas::quote(&self.collection))
         };
         let mut e = base;
+        if !self.pick.is_empty() {
+            let list: Vec<String> = self.pick.iter().map(|p| crate::canvas::quote(p)).collect();
+            e.push_str(&format!(" | by_slugs([{}])", list.join(", ")));
+        }
         if let Some((path, value)) = &self.filter {
             match value {
                 Some(v) => e.push_str(&format!(
@@ -133,6 +145,12 @@ impl Query {
                 )),
                 None => e.push_str(&format!(" | selectattr({})", crate::canvas::quote(path))),
             }
+        }
+        if let Some((path, value)) = &self.contains {
+            e.push_str(&format!(
+                " | where_contains({}, {value})",
+                crate::canvas::quote(path)
+            ));
         }
         if self.exclude_current {
             e.push_str(" | without(page.url)");
@@ -191,6 +209,24 @@ impl Query {
             let args = args.strip_suffix(')')?;
             let args = split_top(args, ',');
             match name.trim() {
+                "by_slugs"
+                    if q.pick.is_empty()
+                        && q.filter.is_none()
+                        && q.sort.is_none()
+                        && !q.exclude_current
+                        && args.len() == 1 =>
+                {
+                    let inner = args[0].trim().strip_prefix('[')?.strip_suffix(']')?;
+                    let picks: Option<Vec<String>> = split_top(inner, ',')
+                        .iter()
+                        .filter(|x| !x.is_empty())
+                        .map(|x| crate::canvas::literal(x))
+                        .collect();
+                    q.pick = picks?;
+                    if q.pick.is_empty() {
+                        return None;
+                    }
+                }
                 "selectattr" if q.filter.is_none() && q.sort.is_none() && !q.exclude_current => {
                     let path = crate::canvas::literal(args.first()?)?;
                     if !valid_path(&path) {
@@ -207,6 +243,19 @@ impl Query {
                         _ => return None,
                     };
                     q.filter = Some((path, value));
+                }
+                "where_contains"
+                    if q.contains.is_none()
+                        && q.sort.is_none()
+                        && !q.exclude_current
+                        && args.len() == 2 =>
+                {
+                    let path = crate::canvas::literal(&args[0])?;
+                    let v = args[1].trim();
+                    if !valid_path(&path) || !(literal_value(v) || valid_path(v)) {
+                        return None;
+                    }
+                    q.contains = Some((path, v.to_string()));
                 }
                 "without"
                     if !q.exclude_current
@@ -301,6 +350,8 @@ mod tests {
                 sort: Some(("date".into(), true)),
                 limit: Some(3),
                 exclude_current: false,
+                pick: Vec::new(),
+                contains: None,
             },
             Query {
                 collection: "actualites-fr".into(),
@@ -308,12 +359,29 @@ mod tests {
                 sort: Some(("data.title".into(), false)),
                 limit: None,
                 exclude_current: false,
+                pick: Vec::new(),
+                contains: None,
             },
             Query {
                 collection: "projets".into(),
                 sort: Some(("date".into(), true)),
                 limit: Some(3),
                 exclude_current: true,
+                ..Default::default()
+            },
+            // Contenus choisis à la main, dans l'ordre.
+            Query {
+                collection: "projets".into(),
+                pick: vec!["showreel".into(), "voeux-2026".into()],
+                limit: Some(1),
+                ..Default::default()
+            },
+            // Projets d'une expertise (modèle de page d'expertise).
+            Query {
+                collection: "projets".into(),
+                contains: Some(("data.expertises".into(), "slug".into())),
+                sort: Some(("date".into(), true)),
+                limit: Some(3),
                 ..Default::default()
             },
         ];
@@ -328,6 +396,8 @@ mod tests {
                 sort: Some(("date".into(), true)),
                 limit: Some(3),
                 exclude_current: false,
+                pick: Vec::new(),
+                contains: None,
             }
             .to_expr(),
             r#"(collections.projets | selectattr("data.une") | sort(attribute="date", reverse=true))[:3]"#

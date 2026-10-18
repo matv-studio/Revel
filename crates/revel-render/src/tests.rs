@@ -698,6 +698,8 @@ fn liste_de_collection() {
             sort,
             limit,
             exclude_current: false,
+            pick: Vec::new(),
+            contains: None,
         }
         .to_expr()
     };
@@ -1070,4 +1072,44 @@ fn calques_masques_et_noms() {
         e.html
     );
     assert!(!e.html.contains("data-revel-name"));
+}
+
+/// Reconstruction dans la forme de l'interface (D-90) : même rendu ; variables, boucle de
+/// contenus choisis et listes de données remplacées par des éléments écrits et une liste de
+/// collection réglable.
+#[test]
+fn reconstruction_meme_rendu() {
+    let mut s = site();
+    s.pages[0].body.extend(parse(
+        r#"{% set chiffres = [{"n": "20", "l": "ans"}, {"n": "45", "l": "experts"}] %}<dl>{% for c in chiffres %}<dt>{{ c.l }}</dt><dd>+{{ c.n }}</dd>{% endfor %}</dl>"#,
+    ));
+    let entries = || {
+        vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "Projet A", "date": "2026-01-02"}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "Projet B", "date": "2026-03-01"}),
+            ),
+        ]
+    };
+    let before = build(&input(&s, entries())).unwrap();
+    let r = crate::flatten::rebuild(&input(&s, entries())).unwrap();
+    let after = build(&input(&r.site, entries())).unwrap();
+    assert_eq!(file(&before, "index.html"), file(&after, "index.html"));
+    let issues = revel_edit::editable::audit(&r.site);
+    // Classe du premier élément d'une liste : pas de forme dans l'interface (style « premier »).
+    let page: Vec<_> = issues
+        .iter()
+        .filter(|i| i.owner == "page:index" && !i.detail.contains("loop.first"))
+        .collect();
+    assert!(page.is_empty(), "{page:?}");
+    let json = serde_json::to_string(&r.site.pages[0].body).unwrap();
+    assert!(
+        json.contains(r#"collections.projets | by_slugs([\"b\", \"zz\", \"a\"])"#),
+        "{json}"
+    );
+    assert!(json.contains("experts") && !json.contains("chiffres"));
 }

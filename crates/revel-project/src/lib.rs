@@ -447,6 +447,26 @@ impl Project {
     }
 
     /// Site complété des données du dossier de données (comme pour la génération).
+    /// Site reconstruit dans la forme de l'interface (D-90) : données et calculs écrits,
+    /// listes de collection et propriétés de composants gardées vivantes ; même rendu. Les
+    /// données du site d'origine restent dans le site (elles servent encore aux gabarits).
+    pub fn rebuilt(&self) -> Result<(Site, Vec<String>), ProjectError> {
+        let site = self.site_with_data()?;
+        let input = BuildInput {
+            site: &site,
+            entries: self.load_entries()?,
+            locales: self.load_locales()?,
+            environment: "production".into(),
+            version: self.version_tag(&site),
+            hooks: Arc::new(ProjectAssets::new(self)),
+            now: chrono::Utc::now(),
+        };
+        let r = revel_render::flatten::rebuild(&input)?;
+        let mut out = r.site;
+        out.data = self.site.data.clone();
+        Ok((out, r.notes))
+    }
+
     fn site_with_data(&self) -> Result<Site, ProjectError> {
         let mut site = self.site.clone();
         for (k, v) in self.load_data()? {

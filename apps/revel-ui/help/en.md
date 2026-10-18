@@ -103,6 +103,7 @@ A linked date is written the way you want (October 16, 2026, 16.10.2026…); an 
 - Everyone works on their own copy of the site, then clicks **Sync**: the others' versions come in, theirs go out. Changes made in different places are combined.
 - One place changed by two people: choose **Mine** or **Received** for each, then **Apply**.
 - The others open the site with **Import › Git repository**, pasting the copied address or using **Folder…**. **Settings › Accounts › Your name** puts each person's name on their versions.
+- Online repository: everyone has their own GitHub account, invited to the repository (Settings › Collaborators); GitHub forbids sharing an account.
 
 ## Revel updates
 

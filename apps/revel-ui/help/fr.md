@@ -103,6 +103,7 @@ Une date reliée s'écrit comme vous le voulez (16 octobre 2026, 16.10.2026…) 
 - Chacun travaille sur sa copie du site puis clique **Synchroniser** : les versions des autres arrivent, les siennes partent. Les modifications faites à des endroits différents se combinent.
 - Un même endroit modifié par deux personnes : choisissez **Ma version** ou **Version reçue** pour chacun, puis **Appliquer**.
 - Les autres ouvrent le site avec **Importer › Dépôt Git**, en collant l'adresse copiée ou avec **Dossier…**. **Réglages › Comptes › Votre nom** inscrit le nom de chacun sur ses versions.
+- Dépôt en ligne : chacun a son propre compte GitHub, invité au dépôt (Settings › Collaborators) ; GitHub interdit de partager un compte.
 
 ## Mises à jour de Revel
 

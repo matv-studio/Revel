@@ -703,8 +703,12 @@ ordinateur, hors ligne si besoin) puis synchronise : versions des autres récup�
   puis « Appliquer » (résultat enregistré et envoyé). Autres fichiers modifiés des deux côtés : un choix pour
   tous. Rien n'est changé tant que les choix ne sont pas appliqués.
 - **Nom de l'auteur** : Réglages › Comptes › « Votre nom », inscrit sur les versions faites depuis cet
-  ordinateur (un nom par personne même avec un compte GitHub commun) ; sans nom : celui réglé dans Git, sinon
-  le compte GitHub.
+  ordinateur (qui a modifié quoi, y compris avec le dossier partagé, sans compte) ; sans nom : celui réglé dans
+  Git, sinon le compte GitHub. Dépôt en ligne : un compte GitHub par personne, invité au dépôt ; les conditions
+  de GitHub interdisent de partager un identifiant (« a single login may not be shared by multiple people »,
+  [conditions d'utilisation, B.3](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service)) et
+  un dépôt privé gratuit accepte des collaborateurs sans limite de nombre
+  ([documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/repository-access-and-collaboration/inviting-collaborators-to-a-personal-repository)).
 - Pas de serveur ni de service de Revel : le dossier partagé ne demande qu'un accès en lecture et écriture ; le
   NAS n'a pas besoin d'avoir Git. Limite : deux personnes ne voient pas les modifications de l'autre en direct
   (synchroniser pour les recevoir).

@@ -2810,7 +2810,7 @@ try {
     await page.fill('.settings-author', '');
     await page.locator('.settings-author').blur();
     await page.waitForFunction(() => window.__revelSettings && !window.__revelSettings.author);
-    check('réglages : nom inscrit sur les versions (enregistré puis retiré)', /compte GitHub commun/.test(help || ''));
+    check('réglages : nom inscrit sur les versions (enregistré puis retiré)', /qui a modifié quoi/.test(help || ''));
   }
 
   // Réglages › Outils de construction (D-88) : Node.js téléchargé pour l'import construit,

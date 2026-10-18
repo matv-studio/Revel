@@ -274,7 +274,8 @@ fn element_content(
     };
     let set_href = set.clone();
     // Lien marqué « page actuelle » aussi sur les pages dont l'adresse commence par la sienne.
-    let section = attr(&attrs, "data-revel-current").and_then(|a| a.value.as_deref()) == Some("section");
+    let section =
+        attr(&attrs, "data-revel-current").and_then(|a| a.value.as_deref()) == Some("section");
     let set_section = set.clone();
     let media = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
     let is_img = lower == "img";

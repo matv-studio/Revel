@@ -223,7 +223,8 @@ fn site_statique_importe() {
     assert!(head_json.contains("\"/css/base.css\""), "{head_json}");
     assert!(!head_json.contains("style.css"), "{head_json}");
     let body = find_tag(base, "body").unwrap();
-    assert_eq!(attr(body, "class"), Some("{{ body_class }}"));
+    // Classe du corps propre à chaque page : réglage de la page (Apparence), rien dans le gabarit.
+    assert_eq!(attr(body, "class"), None);
     let body_json = serde_json::to_string(body).unwrap();
     assert!(body_json.contains("/js/site.js"), "{body_json}");
     let shell = serde_json::to_string(&site.layouts[1].body).unwrap();
@@ -254,7 +255,7 @@ fn site_statique_importe() {
     let home = &site.pages[0];
     assert_eq!(home.props["seo"]["title"], "Accueil — Atelier");
     assert_eq!(home.props["seo"]["description"], "Page Accueil — Atelier");
-    assert_eq!(home.props["body_class"], "home");
+    assert_eq!(home.props["bodyClass"], "home");
     let home_json = serde_json::to_string(&home.body).unwrap();
     assert!(
         home_json.contains("{{ pas une expression }}"),

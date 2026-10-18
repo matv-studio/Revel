@@ -694,15 +694,17 @@ pub fn TickerSettings(at: Target) -> impl IntoView {
     let at = StoredValue::new(at);
     let anim = Memo::new(move |_| {
         let at = at.get_value();
-        ed.doc.with(|d| match revel_edit::address::node(d.as_ref()?, &at).ok()? {
-            Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
-                .iter()
-                .find(|a| a.name == f.attr())
-                .and_then(|a| a.value.as_deref())
-                .map(Anim::parse)
-                .filter(|a| a.preset == "ticker"),
-            _ => None,
-        })
+        ed.doc.with(
+            |d| match revel_edit::address::node(d.as_ref()?, &at).ok()? {
+                Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
+                    .iter()
+                    .find(|a| a.name == f.attr())
+                    .and_then(|a| a.value.as_deref())
+                    .map(Anim::parse)
+                    .filter(|a| a.preset == "ticker"),
+                _ => None,
+            },
+        )
     });
     let write = StoredValue::new(move |a: Option<Anim>| {
         let Some(a) = a else { return };
@@ -718,7 +720,9 @@ pub fn TickerSettings(at: Target) -> impl IntoView {
         let id = at.get_value().node;
         let v = a.write();
         set_timeout(
-            move || ed.post(serde_json::json!({ "type": "animate", "id": id, "family": "loop", "value": v })),
+            move || {
+                ed.post(serde_json::json!({ "type": "animate", "id": id, "family": "loop", "value": v }))
+            },
             std::time::Duration::from_millis(350),
         );
     });

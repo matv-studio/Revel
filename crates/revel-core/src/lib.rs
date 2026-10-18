@@ -500,7 +500,8 @@ impl Core {
         Ok(summary)
     }
 
-    /// Importe un projet Eleventy (écrit `site.revel.json` à sa racine).
+    /// Importe un projet Eleventy (écrit `site.revel.json` à sa racine), reconstruit dans la forme
+    /// de l'interface.
     pub fn import_eleventy(&self, path: &Path, overwrite: bool) -> Result<ImportResult> {
         if !revel_import::is_eleventy(path) {
             return Err(CoreError::NotEleventy);
@@ -509,8 +510,9 @@ impl Core {
             return Err(CoreError::AlreadyImported);
         }
         let profile = revel_import::eleventy::load_profile(path)?;
-        let (site, report) = revel_import::eleventy::import(path, &profile)?;
-        let p = revel_project::Project::create(path, site)?;
+        let (site, mut report) = revel_import::eleventy::import(path, &profile)?;
+        let mut p = revel_project::Project::create(path, site)?;
+        report.warnings.extend(rebuild_for_ui(&mut p));
         let summary = summarize(&p)?;
         self.touch_recent(&summary);
         Ok(ImportResult {
@@ -1173,6 +1175,37 @@ fn summarize(p: &revel_project::Project) -> Result<SiteSummary> {
             .map(|r| (r.from.clone(), r.to.clone()))
             .collect(),
     })
+}
+
+/// Site importé reconstruit dans la forme de l'interface (calques, listes de collection,
+/// propriétés, réglages ; même rendu) : ce que l'interface ne pouvait pas modifier le devient.
+/// Rend une ligne du bilan (points restants), ou l'erreur si la reconstruction échoue (site
+/// importé gardé tel quel).
+pub fn rebuild_for_ui(p: &mut revel_project::Project) -> Option<String> {
+    let before = revel_edit::editable::audit(&p.site).len();
+    if before == 0 {
+        return None;
+    }
+    match p.rebuilt() {
+        Ok((site, _notes)) => {
+            let after = revel_edit::editable::audit(&site).len();
+            p.site = site;
+            if let Err(e) = p.save() {
+                return Some(format!(
+                    "reconstruction dans la forme de l'interface non enregistrée : {e}"
+                ));
+            }
+            (after > 0).then(|| {
+                format!(
+                    "structure de l'interface : {before} points convertis en {}, {after} restent écrits dans le code (liste : revel audit)",
+                    before - after
+                )
+            })
+        }
+        Err(e) => Some(format!(
+            "reconstruction dans la forme de l'interface impossible : {e}"
+        )),
+    }
 }
 
 #[cfg(test)]

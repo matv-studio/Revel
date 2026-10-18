@@ -12,7 +12,8 @@ les noms dépendent de l'outil. Les fichiers CSS sont comparés sous forme canon
 suite de règles et de valeurs, mise en forme et commentaires ignorés) si la variable
 d'environnement REVEL_BIN désigne la commande `revel` (feuilles générées par Revel, D-18).
 Les différences attendues sont neutralisées : paramètre de version `?v=…`,
-variantes d'images (`<picture>`, `srcset`, noms `nom-abc123-800.webp`).
+variantes d'images (`<picture>`, `srcset`, noms `nom-abc123-800.webp`), liens « page
+actuelle » (`aria-current="page"`, posé par Revel).
 Code de sortie 0 si aucune différence.
 """
 import os
@@ -72,6 +73,9 @@ def html_facts(text: str) -> dict:
     for t in body.find_all(True):
         for k, v in sorted(t.attrs.items()):
             if t.name == "img" and k in ("src", "srcset", "sizes", "width", "height", "decoding", "fetchpriority", "style"):
+                continue
+            # Lien vers la page affichée : marqué par Revel à la génération (état « page actuelle »).
+            if t.name == "a" and k == "aria-current" and v == "page":
                 continue
             if isinstance(v, list):
                 v = " ".join(v)

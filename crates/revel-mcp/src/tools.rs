@@ -23,28 +23,45 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 const INSTRUCTIONS: &str = "Revel is a desktop visual website builder. These tools read and edit the website \
-currently open in Revel (or the one named by the optional `site` argument, an absolute folder path). \
-Every edit is applied with Revel's own commands: it shows up immediately in Revel's editor, and the user \
-can undo it (tool `undo`, or Ctrl+Z in Revel). Start with `get_site`, then `get_page` for the page you want \
-to work on: it lists every element with its id (#id). Change text with `set_text`, attributes (class, \
-href, src, alt…) with `set_attributes`, CSS with `set_styles` (styles belong to classes, per breakpoint), \
-add markup with `insert_html`, remove with `remove_node`. Texts shown as {{ expressions }} come from the \
-site's data files or CMS entries: resolve the variables set by {% set … %} (e.g. `{% set a = pages.agence %}` \
-then `{{ a.title }}` is the data path `pages.agence.title`), read them with `get_data` and change them with \
-`set_data`; CMS entries (`list_collections`) with `get_entry` and `set_entry_field`. Animations are \
-attributes set with `set_attributes`: `data-revel-appear` (fade, up, down, left, right, zoom-in, zoom-out, blur, \
-pop, flip, rotate, reveal), `data-revel-text` (fade, up, blur, pop, flip, typewriter), `data-revel-hover` (grow, \
-shrink, lift, shadow, dim, tilt, brighten, underline), `data-revel-press` (press, squish, push), \
-`data-revel-loop` (spin, pulse, float, swing, shake, blink, bounce, heartbeat, ticker) and \
-`data-revel-scroll` (parallax, fade-in, zoom-in, rotate, slide-x, fade-out); value: the animation, then optional \
-settings such as `dur=0.8 delay=0.2 ease=smooth|bounce|ease|linear dist=32 stagger=0.1 trigger=view|load \
-replay split=chars|words|lines amount=100 mirror=on|off dir=left|right pause` (e.g. `up dur=0.8`). \
-Interactions between elements are the attribute `data-revel-on` on the triggering element: `<trigger> <action> \
-<target>` separated by `;`, trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss, \
-target self|parent|next|body|.<class>|#<id> (e.g. `click class:is-open #menu; scroll:80 class:is-solid self`). \
-Tabs: a `data-revel-tabs` container with `data-revel-tab` buttons and as many `data-revel-panel` panels. A Lottie \
-animation is an element with `data-lottie=\"/media/<file>.json\"`, `data-lottie-play=auto|hover|click|scroll`, \
-optional `data-lottie-loop` and `data-lottie-speed`. Keep the site's language and tone.";
+currently open in Revel (or the one named by the optional `site` argument, an absolute folder path). Every edit \
+is applied with Revel's own commands: it shows up immediately in Revel's editor and the user can undo it \
+(`undo`, or Ctrl+Z). Start with `get_site`, then `get_page` (every element with its id #id).\n\n\
+BUILD ONLY WHAT THE USER CAN EDIT IN REVEL'S INTERFACE. The user must be able to change everything you make from \
+the panels (Layers, Styles, Add, CMS), without code: never write `{% set %}`, computed expressions, filters other \
+than those listed here, or site scripts. After your changes call `check_site`: it must list no issue for what you \
+built; rebuild anything it lists with the forms below.\n\
+- Structure: elements with classes; texts written in the elements (`set_text`); CSS on classes per breakpoint and \
+state (`set_styles`, states :hover :active :focus-visible [aria-current=\"page\"]). Prefer `insert_preset` (Add panel) \
+for sections, grids, buttons, images, video, video player (YouTube/Vimeo/file with cover), icons, navbar, ticker \
+(endless scroll of logos/team), carousel, slideshow, tabs, accordion, list filters, collection list, blocks.\n\
+- Repeated content (projects, team, logos, articles): a CMS collection and a collection list: `{% for item in \
+(collections.<id> | selectattr(\"data.<field>\") | where_contains(\"data.<listfield>\", <value>) | without(page.url) | \
+sort(attribute=\"<path>\", reverse=true) | pick_first(<field or [\"slug\",…]>))[:<n>] %}` (each part optional, in this \
+order; `collections.<id> | by_slugs([\"a\",\"b\"])` for chosen entries). Inside: `{{ item.data.<field> }}` alone in an \
+element (or with a date format `| date(\"%d.%m.%Y\")`, `| safe` for rich text, `| length` for a count, `| emphasis(\"accent\")` \
+for *starred* words), `href=\"{{ item.url }}\"`, images bound to a field. A list field: `{% for v in item.data.<field> %}`, \
+a reference list: `{% for r in collections.<id> | by_slugs(item.data.<field>) %}`. In a collection template, \
+fields are read without prefix (`{{ title }}`).\n\
+- Conditions: `{% if %}` with clauses joined by `and` (or all by `or`): `field`, `not field`, `field == \"v\"`, \
+`field != \"v\"`, `\"v\" in field`, `field|length > n`. Classes on a condition: \
+`class=\"card{% if item.data.featured %} card--featured{% endif %}\"`; class from a value: `class=\"tag tag--{{ item.data.color }}\"`.\n\
+- Components: repeated blocks become components with properties (text, image, link, visibility, list) that each \
+use sets; variants for alternate looks.\n\
+- Behaviour without code: `data-revel-on` on the triggering element, `<trigger> <action> <target>` separated by \
+`;`: trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss|random:<ms>|spin:<deg>, \
+target self|parent|next|body|.<class>|#<id> (e.g. `click class:menu-open body; scroll:40 class:is-solid self`). \
+Tabs: `data-revel-tabs` (value `hover` to switch on hover) with `data-revel-tab` triggers and `data-revel-panel` \
+panels; slider: `data-revel-slider` (`autoplay=5 loop`) with `data-revel-track`, `data-revel-prev`, `data-revel-next`, \
+`data-revel-count`; video player: `data-revel-video=\"<url>\"` with a `data-revel-play` cover; list filters: \
+`data-revel-filters=\"<url param>\"` group of `data-revel-filter=\"<value>\"` buttons, items `data-revel-tags`, \
+`data-revel-filter-empty`; cookie consent: `data-revel-consent=\"G-…\"` banner, `data-revel-consent-choice=accept|refuse`, \
+`data-revel-consent-open`; forms: `<form data-revel-form=\"contact\">` (sent by e-mail, Settings › Forms). \
+Animations: `data-revel-appear|text|hover|press|loop|scroll` (e.g. `data-revel-appear=\"up dur=0.8\"`, \
+`data-revel-loop=\"ticker speed=60 pause\"`). Lottie: `data-lottie=\"/media/x.json\"` with `data-lottie-play`.\n\
+- Page settings (title, description, share image, body class, theme, share type) and site settings (site name, \
+icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`.\n\
+Existing sites may still contain {{ expressions }} from data files: read them with `get_data`/`set_data`; CMS entries \
+with `list_collections`, `get_entry`, `set_entry_field`. Keep the site's language and tone.";
 
 /// Assistant et outil d'une modification (dernières actions des assistants).
 #[derive(Debug, Clone, serde::Serialize)]
@@ -460,6 +477,7 @@ fn preset_text(p: revel_edit::make::Preset, locale: &str) -> String {
         P::Carousel | P::Slideshow => "insert-text-slider",
         P::VideoPlayer => "insert-text-video-player",
         P::ListFilters => "insert-text-filters",
+        P::Consent => "insert-text-consent",
         _ => return String::new(),
     };
     revel_i18n::Localizer::new(locale).t(key, &[])

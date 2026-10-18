@@ -984,8 +984,12 @@ pub fn Media() -> impl IntoView {
 fn sort_media(v: &mut [MediaFile], sort: MediaSort) {
     let name = |f: &MediaFile| file_name(&f.url).to_lowercase();
     match sort {
-        MediaSort::Recent => v.sort_by(|a, b| b.modified.cmp(&a.modified).then(name(a).cmp(&name(b)))),
-        MediaSort::Oldest => v.sort_by(|a, b| a.modified.cmp(&b.modified).then(name(a).cmp(&name(b)))),
+        MediaSort::Recent => {
+            v.sort_by(|a, b| b.modified.cmp(&a.modified).then(name(a).cmp(&name(b))))
+        }
+        MediaSort::Oldest => {
+            v.sort_by(|a, b| a.modified.cmp(&b.modified).then(name(a).cmp(&name(b))))
+        }
         MediaSort::Name => v.sort_by_key(name),
         MediaSort::NameDesc => v.sort_by_key(|f| std::cmp::Reverse(name(f))),
         MediaSort::Kind => v.sort_by(|a, b| a.kind.cmp(&b.kind).then(name(a).cmp(&name(b)))),

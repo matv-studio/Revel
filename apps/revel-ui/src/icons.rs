@@ -705,4 +705,3 @@ pub fn navbar() -> AnyView {
         r#"<rect x="1.5" y="3" width="13" height="4" rx="1"/><path d="M3.5 5h2.5M10 5h.01M12 5h.01M3 10h10M3 12.5h7"/>"#,
     )
 }
-

@@ -262,7 +262,8 @@ impl Query {
                     if q.filter.is_none()
                         && q.sort.is_none()
                         && !q.exclude_current
-                        && q.first.is_none() => {
+                        && q.first.is_none() =>
+                {
                     let path = crate::canvas::literal(args.first()?)?;
                     if !valid_path(&path) {
                         return None;

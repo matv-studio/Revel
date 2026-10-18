@@ -164,7 +164,9 @@ jobs:
         run: |
           cargo build -q --release -p revel-cli
           REVEL=target/release/revel
-          $REVEL import-eleventy cobaye
+          # Sans reconstruction (forme de l'interface) : fidélité de l'importeur seul ; la
+          # reconstruction est vérifiée plus bas (étape « Reconstruction »).
+          $REVEL import-eleventy cobaye --no-rebuild
           # Le fichier du cobaye doit correspondre à ce que produit l'importeur actuel.
           if ! git -C cobaye diff --quiet -- site.revel.json; then
             echo "::warning::site.revel.json du cobaye diffère de l'import actuel : mettre à jour le dépôt cobaye et COBAYE_REF."
@@ -199,6 +201,21 @@ jobs:
           widths=$(jq -r '[1280] + [.breakpoints[] | .max_width // empty] + [375] | join(",")' cobaye/site.revel.json)
           echo "## Styles calculés et captures ($widths px)" >> "$GITHUB_STEP_SUMMARY"
           node tools/compare-styles.mjs styles-origine revel-production --jobs 4 --shots --widths "$widths" \
+            --save captures-ecarts \
+            --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+      # Reconstruction dans la forme de l'interface (D-90), faite par défaut à l'import : le site
+      # reconstruit doit donner les mêmes styles calculés et les mêmes captures.
+      - name: Reconstruction (forme de l'interface)
+        shell: bash
+        run: |
+          REVEL=target/release/revel
+          rsync -a --exclude node_modules --exclude _site --exclude .git cobaye/ cobaye-ui/
+          echo "## Reconstruction" >> "$GITHUB_STEP_SUMMARY"
+          $REVEL rebuild cobaye-ui | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
+          $REVEL build cobaye-ui --out revel-ui --no-images
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          node tools/compare-styles.mjs revel-production revel-ui --jobs 4 --shots --widths 1280,375 \
             --save captures-ecarts \
             --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
             | tee -a "$GITHUB_STEP_SUMMARY"

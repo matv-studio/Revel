@@ -368,6 +368,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     true,
                 ),
                 item(
+                    Preset::Consent,
+                    "insert-consent",
+                    "insert-help-consent",
+                    "insert-text-consent",
+                    icons::info,
+                    "div",
+                    true,
+                ),
+                item(
                     Preset::ListFilters,
                     "insert-filters",
                     "insert-help-filters",

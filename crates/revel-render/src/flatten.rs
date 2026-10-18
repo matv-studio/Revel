@@ -1296,7 +1296,10 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
                 if !outside(&r.name, local) {
                     continue;
                 }
-                if let Some((_, p)) = lists.iter().find(|(path, _)| *path == e[r.start..r.path_end]) {
+                if let Some((_, p)) = lists
+                    .iter()
+                    .find(|(path, _)| *path == e[r.start..r.path_end])
+                {
                     out.push_str(&e[at..r.start]);
                     out.push_str(p);
                     at = r.path_end;
@@ -1559,7 +1562,9 @@ fn exclude_current_ifs(site: &mut Site, notes: &mut Vec<String>) {
             let it = item.trim();
             let c: String = cond.split_whitespace().collect::<Vec<_>>().join(" ");
             let ok = c == format!("{it}.url != page.url") || c == format!("page.url != {it}.url");
-            let uses_loop = exprs_of(then).iter().any(|e| refs(e).iter().any(|r| r.name == "loop"));
+            let uses_loop = exprs_of(then)
+                .iter()
+                .any(|e| refs(e).iter().any(|r| r.name == "loop"));
             if !ok || !otherwise.is_empty() || uses_loop {
                 return;
             }
@@ -1593,8 +1598,9 @@ fn map_styles(site: &mut Site, notes: &mut Vec<String>) {
     let style_re =
         regex::Regex::new(r"^\s*(--[A-Za-z0-9_-]+|[a-z-]+)\s*:\s*\{\{-?\s*(.+?)\s*-?\}\}\s*;?\s*$")
             .expect("regex");
-    let map_re = regex::Regex::new(r"^\(?\s*(\{.*\})\s*\)?\s*\[\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\]$")
-        .expect("regex");
+    let map_re =
+        regex::Regex::new(r"^\(?\s*(\{.*\})\s*\)?\s*\[\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\]$")
+            .expect("regex");
     let slug = |k: &str| -> String {
         let mut out = String::new();
         for c in k.chars() {
@@ -1648,7 +1654,8 @@ fn map_styles(site: &mut Site, notes: &mut Vec<String>) {
             if class.contains("{{") {
                 return;
             }
-            let base = crate::style_base(&class).unwrap_or_else(|| slug(prop.trim_start_matches('-')));
+            let base =
+                crate::style_base(&class).unwrap_or_else(|| slug(prop.trim_start_matches('-')));
             let mut value = class.clone();
             for (k, val) in &map {
                 let cls = format!("{base}--{}", slug(k));
@@ -1662,7 +1669,10 @@ fn map_styles(site: &mut Site, notes: &mut Vec<String>) {
                 }
             }
             attrs.remove(si);
-            match attrs.iter_mut().find(|a| a.name == "class" && a.when.is_none()) {
+            match attrs
+                .iter_mut()
+                .find(|a| a.name == "class" && a.when.is_none())
+            {
                 Some(a) => a.value = Some(value.trim_start().to_string()),
                 None => attrs.push(Attr {
                     name: "class".into(),
@@ -1685,11 +1695,13 @@ fn map_styles(site: &mut Site, notes: &mut Vec<String>) {
     if n == 0 {
         return;
     }
-    let sheet = site.stylesheet.get_or_insert_with(|| revel_model::Stylesheet {
-        url: "/assets/css/site.css".into(),
-        source: None,
-        items: Vec::new(),
-    });
+    let sheet = site
+        .stylesheet
+        .get_or_insert_with(|| revel_model::Stylesheet {
+            url: "/assets/css/site.css".into(),
+            source: None,
+            items: Vec::new(),
+        });
     let mut taken: HashSet<String> = sheet
         .items
         .iter()
@@ -1707,16 +1719,18 @@ fn map_styles(site: &mut Site, notes: &mut Vec<String>) {
         }
         let id = revel_model::ids::fresh(&taken);
         taken.insert(id.clone());
-        sheet.items.push(revel_model::StyleItem::Rule(revel_model::StyleRule {
-            id: Some(id),
-            selector: sel,
-            media: None,
-            decls: vec![revel_model::Decl {
-                prop,
-                value,
-                important: false,
-            }],
-        }));
+        sheet
+            .items
+            .push(revel_model::StyleItem::Rule(revel_model::StyleRule {
+                id: Some(id),
+                selector: sel,
+                media: None,
+                decls: vec![revel_model::Decl {
+                    prop,
+                    value,
+                    important: false,
+                }],
+            }));
     }
     notes.push(format!(
         "{n} valeur(s) de style selon un champ : classes conditionnelles (Styles)"
@@ -1727,8 +1741,7 @@ fn map_styles(site: &mut Site, notes: &mut Vec<String>) {
 /// la génération pose ces réglages de la page (Apparence) ; l'attribut garde la valeur par
 /// défaut écrite.
 fn page_look_attrs(site: &mut Site, notes: &mut Vec<String>) {
-    let body_re =
-        regex::Regex::new(r"^\s*\{\{-?\s*bodyClass\s*-?\}\}\s*$").expect("regex");
+    let body_re = regex::Regex::new(r"^\s*\{\{-?\s*bodyClass\s*-?\}\}\s*$").expect("regex");
     let theme_re = regex::Regex::new(
         r#"^\s*\{\{-?\s*\(?\s*theme\s*(?:or\s*(?:'([^']*)'|"([^"]*)"))?\s*\)?\s*-?\}\}\s*$"#,
     )
@@ -1751,7 +1764,10 @@ fn page_look_attrs(site: &mut Site, notes: &mut Vec<String>) {
                 }
                 "html" => {
                     let mut drop = false;
-                    for a in attrs.iter_mut().filter(|a| a.name == "data-theme" && a.when.is_none()) {
+                    for a in attrs
+                        .iter_mut()
+                        .filter(|a| a.name == "data-theme" && a.when.is_none())
+                    {
                         if let Some(c) = a.value.as_deref().and_then(|v| theme_re.captures(v)) {
                             match c.get(1).or(c.get(2)) {
                                 Some(d) => a.value = Some(d.as_str().to_string()),
@@ -1791,8 +1807,10 @@ fn current_links(site: &mut Site, notes: &mut Vec<String>) {
         t.replace('\'', "\"")
     };
     let url = r#"(?:\(\s*page\.url\s+or\s+(?:""|'')\s*\)|page\.url)"#;
-    let exact = regex::Regex::new(&format!(r"^\s*(?:{url}\s*==\s*(.+?)|(.+?)\s*==\s*{url})\s*$"))
-        .expect("regex");
+    let exact = regex::Regex::new(&format!(
+        r"^\s*(?:{url}\s*==\s*(.+?)|(.+?)\s*==\s*{url})\s*$"
+    ))
+    .expect("regex");
     let prefix = regex::Regex::new(&format!(
         r"^\s*{url}\s*(?:is\s+startingwith\s*\(\s*(.+?)\s*\)|\.startswith\s*\(\s*(.+?)\s*\))\s*$"
     ))
@@ -1867,7 +1885,9 @@ fn convert_feeds(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
     let cands: Vec<(String, String, Option<usize>)> = site
         .pages
         .iter()
-        .filter(|p| p.path.ends_with(".xml") && !site.settings.feeds.iter().any(|f| f.path == p.path))
+        .filter(|p| {
+            p.path.ends_with(".xml") && !site.settings.feeds.iter().any(|f| f.path == p.path)
+        })
         .filter_map(|p| {
             let (mut rss, mut col, mut limit) = (false, None, None);
             revel_model::ids::walk(&p.body, &mut |n| match n {

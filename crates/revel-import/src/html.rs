@@ -1139,12 +1139,37 @@ fn shared_attrs(
                     .map(|a| a.value.clone().unwrap_or_default())
             })
             .collect();
+        // Classe du corps et thème du document : réglages de la page (Apparence), posés par la
+        // génération ; rien dans le gabarit.
+        let setting = match (prefix, name.as_str()) {
+            ("body", "class") => Some("bodyClass"),
+            ("html", "data-theme") => Some("theme"),
+            _ => None,
+        }
+        .filter(|_| {
+            values.iter().flatten().all(|v| {
+                let tidy = v.split_whitespace().collect::<Vec<_>>().join(" ");
+                let clean = if name == "class" {
+                    tidy == *v || tidy.is_empty()
+                } else {
+                    !tidy.is_empty() && tidy == *v
+                };
+                clean && !v.contains("{{") && !v.contains("{%")
+            })
+        });
         if values.iter().all(|v| *v == values[0]) {
             attrs.push(Attr {
                 name: name.clone(),
                 value: values[0].clone(),
                 when: None,
             });
+        } else if let Some(key) = setting {
+            // Classe vide : sans effet, pas de réglage.
+            let values = values
+                .into_iter()
+                .map(|v| v.map(|v| v.trim().to_string()).filter(|v| !v.is_empty()))
+                .collect();
+            props.push((key.to_string(), values));
         } else {
             let prop = format!(
                 "{prefix}_{}",
@@ -1939,8 +1964,12 @@ pub fn compare(original: &str, produced: &str, rel: &str, limit: usize) -> Vec<S
         ));
     }
     let attrs = |l: &[Attr]| {
+        // `class=""` : sans effet, comme l'absence de classe.
         let mut v: Vec<String> = l
             .iter()
+            .filter(|a| {
+                !(a.name == "class" && a.value.as_deref().is_none_or(|v| v.trim().is_empty()))
+            })
             .map(|a| format!("{}={:?}", a.name, a.value))
             .collect();
         v.sort();

@@ -471,16 +471,61 @@ fn org_rows(
     type Get = fn(&revel_model::Organization) -> String;
     type Put = fn(&mut revel_model::Organization, String);
     let fields: [(&'static str, &'static str, Get, Put); 10] = [
-        ("seo-org-name", "Alunites", |o| o.name.clone(), |o, v| o.name = v),
-        ("seo-org-alt", "", |o| o.alternate_name.clone(), |o, v| o.alternate_name = v),
-        ("seo-org-logo", "/media/logo.svg", |o| o.logo.clone(), |o, v| o.logo = v),
-        ("seo-org-email", "bonjour@exemple.fr", |o| o.email.clone(), |o, v| o.email = v),
-        ("seo-org-phone", "+33 1 23 45 67 89", |o| o.telephone.clone(), |o, v| o.telephone = v),
-        ("seo-org-founded", "2004", |o| o.founding_date.clone(), |o, v| o.founding_date = v),
-        ("seo-org-street", "", |o| o.street.clone(), |o, v| o.street = v),
-        ("seo-org-postcode", "", |o| o.postcode.clone(), |o, v| o.postcode = v),
+        (
+            "seo-org-name",
+            "Atelier Exemple",
+            |o| o.name.clone(),
+            |o, v| o.name = v,
+        ),
+        (
+            "seo-org-alt",
+            "",
+            |o| o.alternate_name.clone(),
+            |o, v| o.alternate_name = v,
+        ),
+        (
+            "seo-org-logo",
+            "/media/logo.svg",
+            |o| o.logo.clone(),
+            |o, v| o.logo = v,
+        ),
+        (
+            "seo-org-email",
+            "bonjour@exemple.fr",
+            |o| o.email.clone(),
+            |o, v| o.email = v,
+        ),
+        (
+            "seo-org-phone",
+            "+33 1 23 45 67 89",
+            |o| o.telephone.clone(),
+            |o, v| o.telephone = v,
+        ),
+        (
+            "seo-org-founded",
+            "2004",
+            |o| o.founding_date.clone(),
+            |o, v| o.founding_date = v,
+        ),
+        (
+            "seo-org-street",
+            "",
+            |o| o.street.clone(),
+            |o, v| o.street = v,
+        ),
+        (
+            "seo-org-postcode",
+            "",
+            |o| o.postcode.clone(),
+            |o, v| o.postcode = v,
+        ),
         ("seo-org-city", "", |o| o.city.clone(), |o, v| o.city = v),
-        ("seo-org-country", "FR", |o| o.country.clone(), |o, v| o.country = v),
+        (
+            "seo-org-country",
+            "FR",
+            |o| o.country.clone(),
+            |o, v| o.country = v,
+        ),
     ];
     view! {
         {fields.into_iter().map(|(label, ph, get, put)| view! {

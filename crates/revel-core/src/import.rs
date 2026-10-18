@@ -202,7 +202,8 @@ impl Core {
                         .map_err(CoreError::Other)?;
                     }
                 }
-                let p = revel_project::Project::create(path, site)?;
+                let mut p = revel_project::Project::create(path, site)?;
+                report.warnings.extend(crate::rebuild_for_ui(&mut p));
                 let summary = summarize(&p)?;
                 self.touch_recent(&summary);
                 self.clones
@@ -315,10 +316,11 @@ impl Core {
         let mut warnings = crawled.warnings;
         warnings.append(&mut report.warnings);
         report.warnings = warnings;
-        let p = match revel_project::Project::create(&dest, site) {
+        let mut p = match revel_project::Project::create(&dest, site) {
             Ok(p) => p,
             Err(e) => return Err(fail(e.into())),
         };
+        report.warnings.extend(crate::rebuild_for_ui(&mut p));
         let summary = summarize(&p)?;
         self.touch_recent(&summary);
         Ok(ImportResult {
@@ -421,7 +423,7 @@ impl Core {
                 })
             },
         );
-        let report = match report {
+        let mut report = match report {
             Ok(r) => r,
             Err(_) if self.import_cancel.load(Ordering::SeqCst) => {
                 return Err(fail(CoreError::ImportCancelled));
@@ -435,10 +437,11 @@ impl Core {
             return Err(fail(e.into()));
         }
         let _ = std::fs::create_dir_all(dest.join("media"));
-        let p = match revel_project::Project::create(&dest, site) {
+        let mut p = match revel_project::Project::create(&dest, site) {
             Ok(p) => p,
             Err(e) => return Err(fail(e.into())),
         };
+        report.warnings.extend(crate::rebuild_for_ui(&mut p));
         let summary = summarize(&p)?;
         self.touch_recent(&summary);
         let mut st = stats(&report);
@@ -596,10 +599,11 @@ impl Core {
             Err(e) => return Err(fail(figma_error(e))),
         };
         let _ = std::fs::create_dir_all(dest.join("media"));
-        let p = match revel_project::Project::create(&dest, imp.site) {
+        let mut p = match revel_project::Project::create(&dest, imp.site) {
             Ok(p) => p,
             Err(e) => return Err(fail(e.into())),
         };
+        imp.report.warnings.extend(crate::rebuild_for_ui(&mut p));
         // Polices : copies locales depuis Google Fonts (aucune requête des visiteurs).
         if fonts && !imp.fonts.is_empty() && self.edit_open(&dest).is_ok() {
             for (family, variants) in &imp.fonts {

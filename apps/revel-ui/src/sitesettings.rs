@@ -34,7 +34,10 @@ fn feeds_section(ui: Ui, s: DocSession) -> AnyView {
     let Some((cols, feeds)) = s.doc.with(|d| {
         d.as_ref().map(|d| {
             (
-                d.collections.iter().map(|c| c.id.clone()).collect::<Vec<_>>(),
+                d.collections
+                    .iter()
+                    .map(|c| c.id.clone())
+                    .collect::<Vec<_>>(),
                 d.settings.feeds.clone(),
             )
         })

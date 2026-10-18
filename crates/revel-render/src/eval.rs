@@ -1307,7 +1307,11 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
     // Mots entre astérisques mis en valeur (`*mot*` -> `<em class="accent">mot</em>`), le reste
     // échappé : texte court d'un champ avec un mot en couleur.
     env.add_filter("emphasis", |v: Value, cls: Option<String>| {
-        let text = if v.is_undefined() || v.is_none() { String::new() } else { v.to_string() };
+        let text = if v.is_undefined() || v.is_none() {
+            String::new()
+        } else {
+            v.to_string()
+        };
         let esc = crate::html::escape(&text);
         let re = regex::Regex::new(r"\*([^*]+)\*").expect("regex");
         let class = cls.unwrap_or_else(|| "accent".into());
@@ -1318,32 +1322,35 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
         )
     });
     // Contenus désignés mis en premier (dans l'ordre des adresses), puis les autres.
-    env.add_filter("pick_first", |v: Value, slugs: Value, min: Option<usize>| {
-        let items = items_of(&v);
-        // Champ vide ou absent : aucun contenu mis en premier.
-        let slugs: Vec<Value> = if slugs.as_str().is_some() {
-            vec![slugs]
-        } else {
-            items_of(&slugs)
-        }
-        .into_iter()
-        .filter(|s| s.as_str().is_some_and(|x| !x.is_empty()))
-        .collect();
-        let mut out: Vec<Value> = slugs
-            .iter()
-            .filter_map(|s| items.iter().find(|i| &path(i, "data.slug") == s).cloned())
-            .collect();
-        // Pas assez de contenus désignés : la liste ordinaire.
-        if min.is_some_and(|m| out.len() < m) {
-            return Value::from(items);
-        }
-        for i in items {
-            if !slugs.contains(&path(&i, "data.slug")) {
-                out.push(i);
+    env.add_filter(
+        "pick_first",
+        |v: Value, slugs: Value, min: Option<usize>| {
+            let items = items_of(&v);
+            // Champ vide ou absent : aucun contenu mis en premier.
+            let slugs: Vec<Value> = if slugs.as_str().is_some() {
+                vec![slugs]
+            } else {
+                items_of(&slugs)
             }
-        }
-        Value::from(out)
-    });
+            .into_iter()
+            .filter(|s| s.as_str().is_some_and(|x| !x.is_empty()))
+            .collect();
+            let mut out: Vec<Value> = slugs
+                .iter()
+                .filter_map(|s| items.iter().find(|i| &path(i, "data.slug") == s).cloned())
+                .collect();
+            // Pas assez de contenus désignés : la liste ordinaire.
+            if min.is_some_and(|m| out.len() < m) {
+                return Value::from(items);
+            }
+            for i in items {
+                if !slugs.contains(&path(&i, "data.slug")) {
+                    out.push(i);
+                }
+            }
+            Value::from(out)
+        },
+    );
     env.add_filter(
         "where_contains",
         |v: Value, field: String, needle: Value| {

@@ -472,7 +472,9 @@ impl Core {
         report.tool = Some(recipe.tool.clone());
         // Fichiers du site (pages comprises), copiés ou lus.
         report.files = count_files(&dest);
-        let p = revel_project::Project::create(&dest, site)?;
+        let mut p = revel_project::Project::create(&dest, site)?;
+        // Site construit (Git) : reconstruit dans la forme de l'interface comme les autres imports.
+        report.warnings.extend(crate::rebuild_for_ui(&mut p));
         let summary = summarize(&p)?;
         self.touch_recent(&summary);
         Ok(ImportResult {

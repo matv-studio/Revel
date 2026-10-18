@@ -55,6 +55,9 @@ enum Command {
         /// Affiche le rapport sans écrire le fichier.
         #[arg(long)]
         dry_run: bool,
+        /// Garde le site tel qu'importé, sans le reconstruire dans la forme de l'interface.
+        #[arg(long)]
+        no_rebuild: bool,
     },
     /// Importe un site (Eleventy ou HTML statique, reconnu) : écrit `site.revel.json` à sa racine.
     Import {
@@ -62,6 +65,9 @@ enum Command {
         /// Affiche le rapport sans écrire le fichier.
         #[arg(long)]
         dry_run: bool,
+        /// Garde le site tel qu'importé, sans le reconstruire dans la forme de l'interface.
+        #[arg(long)]
+        no_rebuild: bool,
         /// Langue du site si ses pages n'en déclarent pas.
         #[arg(long, default_value = "en")]
         lang: String,
@@ -306,7 +312,11 @@ fn main() -> Result<()> {
             }
             println!("{}", dir.join(revel_project::SITE_FILE).display());
         }
-        Command::ImportEleventy { dir, dry_run } => {
+        Command::ImportEleventy {
+            dir,
+            dry_run,
+            no_rebuild,
+        } => {
             let profile = revel_import::eleventy::load_profile(&dir)?;
             let (site, report) = revel_import::eleventy::import(&dir, &profile)?;
             println!(
@@ -321,11 +331,19 @@ fn main() -> Result<()> {
                 println!("! {w}");
             }
             if !dry_run {
-                Project::create(&dir, site)?;
+                let mut p = Project::create(&dir, site)?;
+                if !no_rebuild && let Some(w) = revel_core::rebuild_for_ui(&mut p) {
+                    println!("! {w}");
+                }
                 println!("{}", dir.join(revel_project::SITE_FILE).display());
             }
         }
-        Command::Import { dir, dry_run, lang } => match revel_import::detect(&dir) {
+        Command::Import {
+            dir,
+            dry_run,
+            no_rebuild,
+            lang,
+        } => match revel_import::detect(&dir) {
             revel_import::SiteKind::Eleventy => {
                 anyhow::bail!("projet Eleventy : utiliser `revel import-eleventy`")
             }
@@ -354,7 +372,10 @@ fn main() -> Result<()> {
                     println!("! {w}");
                 }
                 if !dry_run {
-                    Project::create(&dir, site)?;
+                    let mut p = Project::create(&dir, site)?;
+                    if !no_rebuild && let Some(w) = revel_core::rebuild_for_ui(&mut p) {
+                        println!("! {w}");
+                    }
                     println!("{}", dir.join(revel_project::SITE_FILE).display());
                 }
             }

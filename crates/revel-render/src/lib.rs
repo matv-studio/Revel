@@ -326,7 +326,11 @@ pub(crate) fn feeds(
     }
     let b = eval::Builder::new(input);
     let prepared = prepare(&b, input, false)?;
-    let cols = prepared.globals.get("collections").cloned().unwrap_or(Value::UNDEFINED);
+    let cols = prepared
+        .globals
+        .get("collections")
+        .cloned()
+        .unwrap_or(Value::UNDEFINED);
     let site_data = |k: &str| {
         site.data
             .get("site")
@@ -352,6 +356,7 @@ pub(crate) fn feeds(
             .replace('"', "&quot;")
     };
     let strip = regex::Regex::new(r"<[^>]*>").expect("regex");
+    let last_word = regex::Regex::new(r"\s+\S*$").expect("regex");
     for f in &site.settings.feeds {
         let Ok(items) = cols.get_attr(&f.collection) else {
             continue;
@@ -377,7 +382,10 @@ pub(crate) fn feeds(
         {
             out.push_str(&format!("    <description>{}</description>\n", esc(&d)));
         }
-        out.push_str(&format!("    <language>{}</language>\n", esc(&site.default_locale)));
+        out.push_str(&format!(
+            "    <language>{}</language>\n",
+            esc(&og_locale(&site.default_locale).replace('_', "-"))
+        ));
         // Les plus récents d'abord (usage des flux) quand chaque contenu a une date.
         let mut list: Vec<(Option<DateTime<Utc>>, Value)> = items
             .try_iter()
@@ -395,7 +403,11 @@ pub(crate) fn feeds(
         if list.iter().all(|(d, _)| d.is_some()) {
             list.sort_by_key(|a| std::cmp::Reverse(a.0));
         }
-        for it in list.into_iter().map(|(_, it)| it).take(f.limit.unwrap_or(20)) {
+        for it in list
+            .into_iter()
+            .map(|(_, it)| it)
+            .take(f.limit.unwrap_or(20))
+        {
             let data = it.get_attr("data").unwrap_or(Value::UNDEFINED);
             let text = |k: &str| {
                 data.get_attr(k)
@@ -405,11 +417,21 @@ pub(crate) fn feeds(
             };
             let url = format!(
                 "{base}{}",
-                it.get_attr("url").ok().and_then(|u| u.as_str().map(str::to_string)).unwrap_or_default()
+                it.get_attr("url")
+                    .ok()
+                    .and_then(|u| u.as_str().map(str::to_string))
+                    .unwrap_or_default()
             );
             out.push_str("    <item>\n");
-            out.push_str(&format!("      <title>{}</title>\n", esc(&text("title").unwrap_or_default())));
-            out.push_str(&format!("      <link>{}</link>\n      <guid>{}</guid>\n", esc(&url), esc(&url)));
+            out.push_str(&format!(
+                "      <title>{}</title>\n",
+                esc(&text("title").unwrap_or_default())
+            ));
+            out.push_str(&format!(
+                "      <link>{}</link>\n      <guid>{}</guid>\n",
+                esc(&url),
+                esc(&url)
+            ));
             let date = it
                 .get_attr("date")
                 .ok()
@@ -424,9 +446,14 @@ pub(crate) fn feeds(
                 .iter()
                 .find_map(|k| text(k))
                 .map(|s| {
-                    let t = strip.replace_all(&s, "").trim().to_string();
-                    if t.chars().count() > 300 {
-                        t.chars().take(300).collect::<String>()
+                    // Texte sans balises (blancs réduits), 300 caractères au plus, coupé entre deux
+                    // mots avec « … ».
+                    let t = strip.replace_all(&s, " ");
+                    let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+                    let chars: Vec<char> = t.chars().collect();
+                    if chars.len() > 300 {
+                        let cut: String = chars[..299].iter().collect();
+                        format!("{}…", last_word.replace(&cut, ""))
                     } else {
                         t
                     }
@@ -842,7 +869,11 @@ fn mark_current(html: &str, url: &str) -> String {
             }
             let hit = path == url || (section && path != "/" && url.starts_with(&path));
             if hit {
-                let at = if out.ends_with("/>") { out.len() - 2 } else { out.len() - 1 };
+                let at = if out.ends_with("/>") {
+                    out.len() - 2
+                } else {
+                    out.len() - 1
+                };
                 out.insert_str(at, r#" aria-current="page""#);
             }
             out
@@ -948,7 +979,9 @@ fn set_attr(html: &str, tag: &str, name: &str, value: &str) -> String {
 }
 
 fn escape_attr_value(v: &str) -> String {
-    v.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;")
+    v.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
 }
 
 /// Référencement écrit par Revel quand le gabarit ne l'écrit pas (comme Webflow) : description,
@@ -975,7 +1008,12 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
             .filter(|s| !s.is_empty())
     };
     let cfg = &site.settings.seo;
-    let opt = |v: &Option<String>| v.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    let opt = |v: &Option<String>| {
+        v.as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
     let site_title = opt(&cfg.site_title);
     let title = seo_text("title").or_else(|| data_text(&j.data, "title"));
     // Titre complet (« Page | Nom du site ») quand le nom affiché du site est réglé.
@@ -1014,35 +1052,92 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
     };
     let e = escape_attr_value;
     // Titre de la page : écrit par Revel quand le gabarit n'en a pas.
-    if let Some(t) = full_title.clone().or_else(|| Some(site.name.clone())).filter(|_| !has("<title")) {
-        add(true, format!("<title>{}</title>", crate::html::escape_text(&t)));
+    if let Some(t) = full_title
+        .clone()
+        .or_else(|| Some(site.name.clone()))
+        .filter(|_| !has("<title"))
+    {
+        add(
+            true,
+            format!("<title>{}</title>", crate::html::escape_text(&t)),
+        );
     }
     if let Some(d) = &description {
-        add(!has("name=\"description\""), format!("<meta name=\"description\" content=\"{}\">", e(d)));
-        add(!has("og:description"), format!("<meta property=\"og:description\" content=\"{}\">", e(d)));
-        add(!has("twitter:description"), format!("<meta name=\"twitter:description\" content=\"{}\">", e(d)));
+        add(
+            !has("name=\"description\""),
+            format!("<meta name=\"description\" content=\"{}\">", e(d)),
+        );
+        add(
+            !has("og:description"),
+            format!("<meta property=\"og:description\" content=\"{}\">", e(d)),
+        );
+        add(
+            !has("twitter:description"),
+            format!("<meta name=\"twitter:description\" content=\"{}\">", e(d)),
+        );
     }
     if let Some(t) = &full_title {
-        add(!has("og:title"), format!("<meta property=\"og:title\" content=\"{}\">", e(t)));
-        add(!has("twitter:title"), format!("<meta name=\"twitter:title\" content=\"{}\">", e(t)));
+        add(
+            !has("og:title"),
+            format!("<meta property=\"og:title\" content=\"{}\">", e(t)),
+        );
+        add(
+            !has("twitter:title"),
+            format!("<meta name=\"twitter:title\" content=\"{}\">", e(t)),
+        );
     }
     if let Some(st) = &site_title {
-        add(!has("og:site_name"), format!("<meta property=\"og:site_name\" content=\"{}\">", e(st)));
+        add(
+            !has("og:site_name"),
+            format!("<meta property=\"og:site_name\" content=\"{}\">", e(st)),
+        );
     }
-    add(!has("og:locale"), format!("<meta property=\"og:locale\" content=\"{}\">", e(&og_locale(&j_locale(site, j)))));
+    add(
+        !has("og:locale"),
+        format!(
+            "<meta property=\"og:locale\" content=\"{}\">",
+            e(&og_locale(&j_locale(site, j)))
+        ),
+    );
     if let Some(u) = &url {
-        add(!has("rel=\"canonical\""), format!("<link rel=\"canonical\" href=\"{}\">", e(u)));
-        add(!has("og:url"), format!("<meta property=\"og:url\" content=\"{}\">", e(u)));
+        add(
+            !has("rel=\"canonical\""),
+            format!("<link rel=\"canonical\" href=\"{}\">", e(u)),
+        );
+        add(
+            !has("og:url"),
+            format!("<meta property=\"og:url\" content=\"{}\">", e(u)),
+        );
     }
     if let Some(i) = &image {
-        add(!has("og:image"), format!("<meta property=\"og:image\" content=\"{}\">", e(i)));
-        add(!has("twitter:card"), "<meta name=\"twitter:card\" content=\"summary_large_image\">".to_string());
-        add(!has("twitter:image"), format!("<meta name=\"twitter:image\" content=\"{}\">", e(i)));
+        add(
+            !has("og:image"),
+            format!("<meta property=\"og:image\" content=\"{}\">", e(i)),
+        );
+        add(
+            !has("twitter:card"),
+            "<meta name=\"twitter:card\" content=\"summary_large_image\">".to_string(),
+        );
+        add(
+            !has("twitter:image"),
+            format!("<meta name=\"twitter:image\" content=\"{}\">", e(i)),
+        );
     }
     let og_type = page_setting(site, j, "ogType").unwrap_or_else(|| {
-        if j.collection.is_some() { "article" } else { "website" }.to_string()
+        if j.collection.is_some() {
+            "article"
+        } else {
+            "website"
+        }
+        .to_string()
     });
-    add(!has("og:type"), format!("<meta property=\"og:type\" content=\"{}\">", escape_attr_value(&og_type)));
+    add(
+        !has("og:type"),
+        format!(
+            "<meta property=\"og:type\" content=\"{}\">",
+            escape_attr_value(&og_type)
+        ),
+    );
     // Article : date de publication.
     let published = j
         .data
@@ -1053,7 +1148,13 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
     if og_type == "article"
         && let Some(p) = &published
     {
-        add(!has("article:published_time"), format!("<meta property=\"article:published_time\" content=\"{}\">", e(p)));
+        add(
+            !has("article:published_time"),
+            format!(
+                "<meta property=\"article:published_time\" content=\"{}\">",
+                e(p)
+            ),
+        );
     }
     // Aperçus d'image en grand dans les résultats de recherche (page indexée).
     add(
@@ -1062,35 +1163,72 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
     );
     // Navigateur : couleur, icônes.
     if let Some(c) = opt(&cfg.theme_color) {
-        add(!has("theme-color"), format!("<meta name=\"theme-color\" content=\"{}\">", e(&c)));
+        add(
+            !has("theme-color"),
+            format!("<meta name=\"theme-color\" content=\"{}\">", e(&c)),
+        );
     }
     if !has("rel=\"icon\"") {
         if let Some(i) = opt(&cfg.favicon) {
-            let kind = if i.ends_with(".svg") { "image/svg+xml" } else { "image/png" };
-            add(true, format!("<link rel=\"icon\" href=\"{}\" type=\"{kind}\">", e(&i)));
+            let kind = if i.ends_with(".svg") {
+                "image/svg+xml"
+            } else {
+                "image/png"
+            };
+            add(
+                true,
+                format!("<link rel=\"icon\" href=\"{}\" type=\"{kind}\">", e(&i)),
+            );
         }
         if let Some(i) = opt(&cfg.favicon_png) {
-            add(true, format!("<link rel=\"icon\" href=\"{}\" type=\"image/png\" sizes=\"192x192\">", e(&i)));
+            add(
+                true,
+                format!(
+                    "<link rel=\"icon\" href=\"{}\" type=\"image/png\" sizes=\"192x192\">",
+                    e(&i)
+                ),
+            );
         }
     }
     if let Some(i) = opt(&cfg.touch_icon) {
-        add(!has("apple-touch-icon"), format!("<link rel=\"apple-touch-icon\" href=\"{}\">", e(&i)));
+        add(
+            !has("apple-touch-icon"),
+            format!("<link rel=\"apple-touch-icon\" href=\"{}\">", e(&i)),
+        );
     }
     // Flux RSS du site.
     for f in &site.settings.feeds {
-        let t = f.title.clone().or_else(|| site_title.clone()).unwrap_or_else(|| site.name.clone());
+        let t = f
+            .title
+            .clone()
+            .or_else(|| site_title.clone())
+            .unwrap_or_else(|| site.name.clone());
         add(
             !has(&format!("href=\"{}\"", f.path.to_ascii_lowercase())),
-            format!("<link rel=\"alternate\" type=\"application/rss+xml\" title=\"{}\" href=\"{}\">", e(&t), e(&f.path)),
+            format!(
+                "<link rel=\"alternate\" type=\"application/rss+xml\" title=\"{}\" href=\"{}\">",
+                e(&t),
+                e(&f.path)
+            ),
         );
     }
     // Données structurées : organisation, article.
     if let Some(o) = &cfg.organization
         && !has("\"@type\":\"organization\"")
     {
-        add(true, format!("<script type=\"application/ld+json\">{}</script>", organization_ld(o, base)));
+        add(
+            true,
+            format!(
+                "<script type=\"application/ld+json\">{}</script>",
+                organization_ld(o, base)
+            ),
+        );
         if og_type == "article"
-            && let (Some(t), Some(p), Some(u)) = (data_text(&j.data, "title").or(title.clone()), &published, &url)
+            && let (Some(t), Some(p), Some(u)) = (
+                data_text(&j.data, "title").or(title.clone()),
+                &published,
+                &url,
+            )
         {
             let ld = serde_json::json!({
                 "@context": "https://schema.org",
@@ -1100,7 +1238,13 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
                 "mainEntityOfPage": u,
                 "publisher": { "@id": format!("{base}/#organisation") },
             });
-            add(true, format!("<script type=\"application/ld+json\">{}</script>", ld.to_string().replace("</", "<\\/")));
+            add(
+                true,
+                format!(
+                    "<script type=\"application/ld+json\">{}</script>",
+                    ld.to_string().replace("</", "<\\/")
+                ),
+            );
         }
     }
     if tags.is_empty() {
@@ -1175,7 +1319,12 @@ fn organization_ld(o: &revel_model::Organization, base: &str) -> String {
         put("logo", &abs(&o.logo));
     }
     put("email", &o.email);
-    put("telephone", &o.telephone.replace([' ', '(', ')'], "").replace("+330", "+33"));
+    put(
+        "telephone",
+        &o.telephone
+            .replace([' ', '(', ')'], "")
+            .replace("+330", "+33"),
+    );
     put("foundingDate", &o.founding_date);
     if !(o.street.is_empty() && o.city.is_empty()) {
         let mut a = serde_json::Map::new();
@@ -1195,7 +1344,9 @@ fn organization_ld(o: &revel_model::Organization, base: &str) -> String {
     if !o.same_as.is_empty() {
         m.insert("sameAs".into(), o.same_as.clone().into());
     }
-    serde_json::Value::Object(m).to_string().replace("</", "<\\/")
+    serde_json::Value::Object(m)
+        .to_string()
+        .replace("</", "<\\/")
 }
 
 /// Page `noindex` : balise `<meta name="robots" content="noindex">` ajoutée dans `<head>` si le

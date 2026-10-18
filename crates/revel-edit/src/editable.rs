@@ -216,6 +216,7 @@ impl Ctx {
         self.field(&e)
             || self.url.as_deref() == Some(e.as_str())
             || (name == "href" && self.prop(&e, Some(PropKind::Link)))
+            || (matches!(name, "src" | "poster") && self.prop(&e, Some(PropKind::Image)))
             || self.output(&e)
     }
     fn condition(&self, cond: &str) -> bool {

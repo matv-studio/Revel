@@ -508,7 +508,10 @@ fn pages_brouillon_indexation_et_plan_du_site() {
     );
     // Page indexée : pas de noindex, aperçus d'image en grand permis.
     let home = file(&out, "index.html");
-    assert!(!home.contains("noindex") && home.contains("max-image-preview:large"), "{home}");
+    assert!(
+        !home.contains("noindex") && home.contains("max-image-preview:large"),
+        "{home}"
+    );
     let sm = file(&out, "sitemap.xml");
     assert!(
         sm.contains("<loc>https://exemple.fr/</loc>")
@@ -884,7 +887,10 @@ fn langues() {
     assert!(en.contains(r#"<a href="/en/project/b/">Project B</a></li><li class="i"><a href="/en/project/a/">Projet &lt;A&gt;</a>"#), "{en}");
     assert!(file(&out, "en/project/a/index.html").contains("<h1>Projet &lt;A&gt;</h1>"));
     let l = file(&out, "en/langues/index.html");
-    assert!(l.contains(r#"<link rel="canonical" href="https://alunites.com/en/langues/">"#), "{l}");
+    assert!(
+        l.contains(r#"<link rel="canonical" href="https://alunites.com/en/langues/">"#),
+        "{l}"
+    );
     assert!(l.contains(r#"<a href="/langues/" hreflang="fr">Français</a><a href="/en/langues/" hreflang="en" aria-current="page">English</a><a href="/en/project/a/#x">a</a><a href="/media/f.pdf">f</a><p>en</p>"#), "{l}");
     assert!(file(&out, "langues/index.html").contains("<p>fr</p>"));
 
@@ -1141,7 +1147,10 @@ fn apparence_et_referencement_de_la_page() {
     s.pages.push(p);
     let out = build(&input(&s, vec![])).unwrap();
     let html = file(&out, "agence/index.html");
-    assert!(html.contains(r#"<html lang="fr" data-theme="light">"#), "{html}");
+    assert!(
+        html.contains(r#"<html lang="fr" data-theme="light">"#),
+        "{html}"
+    );
     assert!(html.contains(r#"<body class="page-agence">"#), "{html}");
     for t in [
         r#"<meta name="description" content="Qui nous sommes">"#,
@@ -1170,8 +1179,14 @@ fn liens_page_actuelle_et_flux() {
     let out = build(&input(&s, vec![])).unwrap();
     let html = file(&out, "projets/un/index.html");
     assert!(html.contains(r#"<a href="/">Accueil</a>"#), "{html}");
-    assert!(html.contains(r#"<a href="/projets/" aria-current="page">Projets</a>"#), "{html}");
-    assert!(html.contains(r#"<a href="/projets/un/" aria-current="page">Un</a>"#), "{html}");
+    assert!(
+        html.contains(r#"<a href="/projets/" aria-current="page">Projets</a>"#),
+        "{html}"
+    );
+    assert!(
+        html.contains(r#"<a href="/projets/un/" aria-current="page">Un</a>"#),
+        "{html}"
+    );
     assert!(html.contains(r#"<a href="/agence/">Agence</a>"#), "{html}");
     assert!(!html.contains("data-revel-current"), "{html}");
 }
@@ -1205,7 +1220,8 @@ fn reconstruction_lien_actuel_theme_et_flux() {
         r#"{% set nav = [{"url": "/agence/", "label": "Agence"}, {"url": "/projets/", "label": "Projets"}] %}<nav>{% for item in nav %}<a href="{{ item.url }}"{% if (page.url or "") is startingwith(item.url) %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}</nav>"#,
     );
     s.pages.push(p);
-    let mut feed: Page = serde_json::from_value(json!({ "id": "feed", "path": "/feed.xml" })).unwrap();
+    let mut feed: Page =
+        serde_json::from_value(json!({ "id": "feed", "path": "/feed.xml" })).unwrap();
     feed.body = revel_markup::parse(
         r#"<rss version="2.0"><channel><title>Actus</title><link>https://exemple.fr/actus/</link>{% for item in (collections.actus | sort(attribute="date", reverse=true)) | limit(5) %}<item><title>{{ item.data.title }}</title><link>{{ item.url | absolute_url("https://exemple.fr") }}</link></item>{% endfor %}</channel></rss>"#,
         &revel_markup::Options {
@@ -1216,9 +1232,12 @@ fn reconstruction_lien_actuel_theme_et_flux() {
     .unwrap()
     .nodes;
     s.pages.push(feed);
-    s.collections.push(serde_json::from_value(json!({
-        "id": "actus", "folder": "content/actus", "path": "/actus/{{ slug }}/"
-    })).unwrap());
+    s.collections.push(
+        serde_json::from_value(json!({
+            "id": "actus", "folder": "content/actus", "path": "/actus/{{ slug }}/"
+        }))
+        .unwrap(),
+    );
     let entries: Vec<Entry> = ["a", "b"]
         .iter()
         .enumerate()
@@ -1232,7 +1251,11 @@ fn reconstruction_lien_actuel_theme_et_flux() {
     let inp = input(&s, entries.clone());
     let before = build(&inp).unwrap();
     let rb = crate::flatten::rebuild(&inp).unwrap();
-    assert!(rb.site.pages.iter().all(|p| p.path != "/feed.xml"), "{:?}", rb.notes);
+    assert!(
+        rb.site.pages.iter().all(|p| p.path != "/feed.xml"),
+        "{:?}",
+        rb.notes
+    );
     assert_eq!(rb.site.settings.feeds.len(), 1);
     assert_eq!(rb.site.settings.feeds[0].limit, Some(5));
     assert_eq!(rb.site.settings.feeds[0].link.as_deref(), Some("/actus/"));
@@ -1242,15 +1265,27 @@ fn reconstruction_lien_actuel_theme_et_flux() {
     let b = file(&after, "agence/index.html");
     assert_eq!(
         a,
-        b.replace(r#"<link rel="alternate" type="application/rss+xml" title="Actus" href="/feed.xml">"#, "")
+        b.replace(
+            r#"<link rel="alternate" type="application/rss+xml" title="Actus" href="/feed.xml">"#,
+            ""
+        )
     );
-    assert!(b.contains(r#"<a href="/agence/" aria-current="page">Agence</a>"#), "{b}");
+    assert!(
+        b.contains(r#"<a href="/agence/" aria-current="page">Agence</a>"#),
+        "{b}"
+    );
     assert!(b.contains(r#"<body class="page-agence">"#), "{b}");
     assert!(b.contains(r#"data-theme="dark""#), "{b}");
     let json = serde_json::to_string(&rb.site.pages).unwrap();
-    assert!(json.contains("data-revel-current") && !json.contains("startingwith"), "{json}");
+    assert!(
+        json.contains("data-revel-current") && !json.contains("startingwith"),
+        "{json}"
+    );
     let f = file(&after, "feed.xml");
-    assert!(f.find("<title>B</title>").unwrap() < f.find("<title>A</title>").unwrap(), "{f}");
+    assert!(
+        f.find("<title>B</title>").unwrap() < f.find("<title>A</title>").unwrap(),
+        "{f}"
+    );
 }
 
 /// Réglages du site : titre complété du nom du site, partage, icônes, organisation, article.

@@ -77,19 +77,26 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
             parts.push(view! { <crate::interactions::TickerSettings at=at/> }.into_any());
         }
         if let Some(v) = attr(attrs, "data-revel-tabs") {
-            parts.push(tabs_options(ui, ed, at.clone(), v.value.clone().unwrap_or_default()));
+            parts.push(tabs_options(
+                ui,
+                ed,
+                at.clone(),
+                v.value.clone().unwrap_or_default(),
+            ));
         }
         // Filtres de liste : groupe, bouton, élément filtré, message sans résultat.
         if let Some(v) = filter_settings(ui, ed, &at, attrs) {
             parts.push(v);
         }
         // Consentement : bandeau (identifiant de mesure), boutons, lien qui le rouvre.
-        if let Some(v) = consent_settings(ui, ed, &at, attrs) {
+        if let Some(v) = consent_settings(ui, ed, &at, &lower, attrs) {
             parts.push(v);
         }
         // Élément dans des onglets : onglet (bouton ou lien) ou panneau.
         if attr(attrs, "data-revel-tabs").is_none()
-            && ed.doc.with_untracked(|d| d.as_ref().is_some_and(|d| inside_tabs(d, &at)))
+            && ed
+                .doc
+                .with_untracked(|d| d.as_ref().is_some_and(|d| inside_tabs(d, &at)))
         {
             let role = if attr(attrs, "data-revel-tab").is_some() {
                 "tab"
@@ -368,11 +375,17 @@ fn filter_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyVie
     } else {
         ""
     };
-    let (has_group, list) = ed.doc.with_untracked(|d| {
+    let (has_group, list, in_list) = ed.doc.with_untracked(|d| {
         let d = d.as_ref()?;
-        Some((site_has_attr(d, "data-revel-filters"), binding_context(d, at)))
+        Some((
+            site_has_attr(d, "data-revel-filters"),
+            binding_context(d, at),
+            enclosing_list(d, at).is_some(),
+        ))
     })?;
-    if role.is_empty() && !has_group {
+    // Sans rôle : proposé aux éléments d'une liste quand la page a des filtres (les boutons et le
+    // groupe viennent de l'élément « Filtres de liste » du panneau Ajouter).
+    if role.is_empty() && !(has_group && in_list) {
         return None;
     }
     let names = [
@@ -463,7 +476,11 @@ fn filter_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyVie
         "button" => {
             let v = value("data-revel-filter").unwrap_or_default();
             let bound = inner(&v);
-            let written = if bound.is_some() { String::new() } else { v.clone() };
+            let written = if bound.is_some() {
+                String::new()
+            } else {
+                v.clone()
+            };
             let cur = bound.clone().unwrap_or_default();
             Some(view! {
                 <label class="field">
@@ -543,7 +560,7 @@ fn filter_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyVie
 /// Rôle d'un élément dans le consentement aux cookies : bandeau (affiché tant que le visiteur
 /// n'a pas choisi ; identifiant Google Analytics 4 chargé après accord), bouton Accepter,
 /// bouton Refuser, lien qui rouvre le bandeau.
-fn consent_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyView> {
+fn consent_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Option<AnyView> {
     let choice = attr(attrs, "data-revel-consent-choice").and_then(|a| a.value.clone());
     let role = if attr(attrs, "data-revel-consent").is_some() {
         "banner"
@@ -556,10 +573,13 @@ fn consent_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyVi
     } else {
         ""
     };
-    let has_banner = ed
-        .doc
-        .with_untracked(|d| d.as_ref().is_some_and(|d| site_has_attr(d, "data-revel-consent")));
-    if role.is_empty() && !has_banner {
+    let has_banner = ed.doc.with_untracked(|d| {
+        d.as_ref()
+            .is_some_and(|d| site_has_attr(d, "data-revel-consent"))
+    });
+    // Sans rôle : proposé aux boutons et aux liens quand le site a un bandeau (le bandeau vient
+    // de l'élément « Consentement » du panneau Ajouter).
+    if role.is_empty() && !(has_banner && matches!(tag, "a" | "button")) {
         return None;
     }
     let ga = attr(attrs, "data-revel-consent")
@@ -756,8 +776,9 @@ fn slider_options(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
             d.as_ref()
                 .and_then(|d| revel_edit::address::node(d, &at.get_value()).ok())
                 .and_then(|n| match n {
-                    Node::Element { attrs, .. } => attr(attrs, "data-revel-slider")
-                        .and_then(|a| a.value.clone()),
+                    Node::Element { attrs, .. } => {
+                        attr(attrs, "data-revel-slider").and_then(|a| a.value.clone())
+                    }
                     _ => None,
                 })
                 .unwrap_or_default()
@@ -1068,7 +1089,9 @@ fn class_editors(
         .and_then(|a| a.value.clone())
         .unwrap_or_default();
     if let Some((base, prefix, field, default)) = revel_edit::style::value_class(&v) {
-        return Some(value_class_editor(ui, ed, at, base, prefix, field, default, fields));
+        return Some(value_class_editor(
+            ui, ed, at, base, prefix, field, default, fields,
+        ));
     }
     let (base, conds) = revel_edit::style::cond_classes(&v)?;
     Some(cond_classes_editor(ui, ed, at, base, conds, fields))
@@ -1170,7 +1193,10 @@ fn cond_classes_editor(
         let base = base.get_value();
         rows.set_value(list.clone());
         let mut value = base.clone();
-        for (c, cls) in list.iter().filter(|(c, cls)| !c.trim().is_empty() && !cls.trim().is_empty()) {
+        for (c, cls) in list
+            .iter()
+            .filter(|(c, cls)| !c.trim().is_empty() && !cls.trim().is_empty())
+        {
             value.push_str(&format!("{{% if {c} %}} {}{{% endif %}}", cls.trim()));
         }
         let cmd = if value.trim().is_empty() {
@@ -1396,7 +1422,9 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     // Contenus mis en premier : champ du contenu affiché (liste de contenus reliés) ou
     // contenus choisis, puis les autres.
     let first = q.with_value(|q| q.first.clone());
-    let first_picks = first.as_deref().and_then(revel_edit::collection::first_picks);
+    let first_picks = first
+        .as_deref()
+        .and_then(revel_edit::collection::first_picks);
     let first_value = match (&first, &first_picks) {
         (None, _) => String::new(),
         (Some(_), Some(_)) => "pick".to_string(),
@@ -1694,7 +1722,11 @@ pub(crate) fn list_prop_source(d: &Site, cid: &str, prop: &str) -> Option<(Strin
         .layouts
         .iter()
         .map(|l| (revel_edit::Owner::Layout(l.id.clone()), &l.body))
-        .chain(d.pages.iter().map(|p| (revel_edit::Owner::Page(p.id.clone()), &p.body)));
+        .chain(
+            d.pages
+                .iter()
+                .map(|p| (revel_edit::Owner::Page(p.id.clone()), &p.body)),
+        );
     for (owner, body) in owners {
         if found.is_some() {
             break;
@@ -1811,7 +1843,12 @@ fn text_bind(children: &[Node], field_of: &dyn Fn(&str) -> Option<String>) -> Op
         .strip_prefix('(')
         .and_then(|h| h.strip_suffix(')'))
         .unwrap_or(head);
-    let head = match inner.split(" or ").map(str::trim).collect::<Vec<_>>().as_slice() {
+    let head = match inner
+        .split(" or ")
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
         [a, b] if field_of(a).is_some() && field_of(b).is_some() => {
             b_fallback = field_of(b);
             *a
@@ -1947,7 +1984,9 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
         let classes = class_editors(ui, ed, StoredValue::new(at.clone()), node, fields);
         return match (main, classes) {
             (None, None) => None,
-            (m, c) => Some(view! { {m} {c.map(|c| view! { <div class="insp-group">{c}</div> })} }.into_any()),
+            (m, c) => Some(
+                view! { {m} {c.map(|c| view! { <div class="insp-group">{c}</div> })} }.into_any(),
+            ),
         };
     }
     let (collection_id, prefix, url_expr) = ed
@@ -2082,15 +2121,23 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                             )
                         })
                         // Texte : aussi le nombre de valeurs d'un champ liste.
-                        .chain(c.fields.iter().filter(|f| f.list && slot == Slot::Text).map(|f| {
-                            (
-                                format!("count:{}", f.name),
-                                ui.now(
-                                    "block-bound-count",
-                                    &[("field", f.label.clone().unwrap_or_else(|| f.name.clone()))],
-                                ),
-                            )
-                        }))
+                        .chain(
+                            c.fields
+                                .iter()
+                                .filter(|f| f.list && slot == Slot::Text)
+                                .map(|f| {
+                                    (
+                                        format!("count:{}", f.name),
+                                        ui.now(
+                                            "block-bound-count",
+                                            &[(
+                                                "field",
+                                                f.label.clone().unwrap_or_else(|| f.name.clone()),
+                                            )],
+                                        ),
+                                    )
+                                }),
+                        )
                         .collect()
                 })
                 .unwrap_or_default()
@@ -2152,7 +2199,8 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     b.raw = None;
                     b.count = count;
                     b.safe = rich && !count;
-                    b.format = (date && !count).then(|| revel_edit::dates::FORMATS[0].0.to_string());
+                    b.format =
+                        (date && !count).then(|| revel_edit::dates::FORMATS[0].0.to_string());
                 }));
                 return;
             }
@@ -2245,7 +2293,8 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
             ed.apply(ui, cmd, false);
         }
     };
-    let cond_fields = condition_fields(ed, &at.get_value()).unwrap_or_else(|| Signal::derive(Vec::new));
+    let cond_fields =
+        condition_fields(ed, &at.get_value()).unwrap_or_else(|| Signal::derive(Vec::new));
     let text_extra = text
         .with_value(|t| t.clone())
         .filter(|t| !t.field.is_empty() && t.raw.is_none());
@@ -2438,7 +2487,10 @@ fn value_binding(ui: Ui, ed: Ed, at: &Target, node: &Node, var: String) -> Optio
             let (_, field, each) = enclosing_values_at(d, at)?;
             match binding_context(d, &each) {
                 Some((col, prefix, _)) => {
-                    let name = field.strip_prefix(prefix.as_str()).unwrap_or(&field).to_string();
+                    let name = field
+                        .strip_prefix(prefix.as_str())
+                        .unwrap_or(&field)
+                        .to_string();
                     Some((col, name))
                 }
                 // Liste d'une propriété du composant : champ relié à ses utilisations.
@@ -2465,7 +2517,10 @@ fn value_binding(ui: Ui, ed: Ed, at: &Target, node: &Node, var: String) -> Optio
                             (
                                 x.name.clone(),
                                 x.label.clone().unwrap_or_else(|| x.name.clone()),
-                                matches!(x.kind.as_deref(), Some("rich-text" | "rich_text" | "markdown")),
+                                matches!(
+                                    x.kind.as_deref(),
+                                    Some("rich-text" | "rich_text" | "markdown")
+                                ),
                             )
                         })
                         .collect(),
@@ -2564,7 +2619,10 @@ pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, Strin
         let values = enclosing_values_at(d, at).map(|(var, field, each)| {
             let col = binding_context(d, &each)
                 .map(|(col, prefix, _)| {
-                    let name = field.strip_prefix(prefix.as_str()).unwrap_or(&field).to_string();
+                    let name = field
+                        .strip_prefix(prefix.as_str())
+                        .unwrap_or(&field)
+                        .to_string();
                     (col, name)
                 })
                 .or_else(|| match &at.owner {
@@ -2582,7 +2640,12 @@ pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, Strin
                 .map(|c| {
                     c.props
                         .iter()
-                        .map(|p| (p.name.clone(), p.label.clone().unwrap_or_else(|| p.name.clone())))
+                        .map(|p| {
+                            (
+                                p.name.clone(),
+                                p.label.clone().unwrap_or_else(|| p.name.clone()),
+                            )
+                        })
                         .collect()
                 })
                 .unwrap_or_default(),
@@ -2607,7 +2670,10 @@ pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, Strin
                         .and_then(|c| c.fields.iter().find(|f| f.name == *name))
                 {
                     for sub in &f.fields {
-                        out.push((format!("{var}.{}", sub.name), format!("{var} › {}", label(sub))));
+                        out.push((
+                            format!("{var}.{}", sub.name),
+                            format!("{var} › {}", label(sub)),
+                        ));
                     }
                 }
             }

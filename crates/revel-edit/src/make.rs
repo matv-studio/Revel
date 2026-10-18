@@ -203,6 +203,8 @@ pub enum Preset {
     /// Filtres de liste : boutons qui n'affichent que les éléments d'une liste dont les
     /// étiquettes contiennent leur valeur.
     ListFilters,
+    /// Bandeau de consentement aux cookies (mesure d'audience chargée après accord).
+    Consent,
 }
 
 impl Preset {
@@ -222,7 +224,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 33] = [
+    pub const ALL: [Preset; 34] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -256,6 +258,7 @@ impl Preset {
         Preset::Navbar,
         Preset::VideoPlayer,
         Preset::ListFilters,
+        Preset::Consent,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -406,6 +409,28 @@ impl Preset {
                     vec![("opacity", "1"), ("font-weight", "600")],
                 ),
             ],
+            Preset::Consent => vec![
+                (
+                    ".consentement",
+                    vec![
+                        ("position", "fixed"),
+                        ("right", "16px"),
+                        ("bottom", "16px"),
+                        ("left", "16px"),
+                        ("z-index", "60"),
+                        ("max-width", "480px"),
+                        ("margin-left", "auto"),
+                        ("padding", "20px"),
+                        ("border-radius", "12px"),
+                        ("background-color", "#212328"),
+                        ("color", "#ffffff"),
+                    ],
+                ),
+                (
+                    ".consentement__actions",
+                    vec![("display", "flex"), ("gap", "8px"), ("margin-top", "12px")],
+                ),
+            ],
             Preset::ListFilters => vec![
                 (
                     ".filtres",
@@ -477,7 +502,10 @@ impl Preset {
                         ("transform", "translate(-50%, -50%)"),
                     ],
                 ),
-                (".lecteur__bouton svg", vec![("width", "32px"), ("height", "32px")]),
+                (
+                    ".lecteur__bouton svg",
+                    vec![("width", "32px"), ("height", "32px")],
+                ),
             ],
             Preset::Ticker => vec![
                 (
@@ -815,6 +843,50 @@ impl Preset {
                     html: format!("<p>{}</p>", html_escape(text)),
                 }],
             ),
+            Preset::Consent => {
+                // `text` : « Message|Refuser|Accepter ».
+                let mut parts = text.split('|');
+                let message = parts.next().unwrap_or(text).to_string();
+                let refuse = parts.next().unwrap_or("Refuser").to_string();
+                let accept = parts.next().unwrap_or("Accepter").to_string();
+                el(
+                    id(),
+                    "div",
+                    vec![
+                        attr("class", "consentement"),
+                        attr("role", "dialog"),
+                        attr("data-revel-consent", ""),
+                    ],
+                    vec![
+                        el(id(), "p", vec![], vec![txt(&message)]),
+                        el(
+                            id(),
+                            "div",
+                            vec![attr("class", "consentement__actions")],
+                            vec![
+                                el(
+                                    id(),
+                                    "button",
+                                    vec![
+                                        attr("type", "button"),
+                                        attr("data-revel-consent-choice", "refuse"),
+                                    ],
+                                    vec![txt(&refuse)],
+                                ),
+                                el(
+                                    id(),
+                                    "button",
+                                    vec![
+                                        attr("type", "button"),
+                                        attr("data-revel-consent-choice", "accept"),
+                                    ],
+                                    vec![txt(&accept)],
+                                ),
+                            ],
+                        ),
+                    ],
+                )
+            }
             Preset::ListFilters => {
                 // `text` : « Tout|Option 1|Option 2 ».
                 let mut parts = text.split('|');
@@ -850,7 +922,10 @@ impl Preset {
                 el(
                     id(),
                     "div",
-                    vec![attr("class", "filtres"), attr("data-revel-filters", "filtre")],
+                    vec![
+                        attr("class", "filtres"),
+                        attr("data-revel-filters", "filtre"),
+                    ],
                     buttons,
                 )
             }
@@ -885,7 +960,10 @@ impl Preset {
                             el(
                                 icon,
                                 "span",
-                                vec![attr("class", "lecteur__bouton"), attr("aria-hidden", "true")],
+                                vec![
+                                    attr("class", "lecteur__bouton"),
+                                    attr("aria-hidden", "true"),
+                                ],
                                 vec![el(
                                     svg,
                                     "svg",
@@ -893,7 +971,10 @@ impl Preset {
                                     vec![el(
                                         path,
                                         "path",
-                                        vec![attr("d", "M8 5v14l11-7z"), attr("fill", "currentColor")],
+                                        vec![
+                                            attr("d", "M8 5v14l11-7z"),
+                                            attr("fill", "currentColor"),
+                                        ],
                                         vec![],
                                     )],
                                 )],

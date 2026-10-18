@@ -857,7 +857,9 @@ pub fn toggle_hidden(ui: Ui, ed: Ed, at: Target) {
     let cmd = ed.doc.with_untracked(|d| {
         let d = d.as_ref()?;
         let hidden = revel_model::is_hidden(revel_edit::address::node(d, &at).ok()?);
-        revel_edit::layer::set_hidden(d, &at, !hidden).ok().flatten()
+        revel_edit::layer::set_hidden(d, &at, !hidden)
+            .ok()
+            .flatten()
     });
     if let Some(c) = cmd {
         ed.apply(ui, c, false);
@@ -1230,7 +1232,11 @@ pub fn Layers() -> impl IntoView {
             .sep(),
             CtxItem::new(
                 ui.now(
-                    if selected_row().is_some_and(|r| r.hidden) { "layers-show" } else { "layers-hide" },
+                    if selected_row().is_some_and(|r| r.hidden) {
+                        "layers-show"
+                    } else {
+                        "layers-hide"
+                    },
                     &[],
                 ),
                 move || {
@@ -1239,7 +1245,11 @@ pub fn Layers() -> impl IntoView {
                     }
                 },
             )
-            .icon(if selected_row().is_some_and(|r| r.hidden) { icons::eye } else { icons::eye_off })
+            .icon(if selected_row().is_some_and(|r| r.hidden) {
+                icons::eye
+            } else {
+                icons::eye_off
+            })
             .key(ui.now("key-hide", &[]))
             .disabled(!selected_row().is_some_and(|r| nameable(&r))),
         ];

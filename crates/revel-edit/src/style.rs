@@ -348,7 +348,10 @@ mod value_class_tests {
     #[test]
     fn classe_selon_la_valeur() {
         let (b, p, f, d) = value_class("block block--{{ b.style or 'fullscreen' }}").unwrap();
-        assert_eq!((b.as_str(), p.as_str(), f.as_str(), d.as_deref()), ("block", "block--", "b.style", Some("fullscreen")));
+        assert_eq!(
+            (b.as_str(), p.as_str(), f.as_str(), d.as_deref()),
+            ("block", "block--", "b.style", Some("fullscreen"))
+        );
         assert_eq!(
             value_class(&value_class_expr(&b, &p, &f, d.as_deref())),
             Some((b, p, f, d))

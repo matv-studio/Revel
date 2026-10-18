@@ -154,9 +154,12 @@ async function pixelDiff(cmp, a, b) {
 function computedStyles(detail) {
   const out = [];
   let n = 0;
-  // Éléments propres au canevas de l'éditeur : ignorés.
+  // Éléments propres au canevas de l'éditeur : ignorés. En-tête du document (`<head>`) aussi :
+  // jamais affiché ; les balises de référencement que la génération ajoute (D-92) n'y changent
+  // aucun style.
   const own = (el) => el.tagName === 'REVEL-OVERLAY' || el.id === 'rv-slots'
-    || (el.tagName === 'SCRIPT' && el.getAttribute('src') === '/__revel/canvas.js');
+    || (el.tagName === 'SCRIPT' && el.getAttribute('src') === '/__revel/canvas.js')
+    || el.closest('head') !== null;
   for (const el of document.querySelectorAll('*')) {
     if (own(el)) continue;
     const pseudos = [null, '::before', '::after'];

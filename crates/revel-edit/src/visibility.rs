@@ -234,8 +234,7 @@ pub fn is_path(s: &str) -> bool {
     !s.is_empty()
         && s.split('.').all(|p| {
             let mut ch = p.chars();
-            ch.next()
-                .is_some_and(|c| c.is_alphabetic() || c == '_')
+            ch.next().is_some_and(|c| c.is_alphabetic() || c == '_')
                 && ch.all(|c| c.is_alphanumeric() || c == '_' || c == '-')
         })
         && !matches!(s, "and" | "or" | "not" | "true" | "false" | "none")
@@ -249,7 +248,9 @@ fn literal(s: &str) -> Option<Lit> {
     {
         let inner = &s[1..s.len() - 1];
         if s.starts_with('"') {
-            return serde_json::from_str::<String>(s).ok().map(|t| Lit::text(&t));
+            return serde_json::from_str::<String>(s)
+                .ok()
+                .map(|t| Lit::text(&t));
         }
         return Some(Lit::text(&inner.replace("\\'", "'")));
     }

@@ -713,6 +713,46 @@ ordinateur, hors ligne si besoin) puis synchronise : versions des autres récup�
   NAS n'a pas besoin d'avoir Git. Limite : deux personnes ne voient pas les modifications de l'autre en direct
   (synchroniser pour les recevoir).
 
+**D-90 — 18/10/2026 — prise.** **Tout site s'édite depuis l'interface, quelle que soit son origine.** Demande de
+l'utilisateur : « l'import d'un site externe doit avoir le même niveau de contrôle qu'un site natif à Revel » et
+« quand tu te heurtes à une limite, tu crées l'outil ». Trois pièces : le **relevé** (`revel audit`, outil MCP
+`check_site`, `revel_edit::editable`) liste ce que les panneaux ne savent ni créer ni régler (variables,
+expressions calculées, conditions et listes écrites, attributs calculés) ; la **reconstruction** (`revel
+rebuild`, `revel_render::flatten`) réécrit un site dans la forme des panneaux à rendu identique (données
+connues d'avance écrites dans les calques, propriétés de composant déduites champ par champ, listes de
+collection, flux RSS, réglages de page, liens « page actuelle », couleurs par valeur en classes) ; chaque
+**import** (Eleventy, HTML, lien, Git construit, WordPress, Figma) passe par la reconstruction, le bilan dit ce
+qui reste écrit dans le code (`revel import … --no-rebuild` garde l'import brut). Les assistants (MCP) reçoivent
+la liste des formes de l'interface et doivent finir avec un relevé vide.
+
+**D-91 — 18/10/2026 — prise.** **Formes de l'interface ajoutées pour les limites rencontrées.** Conditions par
+clauses (rempli, vide, égal à, différent de, contient, plus / moins de N valeurs), toutes vraies ou une au moins ;
+propriété de composant « Liste » ; liste de collection « Mettre en premier » (champ ou contenus choisis,
+complétés, ou seulement s'ils remplissent la liste) ; classe tirée de la valeur d'un champ ; adresse de lien
+écrite autour d'un champ ; nombre de valeurs d'un champ ; mots entre *astérisques* mis en valeur ; filtres de
+liste (boutons, éléments filtrés, paramètre d'adresse) ; consentement aux cookies avec Google Analytics 4 après
+accord ; onglets au survol avec vidéos du panneau affiché ; lecteur vidéo (YouTube, Vimeo, fichier) ;
+interactions « un enfant au hasard » et « tourner » ; Échap referme un menu ouvert par une interaction. Chaque
+forme est lisible dans le code (attributs `data-revel-*`, filtres `pick_first`, `emphasis`) et réglable dans
+Styles.
+
+**D-92 — 18/10/2026 — prise.** **L'en-tête des pages est écrit par Revel d'après les réglages.** Paramètres ›
+Référencement : nom affiché du site (« Page | Nom »), description et image de partage par défaut, couleur du
+navigateur, icônes, fiche de l'organisation (données structurées schema.org) ; réglages d'une page et du modèle
+d'une collection : classe du corps, thème, type au partage. Revel écrit titre, partage (Open Graph, Twitter),
+langue, date d'article, `max-image-preview:large`, icônes, flux RSS et données structurées quand le gabarit ne
+les a pas. Les liens vers la page affichée reçoivent `aria-current="page"` (comme la classe `w--current` de
+Webflow, [forum Webflow](https://discourse.webflow.com/t/force-apply-current-class-to-nav-bar-link/36871)) ; le
+réglage « Actif sur les sous-pages » d'un lien couvre les pages dont l'adresse commence par la sienne.
+
+**D-93 — 18/10/2026 — prise.** **Alunites recréé dans la forme de l'interface, relevé vide.** Le script propre au
+site est retiré : chaque comportement est un réglage (en-tête au défilement, menu, onglets « À la une »,
+bandeaux défilants, filtres, lecteur vidéo, galeries, boussole, formulaire, consentement). Données devenues
+collections (rubriques, clients) ; noms de l'équipe écrits comme ils s'affichent ; chiffres et pictogrammes en
+propriétés du composant « Chiffres ». Écarts voulus avec la version Eleventy : le titre d'une page sans titre de
+référencement devient « Titre du contenu | Nom du site » au lieu du seul nom du site, et les bandeaux défilent
+aussi sur téléphone.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

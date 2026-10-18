@@ -1541,7 +1541,7 @@ try {
     const inline = await untilD('display', 'inline-block');
     await page.click('.display-ctl .seg button:has-text("Flex")');
     await untilD('display', 'flex');
-    await page.click('.align-box .align-cell >> nth=4');
+    await page.click('.align-box:not(.align-box--small) .align-cell >> nth=4');
     const centre = await untilD('justify-content', 'center') && await untilD('align-items', 'center');
     check('disposition : Bloc, Flex, Grille, Masqué ; autres affichages par la flèche ; matrice d\'alignement',
       labels.join('|') === 'Bloc|Flex|Grille|Masqué' && flex && inline && centre, labels.join('|'));

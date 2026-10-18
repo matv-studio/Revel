@@ -794,7 +794,15 @@ impl Preset {
                 ],
                 vec![],
             ),
-            Preset::Icon => icon_node(id(), "etoile"),
+            // `text` : nom d'une icône (`fleche-droite`), sinon l'étoile.
+            Preset::Icon => icon_node(
+                id(),
+                if crate::icons::icon(text.trim()).is_some() {
+                    text.trim()
+                } else {
+                    "etoile"
+                },
+            ),
             Preset::Tabs => {
                 let flag = |n: &str| Attr {
                     name: n.into(),

@@ -7,6 +7,10 @@ pub const ICONS: &[(&str, &str)] = &[
     ("fleche-droite", r#"<path d="M5 12h14M13 6l6 6-6 6"/>"#),
     ("fleche-gauche", r#"<path d="M19 12H5M11 6l-6 6 6 6"/>"#),
     ("fleche-haut-droite", r#"<path d="M7 17 17 7M8 7h9v9"/>"#),
+    (
+        "fleche-epaisse",
+        r#"<path fill="currentColor" stroke="none" d="M3 9h9V4l9 8-9 8v-5H3z"/>"#,
+    ),
     ("chevron-droite", r#"<path d="m9 6 6 6-6 6"/>"#),
     ("chevron-bas", r#"<path d="m6 9 6 6 6-6"/>"#),
     ("plus", r#"<path d="M12 5v14M5 12h14"/>"#),

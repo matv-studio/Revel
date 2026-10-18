@@ -366,6 +366,9 @@ pub async fn serve(
             response(r.status, &r.content_type, r.body)
         }
     });
+    // Fichiers envoyés par l'interface (polices, médias importés) : pas de limite de 2 Mo, comme
+    // dans l'application de bureau (serveur local seulement).
+    let app = app.layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
     axum::serve(listener, app)
         .with_graceful_shutdown(stop)
         .await

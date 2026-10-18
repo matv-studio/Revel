@@ -189,10 +189,11 @@ pub struct InsertPresetArg {
     /// list, grid, columns, rich_text, video, icon, embed, lottie, tabs, accordion,
     /// collection_list, locale_switch, navbar, ticker, carousel, slideshow, block_hero,
     /// block_features, block_text_image, block_cta, block_testimonial, block_faq, block_contact,
-    /// block_form.
+    /// block_form, video_player, list_filters, consent, switch.
     pub preset: String,
     /// Default text of the new element (site's language). navbar: "Brand|Menu|Link 1|Link 2|…";
-    /// carousel/slideshow: "Slide|Previous|Next".
+    /// carousel/slideshow: "Slide|Previous|Next"; switch: "Label|On|Off"; icon: icon name
+    /// (fleche-droite, chevron-droite, plus, croix, coche, menu, etoile, coeur…).
     #[serde(default)]
     pub text: Option<String>,
     /// Insert at the end of this element (id).

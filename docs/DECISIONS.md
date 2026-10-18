@@ -771,7 +771,10 @@ Ajouter, texte « On / Off » de leur état, choix gardé par le navigateur) ; o
 dans toute la page (flèches, W/A/S/D), son à chaque changement, plusieurs séries de panneaux qui suivent
 les onglets dans l'ordre (texte, numéro) ; animation « Devenu actif » (rebond, saut, secousse, éclair,
 tour) jouée quand l'onglet, le filtre ou l'interrupteur qui contient l'élément devient actif. Rien de
-propre à un site : chaque réglage est un attribut `data-revel-*` lu par le script commun.
+propre à un site : chaque réglage est un attribut `data-revel-*` lu par le script commun. Vérifié en
+recréant p3r.deltea.space avec les seuls outils des assistants (MCP) : relevé vide, 0,01 % d'écart sur
+l'écran d'accueil, 0,2 à 0,34 % sur le menu (1440 × 900) ; icône « flèche épaisse » ajoutée, élément
+« Icône » réglable par son nom pour les assistants.
 
 ## Décisions ouvertes
 

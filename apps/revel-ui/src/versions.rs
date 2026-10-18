@@ -76,7 +76,10 @@ fn is_folder(remote: &str) -> bool {
     remote.starts_with('/')
         || remote.starts_with("\\\\")
         || remote.starts_with("file://")
-        || (b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/'))
+        || (b.len() > 2
+            && b[0].is_ascii_alphabetic()
+            && b[1] == b':'
+            && matches!(b[2], b'\\' | b'/'))
 }
 
 /// Façon de travailler : `solo`, `shared` (dossier partagé) ou `online` (dépôt en ligne).
@@ -89,7 +92,9 @@ fn mode_of(remote: Option<&str>) -> &'static str {
 }
 
 /// Lignes de la comparaison des deux façons de travailler à plusieurs : libellé et valeurs.
-const COMPARE: &[&str] = &["where", "accounts", "remote", "browser", "backup", "provider"];
+const COMPARE: &[&str] = &[
+    "where", "accounts", "remote", "browser", "backup", "provider",
+];
 
 /// Endroit modifié des deux côtés : où (page, composant…) et élément.
 fn item_place(ui: Ui, i: &SyncConflictItem) -> String {

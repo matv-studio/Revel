@@ -776,24 +776,6 @@ impl Revel {
             Ok(d) => d,
             Err(e) => return fail(e),
         };
-        let mut nodes = match revel_markup::parse(
-            &a.html,
-            &revel_markup::Options {
-                dialect: revel_markup::Dialect::Nunjucks,
-                ..Default::default()
-            },
-        ) {
-            Ok(p) => p.nodes,
-            Err(e) => return fail(format!("HTML not understood: {e}")),
-        };
-        nodes.retain(|n| !matches!(n, Node::Text { text } if text.trim().is_empty()));
-        if nodes.is_empty() {
-            return fail("Nothing to insert.");
-        }
-        let mut taken = d.node_ids();
-        for n in &mut nodes {
-            revel_edit::make::refresh_ids(n, &mut taken);
-        }
         let place = if let Some(id) = &a.inside {
             target_of(&d, id).and_then(|t| match address::node(&d, &t).ok()? {
                 Node::Element { children, .. } => {
@@ -824,6 +806,35 @@ impl Revel {
                 "Say where to insert: `inside`, `before` or `after` an element id, or `page`.",
             );
         };
+        // Page XML (flux RSS) ou texte (`.htaccess`) : lue comme telle, comme à l'import.
+        let mode = match &parent.owner {
+            Owner::Page(id) => d
+                .pages
+                .iter()
+                .find(|p| &p.id == id)
+                .map_or(revel_markup::Mode::Html, |p| page_mode(&p.path)),
+            _ => revel_markup::Mode::Html,
+        };
+        let mut nodes = match revel_markup::parse(
+            &a.html,
+            &revel_markup::Options {
+                dialect: revel_markup::Dialect::Nunjucks,
+                mode,
+            },
+        ) {
+            Ok(p) => p.nodes,
+            Err(e) => return fail(format!("HTML not understood: {e}")),
+        };
+        if mode == revel_markup::Mode::Html {
+            nodes.retain(|n| !matches!(n, Node::Text { text } if text.trim().is_empty()));
+        }
+        if nodes.is_empty() {
+            return fail("Nothing to insert.");
+        }
+        let mut taken = d.node_ids();
+        for n in &mut nodes {
+            revel_edit::make::refresh_ids(n, &mut taken);
+        }
         let ids: Vec<String> = nodes
             .iter()
             .filter_map(|n| revel_model::ids::node_id(n).map(str::to_string))
@@ -1122,6 +1133,22 @@ impl ServerHandler for Revel {
     }
 }
 
+/// Lecture d'un contenu inséré dans une page : HTML, XML (`.xml`, `.rss`, `.atom`, `.svg`) ou
+/// texte (autres fichiers : `.htaccess`, `robots.txt`), comme `revel_render::DocKind`.
+fn page_mode(path: &str) -> revel_markup::Mode {
+    let last = path.rsplit('/').next().unwrap_or("");
+    if path.ends_with('/') || last.ends_with(".html") || last.ends_with(".htm") {
+        revel_markup::Mode::Html
+    } else if [".xml", ".rss", ".atom", ".svg"]
+        .iter()
+        .any(|e| last.ends_with(e))
+    {
+        revel_markup::Mode::Xml
+    } else {
+        revel_markup::Mode::Text
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1134,6 +1161,19 @@ mod tests {
         fn invoke(&self, _: &str, _: Value) -> Reply {
             Box::pin(async { Err(Failure::new("error-mcp-no-site")) })
         }
+    }
+
+    /// Contenu inséré lu selon la page : flux RSS en XML (`<link>…</link>` gardé), `.htaccess` en
+    /// texte, pages en HTML.
+    #[test]
+    fn lecture_selon_la_page() {
+        use revel_markup::Mode;
+        assert_eq!(page_mode("/"), Mode::Html);
+        assert_eq!(page_mode("/agence/"), Mode::Html);
+        assert_eq!(page_mode("/404.html"), Mode::Html);
+        assert_eq!(page_mode("/feed.xml"), Mode::Xml);
+        assert_eq!(page_mode("/.htaccess"), Mode::Text);
+        assert_eq!(page_mode("/robots.txt"), Mode::Text);
     }
 
     /// Chaque outil du protocole est aussi appelable sans MCP, et décrit sans référence externe.

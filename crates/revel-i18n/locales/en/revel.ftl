@@ -999,6 +999,7 @@ component-bind = Link to a property
 component-bind-new = New property "{ $label }"
 component-bind-field = Link to an entry field
 component-unbind = Unlink (the default value is written)
+component-field-url = Entry page address
 component-bind-text = Text
 component-bind-image = Image
 component-bind-link = Link

@@ -202,7 +202,8 @@
 .row-action { flex: none; display: none; place-items: center; width: 20px; height: 20px; border-radius: var(--radius-sm); color: var(--text-muted); }
 .row-action svg.icon { width: 13px; height: 13px; }
 .row-action:hover { background: var(--surface-active); color: var(--text); }
-.page-row:hover .row-action, .page-row.is-on .row-action { display: grid; }
+.page-row:hover .row-action, .page-row.is-on .row-action,
+.list-row:hover .row-action, .list-row:focus-within .row-action { display: grid; }
 .page-row .list-meta { display: none; }
 
 /* --- Paramètres d'une page (par-dessus la colonne du panneau) ------------------------------ */

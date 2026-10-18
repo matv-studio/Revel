@@ -1002,6 +1002,7 @@ component-bind = Relier à une propriété
 component-bind-new = Nouvelle propriété « { $label } »
 component-bind-field = Relier à un champ du contenu
 component-unbind = Délier (la valeur par défaut est écrite)
+component-field-url = Adresse de la page du contenu
 component-bind-text = Texte
 component-bind-image = Image
 component-bind-link = Lien

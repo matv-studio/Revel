@@ -396,13 +396,42 @@ fn prop_value_row(
         }
         .into_any();
     }
+    // Relié à l'adresse de la page du contenu (`item.url`).
+    if let Some(((_, item), _)) = list.clone()
+        && p.kind != PropKind::Switch
+        && p.kind != PropKind::List
+        && arg.as_deref().map(str::trim) == Some(format!("{item}.url").as_str())
+    {
+        return view! {
+            <div class="view-line prop-row" data-prop=p.name.clone()>
+                <span class="prop-label">{kind_icon(p.kind)}{label}</span>
+                <span class="prop-chip prop-chip--field" title=format!("{{{{ {item}.url }}}}")>
+                    {icons::link()}<span>{ui.t("component-field-url")}</span>
+                    <button class="chip-x" title=ui.t("component-unbind") aria-label=ui.t("component-unbind")
+                        on:click=move |_| set(name.get_value(), None)>{icons::close()}</button>
+                </span>
+            </div>
+        }
+        .into_any();
+    }
     let can_bind = list.is_some() && p.kind != PropKind::Switch;
     let field_menu = move |e: leptos::ev::MouseEvent| {
         use crate::ctxmenu::{CtxItem, open};
         let Some(((collection, item), cols)) = list.clone() else {
             return;
         };
-        let items: Vec<CtxItem> = cols.with_untracked(|cs| {
+        // Adresse de la page du contenu, puis ses champs.
+        let mut items: Vec<CtxItem> = Vec::new();
+        if p.kind != PropKind::List {
+            let expr = format!("{item}.url");
+            items.push(
+                CtxItem::new(ui.now("component-field-url", &[]), move || {
+                    set(name.get_value(), Some(expr.clone()))
+                })
+                .icon(icons::link),
+            );
+        }
+        let fields: Vec<CtxItem> = cols.with_untracked(|cs| {
             cs.iter()
                 .find(|c| c.id == collection)
                 .map(|c| {
@@ -425,6 +454,7 @@ fn prop_value_row(
                 })
                 .unwrap_or_default()
         });
+        items.extend(fields);
         open(ui, &e, items);
     };
 

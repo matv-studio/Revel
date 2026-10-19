@@ -276,6 +276,7 @@ pub fn starter_from(name: &str, lang: &str, template: SiteTemplate, light: bool)
         to: "media".into(),
     }];
     s.layouts.push(Layout {
+        fields: Vec::new(),
         id: "base".into(),
         parent: None,
         props: Default::default(),
@@ -333,6 +334,7 @@ fn template_site(name: &str, lang: &str, template: SiteTemplate, colors: &str) -
         to: "media".into(),
     }];
     s.layouts.push(Layout {
+        fields: Vec::new(),
         id: "base".into(),
         parent: None,
         props: Default::default(),
@@ -353,6 +355,7 @@ fn template_site(name: &str, lang: &str, template: SiteTemplate, colors: &str) -
     match template {
         SiteTemplate::Blog => {
             s.layouts.push(Layout {
+                fields: Vec::new(),
                 id: "article".into(),
                 parent: Some("base".into()),
                 props: Default::default(),

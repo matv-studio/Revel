@@ -58,6 +58,7 @@ fn site() -> Site {
         ..Default::default()
     };
     s.layouts.push(Layout {
+        fields: Vec::new(),
         id: "base".into(),
         parent: None,
         props: Default::default(),
@@ -66,6 +67,7 @@ fn site() -> Site {
         ),
     });
     s.layouts.push(Layout {
+        fields: Vec::new(),
         id: "project".into(),
         parent: Some("base".into()),
         props: [("bodyClass".to_string(), json!("page-entry"))].into(),
@@ -708,6 +710,7 @@ fn liste_de_collection() {
             contains: None,
             first: None,
             first_full: false,
+            also: Vec::new(),
         }
         .to_expr()
     };
@@ -1359,6 +1362,7 @@ fn en_tete_ecrit_a_la_main_devient_reglages() {
     let mut s = Site::new("Atelier", "fr");
     s.base_url = Some("https://exemple.fr".into());
     s.layouts.push(Layout {
+        fields: Vec::new(),
         id: "base".into(),
         parent: None,
         props: Default::default(),
@@ -1425,4 +1429,394 @@ fn en_tete_ecrit_a_la_main_devient_reglages() {
         ]
     );
     assert_eq!(h2.matches("og:title").count(), 1);
+}
+
+/// Variable de page lue par le gabarit (`{% if not cacherAppel %}`, `{{ sousTitre }}`) :
+/// propriété du gabarit à la reconstruction, valeur gardée par chaque page ; la valeur par défaut
+/// d'une propriété vaut pour les pages qui n'en donnent pas ; réglage de page tiré des données
+/// (`seo = pages.x.seo`) écrit dans la page.
+#[test]
+fn proprietes_du_gabarit_et_reglages_tires_des_donnees() {
+    let mut s = site();
+    s.layouts[0].body = parse(
+        r#"<!doctype html><html><head><title>{{ seo.title }}</title></head><body>{% if not cacherAppel %}<section class="appel">Écrivez-nous</section>{% endif %}<p class="st">{{ sousTitre }}</p>{{ content | safe }}</body></html>"#,
+    );
+    s.layouts[0]
+        .props
+        .insert("sousTitre".into(), json!("Agence"));
+    s.data.insert(
+        "pages".into(),
+        json!({"contact": {"seo": {"title": "Contact"}}}),
+    );
+    s.pages.push(Page {
+        id: "contact".into(),
+        path: "/contact/".into(),
+        layout: Some("base".into()),
+        props: [("cacherAppel".to_string(), json!(true))].into(),
+        body: parse("<main>Contact</main>"),
+        computed: [("seo".to_string(), r#"pages["contact"].seo"#.to_string())].into(),
+        draft: false,
+        code: Default::default(),
+        name: None,
+    });
+    let before = build(&input(&s, vec![])).unwrap();
+    let r = crate::flatten::rebuild(&input(&s, vec![])).unwrap();
+    let after = build(&input(&r.site, vec![])).unwrap();
+    for f in ["index.html", "contact/index.html"] {
+        assert_eq!(file(&before, f), file(&after, f), "{f}");
+    }
+    assert!(!file(&after, "contact/index.html").contains("appel"));
+    assert!(file(&after, "index.html").contains("Agence"));
+    let base = &r.site.layouts[0];
+    let names: Vec<(&str, revel_model::PropKind)> = base
+        .fields
+        .iter()
+        .map(|f| (f.name.as_str(), f.kind))
+        .collect();
+    assert!(
+        names.contains(&("cacherAppel", revel_model::PropKind::Switch)),
+        "{names:?}"
+    );
+    assert!(
+        names.contains(&("sousTitre", revel_model::PropKind::Text)),
+        "{names:?}"
+    );
+    assert_eq!(
+        base.field("sousTitre").and_then(|f| f.default.clone()),
+        Some(json!("Agence"))
+    );
+    assert!(!base.props.contains_key("sousTitre"));
+    let contact = r.site.pages.iter().find(|p| p.id == "contact").unwrap();
+    assert!(contact.computed.is_empty());
+    assert_eq!(contact.props.get("seo"), Some(&json!({"title": "Contact"})));
+    let left: Vec<_> = revel_edit::editable::audit(&r.site)
+        .into_iter()
+        .filter(|i| {
+            i.detail.contains("cacherAppel")
+                || i.detail.contains("sousTitre")
+                || i.detail.contains("seo")
+        })
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+}
+
+/// Plan du site écrit à la main (boucle sur une collection, dates) : remplacé à la
+/// reconstruction par celui de Revel avec les dates de mise à jour (mêmes adresses et dates).
+#[test]
+fn plan_du_site_ecrit_a_la_main_devient_reglage() {
+    let mut s = site();
+    s.base_url = Some("https://alunites.com".into());
+    s.pages.retain(|p| p.path != "/sitemap.xml");
+    s.pages.push(Page {
+        id: "sitemap".into(),
+        path: "/sitemap.xml".into(),
+        layout: None,
+        props: Default::default(),
+        // Forme de l'import (page XML) : prologue écrit, liste sur la collection des pages.
+        body: serde_json::from_value(json!([
+            {"node": "html", "html": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"},
+            {"node": "text", "text": "\n"},
+            {"node": "element", "tag": "urlset",
+             "attrs": [{"name": "xmlns", "value": "http://www.sitemaps.org/schemas/sitemap/0.9"}],
+             "children": [{"node": "each", "expr": "collections.sitemap", "item": "p", "children": [
+                {"node": "text", "text": "\n  "},
+                {"node": "element", "tag": "url", "children": [
+                    {"node": "text", "text": "\n    "},
+                    {"node": "element", "tag": "loc", "children": [{"node": "out", "expr": "p.url | absolute_url(\"https://alunites.com\")"}]},
+                    {"node": "if", "cond": "p.data.date", "then": [
+                        {"node": "element", "tag": "lastmod", "children": [{"node": "out", "expr": "p.date | iso_date"}]}]},
+                    {"node": "text", "text": "\n  "}]}]},
+                {"node": "text", "text": "\n"}]}
+        ]))
+        .unwrap(),
+        computed: Default::default(),
+        draft: false,
+        code: Default::default(),
+        name: None,
+    });
+    let entries = || {
+        vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "A", "date": "2026-01-02"}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "B", "date": "2026-03-01T10:00:00Z"}),
+            ),
+        ]
+    };
+    let before = build(&input(&s, entries())).unwrap();
+    let r = crate::flatten::rebuild(&input(&s, entries())).unwrap();
+    assert!(
+        !r.site.pages.iter().any(|p| p.path == "/sitemap.xml"),
+        "{:?}",
+        r.notes
+    );
+    assert!(
+        r.site.settings.seo.sitemap_lastmod && !r.site.settings.seo.no_sitemap,
+        "{:?}",
+        r.notes
+    );
+    let after = build(&input(&r.site, entries())).unwrap();
+    let pairs = |xml: &str| {
+        let re = regex::Regex::new(
+            r"(?s)<url>\s*<loc>(.*?)</loc>(?:<lastmod>(.*?)</lastmod>)?\s*</url>",
+        )
+        .unwrap();
+        let mut v: Vec<(String, String)> = re
+            .captures_iter(xml)
+            .map(|c| {
+                (
+                    c[1].to_string(),
+                    c.get(2).map(|m| m.as_str().to_string()).unwrap_or_default(),
+                )
+            })
+            .collect();
+        v.sort();
+        v
+    };
+    let (a, b) = (
+        pairs(file(&before, "sitemap.xml")),
+        pairs(file(&after, "sitemap.xml")),
+    );
+    assert_eq!(a, b);
+    assert!(
+        b.iter()
+            .any(|(u, d)| u.ends_with("/project/b/") && d == "2026-03-01T10:00:00.000Z"),
+        "{b:?}"
+    );
+}
+
+/// « Suggestions du contenu s'il y en a assez, sinon les plus récents » écrit avec des variables :
+/// liste de collection « Mettre en premier, seulement s'ils remplissent la liste » à la
+/// reconstruction, même rendu.
+#[test]
+fn suggestions_sinon_les_plus_recents() {
+    let mut s = site();
+    s.layouts[1].body = parse(
+        r#"{%- set others = (collections.projets | by_slugs(suggestions)) if suggestions and suggestions|length else [] -%}
+{%- if others|length < 2 %}{% set others = collections.projets | without(page.url) | limit(2) %}{% endif %}
+<article><h1>{{ title }}</h1>{{ content | safe }}{% if others|length %}<ul>{% for item in others | limit(2) %}<li>{{ item.data.title }}</li>{% endfor %}</ul>{% endif %}</article>"#,
+    );
+    let entries = || {
+        vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "A", "date": "2026-01-01", "suggestions": ["c", "b"]}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "B", "date": "2026-02-01", "suggestions": ["c"]}),
+            ),
+            entry(
+                "c",
+                json!({"slug": "c", "title": "C", "date": "2026-03-01"}),
+            ),
+        ]
+    };
+    let before = build(&input(&s, entries())).unwrap();
+    let r = crate::flatten::rebuild(&input(&s, entries())).unwrap();
+    let after = build(&input(&r.site, entries())).unwrap();
+    for f in [
+        "project/a/index.html",
+        "project/b/index.html",
+        "project/c/index.html",
+    ] {
+        assert_eq!(file(&before, f), file(&after, f), "{f}");
+    }
+    assert!(file(&after, "project/a/index.html").contains("<li>C</li><li>B</li>"));
+    let body = serde_json::to_string(&r.site.layouts[1].body).unwrap();
+    assert!(body.contains("pick_first(suggestions, 2)"), "{body}");
+    assert!(!body.contains("\"set\""), "{body}");
+    let left: Vec<_> = revel_edit::editable::audit(&r.site)
+        .into_iter()
+        .filter(|i| i.owner == "layout:project")
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+}
+
+/// Contenus choisis un à un dans deux collections (`(projets | by_slug(s)) or (actualites |
+/// by_slug(s))`), ajoutés à une liste, premier contenu lu à part : liste de collection à deux
+/// collections, premier contenu dans une liste d'un seul contenu ; même rendu.
+#[test]
+fn contenus_choisis_dans_deux_collections() {
+    let mut s = site();
+    s.collections.push(Collection {
+        id: "actualites".into(),
+        source: CollectionSource::Folder,
+        folder: "content/actualites".into(),
+        path: Some("/{{ slug }}/".into()),
+        layout: Some("project".into()),
+        props: Default::default(),
+        filter: None,
+        sort: None,
+        fields: vec![],
+    });
+    s.pages[0].body = parse(
+        r#"{%- set featured = [] -%}{%- for slug in ["b", "n1", "zz", "a"] -%}{%- set it = (collections.projets | by_slug(slug)) or (collections.actualites | by_slug(slug)) -%}{%- if it %}{% set featured = (featured.push(it), featured) %}{% endif -%}{%- endfor -%}
+{%- set first = featured[0] -%}
+<div class="hero">{% if first and first.data.video %}<video data-src="{{ first.data.video }}"></video>{% endif %}</div>
+<ol>{% for it in featured %}<li><a href="{{ it.url }}">{{ it.data.title }}</a></li>{% endfor %}</ol>"#,
+    );
+    let entries = || {
+        let mut v = vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "A", "date": "2026-01-02"}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "B", "date": "2026-03-01", "video": "/media/b.mp4"}),
+            ),
+        ];
+        v.push(Entry {
+            folder: "content/actualites".into(),
+            file_stem: "n1".into(),
+            data: json!({"slug": "n1", "title": "Nouvelle", "date": "2026-02-01"}),
+            body: String::new(),
+        });
+        v
+    };
+    let before = build(&input(&s, entries())).unwrap();
+    let r = crate::flatten::rebuild(&input(&s, entries())).unwrap();
+    let after = build(&input(&r.site, entries())).unwrap();
+    assert_eq!(file(&before, "index.html"), file(&after, "index.html"));
+    assert!(file(&after, "index.html").contains(r#"<video data-src="/media/b.mp4">"#));
+    let body = serde_json::to_string(&r.site.pages[0].body).unwrap();
+    assert!(
+        body.contains(r#"(collections.projets + collections.actualites) | by_slugs([\"b\", \"n1\", \"zz\", \"a\"])"#),
+        "{body}"
+    );
+    let left: Vec<_> = revel_edit::editable::audit(&r.site)
+        .into_iter()
+        .filter(|i| i.owner == "page:index")
+        .collect();
+    assert!(left.is_empty(), "{left:?} {:?}", r.notes);
+}
+
+/// Contenu relié lu directement (`(collections.projets | by_slug(voisin)).data.title`) : liste
+/// des contenus reliés par le champ à la reconstruction, même rendu.
+#[test]
+fn contenu_relie_lu_directement() {
+    let mut s = site();
+    s.layouts[1].body = parse(
+        r#"<article><h1>{{ title }}</h1>{% if (collections.projets | by_slug(voisin)) %}<p class="voisin"><a href="{{ (collections.projets | by_slug(voisin)).url }}">{{ (collections.projets | by_slug(voisin)).data.title }}</a></p>{% endif %}</article>"#,
+    );
+    let entries = || {
+        vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "A", "date": "2026-01-01", "voisin": "b"}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "B", "date": "2026-02-01"}),
+            ),
+        ]
+    };
+    let before = build(&input(&s, entries())).unwrap();
+    let r = crate::flatten::rebuild(&input(&s, entries())).unwrap();
+    let after = build(&input(&r.site, entries())).unwrap();
+    for f in ["project/a/index.html", "project/b/index.html"] {
+        assert_eq!(file(&before, f), file(&after, f), "{f}");
+    }
+    assert!(file(&after, "project/a/index.html").contains(r#"<a href="/project/b/">B</a>"#));
+    let left: Vec<_> = revel_edit::editable::audit(&r.site)
+        .into_iter()
+        .filter(|i| i.owner == "layout:project")
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+}
+
+/// Valeur tirée d'un tableau gardée dans une variable du même nom, lue par un style : classe par
+/// valeur du champ (réglable dans Styles), même rendu.
+#[test]
+fn valeur_de_tableau_dans_une_variable_lue_par_un_style() {
+    let mut s = site();
+    s.layouts[1].body = parse(
+        r##"{%- set couleur = {"orange": "#F4684D", "violet": "#8C5CF0"}[couleur] -%}<article class="fiche" style="--fiche:{{ couleur }}"><h1>{{ title }}</h1></article>"##,
+    );
+    let entries = || {
+        vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "A", "date": "2026-01-01", "couleur": "orange"}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "B", "date": "2026-02-01", "couleur": "violet"}),
+            ),
+        ]
+    };
+    let r = crate::flatten::rebuild(&input(&s, entries())).unwrap();
+    let after = build(&input(&r.site, entries())).unwrap();
+    assert!(file(&after, "project/a/index.html").contains(r#"class="fiche fiche--orange""#));
+    let css = serde_json::to_string(&r.site.stylesheet).unwrap();
+    assert!(
+        css.contains(".fiche--violet") && css.contains("#8C5CF0"),
+        "{css}"
+    );
+    let left: Vec<_> = revel_edit::editable::audit(&r.site)
+        .into_iter()
+        .filter(|i| i.owner == "layout:project")
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+}
+
+/// Site à plusieurs environnements de publication (production, recette) : ce qui dépend de
+/// l'environnement (`{% if env.staging %}`) reste lu à la publication ; la reconstruction donne
+/// les mêmes fichiers dans chaque environnement.
+#[test]
+fn reconstruction_garde_les_environnements() {
+    let mut s = site();
+    s.settings.environments = [
+        ("production".to_string(), json!({"staging": false})),
+        ("staging".to_string(), json!({"staging": true})),
+    ]
+    .into();
+    s.layouts[0].body = parse(
+        r#"<!doctype html><html><head><title>{{ seo.title }}</title>{% if env.staging %}<meta name="robots" content="noindex, nofollow">{% endif %}</head><body>{{ content | safe }}{% if env.staging %}<p class="recette">Recette</p>{% endif %}</body></html>"#,
+    );
+    s.pages.push(Page {
+        id: "htaccess".into(),
+        path: "/.htaccess".into(),
+        layout: None,
+        props: Default::default(),
+        body: revel_markup::parse(
+            "{%- if env.staging %}\nHeader always set X-Robots-Tag \"noindex, nofollow\"\n{%- endif %}\nOptions -Indexes\n",
+            &revel_markup::Options {
+                dialect: revel_markup::Dialect::Nunjucks,
+                mode: revel_markup::Mode::Text,
+            },
+        )
+        .unwrap()
+        .nodes,
+        computed: Default::default(),
+        draft: false,
+        code: Default::default(),
+        name: None,
+    });
+    let staging = |site: &Site| {
+        let mut inp = input(site, vec![]);
+        inp.environment = "staging".into();
+        build(&inp).unwrap()
+    };
+    let before = staging(&s);
+    let r = crate::flatten::rebuild(&input(&s, vec![])).unwrap();
+    let after = staging(&r.site);
+    // Corps identique ; en-tête : mêmes balises (leur ordre peut changer).
+    let body = |h: &str| h.split("</head>").nth(1).unwrap_or_default().to_string();
+    assert_eq!(
+        body(file(&before, "index.html")),
+        body(file(&after, "index.html"))
+    );
+    assert_eq!(file(&before, ".htaccess"), file(&after, ".htaccess"));
+    assert!(
+        file(&after, "index.html").contains(r#"<meta name="robots" content="noindex, nofollow">"#)
+    );
+    assert!(file(&after, "index.html").contains("Recette"));
+    assert!(file(&after, ".htaccess").contains("X-Robots-Tag"));
+    let prod = build(&input(&r.site, vec![])).unwrap();
+    assert!(!file(&prod, ".htaccess").contains("X-Robots-Tag"));
 }

@@ -141,12 +141,15 @@ pub fn ContentSettings() -> impl IntoView {
     let apply = move |cmd: Command| ed.apply(ui, cmd, false);
     let in_component = move || {
         current.get().and_then(|(at, node)| {
-            let c = crate::components::owner_component(&at)?;
+            let h = crate::components::Holder::of(&at)?;
             let bind = (!matches!(node, Node::Use { .. }))
-                .then(|| crate::components::bindings(ui, ed, c.clone(), at.clone()));
+                .then(|| crate::components::bindings(ui, ed, h.clone(), at.clone()));
+            // Propriétés du composant ouvert ; celles d'un gabarit se règlent avec la page.
+            let section = matches!(h, crate::components::Holder::Component(_))
+                .then(|| crate::components::props_section(ui, ed, h));
             Some(view! {
                 {bind}
-                {crate::components::props_section(ui, ed, c)}
+                {section}
             })
         })
     };

@@ -179,10 +179,17 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                             }).collect();
                             let n = p.body.len();
                             let pid = pid.clone();
+                            // Écrit en partie par des boucles ou des conditions (contenus, environnement
+                            // de publication) : montré, pas modifiable ici (le texte seul les écraserait).
+                            let computed = p.body.iter().any(|n| !matches!(n, revel_model::Node::Html { .. } | revel_model::Node::Text { .. }));
+                            let help = if computed { "pages-file-computed" } else { "pages-file-help" };
                             view! {
                                 <label class="field page-settings-file">
-                                    <span class="label" title=ui.t("pages-file-help")>{ui.t("pages-file")}</span>
-                                    <textarea class="input input--mono" rows="14" spellcheck="false" prop:value=text
+                                    <span class="label" title=ui.t(help)>
+                                        {ui.t("pages-file")}
+                                        {computed.then(|| view! { <span class="seo-warn">{icons::warning()}</span> })}
+                                    </span>
+                                    <textarea class="input input--mono" rows="14" spellcheck="false" prop:value=text disabled=computed
                                         on:change=move |e| {
                                             let v = event_target_value(&e);
                                             let root = revel_edit::Parent::root(revel_edit::Owner::Page(pid.clone()));
@@ -247,6 +254,7 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                                 }
                             }
                         }
+                        {layout_props(ui, ed, StoredValue::new(pid.clone()))}
                         <h3 class="page-settings-section">{ui.t("pages-seo")}</h3>
                         {lang.clone().map(|code| {
                             // Autre langue : titre et description traduits (variable de la page) ; ceux
@@ -420,5 +428,154 @@ fn share_type(ui: Ui, cur: Signal<String>, set: Callback<String>) -> impl IntoVi
                 </select>
             </div>
         </label>
+    }
+}
+
+/// Propriétés du gabarit de la page (D-96) : valeur choisie pour cette page (interrupteur, texte,
+/// image, lien), comme les propriétés d'une utilisation de composant ; ajout (au gabarit le plus
+/// extérieur, lisible par tous ceux qu'il contient), nom et retrait d'une propriété, pour toutes
+/// les pages du gabarit. Les éléments du gabarit s'y relient depuis l'onglet Styles.
+fn layout_props(ui: Ui, ed: Ed, page: StoredValue<String>) -> impl IntoView {
+    use crate::components::{Holder, default_bool, default_text, kind_icon, kind_icon_fn, kind_key, new_prop, KINDS};
+    use revel_model::{PropDef, PropKind};
+    // (gabarit de la page, gabarit le plus extérieur, (propriétaire, propriété)…, valeurs).
+    type Rows = (String, String, Vec<(String, PropDef)>, std::collections::BTreeMap<String, Value>);
+    let data = Memo::new(move |_| -> Option<Rows> {
+        ed.doc.with(|d| {
+            let d = d.as_ref()?;
+            let p = d.pages.iter().find(|p| page.with_value(|i| p.id == *i))?;
+            let first = p.layout.clone()?;
+            let mut rows: Vec<(String, PropDef)> = Vec::new();
+            let mut seen: Vec<String> = Vec::new();
+            let mut cur = Some(first.clone());
+            while let Some(id) = cur {
+                if seen.contains(&id) {
+                    break;
+                }
+                let Some(l) = d.layouts.iter().find(|l| l.id == id) else {
+                    break;
+                };
+                for f in &l.fields {
+                    if !rows.iter().any(|(_, r)| r.name == f.name) {
+                        rows.push((l.id.clone(), f.clone()));
+                    }
+                }
+                seen.push(id);
+                cur = l.parent.clone();
+            }
+            let outer = seen.last().cloned().unwrap_or_else(|| first.clone());
+            Some((first, outer, rows, p.props.clone()))
+        })
+    });
+    let set_value = move |name: String, v: Option<Value>| {
+        ed.apply(ui, Command::SetPageProp { page: page.get_value(), key: name, value: v }, false)
+    };
+    let add = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        let Some((_, outer, rows, _)) = data.get_untracked() else { return };
+        let outer = StoredValue::new(outer);
+        let visible: Vec<PropDef> = rows.iter().map(|(_, p)| p.clone()).collect();
+        let items = KINDS
+            .into_iter()
+            .filter(|k| *k != PropKind::List)
+            .map(|k| {
+                let visible = visible.clone();
+                CtxItem::new(ui.now(kind_key(k), &[]), move || {
+                    let h = Holder::Layout(outer.get_value());
+                    let Some(mut own) = ed.doc.with_untracked(|d| h.own(d.as_ref()?)) else { return };
+                    let mut p = new_prop(ui, &visible, k, None);
+                    // Interrupteur : éteint tant que la page ne l'allume pas.
+                    if k == PropKind::Switch {
+                        p.default = None;
+                    }
+                    own.push(p);
+                    ed.apply(ui, h.set(own), false);
+                })
+                .icon(kind_icon_fn(k))
+            })
+            .collect();
+        open(ui, &e, items);
+    };
+    move || {
+        let (_, _, rows, values) = data.get()?;
+        let list = rows.into_iter().map(|(owner, f)| {
+            let h = StoredValue::new(Holder::Layout(owner));
+            let name = StoredValue::new(f.name.clone());
+            let kind = f.kind;
+            let rename = move |e: leptos::ev::Event| {
+                let v = event_target_value(&e).trim().to_string();
+                let Some(mut own) = ed.doc.with_untracked(|d| h.with_value(|h| h.own(d.as_ref()?))) else { return };
+                if let Some(p) = own.iter_mut().find(|p| name.with_value(|n| &p.name == n)) {
+                    p.label = (!v.is_empty()).then_some(v);
+                }
+                ed.apply(ui, h.with_value(|h| h.set(own)), false);
+            };
+            let remove = move |_| {
+                let cmd = ed.doc.with_untracked(|d| h.with_value(|h| h.remove(d.as_ref()?, &name.get_value())));
+                if let Some(cmd) = cmd {
+                    ed.apply(ui, cmd, false);
+                }
+            };
+            let cur = values.get(&f.name).cloned();
+            let is_set = cur.is_some();
+            let control = match kind {
+                PropKind::Switch => {
+                    let dflt = default_bool(&f);
+                    let on = cur.as_ref().and_then(Value::as_bool).unwrap_or(dflt);
+                    view! {
+                        <span class="switch">
+                            <input type="checkbox" prop:checked=on aria-label=f.label().to_string()
+                                on:change=move |e| {
+                                    let v = event_target_checked(&e);
+                                    set_value(name.get_value(), (v != dflt).then_some(Value::Bool(v)));
+                                }/>
+                            <span class="switch-track"></span>
+                        </span>
+                    }.into_any()
+                }
+                _ => {
+                    let text = cur.as_ref().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+                    let image = kind == PropKind::Image;
+                    view! {
+                        <Field label=String::new() value=text placeholder=default_text(&f) mono=kind == PropKind::Link
+                            on_commit=move |v: String| {
+                                let v = v.trim().to_string();
+                                set_value(name.get_value(), (!v.is_empty()).then(|| json!(v)));
+                            }>
+                            {image.then(|| view! {
+                                <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
+                                    on:click=move |_| crate::library::pick_image(ui, crate::library::media_shelf(ed), move |url| set_value(name.get_value(), Some(json!(url))))>
+                                    {icons::image()}</button>
+                            })}
+                        </Field>
+                    }.into_any()
+                }
+            };
+            let switch = kind == PropKind::Switch;
+            // Interrupteur sur la ligne du nom ; texte, image, lien dessous.
+            let (head_control, body_control) = if switch { (Some(control), None) } else { (None, Some(control)) };
+            view! {
+                <div class="layout-prop" class:layout-prop--switch=switch class:is-set=is_set data-prop=f.name.clone()>
+                    <div class="prop-def-head">
+                        <span class="prop-kind" title=ui.t(kind_key(kind))>{kind_icon(kind)}</span>
+                        <input class="input prop-def-label" prop:value=f.label().to_string()
+                            aria-label=ui.t("component-prop-label") title=format!("{{{{ {} }}}}", f.name)
+                            on:change=rename/>
+                        {head_control}
+                        <button class="icon-btn icon-btn--small" title=ui.t("component-prop-remove") aria-label=ui.t("component-prop-remove")
+                            on:click=remove>{icons::trash()}</button>
+                    </div>
+                    {body_control}
+                </div>
+            }
+        }).collect_view();
+        Some(view! {
+            <div class="page-settings-section-head">
+                <h3 class="page-settings-section" title=ui.t("layout-props-help")>{ui.t("layout-props")}</h3>
+                <button class="icon-btn icon-btn--small" title=ui.t("component-prop-add") aria-label=ui.t("component-prop-add")
+                    on:click=add>{icons::plus()}</button>
+            </div>
+            <div class="layout-props">{list}</div>
+        })
     }
 }

@@ -38,7 +38,9 @@ for sections, grids, buttons, images, video, video player (YouTube/Vimeo/file wi
 - Repeated content (projects, team, logos, articles): a CMS collection and a collection list: `{% for item in \
 (collections.<id> | selectattr(\"data.<field>\") | where_contains(\"data.<listfield>\", <value>) | without(page.url) | \
 sort(attribute=\"<path>\", reverse=true) | pick_first(<field or [\"slug\",…]>))[:<n>] %}` (each part optional, in this \
-order; `collections.<id> | by_slugs([\"a\",\"b\"])` for chosen entries). Inside: `{{ item.data.<field> }}` alone in an \
+order; `collections.<id> | by_slugs([\"a\",\"b\"])` for chosen entries; several collections read one after the other: \
+`(collections.<a> + collections.<b>) | by_slugs([…])`; `pick_first(<field>, <n>)` puts the entries named by the field first \
+only when they fill the list, otherwise the plain list). Inside: `{{ item.data.<field> }}` alone in an \
 element (or with a date format `| date(\"%d.%m.%Y\")`, `| safe` for rich text, `| length` for a count, `| emphasis(\"accent\")` \
 for *starred* words), `href=\"{{ item.url }}\"`, images bound to a field. A list field: `{% for v in item.data.<field> %}`, \
 a reference list: `{% for r in collections.<id> | by_slugs(item.data.<field>) %}`. In a collection template, \
@@ -68,7 +70,11 @@ Animations: `data-revel-appear|text|hover|press|loop|scroll|active` (e.g. `data-
 icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`. Redirections \
 (old address, with or without `?parameters`, to a new one) are a site setting: `apply_commands` with \
 `{\"cmd\": \"set_redirects\", \"redirects\": [{\"from\": \"/old/\", \"to\": \"/new/\"}]}` (the whole list); Revel writes the \
-`.htaccess` rules and a redirect page at the old address.\n\
+`.htaccess` rules and a redirect page at the old address. A value that changes from page to page inside a \
+layout (header, footer: hide a block, a subtitle) is a layout property: `apply_commands` with \
+`{\"cmd\": \"set_layout_fields\", \"id\": \"<layout>\", \"fields\": [{\"name\": \"hideCta\", \"label\": \"Hide the call to action\", \"type\": \"switch\"}]}` \
+(types text, image, link, switch), read in the layout like a component property (`{% if not hideCta %}`), each \
+page giving its value with `{\"cmd\": \"set_page_prop\", \"page\": \"<page id>\", \"key\": \"hideCta\", \"value\": true}`.\n\
 Existing sites may still contain {{ expressions }} from data files: read them with `get_data`/`set_data`; CMS entries \
 with `list_collections`, `get_entry`, `set_entry_field`. Keep the site's language and tone.";
 

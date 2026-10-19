@@ -219,6 +219,10 @@ jobs:
             --save captures-ecarts \
             --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
             | tee -a "$GITHUB_STEP_SUMMARY"
+          # Recette : ce qui dépend de l'environnement (en-têtes du serveur, consignes aux moteurs
+          # de recherche) reste lu à la publication.
+          $REVEL build cobaye-ui --out revel-ui-staging --env staging --no-images
+          python3 tools/compare-robots.py revel-staging revel-ui-staging | tee -a "$GITHUB_STEP_SUMMARY"
       # Import d'un site HTML statique (7.1) : le site produit par Revel, importé comme un dossier
       # de pages HTML, doit redonner les mêmes pages (structure de chaque page, styles calculés et
       # captures).

@@ -129,19 +129,12 @@ struct Print {
     head: Vec<(String, Option<String>)>,
 }
 
+/// Empreinte du site produit, dans chaque environnement de publication (une balise écrite
+/// seulement en recette compte).
 fn prints(input: &BuildInput, site: &Site) -> Option<Prints> {
-    let inp = BuildInput {
-        site,
-        entries: input.entries.clone(),
-        locales: input.locales.clone(),
-        environment: input.environment.clone(),
-        version: input.version.clone(),
-        hooks: input.hooks.clone(),
-        now: input.now,
-    };
-    let out = crate::build(&inp).ok()?;
+    let files = crate::build_all_envs(input, site)?;
     Some(
-        out.files
+        files
             .into_iter()
             .map(|f| {
                 let text = String::from_utf8_lossy(&f.bytes).into_owned();

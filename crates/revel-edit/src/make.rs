@@ -1396,6 +1396,7 @@ pub fn collection_template(
         ],
     }];
     revel_model::Layout {
+        fields: Vec::new(),
         id,
         parent: usual_layout(site).or_else(|| site.layouts.first().map(|l| l.id.clone())),
         props: Default::default(),
@@ -1415,6 +1416,7 @@ pub fn layout_copy(site: &Site, from: &str, id: &str) -> Result<revel_model::Lay
         refresh_ids(n, &mut taken);
     }
     Ok(revel_model::Layout {
+        fields: Vec::new(),
         id: id.to_string(),
         parent: src.parent.clone(),
         props: src.props.clone(),
@@ -1536,6 +1538,7 @@ pub fn base_layout(site: &Site) -> revel_model::Layout {
         k += 1;
     }
     revel_model::Layout {
+        fields: Vec::new(),
         id,
         parent: None,
         props: Default::default(),
@@ -1830,16 +1833,23 @@ fn substitute(nodes: &mut Vec<Node>, name: &str, expr: &str) -> bool {
     let mut i = 0;
     while i < nodes.len() {
         // Condition sur la propriété avec une valeur connue : branche gardée à la place.
+        // `not x` : branche inverse.
+        let negated = |c: &str| {
+            c.trim()
+                .strip_prefix("not ")
+                .is_some_and(|x| x.trim() == name)
+        };
         if let Node::If {
             cond,
             then,
             otherwise,
             ..
         } = &nodes[i]
-            && cond.trim() == name
+            && (cond.trim() == name || negated(cond))
             && matches!(expr.trim(), "true" | "false")
         {
-            let keep = if expr.trim() == "true" {
+            let truth = (expr.trim() == "true") != negated(cond);
+            let keep = if truth {
                 then.clone()
             } else {
                 otherwise.clone()
@@ -1862,6 +1872,8 @@ fn substitute(nodes: &mut Vec<Node>, name: &str, expr: &str) -> bool {
             Node::If { cond, .. } => {
                 if cond.trim() == name {
                     *cond = expr.to_string();
+                } else if negated(cond) {
+                    *cond = format!("not ({expr})");
                 } else {
                     rest |= mentions(cond, name);
                 }
@@ -2028,6 +2040,76 @@ pub fn remove_prop(site: &Site, id: &str, name: &str) -> Result<Command, EditErr
         });
     }
     Ok(Command::Batch { commands })
+}
+
+/// Propriété `name` du gabarit `id` retirée : ses usages dans le gabarit reçoivent sa valeur
+/// par défaut (texte écrit, condition résolue), les pages qui lui donnaient une valeur la perdent.
+pub fn remove_layout_field(site: &Site, id: &str, name: &str) -> Result<Command, EditError> {
+    let l = site
+        .layouts
+        .iter()
+        .find(|l| l.id == id)
+        .ok_or_else(|| EditError::NotFound(format!("gabarit {id}")))?;
+    let p = l
+        .field(name)
+        .ok_or_else(|| EditError::NotFound(format!("propriété {name}")))?;
+    let mut body = l.body.clone();
+    substitute(&mut body, name, &prop_expr(p, &Default::default()));
+    let mut commands = vec![
+        Command::SetLayoutBody {
+            id: id.to_string(),
+            body,
+        },
+        Command::SetLayoutFields {
+            id: id.to_string(),
+            fields: l
+                .fields
+                .iter()
+                .filter(|p| p.name != name)
+                .cloned()
+                .collect(),
+        },
+    ];
+    // Pages dont un gabarit de la chaîne est `id`.
+    for page in &site.pages {
+        let mut cur = page.layout.clone();
+        let mut hops = 0;
+        let mut uses = false;
+        while let Some(lid) = cur {
+            if lid == id {
+                uses = true;
+                break;
+            }
+            hops += 1;
+            if hops > 32 {
+                break;
+            }
+            cur = site
+                .layouts
+                .iter()
+                .find(|x| x.id == lid)
+                .and_then(|x| x.parent.clone());
+        }
+        if uses && page.props.contains_key(name) {
+            commands.push(Command::SetPageProp {
+                page: page.id.clone(),
+                key: name.to_string(),
+                value: None,
+            });
+        }
+    }
+    Ok(Command::Batch { commands })
+}
+
+/// Nom libre parmi des propriétés (`texte`, `texte_2`…).
+pub fn free_name(props: &[revel_model::PropDef], base: &str) -> String {
+    let mut name = base.to_string();
+    let mut n = 2;
+    while props.iter().any(|p| p.name == name) {
+        name = format!("{base}_{n}");
+        n += 1;
+    }
+    name
 }
 
 /// Nom libre pour une nouvelle propriété (`texte`, `texte_2`…).

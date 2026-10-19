@@ -893,6 +893,7 @@ pub fn apply(
             let bound = bind_template(&mut body, &c.fields, body_key.as_deref());
             let layout_id = format!("cms-{}", id.replace('_', "-"));
             site.layouts.push(Layout {
+                fields: Vec::new(),
                 id: layout_id.clone(),
                 parent: page.layout.clone(),
                 props: Default::default(),

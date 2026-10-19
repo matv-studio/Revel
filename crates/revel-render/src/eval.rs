@@ -601,7 +601,13 @@ impl<'a> Builder<'a> {
         let mut origins = j.origins.clone();
         // Variables des gabarits : priorité la plus faible (le plus proche de la page l'emporte).
         for l in &chain {
-            for (k, v) in &l.props {
+            // Propriétés du gabarit sans valeur donnée par la page : valeur par défaut.
+            let defaults = l
+                .fields
+                .iter()
+                .filter_map(|f| f.default.as_ref().map(|d| (&f.name, d)))
+                .filter(|(k, _)| !l.props.contains_key(*k));
+            for (k, v) in l.props.iter().chain(defaults) {
                 if !data.contains_key(k) {
                     data.insert(k.clone(), crate::eval::from_json(v));
                     origins.insert(

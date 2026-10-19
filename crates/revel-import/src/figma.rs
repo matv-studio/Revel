@@ -1567,6 +1567,7 @@ pub fn import(
         items,
     });
     site.layouts.push(Layout {
+        fields: Vec::new(),
         id: "base".into(),
         parent: None,
         props: Default::default(),

@@ -824,6 +824,7 @@ mod tests {
             },
         );
         s.layouts.push(Layout {
+            fields: Vec::new(),
             id: "base".into(),
             parent: None,
             props: Default::default(),
@@ -939,6 +940,7 @@ mod tests {
     fn titre_ecrit_dans_la_balise() {
         let mut s = Site::new("Essai", "fr");
         s.layouts.push(Layout {
+            fields: Vec::new(),
             id: "base".into(),
             parent: None,
             props: Default::default(),

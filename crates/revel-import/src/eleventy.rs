@@ -201,6 +201,7 @@ pub fn import(root: &Path, profile: &Profile) -> Result<(Site, Report), ImportEr
                 .remove("layout")
                 .and_then(|v| v.as_str().map(revel_markup::component_id));
             site.layouts.push(Layout {
+                fields: Vec::new(),
                 id,
                 parent,
                 props,

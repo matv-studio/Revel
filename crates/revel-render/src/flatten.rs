@@ -347,7 +347,14 @@ fn inline_filters(expr: &str, filters: &BTreeMap<String, revel_model::CustomFilt
                     if let Some(i) = def.params.iter().position(|p| *p == r.name)
                         && let Some(v) = values.get(i)
                     {
-                        body.replace_range(r.start..r.end, &format!("({v})"));
+                        // Parenthèses seulement si la valeur en a besoin (`((a or b))` -> `(a or b)`).
+                        let v = v.trim();
+                        let wrapped = if revel_edit::visibility::is_path(v) || outer_parens(v) {
+                            v.to_string()
+                        } else {
+                            format!("({v})")
+                        };
+                        body.replace_range(r.start..r.end, &wrapped);
                     }
                 }
                 base = body;
@@ -1409,13 +1416,27 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
                 _ => {}
             });
         }
+        // Condition `not x` : propriété `x` (interrupteur), la négation reste dans le composant
+        // (« affiché si la propriété est désactivée »).
+        let negated = |e: &str| {
+            e.trim()
+                .strip_prefix("not ")
+                .map(str::trim)
+                .filter(|x| revel_edit::visibility::is_path(x))
+                .map(str::to_string)
+        };
         walk_body(&mut body, &mut Vec::new(), &mut |n, local| match n {
             Node::Element { tag, attrs, .. } => {
                 for a in attrs.iter_mut() {
                     if let Some(w) = a.when.clone()
                         && external(&w, local)
                     {
-                        a.when = Some(prop_for(&w, PropKind::Switch, &mut found));
+                        a.when = Some(match negated(&w) {
+                            Some(x) => {
+                                format!("not {}", prop_for(&x, PropKind::Switch, &mut found))
+                            }
+                            None => prop_for(&w, PropKind::Switch, &mut found),
+                        });
                     }
                     let Some(v) = a.value.clone() else { continue };
                     if !v.contains("{{") && !v.contains("{%") {
@@ -1443,7 +1464,10 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
                 *expr = prop_for(expr, PropKind::Text, &mut found);
             }
             Node::If { cond, .. } if external(cond, local) => {
-                *cond = prop_for(cond, PropKind::Switch, &mut found);
+                *cond = match negated(cond) {
+                    Some(x) => format!("not {}", prop_for(&x, PropKind::Switch, &mut found)),
+                    None => prop_for(cond, PropKind::Switch, &mut found),
+                };
             }
             Node::Image(img) => {
                 if external(&img.src, local) {
@@ -1474,7 +1498,7 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
         for (_, p, kind) in &found {
             c.props.push(PropDef {
                 name: p.clone(),
-                label: None,
+                label: humanize(p),
                 kind: *kind,
                 default: None,
             });
@@ -1988,20 +2012,1115 @@ fn convert_feeds(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
     }
 }
 
+/// Plan du site écrit à la main (`/sitemap.xml` parcourant une collection) : remplacé par celui
+/// que Revel produit (Paramètres › Référencement), avec les dates de mise à jour si la page en
+/// donnait, quand il liste les mêmes adresses avec les mêmes dates.
+fn convert_sitemap(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
+    let Some(pid) = site
+        .pages
+        .iter()
+        .find(|p| {
+            p.path == "/sitemap.xml"
+                && p.body
+                    .iter()
+                    .any(|n| !matches!(n, Node::Text { .. } | Node::Html { .. }))
+        })
+        .map(|p| p.id.clone())
+    else {
+        return;
+    };
+    let entries = |xml: &str| -> Vec<(String, Option<String>)> {
+        let tag = |it: &str, t: &str| {
+            regex::Regex::new(&format!(r"(?s)<{t}>(.*?)</{t}>"))
+                .ok()?
+                .captures(it)
+                .map(|c| unescape(c[1].trim()))
+        };
+        let mut v: Vec<(String, Option<String>)> = xml
+            .split("<url>")
+            .skip(1)
+            .filter_map(|it| Some((tag(it, "loc")?, tag(it, "lastmod"))))
+            .collect();
+        v.sort();
+        v
+    };
+    let sitemap = |s: &Site| -> Option<String> {
+        let inp = BuildInput {
+            site: s,
+            entries: input.entries.clone(),
+            locales: Vec::new(),
+            environment: input.environment.clone(),
+            version: input.version.clone(),
+            hooks: input.hooks.clone(),
+            now: input.now,
+        };
+        let out = crate::build(&inp).ok()?;
+        out.files
+            .iter()
+            .find(|f| f.path == "sitemap.xml")
+            .map(|f| String::from_utf8_lossy(&f.bytes).to_string())
+    };
+    let Some(own) = sitemap(input.site) else {
+        return;
+    };
+    let want = entries(&own);
+    if want.is_empty() {
+        return;
+    }
+    let mut test = input.site.clone();
+    test.pages.retain(|p| p.id != pid);
+    test.settings.seo.no_sitemap = false;
+    test.settings.seo.sitemap_lastmod = want.iter().any(|(_, d)| d.is_some());
+    if sitemap(&test).is_some_and(|x| entries(&x) == want) {
+        site.pages.retain(|p| p.id != pid);
+        site.settings.seo.no_sitemap = false;
+        site.settings.seo.sitemap_lastmod = test.settings.seo.sitemap_lastmod;
+        notes.push(
+            "plan du site écrit à la main : produit par Revel (Paramètres › Référencement), mêmes adresses et dates"
+                .into(),
+        );
+    } else {
+        notes.push("plan du site laissé en page : ses adresses diffèrent de celles du plan produit par Revel".into());
+    }
+}
+
+/// Expression d'un seul nœud (sans ses enfants).
+fn own_exprs(n: &Node) -> Vec<String> {
+    let mut one = n.clone();
+    for list in revel_model::ids::child_lists_mut(&mut one) {
+        list.clear();
+    }
+    exprs_of(std::slice::from_ref(&one))
+}
+
+/// Parenthèses autour d'un nom seul retirées (`((collections.x))` -> `collections.x`,
+/// `(slug)` -> `slug`) : forme de la liste de collection du panneau. Le texte entre guillemets et
+/// les parenthèses d'un appel (`limit(3)`) sont gardés.
+fn bare_parens(e: &str) -> String {
+    let re = regex::Regex::new(r"\(\s*([A-Za-z_][\w.]*)\s*\)").expect("regex");
+    // Morceaux hors guillemets (réécrits) et entre guillemets (gardés).
+    let pieces = |e: &str| -> Vec<(bool, String)> {
+        let mut out: Vec<(bool, String)> = Vec::new();
+        let mut cur = String::new();
+        let mut quote: Option<char> = None;
+        let mut esc = false;
+        for c in e.chars() {
+            match quote {
+                Some(q) => {
+                    cur.push(c);
+                    if esc {
+                        esc = false;
+                    } else if c == '\\' {
+                        esc = true;
+                    } else if c == q {
+                        out.push((false, std::mem::take(&mut cur)));
+                        quote = None;
+                    }
+                }
+                None if c == '"' || c == '\'' => {
+                    out.push((true, std::mem::take(&mut cur)));
+                    cur.push(c);
+                    quote = Some(c);
+                }
+                None => cur.push(c),
+            }
+        }
+        out.push((quote.is_none(), cur));
+        out
+    };
+    let mut cur = e.trim().to_string();
+    loop {
+        let mut next = String::new();
+        for (code, piece) in pieces(&cur) {
+            if !code {
+                next.push_str(&piece);
+                continue;
+            }
+            let before = next.clone();
+            let replaced = re.replace_all(&piece, |c: &regex::Captures| {
+                let start = c.get(0).map(|m| m.start()).unwrap_or(0);
+                let prev = piece[..start]
+                    .chars()
+                    .next_back()
+                    .or_else(|| before.chars().next_back());
+                if prev.is_some_and(|p| p.is_alphanumeric() || p == '_') {
+                    c[0].to_string()
+                } else {
+                    c[1].to_string()
+                }
+            });
+            next.push_str(&replaced);
+        }
+        if next == cur {
+            return cur;
+        }
+        cur = next;
+    }
+}
+
+/// Listes « contenus mis en avant, sinon une liste » écrites avec des variables, réécrites en
+/// liste de collection « Mettre en premier » :
+/// - suggestions d'un champ s'il y en a assez :
+///   `{% set V = (collections.x | by_slugs(F)) if F and F|length else [] %}`,
+///   `{% if V|length < N %}{% set V = <liste de x> %}{% endif %}`, `{% for i in V | limit(N) %}`
+///   -> « Mettre en premier : F, seulement s'ils remplissent la liste », N au plus ;
+/// - contenus choisis, sinon les plus récents : `{% set V = collections.x | by_slugs(["a", "b"]) %}`,
+///   `{% if not V|length %}{% set V = <liste de x> %}{% endif %}`, `{% for i in V | limit(N) %}`
+///   -> « Mettre en premier : a, b, complétés par la liste », N au plus.
+///
+/// Une lecture `{% if V|length %}` devient le nombre de contenus de la liste. Renvoie le nombre
+/// de listes réécrites (le rendu est vérifié par l'appelant).
+fn rewrite_suggestions(nodes: &mut Vec<Node>) -> usize {
+    let mut count = 0;
+    for n in nodes.iter_mut() {
+        for list in revel_model::ids::child_lists_mut(n) {
+            count += rewrite_suggestions(list);
+        }
+    }
+    let by_field = regex::Regex::new(
+        r"^\(\s*collections\.(\w+)\s*\|\s*by_slugs\(\s*([\w.]+)\s*\)\s*\)\s+if\s+([\w.]+)\s+and\s+([\w.]+)\s*\|\s*length\s+else\s+\[\s*\]$",
+    )
+    .expect("regex");
+    let by_list =
+        regex::Regex::new(r"^collections\.(\w+)\s*\|\s*by_slugs\((.*)\)$").expect("regex");
+    let mut i = 0;
+    while i < nodes.len() {
+        let found = (|| {
+            let Node::Set { name: v, expr } = &nodes[i] else {
+                return None;
+            };
+            let v = v.clone();
+            // (collection, contenus mis en premier, seulement s'ils remplissent la liste)
+            let (col, first, full) = if let Some(c) = by_field.captures(expr.trim()) {
+                let field = c[2].to_string();
+                if c[3] != field || c[4] != field {
+                    return None;
+                }
+                (c[1].to_string(), field, true)
+            } else {
+                let e = bare_parens(expr);
+                let c = by_list.captures(e.trim())?;
+                let inner = c[2]
+                    .trim()
+                    .trim_start_matches('(')
+                    .trim_end_matches(')')
+                    .trim();
+                let picks = revel_edit::collection::first_picks(inner)?;
+                (
+                    c[1].to_string(),
+                    revel_edit::collection::first_expr(&picks),
+                    false,
+                )
+            };
+            let j = (i + 1..nodes.len()).find(|&k| !matches!(nodes[k], Node::Text { .. }))?;
+            let Node::If {
+                cond,
+                then,
+                otherwise,
+                ..
+            } = &nodes[j]
+            else {
+                return None;
+            };
+            let esc = regex::escape(&v);
+            let threshold = if full {
+                let less =
+                    regex::Regex::new(&format!(r"^{esc}\s*\|\s*length\s*<\s*(\d+)$")).ok()?;
+                Some(less.captures(cond.trim())?[1].parse::<usize>().ok()?)
+            } else {
+                let none =
+                    regex::Regex::new(&format!(r"^not\s+\(?{esc}\s*\|\s*length\)?$")).ok()?;
+                none.is_match(cond.trim()).then_some(None)?
+            };
+            let sets: Vec<&Node> = then
+                .iter()
+                .filter(|x| !matches!(x, Node::Text { .. }))
+                .collect();
+            let (true, [Node::Set { name: v2, expr: e2 }]) =
+                (otherwise.is_empty(), sets.as_slice())
+            else {
+                return None;
+            };
+            if *v2 != v {
+                return None;
+            }
+            let e2 = bare_parens(e2);
+            let mut q = Query::parse(&canonical_list(&e2).unwrap_or(e2))?;
+            if q.collection != col || q.first.is_some() || !q.pick.is_empty() {
+                return None;
+            }
+            // Lectures de V après : boucle `V | limit(N)`, condition `V|length`, rien d'autre.
+            let each_ok = regex::Regex::new(&format!(
+                r"^{esc}\s*(?:\|\s*limit\(\s*(\d+)\s*\)|\[\s*:\s*(\d+)\s*\])$"
+            ))
+            .ok()?;
+            let len_ok = regex::Regex::new(&format!(r"^\(?{esc}\)?\s*\|\s*length$")).ok()?;
+            let mut ok = true;
+            let mut limits: Vec<usize> = Vec::new();
+            revel_model::ids::walk(&nodes[j + 1..], &mut |x| {
+                let reads = own_exprs(x)
+                    .iter()
+                    .any(|e| refs(e).iter().any(|r| r.name == v));
+                if !reads {
+                    return;
+                }
+                ok &= match x {
+                    Node::Each { expr, .. } => match each_ok.captures(expr.trim()) {
+                        Some(c) => {
+                            let n = c
+                                .get(1)
+                                .or(c.get(2))
+                                .and_then(|m| m.as_str().parse::<usize>().ok());
+                            limits.extend(n);
+                            n.is_some()
+                        }
+                        None => false,
+                    },
+                    Node::If { cond, .. } => len_ok.is_match(cond.trim()),
+                    _ => false,
+                };
+            });
+            let n = *limits.first()?;
+            if !ok || limits.iter().any(|l| *l != n) || threshold.is_some_and(|t| t != n) {
+                return None;
+            }
+            if q.limit.is_some_and(|l| l != n) {
+                return None;
+            }
+            q.first = Some(first);
+            q.first_full = full;
+            q.limit = Some(n);
+            Some((j, v, q))
+        })();
+        let Some((j, v, q)) = found else {
+            i += 1;
+            continue;
+        };
+        let list = q.to_expr();
+        let each_re = regex::Regex::new(&format!(r"^{}\b", regex::escape(&v))).expect("regex");
+        walk_mut(&mut nodes[j + 1..], &mut |x| match x {
+            Node::Each { expr, .. } if each_re.is_match(expr.trim()) => *expr = list.clone(),
+            Node::If { cond, .. } if each_re.is_match(cond.trim().trim_start_matches('(')) => {
+                *cond = format!("({list})|length")
+            }
+            _ => {}
+        });
+        nodes.remove(j);
+        nodes.remove(i);
+        count += 1;
+    }
+    count
+}
+
+/// Réécriture appliquée gabarit par gabarit, page par page, composant par composant, gardée là
+/// où le site produit reste le même (fichiers identiques). Renvoie le nombre de réécritures
+/// gardées et refusées.
+fn verified_pass(
+    input: &BuildInput,
+    site: &mut Site,
+    rewrite: &dyn Fn(&mut Vec<Node>, &mut HashSet<String>) -> usize,
+) -> (usize, usize) {
+    // Mêmes fichiers dans chaque environnement de publication.
+    let out = |s: &Site| crate::build_all_envs(input, s);
+    let mut base: Option<Option<Vec<crate::OutputFile>>> = None;
+    let (mut kept, mut refused) = (0, 0);
+    let owners = site.layouts.len() + site.pages.len() + site.components.len();
+    for k in 0..owners {
+        let mut cand = site.clone();
+        let mut taken = cand.node_ids();
+        let body = if k < cand.layouts.len() {
+            &mut cand.layouts[k].body
+        } else if k < cand.layouts.len() + cand.pages.len() {
+            &mut cand.pages[k - cand.layouts.len()].body
+        } else {
+            &mut cand.components[k - cand.layouts.len() - cand.pages.len()].body
+        };
+        let n = rewrite(body, &mut taken);
+        if n == 0 {
+            continue;
+        }
+        let before = base.get_or_insert_with(|| out(site)).clone();
+        let after = out(&cand);
+        if before.is_some() && before == after {
+            *site = cand;
+            base = Some(after);
+            kept += n;
+        } else {
+            refused += n;
+        }
+    }
+    (kept, refused)
+}
+
+/// [`rewrite_suggestions`] sur tout le site, gardé là où le site produit reste le même.
+fn suggestion_lists(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
+    let (kept, refused) = verified_pass(input, site, &|b, _| rewrite_suggestions(b));
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} liste(s) « contenus mis en avant, sinon une liste » : liste de collection (Mettre en premier)"
+        ));
+    }
+    if refused > 0 {
+        notes.push(format!(
+            "{refused} liste(s) « mis en avant, sinon… » laissée(s) en variables : le site produit changerait"
+        ));
+    }
+}
+
+/// Contenus choisis un à un dans une ou plusieurs collections, ajoutés à une liste :
+/// `{% set V = [] %}` puis, pour chaque contenu, `{% set it = (collections.a | by_slug("s")) or
+/// (collections.b | by_slug("s")) %}{% if it %}{% set V = (V + [it]) %}{% endif %}` ->
+/// `{% set V = (collections.a + collections.b) | by_slugs(["s", …]) %}` (liste de collection à
+/// plusieurs collections, contenus choisis). Renvoie le nombre de listes réécrites.
+fn rewrite_accumulated_picks(nodes: &mut Vec<Node>) -> usize {
+    let mut count = 0;
+    for n in nodes.iter_mut() {
+        for list in revel_model::ids::child_lists_mut(n) {
+            count += rewrite_accumulated_picks(list);
+        }
+    }
+    let one = regex::Regex::new(r#"^\(?\s*collections\.(\w+)\s*\|\s*by_slug\(\s*\(?\s*("(?:[^"\\]|\\.)*")\s*\)?\s*\)\s*\)?$"#)
+        .expect("regex");
+    // `(a | by_slug("s")) or (b | by_slug("s"))` -> ([a, b], "s").
+    let lookup = |e: &str| -> Option<(Vec<String>, String)> {
+        let e = e.trim();
+        let e = if outer_parens(e) {
+            &e[1..e.len() - 1]
+        } else {
+            e
+        };
+        let mut cols = Vec::new();
+        let mut slug: Option<String> = None;
+        for part in e.split(" or ") {
+            let c = one.captures(part.trim())?;
+            cols.push(c[1].to_string());
+            let s = revel_edit::canvas::literal(&c[2])?;
+            if slug.as_ref().is_some_and(|x| *x != s) {
+                return None;
+            }
+            slug = Some(s);
+        }
+        Some((cols, slug?))
+    };
+    let mut i = 0;
+    while i < nodes.len() {
+        let Node::Set { name: v, expr } = &nodes[i] else {
+            i += 1;
+            continue;
+        };
+        if expr.trim() != "[]" {
+            i += 1;
+            continue;
+        }
+        let v = v.clone();
+        let push = regex::Regex::new(&format!(
+            r"^\(?\s*{}\s*\+\s*\[\s*(.*)\s*\]\s*\)?$",
+            regex::escape(&v)
+        ))
+        .expect("regex");
+        let mut cols: Option<Vec<String>> = None;
+        let mut slugs: Vec<String> = Vec::new();
+        let mut last = i;
+        let mut k = i + 1;
+        let mut it_expr: Option<String> = None;
+        while k < nodes.len() {
+            match &nodes[k] {
+                Node::Text { text } if text.trim().is_empty() => {}
+                Node::Set { name, expr } if name != &v && lookup(expr).is_some() => {
+                    it_expr = Some(expr.clone());
+                }
+                Node::If {
+                    cond,
+                    then,
+                    otherwise,
+                    ..
+                } if otherwise.is_empty() => {
+                    let sets: Vec<&Node> = then
+                        .iter()
+                        .filter(|x| !matches!(x, Node::Text { .. }))
+                        .collect();
+                    let [Node::Set { name, expr: pe }] = sets.as_slice() else {
+                        break;
+                    };
+                    if *name != v {
+                        break;
+                    }
+                    let Some(c) = push.captures(pe.trim()) else {
+                        break;
+                    };
+                    // Contenu ajouté : l'expression elle-même, ou la variable qui la porte.
+                    let resolve = |e: &str| -> Option<(Vec<String>, String)> {
+                        lookup(e).or_else(|| {
+                            let x = e
+                                .trim()
+                                .trim_start_matches('(')
+                                .trim_end_matches(')')
+                                .trim();
+                            it_expr
+                                .as_deref()
+                                .filter(|_| revel_model::valid_prop_name(x))
+                                .and_then(lookup)
+                        })
+                    };
+                    let (Some(a), Some(b)) = (resolve(cond), resolve(&c[1])) else {
+                        break;
+                    };
+                    if a != b || cols.as_ref().is_some_and(|c| *c != a.0) {
+                        break;
+                    }
+                    cols = Some(a.0);
+                    slugs.push(a.1);
+                    last = k;
+                    it_expr = None;
+                }
+                _ => break,
+            }
+            k += 1;
+        }
+        let Some(cols) = cols.filter(|_| !slugs.is_empty()) else {
+            i += 1;
+            continue;
+        };
+        let q = Query {
+            collection: cols[0].clone(),
+            also: cols[1..].to_vec(),
+            pick: slugs,
+            ..Default::default()
+        };
+        nodes.splice(
+            i..=last,
+            [Node::Set {
+                name: v,
+                expr: q.to_expr(),
+            }],
+        );
+        count += 1;
+        i += 1;
+    }
+    count
+}
+
+/// Liste de collection gardée dans une variable (`{% set V = <liste> %}`), lue ensuite :
+/// - `{% for x in V %}` (`| limit(n)`, `[:n]`) -> la liste elle-même dans la boucle ;
+/// - `{% if V|length %}` -> nombre de contenus de la liste ;
+/// - un élément qui lit le premier contenu (`V[0].data.cover`) -> enveloppé d'une liste d'un
+///   seul contenu (`first`), qui lit ses champs (`first.data.cover`).
+///
+/// Toute autre lecture garde la variable. Renvoie le nombre de variables remplacées.
+fn rewrite_list_vars(nodes: &mut Vec<Node>, taken: &mut HashSet<String>) -> usize {
+    let mut count = 0;
+    for n in nodes.iter_mut() {
+        for list in revel_model::ids::child_lists_mut(n) {
+            count += rewrite_list_vars(list, taken);
+        }
+    }
+    let mut i = 0;
+    while i < nodes.len() {
+        let Node::Set { name: v, expr } = &nodes[i] else {
+            i += 1;
+            continue;
+        };
+        let Some(q) = Query::parse(expr) else {
+            i += 1;
+            continue;
+        };
+        let v = v.clone();
+        let esc = regex::escape(&v);
+        let each_re = regex::Regex::new(&format!(
+            r"^{esc}\s*(?:\|\s*limit\(\s*(\d+)\s*\)|\[\s*:\s*(\d+)\s*\])?$"
+        ))
+        .expect("regex");
+        let len_re =
+            regex::Regex::new(&format!(r"^(not\s+)?\(?{esc}\)?\s*\|\s*length$")).expect("regex");
+        let first_re = regex::Regex::new(&format!(r"\b{esc}\[0\]")).expect("regex");
+        // Variables qui ne gardent que le premier contenu (`{% set first = V[0] %}`), plus lues
+        // ensuite (leurs lectures déjà écrites avec `V[0]`) : retirées.
+        let read_later: HashSet<String> = exprs_of(&nodes[i + 1..])
+            .iter()
+            .flat_map(|e| refs(e).into_iter().map(|r| r.name))
+            .collect();
+        let dead_first = |x: &Node| match x {
+            Node::Set { name, expr } => first_re.is_match(expr) && !read_later.contains(name),
+            _ => false,
+        };
+        // Lectures permises seulement.
+        let mut ok = true;
+        let mut uses = 0;
+        revel_model::ids::walk(&nodes[i + 1..], &mut |x| {
+            let es = own_exprs(x);
+            if !es.iter().any(|e| refs(e).iter().any(|r| r.name == v)) {
+                return;
+            }
+            uses += 1;
+            if dead_first(x) {
+                return;
+            }
+            ok &= match x {
+                Node::Each { expr, .. } if each_re.is_match(expr.trim()) => true,
+                Node::If { cond, .. } if len_re.is_match(cond.trim()) => true,
+                // Premier contenu : toutes les lectures passent par `V[0]`.
+                _ => es.iter().all(|e| {
+                    let stripped = first_re.replace_all(e, "");
+                    !refs(&stripped).iter().any(|r| r.name == v)
+                }),
+            };
+        });
+        if !ok || uses == 0 {
+            i += 1;
+            continue;
+        }
+        let list_of = |limit: Option<usize>| {
+            let mut q = q.clone();
+            if let Some(n) = limit {
+                q.limit = Some(q.limit.map_or(n, |l| l.min(n)));
+            }
+            q.to_expr()
+        };
+        let first_list = list_of(Some(1));
+        // Remplacement, du plus profond au plus haut : un élément qui lit `V[0]` est enveloppé.
+        /// Motifs et listes du remplacement.
+        struct Swap<'a> {
+            each_re: &'a regex::Regex,
+            len_re: &'a regex::Regex,
+            first_re: &'a regex::Regex,
+            list_of: &'a dyn Fn(Option<usize>) -> String,
+            first_list: &'a str,
+        }
+        fn apply(nodes: &mut [Node], w: &Swap, taken: &mut HashSet<String>) {
+            for node in nodes.iter_mut() {
+                for list in revel_model::ids::child_lists_mut(node) {
+                    apply(list, w, taken);
+                }
+                let reads_first = own_exprs(node).iter().any(|e| w.first_re.is_match(e));
+                match node {
+                    Node::Each { expr, .. } if w.each_re.is_match(expr.trim()) => {
+                        let c = w.each_re.captures(expr.trim()).expect("motif vérifié");
+                        let n = c
+                            .get(1)
+                            .or(c.get(2))
+                            .and_then(|m| m.as_str().parse::<usize>().ok());
+                        *expr = (w.list_of)(n);
+                    }
+                    Node::If { cond, .. } if w.len_re.is_match(cond.trim()) => {
+                        let not = w
+                            .len_re
+                            .captures(cond.trim())
+                            .and_then(|c| c.get(1))
+                            .is_some();
+                        *cond = format!(
+                            "{}({})|length",
+                            if not { "not " } else { "" },
+                            (w.list_of)(None)
+                        );
+                    }
+                    _ if reads_first => {
+                        let mut inner = std::mem::replace(
+                            node,
+                            Node::Text {
+                                text: String::new(),
+                            },
+                        );
+                        rename_first(&mut inner, w.first_re);
+                        let id = revel_model::ids::fresh(taken);
+                        taken.insert(id.clone());
+                        *node = Node::Each {
+                            id: Some(id),
+                            expr: w.first_list.to_string(),
+                            item: "first".into(),
+                            children: vec![inner],
+                            empty: Vec::new(),
+                        };
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut rest: Vec<Node> = nodes.split_off(i + 1);
+        fn drop_sets(nodes: &mut Vec<Node>, dead: &dyn Fn(&Node) -> bool) {
+            nodes.retain(|x| !dead(x));
+            for n in nodes.iter_mut() {
+                for list in revel_model::ids::child_lists_mut(n) {
+                    drop_sets(list, dead);
+                }
+            }
+        }
+        drop_sets(&mut rest, &dead_first);
+        let swap = Swap {
+            each_re: &each_re,
+            len_re: &len_re,
+            first_re: &first_re,
+            list_of: &list_of,
+            first_list: &first_list,
+        };
+        apply(&mut rest, &swap, taken);
+        nodes.remove(i);
+        nodes.extend(rest);
+        count += 1;
+    }
+    count
+}
+
+/// `V[0]` devient `first` dans les expressions du nœud (pas ses enfants) ; `first and first.x`
+/// -> `first.x` ; `first.x if first else ""` -> `first.x` (le contenu existe dans sa liste).
+fn rename_first(n: &mut Node, first_re: &regex::Regex) {
+    let fix = |e: &str| -> String {
+        // `(V[0]).x` -> `first.x` (parenthèses d'un appel gardées).
+        let mut e = bare_parens(&first_re.replace_all(e, "first"));
+        if let Some(rest) = e.trim().strip_prefix("first and ") {
+            e = rest.trim().to_string();
+        }
+        let re =
+            regex::Regex::new(r#"^(first\.[\w.]+)\s+if\s+first\s+else\s+(""|'')$"#).expect("regex");
+        if let Some(c) = re.captures(e.trim()) {
+            e = c[1].to_string();
+        }
+        e
+    };
+    match n {
+        Node::Out { expr } | Node::Set { expr, .. } | Node::Each { expr, .. } => *expr = fix(expr),
+        Node::If { cond, .. } => *cond = fix(cond),
+        Node::Element { attrs, .. } | Node::Use { attrs, .. } => {
+            for a in attrs.iter_mut() {
+                if let Some(w) = a.when.as_mut() {
+                    *w = fix(w);
+                }
+                if let Some(val) = a.value.as_mut()
+                    && first_re.is_match(val)
+                {
+                    *val = rewrite_template(val, &mut |e, _| Some(fix(e)));
+                }
+            }
+        }
+        Node::Image(img) => {
+            img.src = fix(&img.src);
+            if let Some(alt) = img.alt.as_mut() {
+                *alt = fix(alt);
+            }
+        }
+        _ => {}
+    }
+    if let Node::Use { args, .. } = n {
+        for e in args.values_mut() {
+            *e = fix(e);
+        }
+    }
+}
+
+/// Contenus choisis ajoutés un à un à une liste, puis cette liste lue : liste de collection.
+fn picked_lists(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
+    let (kept, refused) = verified_pass(input, site, &|b, taken| {
+        let n = rewrite_accumulated_picks(b);
+        if n == 0 {
+            return 0;
+        }
+        rewrite_list_vars(b, taken).max(n)
+    });
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} liste(s) de contenus choisis (une ou plusieurs collections) : liste de collection"
+        ));
+    }
+    if refused > 0 {
+        notes.push(format!(
+            "{refused} liste(s) de contenus choisis laissée(s) en variables : le site produit changerait"
+        ));
+    }
+}
+
+/// Contenu relié lu directement : `{% if (collections.x | by_slug(champ)) %}` dont le contenu lit
+/// `(collections.x | by_slug(champ)).data.nom` -> liste des contenus reliés par le champ
+/// (`{% for ref in collections.x | by_slugs(champ) %}`, `ref.data.nom`), forme du panneau. Renvoie
+/// le nombre de conditions réécrites.
+fn rewrite_ref_lookups(nodes: &mut [Node]) -> usize {
+    let mut count = 0;
+    for n in nodes.iter_mut() {
+        for list in revel_model::ids::child_lists_mut(n) {
+            count += rewrite_ref_lookups(list);
+        }
+    }
+    let cond_re = regex::Regex::new(
+        r"^\(*\s*collections\.(\w+)\s*\|\s*by_slug\(\s*\(?\s*([A-Za-z_][\w.]*)\s*\)?\s*\)\s*\)*$",
+    )
+    .expect("regex");
+    for n in nodes.iter_mut() {
+        let Node::If {
+            id,
+            cond,
+            then,
+            otherwise,
+        } = n
+        else {
+            continue;
+        };
+        if !otherwise.is_empty() {
+            continue;
+        }
+        let Some(c) = cond_re.captures(cond.trim()) else {
+            continue;
+        };
+        let (col, field) = (c[1].to_string(), c[2].to_string());
+        // Chaque lecture du contenu relié dans le contenu de la condition.
+        // Recherche seule, ou entre une paire de parenthèses (pas celles qui l'entourent).
+        let lookup = format!(
+            r"collections\.{}\s*\|\s*by_slug\(\s*(?:\(\s*{f}\s*\)|{f})\s*\)",
+            regex::escape(&col),
+            f = regex::escape(&field)
+        );
+        let look = regex::Regex::new(&format!(r"\(\s*{lookup}\s*\)|{lookup}")).expect("regex");
+        let item = "ref";
+        // Nom déjà employé dans le contenu : pas de réécriture.
+        if exprs_of(then)
+            .iter()
+            .any(|e| refs(e).iter().any(|r| r.name == item))
+        {
+            continue;
+        }
+        let mut body = std::mem::take(then);
+        walk_mut(&mut body, &mut |x| {
+            let fix = |e: &str| look.replace_all(e, item).into_owned();
+            match x {
+                Node::Out { expr } | Node::Set { expr, .. } | Node::Each { expr, .. } => {
+                    *expr = fix(expr)
+                }
+                Node::If { cond, .. } => *cond = fix(cond),
+                Node::Element { attrs, .. } | Node::Use { attrs, .. } => {
+                    for a in attrs.iter_mut() {
+                        if let Some(w) = a.when.as_mut() {
+                            *w = fix(w);
+                        }
+                        if let Some(v) = a.value.as_mut()
+                            && look.is_match(v)
+                        {
+                            *v = rewrite_template(v, &mut |e, _| Some(fix(e)));
+                        }
+                    }
+                }
+                Node::Image(img) => {
+                    img.src = fix(&img.src);
+                    if let Some(alt) = img.alt.as_mut() {
+                        *alt = fix(alt);
+                    }
+                }
+                _ => {}
+            }
+            if let Node::Use { args, .. } = x {
+                for e in args.values_mut() {
+                    *e = fix(e);
+                }
+            }
+        });
+        *n = Node::Each {
+            id: id.take(),
+            expr: format!("collections.{col} | by_slugs({field})"),
+            item: item.into(),
+            children: body,
+            empty: Vec::new(),
+        };
+        count += 1;
+    }
+    count
+}
+
+/// [`rewrite_ref_lookups`] gardé là où le site produit reste le même.
+fn ref_lookups(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
+    let (kept, _) = verified_pass(input, site, &|b, _| rewrite_ref_lookups(b));
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} contenu(s) relié(s) lu(s) directement : liste des contenus reliés par le champ"
+        ));
+    }
+}
+
+/// Valeur tirée d'un tableau selon un champ, gardée dans une variable du même nom
+/// (`{% set color = {"orange": "#F4684D", …}[color] %}`), lue seulement par des attributs
+/// `style` (`--x:{{ color }}`) : le tableau est écrit dans l'attribut, que [`map_styles`] change
+/// ensuite en classes. Renvoie le nombre de variables remplacées.
+fn inline_mapped_sets(nodes: &mut Vec<Node>) -> usize {
+    let mut count = 0;
+    for n in nodes.iter_mut() {
+        for list in revel_model::ids::child_lists_mut(n) {
+            count += inline_mapped_sets(list);
+        }
+    }
+    let map_re = regex::Regex::new(r"^\(?\s*\{.*\}\s*\)?\s*\[\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\]$")
+        .expect("regex");
+    let mut i = 0;
+    while i < nodes.len() {
+        let Node::Set { name, expr } = &nodes[i] else {
+            i += 1;
+            continue;
+        };
+        let (v, e) = (name.clone(), expr.trim().to_string());
+        if !map_re.captures(&e).is_some_and(|c| c[1] == v) {
+            i += 1;
+            continue;
+        }
+        let whole = regex::Regex::new(&format!(r"\{{\{{-?\s*{}\s*-?\}}\}}", regex::escape(&v)))
+            .expect("regex");
+        // Lectures après : seulement `{{ v }}` dans un attribut `style`.
+        let mut ok = true;
+        let mut uses = 0;
+        revel_model::ids::walk(&nodes[i + 1..], &mut |x| {
+            for ex in own_exprs(x) {
+                if !refs(&ex).iter().any(|r| r.name == v) {
+                    continue;
+                }
+                uses += 1;
+                ok &= match x {
+                    Node::Element { attrs, .. } => {
+                        attrs.iter().any(|a| {
+                            a.name == "style"
+                                && a.when.is_none()
+                                && a.value.as_deref().is_some_and(|val| whole.is_match(val))
+                        }) && ex.trim() == v
+                    }
+                    _ => false,
+                };
+            }
+        });
+        if !ok || uses == 0 {
+            i += 1;
+            continue;
+        }
+        walk_mut(&mut nodes[i + 1..], &mut |x| {
+            if let Node::Element { attrs, .. } = x {
+                for a in attrs.iter_mut().filter(|a| a.name == "style") {
+                    if let Some(val) = a.value.as_mut() {
+                        *val = whole
+                            .replace_all(val, format!("{{{{ {e} }}}}").as_str())
+                            .into_owned();
+                    }
+                }
+            }
+        });
+        nodes.remove(i);
+        count += 1;
+    }
+    count
+}
+
+/// Noms lus par des nœuds (racines des chemins des valeurs, conditions, listes, attributs,
+/// propriétés, images).
+fn names_read(nodes: &[Node]) -> HashSet<String> {
+    let mut used: HashSet<String> = HashSet::new();
+    let attr_exprs = |attrs: &[Attr]| -> Vec<String> {
+        attrs
+            .iter()
+            .flat_map(|a| {
+                a.value
+                    .as_deref()
+                    .map(template_exprs)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .chain(a.when.clone())
+            })
+            .collect()
+    };
+    revel_model::ids::walk(nodes, &mut |n| {
+        let exprs: Vec<String> = match n {
+            Node::Out { expr } | Node::Set { expr, .. } | Node::Each { expr, .. } => {
+                vec![expr.clone()]
+            }
+            Node::If { cond, .. } => vec![cond.clone()],
+            Node::Use { attrs, args, .. } => attr_exprs(attrs)
+                .into_iter()
+                .chain(args.values().cloned())
+                .collect(),
+            Node::Element { attrs, .. } => attr_exprs(attrs),
+            Node::Image(img) => std::iter::once(img.src.clone())
+                .chain(img.alt.clone())
+                .collect(),
+            _ => Vec::new(),
+        };
+        for e in exprs {
+            used.extend(refs(&e).into_iter().map(|r| r.name));
+        }
+    });
+    used
+}
+
+/// Libellé lisible d'un nom de propriété (`hideFooterCta` -> « Hide footer cta », `cover_alt`
+/// -> « Cover alt », `date2` -> « Date 2 ») ; `None` s'il est déjà le nom.
+fn humanize(name: &str) -> Option<String> {
+    let mut words: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut prev: Option<char> = None;
+    for c in name.chars() {
+        let split = c == '_'
+            || c == '-'
+            || (c.is_uppercase() && prev.is_some_and(|p| p.is_lowercase() || p.is_ascii_digit()))
+            || (c.is_ascii_digit() && prev.is_some_and(|p| !p.is_ascii_digit()));
+        if split && !cur.is_empty() {
+            words.push(std::mem::take(&mut cur));
+        }
+        if c != '_' && c != '-' {
+            cur.extend(c.to_lowercase());
+        }
+        prev = Some(c);
+    }
+    if !cur.is_empty() {
+        words.push(cur);
+    }
+    let mut label = words.join(" ");
+    if let Some(f) = label.chars().next() {
+        label = f.to_uppercase().collect::<String>() + &label[f.len_utf8()..];
+    }
+    (!label.is_empty() && label != name).then_some(label)
+}
+
+/// Variables d'une page lues par son gabarit (`{% if not hideFooterCta %}`, `{{ subtitle }}`) :
+/// propriétés du gabarit le plus extérieur qui les lit, chaque page en donne la valeur dans ses
+/// réglages (comme une utilisation de composant). Nature : interrupteur pour un booléen, image
+/// ou lien selon l'endroit où le gabarit l'emploie, texte sinon ; une liste ou un objet reste
+/// une variable de page. Une variable par défaut du gabarit lue par lui devient la valeur par
+/// défaut de la propriété.
+fn layout_fields_from_pages(site: &mut Site, notes: &mut Vec<String>) {
+    use revel_edit::editable::PAGE_SETTINGS;
+    let reads: BTreeMap<String, HashSet<String>> = site
+        .layouts
+        .iter()
+        .map(|l| (l.id.clone(), names_read(&l.body)))
+        .collect();
+    let chain = |site: &Site, first: Option<&str>| -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let mut cur = first.map(str::to_string);
+        while let Some(id) = cur {
+            if out.contains(&id) {
+                break;
+            }
+            cur = site
+                .layouts
+                .iter()
+                .find(|l| l.id == id)
+                .and_then(|l| l.parent.clone());
+            out.push(id);
+        }
+        out
+    };
+    let scalar = |v: &serde_json::Value| {
+        matches!(
+            v,
+            serde_json::Value::Bool(_)
+                | serde_json::Value::String(_)
+                | serde_json::Value::Number(_)
+        )
+    };
+    // (gabarit, nom) -> valeurs des pages.
+    let mut wanted: BTreeMap<(String, String), Vec<serde_json::Value>> = BTreeMap::new();
+    for p in &site.pages {
+        let ids = chain(site, p.layout.as_deref());
+        let declared = revel_edit::editable::layout_fields(site, p.layout.as_deref());
+        for (k, v) in &p.props {
+            if PAGE_SETTINGS.contains(&k.as_str())
+                || declared.iter().any(|f| &f.name == k)
+                || !revel_model::valid_prop_name(k)
+            {
+                continue;
+            }
+            // Le plus extérieur des gabarits qui la lisent : visible de tous ceux qu'il contient.
+            let Some(outer) = ids
+                .iter()
+                .rev()
+                .find(|id| reads.get(*id).is_some_and(|r| r.contains(k)))
+            else {
+                continue;
+            };
+            wanted
+                .entry((outer.clone(), k.clone()))
+                .or_default()
+                .push(v.clone());
+        }
+    }
+    // Variables par défaut d'un gabarit lues par lui.
+    for l in &site.layouts {
+        for (k, v) in &l.props {
+            if !PAGE_SETTINGS.contains(&k.as_str())
+                && revel_model::valid_prop_name(k)
+                && l.field(k).is_none()
+                && reads.get(&l.id).is_some_and(|r| r.contains(k))
+            {
+                wanted
+                    .entry((l.id.clone(), k.clone()))
+                    .or_default()
+                    .push(v.clone());
+            }
+        }
+    }
+    for ((lid, name), values) in wanted {
+        if !values.iter().all(scalar) {
+            continue;
+        }
+        let Some(li) = site.layouts.iter().position(|l| l.id == lid) else {
+            continue;
+        };
+        let l = &mut site.layouts[li];
+        let kind = if values.iter().all(serde_json::Value::is_boolean) {
+            PropKind::Switch
+        } else {
+            // Endroit où le gabarit l'emploie seule : image, lien.
+            let mut image = false;
+            let mut link = false;
+            revel_model::ids::walk(&l.body, &mut |n| match n {
+                Node::Image(img) if img.src.trim() == name => image = true,
+                Node::Element { attrs, .. } => {
+                    for a in attrs {
+                        let whole = a
+                            .value
+                            .as_deref()
+                            .and_then(|v| v.trim().strip_prefix("{{"))
+                            .and_then(|v| v.strip_suffix("}}"))
+                            .map(str::trim);
+                        if whole == Some(name.as_str()) {
+                            match a.name.as_str() {
+                                "src" | "poster" => image = true,
+                                "href" => link = true,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            });
+            if image {
+                PropKind::Image
+            } else if link {
+                PropKind::Link
+            } else {
+                PropKind::Text
+            }
+        };
+        let default = l.props.remove(&name);
+        l.fields.push(PropDef {
+            name: name.clone(),
+            label: humanize(&name),
+            kind,
+            default,
+        });
+        notes.push(format!(
+            "gabarit {lid} : propriété {name} (réglée par chaque page)"
+        ));
+    }
+}
+
 /// Reconstruit le site de `input` dans la forme de l'interface (même rendu).
 pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
     let b = Builder::new(input);
     let prepared = crate::prepare(&b, input, true)?;
     let globals = prepared.globals.clone();
+    // Plusieurs environnements de publication : leurs variables (`env.staging`) restent lues à
+    // la publication, jamais écrites avec les valeurs d'un seul.
+    let several_envs = crate::environments_of(input.site, &input.environment).len() > 1;
     let global_names: HashSet<String> = globals
         .keys()
-        .filter(|k| *k != "collections")
+        .filter(|k| *k != "collections" && !(several_envs && *k == "env"))
         .cloned()
         .collect();
     let mut site = input.site.clone();
     let mut notes = Vec::new();
     // Flux RSS écrits à la main : réglages du site (un interrupteur par collection).
     convert_feeds(input, &mut site, &mut notes);
+    // Plan du site écrit à la main : celui de Revel (mêmes adresses et dates).
+    convert_sitemap(input, &mut site, &mut notes);
     // Classe du corps et thème lus dans la page : posés par la génération (réglages de la page).
     page_look_attrs(&mut site, &mut notes);
     // Lien « page actuelle » écrit en condition : marqué par la génération.
@@ -2074,6 +3193,33 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         let Some(pi) = site.pages.iter().position(|p| p.id == pid) else {
             continue;
         };
+        // Réglage de la page calculé depuis les données du site (`seo = pages["agence"].seo`) :
+        // valeur écrite dans les réglages de la page.
+        let settings: Vec<String> = site.pages[pi]
+            .computed
+            .keys()
+            .filter(|k| revel_edit::editable::PAGE_SETTINGS.contains(&k.as_str()))
+            .cloned()
+            .collect();
+        for k in settings {
+            let p = &mut site.pages[pi];
+            match j.data.get(&k) {
+                // Donnée absente : le réglage n'existait pas (réglages du site par défaut).
+                None => {
+                    p.computed.remove(&k);
+                }
+                Some(v) if v.is_undefined() || v.is_none() => {
+                    p.computed.remove(&k);
+                }
+                Some(v) => {
+                    if let Ok(json) = serde_json::to_value(v) {
+                        p.computed.remove(&k);
+                        p.props.insert(k.clone(), json);
+                        notes.push(format!("page {} : réglage {k} écrit dans la page", j.url));
+                    }
+                }
+            }
+        }
         let mut data = j.data.clone();
         let mut page: BTreeMap<String, Value> = BTreeMap::new();
         page.insert("url".into(), Value::from(j.url.clone()));
@@ -2089,10 +3235,51 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         taken = std::mem::take(&mut f.taken);
         notes.append(&mut f.notes);
     }
+    // Valeur tirée d'un tableau gardée dans une variable, lue par un style : écrite dans le style.
+    let (kept, _) = verified_pass(input, &mut site, &|b, _| inline_mapped_sets(b));
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} valeur(s) tirée(s) d'un tableau écrite(s) dans le style"
+        ));
+    }
     // Valeurs de style choisies dans un tableau selon un champ : classes conditionnelles.
     map_styles(&mut site, &mut notes);
     // Liste dont la boucle saute le contenu affiché : réglage « sans le contenu affiché ».
     exclude_current_ifs(&mut site, &mut notes);
+    // Suggestions du contenu, sinon une liste : liste de collection « Mettre en premier ».
+    suggestion_lists(input, &mut site, &mut notes);
+    // Contenus choisis ajoutés un à un (une ou plusieurs collections) : liste de collection.
+    picked_lists(input, &mut site, &mut notes);
+    // Contenu relié lu directement (`(collections.x | by_slug(champ)).data.nom`) : liste reliée.
+    ref_lookups(input, &mut site, &mut notes);
+    // Parenthèses autour d'un nom seul (`(b.cover)`, `(title) or 'x'`) retirées : formes du panneau.
+    let simplify = |nodes: &mut Vec<Node>| {
+        walk_mut(nodes, &mut |n| match n {
+            Node::Out { expr } => *expr = bare_parens(expr),
+            Node::If { cond, .. } => *cond = bare_parens(cond),
+            Node::Use { args, .. } => {
+                for e in args.values_mut() {
+                    *e = bare_parens(e);
+                }
+            }
+            Node::Image(img) => {
+                img.src = bare_parens(&img.src);
+                if let Some(a) = img.alt.as_mut() {
+                    *a = bare_parens(a);
+                }
+            }
+            _ => {}
+        });
+    };
+    for l in &mut site.layouts {
+        simplify(&mut l.body);
+    }
+    for p in &mut site.pages {
+        simplify(&mut p.body);
+    }
+    for c in &mut site.components {
+        simplify(&mut c.body);
+    }
     // Variables vivantes qui ne servent plus (remplacées là où elles servaient) : retirées,
     // sauf celles qu'un composant lit chez son utilisateur.
     let mut read_by_components: HashSet<String> = HashSet::new();
@@ -2129,41 +3316,7 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
     // les gabarits restent.
     let mut used: HashSet<String> = HashSet::new();
     for l in &site.layouts {
-        revel_model::ids::walk(&l.body, &mut |n| {
-            let exprs: Vec<String> = match n {
-                Node::Out { expr } | Node::Set { expr, .. } | Node::Each { expr, .. } => {
-                    vec![expr.clone()]
-                }
-                Node::If { cond, .. } => vec![cond.clone()],
-                Node::Use { attrs, args, .. } => attrs
-                    .iter()
-                    .flat_map(|a| {
-                        a.value
-                            .as_deref()
-                            .map(template_exprs)
-                            .unwrap_or_default()
-                            .into_iter()
-                            .chain(a.when.clone())
-                    })
-                    .chain(args.values().cloned())
-                    .collect(),
-                Node::Element { attrs, .. } => attrs
-                    .iter()
-                    .flat_map(|a| {
-                        a.value
-                            .as_deref()
-                            .map(template_exprs)
-                            .unwrap_or_default()
-                            .into_iter()
-                            .chain(a.when.clone())
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
-            for e in exprs {
-                used.extend(refs(&e).into_iter().map(|r| r.name));
-            }
-        });
+        used.extend(names_read(&l.body));
     }
     for p in &mut site.pages {
         p.props.retain(|k, _| {
@@ -2171,6 +3324,8 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         });
         p.computed.retain(|k, _| used.contains(k));
     }
+    // Variables des pages lues par leur gabarit : propriétés du gabarit.
+    layout_fields_from_pages(&mut site, &mut notes);
     // Filtres propres au site qui ne servent plus.
     let text =
         serde_json::to_string(&(&site.layouts, &site.pages, &site.components)).unwrap_or_default();
@@ -2198,6 +3353,35 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parentheses_autour_d_un_nom() {
+        assert_eq!(
+            bare_parens("((collections.projets)) | limit(3)"),
+            "collections.projets | limit(3)"
+        );
+        assert_eq!(
+            bare_parens("(title) or 'Vidéo (courte)'"),
+            "title or 'Vidéo (courte)'"
+        );
+        assert_eq!(
+            bare_parens("where_contains('data.x', (slug))"),
+            "where_contains('data.x', slug)"
+        );
+        assert_eq!(bare_parens("f(x)"), "f(x)");
+    }
+
+    #[test]
+    fn libelles_lisibles() {
+        assert_eq!(
+            humanize("hideFooterCta").as_deref(),
+            Some("Hide footer cta")
+        );
+        assert_eq!(humanize("cover_alt").as_deref(), Some("Cover alt"));
+        assert_eq!(humanize("date2").as_deref(), Some("Date 2"));
+        assert_eq!(humanize("Titre"), None);
+        assert_eq!(humanize("titre").as_deref(), Some("Titre"));
+    }
 
     #[test]
     fn variables_lues() {

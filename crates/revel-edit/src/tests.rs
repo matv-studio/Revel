@@ -960,12 +960,14 @@ fn rangement_des_medias_et_composants() {
 fn gabarit_copie_puis_retire() {
     let mut s = sample();
     s.layouts.push(revel_model::Layout {
+        fields: Vec::new(),
         id: "layouts/base".into(),
         parent: None,
         props: Default::default(),
         body: vec![el("main", &[], vec![Node::Slot])],
     });
     s.layouts.push(revel_model::Layout {
+        fields: Vec::new(),
         id: "layouts/projet".into(),
         parent: Some("layouts/base".into()),
         props: Default::default(),
@@ -2163,4 +2165,100 @@ fn elements_complexes() {
         apply(&mut s, &inv).unwrap();
     }
     assert_eq!(json(&s), before);
+}
+
+#[test]
+fn proprietes_du_gabarit() {
+    use revel_model::{PropDef, PropKind};
+    let mut s = sample();
+    s.layouts.push(revel_model::Layout {
+        id: "layouts/base".into(),
+        parent: None,
+        props: Default::default(),
+        fields: Vec::new(),
+        body: vec![
+            Node::If {
+                id: None,
+                cond: "not masquer".into(),
+                then: vec![el(
+                    "section",
+                    &[("class", "appel")],
+                    vec![text("Écrivez-nous")],
+                )],
+                otherwise: vec![],
+            },
+            el("main", &[], vec![Node::Slot]),
+        ],
+    });
+    s.pages[0].layout = Some("layouts/base".into());
+    s.pages[0]
+        .props
+        .insert("masquer".into(), serde_json::json!(true));
+    s.ensure_ids();
+    let flagged = |s: &Site| {
+        editable::audit(s)
+            .into_iter()
+            .filter(|i| i.detail.contains("masquer"))
+            .count()
+    };
+    // Variable de page lue par le gabarit : relevée (donnée de page et condition écrite).
+    assert_eq!(flagged(&s), 2);
+    let field = PropDef {
+        name: "masquer".into(),
+        label: Some("Masquer l'appel".into()),
+        kind: PropKind::Switch,
+        default: None,
+    };
+    let before = json(&s);
+    let inv = apply(
+        &mut s,
+        &Command::SetLayoutFields {
+            id: "layouts/base".into(),
+            fields: vec![field.clone()],
+        },
+    )
+    .unwrap();
+    let after = json(&s);
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+    apply(
+        &mut s,
+        &Command::SetLayoutFields {
+            id: "layouts/base".into(),
+            fields: vec![field.clone()],
+        },
+    )
+    .unwrap();
+    assert_eq!(json(&s), after);
+    // Propriété du gabarit : valeur de la page et condition dans la forme de l'interface.
+    assert_eq!(flagged(&s), 0);
+    // Nom invalide ou en double : refusé.
+    let mut twice = vec![field.clone(), field.clone()];
+    assert!(
+        apply(
+            &mut s,
+            &Command::SetLayoutFields {
+                id: "layouts/base".into(),
+                fields: std::mem::take(&mut twice),
+            },
+        )
+        .is_err()
+    );
+    // Retrait : condition résolue avec la valeur par défaut (éteint : l'appel est affiché),
+    // valeur des pages retirée.
+    let cmd = make::remove_layout_field(&s, "layouts/base", "masquer").unwrap();
+    let inv = apply(&mut s, &cmd).unwrap();
+    assert!(s.layouts[0].fields.is_empty());
+    assert!(!s.pages[0].props.contains_key("masquer"));
+    assert!(
+        !serde_json::to_string(&s.layouts[0].body)
+            .unwrap()
+            .contains("masquer")
+    );
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(s.layouts[0].fields.len(), 1);
+    assert_eq!(
+        s.pages[0].props.get("masquer"),
+        Some(&serde_json::json!(true))
+    );
 }

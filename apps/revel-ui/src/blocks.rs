@@ -19,8 +19,56 @@ fn attr<'a>(attrs: &'a [Attr], name: &str) -> Option<&'a Attr> {
 pub(crate) fn collections(ed: Ed) -> RwSignal<Vec<CmsCollection>> {
     let cols = RwSignal::new(Vec::new());
     let path = ed.path.get_value();
+    // Listes qui lisent plusieurs collections : une collection réunie (`projets+actualites`),
+    // aux champs des deux, pour relier leurs éléments.
+    let keys: Vec<Vec<String>> = ed.doc.with_untracked(|d| {
+        let mut keys: Vec<Vec<String>> = Vec::new();
+        if let Some(d) = d.as_ref() {
+            for (_, _, nodes) in d.owners() {
+                revel_model::ids::walk(nodes, &mut |n| {
+                    if let Node::Each { expr, .. } = n
+                        && let Some(q) = Query::parse(expr)
+                        && !q.also.is_empty()
+                    {
+                        let ids: Vec<String> =
+                            std::iter::once(q.collection.clone()).chain(q.also.clone()).collect();
+                        if !keys.contains(&ids) {
+                            keys.push(ids);
+                        }
+                    }
+                });
+            }
+        }
+        keys
+    });
     spawn_local(async move {
-        if let Ok(c) = api::cms_collections(&path).await {
+        if let Ok(mut c) = api::cms_collections(&path).await {
+            for ids in keys {
+                let parts: Vec<CmsCollection> = ids
+                    .iter()
+                    .filter_map(|id| c.iter().find(|x| &x.id == id).cloned())
+                    .collect();
+                let Some(first) = parts.first().cloned() else {
+                    continue;
+                };
+                let mut merged = first;
+                merged.id = ids.join("+");
+                merged.label = Some(
+                    parts
+                        .iter()
+                        .map(label_of)
+                        .collect::<Vec<_>>()
+                        .join(" + "),
+                );
+                for p in &parts[1..] {
+                    for f in &p.fields {
+                        if !merged.fields.iter().any(|m| m.name == f.name) {
+                            merged.fields.push(f.clone());
+                        }
+                    }
+                }
+                c.push(merged);
+            }
             let _ = cols.try_set(c);
         }
     });
@@ -1544,7 +1592,7 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
         );
     };
     let current =
-        move || cols.with(|cs| q.with_value(|q| cs.iter().find(|c| c.id == q.collection).cloned()));
+        move || cols.with(|cs| q.with_value(|q| cs.iter().find(|c| c.id == q.key()).cloned()));
     let fields = move || fields_of(ui, current().as_ref());
     let filter_field = q.with_value(|q| q.filter.as_ref().map(|f| f.0.clone()).unwrap_or_default());
     let filter_value = q.with_value(|q| {
@@ -1573,10 +1621,11 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     let picking = RwSignal::new(!picked.is_empty());
     let entries = RwSignal::new(Vec::<revel_protocol::PickEntry>::new());
     {
-        let col = q.with_value(|q| q.collection.clone());
+        let ids: Vec<String> =
+            q.with_value(|q| std::iter::once(q.collection.clone()).chain(q.also.clone()).collect());
         let path = ed.path.get_value();
         spawn_local(async move {
-            if let Ok(d) = crate::api::readable_data(&path, &[], &[col]).await {
+            if let Ok(d) = crate::api::readable_data(&path, &[], &ids).await {
                 let _ = entries.try_set(d.entries);
             }
         });
@@ -1640,7 +1689,7 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                     }>
                         {move || {
                             let cur = q.with_value(|q| q.collection.clone());
-                            let mut list: Vec<(String, String)> = cols.with(|cs| cs.iter().map(|c| (c.id.clone(), label_of(c))).collect());
+                            let mut list: Vec<(String, String)> = cols.with(|cs| cs.iter().filter(|c| !c.id.contains('+')).map(|c| (c.id.clone(), label_of(c))).collect());
                             if !list.iter().any(|(id, _)| *id == cur) {
                                 list.insert(0, (cur.clone(), cur.clone()));
                             }
@@ -1652,6 +1701,40 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                     </select>
                 </div>
             </label>
+            // Autres collections lues à la suite (contenus de plusieurs collections).
+            <div class="list-also" class:is-hidden=nested title=ui.t("block-list-also-help")>
+                {move || q.with_value(|q| q.also.clone()).into_iter().map(|id| {
+                    let shown = cols.with(|cs| cs.iter().find(|c| c.id == id).map(label_of)).unwrap_or_else(|| id.clone());
+                    let gone = id.clone();
+                    view! {
+                        <span class="prop-chip prop-chip--field">
+                            {icons::database()}<span>{format!("+ {shown}")}</span>
+                            <button class="chip-x" title=ui.t("block-list-also-remove") aria-label=ui.t("block-list-also-remove")
+                                on:click=move |_| { let g = gone.clone(); write(Box::new(move |q| q.also.retain(|x| *x != g))) }>{icons::close()}</button>
+                        </span>
+                    }
+                }).collect_view()}
+                <div class="select select--small">
+                    <select class="input" aria-label=ui.t("block-list-also-add") on:change=move |e| {
+                        let v = event_target_value(&e);
+                        if !v.is_empty() {
+                            write(Box::new(move |q| if !q.also.contains(&v) && q.collection != v { q.also.push(v.clone()) }));
+                        }
+                    }>
+                        <option value="" selected=true>{ui.t("block-list-also-add")}</option>
+                        {move || {
+                            let (main, also) = q.with_value(|q| (q.collection.clone(), q.also.clone()));
+                            cols.with(|cs| cs.iter()
+                                .filter(|c| !c.id.contains('+') && c.id != main && !also.contains(&c.id))
+                                .map(|c| (c.id.clone(), label_of(c)))
+                                .collect::<Vec<_>>())
+                                .into_iter()
+                                .map(|(id, l)| view! { <option value=id>{l}</option> })
+                                .collect_view()
+                        }}
+                    </select>
+                </div>
+            </div>
             <label class="field" class:is-hidden=nested>
                 <span class="label">{ui.t("block-list-items")}</span>
                 <div class="select">
@@ -2121,7 +2204,7 @@ fn visibility_of(d: &Site, at: &Target) -> Option<(Target, String)> {
 /// Webflow) : le contenu affiché (`client`, `page.url`).
 fn binding_context(d: &Site, at: &Target) -> Option<(String, String, String)> {
     if let Some((q, item)) = enclosing_list(d, at) {
-        return Some((q.collection, format!("{item}.data."), format!("{item}.url")));
+        return Some((q.key(), format!("{item}.data."), format!("{item}.url")));
     }
     template_collection(d, at).map(|c| (c, String::new(), "page.url".into()))
 }
@@ -2800,7 +2883,7 @@ pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, Strin
             (var, col)
         });
         let content = binding_context(d, at).map(|(col, prefix, _)| (col, prefix));
-        let props: Vec<(String, String)> = match &at.owner {
+        let mut props: Vec<(String, String)> = match &at.owner {
             revel_edit::Owner::Component(cid) => d
                 .components
                 .iter()
@@ -2817,8 +2900,19 @@ pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, Strin
                         .collect()
                 })
                 .unwrap_or_default(),
+            // Gabarit : ses propriétés (valeurs choisies par chaque page, D-96).
+            revel_edit::Owner::Layout(lid) => revel_edit::editable::layout_fields(d, Some(lid))
+                .iter()
+                .map(|p| (p.name.clone(), p.label().to_string()))
+                .collect(),
             _ => Vec::new(),
         };
+        // Variables des environnements de publication (« recette » : `env.staging`).
+        props.extend(
+            revel_edit::editable::env_fields(d)
+                .into_iter()
+                .map(|v| (format!("env.{v}"), format!("Environnement › {v}"))),
+        );
         Some((values, content, props))
     })?;
     if values.is_none() && content.is_none() && props.is_empty() {

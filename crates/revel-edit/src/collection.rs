@@ -12,6 +12,10 @@ use serde::{Deserialize, Serialize};
 pub struct Query {
     /// Identifiant de la collection (`collections.<id>`).
     pub collection: String,
+    /// Autres collections lues à la suite (contenus de plusieurs collections, dans l'ordre des
+    /// collections : `(collections.projets + collections.actualites)`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<String>,
     /// Filtre : chemin dans le contenu (`data.categorie`) et valeur attendue (expression
     /// littérale : `"design"`, `true`, `3`) ; sans valeur, le champ doit être vrai (rempli).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -150,12 +154,32 @@ fn literal_value(v: &str) -> bool {
 }
 
 impl Query {
+    /// Identifiant de la source : la collection, ou les collections jointes par `+`
+    /// (`projets+actualites`) quand la liste en lit plusieurs.
+    pub fn key(&self) -> String {
+        std::iter::once(self.collection.as_str())
+            .chain(self.also.iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join("+")
+    }
+
     /// Expression de la boucle.
     pub fn to_expr(&self) -> String {
-        let base = if ident(&self.collection) {
-            format!("collections.{}", self.collection)
+        let one = |id: &str| {
+            if ident(id) {
+                format!("collections.{id}")
+            } else {
+                format!("collections[{}]", crate::canvas::quote(id))
+            }
+        };
+        let base = if self.also.is_empty() {
+            one(&self.collection)
         } else {
-            format!("collections[{}]", crate::canvas::quote(&self.collection))
+            let all: Vec<String> = std::iter::once(&self.collection)
+                .chain(&self.also)
+                .map(|c| one(c))
+                .collect();
+            format!("({})", all.join(" + "))
         };
         let mut e = base;
         if !self.pick.is_empty() {
@@ -224,14 +248,31 @@ impl Query {
         }
         let parts = split_top(&e, '|');
         let (base, filters) = parts.split_first()?;
-        let collection = if let Some(id) = base.strip_prefix("collections.") {
-            ident(id).then(|| id.to_string())?
-        } else {
-            let inner = base.strip_prefix("collections[")?.strip_suffix(']')?;
-            crate::canvas::literal(inner)?
+        let one = |b: &str| -> Option<String> {
+            let b = b.trim();
+            if let Some(id) = b.strip_prefix("collections.") {
+                ident(id).then(|| id.to_string())
+            } else {
+                let inner = b.strip_prefix("collections[")?.strip_suffix(']')?;
+                crate::canvas::literal(inner)
+            }
         };
+        // Plusieurs collections : `(collections.a + collections.b)`.
+        let mut ids: Vec<String> = match base
+            .strip_prefix('(')
+            .and_then(|b| b.strip_suffix(')'))
+            .filter(|b| balanced(b) && b.contains('+'))
+        {
+            Some(inner) => split_top(inner, '+')
+                .iter()
+                .map(|b| one(b))
+                .collect::<Option<Vec<_>>>()?,
+            None => vec![one(base)?],
+        };
+        let collection = ids.remove(0);
         let mut q = Query {
             collection,
+            also: ids,
             limit,
             ..Default::default()
         };
@@ -411,6 +452,7 @@ mod tests {
                 contains: None,
                 first: None,
                 first_full: false,
+                also: Vec::new(),
             },
             Query {
                 collection: "actualites-fr".into(),
@@ -422,12 +464,20 @@ mod tests {
                 contains: None,
                 first: None,
                 first_full: false,
+                also: Vec::new(),
             },
             Query {
                 collection: "projets".into(),
                 sort: Some(("date".into(), true)),
                 limit: Some(3),
                 exclude_current: true,
+                ..Default::default()
+            },
+            // Contenus de deux collections, choisis à la main.
+            Query {
+                collection: "projets".into(),
+                also: vec!["actualites".into()],
+                pick: vec!["showreel".into(), "voeux-2026".into()],
                 ..Default::default()
             },
             // Contenus choisis à la main, dans l'ordre.
@@ -475,6 +525,11 @@ mod tests {
             assert_eq!(Query::parse(&e).as_ref(), Some(&q), "{e}");
         }
         assert_eq!(
+            Query::parse(r#"(collections.projets + collections.actualites) | by_slugs(["a"])"#)
+                .map(|q| (q.collection, q.also)),
+            Some(("projets".into(), vec!["actualites".into()]))
+        );
+        assert_eq!(
             Query {
                 collection: "projets".into(),
                 filter: Some(("data.une".into(), None)),
@@ -485,6 +540,7 @@ mod tests {
                 contains: None,
                 first: None,
                 first_full: false,
+                also: Vec::new(),
             }
             .to_expr(),
             r#"(collections.projets | selectattr("data.une") | sort(attribute="date", reverse=true))[:3]"#

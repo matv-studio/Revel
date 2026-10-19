@@ -788,6 +788,59 @@ placées avant la première règle du fichier), seules capables de lire les para
 `noindex` et adresse canonique ; jamais à la place d'une page existante. Les assistants (MCP) lisent la liste
 dans `get_site` et la remplacent par `apply_commands` (`set_redirects`).
 
+**D-96 — 18/10/2026 — prise.** **Propriétés du gabarit.** Une valeur qui change d'une page à l'autre dans un
+gabarit (masquer l'appel à contacter, un sous-titre, une image d'en-tête) est une propriété du gabarit, comme
+celle d'un composant l'est pour chaque utilisation : déclarée par le gabarit (texte, image, lien,
+interrupteur ; valeur par défaut), réglée dans les paramètres de chaque page (« Propriétés du gabarit »,
+avec ajout, nom et retrait), reliée aux éléments du gabarit depuis l'onglet Styles (texte, image, lien,
+visibilité, comme dans un composant ouvert). Une utilisation de composant dans le gabarit peut reprendre une
+propriété du gabarit, inversée au besoin (`not x`). Une propriété ajoutée depuis une page va au gabarit le
+plus extérieur de sa chaîne, lisible par tous ceux qu'il contient. À la reconstruction, une variable de page
+lue par son gabarit (`{% if not hideFooterCta %}`, champ de front matter d'Eleventy, de Hugo ou de Jekyll)
+devient une telle propriété (interrupteur pour un booléen, image ou lien selon l'endroit où elle sert),
+avec un libellé lisible (« Hide footer cta ») modifiable ; les pages gardent leur valeur. Une liste ou un
+objet reste une variable de page. Assistants (MCP) : `set_layout_fields`, `set_page_prop`.
+
+**D-97 — 18/10/2026 — prise.** **Reconstruction étendue (imports d'Eleventy et autres générateurs).** Formes
+ajoutées à la reconstruction, chacune gardée seulement si le site produit reste identique (fichiers
+comparés gabarit par gabarit, page par page, composant par composant) :
+- réglage de page tiré des données (`seo = pages["agence"].seo`) écrit dans la page ; absent des données :
+  retiré ;
+- plan du site écrit à la main (boucle sur une collection) remplacé par celui de Revel quand il liste les
+  mêmes adresses avec les mêmes dates ; réglage ajouté : « Dates de mise à jour » (`lastmod`) dans
+  Paramètres › Référencement ;
+- « suggestions du contenu s'il y en a assez, sinon les plus récents » et « contenus choisis, sinon les plus
+  récents », écrits avec des variables : liste de collection « Mettre en premier » (seulement s'ils
+  remplissent la liste, ou complétés) ;
+- contenus choisis un à un dans plusieurs collections (`(projets | by_slug(s)) or (actualites |
+  by_slug(s))`) : liste de collection à plusieurs collections (nouvelle forme du panneau : « + Autre
+  collection », champs des collections réunis) ; premier contenu lu à part (`liste[0].data.cover`) :
+  liste d'un seul contenu ;
+- contenu relié lu directement (`(collections.equipe | by_slug(contact_person)).data.job`) : liste des
+  contenus reliés par le champ ;
+- valeur tirée d'un tableau gardée dans une variable du même nom et lue par un style : classes par valeur
+  (D-91) ;
+- `(a or b)` entre doubles parenthèses simplifié ; propriété de composant reliée à un champ avec un champ de
+  repli et une écriture de date : affichée et réglable dans l'utilisation (« Date, sinon Date affichée »,
+  écriture choisie).
+Site cobaye d'Alunites (Eleventy) : 331 → 63 points dans le code, styles et captures identiques sur 13
+pages à 1280 et 375 px, fichiers du serveur et consignes aux moteurs identiques en recette. Restent surtout
+le `.htaccess` écrit en boucles sur les contenus, des valeurs calculées propres au site (noms mis en forme,
+échappements faits à la main, HTML assemblé), le lecteur vidéo propre au site et les attributs lus par son
+script ; une liste « suggestions » reste en variables parce qu'une actualité se suggère elle-même (le rendu
+changerait).
+
+**D-98 — 19/10/2026 — prise.** **Environnements de publication gardés à la reconstruction.** Défaut corrigé de
+la 0.6.2 : la reconstruction écrivait les valeurs de la production à la place des variables d'environnement
+(`{% if env.staging %}`), si bien qu'une recette publiée perdait son `noindex` et son en-tête
+`X-Robots-Tag`. Quand le site a plusieurs environnements, `env` reste lu à la publication ; chaque réécriture
+n'est gardée que si les fichiers produits restent identiques dans tous les environnements ; la CI compare
+en recette les fichiers du serveur et les consignes aux moteurs (`tools/compare-robots.py`). Dans
+l'interface, une condition peut lire une variable d'environnement (« Environnement › staging ») et les
+propriétés du gabarit ; le texte d'un fichier du serveur écrit en partie par des boucles ou des conditions
+est montré sans être modifiable (l'enregistrer comme texte seul effaçait ces parties) ; dans le relevé, le
+texte d'un tel fichier n'est plus compté comme du HTML écrit.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

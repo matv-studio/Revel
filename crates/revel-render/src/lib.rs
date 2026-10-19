@@ -244,7 +244,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let all = languages(site, false);
     let mut warnings = Vec::new();
     let mut files = Vec::new();
-    let mut pages: Vec<(String, bool)> = Vec::new();
+    let mut pages: Vec<SitemapPage> = Vec::new();
     // Formulaires reçus par l'hébergement (5.8) trouvés dans les pages ; pages animées (6.1).
     let mut forms = 0usize;
     let mut used = Scripts::default();
@@ -313,6 +313,46 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     actions::script_file(used.actions, &mut files);
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(BuildOutput { files, warnings })
+}
+
+/// Environnements de publication d'un site (`production` d'abord, puis ceux des paramètres du
+/// site) : un site reconstruit doit donner les mêmes fichiers dans chacun.
+pub(crate) fn environments_of(site: &Site, first: &str) -> Vec<String> {
+    let mut v = vec![first.to_string()];
+    for k in site.settings.environments.keys() {
+        if !v.contains(k) {
+            v.push(k.clone());
+        }
+    }
+    v
+}
+
+/// Fichiers produits pour chaque environnement de publication (chemin préfixé par
+/// l'environnement hors du premier : `staging:index.html`).
+pub(crate) fn build_all_envs(input: &BuildInput, site: &Site) -> Option<Vec<OutputFile>> {
+    let mut all = Vec::new();
+    for (i, env) in environments_of(input.site, &input.environment)
+        .into_iter()
+        .enumerate()
+    {
+        let inp = BuildInput {
+            site,
+            entries: input.entries.clone(),
+            locales: input.locales.clone(),
+            environment: env.clone(),
+            version: input.version.clone(),
+            hooks: input.hooks.clone(),
+            now: input.now,
+        };
+        let out = build(&inp).ok()?;
+        for mut f in out.files {
+            if i > 0 {
+                f.path = format!("{env}:{}", f.path);
+            }
+            all.push(f);
+        }
+    }
+    Some(all)
 }
 
 /// Flux RSS des collections (paramètres du site) : contenus publiés dans l'ordre de la
@@ -483,12 +523,16 @@ struct Scripts {
     actions: bool,
 }
 
-/// Pages d'une langue : fichiers produits, adresses HTML (adresse, `noindex`) pour le plan du site.
+/// Page HTML pour le plan du site : adresse, `noindex`, date de publication (ISO 8601).
+type SitemapPage = (String, bool, Option<String>);
+
+/// Pages d'une langue : fichiers produits, adresses HTML (adresse, `noindex`, date) pour le plan
+/// du site.
 fn build_pages(
     b: &eval::Builder,
     input: &BuildInput,
     files: &mut Vec<OutputFile>,
-    pages: &mut Vec<(String, bool)>,
+    pages: &mut Vec<SitemapPage>,
     forms: &mut usize,
     used: &mut Scripts,
     warnings: &mut Vec<String>,
@@ -498,7 +542,13 @@ fn build_pages(
         let kind = DocKind::of_path(&j.url);
         let html = b.render_job(&prepared.globals, j, kind, warnings)?;
         let html = if kind == DocKind::Html {
-            pages.push((j.url.clone(), truthy(&j.data, "noindex")));
+            let date = j
+                .data
+                .get("date")
+                .filter(|v| !v.is_undefined() && !v.is_none())
+                .and_then(|v| eval::parse_date(&v.to_string()))
+                .map(|d| d.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string());
+            pages.push((j.url.clone(), truthy(&j.data, "noindex"), date));
             let scripts = b.editor.as_ref().is_none_or(|e| e.scripts);
             let (html, n) = forms::wire(input.site, finish_html(b, input.site, j, html), scripts);
             *forms += n;
@@ -1414,7 +1464,7 @@ fn noindex_meta(site: &Site, j: &Job, html: String) -> String {
 /// adresses (réglages de référencement du site).
 fn seo_files(
     site: &Site,
-    pages: &[(String, bool)],
+    pages: &[SitemapPage],
     files: &mut Vec<OutputFile>,
     warnings: &mut Vec<String>,
 ) {
@@ -1431,17 +1481,23 @@ fn seo_files(
                 let mut xml = String::from(
                     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
                 );
-                let mut urls: Vec<&str> = pages
+                let mut urls: Vec<(&str, Option<&str>)> = pages
                     .iter()
-                    .filter(|(_, noindex)| !noindex)
-                    .filter(|(u, _)| !u.ends_with("404.html") && !u.ends_with("/404/"))
-                    .map(|(u, _)| u.as_str())
+                    .filter(|(_, noindex, _)| !noindex)
+                    .filter(|(u, _, _)| !u.ends_with("404.html") && !u.ends_with("/404/"))
+                    .map(|(u, _, d)| (u.as_str(), d.as_deref()))
                     .collect();
                 urls.sort();
-                urls.dedup();
-                for u in urls {
+                urls.dedup_by(|a, b| a.0 == b.0);
+                for (u, d) in urls {
+                    let lastmod = match d {
+                        Some(d) if site.settings.seo.sitemap_lastmod => {
+                            format!("<lastmod>{}</lastmod>", html::escape(d))
+                        }
+                        _ => String::new(),
+                    };
                     xml.push_str(&format!(
-                        "  <url><loc>{}{}</loc></url>\n",
+                        "  <url><loc>{}{}</loc>{lastmod}</url>\n",
                         html::escape(base),
                         html::escape(u)
                     ));
@@ -1902,7 +1958,12 @@ fn prepare<'s>(
             path: vec![Seg::Key(k.to_string())],
         };
         for l in b.layout_chain(p.layout.as_deref())?.iter().rev() {
-            for (k, v) in &l.props {
+            let defaults = l
+                .fields
+                .iter()
+                .filter_map(|f| f.default.as_ref().map(|d| (&f.name, d)))
+                .filter(|(k, _)| !l.props.contains_key(*k));
+            for (k, v) in l.props.iter().chain(defaults) {
                 data.insert(k.clone(), crate::eval::from_json(v));
                 origins.insert(
                     k.clone(),

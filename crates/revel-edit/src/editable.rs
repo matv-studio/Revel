@@ -75,6 +75,10 @@ struct Ctx {
     locale: Option<String>,
     /// Dans `<head>` (titre de la page).
     head: bool,
+    /// Variables des environnements de publication (`env.staging`).
+    env: Vec<String>,
+    /// Fichier du serveur (`.htaccess`) : son texte écrit est du texte, pas du HTML.
+    text_file: bool,
 }
 
 fn is_field(f: &str) -> bool {
@@ -101,6 +105,11 @@ impl Ctx {
             .as_deref()
             .and_then(|p| e.strip_prefix(p))
             .is_some_and(is_field)
+    }
+    fn env_var(&self, e: &str) -> bool {
+        e.trim()
+            .strip_prefix("env.")
+            .is_some_and(|v| self.env.iter().any(|x| x == v))
     }
     fn prop(&self, e: &str, kind: Option<PropKind>) -> bool {
         let e = e.trim();
@@ -242,11 +251,12 @@ impl Ctx {
                     self.field(&field) || self.prop(&field, Some(PropKind::List))
                 }
             })
-            // Clauses de l'interface (rempli, vide, égal à…) sur des champs ou des propriétés.
+            // Clauses de l'interface (rempli, vide, égal à…) sur des champs, des propriétés ou
+            // des variables de l'environnement de publication.
             || crate::visibility::read(cond).is_some_and(|c| {
-                c.clauses
-                    .iter()
-                    .all(|k| self.field(&k.field) || self.prop(&k.field, None))
+                c.clauses.iter().all(|k| {
+                    self.field(&k.field) || self.prop(&k.field, None) || self.env_var(&k.field)
+                })
             })
     }
 }
@@ -285,7 +295,7 @@ impl Audit<'_> {
             Node::Text { .. } | Node::Slot => {}
             Node::Html { html } => {
                 let t = html.trim_start();
-                if !(t.is_empty() || t.starts_with("<!") || ctx.head) {
+                if !(t.is_empty() || t.starts_with("<!") || ctx.head || ctx.text_file) {
                     self.push(None, Kind::Html, short(html));
                 }
             }
@@ -474,6 +484,49 @@ fn owner_name(o: &Owner) -> String {
 /// du corps de page, thème.
 pub const PAGE_SETTINGS: &[&str] = &["seo", "noindex", "bodyClass", "theme", "ogType", "date"];
 
+/// Variables des environnements de publication d'un site qui en a plusieurs (`staging` pour
+/// `env.staging`) : une condition peut les lire (« affiché seulement en recette »).
+pub fn env_fields(site: &Site) -> Vec<String> {
+    let envs = &site.settings.environments;
+    if envs.len() < 2 && !envs.keys().any(|k| k != "production") {
+        return Vec::new();
+    }
+    let mut out: Vec<String> = vec!["name".into()];
+    for v in envs.values() {
+        if let serde_json::Value::Object(m) = v {
+            for k in m.keys() {
+                if !out.contains(k) && is_field(k) {
+                    out.push(k.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Propriétés d'un gabarit et de ses parents (valeurs choisies par chaque page).
+pub fn layout_fields(site: &Site, layout: Option<&str>) -> Vec<revel_model::PropDef> {
+    let mut out: Vec<revel_model::PropDef> = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
+    let mut cur = layout.map(str::to_string);
+    while let Some(id) = cur {
+        if seen.contains(&id) {
+            break;
+        }
+        seen.push(id.clone());
+        let Some(l) = site.layouts.iter().find(|l| l.id == id) else {
+            break;
+        };
+        for f in &l.fields {
+            if !out.iter().any(|o| o.name == f.name) {
+                out.push(f.clone());
+            }
+        }
+        cur = l.parent.clone();
+    }
+    out
+}
+
 /// Relevé du site entier, dans l'ordre : paramètres, gabarits, pages, composants.
 pub fn audit(site: &Site) -> Vec<Issue> {
     let mut a = Audit {
@@ -481,11 +534,17 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         out: Vec::new(),
         owner: "site".into(),
     };
+    let env = env_fields(site);
     // Filtres propres au site : relevés là où une expression les emploie (le titre de l'onglet,
     // dans `<head>`, se règle dans Paramètres › Référencement).
     for l in &site.layouts {
         a.owner = owner_name(&Owner::Layout(l.id.clone()));
-        let mut ctx = Ctx::default();
+        let fields = layout_fields(site, Some(&l.id));
+        let mut ctx = Ctx {
+            props: fields.iter().map(|p| (p.name.clone(), p.kind)).collect(),
+            env: env.clone(),
+            ..Default::default()
+        };
         // Modèle des pages d'une collection : champs du contenu affiché.
         let template = site.collections.iter().any(|c| {
             c.layout.as_deref().is_some_and(|t| {
@@ -501,11 +560,9 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         if !slot && !template {
             a.push(None, Kind::NoSlot, l.id.clone());
         }
-        for k in l
-            .props
-            .keys()
-            .filter(|k| !PAGE_SETTINGS.contains(&k.as_str()))
-        {
+        for k in l.props.keys().filter(|k| {
+            !PAGE_SETTINGS.contains(&k.as_str()) && !fields.iter().any(|f| &f.name == *k)
+        }) {
             a.push(None, Kind::PageData, k.clone());
         }
         a.nodes(&l.body, &ctx);
@@ -523,22 +580,36 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         {
             continue;
         }
-        for k in p
-            .props
-            .keys()
-            .filter(|k| !PAGE_SETTINGS.contains(&k.as_str()))
-        {
+        // Valeurs des propriétés de son gabarit : réglages de la page.
+        let fields = layout_fields(site, p.layout.as_deref());
+        for k in p.props.keys().filter(|k| {
+            !PAGE_SETTINGS.contains(&k.as_str()) && !fields.iter().any(|f| &f.name == *k)
+        }) {
             a.push(None, Kind::PageData, k.clone());
         }
         for (k, e) in &p.computed {
             a.push(None, Kind::PageData, format!("{k} = {}", short(e)));
         }
-        a.nodes(&p.body, &Ctx::default());
+        // Fichier du serveur : texte modifiable seulement s'il est tout écrit (sans boucle ni
+        // condition, même d'environnement).
+        a.nodes(
+            &p.body,
+            &Ctx {
+                env: if html_page || p.path.ends_with(".xml") {
+                    env.clone()
+                } else {
+                    Vec::new()
+                },
+                text_file: !html_page && !p.path.ends_with(".xml"),
+                ..Default::default()
+            },
+        );
     }
     for c in &site.components {
         a.owner = owner_name(&Owner::Component(c.id.clone()));
         let ctx = Ctx {
             props: c.props.iter().map(|p| (p.name.clone(), p.kind)).collect(),
+            env: env.clone(),
             ..Default::default()
         };
         a.nodes(&c.body, &ctx);

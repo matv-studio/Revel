@@ -1144,6 +1144,7 @@ fn design_propre_a_un_contenu() {
     {
         let mut p = revel_project::Project::open(&site).unwrap();
         p.site.layouts.push(revel_model::Layout {
+            fields: Vec::new(),
             id: "projet".into(),
             parent: None,
             props: Default::default(),
@@ -1221,6 +1222,7 @@ fn design_propre_a_un_contenu() {
         commands: vec![
             Command::AddLayout {
                 layout: revel_model::Layout {
+                    fields: Vec::new(),
                     id: "autre".into(),
                     parent: None,
                     props: Default::default(),

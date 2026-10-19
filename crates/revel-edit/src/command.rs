@@ -338,6 +338,14 @@ pub enum Command {
         id: String,
         props: Vec<revel_model::PropDef>,
     },
+    /// Contenu d'un gabarit remplacé (mêmes identifiants pour les nœuds gardés).
+    SetLayoutBody { id: String, body: Vec<Node> },
+    /// Propriétés d'un gabarit remplacées (valeurs choisies par chaque page qui l'utilise ;
+    /// noms valides, chacun une seule fois).
+    SetLayoutFields {
+        id: String,
+        fields: Vec<revel_model::PropDef>,
+    },
     /// Valeur d'une propriété pour une utilisation de composant (expression : `"Titre"`,
     /// `p.data.title`, `true`) ; `None` : valeur par défaut du composant.
     SetUseArg {
@@ -1517,6 +1525,36 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 name: std::mem::replace(&mut c.name, name),
             })
         }
+        Command::SetLayoutBody { id, body } => {
+            let i = site
+                .layouts
+                .iter()
+                .position(|l| &l.id == id)
+                .ok_or_else(|| EditError::NotFound(format!("gabarit {id}")))?;
+            let mut old_ids = std::collections::HashSet::new();
+            walk(&site.layouts[i].body, &mut |n| {
+                if let Some(x) = node_id(n) {
+                    old_ids.insert(x.to_string());
+                }
+            });
+            let taken = site.node_ids();
+            let mut dup = None;
+            walk(body, &mut |n| {
+                if let Some(x) = node_id(n)
+                    && !old_ids.contains(x)
+                    && taken.contains(x)
+                {
+                    dup.get_or_insert_with(|| x.to_string());
+                }
+            });
+            if let Some(x) = dup {
+                return Err(EditError::DuplicateId(x));
+            }
+            Ok(Command::SetLayoutBody {
+                id: id.clone(),
+                body: std::mem::replace(&mut site.layouts[i].body, body.clone()),
+            })
+        }
         Command::SetComponentBody { id, body } => {
             let i = site
                 .components
@@ -1561,6 +1599,18 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             Ok(Command::SetComponentProps {
                 id: id.clone(),
                 props: std::mem::replace(&mut c.props, props.clone()),
+            })
+        }
+        Command::SetLayoutFields { id, fields } => {
+            check_props(fields)?;
+            let l = site
+                .layouts
+                .iter_mut()
+                .find(|l| &l.id == id)
+                .ok_or_else(|| EditError::NotFound(format!("gabarit {id}")))?;
+            Ok(Command::SetLayoutFields {
+                id: id.clone(),
+                fields: std::mem::replace(&mut l.fields, fields.clone()),
             })
         }
         Command::SetComponentVariants { id, variants } => {

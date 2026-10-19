@@ -394,6 +394,15 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                         <span class="switch-track"></span>
                     </span>
                 </label>
+                <label class="view-line" title=ui.t("seo-sitemap-lastmod-help")>
+                    <span>{ui.t("seo-sitemap-lastmod")}</span>
+                    <span class="switch">
+                        <input type="checkbox" prop:checked=move || seo().sitemap_lastmod
+                            disabled=move || own("/sitemap.xml") || seo().no_sitemap
+                            on:change=move |e| { let on = event_target_checked(&e); set(&|v| v.sitemap_lastmod = on) }/>
+                        <span class="switch-track"></span>
+                    </span>
+                </label>
             </div>
             <div class="section">
                 <h2 title=ui.t("seo-share-help")>{ui.t("seo-share")}</h2>

@@ -1031,6 +1031,14 @@ try {
       const two = await untilE(async () => (await frame.locator('.liste-collection__element').count()) === 2);
       check('éléments : liste de collection (collection, tri par date décroissante, 2 contenus)', listed && two
         && (await pageJson()).includes('[:2]'));
+      // Liste de plusieurs collections (D-97) : « + Autre collection », puis retirée.
+      const others2 = await page.$$eval('.list-also select option', (o) => o.map((x) => x.value).filter(Boolean));
+      await page.selectOption('.list-also select', others2[0]);
+      const multi = await untilE(async () => (await pageJson()).includes(` + collections.${others2[0]})`));
+      await page.waitForSelector('.list-also .prop-chip');
+      check('éléments : liste de collection à deux collections (+ Autre collection)', multi, others2[0]);
+      await page.click('.list-also .prop-chip .chip-x');
+      check('éléments : seconde collection retirée', await untilE(async () => !(await pageJson()).includes(' + collections.')));
       await frame.locator('.liste-collection__element h3').first().click();
       await page.waitForSelector('[data-bound="block-bound-text-label"] select');
       await page.waitForFunction(() => document.querySelectorAll('[data-bound="block-bound-text-label"] select option').length > 2);
@@ -1258,6 +1266,56 @@ try {
       check('pages : tout annulé, document et fichier de données identiques', JSON.stringify(await site34()) === doc34 && fs.readFileSync(agenceYml, 'utf8') === agence0);
       await waitFrame(() => location.pathname === '/' || !!document.querySelector('[data-rv]'), 'retour');
       await page.click('.pages .page-row[data-url="/"]');
+    }
+    // Propriétés du gabarit (D-96) : ajoutée depuis les réglages d'une page (au gabarit le plus
+    // extérieur), valeur de cette page, élément du gabarit relié (visibilité), autres pages à la
+    // valeur par défaut ; tout annulé.
+    {
+      const site96 = () => invoke('edit_open').then((o) => o.site);
+      const doc96 = JSON.stringify(await site96());
+      await page.click('.dock-tab[data-panel="pages"]');
+      await page.hover('.pages .page-row[data-url="/agence/"]');
+      await page.click('.pages .page-row[data-url="/agence/"] .row-action');
+      await page.waitForSelector('.page-settings .page-settings-section-head');
+      await page.click('.page-settings-section-head .icon-btn');
+      await page.click('.ctx-menu .menu-item:has-text("Visibilité")');
+      await page.waitForSelector('.layout-prop');
+      const base96 = (s) => s.layouts.find((l) => l.id === 'layouts/base');
+      const f96 = (base96(await site96()).fields || [])[0];
+      check('gabarit : propriété ajoutée depuis la page (gabarit du site, visibilité)', !!f96 && f96.type === 'switch');
+      await page.click('.layout-prop .switch');
+      await page.waitForFunction(() => document.querySelector('.layout-prop')?.classList.contains('is-set'));
+      const ag96 = (await site96()).pages.find((p) => p.path === '/agence/');
+      check('gabarit : valeur choisie pour la page', ag96.props[f96.name] === true);
+      if (shots) await page.locator('.dock-col--left').screenshot({ path: `${shots}/editeur-gabarit-proprietes.png` });
+      await page.click('.page-settings-head .icon-btn');
+      await page.click('.pages .page-row[data-url="/agence/"]');
+      await waitFrame(() => location.pathname === '/agence/', 'agence');
+      await page.click('.dock-tab[data-panel="layers"]');
+      await page.locator('.layers .layer[data-tech="main"]').first().click({ position: { x: 60, y: 8 } });
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.waitForSelector('.component-bindings .bind-row[data-bind="component-bind-visibility"] .bind-btn');
+      await page.click('.component-bindings .bind-row[data-bind="component-bind-visibility"] .bind-btn');
+      await page.locator('.ctx-menu .menu-item', { hasText: /^Visibilité$/ }).click();
+      let body96 = '';
+      for (let i = 0; i < 20 && !body96.includes(`"cond":"${f96.name}"`); i++) {
+        await page.waitForTimeout(250);
+        body96 = JSON.stringify(base96(await site96()).body);
+      }
+      check('gabarit : élément relié à la propriété (condition dans le gabarit)', body96.includes(`"cond":"${f96.name}"`));
+      await waitFrame(() => !!document.querySelector('main#contenu'), 'contenu affiché (valeur de la page)');
+      await page.click('.dock-tab[data-panel="pages"]');
+      await page.click('.pages .page-row[data-url="/contact/"]');
+      await waitFrame(() => location.pathname === '/contact/' && !document.querySelector('main#contenu'), 'masqué ailleurs (valeur par défaut)');
+      check('gabarit : affiché sur la page qui l\'active, masqué ailleurs', true);
+      for (let i = 0; i < 6 && JSON.stringify(await site96()) !== doc96; i++) {
+        await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(400);
+      }
+      check('gabarit : tout annulé, document identique', JSON.stringify(await site96()) === doc96);
+      await page.click('.pages .page-row[data-url="/"]');
+      await waitFrame(() => location.pathname === '/', 'accueil');
     }
     await page.click('.dock-tab[data-panel="layers"]');
     await page.keyboard.press('Control+0');

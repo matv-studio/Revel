@@ -432,6 +432,10 @@ pub struct SeoSettings {
     /// Plan du site désactivé (produit par défaut).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_sitemap: bool,
+    /// Plan du site : date de mise à jour de chaque page (`lastmod`), tirée de sa date de
+    /// publication (champ `date` d'un contenu, réglage de la page) quand elle en a une.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sitemap_lastmod: bool,
     /// Texte de `robots.txt` ; `None` : tout autoriser et indiquer le plan du site.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub robots: Option<String>,
@@ -598,7 +602,18 @@ pub struct Layout {
     /// Variables par défaut du gabarit.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub props: BTreeMap<String, Value>,
+    /// Propriétés du gabarit : valeurs choisies par chaque page qui l'utilise (réglages de la
+    /// page), lues dans le gabarit comme des variables, comme les propriétés d'un composant le
+    /// sont à chaque utilisation. La valeur par défaut vaut pour les pages qui n'en donnent pas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<PropDef>,
     pub body: Vec<Node>,
+}
+
+impl Layout {
+    pub fn field(&self, name: &str) -> Option<&PropDef> {
+        self.fields.iter().find(|p| p.name == name)
+    }
 }
 
 /// Sous-arbre réutilisable. Il est rendu avec les variables de l'endroit où il est utilisé.
@@ -1281,6 +1296,7 @@ mod tests {
             name: None,
         });
         site.layouts.push(Layout {
+            fields: Vec::new(),
             id: "base".into(),
             parent: None,
             props: BTreeMap::new(),

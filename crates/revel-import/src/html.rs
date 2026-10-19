@@ -303,6 +303,7 @@ pub fn import(root: &Path, opts: &Options) -> Result<(Site, Report), ImportError
         ],
     });
     site.layouts.push(Layout {
+        fields: Vec::new(),
         id: "base".into(),
         parent: None,
         props: Default::default(),
@@ -330,6 +331,7 @@ pub fn import(root: &Path, opts: &Options) -> Result<(Site, Report), ImportError
             && (!s.wrappers.is_empty() || s.prefix + s.suffix > 0)
         {
             site.layouts.push(Layout {
+                fields: Vec::new(),
                 id: "site".into(),
                 parent: Some("base".into()),
                 props: Default::default(),

@@ -348,6 +348,11 @@
 .gap-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; flex: 1; min-width: 0; }
 .gap-pair.is-single { grid-template-columns: minmax(0, 1fr); }
 .collection-list .field.is-hidden { display: none; }
+.list-also { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.list-also.is-hidden { display: none; }
+.list-also .prop-chip { max-width: 100%; }
+.list-also .select { flex: 1; min-width: 120px; }
+.list-also .select .input { height: 26px; font-size: var(--text-xs); color: var(--text-muted); }
 .gap-pair > span { min-width: 0; }
 
 /* --- Code CSS ----------------------------------------------------------------------------------- */

@@ -436,10 +436,17 @@ fn share_type(ui: Ui, cur: Signal<String>, set: Callback<String>) -> impl IntoVi
 /// extérieur, lisible par tous ceux qu'il contient), nom et retrait d'une propriété, pour toutes
 /// les pages du gabarit. Les éléments du gabarit s'y relient depuis l'onglet Styles.
 fn layout_props(ui: Ui, ed: Ed, page: StoredValue<String>) -> impl IntoView {
-    use crate::components::{Holder, default_bool, default_text, kind_icon, kind_icon_fn, kind_key, new_prop, KINDS};
+    use crate::components::{
+        Holder, KINDS, default_bool, default_text, kind_icon, kind_icon_fn, kind_key, new_prop,
+    };
     use revel_model::{PropDef, PropKind};
     // (gabarit de la page, gabarit le plus extérieur, (propriétaire, propriété)…, valeurs).
-    type Rows = (String, String, Vec<(String, PropDef)>, std::collections::BTreeMap<String, Value>);
+    type Rows = (
+        String,
+        String,
+        Vec<(String, PropDef)>,
+        std::collections::BTreeMap<String, Value>,
+    );
     let data = Memo::new(move |_| -> Option<Rows> {
         ed.doc.with(|d| {
             let d = d.as_ref()?;
@@ -468,11 +475,21 @@ fn layout_props(ui: Ui, ed: Ed, page: StoredValue<String>) -> impl IntoView {
         })
     });
     let set_value = move |name: String, v: Option<Value>| {
-        ed.apply(ui, Command::SetPageProp { page: page.get_value(), key: name, value: v }, false)
+        ed.apply(
+            ui,
+            Command::SetPageProp {
+                page: page.get_value(),
+                key: name,
+                value: v,
+            },
+            false,
+        )
     };
     let add = move |e: leptos::ev::MouseEvent| {
         use crate::ctxmenu::{CtxItem, open};
-        let Some((_, outer, rows, _)) = data.get_untracked() else { return };
+        let Some((_, outer, rows, _)) = data.get_untracked() else {
+            return;
+        };
         let outer = StoredValue::new(outer);
         let visible: Vec<PropDef> = rows.iter().map(|(_, p)| p.clone()).collect();
         let items = KINDS
@@ -482,7 +499,9 @@ fn layout_props(ui: Ui, ed: Ed, page: StoredValue<String>) -> impl IntoView {
                 let visible = visible.clone();
                 CtxItem::new(ui.now(kind_key(k), &[]), move || {
                     let h = Holder::Layout(outer.get_value());
-                    let Some(mut own) = ed.doc.with_untracked(|d| h.own(d.as_ref()?)) else { return };
+                    let Some(mut own) = ed.doc.with_untracked(|d| h.own(d.as_ref()?)) else {
+                        return;
+                    };
                     let mut p = new_prop(ui, &visible, k, None);
                     // Interrupteur : éteint tant que la page ne l'allume pas.
                     if k == PropKind::Switch {

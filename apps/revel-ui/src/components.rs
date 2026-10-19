@@ -297,8 +297,7 @@ pub fn instance_settings(
     };
     // Utilisation dans une liste de collection : propriétés reliables aux champs du contenu.
     let list = ed.doc.with_untracked(|d| {
-        crate::blocks::enclosing_list(d.as_ref()?, &at.get_value())
-            .map(|(q, item)| (q.key(), item))
+        crate::blocks::enclosing_list(d.as_ref()?, &at.get_value()).map(|(q, item)| (q.key(), item))
     });
     let cols = list.as_ref().map(|_| crate::blocks::collections(ed));
     // Propriétés de ce qui contient l'utilisation (composant ouvert, gabarit) : une valeur peut
@@ -477,7 +476,10 @@ fn prop_value_row(
     // Reprend une propriété du composant ouvert ou du gabarit (inversée pour `not x`).
     if let Some((q, neg)) = parent {
         let shown = if neg {
-            ui.now("component-prop-inverted", &[("label", q.label().to_string())])
+            ui.now(
+                "component-prop-inverted",
+                &[("label", q.label().to_string())],
+            )
         } else {
             q.label().to_string()
         };
@@ -506,13 +508,21 @@ fn prop_value_row(
                 cs.iter()
                     .find(|c| c.id == collection)
                     .and_then(|c| c.fields.iter().find(|x| x.name == f))
-                    .map(|x| (x.label.clone().unwrap_or_else(|| x.name.clone()), x.kind.clone()))
+                    .map(|x| {
+                        (
+                            x.label.clone().unwrap_or_else(|| x.name.clone()),
+                            x.kind.clone(),
+                        )
+                    })
             })
             .unwrap_or_else(|| (f.to_string(), None))
         };
         let (main_label, main_kind) = info(&field);
         let shown = match &fallback {
-            Some(fb) => ui.now("component-field-fallback", &[("field", main_label), ("other", info(fb).0)]),
+            Some(fb) => ui.now(
+                "component-field-fallback",
+                &[("field", main_label), ("other", info(fb).0)],
+            ),
             None => main_label,
         };
         let date = format.is_some() || main_kind.as_deref().is_some_and(|k| k.starts_with("date"));
@@ -710,7 +720,9 @@ pub fn props_section(ui: Ui, ed: Ed, holder: Holder) -> AnyView {
                     };
                     let visible = ed
                         .doc
-                        .with_untracked(|d| d.as_ref().and_then(|d| holder.with_value(|h| h.visible(d))))
+                        .with_untracked(|d| {
+                            d.as_ref().and_then(|d| holder.with_value(|h| h.visible(d)))
+                        })
                         .unwrap_or_else(|| list.clone());
                     list.push(new_prop(ui, &visible, k, None));
                     write(list);
@@ -1094,7 +1106,14 @@ pub fn bindings(ui: Ui, ed: Ed, holder: Holder, at: Target) -> AnyView {
                         props.push(p);
                         let cmd = ed.doc.with_untracked(|d| {
                             holder.with_value(|h| {
-                                bind_commands(d.as_ref()?, h, &at.get_value(), b, &name, Some(props))
+                                bind_commands(
+                                    d.as_ref()?,
+                                    h,
+                                    &at.get_value(),
+                                    b,
+                                    &name,
+                                    Some(props),
+                                )
                             })
                         });
                         if let Some(cmd) = cmd {

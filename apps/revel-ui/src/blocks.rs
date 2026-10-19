@@ -30,8 +30,9 @@ pub(crate) fn collections(ed: Ed) -> RwSignal<Vec<CmsCollection>> {
                         && let Some(q) = Query::parse(expr)
                         && !q.also.is_empty()
                     {
-                        let ids: Vec<String> =
-                            std::iter::once(q.collection.clone()).chain(q.also.clone()).collect();
+                        let ids: Vec<String> = std::iter::once(q.collection.clone())
+                            .chain(q.also.clone())
+                            .collect();
                         if !keys.contains(&ids) {
                             keys.push(ids);
                         }
@@ -53,13 +54,7 @@ pub(crate) fn collections(ed: Ed) -> RwSignal<Vec<CmsCollection>> {
                 };
                 let mut merged = first;
                 merged.id = ids.join("+");
-                merged.label = Some(
-                    parts
-                        .iter()
-                        .map(label_of)
-                        .collect::<Vec<_>>()
-                        .join(" + "),
-                );
+                merged.label = Some(parts.iter().map(label_of).collect::<Vec<_>>().join(" + "));
                 for p in &parts[1..] {
                     for f in &p.fields {
                         if !merged.fields.iter().any(|m| m.name == f.name) {
@@ -1621,8 +1616,11 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     let picking = RwSignal::new(!picked.is_empty());
     let entries = RwSignal::new(Vec::<revel_protocol::PickEntry>::new());
     {
-        let ids: Vec<String> =
-            q.with_value(|q| std::iter::once(q.collection.clone()).chain(q.also.clone()).collect());
+        let ids: Vec<String> = q.with_value(|q| {
+            std::iter::once(q.collection.clone())
+                .chain(q.also.clone())
+                .collect()
+        });
         let path = ed.path.get_value();
         spawn_local(async move {
             if let Ok(d) = crate::api::readable_data(&path, &[], &ids).await {

@@ -363,6 +363,10 @@ pub struct Settings {
     /// Flux RSS des collections (abonnement aux actualités), produits à la génération.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub feeds: Vec<FeedSettings>,
+    /// Noms affichés des informations du site (chemin `address.city` -> « Ville ») donnés dans
+    /// Paramètres › Informations du site.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub site_labels: BTreeMap<String, String>,
 }
 
 /// Flux RSS d'une collection : derniers contenus publiés (titre, adresse, date, résumé).

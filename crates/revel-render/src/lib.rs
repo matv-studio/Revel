@@ -992,6 +992,7 @@ fn page_setting(site: &Site, j: &Job, key: &str) -> Option<String> {
 
 fn page_look(site: &Site, j: &Job, html: String) -> String {
     let mut html = mark_current(&html, &j.url);
+    html = actions::prefill_hover(&html);
     let look = |key: &str| page_setting(site, j, key);
     if let Some(cls) = look("bodyClass") {
         html = add_attr_class(&html, "body", &cls);

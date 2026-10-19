@@ -3,7 +3,8 @@
    onglets (`data-revel-tabs`) : un bouton `data-revel-tab` par panneau `data-revel-panel` ;
    carrousels et diaporamas (`data-revel-slider`), lecteurs vidéo (`data-revel-video`), filtres de
    liste (`data-revel-filters`), bandeau de consentement (`data-revel-consent`), sons et musique
-   (actions `sound:` et `music:`) coupés par les interrupteurs `data-revel-switch`.
+   (actions `sound:` et `music:`) coupés par les interrupteurs `data-revel-switch` ; média au
+   survol (`data-revel-hover-media`) : vidéo ou image qui montre le média de l'élément survolé.
    Sans JavaScript, la page reste lisible : rien n'est masqué d'avance par le script. */
 (function () {
   var css = document.createElement("style");
@@ -119,6 +120,20 @@
         }
         return;
       }
+      // Média au survol (vidéo de fond pilotée par une liste) : arrêté ou relancé ; un autre
+      // élément survolé pendant l'arrêt reste arrêté.
+      var hms = el.hasAttribute("data-revel-hover-media") ? [el] : el.querySelectorAll("[data-revel-hover-media]");
+      if (hms.length) {
+        var halt = !el.classList.contains("is-paused");
+        el.classList.toggle("is-paused", halt);
+        for (var h = 0; h < hms.length; h++) {
+          hms[h].__rvPaused = halt;
+          if (hms[h].tagName !== "VIDEO") continue;
+          if (halt) hms[h].pause();
+          else if (hms[h].__rvLoad) hms[h].__rvLoad();
+        }
+        return;
+      }
       var v = el.tagName === "VIDEO" ? el : el.querySelector("video");
       if (v) { if (on && v.paused) v.play(); else if (!on || !v.paused) v.pause(); }
     } else if (a.indexOf("random:") === 0) {
@@ -157,6 +172,18 @@
     }
     if (trig === "click") {
       var state = false;
+      // « Lire ou mettre en pause » un média au survol, avec la préférence « réduire les
+      // animations » : en pause dès le chargement (le bouton propose de lire).
+      if (act === "play" && still) {
+        targets(src, key).forEach(function (t) {
+          var hm = t.hasAttribute("data-revel-hover-media") ? [t] : t.querySelectorAll("[data-revel-hover-media]");
+          if (!hm.length) return;
+          t.classList.add("is-paused");
+          for (var h = 0; h < hm.length; h++) hm[h].__rvPaused = true;
+          state = true;
+          src.setAttribute("aria-pressed", "true");
+        });
+      }
       src.addEventListener("click", function (e) {
         if (src.tagName === "A" && (src.getAttribute("href") || "#") === "#") e.preventDefault();
         // Classe : ajoutée puis retirée à l'appui suivant ; autres actions : à chaque appui.
@@ -271,6 +298,66 @@
     var start = 0;
     for (var a = 0; a < btns.length; a++) if (btns[a].classList.contains("is-active")) { start = a; break; }
     if (btns.length) pick(start);
+  }
+  // Média au survol (`data-revel-hover-media="<nom>"`, sur une vidéo ou une image) : montre le
+  // média de l'élément survolé ou atteint au clavier parmi ceux `data-revel-media-for="<nom>"`
+  // (adresse `data-revel-media`, image d'attente `data-revel-media-poster`), le premier au
+  // chargement ; classe `is-active` sur l'élément montré, `is-ready` sur le média une fois lancé
+  // (vidéo) ou chargé (image). Vidéo lancée seulement si elle a la lecture automatique, sans
+  // préférence « réduire les animations » ; rien n'est chargé d'avance avec cette préférence.
+  function hoverMedia(disp) {
+    var name = disp.getAttribute("data-revel-hover-media");
+    if (!name) return;
+    var items = Array.prototype.filter.call(document.querySelectorAll("[data-revel-media-for]"), function (x) {
+      return x.getAttribute("data-revel-media-for") === name;
+    });
+    if (!items.length) return;
+    var isVideo = disp.tagName === "VIDEO";
+    // Lecture automatique gérée ici (une vidéo arrêtée ne repart pas à chaque changement).
+    var auto = isVideo && disp.hasAttribute("autoplay");
+    if (auto) { disp.autoplay = false; disp.removeAttribute("autoplay"); }
+    disp.addEventListener(isVideo ? "playing" : "load", function () { disp.classList.add("is-ready"); });
+    var cur = -1;
+    var run = function () {
+      if (!auto || still || disp.__rvPaused) return;
+      var p = disp.play();
+      if (p && p.catch) p.catch(function () {});
+    };
+    var load = function (start) {
+      var it = items[cur];
+      var src = it ? (it.getAttribute("data-revel-media") || "").trim() : "";
+      if (!src) return;
+      if (start && isVideo && still) return;
+      if (disp.getAttribute("src") === src) { if (isVideo && disp.paused) run(); return; }
+      var poster = (it.getAttribute("data-revel-media-poster") || "").trim();
+      disp.classList.remove("is-ready");
+      if (isVideo) {
+        if (poster) disp.setAttribute("poster", poster);
+        disp.setAttribute("src", src);
+        run();
+      } else {
+        disp.removeAttribute("srcset");
+        disp.setAttribute("src", src);
+      }
+    };
+    // Relancée par le bouton « Lire ou mettre en pause », même avec « réduire les animations ».
+    disp.__rvLoad = function () {
+      load(false);
+      if (isVideo && disp.getAttribute("src")) { var p = disp.play(); if (p && p.catch) p.catch(function () {}); }
+    };
+    var show = function (i, start) {
+      if (i === cur) return;
+      cur = i;
+      for (var j = 0; j < items.length; j++) items[j].classList.toggle("is-active", j === i);
+      load(start);
+    };
+    items.forEach(function (it, i) {
+      it.addEventListener("mouseenter", function () { show(i, false); });
+      it.addEventListener("focusin", function () { show(i, false); });
+    });
+    var first = 0;
+    for (var a = 0; a < items.length; a++) if (items[a].classList.contains("is-active")) { first = a; break; }
+    show(first, true);
   }
   // Carrousel et diaporama (`data-revel-slider`) : piste `data-revel-track` défilante (accroche
   // par diapositive), boutons `data-revel-prev` / `data-revel-next`, compteur `data-revel-count`,
@@ -496,6 +583,8 @@
     for (var f = 0; f < fs.length; f++) filters(fs[f]);
     var vs = document.querySelectorAll("[data-revel-video]");
     for (var v = 0; v < vs.length; v++) video(vs[v]);
+    var hm = document.querySelectorAll("[data-revel-hover-media]");
+    for (var m = 0; m < hm.length; m++) hoverMedia(hm[m]);
     switches();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", all);

@@ -1609,9 +1609,10 @@ fn suggestions_sinon_les_plus_recents() {
                 "b",
                 json!({"slug": "b", "title": "B", "date": "2026-02-01", "suggestions": ["c"]}),
             ),
+            // Contenu qui se suggère lui-même : montré comme dans le site d'origine.
             entry(
                 "c",
-                json!({"slug": "c", "title": "C", "date": "2026-03-01"}),
+                json!({"slug": "c", "title": "C", "date": "2026-03-01", "suggestions": ["c", "a"]}),
             ),
         ]
     };
@@ -1627,7 +1628,11 @@ fn suggestions_sinon_les_plus_recents() {
     }
     assert!(file(&after, "project/a/index.html").contains("<li>C</li><li>B</li>"));
     let body = serde_json::to_string(&r.site.layouts[1].body).unwrap();
-    assert!(body.contains("pick_first(suggestions, 2)"), "{body}");
+    assert!(file(&after, "project/c/index.html").contains("<li>C</li><li>A</li>"));
+    assert!(
+        body.contains("pick_first(suggestions, 2, page.url)"),
+        "{body}"
+    );
     assert!(!body.contains("\"set\""), "{body}");
     let left: Vec<_> = revel_edit::editable::audit(&r.site)
         .into_iter()

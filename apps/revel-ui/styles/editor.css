@@ -407,3 +407,14 @@ kbd {
   padding: 2px 6px; border-radius: var(--radius-sm); background: var(--surface-raised); box-shadow: var(--shadow-dialog);
   font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text); pointer-events: none;
 }
+
+/* Valeur reliée d'un attribut (Inspecteur › Attributs) */
+.attr-row--bound { grid-template-columns: minmax(0, 1fr) auto; }
+.attr-actions { display: inline-flex; gap: 2px; }
+.bound-attr { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 8px 8px; border-left: 2px solid var(--border); margin-left: 4px; }
+.bound-affix { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.bound-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bound-decl { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr) auto auto; gap: 4px; align-items: center; }
+.bound-decl .icon-btn { width: var(--control-sm); height: var(--control-sm); }
+.bound-style > .btn { align-self: flex-start; }
+.bound-decl-fallback { padding-left: 4px; }

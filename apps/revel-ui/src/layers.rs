@@ -811,13 +811,20 @@ fn tooltip(ui: Ui, k: &Kind) -> String {
     }
 }
 
-fn icon(k: &Kind, textual: bool) -> AnyView {
+fn icon(k: &Kind, textual: bool, has_children: bool) -> AnyView {
     match k {
         // Bloc générique qui ne contient que du texte : icône de texte (comme Webflow).
         Kind::Element { tag, .. }
             if textual && matches!(tag.to_ascii_lowercase().as_str(), "div" | "span") =>
         {
             icons::text_left()
+        }
+        // Élément de texte en ligne qui contient d'autres éléments (image, blocs) : une boîte,
+        // pas un texte (icône « T » trompeuse).
+        Kind::Element { tag, .. }
+            if !textual && has_children && tag.eq_ignore_ascii_case("span") =>
+        {
+            icons::box_()
         }
         Kind::Element { tag, .. } => crate::names::icon(tag),
         Kind::Text(_) => icons::text(),
@@ -1483,7 +1490,7 @@ pub fn Layers() -> impl IntoView {
                                     class:is-hidden=!has_children on:click=toggle>
                                     {if open { icons::chevron_down() } else { icons::chevron_right() }}
                                 </button>
-                                <span class="layer-icon">{icon(&kind, textual)}</span>
+                                <span class="layer-icon">{icon(&kind, textual, has_children)}</span>
                                 {let kind = kind.clone(); move || if is_renaming() {
                                     let at = StoredValue::new(r.with_value(|r| r.id.clone().map(|id| Target { owner: r.owner.clone(), node: id })));
                                     let initial = r.with_value(|r| shown_name(ui, r));

@@ -268,6 +268,20 @@ pub enum Command {
         #[serde(default)]
         feeds: Vec<revel_model::FeedSettings>,
     },
+    /// Information du site (valeur des données globales du document, `site.email`,
+    /// `site.menus.principal`) : chemin de clés, valeur ; `None` : retirée. Les objets
+    /// intermédiaires sont créés au besoin ; l'inverse retire ce qui a été créé.
+    SetGlobal {
+        path: Vec<String>,
+        #[serde(default)]
+        value: Option<Value>,
+    },
+    /// Nom affiché d'une information du site (chemin `address.city`) ; `None` : nom par défaut.
+    SetSiteLabel {
+        path: String,
+        #[serde(default)]
+        label: Option<String>,
+    },
     /// Identité du site (3.9) : nom, adresse publique (`https://…`, sans `/` final ; vide :
     /// aucune), langue principale (code valide, différent des autres langues), typographie
     /// (`fr` ou aucune).
@@ -1225,6 +1239,22 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 forms: std::mem::replace(&mut site.settings.forms, forms),
             })
         }
+        Command::SetGlobal { path, value } => set_global(site, path, value.as_ref()),
+        Command::SetSiteLabel { path, label } => {
+            let label = label
+                .as_deref()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(str::to_string);
+            let old = match label {
+                Some(l) => site.settings.site_labels.insert(path.clone(), l),
+                None => site.settings.site_labels.remove(path),
+            };
+            Ok(Command::SetSiteLabel {
+                path: path.clone(),
+                label: old,
+            })
+        }
         Command::SetSiteInfo {
             name,
             base_url,
@@ -1803,4 +1833,88 @@ pub fn clean_url(u: &str) -> Option<String> {
             .chars()
             .all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | ':' | '[' | ']'));
     ok.then(|| u.to_string())
+}
+
+/// Valeur des données globales du document à un chemin de clés.
+pub fn global_at<'a>(site: &'a Site, path: &[String]) -> Option<&'a Value> {
+    let (first, rest) = path.split_first()?;
+    let mut cur = site.data.get(first)?;
+    for k in rest {
+        cur = cur.get(k)?;
+    }
+    Some(cur)
+}
+
+/// Écrit une valeur des données globales du document (voir `Command::SetGlobal`).
+fn set_global(
+    site: &mut Site,
+    path: &[String],
+    value: Option<&Value>,
+) -> Result<Command, EditError> {
+    let bad = || EditError::InvalidPath(path.join("."));
+    if path.is_empty()
+        || path
+            .iter()
+            .any(|k| k.trim().is_empty() || k.contains('.') || k.trim() != k)
+    {
+        return Err(bad());
+    }
+    // Plus court début du chemin absent : ce que l'inverse retire.
+    let missing = (1..=path.len()).find(|n| global_at(site, &path[..*n]).is_none());
+    let old = global_at(site, path).cloned();
+    match value {
+        None => {
+            if old.is_none() {
+                return Ok(Command::SetGlobal {
+                    path: path.to_vec(),
+                    value: None,
+                });
+            }
+            let (last, parents) = path.split_last().ok_or_else(bad)?;
+            if parents.is_empty() {
+                site.data.remove(last);
+            } else {
+                let mut cur = site.data.get_mut(&parents[0]).ok_or_else(bad)?;
+                for k in &parents[1..] {
+                    cur = cur.get_mut(k).ok_or_else(bad)?;
+                }
+                cur.as_object_mut().ok_or_else(bad)?.remove(last);
+            }
+            Ok(Command::SetGlobal {
+                path: path.to_vec(),
+                value: old,
+            })
+        }
+        Some(v) => {
+            let (first, rest) = path.split_first().ok_or_else(bad)?;
+            if rest.is_empty() {
+                site.data.insert(first.clone(), v.clone());
+            } else {
+                let mut cur = site
+                    .data
+                    .entry(first.clone())
+                    .or_insert_with(|| Value::Object(Default::default()));
+                for (i, k) in rest.iter().enumerate() {
+                    let obj = cur.as_object_mut().ok_or_else(bad)?;
+                    if i + 1 == rest.len() {
+                        obj.insert(k.clone(), v.clone());
+                        break;
+                    }
+                    cur = obj
+                        .entry(k.clone())
+                        .or_insert_with(|| Value::Object(Default::default()));
+                }
+            }
+            Ok(match missing {
+                Some(n) => Command::SetGlobal {
+                    path: path[..n].to_vec(),
+                    value: None,
+                },
+                None => Command::SetGlobal {
+                    path: path.to_vec(),
+                    value: old,
+                },
+            })
+        }
+    }
 }

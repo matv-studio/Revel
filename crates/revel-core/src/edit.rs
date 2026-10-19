@@ -64,6 +64,19 @@ fn check_exprs(c: &Command) -> std::result::Result<(), revel_edit::EditError> {
             filter: Some(f), ..
         } => check(&f.expr),
         Command::Batch { commands } => commands.iter().try_for_each(check_exprs),
+        // Nœuds ajoutés (texte d'un fichier du serveur relu, collage) : leurs expressions.
+        Command::Insert { node, .. } => {
+            let mut exprs: Vec<String> = Vec::new();
+            revel_model::ids::walk(std::slice::from_ref(node), &mut |n| match n {
+                revel_model::Node::Out { expr } | revel_model::Node::Set { expr, .. } => {
+                    exprs.push(expr.clone())
+                }
+                revel_model::Node::If { cond, .. } => exprs.push(cond.clone()),
+                revel_model::Node::Each { expr, .. } => exprs.push(expr.clone()),
+                _ => {}
+            });
+            exprs.iter().try_for_each(|e| check(e))
+        }
         _ => Ok(()),
     }
 }
@@ -268,6 +281,21 @@ fn exec(
                 folder: c.folder,
                 fields: item.get("fields").cloned().unwrap_or(serde_json::json!([])),
             })
+        }
+        // Donnée du document (informations du site écrites dans `site.revel.json`) : modifiée
+        // dans le document, pas dans un fichier.
+        Command::SetDataValue { binding, value }
+            if binding.source == revel_edit::canvas::Source::Data
+                && document_data(site, &binding.path).is_some() =>
+        {
+            let path = document_data(site, &binding.path).unwrap_or_default();
+            revel_edit::apply(
+                site,
+                &Command::SetGlobal {
+                    path,
+                    value: value.clone(),
+                },
+            )
         }
         Command::SetDataValue { binding, value } => {
             let created = project
@@ -963,4 +991,20 @@ impl Core {
         let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         map.remove(&key(path));
     }
+}
+
+/// Chemin de clés d'une donnée globale écrite dans le document (`site.data`) ; `None` si sa
+/// racine vient d'un fichier de données (ou si le chemin passe par une liste).
+fn document_data(
+    site: &revel_model::Site,
+    path: &[revel_edit::canvas::Seg],
+) -> Option<Vec<String>> {
+    let keys: Vec<String> = path
+        .iter()
+        .map(|s| match s {
+            revel_edit::canvas::Seg::Key(k) => Some(k.clone()),
+            revel_edit::canvas::Seg::Index(_) => None,
+        })
+        .collect::<Option<_>>()?;
+    site.data.contains_key(keys.first()?).then_some(keys)
 }

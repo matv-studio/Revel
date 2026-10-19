@@ -72,6 +72,11 @@ enum FromCanvas {
         #[serde(default)]
         rev: Option<u64>,
     },
+    /// Page qui ne s'affiche plus après une modification (la précédente reste) : raison.
+    RenderError {
+        #[serde(default)]
+        text: String,
+    },
     /// Page mise à jour sur place après une modification.
     Refreshed {
         #[serde(default)]
@@ -2825,6 +2830,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 | FromCanvas::RichText { .. } => ed.activate_key(&from_bp),
                 FromCanvas::Ready { .. }
                 | FromCanvas::Refreshed { .. }
+                | FromCanvas::RenderError { .. }
                 | FromCanvas::Stage { .. }
                 | FromCanvas::OpenComponent { .. }
                 | FromCanvas::Key { .. }
@@ -2867,6 +2873,11 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                     ed.post(serde_json::json!({ "type": "select", "id": s.id }));
                     ed.post_multi();
                 }
+            }
+            FromCanvas::RenderError { text } => {
+                let mut f = revel_protocol::Failure::new("canvas-render-error");
+                f.args.push(("error".into(), text.trim().to_string()));
+                ui.fail(f);
             }
             FromCanvas::Refreshed { vars, rev } => {
                 if ed.stale(rev) {

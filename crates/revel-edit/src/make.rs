@@ -207,6 +207,9 @@ pub enum Preset {
     Consent,
     /// Interrupteur de la musique ou des sons du site (« On / Off »).
     Switch,
+    /// Média au survol : vidéo qui montre le média de l'élément survolé (contenus d'une liste
+    /// de collection ou éléments choisis), voir [`crate::hover`].
+    HoverMedia,
 }
 
 impl Preset {
@@ -226,7 +229,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 35] = [
+    pub const ALL: [Preset; 36] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -262,6 +265,7 @@ impl Preset {
         Preset::ListFilters,
         Preset::Consent,
         Preset::Switch,
+        Preset::HoverMedia,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -328,6 +332,15 @@ impl Preset {
             Preset::Video => vec![(
                 ".video",
                 vec![("display", "block"), ("width", "100%"), ("height", "auto")],
+            )],
+            Preset::HoverMedia => vec![(
+                ".media-survol",
+                vec![
+                    ("display", "block"),
+                    ("width", "100%"),
+                    ("aspect-ratio", "16 / 9"),
+                    ("object-fit", "cover"),
+                ],
             )],
             Preset::Tabs => vec![
                 (
@@ -794,6 +807,28 @@ impl Preset {
                 ],
                 vec![],
             ),
+            // Sans nom : relié à des éléments survolés depuis ses réglages (nom attribué alors).
+            Preset::HoverMedia => {
+                let flag = |n: &str| Attr {
+                    name: n.into(),
+                    value: None,
+                    when: None,
+                };
+                el(
+                    id(),
+                    "video",
+                    vec![
+                        attr("class", "media-survol"),
+                        flag("muted"),
+                        flag("playsinline"),
+                        flag("loop"),
+                        flag("autoplay"),
+                        attr("preload", "none"),
+                        flag(crate::hover::DISPLAY),
+                    ],
+                    vec![],
+                )
+            }
             // `text` : nom d'une icône (`fleche-droite`), sinon l'étoile.
             Preset::Icon => icon_node(
                 id(),

@@ -504,6 +504,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     true,
                 ),
                 item(
+                    Preset::HoverMedia,
+                    "insert-hover-media",
+                    "insert-help-hover-media",
+                    "",
+                    icons::video,
+                    "video",
+                    false,
+                ),
+                item(
                     Preset::Icon,
                     "insert-icon",
                     "insert-help-icon",

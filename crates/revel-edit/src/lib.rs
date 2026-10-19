@@ -10,12 +10,14 @@
 
 pub mod actions;
 pub mod address;
+pub mod attrbind;
 pub mod canvas;
 pub mod collection;
 pub mod command;
 pub mod dates;
 pub mod editable;
 pub mod history;
+pub mod hover;
 pub mod icons;
 pub mod inline;
 pub mod layer;
@@ -23,7 +25,10 @@ pub mod locale;
 pub mod make;
 pub mod readable;
 pub mod ready;
+pub mod siteinfo;
 pub mod style;
+pub mod tabs;
+pub mod textfile;
 pub mod visibility;
 
 pub use address::{Branch, Owner, Parent, Target};

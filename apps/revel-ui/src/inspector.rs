@@ -281,6 +281,8 @@ fn element_content(
         attr(&attrs, "data-revel-current").and_then(|a| a.value.as_deref()) == Some("section");
     let set_section = set.clone();
     let media = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
+    // Média au survol : son adresse est celle de l'élément survolé (réglée plus haut).
+    let hover_display = attr(&attrs, revel_edit::hover::DISPLAY).is_some();
     let is_img = lower == "img";
     let src = attr(&attrs, "src")
         .and_then(|a| a.value.clone())
@@ -351,7 +353,10 @@ fn element_content(
         })}
         {is_link.then(|| view! {
             <div class="stack insp-content">
-                <LinkTarget ed href=href.clone() on_commit=move |v: String| set_href("href", v)/>
+                // Adresse reliée (contenu, information du site, menu) : réglée plus haut.
+                {(!href.contains("{{")).then(|| view! {
+                    <LinkTarget ed href=href.clone() on_commit=move |v: String| set_href("href", v)/>
+                })}
                 <label class="row-switch">
                     <span class="switch">
                         <input type="checkbox" prop:checked=blank on:change=move |e| toggle_blank(event_target_checked(&e))/>
@@ -370,9 +375,9 @@ fn element_content(
                 </label>
             </div>
         })}
-        {media.then(|| view! {
+        {(media && !hover_display).then(|| view! {
             <div class="stack insp-content">
-                <Field label=ui.t("inspector-src") value=src.clone() mono=dynamic_src
+                <Field label=ui.t(match lower.as_str() { "video" => "inspector-src-video", "audio" => "inspector-src-audio", _ => "inspector-src" }) value=src.clone() mono=dynamic_src
                     on_commit=move |v| set_src("src", v)>
                     <button type="button" class="icon-btn icon-btn--small" title=ui.t(key) aria-label=ui.t(key)
                         disabled=dynamic_src on:click=move |_| pick()>{icons::image()}</button>
@@ -533,6 +538,10 @@ fn element_advanced(
         // Lien et média : réglés en tête de l'onglet.
         .filter(|a| !(is_link && matches!(a.name.as_str(), "href" | "target")))
         .filter(|a| !(media && matches!(a.name.as_str(), "src" | "alt")))
+        // Réglages de Revel qui ont leur propre contrôle (onglets, carrousel, lecteur, filtres,
+        // consentement, interrupteurs, formulaire, média au survol, lien actif, interactions) :
+        // montrés là, pas comme attributs bruts.
+        .filter(|a| !MANAGED.contains(&a.name.as_str()))
         // Animations : réglées dans le panneau Interactions.
         .filter(|a| {
             !crate::interactions::FAMILIES
@@ -623,13 +632,30 @@ fn element_advanced(
                                 }/>
                         }.into_any(),
                     };
+                    // Valeur reliée (champ, propriété, information du site) : réglée sans accolades.
+                    let value = a.value.clone().unwrap_or_default();
+                    let bound = (conditional.is_none())
+                        .then(|| crate::boundattr::attr_editor(ui, ed, at.clone(), a.name.clone(), value.clone()))
+                        .flatten();
+                    let link = if bound.is_some() {
+                        crate::boundattr::unlink_button(ui, ed, at.clone(), a.name.clone(), value.clone())
+                    } else if conditional.is_none() && a.value.is_some() && !value.contains("{%") && !matches!(a.name.as_str(), "class" | "id") {
+                        Some(crate::boundattr::link_button(ui, ed, at.clone(), a.name.clone(), value.clone()))
+                    } else {
+                        None
+                    };
+                    let has_bound = bound.is_some();
                     view! {
-                        <div class="attr-row">
+                        <div class="attr-row" class:attr-row--bound=has_bound>
                             <span class="attr-name" title=conditional.clone().map(|w| ui.tx("inspector-attr-when", &[("cond", w)]))>{a.name.clone()}{conditional.is_some().then_some(" ?")}</span>
-                            {input}
-                            <button class="icon-btn" title=ui.t("inspector-attr-remove") aria-label=ui.t("inspector-attr-remove")
-                                on:click=move |_| apply(Command::RemoveAttr { at: at_rm.clone(), name: name_rm.clone() })>{icons::trash()}</button>
+                            {(!has_bound).then_some(input)}
+                            <span class="attr-actions">
+                                {link}
+                                <button class="icon-btn" title=ui.t("inspector-attr-remove") aria-label=ui.t("inspector-attr-remove")
+                                    on:click=move |_| apply(Command::RemoveAttr { at: at_rm.clone(), name: name_rm.clone() })>{icons::trash()}</button>
+                            </span>
                         </div>
+                        {bound}
                     }
                 }).collect_view()}
                 <input class="input input--mono" placeholder=ui.t("inspector-attr-add")
@@ -742,3 +768,37 @@ mod tests {
         }
     }
 }
+
+/// Attributs de Revel réglés par leurs propres contrôles.
+const MANAGED: &[&str] = &[
+    "data-revel-tabs",
+    "data-revel-tab",
+    "data-revel-panel",
+    "data-revel-slider",
+    "data-revel-track",
+    "data-revel-prev",
+    "data-revel-next",
+    "data-revel-count",
+    "data-revel-dots",
+    "data-revel-video",
+    "data-revel-play",
+    "data-revel-filters",
+    "data-revel-filter",
+    "data-revel-filter-empty",
+    "data-revel-tags",
+    "data-revel-consent",
+    "data-revel-consent-choice",
+    "data-revel-consent-open",
+    "data-revel-switch",
+    "data-revel-switch-text",
+    "data-revel-form",
+    "data-revel-form-status",
+    "data-revel-hover-media",
+    "data-revel-media-for",
+    "data-revel-media",
+    "data-revel-media-poster",
+    "data-revel-current",
+    "data-revel-on",
+    "data-revel-name",
+    "data-revel-hidden",
+];

@@ -22,10 +22,15 @@ use revel_edit::collection::Query;
 use revel_model::{Attr, Node, PropDef, PropKind, Site};
 use std::collections::{BTreeMap, HashSet};
 
+mod fuse;
+pub use fuse::NewCollection;
+
 /// Site reconstruit et ce qui a été fait.
 pub struct Rebuilt {
     pub site: Site,
     pub notes: Vec<String>,
+    /// Collections créées (listes de données lues par adresse) : contenus à écrire.
+    pub collections: Vec<NewCollection>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -264,6 +269,9 @@ struct Fl<'a, 'b> {
     /// Variables affectées plusieurs fois ou dans une liste (accumulateurs) : gardées telles
     /// quelles.
     mutable: HashSet<String>,
+    /// Dans `<head>` : écrit par Revel d'après les réglages (référencement), les informations
+    /// du site y restent écrites comme avant.
+    in_head: bool,
 }
 
 /// Variables gardées telles quelles : accumulateurs (affectation qui relit la variable) et
@@ -333,11 +341,24 @@ fn inline_filters(expr: &str, filters: &BTreeMap<String, revel_model::CustomFilt
     }
     let mut base = parts[0].clone();
     let mut changed = false;
-    for f in parts.iter().skip(1) {
+    for (i, f) in parts.iter().enumerate().skip(1) {
         let (name, args) = match f.split_once('(') {
             Some((n, a)) if f.ends_with(')') => (n.trim(), split_top(&a[..a.len() - 1], ',')),
             _ => (f.trim(), Vec::new()),
         };
+        // Écriture du site (filtre à une valeur) appliquée à une valeur reliée, en dernier (ou
+        // suivie de `| safe`) : gardée, elle se choisit dans le panneau (« Prénom NOM »).
+        let last = parts[i + 1..].iter().all(|r| r.trim() == "safe");
+        let format = filters.get(name).is_some_and(|d| d.params.len() == 1)
+            && args.is_empty()
+            && last
+            && revel_edit::visibility::is_path(
+                base.trim().trim_start_matches('(').trim_end_matches(')'),
+            );
+        if format {
+            base = format!("{} | {}", base.trim(), f.trim());
+            continue;
+        }
         match filters.get(name) {
             Some(def) => {
                 let mut body = def.expr.clone();
@@ -542,6 +563,92 @@ impl Fl<'_, '_> {
             || self.aliases.iter().any(|(n, _)| n == name)
     }
 
+    /// Les informations du site (`site.…`) restent reliées : elles se règlent une fois pour
+    /// tout le site (Paramètres › Informations du site) au lieu d'être recopiées partout.
+    fn keeps_site(&self) -> bool {
+        !self.in_head && self.known.contains("site") && !self.is_dynamic("site")
+    }
+
+    /// Texte relié à une information du site, dans la forme du panneau (filtres du site
+    /// développés) ; `None` sinon.
+    fn site_output(&self, expr: &str) -> Option<String> {
+        if !self.keeps_site() {
+            return None;
+        }
+        let e = bare_parens(&inline_filters(expr, &self.b.site_filters()));
+        revel_edit::editable::is_site_output(&e).then_some(e)
+    }
+
+    /// Condition sur des informations du site (« Fax rempli ») dans la forme du panneau.
+    fn site_condition(&self, cond: &str) -> bool {
+        self.keeps_site()
+            && revel_edit::visibility::read(cond).is_some_and(|c| {
+                !c.clauses.is_empty()
+                    && c.clauses
+                        .iter()
+                        .all(|k| revel_edit::editable::site_path(&k.field))
+            })
+    }
+
+    /// Lien vers une information du site écrit dans une forme du panneau : numéro d'appel
+    /// (`replace(' ', '') | …` -> `| tel`) et adresse d'un plan (`(rue + ' ' + ville) |
+    /// urlencode` -> `adresse | map_query`) quand ils donnent la même adresse ; `None` sinon.
+    fn site_href(&mut self, v: &str, scope: &Scope) -> Option<String> {
+        if !self.keeps_site() {
+            return None;
+        }
+        let v = v.trim();
+        if revel_edit::editable::is_site_href(v) {
+            return Some(v.to_string());
+        }
+        let exprs = template_exprs(v);
+        let [e] = exprs.as_slice() else {
+            return None;
+        };
+        let e = inline_filters(e, &self.b.site_filters());
+        let site_refs: Vec<String> = refs(&e)
+            .into_iter()
+            .filter(|r| r.name == "site")
+            .map(|r| e[r.start..r.path_end].to_string())
+            .collect();
+        if site_refs.is_empty() || refs(&e).iter().any(|r| r.name != "site") {
+            return None;
+        }
+        let value = self.b.eval(scope, &e, &self.ctx).ok()?;
+        let produced = display(&value, false);
+        if produced.is_empty() {
+            return None;
+        }
+        let (start, end) = (v.find("{{")?, v.rfind("}}")?);
+        let (before, after) = (&v[..start], &v[end + 2..]);
+        // Numéro d'appel.
+        if site_refs.len() == 1 && before == "tel:" && after.is_empty() {
+            let base = self.b.eval(scope, &site_refs[0], &self.ctx).ok()?;
+            if crate::eval::tel_link(&display(&base, false)) == produced {
+                return Some(format!("tel:{{{{ {} | tel }}}}", site_refs[0]));
+            }
+        }
+        // Adresse d'un plan : chemin commun des valeurs lues (`site.address`).
+        if before == revel_edit::editable::MAP_PREFIX && after.is_empty() {
+            let parent = |p: &str| p.rsplit_once('.').map(|(a, _)| a.to_string());
+            let common = parent(&site_refs[0])?;
+            if site_refs
+                .iter()
+                .all(|r| parent(r).as_deref() == Some(common.as_str()))
+                && common.contains('.')
+            {
+                let obj = self.b.eval(scope, &common, &self.ctx).ok()?;
+                if crate::eval::map_query(&obj) == produced {
+                    return Some(format!(
+                        "{}{{{{ {common} | map_query }}}}",
+                        revel_edit::editable::MAP_PREFIX
+                    ));
+                }
+            }
+        }
+        None
+    }
+
     /// Expression connue d'avance (aucune variable vivante ni collection).
     fn constant(&self, expr: &str) -> bool {
         refs(expr).iter().all(|r| {
@@ -668,6 +775,12 @@ impl Fl<'_, '_> {
             }
             if let Some(v) = a.value.clone()
                 && (v.contains("{{") || v.contains("{%"))
+                && matches!(a.name.as_str(), "href" | "src" | "poster")
+                && let Some(kept) = self.site_href(&v, scope)
+            {
+                a.value = Some(kept);
+            } else if let Some(v) = a.value.clone()
+                && (v.contains("{{") || v.contains("{%"))
             {
                 let exprs = template_exprs(&v);
                 if exprs.iter().all(|e| self.constant(e)) {
@@ -701,8 +814,12 @@ impl Fl<'_, '_> {
                 attrs,
                 children,
             } => {
+                let head = tag.eq_ignore_ascii_case("head");
+                let was = self.in_head;
+                self.in_head |= head;
                 let attrs = self.attrs(attrs, scope);
                 let children = self.nodes(children, scope);
+                self.in_head = was;
                 out.push(Node::Element {
                     id: id.clone(),
                     tag: tag.clone(),
@@ -711,6 +828,10 @@ impl Fl<'_, '_> {
                 });
             }
             Node::Out { expr } => {
+                if let Some(kept) = self.site_output(expr) {
+                    out.push(Node::Out { expr: kept });
+                    return;
+                }
                 let e = self.inline(expr, scope);
                 if !self.constant(&e) {
                     out.push(Node::Out { expr: e });
@@ -752,6 +873,17 @@ impl Fl<'_, '_> {
                 then,
                 otherwise,
             } => {
+                if self.site_condition(cond) {
+                    let then = self.nodes(then, scope);
+                    let otherwise = self.nodes(otherwise, scope);
+                    out.push(Node::If {
+                        id: id.clone(),
+                        cond: simplify_cond(cond),
+                        then,
+                        otherwise,
+                    });
+                    return;
+                }
                 let c = simplify_cond(&self.inline(cond, scope));
                 if self.constant(&c)
                     && let Some(v) = self.eval(scope, &c)
@@ -1381,18 +1513,43 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
                     .filter(|h| revel_edit::visibility::is_path(h))
                     .unwrap_or(t)
                     .to_string();
+                // `x or 'Vidéo'` : propriété `x`, le texte de repli reste dans le composant.
+                let (key, fallback) = match split_kw_top(&key, " or ") {
+                    Some((h, lit))
+                        if revel_edit::visibility::is_path(h.trim())
+                            && revel_edit::canvas::literal(lit.trim()).is_some() =>
+                    {
+                        (h.trim().to_string(), Some(lit.trim().to_string()))
+                    }
+                    _ => (key, None),
+                };
+                let with = |p: &str| match &fallback {
+                    Some(l) => format!("{p} or {l}"),
+                    None => p.to_string(),
+                };
                 if let Some((_, p, k)) = found.iter_mut().find(|(x, _, _)| *x == key) {
                     // Lu comme condition et comme valeur : une valeur (vraie si remplie).
                     if *k == PropKind::Switch && kind != PropKind::Switch {
                         *k = kind;
                     }
-                    return p.clone();
+                    return with(p);
                 }
                 let p = prop_name(&key, &taken);
                 taken.insert(p.clone());
                 found.push((key, p.clone(), kind));
-                p
+                with(&p)
             };
+        // Variables du composant parcourues par une boucle : leur valeur est une liste.
+        let mut iterated_sets: HashSet<String> = HashSet::new();
+        revel_model::ids::walk(&c.body, &mut |n| {
+            if let Node::Each { expr, .. } = n {
+                for r in refs(expr) {
+                    if sets.contains(&r.name) {
+                        iterated_sets.insert(r.name.clone());
+                    }
+                }
+            }
+        });
         let mut body = std::mem::take(&mut c.body);
         if !lists.is_empty() {
             walk_body(&mut body, &mut Vec::new(), &mut |n, local| match n {
@@ -1462,6 +1619,36 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
             }
             Node::Out { expr } if external(expr, local) => {
                 *expr = prop_for(expr, PropKind::Text, &mut found);
+            }
+            // Variable du composant calculée d'après une valeur de l'utilisateur
+            // (`{% set vid = video or "" %}`) : chaque valeur lue devient une propriété.
+            Node::Set { expr, name } => {
+                let iterated = iterated_sets.contains(name.as_str());
+                let mut out = String::new();
+                let mut at = 0;
+                for r in refs(expr) {
+                    let path = expr[r.start..r.path_end].to_string();
+                    if !outside(&r.name, local)
+                        || list_names.contains(&r.name)
+                        || list_paths
+                            .iter()
+                            .any(|l| l.starts_with(&format!("{path}.")))
+                    {
+                        continue;
+                    }
+                    let kind = if iterated {
+                        PropKind::List
+                    } else {
+                        PropKind::Text
+                    };
+                    out.push_str(&expr[at..r.start]);
+                    out.push_str(&prop_for(&path, kind, &mut found));
+                    at = r.path_end;
+                }
+                if at > 0 {
+                    out.push_str(&expr[at..]);
+                    *expr = out;
+                }
             }
             Node::If { cond, .. } if external(cond, local) => {
                 *cond = match negated(cond) {
@@ -2727,6 +2914,241 @@ fn picked_lists(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
     }
 }
 
+/// Gardes redondantes retirées, formes du panneau : `x and x|trim` -> `x` (texte rempli),
+/// `(x or "")` -> `x` dans une condition « contient » ou une valeur affichée. Renvoie le nombre
+/// d'expressions simplifiées (gardées seulement si les fichiers produits restent identiques).
+fn rewrite_guards(nodes: &mut [Node]) -> usize {
+    let path = r"[A-Za-z_][\w]*(?:\.[A-Za-z_][\w-]*)*";
+    let trim_re = regex::Regex::new(&format!(
+        r"^\(?\s*({path})\s+and\s+\(?\s*({path})\s*\|\s*trim\s*\)?\s*\)?$"
+    ))
+    .expect("regex");
+    let or_empty =
+        regex::Regex::new(&format!(r#"\(\s*({path})\s+or\s+(?:""|'')\s*\)"#)).expect("regex");
+    let whole_or_empty =
+        regex::Regex::new(&format!(r#"^\s*({path})\s+or\s+(?:""|'')\s*$"#)).expect("regex");
+    let simplify = |e: &str| -> Option<String> {
+        // Choix écrit d'avance (`(nom if (1) == 1 else "")`, boucle dépliée) : la branche choisie.
+        if let Some(f) = fold_ternary(e) {
+            return Some(f);
+        }
+        if let Some(c) = trim_re.captures(e.trim())
+            && c[1] == c[2]
+        {
+            return Some(c[1].to_string());
+        }
+        if let Some(c) = whole_or_empty.captures(e) {
+            return Some(c[1].to_string());
+        }
+        let out = or_empty.replace_all(e, "$1").into_owned();
+        (out != e).then_some(out)
+    };
+    let mut n = 0;
+    walk_mut(nodes, &mut |node| match node {
+        Node::If { cond, .. } => {
+            if let Some(c) = simplify(cond) {
+                *cond = c;
+                n += 1;
+            }
+        }
+        Node::Out { expr } => {
+            if let Some(c) = simplify(expr) {
+                *expr = c;
+                n += 1;
+            }
+        }
+        Node::Element { attrs, .. } => {
+            for a in attrs.iter_mut() {
+                if let Some(v) = a.value.as_mut()
+                    && v.contains("{{")
+                {
+                    let mut changed = false;
+                    for e in template_exprs(v) {
+                        if let Some(c) = simplify(&e) {
+                            *v = v.replacen(&e, &c, 1);
+                            changed = true;
+                        }
+                    }
+                    if changed {
+                        n += 1;
+                    }
+                }
+                if let Some(w) = a.when.as_mut()
+                    && let Some(c) = simplify(w)
+                {
+                    *w = c;
+                    n += 1;
+                }
+            }
+        }
+        Node::Use { args, .. } => {
+            for e in args.values_mut() {
+                if let Some(c) = simplify(e) {
+                    *e = c;
+                    n += 1;
+                }
+            }
+        }
+        Node::Image(img) => {
+            if let Some(c) = img.alt.as_deref().and_then(simplify) {
+                img.alt = Some(c);
+                n += 1;
+            }
+            if let Some(c) = simplify(&img.src) {
+                img.src = c;
+                n += 1;
+            }
+        }
+        _ => {}
+    });
+    n
+}
+
+/// Premier `mot` (` if `, ` else `) hors des parenthèses, crochets, accolades et guillemets :
+/// (avant, après).
+fn split_kw_top<'a>(s: &'a str, kw: &str) -> Option<(&'a str, &'a str)> {
+    let mut depth = 0i32;
+    let mut quote: Option<char> = None;
+    let mut esc = false;
+    for (i, c) in s.char_indices() {
+        if let Some(q) = quote {
+            if esc {
+                esc = false;
+            } else if c == '\\' {
+                esc = true;
+            } else if c == q {
+                quote = None;
+            }
+            continue;
+        }
+        match c {
+            '"' | '\'' => quote = Some(c),
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            _ if depth == 0 && s[i..].starts_with(kw) => {
+                return Some((&s[..i], &s[i + kw.len()..]));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `a if C else b` dont la condition ne lit aucune variable (`(1) == 1`) : la branche choisie
+/// (entre parenthèses si elle n'est pas un nom seul).
+fn fold_ternary(e: &str) -> Option<String> {
+    let mut t = e.trim();
+    while outer_parens(t) {
+        t = t[1..t.len() - 1].trim();
+    }
+    let (a, rest) = split_kw_top(t, " if ")?;
+    let (c, b) = split_kw_top(rest, " else ")?;
+    if !refs(c).is_empty() {
+        return None;
+    }
+    let v = minijinja::Environment::new()
+        .compile_expression(c)
+        .ok()?
+        .eval(())
+        .ok()?;
+    let pick = if v.is_true() { a.trim() } else { b.trim() };
+    Some(
+        if revel_edit::visibility::is_path(pick) || revel_edit::canvas::literal(pick).is_some() {
+            pick.to_string()
+        } else {
+            format!("({pick})")
+        },
+    )
+}
+
+fn guards(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
+    let (kept, refused) = verified_pass(input, site, &|b, _| rewrite_guards(b));
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} garde(s) redondante(s) retirée(s) (texte rempli, valeur vide)"
+        ));
+    }
+    if refused > 0 {
+        notes.push(format!(
+            "{refused} garde(s) gardée(s) : le site produit changerait"
+        ));
+    }
+    let (kept, _) = verified_pass(input, site, &|b, taken| rewrite_image_choices(b, taken));
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} image(s) aux réglages choisis selon une condition : une image par cas (condition d'affichage)"
+        ));
+    }
+}
+
+/// Image dont un réglage écrit est choisi selon une condition du panneau
+/// (`sizes = ("100vw" if b.style != "column" else "760px")`) : une image par cas, sous une
+/// condition d'affichage (`Si b.style != "column"` : image « 100vw », sinon image « 760px »).
+fn rewrite_image_choices(nodes: &mut [Node], taken: &mut HashSet<String>) -> usize {
+    let mut n = 0;
+    walk_mut(nodes, &mut |node| {
+        let Node::Image(img) = node else {
+            return;
+        };
+        // Premier réglage choisi : (champ, condition, valeur si vraie, valeur sinon).
+        let choice = |e: &Option<String>| -> Option<(String, String, String)> {
+            let e = e.as_deref()?;
+            let mut t = e.trim();
+            while outer_parens(t) {
+                t = t[1..t.len() - 1].trim();
+            }
+            let (a, rest) = split_kw_top(t, " if ")?;
+            let (c, b) = split_kw_top(rest, " else ")?;
+            let (a, b, c) = (a.trim(), b.trim(), c.trim());
+            (revel_edit::canvas::literal(a).is_some()
+                && revel_edit::canvas::literal(b).is_some()
+                && revel_edit::visibility::read(c).is_some())
+            .then(|| (c.to_string(), a.to_string(), b.to_string()))
+        };
+        let fields: [(&str, &Option<String>); 5] = [
+            ("sizes", &img.sizes),
+            ("class", &img.class),
+            ("ratio", &img.ratio),
+            ("loading", &img.loading),
+            ("widths", &img.widths),
+        ];
+        let Some((field, (cond, a, b))) =
+            fields.iter().find_map(|(f, e)| choice(e).map(|c| (*f, c)))
+        else {
+            return;
+        };
+        let with = |v: &str, fresh: bool, taken: &mut HashSet<String>| {
+            let mut i = img.clone();
+            let slot = match field {
+                "sizes" => &mut i.sizes,
+                "class" => &mut i.class,
+                "ratio" => &mut i.ratio,
+                "loading" => &mut i.loading,
+                _ => &mut i.widths,
+            };
+            *slot = Some(v.to_string());
+            if fresh {
+                let id = revel_model::ids::fresh(taken);
+                taken.insert(id.clone());
+                i.id = Some(id);
+            }
+            Node::Image(i)
+        };
+        let first = with(&a, false, taken);
+        let second = with(&b, true, taken);
+        let id = revel_model::ids::fresh(taken);
+        taken.insert(id.clone());
+        *node = Node::If {
+            id: Some(id),
+            cond,
+            then: vec![first],
+            otherwise: vec![second],
+        };
+        n += 1;
+    });
+    n
+}
+
 /// Contenu relié lu directement : `{% if (collections.x | by_slug(champ)) %}` dont le contenu lit
 /// `(collections.x | by_slug(champ)).data.nom` -> liste des contenus reliés par le champ
 /// (`{% for ref in collections.x | by_slugs(champ) %}`, `ref.data.nom`), forme du panneau. Renvoie
@@ -3102,6 +3524,72 @@ fn layout_fields_from_pages(site: &mut Site, notes: &mut Vec<String>) {
     }
 }
 
+/// Formes composées ([`fuse`]) : boucles sur des contenus reliés réunies, composants qui reçoivent
+/// une liste construite ou du HTML assemblé dépliés, listes construites parcourues directement,
+/// HTML assemblé en éléments ; puis valeurs de style choisies dans un tableau en classes.
+fn composite_forms(input: &BuildInput, site: &mut Site, notes: &mut Vec<String>) {
+    let (kept, _) = verified_pass(input, site, &|b, _| fuse::fuse_nested_refs(b));
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} boucle(s) sur un champ autour de contenus reliés : liste des contenus reliés par le champ"
+        ));
+    }
+    let used_before: HashSet<String> = used_components(site);
+    let components = site.components.clone();
+    let (kept, _) = verified_pass(input, site, &|b, taken| {
+        fuse::inline_uses(b, &components, taken)
+    });
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} utilisation(s) de composant dépliée(s) (liste construite ou HTML assemblé reçus)"
+        ));
+    }
+    let (kept, _) = verified_pass(input, site, &|b, _| fuse::fuse_accumulations(b));
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} liste(s) construite(s) pas à pas : parcourue(s) directement"
+        ));
+    }
+    let (kept, _) = verified_pass(input, site, &|b, taken| fuse::html_strings(b, taken));
+    if kept > 0 {
+        notes.push(format!("{kept} HTML assemblé(s) dans un texte : éléments"));
+    }
+    let (kept, _) = verified_pass(input, site, &|b, _| fuse::fold_const_ifs(b));
+    if kept > 0 {
+        notes.push(format!(
+            "{kept} condition(s) connue(s) d'avance : contenu gardé"
+        ));
+    }
+    // Composants qui ne servent plus (dépliés partout).
+    let used_after = used_components(site);
+    let gone: Vec<String> = used_before
+        .iter()
+        .filter(|c| !used_after.contains(*c))
+        .cloned()
+        .collect();
+    if !gone.is_empty() {
+        site.components.retain(|c| !gone.contains(&c.id));
+        notes.push(format!(
+            "composant(s) déplié(s) partout, retiré(s) : {}",
+            gone.join(", ")
+        ));
+    }
+    map_styles(site, notes);
+}
+
+/// Composants utilisés dans le site.
+fn used_components(site: &Site) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for (_, _, body) in site.owners() {
+        revel_model::ids::walk(body, &mut |n| {
+            if let Node::Use { component, .. } = n {
+                out.insert(component.clone());
+            }
+        });
+    }
+    out
+}
+
 /// Reconstruit le site de `input` dans la forme de l'interface (même rendu).
 pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
     let b = Builder::new(input);
@@ -3148,10 +3636,19 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         notes: Vec::new(),
         ctx,
         mutable: HashSet::new(),
+        in_head: false,
     };
     // Valeurs lues chez l'utilisateur : propriétés, données par chaque utilisation (écrites
     // ensuite là où elles sont connues d'avance).
-    deduce_props(&mut site, &global_names, &mut notes);
+    // Un composant qui en utilise un autre lit à son tour les valeurs données à ce dernier :
+    // déduction répétée jusqu'à ce qu'aucune propriété ne s'ajoute.
+    for _ in 0..4 {
+        let before = notes.len();
+        deduce_props(&mut site, &global_names, &mut notes);
+        if notes.len() == before {
+            break;
+        }
+    }
     // Composants : données du site connues d'avance ; ce qui vient de l'utilisateur, vivant.
     for ci in 0..site.components.len() {
         let mut f = fl(
@@ -3235,6 +3732,24 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
         taken = std::mem::take(&mut f.taken);
         notes.append(&mut f.notes);
     }
+    // Listes de données lues par adresse (`rubriques.items | find_by('slug', s)`) : collections
+    // du CMS ; leurs contenus servent ensuite à chaque vérification.
+    let collections = fuse::data_collections(input, &globals, &mut site, &mut notes);
+    let input_with = BuildInput {
+        site: input.site,
+        entries: input
+            .entries
+            .iter()
+            .cloned()
+            .chain(collections.iter().flat_map(|c| c.entries.iter().cloned()))
+            .collect(),
+        locales: input.locales.clone(),
+        environment: input.environment.clone(),
+        version: input.version.clone(),
+        hooks: input.hooks.clone(),
+        now: input.now,
+    };
+    let input = &input_with;
     // Valeur tirée d'un tableau gardée dans une variable, lue par un style : écrite dans le style.
     let (kept, _) = verified_pass(input, &mut site, &|b, _| inline_mapped_sets(b));
     if kept > 0 {
@@ -3252,6 +3767,9 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
     picked_lists(input, &mut site, &mut notes);
     // Contenu relié lu directement (`(collections.x | by_slug(champ)).data.nom`) : liste reliée.
     ref_lookups(input, &mut site, &mut notes);
+    // Gardes redondantes (`x and x|trim`, `(x or "")`) : conditions et valeurs du panneau.
+    guards(input, &mut site, &mut notes);
+    composite_forms(input, &mut site, &mut notes);
     // Parenthèses autour d'un nom seul (`(b.cover)`, `(title) or 'x'`) retirées : formes du panneau.
     let simplify = |nodes: &mut Vec<Node>| {
         walk_mut(nodes, &mut |n| match n {
@@ -3347,7 +3865,11 @@ pub fn rebuild(input: &BuildInput) -> Result<Rebuilt, RenderError> {
     // En-tête écrit à la main : réglages du site et des pages, là où le site produit reste le
     // même.
     crate::head::head_settings(input, &mut site, &mut notes);
-    Ok(Rebuilt { site, notes })
+    Ok(Rebuilt {
+        site,
+        notes,
+        collections,
+    })
 }
 
 #[cfg(test)]
@@ -3426,6 +3948,7 @@ mod tests {
             notes: Vec::new(),
             ctx: String::new(),
             mutable: HashSet::new(),
+            in_head: false,
         };
         assert_eq!(
             f.collection_list(

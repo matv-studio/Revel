@@ -79,6 +79,21 @@ struct Ctx {
     env: Vec<String>,
     /// Fichier du serveur (`.htaccess`) : son texte écrit est du texte, pas du HTML.
     text_file: bool,
+    /// Dans une liste : « premier contenu », « dernier contenu » (`loop.first`, `loop.last`).
+    in_loop: bool,
+    /// Écritures propres au site (filtres du site à une valeur : `person_name`), choisies comme
+    /// une écriture de date.
+    formats: Vec<String>,
+}
+
+/// Écritures propres au site : ses filtres qui ne prennent que la valeur (« Prénom NOM »).
+pub fn site_formats(site: &Site) -> Vec<String> {
+    site.settings
+        .filters
+        .iter()
+        .filter(|(_, f)| f.params.len() == 1)
+        .map(|(n, _)| n.clone())
+        .collect()
 }
 
 fn is_field(f: &str) -> bool {
@@ -106,6 +121,11 @@ impl Ctx {
             .and_then(|p| e.strip_prefix(p))
             .is_some_and(is_field)
     }
+    /// Information du site (`site.email`, `site.address.street`) : réglée dans Paramètres ›
+    /// Informations du site, reliée aux textes, liens, images, listes et conditions.
+    fn site_value(&self, e: &str) -> bool {
+        site_path(e)
+    }
     fn env_var(&self, e: &str) -> bool {
         e.trim()
             .strip_prefix("env.")
@@ -132,7 +152,12 @@ impl Ctx {
             None => (e, None),
         };
         // Nombre de valeurs d'un champ liste ou d'une propriété liste.
-        if tail == Some("length") && (self.field(head) || self.prop(head, Some(PropKind::List))) {
+        if tail == Some("length")
+            && (self.field(head)
+                || self.prop(head, Some(PropKind::List))
+                // Nombre de contenus d'une collection.
+                || Query::parse(head).is_some_and(|q| q.to_expr() == head.trim()))
+        {
             return true;
         }
         let filter_ok = match tail {
@@ -140,18 +165,21 @@ impl Ctx {
             Some("safe") => true,
             // Mots entre astérisques mis en valeur.
             Some(t) if t.starts_with("emphasis(") => true,
-            Some(t) => crate::dates::format_of(t).is_some(),
+            Some(t) => crate::dates::format_of(t).is_some() || self.format_ok(t),
         };
-        // Champ, sinon un autre champ : `(a or b)`.
+        // Champ, sinon un autre champ ou un texte écrit : `(a or b)`, `a or 'Vidéo'`.
         let fallback = || {
             let inner = head
                 .strip_prefix('(')
                 .and_then(|h| h.strip_suffix(')'))
                 .unwrap_or(head);
             let parts: Vec<&str> = inner.split(" or ").map(str::trim).collect();
-            parts.len() == 2 && parts.iter().all(|p| self.field(p))
+            let value = |p: &str| self.field(p) || self.prop(p, Some(PropKind::Text));
+            parts.len() == 2
+                && value(parts[0])
+                && (value(parts[1]) || crate::canvas::literal(parts[1]).is_some())
         };
-        if filter_ok && (self.field(head) || fallback()) {
+        if filter_ok && (self.field(head) || self.site_value(head) || fallback()) {
             return true;
         }
         if tail.is_none() && self.prop(head, Some(PropKind::Text)) {
@@ -167,19 +195,20 @@ impl Ctx {
         }
         false
     }
-    /// Valeur d'attribut reconnue (`{{ x }}` seul : champ, adresse, propriété, langue).
+    /// Valeur d'attribut reconnue : texte écrit, valeur reliée (texte autour, « seulement si
+    /// remplie »), style relié, classes selon un champ.
     fn attr_value(&self, name: &str, v: &str) -> bool {
         if !v.contains("{{") && !v.contains("{%") {
             return true;
         }
-        let inner = |s: &str| {
-            s.trim()
-                .strip_prefix("{{")
-                .and_then(|x| x.strip_suffix("}}"))
-                .map(|x| x.trim().to_string())
-        };
         if name == "style" {
             let s = v.trim().trim_end_matches(';').trim();
+            let inner = |s: &str| {
+                s.trim()
+                    .strip_prefix("{{")
+                    .and_then(|x| x.strip_suffix("}}"))
+                    .map(|x| x.trim().to_string())
+            };
             if let Some(e) = s
                 .strip_prefix("background-image:")
                 .and_then(|x| x.trim().strip_prefix("url("))
@@ -189,7 +218,13 @@ impl Ctx {
             {
                 return self.field(&e);
             }
-            return false;
+            // Propriétés de style reliées (`--dot:{{ couleur }}`).
+            return crate::attrbind::style_decls(v).is_some_and(|decls| {
+                decls
+                    .iter()
+                    .filter_map(|d| d.bound.as_ref())
+                    .all(|b| self.bound_ok("style", &b.value))
+            });
         }
         // Classe tirée de la valeur d'un champ : `block block--{{ b.style or 'plein' }}`.
         if name == "class"
@@ -202,18 +237,24 @@ impl Ctx {
             return crate::style::cond_classes(v)
                 .is_some_and(|(_, conds)| conds.iter().all(|(c, _)| self.condition(c)));
         }
-        // Adresse écrite autour d'un champ (`/projets/?expertise={{ slug }}`).
-        if name == "href"
-            && let (Some(i), Some(j)) = (v.find("{{"), v.rfind("}}"))
-            && i < j
-            && !v[..i].contains('{')
-            && !v[j + 2..].contains('{')
-            && (i > 0 || j + 2 < v.len())
-        {
-            let e = v[i + 2..j].trim();
-            return self.field(e) || self.prop(e, Some(PropKind::Text));
+        if name == "class" {
+            return false;
         }
-        let Some(e) = inner(v) else { return false };
+        // Valeur reliée, texte écrit autour, partie écrite seulement si la valeur est remplie
+        // (`Lire la vidéo{% if label %} : {{ label }}{% endif %}`).
+        match crate::attrbind::Bound::parse(v) {
+            Some(b) => {
+                self.bound_ok(name, &b.value)
+                    && (!b.only_if || self.condition(crate::attrbind::head(&b.value)))
+            }
+            None => false,
+        }
+    }
+    /// Valeur reliée dans un attribut : champ, information du site, adresse du contenu,
+    /// propriété (lien, image, texte), valeur affichée (écriture, repli), numéro d'appel ou
+    /// adresse pour un plan, nombre de valeurs ou de contenus.
+    fn bound_ok(&self, name: &str, e: &str) -> bool {
+        let e = e.trim();
         // Étiquettes d'un élément filtré : valeurs d'un champ liste (`x | join(' ')`).
         if name == "data-revel-tags"
             && let Some((h, t)) = e.split_once('|')
@@ -222,11 +263,45 @@ impl Ctx {
             let h = h.trim();
             return self.field(h) || self.prop(h, Some(PropKind::List));
         }
-        self.field(&e)
-            || self.url.as_deref() == Some(e.as_str())
-            || (name == "href" && self.prop(&e, Some(PropKind::Link)))
-            || (matches!(name, "src" | "poster") && self.prop(&e, Some(PropKind::Image)))
-            || self.output(&e)
+        // Lien d'appel (`tel:{{ site.phone | tel }}`), plan, écriture du site
+        // (`embed/{{ video | youtube_id }}`).
+        let written = e
+            .strip_suffix("| tel")
+            .or_else(|| e.strip_suffix("|tel"))
+            .or_else(|| e.strip_suffix("| map_query"))
+            .map(str::trim)
+            .or_else(|| {
+                e.split_once('|')
+                    .filter(|(_, f)| self.format_ok(f.trim()))
+                    .map(|(h, _)| h.trim())
+            });
+        self.field(e)
+            || self.site_value(e)
+            || self.url.as_deref() == Some(e)
+            || (name == "href" && self.prop(e, Some(PropKind::Link)))
+            || (matches!(name, "src" | "poster") && self.prop(e, Some(PropKind::Image)))
+            || self.prop(e, Some(PropKind::Text))
+            || written.is_some_and(|t| self.site_value(t) || self.field(t) || self.prop(t, None))
+            || self.output(e)
+    }
+    /// Écriture choisie d'une valeur : filtre propre au site (« Prénom NOM »), valeurs d'une
+    /// liste séparées (`join(' ')`), éventuellement suivis de `| safe`.
+    fn format_ok(&self, tail: &str) -> bool {
+        let parts: Vec<&str> = tail.split('|').map(str::trim).collect();
+        let (first, rest) = match parts.split_first() {
+            Some(x) => x,
+            None => return false,
+        };
+        if !rest.iter().all(|r| *r == "safe") {
+            return false;
+        }
+        if self.formats.iter().any(|f| f == first) {
+            return true;
+        }
+        first
+            .strip_prefix("join(")
+            .and_then(|a| a.strip_suffix(')'))
+            .is_some_and(|a| crate::canvas::literal(a.trim()).is_some())
     }
     fn condition(&self, cond: &str) -> bool {
         let c = cond.trim();
@@ -244,6 +319,8 @@ impl Ctx {
             })
             .unwrap_or(c);
         self.field(c)
+            // Contenu qui a une page.
+            || self.url.as_deref() == Some(c)
             || self.prop(c, Some(PropKind::Switch))
             || Query::parse(c).is_some()
             || FieldList::parse(c).is_some_and(|fl| match fl {
@@ -255,10 +332,65 @@ impl Ctx {
             // des variables de l'environnement de publication.
             || crate::visibility::read(cond).is_some_and(|c| {
                 c.clauses.iter().all(|k| {
-                    self.field(&k.field) || self.prop(&k.field, None) || self.env_var(&k.field)
+                    self.field(&k.field)
+                        || self.url.as_deref() == Some(k.field.as_str())
+                        || self.prop(&k.field, None)
+                        || self.env_var(&k.field)
+                        || self.site_value(&k.field)
+                        // Premier ou dernier contenu de la liste.
+                        || (self.in_loop && matches!(k.field.as_str(), "loop.first" | "loop.last"))
                 })
             })
     }
+}
+
+/// Texte relié à une information du site dans une forme du panneau : `site.x`, avec au plus
+/// `| safe`, `| emphasis(…)` ou une écriture de date.
+pub fn is_site_output(expr: &str) -> bool {
+    let e = expr.trim();
+    let (head, tail) = match e.split_once('|') {
+        Some((h, t)) => (h.trim(), Some(t.trim())),
+        None => (e, None),
+    };
+    let filter_ok = match tail {
+        None | Some("safe") => true,
+        Some(t) if t.starts_with("emphasis(") && !t.contains('|') => true,
+        Some(t) => crate::dates::format_of(t).is_some(),
+    };
+    filter_ok && site_path(head)
+}
+
+/// Lien relié à une information du site : `{{ site.x }}`, `mailto:{{ site.x }}`,
+/// `tel:{{ site.x | tel }}`, plan `https://maps.google.com/?q={{ site.x | map_query }}`.
+pub fn is_site_href(v: &str) -> bool {
+    let v = v.trim();
+    let inner = |s: &str| -> Option<String> {
+        Some(s.strip_prefix("{{")?.strip_suffix("}}")?.trim().to_string())
+    };
+    let with = |e: &str, filter: &str| -> bool {
+        e.split_once('|')
+            .is_some_and(|(h, f)| f.trim() == filter && site_path(h.trim()))
+    };
+    if let Some(r) = v.strip_prefix("mailto:") {
+        return inner(r).is_some_and(|e| site_path(&e));
+    }
+    if let Some(r) = v.strip_prefix("tel:") {
+        return inner(r).is_some_and(|e| with(&e, "tel"));
+    }
+    if let Some(r) = v.strip_prefix(MAP_PREFIX) {
+        return inner(r).is_some_and(|e| with(&e, "map_query"));
+    }
+    inner(v).is_some_and(|e| site_path(&e))
+}
+
+/// Début d'un lien « plan » (adresse sur une carte).
+pub const MAP_PREFIX: &str = "https://maps.google.com/?q=";
+
+/// Chemin d'une information du site (`site.email`, `site.address.street`).
+pub fn site_path(e: &str) -> bool {
+    e.trim()
+        .strip_prefix("site.")
+        .is_some_and(|r| r.split('.').all(is_field))
 }
 
 /// Expression sans espaces (comparaison de formes).
@@ -323,7 +455,16 @@ impl Audit<'_> {
                             .locale
                             .as_deref()
                             .is_some_and(|l| w.trim() == format!("{l}.current"));
-                        if !locale_current {
+                        // Attribut écrit seulement si le champ qu'il reprend est rempli
+                        // (`poster="{{ cover }}"` si `cover`) : comportement d'un attribut relié.
+                        let same_field =
+                            a.value.as_deref().is_some_and(|v| {
+                                v.trim()
+                                    .strip_prefix("{{")
+                                    .and_then(|x| x.strip_suffix("}}"))
+                                    .is_some_and(|x| x.trim() == w.trim())
+                            }) && (ctx.field(w) || ctx.prop(w, None) || ctx.site_value(w));
+                        if !locale_current && !same_field {
                             self.push(id, Kind::Attribute, format!("{} si {w}", a.name));
                         }
                     }
@@ -371,6 +512,7 @@ impl Audit<'_> {
                 ..
             } => {
                 let mut inner = ctx.clone();
+                inner.in_loop = true;
                 if let Some(q) = Query::parse(expr) {
                     // Contenus mis en premier : champ du contenu affiché ou contenus choisis.
                     if let Some(f) = q.first.as_deref()
@@ -384,7 +526,10 @@ impl Audit<'_> {
                     inner.value = None;
                 } else if let Some(fl) = FieldList::parse(expr).filter(|fl| match fl {
                     FieldList::Values { field } | FieldList::Refs { field, .. } => {
-                        ctx.field(field) || ctx.prop(field, Some(PropKind::List))
+                        ctx.field(field)
+                            || ctx.prop(field, Some(PropKind::List))
+                            // Liste des informations du site (menu : liens et leurs textes).
+                            || ctx.site_value(field)
                     }
                 }) {
                     match fl {
@@ -442,6 +587,7 @@ impl Audit<'_> {
                 };
                 let src_ok = crate::canvas::literal(&img.src).is_some()
                     || ctx.field(&img.src)
+                    || ctx.site_value(&img.src)
                     || ctx.prop(&img.src, Some(PropKind::Image));
                 let fixed = [
                     &img.sizes,
@@ -535,6 +681,7 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         owner: "site".into(),
     };
     let env = env_fields(site);
+    let formats = site_formats(site);
     // Filtres propres au site : relevés là où une expression les emploie (le titre de l'onglet,
     // dans `<head>`, se règle dans Paramètres › Référencement).
     for l in &site.layouts {
@@ -543,6 +690,7 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         let mut ctx = Ctx {
             props: fields.iter().map(|p| (p.name.clone(), p.kind)).collect(),
             env: env.clone(),
+            formats: formats.clone(),
             ..Default::default()
         };
         // Modèle des pages d'une collection : champs du contenu affiché.
@@ -572,12 +720,9 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         // Fichier du serveur (`.htaccess`, `robots.txt`, `.php`) : texte écrit tel quel, réglé
         // dans les paramètres de la page.
         let html_page = p.path.ends_with('/') || p.path.ends_with(".html");
-        if !html_page
-            && !p.path.ends_with(".xml")
-            && p.body
-                .iter()
-                .all(|n| matches!(n, Node::Text { .. } | Node::Html { .. }))
-        {
+        // Texte avec ses balises (valeurs, conditions, listes), modifié tel quel dans les
+        // paramètres de la page.
+        if crate::textfile::is_server_file(&p.path) && crate::textfile::round_trips(&p.body) {
             continue;
         }
         // Valeurs des propriétés de son gabarit : réglages de la page.
@@ -601,6 +746,7 @@ pub fn audit(site: &Site) -> Vec<Issue> {
                     Vec::new()
                 },
                 text_file: !html_page && !p.path.ends_with(".xml"),
+                formats: formats.clone(),
                 ..Default::default()
             },
         );
@@ -610,6 +756,7 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         let ctx = Ctx {
             props: c.props.iter().map(|p| (p.name.clone(), p.kind)).collect(),
             env: env.clone(),
+            formats: formats.clone(),
             ..Default::default()
         };
         a.nodes(&c.body, &ctx);

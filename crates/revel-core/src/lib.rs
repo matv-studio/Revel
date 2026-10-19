@@ -1187,10 +1187,9 @@ pub fn rebuild_for_ui(p: &mut revel_project::Project) -> Option<String> {
         return None;
     }
     match p.rebuilt() {
-        Ok((site, _notes)) => {
-            let after = revel_edit::editable::audit(&site).len();
-            p.site = site;
-            if let Err(e) = p.save() {
+        Ok(r) => {
+            let after = revel_edit::editable::audit(&r.site).len();
+            if let Err(e) = p.save_rebuilt(r) {
                 return Some(format!(
                     "reconstruction dans la forme de l'interface non enregistrée : {e}"
                 ));

@@ -44,6 +44,11 @@ const STATES: &[(&str, &str)] = &[
     // Interrupteur éteint (son, musique), et ce qu'il contient.
     ("[aria-pressed=\"false\"]", "styles-state-off"),
     ("^[aria-pressed=\"false\"]", "styles-state-in-off"),
+    // Média au survol lancé (vidéo) ou chargé (image) : classe posée par le script du site.
+    (".is-ready", "styles-state-ready"),
+    // Élément arrêté par « Lire ou mettre en pause » (en-tête dont la vidéo est en pause) : ce
+    // qu'il contient (texte « Lire la vidéo » du bouton).
+    ("^.is-paused", "styles-state-in-paused"),
 ];
 
 /// Sélecteur d'une classe dans un état : ajouté à la classe (`.onglet:hover`), ou, commençant par

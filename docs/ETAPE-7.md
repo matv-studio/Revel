@@ -32,6 +32,7 @@ fois lus, des pages HTML, des feuilles de style et des fichiers.
 | 7.7 | **Animations et interactions** propres à chaque outil (interactions Webflow, effets de Framer) : reprises en animations Revel quand elles correspondent, sinon scripts gardés | `revel-import`, `revel-render` |
 | 7.8 | **Passe de vérification** sur des sites réels : rendu de l'original et du site produit par Revel comparés page par page | outils d'essai |
 | 7.9 | **Site à construire** (demande du 17/10/2026, version 0.6.1) : construction par Revel sur demande (Node.js, Hugo téléchargés et vérifiés ; Ruby du système pour Jekyll), site publié importé, lien qui garde les scripts du site (D-88) | `revel-build`, `revel-import`, `revel-core`, `revel-ui` |
+| 7.10 | **Imports reconstruits dans la forme de l'interface** (demande du 18/10/2026, versions 0.6.2 à 0.6.4) : relevé de ce que l'interface ne règle pas, reconstruction à rendu identique à chaque import, outils créés pour chaque limite rencontrée (D-90 à D-92, D-96 à D-98, D-102) | `revel-edit`, `revel-render`, `revel-project`, `revel-ui`, `revel-mcp` |
 
 ## État
 
@@ -46,6 +47,7 @@ fois lus, des pages HTML, des feuilles de style et des fichiers.
 | 7.7 | Terminée (17/10/2026) : `revel_import::adapt` : apparitions Framer, interactions d'apparition Webflow, AOS → animations Revel (D-82) |
 | 7.8 | Terminée (17/10/2026) : quatre sites en ligne (deux Framer, un Webflow, un statique) et un export WordPress de référence ; écarts trouvés corrigés (section ci-dessous) |
 | 7.9 | Terminée (18/10/2026) : crate `revel-build` (recettes de 17 outils, téléchargement vérifié, construction, aperçu servi), panneau « Site à construire » (plan, « Construire avec Revel », « Importer le site publié », dossier produit, avancement par étape, journal copiable), Réglages › Outils de construction, commande `revel import-build` ; vérifié sur `deltea/p3r-pause-menu` : 0,0 % d'écart avec le site en ligne (D-88) |
+| 7.10 | Terminée (19/10/2026, version 0.6.4) : site cobaye d'Alunites importé d'Eleventy, 273 points dans le code avant la reconstruction (relevé de la 0.6.4), 0 après ; styles calculés et captures identiques (13 pages, 1280 et 375 px), fichiers du serveur identiques en recette ; outils ajoutés : fichiers du serveur modifiés comme texte, valeurs reliées des attributs et du style, écritures du site, listes de données en collections, composants dépliés, HTML assemblé en éléments (D-102) |
 
 ## Règles de l'import HTML statique (7.1)
 

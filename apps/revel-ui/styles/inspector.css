@@ -617,3 +617,10 @@
 .act-sound-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1; color: var(--text-muted); }
 .act-sound-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .act-sound-name svg.icon { flex: none; width: 13px; height: 13px; }
+
+/* --- Média au survol et onglets : éléments reliés, chacun sélectionnable ------------------------ */
+.hover-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.hover-row { display: flex; align-items: center; gap: var(--s-1); min-height: var(--control-sm); padding: 0 0 0 var(--s-2);
+  border-radius: var(--radius-sm); background: var(--surface-raised); font-size: var(--text-sm); }
+.hover-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insp-warn { color: var(--warning-text); }

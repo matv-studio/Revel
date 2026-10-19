@@ -2262,3 +2262,282 @@ fn proprietes_du_gabarit() {
         Some(&serde_json::json!(true))
     );
 }
+
+#[test]
+fn media_au_survol() {
+    // En-tête : vidéo de fond et liste de contenus choisis dans deux collections.
+    let mut s = Site::new("Essai", "fr");
+    s.pages.push(Page {
+        id: "accueil".into(),
+        path: "/".into(),
+        layout: None,
+        props: Default::default(),
+        computed: Default::default(),
+        body: vec![el(
+            "section",
+            &[("class", "hero")],
+            vec![
+                el(
+                    "video",
+                    &[("class", "hero__video"), ("data-revel-hover-media", "")],
+                    vec![],
+                ),
+                el(
+                    "ol",
+                    &[("class", "hero__list")],
+                    vec![Node::Each {
+                        id: None,
+                        expr: r#"(collections.projets + collections.actualites) | by_slugs(["a", "b"])"#
+                            .into(),
+                        item: "it".into(),
+                        children: vec![el(
+                            "li",
+                            &[],
+                            vec![el(
+                                "a",
+                                &[("class", "hero__item"), ("href", "{{ it.url }}")],
+                                vec![out("it.data.title")],
+                            )],
+                        )],
+                        empty: vec![],
+                    }],
+                ),
+                el("p", &[("class", "seul")], vec![text("Autre")]),
+            ],
+        )],
+        draft: false,
+        code: Default::default(),
+        name: None,
+    });
+    s.ensure_ids();
+    let video = at(&s, "video");
+    let link = at(&s, "a");
+    let each = hover::enclosing_each(&s, &link).unwrap();
+    assert_eq!(each.1, "it");
+    assert_eq!(hover::list_trigger(&s, &each.0), Some(link.clone()));
+    let before = json(&s);
+    let cmd = hover::connect_list(&s, &video, &each.0, "home_video", Some("cover")).unwrap();
+    let inv = apply(&mut s, &cmd).unwrap();
+    // Nom tiré de la classe du média ; l'élément de la liste le désigne, champs reliés.
+    assert_eq!(
+        hover::attr_of(&s, &video, hover::DISPLAY).as_deref(),
+        Some("hero-video")
+    );
+    assert_eq!(hover::triggers(&s, "hero-video"), vec![link.clone()]);
+    assert_eq!(
+        hover::attr_of(&s, &link, hover::SRC).as_deref(),
+        Some("{{ it.data.home_video }}")
+    );
+    assert_eq!(
+        hover::field_of(&hover::attr_of(&s, &link, hover::POSTER).unwrap(), "it").as_deref(),
+        Some("cover")
+    );
+    assert_eq!(
+        hover::driving_list(&s, "hero-video").map(|(t, _)| t),
+        Some(each.0.clone())
+    );
+    // Reliés aux champs de la liste : rien n'est relevé comme écrit dans le code.
+    assert!(editable::audit(&s).is_empty(), "{:?}", editable::audit(&s));
+    // Élément choisi un à un : il remplace la liste ; l'image d'attente n'est plus lue.
+    let p = at(&s, "p");
+    let one = hover::connect(&s, &video, &p, Some("/media/a.mp4"), None, false).unwrap();
+    apply(&mut s, &one).unwrap();
+    assert_eq!(hover::triggers(&s, "hero-video").len(), 2);
+    // Retiré : média et éléments redeviennent ordinaires.
+    let off = hover::disconnect(&s, &video).unwrap();
+    apply(&mut s, &off).unwrap();
+    assert!(hover::triggers(&s, "hero-video").is_empty());
+    assert_eq!(hover::attr_of(&s, &video, hover::DISPLAY), None);
+    assert_eq!(hover::attr_of(&s, &link, hover::SRC), None);
+    // Annulation de la première liaison sur le site d'origine.
+    let mut s2: Site = Site::from_json(&before).unwrap();
+    let cmd = hover::connect_list(&s2, &video, &each.0, "home_video", None).unwrap();
+    let inv2 = apply(&mut s2, &cmd).unwrap();
+    apply(&mut s2, &inv2).unwrap();
+    assert_eq!(json(&s2), before);
+    let _ = inv;
+    assert_eq!(hover::slug("Hero  vidéo__x"), "hero-vid-o-x");
+    assert_eq!(hover::free_name(&s2, "Hero video"), "hero-video");
+}
+
+#[test]
+fn onglets_et_panneaux_appaires() {
+    let mut s = Site::new("Essai", "fr");
+    let tab = |n: &str| {
+        el(
+            "button",
+            &[("class", n), ("data-revel-tab", "")],
+            vec![text(n)],
+        )
+    };
+    let panel = |n: &str| el("video", &[("class", n), ("data-revel-panel", "")], vec![]);
+    s.pages.push(Page {
+        id: "accueil".into(),
+        path: "/".into(),
+        layout: None,
+        props: Default::default(),
+        computed: Default::default(),
+        body: vec![el(
+            "section",
+            &[("class", "boite"), ("data-revel-tabs", "hover")],
+            vec![
+                el("div", &[], vec![panel("v1"), panel("v2"), panel("v3")]),
+                el("ol", &[], vec![tab("t1"), tab("t2")]),
+            ],
+        )],
+        draft: false,
+        code: Default::default(),
+        name: None,
+    });
+    s.ensure_ids();
+    let boite = tabs::tabs_box(&s, &at(&s, "button")).unwrap();
+    assert_eq!(boite, at(&s, "section"));
+    let m = tabs::map(&s, &boite);
+    assert_eq!((m.tabs.len(), m.panels.len(), m.repeated), (2, 3, false));
+    // Trois panneaux pour deux onglets : le troisième revient au premier onglet.
+    assert_eq!(m.panels_of(0).len(), 2);
+    assert_eq!(m.tab_of(2), Some(m.tabs[0].clone()));
+    assert_eq!(tabs::place_of(&s, &m, &m.panels[1]), Some((false, 1)));
+}
+
+#[test]
+fn informations_du_site() {
+    let mut s = sample();
+    let before = json(&s);
+    let path = |p: &str| p.split('.').map(str::to_string).collect::<Vec<_>>();
+    // Valeur imbriquée créée : l'inverse retire l'objet créé.
+    let inv = apply(
+        &mut s,
+        &Command::SetGlobal {
+            path: path("site.address.street"),
+            value: Some(serde_json::json!("7 rue Transversale")),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        command::global_at(&s, &path("site.address.street")),
+        Some(&serde_json::json!("7 rue Transversale"))
+    );
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+    // Valeur remplacée puis retirée, chaque fois annulable.
+    apply(
+        &mut s,
+        &Command::SetGlobal {
+            path: path("site.email"),
+            value: Some(serde_json::json!("a@b.fr")),
+        },
+    )
+    .unwrap();
+    let mid = json(&s);
+    let inv = apply(
+        &mut s,
+        &Command::SetGlobal {
+            path: path("site.email"),
+            value: Some(serde_json::json!("c@d.fr")),
+        },
+    )
+    .unwrap();
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), mid);
+    let inv = apply(
+        &mut s,
+        &Command::SetGlobal {
+            path: path("site.email"),
+            value: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(command::global_at(&s, &path("site.email")), None);
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), mid);
+    assert!(
+        apply(
+            &mut s,
+            &Command::SetGlobal {
+                path: vec!["a.b".into()],
+                value: None
+            }
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn menu_du_site_tire_des_liens() {
+    let mut s = sample();
+    let li = |t: &str, u: &str| {
+        el(
+            "li",
+            &[],
+            vec![el(
+                "a",
+                &[("href", u), ("data-revel-current", "section")],
+                vec![text(t)],
+            )],
+        )
+    };
+    s.pages[0].body.push(el(
+        "ul",
+        &[("class", "nav")],
+        vec![li("Agence", "/agence/"), li("Projets", "/projets/")],
+    ));
+    s.pages[0].body.push(el(
+        "ol",
+        &[("class", "menu")],
+        vec![
+            li("Accueil", "/"),
+            li("Agence", "/agence/"),
+            li("Projets", "/projets/"),
+        ],
+    ));
+    s.data_dir = None;
+    s.ensure_ids();
+    let ul = at(&s, "ul");
+    assert_eq!(siteinfo::link_items(&s, &ul).len(), 2);
+    let cmd = siteinfo::use_menu(&s, &ul, "principal", None).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let site_obj = s.data.get("site").cloned().unwrap();
+    let menus = siteinfo::menus(&site_obj);
+    assert_eq!(menus[0].0, "principal");
+    assert_eq!(menus[0].1.len(), 2);
+    // Deuxième liste reliée au même menu : « Accueil », hors du menu, reste écrit.
+    let ol = at(&s, "ol");
+    let cmd = siteinfo::use_menu(&s, &ol, "principal", Some(&menus[0].1)).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let Ok(Node::Element { children, .. }) = address::node(&s, &ol) else {
+        panic!()
+    };
+    assert_eq!(children.len(), 2);
+    assert!(matches!(&children[1], Node::Each { expr, .. } if expr == "site.menus.principal"));
+    // Plus rien d'écrit dans le code : liste du menu, lien et texte reliés.
+    let issues: Vec<_> = editable::audit(&s)
+        .into_iter()
+        .filter(|i| i.detail.contains("site.") || i.detail.contains("lien"))
+        .collect();
+    assert!(issues.is_empty(), "{issues:?}");
+    assert_eq!(
+        siteinfo::key_from("Horaires d'ouverture"),
+        "horaires_d_ouverture"
+    );
+    assert_eq!(
+        siteinfo::values(
+            &serde_json::json!({"email": "a@b.fr", "address": {"city": "Lyon"}, "menus": {"x": []}})
+        )
+        .len(),
+        2
+    );
+}
+
+#[test]
+fn informations_du_site_comptees() {
+    let mut s = sample();
+    s.pages[0].body.push(el("p", &[], vec![out("site.phone")]));
+    s.pages[0].body.push(el(
+        "a",
+        &[("href", "tel:{{ site.phone | tel }}")],
+        vec![out("site.phones")],
+    ));
+    let p = vec!["phone".to_string()];
+    assert_eq!(siteinfo::uses(&s, &p), 2);
+}

@@ -1877,6 +1877,13 @@
       const u = new URL(location.href);
       u.searchParams.set("rvt", String(Date.now()));
       const res = await fetch(u.pathname + u.search, { cache: "no-store" });
+      // Page qui ne s'affiche pas (expression illisible…) : la page actuelle reste, la raison est
+      // donnée à l'interface ; une annulation la remet à jour sur place.
+      if (res.status >= 500) {
+        post({ type: "render_error", text: (await res.text()).slice(0, 400) });
+        return;
+      }
+      // Page déplacée ou retirée : rechargée (l'interface affiche la page demandée).
       if (!res.ok) throw new Error(String(res.status));
       const doc = new DOMParser().parseFromString(await res.text(), "text/html");
       if (headSig(doc.head) !== headAtLoad) { location.reload(); return; }

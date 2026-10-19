@@ -1108,6 +1108,18 @@ try {
       await addIn('tabs');
       const tabsIn = await untilE(async () => (await frame.locator('[data-revel-tabs] [data-revel-tab]').count()) === 2
         && (await frame.locator('[data-revel-tabs] [data-revel-panel]').count()) === 2);
+      // Élément dans les onglets sans rôle : un seul choix « Rôle » (groupé par élément
+      // interactif) ; une fois choisi, les réglages de ce rôle.
+      await frame.locator('[data-revel-tabs] [data-revel-panel] p').first().click();
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.waitForSelector('.insp-group[data-role="picker"] select');
+      const groups = await page.$$eval('.insp-group[data-role="picker"] optgroup', (g) => g.map((x) => x.label));
+      const others = await page.$$eval('.content-settings .insp-group:not([data-role="picker"]) select option', (o) => o.map((x) => x.textContent).filter((t) => /Onglet|Panneau/.test(t)));
+      check('rôle : un seul choix pour un élément sans rôle (groupé)', groups.includes('Dans les onglets') && others.length === 0, groups.join(', '));
+      await page.locator('.insp-group[data-role="picker"] select').selectOption({ label: 'Panneau' });
+      const panelSet = await untilE(async () => (await frame.locator('[data-revel-panel] p[data-revel-panel]').count()) === 1);
+      await page.waitForFunction(() => !document.querySelector('.insp-group[data-role="picker"]'));
+      check('rôle : choisi (attribut posé), réglages du rôle à la place du choix', panelSet);
       await addIn('accordion');
       const accIn = await untilE(async () => (await frame.locator('details.accordeon > summary.accordeon__titre').count()) === 1);
       check('éléments : onglets (deux boutons, deux panneaux), accordéon', tabsIn && accIn);
@@ -1117,8 +1129,26 @@ try {
       await page.locator('.styles label.field:has(> .label:text-is("Lecture")) select').selectOption('hover');
       const hover = await untilE(async () => (await frame.locator('.lottie[data-lottie-play="hover"]').count()) === 1);
       check('éléments : animation Lottie ajoutée, lecture au survol', lottieIn && hover);
+      // Média au survol (D-99) : liste de collection et média ajoutés ; le média piloté par la
+      // liste choisie comme source ; éléments survolés listés et sélectionnables.
+      await addIn('collection-list');
+      const listIn = await untilE(async () => (await frame.locator('section.intro-agency .liste-collection a').count()) > 0);
+      await addIn('hover-media');
+      const mediaIn = await untilE(async () => (await frame.locator('video.media-survol').count()) === 1);
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.waitForSelector('.hover-media[data-hover="display"] [data-hover="source"] select');
+      const listOpt = await page.$eval('.hover-media[data-hover="display"] [data-hover="source"] select',
+        (sel) => [...sel.options].map((o) => o.value).find((v) => v.startsWith('list:')));
+      await page.selectOption('.hover-media[data-hover="display"] [data-hover="source"] select', listOpt);
+      const linked = await untilE(async () => (await frame.locator('.liste-collection a[data-revel-media-for]').count()) > 0);
+      await page.waitForSelector('.hover-media[data-hover="display"] .hover-row');
+      check('média au survol : piloté par la liste choisie, éléments survolés listés', listIn && mediaIn && linked, String(listOpt));
+      if (shots) await page.locator('.hover-media[data-hover="display"]').screenshot({ path: `${shots}/editeur-media-survol.png` });
+      await page.click('.hover-media[data-hover="display"] .hover-row .icon-btn');
+      await page.waitForSelector('.hover-media[data-hover="trigger"] [data-hover="shown-in"] select');
+      check('média au survol : élément survolé sélectionné, média où il s\'affiche', true);
       await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 30; i++) {
         if (JSON.stringify(await siteE()) === docE) break;
         await page.keyboard.press('Control+z');
         await page.waitForTimeout(300);
@@ -1314,6 +1344,84 @@ try {
         await page.waitForTimeout(400);
       }
       check('gabarit : tout annulé, document identique', JSON.stringify(await site96()) === doc96);
+      await page.click('.pages .page-row[data-url="/"]');
+      await waitFrame(() => location.pathname === '/', 'accueil');
+    }
+    // Fichier du serveur (7.10) : `.htaccess` montré avec ses balises (conditions sur
+    // l'environnement, boucles sur les contenus), modifié comme texte et relu ; texte mal fermé
+    // refusé avec sa raison ; annulé.
+    {
+      const siteF = () => invoke('edit_open').then((o) => o.site);
+      const docF = JSON.stringify(await siteF());
+      const bodyF = async () => JSON.stringify((await siteF()).pages.find((p) => p.path === '/.htaccess').body);
+      await page.click('.dock-tab[data-panel="pages"]');
+      await page.hover('.pages .page-row[data-url="/.htaccess"]');
+      await page.click('.pages .page-row[data-url="/.htaccess"] .row-action');
+      await page.waitForSelector('.page-settings-file textarea');
+      const ta = page.locator('.page-settings-file textarea');
+      const text0 = await ta.inputValue();
+      check('fichier du serveur : texte avec ses balises (conditions, boucles), modifiable',
+        await ta.isEnabled() && text0.includes('{% if env.staging %}') && /\{% for \w+ in collections\./.test(text0), `${text0.length} caractères`);
+      await ta.fill(text0 + '\n# Essai Revel {{ site.url }}\n');
+      await ta.blur();
+      let b1 = '';
+      for (let i = 0; i < 20 && !b1.includes('Essai Revel'); i++) { await page.waitForTimeout(250); b1 = await bodyF(); }
+      check('fichier du serveur : texte relu (valeur, conditions et boucles gardées)',
+        b1.includes('Essai Revel') && b1.includes('"expr":"site.url"') && b1.includes('"node":"each"') && b1.includes('"cond":"env.staging"'));
+      if (shots) await page.locator('.dock-col--left').screenshot({ path: `${shots}/editeur-fichier-serveur.png` });
+      await ta.fill(text0 + '{% for x in %}');
+      await ta.blur();
+      await page.waitForSelector('.page-settings-file .field-error');
+      check('fichier du serveur : texte illisible refusé, raison affichée', (await bodyF()) === b1,
+        (await page.textContent('.page-settings-file .field-error')).trim().slice(0, 80));
+      await page.click('.page-settings-head .icon-btn');
+      for (let i = 0; i < 4 && JSON.stringify(await siteF()) !== docF; i++) {
+        await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(400);
+      }
+      check('fichier du serveur : annulé, document identique', JSON.stringify(await siteF()) === docF);
+      await page.click('.pages .page-row[data-url="/"]');
+      await waitFrame(() => location.pathname === '/', 'accueil');
+    }
+    // Valeur reliée d'un attribut (Inspecteur › Attributs) : attribut écrit relié à une
+    // information du site, texte autour, « seulement si remplie » ; délié ; annulé.
+    {
+      const siteB = () => invoke('edit_open').then((o) => o.site);
+      const docB = JSON.stringify(await siteB());
+      // Titre du modèle des projets : champs du contenu proposés.
+      await page.click('.dock-tab[data-panel="pages"]');
+      await page.click('.pages .collection-row[data-collection="projets"]');
+      await waitFrame(() => location.pathname.startsWith('/project/') && !!document.querySelector('.related .section-title'), 'modèle des projets');
+      await page.frameLocator('iframe.canvas-frame').locator('.related .section-title').first().click();
+      await page.click('.dock-tab[data-panel="styles"]');
+      if (!(await page.$('.advanced-settings[open]'))) await page.click('.advanced-settings > summary');
+      const secB = await frameOf().evaluate(() => document.querySelector('.related .section-title').getAttribute('data-rv'));
+      const attrB = async () => (nodeById(await siteB(), secB).attrs || []).find((a) => a.name === 'aria-label')?.value;
+      await page.fill('.insp-attrs > input.input--mono', 'aria-label=Écrire à');
+      await page.press('.insp-attrs > input.input--mono', 'Enter');
+      await page.waitForSelector('.attr-row:has(.attr-name:text-is("aria-label")) .attr-actions .icon-btn >> nth=0');
+      await page.click('.attr-row:has(.attr-name:text-is("aria-label")) .attr-actions .icon-btn >> nth=0');
+      await page.waitForSelector('.bound-attr');
+      let v1 = '';
+      for (let i = 0; i < 20 && !(v1 || '').includes('{{'); i++) { await page.waitForTimeout(200); v1 = await attrB(); }
+      check('attribut relié : texte écrit gardé devant, champ du contenu relié', /^Écrire à\{\{ [\w.]+ \}\}$/.test(v1 || ''), v1);
+      await page.click('.bound-attr .view-line .switch');
+      let v2 = '';
+      for (let i = 0; i < 20 && !(v2 || '').includes('{% if'); i++) { await page.waitForTimeout(200); v2 = await attrB(); }
+      check('attribut relié : seulement si la valeur est remplie', /^\{% if [\w.]+ %\}Écrire à\{\{ [\w.]+ \}\}\{% endif %\}$/.test(v2 || ''), v2);
+      if (shots) await page.locator('.insp-attrs').screenshot({ path: `${shots}/editeur-attribut-relie.png` });
+      await page.click('.attr-row:has(.attr-name:text-is("aria-label")) .attr-actions .icon-btn >> nth=0');
+      let v3 = '';
+      for (let i = 0; i < 20 && (v3 || '{').includes('{'); i++) { await page.waitForTimeout(200); v3 = await attrB(); }
+      check('attribut relié : délié (texte écrit à la place)', v3 === '', String(v3));
+      for (let i = 0; i < 8 && JSON.stringify(await siteB()) !== docB; i++) {
+        await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(350);
+      }
+      check('attribut relié : annulé, document identique', JSON.stringify(await siteB()) === docB);
+      await page.click('.dock-tab[data-panel="pages"]');
       await page.click('.pages .page-row[data-url="/"]');
       await waitFrame(() => location.pathname === '/', 'accueil');
     }

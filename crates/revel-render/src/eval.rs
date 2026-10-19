@@ -1310,6 +1310,19 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
                 .collect::<Vec<_>>(),
         )
     });
+    // Numéro de téléphone écrit pour un lien `tel:` (« +33 (0)4 72 27 03 74 » -> « +33472270374 ») :
+    // le « (0) » d'un numéro international retiré, seuls le `+` initial et les chiffres gardés.
+    env.add_filter("tel", |v: Value| {
+        let text = if v.is_undefined() || v.is_none() {
+            String::new()
+        } else {
+            v.to_string()
+        };
+        Value::from(tel_link(&text))
+    });
+    // Adresse écrite pour un lien vers un plan : rue, code postal, ville (sinon toutes les valeurs
+    // de l'objet), séparés par des espaces et encodés pour une adresse web.
+    env.add_filter("map_query", |v: Value| Value::from(map_query(&v)));
     // Mots entre astérisques mis en valeur (`*mot*` -> `<em class="accent">mot</em>`), le reste
     // échappé : texte court d'un champ avec un mot en couleur.
     env.add_filter("emphasis", |v: Value, cls: Option<String>| {
@@ -1318,7 +1331,8 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
         } else {
             v.to_string()
         };
-        let esc = crate::html::escape(&text);
+        // Apostrophes gardées telles quelles : la typographie du texte les rend courbes.
+        let esc = crate::html::escape_text(&text).replace('"', "&quot;");
         let re = regex::Regex::new(r"\*([^*]+)\*").expect("regex");
         let class = cls.unwrap_or_else(|| "accent".into());
         let class = crate::html::escape(&class);
@@ -1330,8 +1344,14 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
     // Contenus désignés mis en premier (dans l'ordre des adresses), puis les autres.
     env.add_filter(
         "pick_first",
-        |v: Value, slugs: Value, min: Option<usize>| {
+        |v: Value, slugs: Value, min: Option<usize>, without: Option<Value>| {
             let items = items_of(&v);
+            // Contenu affiché retiré de ceux qui complètent (un contenu choisi reste).
+            let kept = |i: &Value| {
+                without
+                    .as_ref()
+                    .is_none_or(|u| u.is_undefined() || u.is_none() || path(i, "url") != *u)
+            };
             // Champ vide ou absent : aucun contenu mis en premier.
             let slugs: Vec<Value> = if slugs.as_str().is_some() {
                 vec![slugs]
@@ -1347,10 +1367,10 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
                 .collect();
             // Pas assez de contenus désignés : la liste ordinaire.
             if min.is_some_and(|m| out.len() < m) {
-                return Value::from(items);
+                return Value::from(items.into_iter().filter(|i| kept(i)).collect::<Vec<_>>());
             }
             for i in items {
-                if !slugs.contains(&path(&i, "data.slug")) {
+                if !slugs.contains(&path(&i, "data.slug")) && kept(&i) {
                     out.push(i);
                 }
             }
@@ -1517,5 +1537,85 @@ fn prop_default(p: &revel_model::PropDef) -> Value {
         None if p.kind == revel_model::PropKind::Switch => Value::from(false),
         None if p.kind == revel_model::PropKind::List => Value::from(Vec::<Value>::new()),
         None => Value::from(""),
+    }
+}
+
+/// Numéro de téléphone d'un lien `tel:` : `(0)` retiré, `+` initial et chiffres gardés.
+pub(crate) fn tel_link(text: &str) -> String {
+    let t = text.replace("(0)", "");
+    let t = t.trim();
+    let mut out = String::new();
+    for (i, c) in t.chars().enumerate() {
+        if c.is_ascii_digit() || (c == '+' && i == 0) {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Adresse d'un lien vers un plan (`7%20rue%20Transversale%2069009%20Lyon`).
+pub(crate) fn map_query(v: &Value) -> String {
+    let text = |x: Option<Value>| -> Option<String> {
+        x.filter(|x| !x.is_undefined() && !x.is_none())
+            .map(|x| x.to_string())
+            .filter(|s| !s.trim().is_empty())
+    };
+    let parts: Vec<String> = if v.as_str().is_some() || v.as_object().is_none() {
+        text(Some(v.clone())).into_iter().collect()
+    } else {
+        let known: Vec<String> = [
+            "street",
+            "address",
+            "postcode",
+            "zip",
+            "postal_code",
+            "city",
+        ]
+        .iter()
+        .filter_map(|k| text(v.get_attr(k).ok()))
+        .collect();
+        if known.is_empty() {
+            v.try_iter()
+                .map(|it| it.filter_map(|k| text(v.get_item(&k).ok())).collect())
+                .unwrap_or_default()
+        } else {
+            known
+        }
+    };
+    let joined = parts.join(" ");
+    let mut out = String::new();
+    for b in joined.bytes() {
+        match b {
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'-'
+            | b'_'
+            | b'.'
+            | b'!'
+            | b'~'
+            | b'*'
+            | b'\''
+            | b'('
+            | b')' => out.push(b as char),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tel_tests {
+    #[test]
+    fn numeros() {
+        assert_eq!(super::tel_link("+33 (0)4 72 27 03 74"), "+33472270374");
+        assert_eq!(super::tel_link("04.72.27.03.74"), "0472270374");
+        let addr = minijinja::Value::from(minijinja::value::Serde(serde_json::json!({
+            "street": "7 rue Transversale", "postcode": "69009", "city": "Lyon", "country": "FR"
+        })));
+        assert_eq!(
+            super::map_query(&addr),
+            "7%20rue%20Transversale%2069009%20Lyon"
+        );
     }
 }

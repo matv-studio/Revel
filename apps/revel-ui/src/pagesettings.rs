@@ -108,6 +108,10 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                 <span class="page-settings-title">{ui.t("pages-settings")}</span>
             </header>
             {move || page.get().map(|p| {
+                // Fichier du serveur : adresse et texte seulement (pas de canevas ni de référencement).
+                if revel_edit::textfile::is_server_file(&p.path) {
+                    return server_file_settings(ui, ed, &p).into_any();
+                }
                 let lang = ed.lang();
                 let home = p.path == "/";
                 let pid = p.id.clone();
@@ -170,44 +174,6 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                                 <span class="switch-track"></span>
                             </span>
                         </label>
-                        {(!p.path.ends_with('/') && !p.path.ends_with(".html") && !p.path.ends_with(".xml")).then(|| {
-                            // Fichier du serveur (`.htaccess`, `robots.txt`, `.php`) : texte écrit tel quel.
-                            let text: String = p.body.iter().map(|n| match n {
-                                revel_model::Node::Html { html } => html.clone(),
-                                revel_model::Node::Text { text } => text.clone(),
-                                _ => String::new(),
-                            }).collect();
-                            let n = p.body.len();
-                            let pid = pid.clone();
-                            // Écrit en partie par des boucles ou des conditions (contenus, environnement
-                            // de publication) : montré, pas modifiable ici (le texte seul les écraserait).
-                            let computed = p.body.iter().any(|n| !matches!(n, revel_model::Node::Html { .. } | revel_model::Node::Text { .. }));
-                            let help = if computed { "pages-file-computed" } else { "pages-file-help" };
-                            view! {
-                                <label class="field page-settings-file">
-                                    <span class="label" title=ui.t(help)>
-                                        {ui.t("pages-file")}
-                                        {computed.then(|| view! { <span class="seo-warn">{icons::warning()}</span> })}
-                                    </span>
-                                    <textarea class="input input--mono" rows="14" spellcheck="false" prop:value=text disabled=computed
-                                        on:change=move |e| {
-                                            let v = event_target_value(&e);
-                                            let root = revel_edit::Parent::root(revel_edit::Owner::Page(pid.clone()));
-                                            let mut commands = vec![Command::Replace {
-                                                parent: root.clone(),
-                                                index: 0,
-                                                node: revel_model::Node::Html { html: v },
-                                            }];
-                                            commands.extend((1..n).map(|i| Command::Replace {
-                                                parent: root.clone(),
-                                                index: i,
-                                                node: revel_model::Node::Text { text: String::new() },
-                                            }));
-                                            ed.apply(ui, Command::Batch { commands }, false);
-                                        }></textarea>
-                                </label>
-                            }
-                        })}
                         <h3 class="page-settings-section">{ui.t("pages-look")}</h3>
                         {
                             let body_class = p.props.get("bodyClass").and_then(|v| v.as_str()).unwrap_or_default().to_string();
@@ -347,9 +313,77 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                             {icons::trash()}{ui.t("pages-delete")}</button>
                     </footer>
                 }
+                .into_any()
             })}
         </div>
     }
+}
+
+/// Paramètres d'un fichier du serveur (`.htaccess`, `robots.txt`, `.php`) : adresse, texte écrit
+/// avec les balises du gabarit (valeurs, conditions, listes), relu à l'enregistrement.
+fn server_file_settings(ui: Ui, ed: Ed, p: &revel_model::Page) -> AnyView {
+    let pid = p.id.clone();
+    let written = revel_edit::textfile::source(&p.body);
+    // Éléments, images ou composants dans le fichier : réglés dans les calques.
+    let fixed = written.is_none();
+    let text = written.unwrap_or_else(|| {
+        p.body
+            .iter()
+            .map(|n| match n {
+                revel_model::Node::Html { html } => html.clone(),
+                revel_model::Node::Text { text } => text.clone(),
+                _ => String::new(),
+            })
+            .collect()
+    });
+    let tags = text.contains("{{") || text.contains("{%");
+    let pid_s = StoredValue::new(pid.clone());
+    let error = RwSignal::new(None::<String>);
+    let help = if fixed {
+        "pages-file-computed"
+    } else {
+        "pages-file-help"
+    };
+    view! {
+        <div class="page-settings-body">
+            <label class="field">
+                <span class="label">{ui.t("pages-path")}</span>
+                <span class="input input--mono is-readonly">{p.path.clone()}</span>
+            </label>
+            <label class="field page-settings-file">
+                <span class="label" title=ui.t(help)>
+                    {ui.t("pages-file")}
+                    {fixed.then(|| view! { <span class="seo-warn">{icons::warning()}</span> })}
+                </span>
+                <textarea class="input input--mono" rows="22" spellcheck="false" prop:value=text disabled=fixed
+                    aria-invalid=move || error.get().is_some().then_some("true")
+                    on:change=move |e| {
+                        let v = event_target_value(&e);
+                        let cmd = ed.doc.with_untracked(|d| {
+                            d.as_ref().map(|d| revel_edit::textfile::set_source(d, &pid_s.get_value(), &v))
+                        });
+                        match cmd {
+                            Some(Ok(cmd)) => {
+                                error.set(None);
+                                ed.apply(ui, cmd, false);
+                            }
+                            Some(Err(m)) => error.set(Some(m)),
+                            None => {}
+                        }
+                    }></textarea>
+                {move || error.get().map(|m| view! { <span class="field-error" role="alert">{ui.now("pages-file-invalid", &[("error", m)])}</span> })}
+                {(!fixed).then(|| view! {
+                    <span class="muted small page-settings-file-help">{ui.t(if tags { "pages-file-tags" } else { "pages-file-tags-none" })}</span>
+                })}
+            </label>
+        </div>
+        <footer class="panel-foot page-settings-foot">
+            <span class="toolbar-spacer"></span>
+            <button class="btn btn--small btn--danger-ghost" on:click=move |_| pageops::delete(ui, ed, &pid)>
+                {icons::trash()}{ui.t("pages-delete")}</button>
+        </footer>
+    }
+    .into_any()
 }
 
 /// Réglages du modèle des pages d'une collection (gabarit) : classe du corps de page, thème et

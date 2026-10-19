@@ -201,7 +201,10 @@ impl Query {
                 crate::canvas::quote(path)
             ));
         }
-        if self.exclude_current {
+        // Sans le contenu affiché : retiré de la liste, sauf s'il est choisi pour être mis en
+        // premier (un contenu choisi l'emporte : `pick_first(…, page.url)` ne le retire que des
+        // contenus qui complètent).
+        if self.exclude_current && self.first.is_none() {
             e.push_str(" | without(page.url)");
         }
         if let Some((path, desc)) = &self.sort {
@@ -218,8 +221,10 @@ impl Query {
             }
         }
         if let Some(f) = &self.first {
-            match (self.first_full, self.limit) {
-                (true, Some(n)) => e.push_str(&format!(" | pick_first({f}, {n})")),
+            match (self.first_full, self.limit, self.exclude_current) {
+                (true, Some(n), false) => e.push_str(&format!(" | pick_first({f}, {n})")),
+                (true, Some(n), true) => e.push_str(&format!(" | pick_first({f}, {n}, page.url)")),
+                (_, _, true) => e.push_str(&format!(" | pick_first({f}, 0, page.url)")),
                 _ => e.push_str(&format!(" | pick_first({f})")),
             }
         }
@@ -344,16 +349,23 @@ impl Query {
                 {
                     q.exclude_current = true;
                 }
-                "pick_first" if q.first.is_none() && (1..=2).contains(&args.len()) => {
+                "pick_first" if q.first.is_none() && (1..=3).contains(&args.len()) => {
                     let a = args[0].trim();
                     if !(valid_path(a) || first_picks(a).is_some()) {
                         return None;
                     }
                     q.first = Some(a.to_string());
                     if let Some(n) = args.get(1) {
-                        // Minimum : le nombre maximal de la liste (relu après).
-                        n.trim().parse::<usize>().ok()?;
-                        q.first_full = true;
+                        // Minimum : le nombre maximal de la liste (relu après) ; 0 : aucun.
+                        let n = n.trim().parse::<usize>().ok()?;
+                        q.first_full = n > 0;
+                    }
+                    // Sans le contenu affiché (sauf s'il est choisi).
+                    if let Some(x) = args.get(2) {
+                        if x.trim() != "page.url" || q.exclude_current {
+                            return None;
+                        }
+                        q.exclude_current = true;
                     }
                 }
                 "sort" if q.sort.is_none() && q.first.is_none() => {
@@ -380,7 +392,7 @@ impl Query {
         // `pick_first(f, n)` : n est le nombre maximal de la liste.
         if q.first_full {
             let n = q.limit?;
-            if !e.contains(&format!(", {n})")) {
+            if !e.contains(&format!(", {n})")) && !e.contains(&format!(", {n}, page.url)")) {
                 return None;
             }
         }

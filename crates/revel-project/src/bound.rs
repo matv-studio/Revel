@@ -581,6 +581,11 @@ impl crate::Project {
                 let v = props_value(&mut site, b)?;
                 scalar_text(v).ok_or_else(|| "pas un texte".into())
             }
+            // Information du site écrite dans le document (`site.revel.json`).
+            Source::Data if document_root(&self.site, &b.path) => {
+                let v = document_value(&self.site, &b.path).ok_or("donnée introuvable")?;
+                scalar_text(v).ok_or_else(|| "pas un texte".into())
+            }
             Source::EntryItem { .. } => Err("valeur calculée".into()),
             // Écrite dans l'utilisation du composant (commande `SetUseArg`), pas dans un fichier.
             Source::Prop { .. } => Err("propriété de composant".into()),
@@ -629,6 +634,18 @@ impl crate::Project {
         value: &str,
     ) -> Result<String, BoundError> {
         match &b.source {
+            // Information du site écrite dans le document (`site.revel.json`).
+            Source::Data if document_root(site, &b.path) => {
+                let v = document_value_mut(site, &b.path).ok_or("donnée introuvable")?;
+                let old = scalar_text(v).ok_or("pas un texte")?;
+                *v = match v {
+                    Value::Number(_) => serde_json::from_str::<serde_json::Number>(value.trim())
+                        .map(Value::Number)
+                        .unwrap_or_else(|_| Value::String(value.to_string())),
+                    _ => Value::String(value.to_string()),
+                };
+                Ok(old)
+            }
             Source::Page { .. } | Source::Layout { .. } => {
                 let v = props_value(site, b)?;
                 let old = scalar_text(v).ok_or("pas un texte")?;
@@ -698,6 +715,37 @@ fn props_value<'a>(site: &'a mut Site, b: &Binding) -> Result<&'a mut Value, Bou
     };
     let v = props.get_mut(key).ok_or("variable introuvable")?;
     json_at(v, rest).ok_or_else(|| "valeur introuvable".into())
+}
+
+/// La donnée globale vient-elle du document (`site.data`) plutôt que d'un fichier de données ?
+fn document_root(site: &Site, path: &[Seg]) -> bool {
+    matches!(path.first(), Some(Seg::Key(k)) if site.data.contains_key(k))
+}
+
+fn document_value<'a>(site: &'a Site, path: &[Seg]) -> Option<&'a Value> {
+    let (first, rest) = path.split_first()?;
+    let Seg::Key(k) = first else { return None };
+    let mut cur = site.data.get(k)?;
+    for seg in rest {
+        cur = match seg {
+            Seg::Key(k) => cur.get(k)?,
+            Seg::Index(i) => cur.get(*i)?,
+        };
+    }
+    Some(cur)
+}
+
+fn document_value_mut<'a>(site: &'a mut Site, path: &[Seg]) -> Option<&'a mut Value> {
+    let (first, rest) = path.split_first()?;
+    let Seg::Key(k) = first else { return None };
+    let mut cur = site.data.get_mut(k)?;
+    for seg in rest {
+        cur = match seg {
+            Seg::Key(k) => cur.get_mut(k)?,
+            Seg::Index(i) => cur.get_mut(*i)?,
+        };
+    }
+    Some(cur)
 }
 
 #[cfg(test)]

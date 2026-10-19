@@ -29,7 +29,9 @@ is applied with Revel's own commands: it shows up immediately in Revel's editor 
 BUILD ONLY WHAT THE USER CAN EDIT IN REVEL'S INTERFACE. The user must be able to change everything you make from \
 the panels (Layers, Styles, Add, CMS), without code: never write `{% set %}`, computed expressions, filters other \
 than those listed here, or site scripts. After your changes call `check_site`: it must list no issue for what you \
-built; rebuild anything it lists with the forms below.\n\
+built; rebuild anything it lists with the forms below. Content that exists in the CMS (titles, dates, clients, \
+covers, videos of projects or articles) is read from it with a collection list and fields, never retyped in the \
+layers; elements that belong together (an item and its media) are linked by a setting, never by their position.\n\
 - Structure: elements with classes; texts written in the elements (`set_text`); CSS on classes per breakpoint and \
 state (`set_styles`, states :hover :active :focus-visible [aria-current=\"page\"] .is-active [aria-pressed=\"false\"], or \
 inside an active element `.is-active .x`); text-shadow, transform-origin and clip-path are panel controls. Prefer `insert_preset` (Add panel) \
@@ -48,6 +50,17 @@ fields are read without prefix (`{{ title }}`).\n\
 - Conditions: `{% if %}` with clauses joined by `and` (or all by `or`): `field`, `not field`, `field == \"v\"`, \
 `field != \"v\"`, `\"v\" in field`, `field|length > n`. Classes on a condition: \
 `class=\"card{% if item.data.featured %} card--featured{% endif %}\"`; class from a value: `class=\"tag tag--{{ item.data.color }}\"`.\n\
+- Values in other attributes (Inspector › Attributes, bound without braces): one value with written text around \
+(`aria-label=\"Play {{ item.data.title }}\"`, `href=\"/projets/?expertise={{ slug }}\"`), or written only when filled: \
+`aria-label=\"Play the video{% if label %}: {{ label }}{% endif %}\"`; style properties bound to a value: \
+`style=\"--dot:{{ item.data.color }};--count:{{ collections.<id>|length }}\"` (custom properties read by the classes' styles).\n\
+- Site information (Settings › Site information: e-mail, phone, address, social links, menus) is shared by every page: \
+`{{ site.<key> }}`, `href=\"mailto:{{ site.email }}\"`, `href=\"tel:{{ site.phone | tel }}\"`, \
+`href=\"https://maps.google.com/?q={{ site.address | map_query }}\"`, menus `{% for lien in site.menus.<name> %}<a \
+href=\"{{ lien.url }}\">{{ lien.label }}</a>{% endfor %}`; set them with `apply_commands` \
+`{\"cmd\": \"set_global\", \"path\": [\"site\", \"email\"], \"value\": \"…\"}`.\n\
+- Server files (`.htaccess`, `robots.txt`) are text pages edited as text in the page settings; they may contain \
+`{{ site.url }}`, `{% if env.staging %}…{% endif %}` (publishing environment) and `{% for e in collections.<id> %}…{% endfor %}`.\n\
 - Components: repeated blocks become components with properties (text, image, link, visibility, list) that each \
 use sets; variants for alternate looks.\n\
 - Behaviour without code: `data-revel-on` on the triggering element, `<trigger> <action> <target>` separated by \
@@ -58,7 +71,12 @@ sound: `hover sound:/media/a.wav~50 self` (several files `a.wav|b.wav`: one at r
 with a `data-revel-switch-text=\"On|Off\"` child (insert_preset switch). \
 Tabs: `data-revel-tabs` (options `hover`, `keys` for arrows/WASD anywhere, `sound=<url>`) with `data-revel-tab` \
 triggers and `data-revel-panel` panels (several series of panels each follow the tabs in order; the active tab and \
-filter get the class `is-active`); slider: `data-revel-slider` (`autoplay=5 loop`) with `data-revel-track`, `data-revel-prev`, `data-revel-next`, \
+filter get the class `is-active`); media on hover (a background video showing the hovered item's video, e.g. a \
+hero driven by a list of featured projects): `insert_preset` HoverMedia (`<video muted playsinline loop autoplay \
+data-revel-hover-media=\"<name>\">`), and on one element of each list item (its link) `data-revel-media-for=\"<name>\"`, \
+`data-revel-media=\"{{ item.data.<video field> }}\"`, optional `data-revel-media-poster=\"{{ item.data.<image field> }}\"` \
+(chosen elements outside a list: addresses written in these attributes); the first item shows on load, the shown \
+item gets `is-active`, the started video `is-ready`; slider: `data-revel-slider` (`autoplay=5 loop`) with `data-revel-track`, `data-revel-prev`, `data-revel-next`, \
 `data-revel-count`; video player: `data-revel-video=\"<url>\"` with a `data-revel-play` cover; list filters: \
 `data-revel-filters=\"<url param>\"` group of `data-revel-filter=\"<value>\"` buttons, items `data-revel-tags`, \
 `data-revel-filter-empty`; cookie consent: `data-revel-consent=\"G-…\"` banner, `data-revel-consent-choice=accept|refuse`, \

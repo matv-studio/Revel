@@ -269,9 +269,9 @@ fn main() -> Result<()> {
         Command::Rebuild { dir, dry_run } => {
             let mut p = Project::open(&dir)?;
             let before = revel_edit::editable::audit(&p.site).len();
-            let (site, notes) = p.rebuilt().map_err(|e| anyhow::anyhow!("{e}"))?;
-            let issues = revel_edit::editable::audit(&site);
-            for n in &notes {
+            let r = p.rebuilt().map_err(|e| anyhow::anyhow!("{e}"))?;
+            let issues = revel_edit::editable::audit(&r.site);
+            for n in &r.notes {
                 println!("{n}");
             }
             for (k, n) in revel_edit::editable::summary(&issues) {
@@ -279,8 +279,7 @@ fn main() -> Result<()> {
             }
             println!("relevé : {before} -> {}", issues.len());
             if !dry_run {
-                p.site = site;
-                p.save()?;
+                p.save_rebuilt(r)?;
             }
         }
         Command::New {

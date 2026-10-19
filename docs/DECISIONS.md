@@ -841,6 +841,60 @@ propriétés du gabarit ; le texte d'un fichier du serveur écrit en partie par 
 est montré sans être modifiable (l'enregistrer comme texte seul effaçait ces parties) ; dans le relevé, le
 texte d'un tel fichier n'est plus compté comme du HTML écrit.
 
+**D-99 — 19/10/2026 — prise.** **Média au survol : outil distinct de la liste qui le pilote.** Demande de
+l'utilisateur (« two distinct tools ») : la vidéo de fond du héros d'Alunites était appariée aux éléments de
+la liste par leur position, sans indication. Désormais la liste est une liste de collection ordinaire
+(contenus choisis dans plusieurs collections, champs du CMS) et le média au survol un outil à part :
+élément média (`data-revel-hover-media="nom"`, Ajouter › Média au survol) et éléments qui le changent
+(`data-revel-media-for`, adresse du média et image d'attente lues dans un champ du contenu, réglées dans
+le panneau : « Affiché dans », source, champs, bouton pour aller de l'un à l'autre). Le premier élément est
+montré au chargement (image d'attente écrite à la génération), l'élément montré reçoit `is-active`, le
+média démarré `is-ready` ; l'action « Jouer » met en pause (`is-paused`) ; mouvement réduit : rien ne démarre
+seul. États ajoutés dans Styles : « Prêt », « Dans un élément en pause ».
+
+**D-100 — 19/10/2026 — prise.** **Informations du site partagées par toutes les pages.** Paramètres ›
+Informations du site : e-mail, téléphone, adresse, réseaux, toute valeur ajoutée (libellé modifiable),
+et menus (liste de liens, `site.menus.<nom>`). Un texte, un lien (`mailto:`, `tel:` avec le numéro écrit
+pour l'appel, plan avec l'adresse), une image, une liste de liens ou une condition se relient à une
+information depuis l'onglet Styles ; une liste de liens écrits devient un menu du site. Valeurs gardées
+dans le document (ou dans `_data/site.yml` quand le site en a un). La reconstruction garde les lectures
+`site.*` au lieu d'écrire leur valeur, convertit les numéros d'appel et les adresses de plan écrits à la
+main, et l'année en cours.
+
+**D-101 — 19/10/2026 — prise.** **Ergonomie de l'onglet Styles : rôles, onglets, conteneurs.** Un élément
+sans rôle dans un élément interactif reçoit un seul choix « Rôle », groupé par élément (onglets,
+carrousel, lecteur vidéo, formulaire, filtres de liste, consentement, interrupteur des sons) au lieu d'une
+liste par élément ; une fois choisi, seuls les réglages de ce rôle restent. Onglets : chaque onglet dit le
+panneau qu'il montre et inversement (sélectionnables, nombres qui ne correspondent pas signalés). Les
+attributs réglés par un contrôle ne sont plus répétés dans « Autres attributs ». Calques : un élément en
+ligne qui contient des éléments s'affiche comme un conteneur (plus de « T ») ; la recréation d'Alunites
+utilise des conteneurs (`div`) pour l'image et le texte des cartes.
+
+**D-102 — 19/10/2026 — prise.** **7.10 terminée : un site Eleventy importé n'a plus rien dans le code.**
+Outils créés pour les dernières limites :
+- fichier du serveur (`.htaccess`, `robots.txt`) modifié comme texte avec ses balises (valeurs, conditions
+  sur l'environnement, listes de contenus) dans les paramètres de la page, relu à l'enregistrement ; un
+  texte illisible est refusé avec sa raison ;
+- valeur reliée d'un attribut (Inspecteur › Attributs) : valeur choisie dans une liste (champ, propriété,
+  information du site, nombre de contenus), texte avant et après, « seulement si la valeur est remplie »,
+  texte si vide ; propriété de style reliée (`--dot` ← Couleur) ;
+- texte relié : écriture propre au site (« Prénom NOM »), valeurs d'un champ liste séparées, texte si
+  vide ; conditions : premier ou dernier de la liste, contenu qui a une page ;
+- liste de collection : un contenu mis en premier reste montré même s'il est le contenu affiché
+  (`pick_first(…, page.url)`).
+Reconstruction, chaque réécriture gardée seulement si les fichiers produits restent identiques (sauf les
+couleurs choisies dans un tableau, en classes comme avant) : choix écrit d'avance replié
+(`(nom if (1) == 1 else "")`) ; variables d'un composant calculées d'après une valeur de l'utilisateur →
+propriétés (déduction répétée), `x or 'Vidéo'` garde son texte de repli ; image dont un réglage dépend d'une
+condition → une image par cas ; liste de données lue par adresse (`rubriques.items | find_by('slug', s)`) →
+collection du CMS (contenus écrits, `.pages.yml` complété, liste de choix aux mêmes adresses changée en
+référence) ; boucle sur un champ autour de contenus reliés → liste des contenus reliés ; composant qui
+reçoit une liste construite pas à pas ou du HTML assemblé → déplié à sa place (retiré s'il ne sert plus) ;
+liste construite pas à pas → parcourue directement ; HTML assemblé dans un texte → éléments ; condition
+connue d'avance → son contenu. Site cobaye d'Alunites : 273 → 0 point ; 13 pages × 1280/375 px × 2
+préférences de mouvement : aucun écart de styles calculés ni de captures ; `.htaccess` et consignes aux
+moteurs identiques en recette.
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

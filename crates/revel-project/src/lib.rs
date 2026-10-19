@@ -56,6 +56,134 @@ pub struct Project {
     pub site: Site,
 }
 
+/// Site reconstruit dans la forme de l'interface : document, bilan, collections créées.
+pub struct RebuiltSite {
+    pub site: Site,
+    pub notes: Vec<String>,
+    pub collections: Vec<revel_render::flatten::NewCollection>,
+}
+
+/// Libellé lisible d'un nom de champ (`photo_hover` -> `Photo hover`).
+fn field_label(name: &str) -> String {
+    let t = name.replace(['_', '-'], " ");
+    let mut c = t.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}
+
+/// Définition Pages CMS d'une collection créée à la reconstruction.
+fn cms_definition(c: &revel_render::flatten::NewCollection) -> Value {
+    let main = ["title", "name", "label"]
+        .into_iter()
+        .find(|k| c.fields.iter().any(|f| f == k))
+        .map(str::to_string)
+        .or_else(|| c.fields.iter().find(|f| *f != "slug").cloned())
+        .unwrap_or_else(|| "slug".into());
+    let mut fields: Vec<Value> = c
+        .fields
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "name": f,
+                "label": field_label(f),
+                "type": "string",
+            })
+        })
+        .collect();
+    fields.push(serde_json::json!({ "name": "order", "label": "Ordre", "type": "number" }));
+    serde_json::json!({
+        "name": c.collection.id,
+        "label": c.label,
+        "type": "collection",
+        "path": c.collection.folder,
+        "filename": "{fields.slug}.md",
+        "view": { "primary": main, "fields": [main, "slug"], "sort": ["order"], "default": { "sort": "order", "order": "asc" } },
+        "fields": fields,
+    })
+}
+
+/// Listes de choix dont les valeurs sont exactement les adresses (`slug`) des contenus d'une
+/// collection créée : changées en références à cette collection (un contenu ajouté devient un
+/// choix).
+fn select_to_reference(
+    yml: &str,
+    c: &revel_render::flatten::NewCollection,
+) -> Result<String, String> {
+    let doc = parse_yaml(yml)?;
+    let slugs: std::collections::BTreeSet<String> =
+        c.entries.iter().map(|e| e.file_stem.clone()).collect();
+    let main = ["title", "name", "label"]
+        .into_iter()
+        .find(|k| c.fields.iter().any(|f| f == k))
+        .unwrap_or("slug");
+    let mut out = yml.to_string();
+    let Some(list) = doc.get("content").and_then(Value::as_array) else {
+        return Ok(out);
+    };
+    for col in list {
+        let Some(cname) = col.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        if cname == c.collection.id {
+            continue;
+        }
+        for f in col
+            .get("fields")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            if f.get("type").and_then(Value::as_str) != Some("select") {
+                continue;
+            }
+            let Some(fname) = f.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            let values: std::collections::BTreeSet<String> = f
+                .pointer("/options/values")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|v| {
+                    v.as_str()
+                        .map(str::to_string)
+                        .or_else(|| v.get("name").and_then(Value::as_str).map(str::to_string))
+                        .or_else(|| v.get("value").and_then(Value::as_str).map(str::to_string))
+                })
+                .collect();
+            if values != slugs {
+                continue;
+            }
+            let multiple = f
+                .pointer("/options/multiple")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let mut options = serde_json::json!({
+                "values": null,
+                "collection": c.collection.id,
+                "value": "{fields.slug}",
+                "label": format!("{{fields.{main}}}"),
+                "search": main,
+            });
+            if multiple {
+                options["multiple"] = Value::Bool(true);
+            }
+            let patch = serde_json::json!({ "type": "reference", "options": options });
+            out = pagesyml::edit_fields(
+                &out,
+                cname,
+                &pagesyml::FieldOp::Set {
+                    field: fname.to_string(),
+                    patch: patch.as_object().cloned().unwrap_or_default(),
+                },
+            )?;
+        }
+    }
+    Ok(out)
+}
+
 /// Résultat d'une génération.
 #[derive(Debug, Default)]
 pub struct BuildReport {
@@ -450,7 +578,7 @@ impl Project {
     /// Site reconstruit dans la forme de l'interface (D-90) : données et calculs écrits,
     /// listes de collection et propriétés de composants gardées vivantes ; même rendu. Les
     /// données du site d'origine restent dans le site (elles servent encore aux gabarits).
-    pub fn rebuilt(&self) -> Result<(Site, Vec<String>), ProjectError> {
+    pub fn rebuilt(&self) -> Result<RebuiltSite, ProjectError> {
         let site = self.site_with_data()?;
         let input = BuildInput {
             site: &site,
@@ -464,7 +592,40 @@ impl Project {
         let r = revel_render::flatten::rebuild(&input)?;
         let mut out = r.site;
         out.data = self.site.data.clone();
-        Ok((out, r.notes))
+        Ok(RebuiltSite {
+            site: out,
+            notes: r.notes,
+            collections: r.collections,
+        })
+    }
+
+    /// Enregistre un site reconstruit : contenus des collections créées (fichiers Markdown),
+    /// leur définition dans le CMS (`.pages.yml`, quand le site en a un) avec les listes de
+    /// choix qui reprenaient leurs adresses changées en références, puis le document.
+    pub fn save_rebuilt(&mut self, r: RebuiltSite) -> Result<(), ProjectError> {
+        let parse_err = |msg: String| ProjectError::Parse {
+            path: pagesyml::CONFIG_FILE.into(),
+            msg,
+        };
+        // Document d'abord : les contenus s'écrivent dans les dossiers de ses collections.
+        self.site = r.site;
+        for c in &r.collections {
+            for e in &c.entries {
+                let text = entries::entry_text(&e.data, &e.body);
+                self.write_entry(&e.folder, &e.file_stem, Some(&text))
+                    .map_err(parse_err)?;
+            }
+        }
+        if !r.collections.is_empty()
+            && let Some(mut yml) = pagesyml::read(&self.dir).map_err(parse_err)?
+        {
+            for c in &r.collections {
+                yml = pagesyml::add_collection(&yml, &cms_definition(c)).map_err(parse_err)?;
+                yml = select_to_reference(&yml, c).map_err(parse_err)?;
+            }
+            pagesyml::write(&self.dir, Some(&yml)).map_err(parse_err)?;
+        }
+        self.save()
     }
 
     fn site_with_data(&self) -> Result<Site, ProjectError> {

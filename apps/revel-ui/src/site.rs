@@ -154,7 +154,7 @@ pub(crate) const SECTIONS: &[(Section, &str, Option<u8>)] = &[
 /// publication avec export, navigation (menus) avec redirections.
 fn group_of(s: Section) -> Section {
     match s {
-        Section::Seo | Section::Forms => Section::General,
+        Section::Seo | Section::Forms | Section::SiteInfo => Section::General,
         Section::Export => Section::Publish,
         Section::Redirects => Section::Menus,
         x => x,
@@ -171,6 +171,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
     let body = match group {
         Section::General => view! {
             {sub("general", view! { <crate::sitesettings::General site=site.clone()/> }.into_any())}
+            {sub("site-info", view! { <crate::siteinfo::SiteInfo s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
             {sub("seo", view! { <Seo site=site.clone()/> }.into_any())}
             {sub("forms", view! { <Forms site=site.clone()/> }.into_any())}
         }
@@ -184,6 +185,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         }
         .into_any(),
         _ => view! {
+            {sub("site-menus", view! { <crate::siteinfo::SiteMenus s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
             {sub("menus", view! { <crate::readable::Menus s=doc_session(ui, site.path.clone())/> }.into_any())}
             {sub("redirects", view! { <Redirects site=site.clone()/> }.into_any())}
         }
@@ -193,6 +195,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
     let wanted = match section {
         Section::Seo => Some("seo"),
         Section::Forms => Some("forms"),
+        Section::SiteInfo => Some("site-info"),
         Section::Export => Some("export"),
         Section::Redirects => Some("redirects"),
         _ => None,

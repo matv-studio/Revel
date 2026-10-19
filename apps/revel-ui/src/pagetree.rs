@@ -984,6 +984,37 @@ pub fn PageTree(
                     </div>
                 }
             }).collect_view()}
+            // Fichiers du serveur (`.htaccess`, `robots.txt`) : pas de canevas, leur texte se
+            // règle dans leurs paramètres.
+            {move || {
+                let cb = tc.on_settings?;
+                let q = q.get().to_lowercase();
+                let files: Vec<(String, String)> = ed.doc.with(|d| {
+                    d.as_ref()
+                        .map(|d| {
+                            d.pages
+                                .iter()
+                                .filter(|p| revel_edit::textfile::is_server_file(&p.path))
+                                .filter(|p| q.is_empty() || p.path.to_lowercase().contains(&q))
+                                .map(|p| (p.id.clone(), p.path.clone()))
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                });
+                Some(files.into_iter().map(|(id, path)| {
+                    let id2 = id.clone();
+                    view! {
+                        <button class="list-row page-row file-row" style="--depth:0" data-url=path.clone()
+                            title=ui.t("pages-file-row-help") on:click=move |_| cb.run(id.clone())>
+                            <span class="list-chevron"></span>
+                            <span class="list-icon">{icons::file()}</span>
+                            <span class="list-label">{path.trim_start_matches('/').to_string()}</span>
+                            <span class="row-action" role="button" title=ui.t("pages-settings") aria-label=ui.t("pages-settings")
+                                on:click=move |e| { e.stop_propagation(); cb.run(id2.clone()) }>{icons::settings()}</span>
+                        </button>
+                    }
+                }).collect_view())
+            }}
         </div>
     }
 }

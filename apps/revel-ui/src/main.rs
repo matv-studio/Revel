@@ -5,6 +5,7 @@ mod api;
 mod assistants;
 mod autotr;
 mod blocks;
+mod boundattr;
 mod canvas;
 mod cms;
 mod cmsfields;
@@ -18,6 +19,7 @@ mod editor;
 mod files;
 mod help;
 mod home;
+mod hovermedia;
 mod icons;
 mod importer;
 mod insert;
@@ -39,6 +41,7 @@ mod richtext;
 mod settings;
 mod setup;
 mod site;
+mod siteinfo;
 mod sitesettings;
 mod styles;
 mod textfield;
@@ -319,6 +322,8 @@ pub enum Section {
     Code,
     Menus,
     Versions,
+    /// Informations du site (coordonnées, réseaux), partie de Général.
+    SiteInfo,
 }
 
 #[derive(Clone, Debug, PartialEq)]

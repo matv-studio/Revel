@@ -2465,6 +2465,7 @@ fn writes_entries(c: &Command) -> bool {
         | Command::SetEntryBody { .. }
         | Command::CreateEntry { .. }
         | Command::WriteEntry { .. }
+        | Command::ReplaceInEntry { .. }
         | Command::CreateCmsCollection { .. }
         | Command::RemoveCmsCollection { .. }
         | Command::SetDataValue { .. }

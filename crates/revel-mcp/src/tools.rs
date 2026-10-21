@@ -94,7 +94,9 @@ layout (header, footer: hide a block, a subtitle) is a layout property: `apply_c
 (types text, image, link, switch), read in the layout like a component property (`{% if not hideCta %}`), each \
 page giving its value with `{\"cmd\": \"set_page_prop\", \"page\": \"<page id>\", \"key\": \"hideCta\", \"value\": true}`.\n\
 - Site map: `get_site_map` lists every page and link (broken links, orphan pages); fix a broken link by changing \
-its `href`, creating the page, or adding a redirect.\n\
+its `href`, creating the page, or adding a redirect. Addresses of other sites (videos, social networks, external \
+links, also in CMS entries and site information): `check_links` tells which still answer, `replace_link` changes \
+one everywhere it is used.\n\
 Existing sites may still contain {{ expressions }} from data files: read them with `get_data`/`set_data`; CMS entries \
 with `list_collections`, `get_entry`, `set_entry_field`. Keep the site's language and tone.";
 
@@ -119,6 +121,27 @@ fn client_of(ctx: &RequestContext<RoleServer>) -> String {
         .or_else(|| ctx.peer.peer_info().map(|p| p.client_info.clone()))
         .map(|i| i.title.filter(|t| !t.trim().is_empty()).unwrap_or(i.name))
         .unwrap_or_default()
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CheckLinksArg {
+    /// Absolute path of the site folder. Omit to use the site open in Revel.
+    #[serde(default)]
+    pub site: Option<String>,
+    /// Check every address again, even those checked less than a day ago.
+    #[serde(default)]
+    pub refresh: bool,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ReplaceLinkArg {
+    /// Absolute path of the site folder. Omit to use the site open in Revel.
+    #[serde(default)]
+    pub site: Option<String>,
+    /// Address used by the site now (as written, from `check_links` or `get_site_map`).
+    pub url: String,
+    /// New address.
+    pub new_url: String,
 }
 
 /// Paramètre commun : site visé.
@@ -494,6 +517,103 @@ impl Revel {
         let v = self.call("cms_collections", site, json!({})).await?;
         serde_json::from_value(v).map_err(|e| e.to_string())
     }
+
+    /// Plan du site (D-103), adresses d'autres sites des contenus et des informations comprises
+    /// (D-107) : document, informations du site, contenus lus, plan.
+    async fn site_map(
+        &self,
+        site: &Option<String>,
+    ) -> Result<
+        (
+            Site,
+            Option<Value>,
+            Vec<revel_edit::linkmap::EntryText>,
+            revel_edit::linkmap::LinkMap,
+        ),
+        String,
+    > {
+        use revel_edit::linkmap::{EntryRef, EntryText};
+        let d = self.doc(site).await?;
+        // Informations du site (menus) : dans le document, sinon dans le fichier de données.
+        let info = match d.data.get(revel_edit::siteinfo::ROOT) {
+            Some(v) => Some(v.clone()),
+            None => self
+                .call(
+                    "readable_data",
+                    site,
+                    json!({ "paths": [[revel_edit::siteinfo::ROOT]], "collections": [] }),
+                )
+                .await
+                .ok()
+                .and_then(|v| v.get("values")?.get(0).cloned())
+                .filter(|v| !v.is_null()),
+        };
+        let folders: Vec<(String, String, bool)> = d
+            .collections
+            .iter()
+            .map(|c| (c.folder.clone(), c.id.clone(), c.path.is_some()))
+            .collect();
+        let cms = self.collections(site).await.unwrap_or_default();
+        let mut entries = Vec::new();
+        let mut texts = Vec::new();
+        for c in cms {
+            let known = folders.iter().find(|(f, _, _)| *f == c.folder);
+            let id = known.map_or(c.id.clone(), |k| k.1.clone());
+            for e in c.entries {
+                let title = ["title", "titre", "name", "nom"]
+                    .iter()
+                    .find_map(|k| e.data.get(*k).and_then(Value::as_str))
+                    .unwrap_or(&e.file)
+                    .to_string();
+                if known.is_some_and(|k| k.2)
+                    && let Some(url) = &e.url
+                {
+                    entries.push(EntryRef {
+                        collection: id.clone(),
+                        file: e.file.clone(),
+                        url: url.clone(),
+                        title: title.clone(),
+                    });
+                }
+                texts.push(EntryText {
+                    collection: id.clone(),
+                    folder: c.folder.clone(),
+                    file: e.file,
+                    title,
+                    data: e.data,
+                    body: e.body,
+                });
+            }
+        }
+        let map = revel_edit::linkmap::build_with(&d, info.as_ref(), &entries, &texts);
+        Ok((d, info, texts, map))
+    }
+}
+
+/// Adresses d'autres sites du plan (une fois chacune) : adresse, plateforme ou domaine, endroits
+/// où elle sert.
+fn external_urls(map: &revel_edit::linkmap::LinkMap) -> Vec<(String, String, Vec<String>)> {
+    use revel_edit::linkmap::NodeKind;
+    let mut out: Vec<(String, String, Vec<String>)> = Vec::new();
+    for l in &map.links {
+        let Some(n) = map.node(&l.to) else { continue };
+        if !matches!(n.kind, NodeKind::External | NodeKind::Media) {
+            continue;
+        }
+        let place = map.node(&l.from).map_or_else(
+            || l.from.clone(),
+            |f| f.path.clone().unwrap_or_else(|| f.label.clone()),
+        );
+        match out.iter_mut().find(|(u, _, _)| *u == l.href) {
+            Some((_, _, uses)) => {
+                if !uses.contains(&place) {
+                    uses.push(place);
+                }
+            }
+            None => out.push((l.href.clone(), n.label.clone(), vec![place])),
+        }
+    }
+    out
 }
 
 /// Texte par défaut d'un élément du panneau Ajouter, dans la langue du site (celui de
@@ -564,6 +684,8 @@ impl Revel {
                 "set_layer" => go!(set_layer),
                 "check_site" => go!(check_site),
                 "get_site_map" => go!(get_site_map),
+                "check_links" => go!(check_links),
+                "replace_link" => go!(replace_link),
                 "remove_node" => go!(remove_node),
                 "apply_commands" => go!(apply_commands),
                 "undo" => go!(undo),
@@ -1163,54 +1285,10 @@ impl Revel {
         description = "Site map: pages, collections (one page per entry), site menus and shared parts (components, templates) with every link between them: written links (with the element id), lists of entries, menu links, redirects. Lists addresses linked to without a page (broken links) and pages no link leads to (orphans). Change a link with set_attributes (href) or apply_commands; node positions on the Sitemap view are `set_map_positions` commands."
     )]
     async fn get_site_map(&self, Parameters(a): Parameters<SiteArg>) -> CallToolResult {
-        let d = match self.doc(&a.site).await {
-            Ok(d) => d,
+        let (_, _, _, map) = match self.site_map(&a.site).await {
+            Ok(m) => m,
             Err(e) => return fail(e),
         };
-        // Informations du site (menus) : dans le document, sinon dans le fichier de données.
-        let info = match d.data.get(revel_edit::siteinfo::ROOT) {
-            Some(v) => Some(v.clone()),
-            None => self
-                .call(
-                    "readable_data",
-                    &a.site,
-                    json!({ "paths": [[revel_edit::siteinfo::ROOT]], "collections": [] }),
-                )
-                .await
-                .ok()
-                .and_then(|v| v.get("values")?.get(0).cloned())
-                .filter(|v| !v.is_null()),
-        };
-        let folders: Vec<(String, String)> = d
-            .collections
-            .iter()
-            .filter(|c| c.path.is_some())
-            .map(|c| (c.folder.clone(), c.id.clone()))
-            .collect();
-        let entries: Vec<revel_edit::linkmap::EntryRef> = self
-            .collections(&a.site)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|c| {
-                let id = folders.iter().find(|(f, _)| *f == c.folder)?.1.clone();
-                Some(c.entries.into_iter().filter_map(move |e| {
-                    Some(revel_edit::linkmap::EntryRef {
-                        collection: id.clone(),
-                        title: e
-                            .data
-                            .get("title")
-                            .and_then(Value::as_str)
-                            .unwrap_or(&e.file)
-                            .to_string(),
-                        file: e.file,
-                        url: e.url?,
-                    })
-                }))
-            })
-            .flatten()
-            .collect();
-        let map = revel_edit::linkmap::build(&d, info.as_ref(), &entries);
         let broken: Vec<&str> = map
             .nodes
             .iter()
@@ -1224,6 +1302,71 @@ impl Revel {
             "orphans": map.orphans(),
         }))
         .unwrap_or_default())
+    }
+
+    #[tool(
+        description = "Check that the addresses of other sites used by the site still answer: videos (YouTube, Vimeo…), social networks, other sites, from pages, CMS entries and site information. Results are kept a day; `refresh` checks again. States: ok, redirected (final_url), missing, restricted (private video or embedding refused), blocked (the site refuses automatic checks: open it in a browser), failing, unreachable."
+    )]
+    async fn check_links(&self, Parameters(a): Parameters<CheckLinksArg>) -> CallToolResult {
+        let (_, _, _, map) = match self.site_map(&a.site).await {
+            Ok(m) => m,
+            Err(e) => return fail(e),
+        };
+        let groups = external_urls(&map);
+        let urls: Vec<String> = groups.iter().map(|(u, _, _)| u.clone()).collect();
+        let mode = if a.refresh { "all" } else { "stale" };
+        let checks = match self
+            .call(
+                "links_check",
+                &a.site,
+                json!({ "urls": urls, "mode": mode }),
+            )
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => return fail(e),
+        };
+        let checks: Vec<Option<revel_protocol::LinkCheck>> =
+            serde_json::from_value(checks).unwrap_or_default();
+        let out: Vec<Value> = groups
+            .iter()
+            .zip(checks)
+            .map(|((url, group, uses), c)| {
+                json!({
+                    "url": url,
+                    "group": group,
+                    "uses": uses,
+                    "check": c,
+                })
+            })
+            .collect();
+        ok(serde_json::to_string_pretty(&out).unwrap_or_default())
+    }
+
+    #[tool(
+        description = "Replace an address of another site (video, social network, external link) everywhere the site uses it: links, embedded media, component values, menus, redirects, CMS entry fields and text, site information. One undo step."
+    )]
+    async fn replace_link(&self, Parameters(a): Parameters<ReplaceLinkArg>) -> CallToolResult {
+        let (d, info, texts, map) = match self.site_map(&a.site).await {
+            Ok(m) => m,
+            Err(e) => return fail(e),
+        };
+        let links: Vec<&revel_edit::linkmap::MapLink> =
+            map.links.iter().filter(|l| l.href == a.url).collect();
+        if links.is_empty() {
+            return fail(format!("The site does not use {}.", a.url));
+        }
+        let Some(cmd) =
+            revel_edit::linkmap::replace_url(&d, info.as_ref(), &texts, &links, &a.url, &a.new_url)
+        else {
+            return ok("Nothing to change.");
+        };
+        self.apply(
+            &a.site,
+            cmd,
+            &format!("{} replaced by {} ({} uses)", a.url, a.new_url, links.len()),
+        )
+        .await
     }
 
     #[tool(description = "Remove an element (and everything inside it).")]

@@ -953,6 +953,68 @@ accentuée après une balise : coupé entre deux caractères (le rendu s'arrêta
   coche) ; une règle `appearance: none` laissait la liste du système, claire et illisible sur le thème
   sombre. Sélecteur personnalisable de Chromium 135 et suivants (WebView2).
 
+**D-107 — 21/10/2026 — prise.** **Plan du site : médias, réseaux et liens externes vérifiés ; corrections.**
+Demande de l'utilisateur : montrer, en plus des parties communes et des autres sites, les médias du CMS et les
+liens externes (vidéos Vimeo, YouTube, réseaux sociaux) « afin de monitorer le fait que les liens soient
+toujours accessibles et pour facilement les mettre à jour ».
+- Groupe « Médias et réseaux » : un nœud par plateforme (`media:<plateforme>`, `revel_edit::linkmap::PLATFORMS` :
+  vidéos YouTube, Vimeo, Dailymotion, Twitch ; sons SoundCloud, Spotify ; réseaux Instagram, Facebook,
+  LinkedIn, X, TikTok, Pinterest, Behance, Threads, Bluesky, WhatsApp). Les autres domaines restent dans
+  « Autres sites ». Adresses relevées : liens, médias intégrés (`src` des `<iframe>`, `<video>`, `<audio>`,
+  `<source>`, `<embed>`), valeurs de composant, menus, et désormais les champs et le texte des contenus du
+  CMS (pointeur JSON du champ) et les informations du site ; une adresse calculée (`…/video/{{ vid }}`) n'est
+  pas une adresse écrite.
+- Vérification par Revel (`revel_core::links`, sans service extérieur) : vidéo YouTube ou Vimeo par la réponse
+  oEmbed de la plateforme (une page de vidéo supprimée répond quand même : vérifié, YouTube 200 / 400,
+  Vimeo 200 / 404) ; autre adresse : premier octet demandé (`Range: bytes=0-0`), redirections suivies.
+  États : en ligne, déplacée (adresse finale proposée), introuvable, privée, non vérifiable (page de
+  connexion, 403, 429, 999 : LinkedIn et Instagram refusent les vérifications automatiques, l'adresse n'est
+  pas morte pour autant), en erreur, sans réponse. Résultats gardés dans `.revel/links.json` (hors des
+  versions), refaits au-delà d'un jour ou sur « Vérifier ». Pastille de l'état le plus grave sur chaque
+  nœud, « N adresses à revoir » dans la barre (montre les deux groupes).
+- Panneau d'une plateforme ou d'un autre site : adresses, à revoir d'abord, chacune avec son état, les
+  endroits où elle sert (page, contenu et champ, information du site), ouvrir, « Remplacer » partout où elle
+  sert (`linkmap::replace_url`, une seule étape d'annulation), « Utiliser cette adresse » pour une page
+  déplacée. Dans un contenu du CMS, l'adresse est remplacée dans le fichier même (commande
+  `ReplaceInEntry`, mise en forme gardée, adresse entière seulement), inverse au texte exact.
+- Outils MCP `check_links` et `replace_link` (un assistant surveille et corrige les liens).
+- Corrections : fond de la rubrique active des paramètres (accent étendu) étendu à tout l'onglet quand elle
+  n'a pas de parties ; bouton « Ranger » centré dans la barre du plan (`.btn--small` se calait en haut) ;
+  zoom du plan avec Alt+molette, comme le canevas d'édition.
+Sources : [HTTP 999 (LinkedIn)](https://http.dev/999), [oEmbed des vidéos privées — Vimeo](https://help.vimeo.com/hc/en-us/articles/12427906892689-Use-oEmbed-with-private-videos).
+
+**D-108 — 21/10/2026 — prise.** **Synchronisation automatique du travail à plusieurs.** Demande de
+l'utilisateur, après comparaison des façons de faire (édition sur GitHub sans copie, copie partielle, copie
+complète actuelle) : garder la copie complète, actualiser quand le dépôt commun change sans enregistrer de
+version, garder Ctrl+Z pour la session (ses propres modifications seulement), s'arrêter et le dire en cas
+de conflit.
+- Vérification toutes les minutes (`revel_git::versions::incoming` : liste des branches du dépôt commun,
+  rien n'est téléchargé ; 444 octets mesurés). Échange réduit aux objets manquants (mesuré sur Alunites :
+  texte changé dans le document de 600 Ko, 546 octets ; image ajoutée de 1,3 Mo, 1,3 Mo), seuls les
+  fichiers changés réécrits.
+- Réception (`receive`) à la première pause d'édition (3 s sans saisie, aucun texte en cours d'édition dans
+  le canevas ni champ actif), sans enregistrer de version : fusion à trois du dossier (changements en cours)
+  avec la version reçue, par endroit pour le document ; la version actuelle devient la dernière reçue et les
+  changements en cours restent à enregistrer. Versions faites des deux côtés : fusion enregistrée si rien
+  n'est en cours, sinon au prochain enregistrement. Les versions enregistrées partent aussitôt
+  (« Enregistrer une version » synchronise ; une version restée hors ligne part à la vérification suivante).
+- Historique d'annulation gardé à la réception (`History::received`) : avant d'annuler ou de rétablir une
+  étape, elle est appliquée puis défaite sur une copie ; si le document ne revient pas à l'identique (même
+  endroit changé par un collègue, position décalée), l'étape est abandonnée avec un message et la suivante
+  reste. Une étape qui écrit un fichier reçu (contenu, données, schéma) est abandonnée. Même principe que
+  Figma et Google Slides (on n'annule que ses propres modifications).
+- Conflit (même endroit modifié des deux côtés) : rien n'est changé, la synchronisation se met en pause et
+  le dit (« La synchronisation n'a pas pu aboutir : N endroits… ») ; « Vérifier » ouvre Paramètres ›
+  Versions, qui enregistre et montre les endroits à choisir ; « Plus tard » laisse travailler, pause
+  signalée.
+- Indicateur en haut à droite (sites à dépôt commun) : état, dernière vérification, versions reçues de qui,
+  « Synchroniser » ; interrupteur « Synchronisation automatique » dans Paramètres › Versions (réglage de
+  l'ordinateur, `auto_sync`, actif par défaut). Pas de serveur : une notification de GitHub demanderait un
+  service de Revel en ligne.
+Sources : [git fetch-pack](https://git-scm.com/docs/git-fetch-pack.html), [Undo/redo en travail à
+plusieurs — Liveblocks](https://development.liveblocks.io/blog/how-to-build-undo-redo-in-a-multiplayer-environment.md),
+[Multiplayer editing in Figma](https://www.figma.com/blog/multiplayer-editing-in-figma/).
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

@@ -73,7 +73,7 @@ pub(crate) fn activity_label(ui: Ui, a: &McpActivity) -> String {
 }
 
 /// Heure d'une action (`14:32`, précédée du jour dans la langue de l'interface un autre jour).
-fn when(at: u64, lang: &str) -> String {
+pub(crate) fn when(at: u64, lang: &str) -> String {
     let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(at as f64));
     let now = js_sys::Date::new_0();
     let hm = format!("{:02}:{:02}", d.get_hours(), d.get_minutes());

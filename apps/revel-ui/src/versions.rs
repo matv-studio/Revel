@@ -237,6 +237,13 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
             ui.activity.set(None);
             match r {
                 Ok(Some(info)) => {
+                    // Synchronisation automatique (D-108) : reprise une fois rien à choisir.
+                    if info.conflicts.is_empty() {
+                        let _ = ui.sync.try_update(|s| {
+                            s.paused = None;
+                            s.waiting = false;
+                        });
+                    }
                     let _ = conflicts.try_set(info.conflicts);
                     let _ = items.try_set(info.items);
                     let _ = picks.try_set(HashMap::new());
@@ -271,10 +278,24 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
         } else {
             message.trim().to_string()
         };
-        run(
-            "save",
-            Box::pin(async move { api::versions_save(&p, &m).await.map(|_| None) }),
-        );
+        // Travail à plusieurs (D-108) : la version enregistrée part aussitôt chez les autres.
+        let shared = status.with_untracked(|s| {
+            s.as_ref()
+                .and_then(|s| s.as_ref())
+                .is_some_and(|s| s.remote.is_some())
+        }) && ui.settings.with_untracked(|s| s.auto_sync);
+        if shared {
+            let f = ui.now("versions-merge-message", &[]);
+            run(
+                "sync",
+                Box::pin(async move { api::versions_sync(&p, &m, &f).await.map(Some) }),
+            );
+        } else {
+            run(
+                "save",
+                Box::pin(async move { api::versions_save(&p, &m).await.map(|_| None) }),
+            );
+        }
     };
     let sync = move || {
         let p = path.get_value();
@@ -382,6 +403,20 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
             .danger(),
         ));
     };
+    // « Vérifier » depuis la synchronisation en pause (D-108) : synchronisation lancée, endroits
+    // à choisir montrés.
+    Effect::new(move |_| {
+        let has = status.with(|s| {
+            s.as_ref()
+                .and_then(|s| s.as_ref())
+                .is_some_and(|s| s.remote.is_some())
+        });
+        // Suivi : « Vérifier » peut venir alors que la page est déjà ouverte.
+        if has && ui.sync.with(|s| s.verify) {
+            ui.sync.update(|s| s.verify = false);
+            sync();
+        }
+    });
     let esc = window_event_listener(leptos::ev::keydown, move |e| {
         if e.key() == "Escape" && saving.with_untracked(Option::is_some) {
             e.prevent_default();
@@ -464,6 +499,16 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                                 on:click=move |_| team.set(Some(mode))>{ui.t("new-site-change")}</button>
                         })}
                         <span class="chip" title=ui.t("versions-branch")>{icons::branch()}{s.branch.clone()}</span>
+                        {(mode != "solo").then(|| view! {
+                            <label class="versions-auto" title=ui.t("versions-auto-help")>
+                                <span class="switch">
+                                    <input type="checkbox" class="versions-auto-sync" prop:checked=move || ui.settings.with(|s| s.auto_sync)
+                                        on:change=move |e| { let v = event_target_checked(&e); crate::settings::update(ui, &|s| s.auto_sync = v); }/>
+                                    <span class="switch-track"></span>
+                                </span>
+                                <span>{ui.t("versions-auto")}</span>
+                            </label>
+                        })}
                         {move || no_account().then(|| view! {
                             <span class="seo-warn" title=ui.t("versions-sync-account")>{icons::warning()}</span>
                         })}

@@ -6,9 +6,13 @@
 //!   page introuvable ; une adresse redirigée mène à la page de destination ;
 //! - lien d'une liste : vers la collection parcourue (`{{ p.url }}` dans une liste de projets) ou
 //!   vers le menu du site parcouru ;
-//! - valeur d'un composant (`href: "'/contact/'"`), lien d'un menu du site, redirection.
+//! - valeur d'un composant (`href: "'/contact/'"`), lien d'un menu du site, redirection ;
+//! - adresse d'un autre site (D-107) : lien, média intégré (`<iframe src>`, `<video src>`…),
+//!   adresse écrite dans un champ ou le texte d'un contenu du CMS, information du site. Les
+//!   plateformes de vidéos et les réseaux sociaux ([`PLATFORMS`]) sont regroupés à part.
 //!
-//! Chaque lien garde ce qu'il faut pour le changer de destination ([`retarget`]).
+//! Chaque lien garde ce qu'il faut pour le changer de destination ([`retarget`]) ou remplacer son
+//! adresse partout où elle sert ([`replace_url`]).
 
 use crate::address::{Owner, Target};
 use crate::collection::{FieldList, Query};
@@ -39,13 +43,15 @@ pub enum NodeKind {
     Missing,
     /// Autre site (par domaine).
     External,
+    /// Plateforme de vidéos ou réseau social ([`PLATFORMS`], D-107).
+    Media,
 }
 
 /// Nœud du plan.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MapNode {
     /// Clé stable : `page:<id>`, `col:<id>`, `entry:<collection>/<fichier>`, `layout:<id>`,
-    /// `comp:<id>`, `menu:<nom>`, `missing:<adresse>`, `ext:<domaine>`.
+    /// `comp:<id>`, `menu:<nom>`, `missing:<adresse>`, `ext:<domaine>`, `media:<plateforme>`.
     pub key: String,
     pub kind: NodeKind,
     /// Nom affiché (nom de la page, de la collection, du menu…).
@@ -79,6 +85,19 @@ pub enum LinkVia {
     List { at: Target },
     /// Liste qui affiche les liens d'un menu du site.
     Menu { at: Target },
+    /// Média intégré : attribut (`src`) d'un `<iframe>`, `<video>`, `<audio>`, `<source>`…
+    Src { at: Target, attr: String },
+    /// Adresse écrite dans un champ d'un contenu du CMS (`pointer` : pointeur JSON dans son
+    /// en-tête, `/video` ou `/blocks/2/video`).
+    Field {
+        folder: String,
+        file: String,
+        pointer: String,
+    },
+    /// Adresse écrite dans le texte (Markdown) d'un contenu du CMS.
+    Body { folder: String, file: String },
+    /// Information du site (chemin sous `site`).
+    Info { path: Vec<String> },
 }
 
 /// Lien du plan : d'un nœud vers un autre.
@@ -99,7 +118,13 @@ pub struct MapLink {
 impl MapLink {
     /// Destination changeable (lien écrit, valeur d'un composant, lien d'un menu, redirection).
     pub fn retargetable(&self) -> bool {
-        !matches!(self.via, LinkVia::List { .. } | LinkVia::Menu { .. })
+        matches!(
+            self.via,
+            LinkVia::Attr { .. }
+                | LinkVia::Arg { .. }
+                | LinkVia::MenuItem { .. }
+                | LinkVia::Redirect { .. }
+        )
     }
 }
 
@@ -110,6 +135,152 @@ pub struct EntryRef {
     pub file: String,
     pub url: String,
     pub title: String,
+}
+
+/// Contenu d'une collection du CMS lu pour les adresses écrites dans ses champs et son texte
+/// (D-107). `collection` : identifiant de la collection du site (clé `entry:` du plan), sinon
+/// celui du CMS.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EntryText {
+    pub collection: String,
+    pub folder: String,
+    pub file: String,
+    pub title: String,
+    pub data: Value,
+    #[serde(default)]
+    pub body: String,
+}
+
+/// Sorte de plateforme en ligne.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlatformKind {
+    Video,
+    Audio,
+    Social,
+}
+
+/// Plateformes de vidéos, de sons et réseaux sociaux : identifiant, nom, sorte, domaines (le
+/// domaine ou l'un de ses sous-domaines).
+pub const PLATFORMS: &[(&str, &str, PlatformKind, &[&str])] = &[
+    (
+        "youtube",
+        "YouTube",
+        PlatformKind::Video,
+        &["youtube.com", "youtu.be", "youtube-nocookie.com"],
+    ),
+    (
+        "vimeo",
+        "Vimeo",
+        PlatformKind::Video,
+        &["vimeo.com", "vimeocdn.com"],
+    ),
+    (
+        "dailymotion",
+        "Dailymotion",
+        PlatformKind::Video,
+        &["dailymotion.com", "dai.ly"],
+    ),
+    ("twitch", "Twitch", PlatformKind::Video, &["twitch.tv"]),
+    (
+        "soundcloud",
+        "SoundCloud",
+        PlatformKind::Audio,
+        &["soundcloud.com"],
+    ),
+    ("spotify", "Spotify", PlatformKind::Audio, &["spotify.com"]),
+    (
+        "instagram",
+        "Instagram",
+        PlatformKind::Social,
+        &["instagram.com"],
+    ),
+    (
+        "facebook",
+        "Facebook",
+        PlatformKind::Social,
+        &["facebook.com", "fb.com", "fb.watch"],
+    ),
+    (
+        "linkedin",
+        "LinkedIn",
+        PlatformKind::Social,
+        &["linkedin.com", "lnkd.in"],
+    ),
+    (
+        "x",
+        "X (Twitter)",
+        PlatformKind::Social,
+        &["x.com", "twitter.com"],
+    ),
+    ("tiktok", "TikTok", PlatformKind::Social, &["tiktok.com"]),
+    (
+        "pinterest",
+        "Pinterest",
+        PlatformKind::Social,
+        &["pinterest.com", "pinterest.fr", "pin.it"],
+    ),
+    ("behance", "Behance", PlatformKind::Social, &["behance.net"]),
+    (
+        "threads",
+        "Threads",
+        PlatformKind::Social,
+        &["threads.net", "threads.com"],
+    ),
+    ("bluesky", "Bluesky", PlatformKind::Social, &["bsky.app"]),
+    (
+        "whatsapp",
+        "WhatsApp",
+        PlatformKind::Social,
+        &["wa.me", "whatsapp.com"],
+    ),
+];
+
+/// Plateforme d'un domaine (`www.` retiré) : identifiant, nom, sorte.
+pub fn platform_of(host: &str) -> Option<(&'static str, &'static str, PlatformKind)> {
+    let h = host.to_ascii_lowercase();
+    let h = h.strip_prefix("www.").unwrap_or(&h);
+    PLATFORMS
+        .iter()
+        .find(|(_, _, _, domains)| {
+            domains
+                .iter()
+                .any(|d| h == *d || h.ends_with(&format!(".{d}")))
+        })
+        .map(|(id, name, kind, _)| (*id, *name, *kind))
+}
+
+/// Plateforme d'un nœud `media:<id>`.
+pub fn platform(key: &str) -> Option<(&'static str, &'static str, PlatformKind)> {
+    let id = key.strip_prefix("media:")?;
+    PLATFORMS
+        .iter()
+        .find(|p| p.0 == id)
+        .map(|(id, name, kind, _)| (*id, *name, *kind))
+}
+
+/// Adresses absolues (`http://`, `https://`) écrites dans un texte (HTML, Markdown compris).
+pub fn urls_in(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(i) = rest.find("http") {
+        let tail = &rest[i..];
+        if !(tail.starts_with("https://") || tail.starts_with("http://")) {
+            rest = &rest[i + 4..];
+            continue;
+        }
+        let end = tail
+            .find(|c: char| c.is_whitespace() || "\"'<>()[]{}\\`".contains(c))
+            .unwrap_or(tail.len());
+        let url = tail[..end].trim_end_matches(['.', ',', ';', ':', '!', '?']);
+        // Adresse calculée (`…/video/{{ vid }}`) : pas une adresse écrite.
+        let computed = tail[end..].starts_with("{{") || tail[end..].starts_with("{%");
+        if url.len() > "https://".len() && !computed {
+            out.push(url.to_string());
+        }
+        rest = &tail[end.max(1)..];
+    }
+    out
 }
 
 /// Plan du site.
@@ -335,6 +506,9 @@ fn text_of(nodes: &[Node]) -> String {
     }
 }
 
+/// Balises d'un média intégré dont l'adresse (`src`) peut venir d'un autre site.
+const EMBEDS: &[&str] = &["iframe", "video", "audio", "source", "embed", "track"];
+
 /// Liste en cours : variable de l'élément et ce qu'elle parcourt.
 #[derive(Clone)]
 enum Loop {
@@ -374,11 +548,16 @@ impl Builder<'_> {
         }
         let path = if let Some((host, path)) = split_absolute(h) {
             if self.host.as_deref() != Some(host.as_str()) {
-                let key = format!("ext:{host}");
+                let (key, kind, label) = match platform_of(&host) {
+                    Some((id, name, _)) => {
+                        (format!("media:{id}"), NodeKind::Media, name.to_string())
+                    }
+                    None => (format!("ext:{host}"), NodeKind::External, host),
+                };
                 self.nodes.entry(key.clone()).or_insert(MapNode {
                     key: key.clone(),
-                    kind: NodeKind::External,
-                    label: host,
+                    kind,
+                    label,
                     path: None,
                     draft: false,
                     parent: None,
@@ -485,6 +664,42 @@ impl Builder<'_> {
                                 loops.iter().rev().find(|(v, _, _)| *v == var).cloned()
                         {
                             self.loop_link(from, &lp, list_at);
+                        }
+                    }
+                    // Média intégré d'un autre site (D-107).
+                    if let Some(id) = id
+                        && EMBEDS.iter().any(|t| tag.eq_ignore_ascii_case(t))
+                    {
+                        for attr in ["src", "data-src"] {
+                            let Some(lit) = attrs
+                                .iter()
+                                .find(|a| a.name == attr)
+                                .and_then(|a| a.value.as_deref())
+                                .and_then(static_href)
+                            else {
+                                continue;
+                            };
+                            if split_absolute(&lit).is_some() {
+                                let text = attrs
+                                    .iter()
+                                    .find(|a| a.name == "title")
+                                    .and_then(|a| a.value.clone())
+                                    .unwrap_or_else(|| format!("<{tag}>"));
+                                let at = Target {
+                                    owner: owner.clone(),
+                                    node: id.clone(),
+                                };
+                                self.add(
+                                    from,
+                                    from_path,
+                                    &lit,
+                                    text,
+                                    LinkVia::Src {
+                                        at,
+                                        attr: attr.to_string(),
+                                    },
+                                );
+                            }
                         }
                     }
                     self.walk(owner, from, from_path, children, loops);
@@ -688,6 +903,42 @@ fn reach(site: &Site) -> HashMap<String, usize> {
 /// Plan du site. `info` : informations du site (menus) ; `entries` : contenus des collections
 /// qui ont une page (pour relier les liens écrits vers l'un d'eux).
 pub fn build(site: &Site, info: Option<&Value>, entries: &[EntryRef]) -> LinkMap {
+    build_with(site, info, entries, &[])
+}
+
+/// Adresses de chaînes d'une valeur (pointeur JSON de chacune).
+fn strings_of(v: &Value, pointer: &mut String, out: &mut Vec<(String, String)>) {
+    match v {
+        Value::String(s) => out.push((pointer.clone(), s.clone())),
+        Value::Array(a) => {
+            for (i, x) in a.iter().enumerate() {
+                let len = pointer.len();
+                pointer.push_str(&format!("/{i}"));
+                strings_of(x, pointer, out);
+                pointer.truncate(len);
+            }
+        }
+        Value::Object(m) => {
+            for (k, x) in m {
+                let len = pointer.len();
+                pointer.push('/');
+                pointer.push_str(&k.replace('~', "~0").replace('/', "~1"));
+                strings_of(x, pointer, out);
+                pointer.truncate(len);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Comme [`build`], avec les adresses d'autres sites écrites dans les contenus du CMS (`texts`)
+/// et dans les informations du site (D-107).
+pub fn build_with(
+    site: &Site,
+    info: Option<&Value>,
+    entries: &[EntryRef],
+    texts: &[EntryText],
+) -> LinkMap {
     let host = site
         .base_url
         .as_deref()
@@ -920,6 +1171,62 @@ pub fn build(site: &Site, info: Option<&Value>, entries: &[EntryRef]) -> LinkMap
             b.redirects.insert(normalize(&r.from), s);
         }
     }
+    // Adresses d'autres sites écrites dans les contenus du CMS et les informations du site.
+    let host = b.host.clone();
+    let external =
+        |u: &str| split_absolute(u).is_some_and(|(h, _)| host.as_deref() != Some(h.as_str()));
+    for t in texts {
+        let entry = format!("entry:{}/{}", t.collection, t.file);
+        let from = if b.nodes.contains_key(&entry) {
+            entry
+        } else {
+            format!("cms:{}/{}", t.folder, t.file)
+        };
+        let mut strings = Vec::new();
+        strings_of(&t.data, &mut String::new(), &mut strings);
+        for (pointer, text) in strings {
+            for u in urls_in(&text).into_iter().filter(|u| external(u)) {
+                b.add(
+                    &from,
+                    None,
+                    &u,
+                    t.title.clone(),
+                    LinkVia::Field {
+                        folder: t.folder.clone(),
+                        file: t.file.clone(),
+                        pointer: pointer.clone(),
+                    },
+                );
+            }
+        }
+        for u in urls_in(&t.body).into_iter().filter(|u| external(u)) {
+            b.add(
+                &from,
+                None,
+                &u,
+                t.title.clone(),
+                LinkVia::Body {
+                    folder: t.folder.clone(),
+                    file: t.file.clone(),
+                },
+            );
+        }
+    }
+    if let Some(info) = info {
+        for v in siteinfo::values(info) {
+            for u in urls_in(&v.value).into_iter().filter(|u| external(u)) {
+                b.add(
+                    "info:site",
+                    None,
+                    &u,
+                    v.path.join(" › "),
+                    LinkVia::Info {
+                        path: v.path.clone(),
+                    },
+                );
+            }
+        }
+    }
     LinkMap {
         nodes: b.nodes.into_values().collect(),
         links: b.links,
@@ -995,6 +1302,171 @@ pub fn retarget(
                     redirects_changed = true;
                 }
             }
+            LinkVia::List { .. }
+            | LinkVia::Menu { .. }
+            | LinkVia::Src { .. }
+            | LinkVia::Field { .. }
+            | LinkVia::Body { .. }
+            | LinkVia::Info { .. } => {}
+        }
+    }
+    for (menu, list) in menus {
+        commands.push(siteinfo::set_value(
+            site,
+            &[siteinfo::MENUS.to_string(), menu],
+            Some(siteinfo::menu_value(&list)),
+        ));
+    }
+    if redirects_changed {
+        commands.push(Command::SetRedirects { redirects });
+    }
+    match commands.len() {
+        0 => None,
+        1 => commands.pop(),
+        _ => Some(Command::Batch { commands }),
+    }
+}
+
+/// Valeur d'un attribut d'un élément.
+fn attr_value(site: &Site, at: &Target, name: &str) -> Option<String> {
+    match crate::address::node(site, at).ok()? {
+        Node::Element { attrs, .. } => attrs
+            .iter()
+            .find(|a| a.name == name)
+            .and_then(|a| a.value.clone()),
+        _ => None,
+    }
+}
+
+/// Caractère qui peut continuer une adresse.
+fn url_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || "-._~/?#[]@!$&*+,;=%:".contains(c)
+}
+
+/// Texte où l'adresse `old` est remplacée par `new` là où elle est écrite entière (pas au début
+/// d'une adresse plus longue ; ponctuation d'une phrase après elle admise).
+pub fn replace_link_text(text: &str, old: &str, new: &str) -> String {
+    if old.is_empty() {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find(old) {
+        let before = if i > 0 {
+            rest[..i].chars().next_back()
+        } else {
+            out.chars().next_back()
+        };
+        let tail = &rest[i + old.len()..];
+        let mut it = tail.chars();
+        let after = it.next();
+        let ends = |c: Option<char>| c.is_none_or(|c| !url_char(c));
+        let whole = before.is_none_or(|c| !c.is_ascii_alphanumeric())
+            && (ends(after) || after.is_some_and(|c| ".,;:!?".contains(c)) && ends(it.next()));
+        out.push_str(&rest[..i]);
+        out.push_str(if whole { new } else { old });
+        rest = tail;
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Commande qui remplace l'adresse `old` par `new` partout où les liens `links` l'écrivent (liens,
+/// médias intégrés, valeurs de composant, menus, redirections, champs et texte des contenus du CMS,
+/// informations du site ; D-107). `texts` : contenus du CMS lus pour le plan.
+pub fn replace_url(
+    site: &Site,
+    info: Option<&Value>,
+    texts: &[EntryText],
+    links: &[&MapLink],
+    old: &str,
+    new: &str,
+) -> Option<Command> {
+    if old.is_empty() || old == new {
+        return None;
+    }
+    let swap = |s: &str| replace_link_text(s, old, new);
+    let mut commands = Vec::new();
+    let mut menus: BTreeMap<String, Vec<MenuLink>> = BTreeMap::new();
+    let mut redirects = site.redirects.clone();
+    let mut redirects_changed = false;
+    // Contenus du CMS où l'adresse est écrite (champs, texte) : remplacée dans leur fichier.
+    let mut entries: BTreeSet<(String, String)> = BTreeSet::new();
+    let mut infos: BTreeMap<Vec<String>, String> = BTreeMap::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for l in links {
+        match &l.via {
+            LinkVia::Attr { at } | LinkVia::Src { at, .. } => {
+                let name = match &l.via {
+                    LinkVia::Src { attr, .. } => attr.as_str(),
+                    _ => "href",
+                };
+                if !seen.insert(format!("{at:?}#{name}")) {
+                    continue;
+                }
+                if let Some(v) = attr_value(site, at, name)
+                    && v.contains(old)
+                {
+                    commands.push(Command::SetAttr {
+                        at: at.clone(),
+                        name: name.into(),
+                        value: Some(swap(&v)),
+                    });
+                }
+            }
+            LinkVia::Arg { at, name } => {
+                if !seen.insert(format!("{at:?}@{name}")) {
+                    continue;
+                }
+                let v = match crate::address::node(site, at).ok() {
+                    Some(Node::Use { args, .. }) => args.get(name).cloned(),
+                    _ => None,
+                };
+                if let Some(v) = v
+                    && v.contains(old)
+                {
+                    commands.push(Command::SetUseArg {
+                        at: at.clone(),
+                        name: name.clone(),
+                        value: Some(swap(&v)),
+                    });
+                }
+            }
+            LinkVia::MenuItem { menu, index } => {
+                let list = menus.entry(menu.clone()).or_insert_with(|| {
+                    info.map(siteinfo::menus)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .find(|(n, _)| n == menu)
+                        .map(|(_, l)| l)
+                        .unwrap_or_default()
+                });
+                if let Some(item) = list.get_mut(*index) {
+                    item.url = swap(&item.url);
+                }
+            }
+            LinkVia::Redirect { index } => {
+                if let Some(r) = redirects.get_mut(*index)
+                    && r.to.contains(old)
+                {
+                    r.to = swap(&r.to);
+                    redirects_changed = true;
+                }
+            }
+            LinkVia::Field { folder, file, .. } | LinkVia::Body { folder, file } => {
+                entries.insert((folder.clone(), file.clone()));
+            }
+            LinkVia::Info { path } => {
+                let current = info
+                    .map(siteinfo::values)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .find(|v| v.path == *path)
+                    .map(|v| v.value);
+                if let Some(v) = current {
+                    infos.insert(path.clone(), swap(&v));
+                }
+            }
             LinkVia::List { .. } | LinkVia::Menu { .. } => {}
         }
     }
@@ -1007,6 +1479,19 @@ pub fn retarget(
     }
     if redirects_changed {
         commands.push(Command::SetRedirects { redirects });
+    }
+    for (folder, file) in entries {
+        if texts.iter().any(|t| t.folder == folder && t.file == file) {
+            commands.push(Command::ReplaceInEntry {
+                folder,
+                file,
+                find: old.to_string(),
+                replace: new.to_string(),
+            });
+        }
+    }
+    for (path, value) in infos {
+        commands.push(siteinfo::set_value(site, &path, Some(Value::String(value))));
     }
     match commands.len() {
         0 => None,
@@ -1245,5 +1730,206 @@ mod tests {
         assert_eq!(item_url_var("{{ p.url | url }}").as_deref(), Some("p"));
         assert_eq!(item_url_var("{{ p.data.url }}").as_deref(), Some("p"));
         assert_eq!(static_href("{{ \"/a/\" | url }}").as_deref(), Some("/a/"));
+    }
+
+    #[test]
+    fn plateformes_reconnues() {
+        assert_eq!(platform_of("www.youtube.com").map(|p| p.0), Some("youtube"));
+        assert_eq!(platform_of("player.vimeo.com").map(|p| p.0), Some("vimeo"));
+        assert_eq!(platform_of("m.facebook.com").map(|p| p.0), Some("facebook"));
+        assert_eq!(platform_of("notyoutube.com"), None);
+        assert_eq!(platform("media:linkedin").map(|p| p.1), Some("LinkedIn"));
+        assert_eq!(
+            urls_in(
+                "<p><a href=\"https://www.instagram.com/sherpa/\">x</a> https://youtu.be/abc.</p>\\"
+            ),
+            vec!["https://www.instagram.com/sherpa/", "https://youtu.be/abc"]
+        );
+        assert!(urls_in("https://player.vimeo.com/video/{{ vid }}").is_empty());
+    }
+
+    fn el(id: &str, tag: &str, attrs: &[(&str, &str)]) -> Node {
+        Node::Element {
+            id: Some(id.into()),
+            tag: tag.into(),
+            attrs: attrs
+                .iter()
+                .map(|(n, v)| Attr {
+                    name: (*n).into(),
+                    value: Some((*v).into()),
+                    when: None,
+                })
+                .collect(),
+            children: vec![],
+        }
+    }
+
+    fn medias() -> (Site, Value, Vec<EntryText>) {
+        let mut s = Site::new("Essai", "fr");
+        s.base_url = Some("https://exemple.fr".into());
+        s.pages = vec![page(
+            "index",
+            "/",
+            vec![
+                el(
+                    "v1",
+                    "iframe",
+                    &[
+                        ("src", "https://www.youtube-nocookie.com/embed/abc"),
+                        ("title", "Film"),
+                    ],
+                ),
+                el(
+                    "v2",
+                    "iframe",
+                    &[("src", "https://www.google.com/maps/embed?pb=1")],
+                ),
+                el(
+                    "v3",
+                    "iframe",
+                    &[("src", "https://player.vimeo.com/video/{{ vid | vimeo_id }}")],
+                ),
+                a("l1", "https://www.instagram.com/agence/", "Instagram"),
+                a("l2", "https://exemple.fr/contact/", "Contact"),
+            ],
+        )];
+        let info = json!({ "social": { "linkedin": "https://www.linkedin.com/company/agence" } });
+        let texts = vec![EntryText {
+            collection: "projets".into(),
+            folder: "src/content/projets".into(),
+            file: "force".into(),
+            title: "Force".into(),
+            data: json!({
+                "title": "Force",
+                "home_video": "https://player.vimeo.com/progressive_redirect/playback/1/file.mp4?s=1",
+                "blocks": [{ "type": "text" }, { "type": "video", "video": "https://www.youtube.com/watch?v=abc" }]
+            }),
+            body: "Voir https://www.instagram.com/agence/ et https://exemple.fr/agence/.".into(),
+        }];
+        (s, info, texts)
+    }
+
+    #[test]
+    fn medias_et_reseaux() {
+        let (s, info, texts) = medias();
+        let m = build_with(&s, Some(&info), &[], &texts);
+        let kind = |k: &str| m.node(k).map(|n| n.kind);
+        assert_eq!(kind("media:youtube"), Some(NodeKind::Media));
+        assert_eq!(kind("media:vimeo"), Some(NodeKind::Media));
+        assert_eq!(kind("media:instagram"), Some(NodeKind::Media));
+        assert_eq!(kind("media:linkedin"), Some(NodeKind::Media));
+        assert_eq!(kind("ext:google.com"), Some(NodeKind::External));
+        assert_eq!(
+            m.node("media:youtube").map(|n| n.label.as_str()),
+            Some("YouTube")
+        );
+        let to = |k: &str| m.links.iter().filter(|l| l.to == k).collect::<Vec<_>>();
+        // Iframe de la page, champ imbriqué du contenu.
+        let yt = to("media:youtube");
+        assert!(yt.iter().any(
+            |l| matches!(&l.via, LinkVia::Src { attr, .. } if attr == "src") && l.text == "Film"
+        ));
+        assert!(yt.iter().any(
+            |l| matches!(&l.via, LinkVia::Field { pointer, .. } if pointer == "/blocks/1/video")
+        ));
+        // Lien de la page et texte du contenu (sans page : source `cms:`).
+        let ig = to("media:instagram");
+        assert!(ig.iter().any(|l| l.from == "page:index"));
+        assert!(
+            ig.iter().any(|l| l.from == "cms:src/content/projets/force"
+                && matches!(l.via, LinkVia::Body { .. }))
+        );
+        // Information du site.
+        assert!(
+            to("media:linkedin")
+                .iter()
+                .any(|l| l.from == "info:site" && l.text == "social › linkedin")
+        );
+        // Adresse calculée, adresse du site : ignorées.
+        assert!(!m.links.iter().any(|l| l.href.contains("{{")));
+        assert!(!m.links.iter().any(|l| l.href.contains("exemple.fr/agence")));
+        // Contenu qui a une page : relié depuis son nœud.
+        let e = vec![EntryRef {
+            collection: "projets".into(),
+            file: "force".into(),
+            url: "/projets/force/".into(),
+            title: "Force".into(),
+        }];
+        let mut s2 = s.clone();
+        s2.collections.push(revel_model::Collection {
+            id: "projets".into(),
+            folder: "src/content/projets".into(),
+            path: Some("/projets/{{ slug }}/".into()),
+            layout: None,
+            source: Default::default(),
+            props: Default::default(),
+            filter: None,
+            sort: None,
+            fields: vec![],
+        });
+        let m2 = build_with(&s2, Some(&info), &e, &texts);
+        assert!(
+            m2.links
+                .iter()
+                .any(|l| l.to == "media:vimeo" && l.from == "entry:projets/force")
+        );
+    }
+
+    #[test]
+    fn adresse_remplacee_partout() {
+        let (s, info, texts) = medias();
+        let m = build_with(&s, Some(&info), &[], &texts);
+        let old = "https://www.instagram.com/agence/";
+        let links: Vec<&MapLink> = m.links.iter().filter(|l| l.href == old).collect();
+        assert_eq!(links.len(), 2);
+        let Some(Command::Batch { commands }) = replace_url(
+            &s,
+            Some(&info),
+            &texts,
+            &links,
+            old,
+            "https://www.instagram.com/agence.officielle/",
+        ) else {
+            panic!("suite attendue")
+        };
+        assert!(commands.iter().any(|c| matches!(c, Command::SetAttr { name, value: Some(v), .. } if name == "href" && v == "https://www.instagram.com/agence.officielle/")));
+        assert!(commands.iter().any(|c| matches!(c, Command::ReplaceInEntry { file, replace, .. } if file == "force" && replace.ends_with("agence.officielle/"))));
+        // Champ imbriqué : remplacée dans le fichier du contenu (mise en forme gardée).
+        let yt = "https://www.youtube.com/watch?v=abc";
+        let links: Vec<&MapLink> = m.links.iter().filter(|l| l.href == yt).collect();
+        assert!(matches!(
+            replace_url(&s, Some(&info), &texts, &links, yt, "https://youtu.be/xyz"),
+            Some(Command::ReplaceInEntry { find, .. }) if find == yt
+        ));
+        // Adresse entière seulement.
+        assert_eq!(
+            replace_link_text(
+                "a https://x.fr/a. b https://x.fr/ab \"https://x.fr/a\"",
+                "https://x.fr/a",
+                "https://y.fr/"
+            ),
+            "a https://y.fr/. b https://x.fr/ab \"https://y.fr/\""
+        );
+        // Information du site, média intégré.
+        let li = "https://www.linkedin.com/company/agence";
+        let links: Vec<&MapLink> = m.links.iter().filter(|l| l.href == li).collect();
+        assert!(matches!(
+            replace_url(
+                &s,
+                Some(&info),
+                &texts,
+                &links,
+                li,
+                "https://www.linkedin.com/company/agence-2"
+            ),
+            Some(Command::SetGlobal { .. } | Command::SetDataValue { .. })
+        ));
+        let src = "https://www.youtube-nocookie.com/embed/abc";
+        let links: Vec<&MapLink> = m.links.iter().filter(|l| l.href == src).collect();
+        assert!(matches!(
+            replace_url(&s, Some(&info), &texts, &links, src, "https://www.youtube-nocookie.com/embed/xyz"),
+            Some(Command::SetAttr { name, .. }) if name == "src"
+        ));
+        assert!(replace_url(&s, Some(&info), &texts, &links, src, src).is_none());
     }
 }

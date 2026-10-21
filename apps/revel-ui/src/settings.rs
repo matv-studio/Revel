@@ -50,7 +50,7 @@ pub fn Settings() -> impl IntoView {
                     let key: &'static str = key;
                     let on = move || current.with(|c| c == key);
                     view! {
-                        <div class="settings-nav-group" class:is-on=on>
+                        <div class="settings-nav-group is-single" class:is-on=on>
                             <button class="settings-nav-item" class:is-on=on data-section=key
                                 aria-current=move || on().then_some("location")
                                 on:click=move |_| { current.set(key.to_string()); crate::site::scroll_to_part(key) }>

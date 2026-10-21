@@ -6,6 +6,11 @@
 //! Synchronisation avec le dépôt distant (`origin`, GitHub) : récupérer les versions faites
 //! ailleurs (Pages CMS), en avance rapide ou par fusion sans conflit, puis envoyer celles du site
 //! (avance rapide seulement : rien n'est écrasé en ligne).
+//!
+//! Synchronisation automatique (D-108) : [`incoming`] regarde, sans rien télécharger, si le dépôt
+//! commun a une version nouvelle ; [`receive`] la reçoit sans enregistrer de version (les
+//! changements en cours du site restent en cours, fusionnés par endroit avec ceux reçus) ;
+//! [`send`] envoie les versions enregistrées qui ne l'ont pas encore été.
 
 use crate::GitError;
 use crate::publish::{callbacks, proxy};
@@ -89,6 +94,24 @@ pub struct SyncReport {
     pub conflicts: Vec<String>,
     /// Endroits du document de site (fichiers JSON) modifiés des deux côtés, à choisir un par
     /// un (D-89) ; leurs fichiers figurent aussi dans `conflicts`.
+    pub items: Vec<ItemConflict>,
+}
+
+/// Résultat d'une réception automatique (D-108).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReceiveReport {
+    /// Versions reçues.
+    pub pulled: usize,
+    /// Auteurs des versions reçues.
+    pub authors: Vec<String>,
+    /// Fichiers changés par les versions reçues.
+    pub files: Vec<String>,
+    /// Le site a des versions que le dépôt commun n'a pas, et inversement : synchronisation
+    /// complète nécessaire (fusion enregistrée comme version) ; rien n'a été changé.
+    pub diverged: bool,
+    /// Fichiers modifiés des deux côtés (changements en cours et versions reçues) : rien n'a
+    /// été changé.
+    pub conflicts: Vec<String>,
     pub items: Vec<ItemConflict>,
 }
 
@@ -650,8 +673,15 @@ pub fn sync(
             report.merged = true;
         }
     }
+    report.pushed = push_ahead(&repo, &branch, token)?;
+    Ok(report)
+}
+
+/// Envoie les versions du site que le dépôt distant n'a pas (avance rapide seulement) ; nombre
+/// de versions envoyées.
+fn push_ahead(repo: &Repository, branch: &str, token: Option<&str>) -> Result<usize, GitError> {
     // Envoi : seulement si le site a des versions que le dépôt distant n'a pas.
-    if let Some(h) = head_commit(&repo).map(|c| c.id()) {
+    if let Some(h) = head_commit(repo).map(|c| c.id()) {
         let ahead = match repo
             .find_reference(&format!("refs/remotes/origin/{branch}"))
             .ok()
@@ -689,9 +719,154 @@ pub fn sync(
                 true,
                 "revel: envoi",
             )?;
-            report.pushed = ahead;
+            return Ok(ahead);
         }
     }
+    Ok(0)
+}
+
+/// Le dépôt distant a une version que le site n'a pas : liste des branches du dépôt distant,
+/// sans rien télécharger (D-108).
+pub fn incoming(dir: &Path, token: Option<&str>) -> Result<bool, GitError> {
+    let repo = open(dir)?;
+    let branch = branch_name(&repo);
+    let mut remote = repo.find_remote("origin")?;
+    let tip = {
+        let conn = remote.connect_auth(
+            git2::Direction::Fetch,
+            Some(callbacks(token)),
+            Some(proxy()),
+        )?;
+        let name = format!("refs/heads/{branch}");
+        conn.list()?
+            .iter()
+            .find(|h| h.name() == name)
+            .map(|h| h.oid())
+    };
+    let Some(tip) = tip else {
+        return Ok(false);
+    };
+    Ok(match head_commit(&repo) {
+        Some(h) => h.id() != tip && !repo.graph_descendant_of(h.id(), tip).unwrap_or(false),
+        None => true,
+    })
+}
+
+/// Identifiant de la version actuelle.
+pub fn head_id(dir: &Path) -> Option<String> {
+    let repo = open(dir).ok()?;
+    head_commit(&repo).map(|c| c.id().to_string())
+}
+
+/// Fichiers changés entre deux versions (`from` absent : tous ceux de `to`).
+pub fn files_between(dir: &Path, from: Option<&str>, to: Option<&str>) -> Vec<String> {
+    let go = || -> Result<Vec<String>, GitError> {
+        let repo = open(dir)?;
+        let tree = |id: Option<&str>| -> Result<Option<git2::Tree<'_>>, GitError> {
+            Ok(match id {
+                Some(i) => Some(repo.find_commit(Oid::from_str(i)?)?.tree()?),
+                None => None,
+            })
+        };
+        let (a, b) = (tree(from)?, tree(to)?);
+        let diff = repo.diff_tree_to_tree(a.as_ref(), b.as_ref(), None)?;
+        Ok(diff
+            .deltas()
+            .filter_map(|d| d.new_file().path().or(d.old_file().path()))
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .collect())
+    };
+    go().unwrap_or_default()
+}
+
+/// Envoie les versions enregistrées que le dépôt distant n'a pas, sans en enregistrer de
+/// nouvelle (D-108) ; nombre de versions envoyées.
+pub fn send(dir: &Path, token: Option<&str>) -> Result<usize, GitError> {
+    let repo = open(dir)?;
+    let branch = branch_name(&repo);
+    push_ahead(&repo, &branch, token)
+}
+
+/// Reçoit les versions du dépôt distant sans enregistrer de version (D-108) : le dossier du site
+/// prend les fichiers reçus, les changements en cours y restent (fusionnés par endroit avec ceux
+/// reçus) et la version actuelle devient la dernière reçue. Rien n'est changé en cas de conflit
+/// ni quand les versions se sont écartées des deux côtés (`diverged`).
+pub fn receive(dir: &Path, token: Option<&str>) -> Result<ReceiveReport, GitError> {
+    let repo = open(dir)?;
+    let branch = branch_name(&repo);
+    let mut report = ReceiveReport::default();
+    let Some(theirs) = fetch(&repo, &branch, token)? else {
+        return Ok(report);
+    };
+    let Some(head) = head_commit(&repo) else {
+        return Ok(report);
+    };
+    let h = head.id();
+    if h == theirs || repo.graph_descendant_of(h, theirs)? {
+        return Ok(report);
+    }
+    if !repo.graph_descendant_of(theirs, h)? {
+        report.diverged = true;
+        return Ok(report);
+    }
+    report.pulled = repo.graph_ahead_behind(theirs, h)?.0;
+    let mut walk = repo.revwalk()?;
+    walk.push(theirs)?;
+    walk.hide(h)?;
+    for id in walk {
+        let c = repo.find_commit(id?)?;
+        let a = c.author().name().unwrap_or("").to_string();
+        if !a.is_empty() && !report.authors.contains(&a) {
+            report.authors.push(a);
+        }
+    }
+    let base_tree = head.tree()?;
+    let their_tree = repo.find_commit(theirs)?.tree()?;
+    let diff = repo.diff_tree_to_tree(Some(&base_tree), Some(&their_tree), None)?;
+    report.files = diff
+        .deltas()
+        .filter_map(|d| d.new_file().path().or(d.old_file().path()))
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .collect();
+    // Changements en cours : arbre du dossier du site (index en mémoire, jamais écrit).
+    ensure_ignored(dir)?;
+    let mut idx = repo.index()?;
+    idx.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
+    idx.update_all(["*"].iter(), None)?;
+    let ours_id = idx.write_tree()?;
+    let target = if ours_id == base_tree.id() {
+        their_tree.clone()
+    } else {
+        let ours_tree = repo.find_tree(ours_id)?;
+        let mut m = repo.merge_trees(&base_tree, &ours_tree, &their_tree, None)?;
+        if m.has_conflicts() {
+            report.items = merge_json_conflicts(&repo, &mut m, &|_, _| None)?;
+        }
+        if m.has_conflicts() {
+            report.conflicts = m
+                .conflicts()?
+                .filter_map(|c| c.ok())
+                .filter_map(|c| c.our.or(c.their).or(c.ancestor))
+                .map(|e| String::from_utf8_lossy(&e.path).to_string())
+                .collect();
+            report.conflicts.sort();
+            report.conflicts.dedup();
+            report.pulled = 0;
+            report.files.clear();
+            return Ok(report);
+        }
+        repo.find_tree(m.write_tree_to(&repo)?)?
+    };
+    let mut co = git2::build::CheckoutBuilder::new();
+    co.force();
+    repo.checkout_tree(target.as_object(), Some(&mut co))?;
+    let refname = format!("refs/heads/{branch}");
+    repo.find_reference(&refname)?
+        .set_target(theirs, "revel: réception")?;
+    // Index : la version reçue ; les changements en cours restent à enregistrer.
+    let mut idx = repo.index()?;
+    idx.read_tree(&their_tree)?;
+    idx.write()?;
     Ok(report)
 }
 
@@ -1039,5 +1214,86 @@ mod tests {
         assert!(site.join("c.md").exists());
         let s = status(&site).unwrap();
         assert_eq!((s.ahead, s.behind, s.changes), (0, 0, 0));
+    }
+
+    #[test]
+    fn reception_sans_version() {
+        let d = tempfile::tempdir().unwrap();
+        let bare = d.path().join("partage").join("central.git");
+        init_shared(&bare, "main").unwrap();
+        let doc = |a: &str, b: &str| {
+            format!(
+                "{{\n  \"name\": \"Atelier\",\n  \"pages\": [\n    {{\n      \"id\": \"index\",\n      \"title\": \"{a}\"\n    }},\n    {{\n      \"id\": \"contact\",\n      \"title\": \"{b}\"\n    }}\n  ]\n}}\n"
+            )
+        };
+        let read = |dir: &Path| -> (String, String) {
+            let v: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(dir.join("site.revel.json")).unwrap(),
+            )
+            .unwrap();
+            (
+                v["pages"][0]["title"].as_str().unwrap().to_string(),
+                v["pages"][1]["title"].as_str().unwrap().to_string(),
+            )
+        };
+        let a = d.path().join("a");
+        write(&a, "site.revel.json", &doc("Accueil", "Contact"));
+        init(&a, "Anne", "anne@local", "Début").unwrap();
+        open(&a)
+            .unwrap()
+            .remote("origin", bare.to_str().unwrap())
+            .unwrap();
+        sync(&a, None, "Anne", "anne@local", "m", "f").unwrap();
+        let b = d.path().join("b");
+        drop(Repository::clone(bare.to_str().unwrap(), &b).unwrap());
+        assert!(!incoming(&a, None).unwrap());
+        // Bruno envoie une version ; Anne a un changement en cours ailleurs.
+        write(&b, "site.revel.json", &doc("Accueil", "Nous écrire"));
+        write(&b, "media/photo.txt", "photo");
+        sync(&b, None, "Bruno", "bruno@local", "Contact renommé", "f").unwrap();
+        write(&a, "site.revel.json", &doc("Bienvenue", "Contact"));
+        assert!(incoming(&a, None).unwrap());
+        let versions = history(&a, 10).unwrap().len();
+        let r = receive(&a, None).unwrap();
+        assert_eq!((r.pulled, r.diverged), (1, false), "{r:?}");
+        // Auteur : le nom réglé dans Git sur l'ordinateur passe avant celui de Revel.
+        assert_eq!(r.authors.len(), 1);
+        assert!(r.files.contains(&"site.revel.json".to_string()));
+        assert!(r.files.contains(&"media/photo.txt".to_string()));
+        // Les deux changements sont là ; celui d'Anne reste en cours, aucune version créée.
+        assert_eq!(read(&a), ("Bienvenue".into(), "Nous écrire".into()));
+        assert!(a.join("media/photo.txt").exists());
+        assert_eq!(status(&a).unwrap().changes, 1);
+        assert_eq!(history(&a, 10).unwrap().len(), versions + 1);
+        assert_eq!(history(&a, 1).unwrap()[0].message, "Contact renommé");
+        assert!(!incoming(&a, None).unwrap());
+        // Même endroit modifié des deux côtés : rien n'est changé.
+        write(&b, "site.revel.json", &doc("Bonjour", "Nous écrire"));
+        sync(&b, None, "Bruno", "bruno@local", "Titre", "f").unwrap();
+        let r = receive(&a, None).unwrap();
+        assert_eq!(r.conflicts, vec!["site.revel.json".to_string()]);
+        assert_eq!((r.items.len(), r.pulled), (1, 0));
+        assert_eq!(read(&a), ("Bienvenue".into(), "Nous écrire".into()));
+        // Anne enregistre une version (non envoyée) ; Bruno en envoie une autre : écart.
+        save(&a, "Anne", "anne@local", "Bienvenue").unwrap();
+        let r = receive(&a, None).unwrap();
+        assert!(r.diverged, "{r:?}");
+        // La synchronisation complète fusionne (choix à faire), puis l'envoi suit.
+        let mut items = std::collections::HashMap::new();
+        items.insert("site.revel.json#/pages/@index/title".to_string(), true);
+        let s1 = sync(&a, None, "Anne", "anne@local", "m", "f").unwrap();
+        assert_eq!(s1.items.len(), 1);
+        let s2 = resolve_items(&a, None, true, &items, "Anne", "anne@local", "Fusion").unwrap();
+        assert!(s2.conflicts.is_empty() && s2.pushed > 0);
+        assert_eq!(send(&a, None).unwrap(), 0);
+        // Version enregistrée sans être envoyée (hors ligne) : envoyée plus tard.
+        write(&a, "site.revel.json", &doc("Bienvenue !", "Nous écrire"));
+        save(&a, "Anne", "anne@local", "Point").unwrap();
+        assert_eq!(send(&a, None).unwrap(), 1);
+        assert!(incoming(&b, None).unwrap());
+        let r = receive(&b, None).unwrap();
+        assert_eq!(r.pulled, 3);
+        assert_eq!(read(&b), ("Bienvenue !".into(), "Nous écrire".into()));
+        assert_eq!(status(&b).unwrap().changes, 0);
     }
 }

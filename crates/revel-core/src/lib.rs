@@ -22,6 +22,7 @@ mod edit;
 mod fonts;
 mod github;
 mod import;
+pub mod links;
 pub mod pagescms;
 pub mod preview;
 mod publish;

@@ -3,7 +3,7 @@
 (() => {
   const params = new URLSearchParams(location.hash.slice(1));
   const state = {
-    settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null },
+    settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null, ...(params.get("scope") ? { accent_scope: params.get("scope") } : {}) },
     // `update=1` : une version plus récente est proposée (Réglages › Mises à jour).
     update: params.get("update") ? { enabled: true, available: { version: "0.7.0", notes: "Version d’essai de la simulation." } } : null,
     recents: params.get("empty") ? [] : [
@@ -67,7 +67,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_resolve", "versions_resolve_items", "versions_set_shared", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
+  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_incoming", "versions_receive", "versions_resolve", "versions_resolve_items", "versions_set_shared", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
   // Nom de dossier d'un nouveau site (comme revel_core::site_folder, sans les suffixes).
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).
@@ -316,6 +316,23 @@
         return { domain: args.domain, addresses: gh ? ["185.199.108.153", "185.199.109.153"] : ["213.186.33.5"],
           expected: gh ? ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"] : [],
           https: !ko, http: true, serves_site: !ko, https_error: ko ? "certificate not valid for name" : null };
+      }
+      // Adresses d'autres sites (D-107) : résultats inventés d'après l'adresse ; `cached` ne
+      // vérifie rien.
+      case "links_check": {
+        state.links = state.links || {};
+        if (args.mode !== "cached") {
+          await wait(200);
+          for (const u of args.urls) {
+            if (args.mode !== "all" && state.links[u]) continue;
+            const [st, code, fin] = /instagram|linkedin|facebook/.test(u) ? ["blocked", 429]
+              : /1148938013/.test(u) ? ["missing", 404]
+              : /deplace/.test(u) ? ["redirected", 200, u.replace("deplace", "nouveau")]
+              : ["ok", 200];
+            state.links[u] = { url: u, state: st, status: code, final_url: fin, checked: Math.floor(Date.now() / 1000) };
+          }
+        }
+        return args.urls.map((u) => state.links[u] || null);
       }
       // Retour à la publication précédente (5.5) : la précédente devient la publiée.
       case "rollback": {

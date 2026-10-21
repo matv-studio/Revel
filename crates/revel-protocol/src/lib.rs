@@ -733,6 +733,45 @@ pub struct DomainStatus {
     pub https_error: Option<String>,
 }
 
+/// État d'une adresse d'un autre site vérifiée par Revel (plan du site, D-107).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LinkState {
+    /// Répond.
+    Ok,
+    /// Répond, à une autre adresse (page déplacée) : `final_url`.
+    Redirected,
+    /// Introuvable (404, 410 ; vidéo supprimée).
+    Missing,
+    /// Vidéo privée ou dont l'intégration est refusée.
+    Restricted,
+    /// Le site refuse les vérifications automatiques (connexion demandée, 403, 429, 999) : à
+    /// ouvrir dans un navigateur.
+    Blocked,
+    /// Erreur du site (5xx, réponse inattendue).
+    Failing,
+    /// Pas de réponse (adresse inconnue, délai, certificat).
+    Unreachable,
+}
+
+/// Résultat de la vérification d'une adresse (D-107).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkCheck {
+    pub url: String,
+    pub state: LinkState,
+    /// Code HTTP reçu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<u16>,
+    /// Adresse finale d'une page redirigée.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_url: Option<String>,
+    /// Raison d'une absence de réponse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Date de la vérification (secondes depuis 1970).
+    pub checked: i64,
+}
+
 /// Point à vérifier avant de publier (5.4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SiteCheck {
@@ -805,6 +844,10 @@ pub struct AppSettings {
     /// Photo du profil (image carrée en `data:`, D-106) ; `None` : photo du compte GitHub connecté.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar: Option<String>,
+    /// Travail à plusieurs : versions du dépôt commun reçues d'elles-mêmes, versions enregistrées
+    /// envoyées aussitôt (D-108).
+    #[serde(default = "yes")]
+    pub auto_sync: bool,
 }
 
 fn default_theme() -> String {
@@ -826,6 +869,7 @@ impl Default for AppSettings {
             prereleases: false,
             author: None,
             avatar: None,
+            auto_sync: true,
         }
     }
 }
@@ -994,6 +1038,32 @@ pub struct SyncInfo {
     #[serde(default)]
     pub conflicts: Vec<String>,
     /// Endroits du site modifiés des deux côtés, à choisir un par un (D-89).
+    #[serde(default)]
+    pub items: Vec<SyncConflictItem>,
+}
+
+/// Résultat d'une synchronisation automatique (D-108) : versions reçues sans en enregistrer,
+/// versions enregistrées envoyées.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReceiveInfo {
+    /// Versions reçues.
+    pub pulled: usize,
+    /// Auteurs des versions reçues.
+    #[serde(default)]
+    pub authors: Vec<String>,
+    /// Versions faites des deux côtés, rien en cours : fusion enregistrée et envoyée.
+    #[serde(default)]
+    pub merged: bool,
+    /// Versions envoyées.
+    #[serde(default)]
+    pub pushed: usize,
+    /// Versions faites des deux côtés et changements en cours : réunies au prochain
+    /// enregistrement d'une version.
+    #[serde(default)]
+    pub waiting: bool,
+    /// Endroits modifiés des deux côtés : rien n'a été changé, vérification à faire.
+    #[serde(default)]
+    pub conflicts: Vec<String>,
     #[serde(default)]
     pub items: Vec<SyncConflictItem>,
 }

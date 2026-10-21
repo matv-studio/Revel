@@ -43,7 +43,8 @@ try {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') console.log('console', m.text().slice(0, 300)); });
   await page.addInitScript(mock);
-  await page.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&bridge=${encodeURIComponent(bridge)}`);
+  // `syncevery=2` : synchronisation automatique (D-108) vérifiée toutes les 2 s.
+  await page.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&syncevery=2&bridge=${encodeURIComponent(bridge)}`);
   // Nouveau site : dossier proposé d'après le nom, sans fenêtre du système.
   await page.click('.page-head .btn--primary');
   await page.waitForSelector('.dialog--form input');
@@ -1654,6 +1655,17 @@ try {
       });
       check('paramètres : partie à l\'écran marquée dans le rail, aller à une partie', true);
       await page.$eval('.settings-content', (c) => c.scrollTo(0, 0));
+      // Rubrique sans parties : le bouton remplit tout l'onglet (fond de l'accent étendu compris).
+      await page.click('.settings-nav-item[data-section="settings-code"]');
+      await page.waitForSelector('.settings-nav-group.is-on.is-single');
+      const single = await page.$eval('.settings-nav-group.is-on.is-single', (g) => {
+        const r = g.getBoundingClientRect();
+        const i = g.querySelector('.settings-nav-item').getBoundingClientRect();
+        return { dw: Math.round(r.width - i.width), dh: Math.round(r.height - i.height) };
+      });
+      check('paramètres : rubrique sans parties, le bouton remplit tout l\'onglet', single.dw <= 2 && single.dh <= 2, JSON.stringify(single));
+      await page.click('.settings-nav-item[data-section="settings-general"]');
+      await page.waitForSelector('.settings-sub[data-sub="site-info"]');
     }
     // Plan du site (D-103) : pages, collections, menus et liens ; zoom, déplacement, nœud
     // déplacé (gardé dans le site), panneau, destination d'un lien changée, lien ajouté à un
@@ -1686,6 +1698,18 @@ try {
       await page.mouse.up({ button: 'middle' });
       const t2 = await tr();
       check('plan du site : zoom (Ctrl+molette), déplacement (glisser)', t0 !== t1 && t1 !== t2, `${t0} → ${t1} → ${t2}`);
+      // Zoom avec Alt, comme le canevas d'édition ; « Ranger » centré dans la barre.
+      await page.mouse.move(st.x + st.width / 2, st.y + st.height / 2);
+      await page.keyboard.down('Alt');
+      await page.mouse.wheel(0, 240);
+      await page.keyboard.up('Alt');
+      await page.waitForFunction((t) => document.querySelector('.map-world').style.transform !== t, t2);
+      const arrange = await page.$eval('.map-toolbar', (t) => {
+        const b = t.querySelector(':scope > .btn--small').getBoundingClientRect();
+        const r = t.getBoundingClientRect();
+        return Math.abs((b.top + b.bottom) / 2 - (r.top + r.bottom) / 2);
+      });
+      check('plan du site : zoom avec Alt+molette, « Ranger » centré dans la barre', arrange <= 1.5, `écart ${arrange.toFixed(1)} px`);
       await page.keyboard.press('f');
       // Nœud déplacé : position gardée dans le site.
       const node = page.locator('.map-node[data-node="page:contact"]');
@@ -1751,6 +1775,48 @@ try {
         await page.waitForTimeout(400);
       }
       check('plan du site : Ctrl+Z, document identique', JSON.stringify((await invoke('edit_open')).site) === doc0);
+      // Médias et réseaux (D-107) : plateformes, adresses vérifiées (résultats simulés), à revoir
+      // d'abord ; adresse remplacée partout (contenu du CMS, mise en forme gardée), annulée.
+      {
+        const untilM = async (pred, what) => {
+          for (let i = 0; i < 80; i++) { if (await pred()) return true; await page.waitForTimeout(100); }
+          throw new Error('plan du site : ' + what);
+        };
+        await page.click('.map-filters button:nth-child(3)');
+        await page.waitForSelector('.map-node--media');
+        await page.waitForSelector('.map-node[data-node="media:vimeo"] .map-status-dot--bad', { timeout: 20000 });
+        const media = await page.$$eval('.map-node--media', (n) => n.map((x) => x.dataset.node));
+        const review = (await page.textContent('.map-count-urls')).trim();
+        check('plan du site : médias et réseaux (plateformes, adresses vérifiées, à revoir)',
+          ['media:vimeo', 'media:youtube', 'media:instagram'].every((k) => media.includes(k)) && /1 adresse à revoir/.test(review),
+          `${media.join(', ')} · ${review}`);
+        await page.click('.map-node[data-node="media:vimeo"]', { position: { x: 20, y: 10 } });
+        await page.waitForSelector('.map-panel .map-url');
+        const first = await page.$eval('.map-panel .map-url', (r) => ({
+          state: r.querySelector('.map-status').className, url: r.dataset.url, places: r.querySelectorAll('.map-url-places li').length,
+        }));
+        check('plan du site : adresses d\'une plateforme, à revoir d\'abord, endroits où elles servent',
+          /map-status--bad/.test(first.state) && /1148938013/.test(first.url) && first.places > 0, `${first.places} endroit(s)`);
+        if (shots) await page.screenshot({ path: `${shots}/plan-du-site-medias.png` });
+        const entryFile = path.join(siteDir, 'src/content/projets/gen-z-et-produits-bancaires.md');
+        const entry0 = fs.readFileSync(entryFile, 'utf8');
+        const yt = 'https://www.youtube.com/watch?v=nGzy-rbno-c';
+        await page.click('.map-node[data-node="media:youtube"]', { position: { x: 20, y: 10 } });
+        await page.locator(`.map-panel .map-url[data-url="${yt}"] .map-url-replace`).click();
+        await page.waitForSelector('.dialog input');
+        await page.fill('.dialog input', 'https://youtu.be/nGzy-rbno-c');
+        await page.keyboard.press('Enter');
+        await untilM(() => fs.readFileSync(entryFile, 'utf8').includes('https://youtu.be/nGzy-rbno-c'), 'adresse remplacée dans le contenu');
+        const entry1 = fs.readFileSync(entryFile, 'utf8');
+        check('plan du site : adresse remplacée partout (contenu du CMS, mise en forme gardée)',
+          entry1.replace('https://youtu.be/nGzy-rbno-c', yt) === entry0);
+        await page.locator('.map-stage').focus();
+        await page.keyboard.press('Control+z');
+        await untilM(() => fs.readFileSync(entryFile, 'utf8') === entry0, 'remplacement annulé');
+        check('plan du site : remplacement annulé (Ctrl+Z)', true);
+        await page.keyboard.press('Escape');
+        await page.click('.map-filters button:nth-child(3)');
+      }
       // Double-clic : page ouverte dans l'éditeur.
       await page.dblclick('.map-node[data-node="page:contact"]', { position: { x: 20, y: 10 } });
       await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
@@ -2584,6 +2650,7 @@ try {
           f(Object.fromEntries(d.pages.map((x) => [x.id, x.props])));
           fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
         };
+        // Synchronisation automatique (D-108) arrêtée pendant la synchronisation à la main.
         await page.click('.versions-mode button[data-mode="shared"]');
         await page.waitForSelector('.team-dialog .team-compare');
         const rows = await page.$$eval('.team-compare tbody tr', (l) => l.length);
@@ -2597,6 +2664,10 @@ try {
         const shown = (await page.textContent('.versions-remote-value')).replace(/\u200e/g, '').trim();
         check('versions : travail à plusieurs, dossier partagé (comparaison, dépôt central créé, premier envoi)',
           rows === 6 && chosen === 'Dossier partagé' && disabled && shown === central, `${rows} lignes · ${chosen} · ${shown}`);
+        await page.waitForSelector('.versions-auto-sync');
+        const autoOn = () => page.$eval('.versions-auto-sync', (i) => i.checked);
+        if (await autoOn()) await page.click('.versions-auto > span:last-child');
+        await page.waitForFunction(() => !document.querySelector('.versions-auto-sync').checked);
         // Équipier : copie du dépôt central, autre page et même endroit modifiés, envoi.
         git(['clone', '-q', central, mate]);
         edit(mate, (p) => { p.agence.e2eEquipe = 'Bruno'; p.index.bodyClass = 'page-home bruno'; });
@@ -2621,6 +2692,57 @@ try {
           place === 'Page /' && /page-home anne/.test(ours) && /page-home bruno/.test(theirs) && waiting
             && props.agence.e2eEquipe === 'Bruno' && props.contact.e2eEquipe === 'Anne' && props.index.bodyClass === 'page-home bruno',
           `${place} · ${ours} / ${theirs} · ${JSON.stringify([props.agence.e2eEquipe, props.contact.e2eEquipe, props.index.bodyClass])}`);
+        // Synchronisation automatique (D-108) : version de l'équipier reçue d'elle-même, sans créer
+        // de version ; modification en cours gardée et annulable (Ctrl+Z) ; même endroit modifié
+        // des deux côtés : pause, « Vérifier », endroit choisi.
+        {
+          const waitFor = async (pred, what, ms = 40000) => {
+            for (let t = 0; t < ms; t += 200) { if (pred()) return true; await page.waitForTimeout(200); }
+            if (shots) await page.screenshot({ path: `${shots}/synchronisation-echec.png` });
+            throw new Error('synchronisation automatique : ' + what);
+          };
+          if (!(await autoOn())) await page.click('.versions-auto > span:last-child');
+          await page.waitForFunction(() => document.querySelector('.versions-auto-sync').checked);
+          await page.waitForSelector('.sync-btn', { timeout: 15000 });
+          git(['pull', '-q', '--no-rebase', 'origin', 'HEAD'], mate);
+          const local = (props) => invoke('edit_apply', { command: { cmd: 'set_page_prop', page: 'contact', key: 'e2eLocal', value: props }, coalesce: false });
+          await local('Anne');
+          const before = head(path.join(siteDir, '.git'));
+          edit(mate, (p) => { p.agence.e2eAuto = 'Bruno'; });
+          git(['commit', '-qam', 'Bruno : agence'], mate);
+          git(['push', '-q', 'origin', 'HEAD'], mate);
+          await waitFor(() => (JSON.parse(docV()).pages.find((x) => x.id === 'agence')?.props?.e2eAuto) === 'Bruno', 'version reçue d\'elle-même');
+          const flash = await page.waitForSelector('.sync-flash', { timeout: 5000 }).then((n) => n.textContent()).catch(() => '');
+          const nowHead = head(path.join(siteDir, '.git'));
+          const props1 = Object.fromEntries(JSON.parse(docV()).pages.map((x) => [x.id, x.props]));
+          check('synchronisation automatique : version de l\'équipier reçue, sans créer de version, modification en cours gardée',
+            nowHead === head(central) && nowHead !== before && props1.contact.e2eLocal === 'Anne' && /Bruno/.test(flash),
+            flash.trim());
+          if (shots) await page.screenshot({ path: `${shots}/synchronisation-recue.png` });
+          await invoke('edit_undo');
+          const props2 = Object.fromEntries(JSON.parse(docV()).pages.map((x) => [x.id, x.props]));
+          check('synchronisation automatique : Ctrl+Z annule sa propre modification, celle de l\'équipier reste',
+            props2.contact.e2eLocal === undefined && props2.agence.e2eAuto === 'Bruno');
+          // Même endroit des deux côtés : pause et vérification.
+          git(['pull', '-q', '--no-rebase', 'origin', 'HEAD'], mate);
+          await local('Anne 2');
+          edit(mate, (p) => { p.contact.e2eLocal = 'Bruno 2'; });
+          git(['commit', '-qam', 'Bruno : contact'], mate);
+          git(['push', '-q', 'origin', 'HEAD'], mate);
+          await page.waitForSelector('.sync-pop .sync-verify', { timeout: 30000 });
+          const msg = (await page.textContent('.sync-pop-state')).trim();
+          if (shots) await page.screenshot({ path: `${shots}/synchronisation-pause.png` });
+          await page.click('.sync-pop .sync-verify');
+          await page.waitForSelector('.versions-item', { timeout: 60000 });
+          await page.click('.versions-item .versions-pick--theirs');
+          await page.click('.versions-apply');
+          await page.waitForSelector('.versions-item', { state: 'detached', timeout: 60000 });
+          await waitFor(() => head(central) === head(path.join(siteDir, '.git')), 'choix envoyé');
+          const props3 = Object.fromEntries(JSON.parse(docV()).pages.map((x) => [x.id, x.props]));
+          const paused = await page.$('.sync-btn--paused');
+          check('synchronisation automatique : même endroit des deux côtés, pause, « Vérifier », endroit choisi et envoyé',
+            /2 endroits|1 endroit/.test(msg) && props3.contact.e2eLocal === 'Bruno 2' && !paused, msg);
+        }
         // Retour au travail seul : dépôt commun retiré, versions gardées.
         await page.click('.versions-mode button[data-mode="solo"]');
         await page.click('.dialog .btn--danger');

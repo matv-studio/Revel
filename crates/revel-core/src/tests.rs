@@ -724,6 +724,30 @@ fn contenus_modifies_crees_supprimes_et_annules() {
     // Rétabli, puis chemins refusés.
     c.edit_redo(&site).unwrap();
     assert!(read().contains("title: 'Wattr 2'"));
+    // Adresse remplacée dans le fichier (plan du site, D-107) : mise en forme gardée, annulable.
+    std::fs::write(
+        site.join("contenus/projets/wattr.md"),
+        "---\ntitle: Wattr\nvideo: https://vimeo.com/1\nblocks:\n  - body: |-\n      <p>Voir https://vimeo.com/1.</p>\n---\nAussi https://vimeo.com/12\n",
+    )
+    .unwrap();
+    let before = read();
+    c.edit_apply(
+        &site,
+        Command::ReplaceInEntry {
+            folder: "contenus/projets".into(),
+            file: "wattr".into(),
+            find: "https://vimeo.com/1".into(),
+            replace: "https://vimeo.com/2".into(),
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        read(),
+        "---\ntitle: Wattr\nvideo: https://vimeo.com/2\nblocks:\n  - body: |-\n      <p>Voir https://vimeo.com/2.</p>\n---\nAussi https://vimeo.com/12\n"
+    );
+    c.edit_undo(&site).unwrap();
+    assert_eq!(read(), before);
     assert!(
         c.edit_apply(
             &site,
@@ -1641,6 +1665,93 @@ fn versions_du_site() {
     c.edit_apply(&site, info("Encore"), false).unwrap();
     assert_eq!(c.versions_list(&site, 10).unwrap().len(), 3);
     assert!(c.versions_sync(&site, "m", "f").is_err());
+}
+
+#[test]
+fn synchronisation_automatique() {
+    use revel_edit::Command;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    c.edit_open(&site).unwrap();
+    c.versions_init(&site, "Début").unwrap();
+    let shared = d.path().join("partage");
+    std::fs::create_dir_all(&shared).unwrap();
+    c.versions_set_shared(&site, &shared).unwrap();
+    c.versions_sync(&site, "m", "f").unwrap();
+    assert!(!c.versions_incoming(&site).unwrap());
+    // Équipier : copie du dépôt commun, nom du site changé, version envoyée.
+    let remote = c.versions_status(&site).unwrap().unwrap().remote.unwrap();
+    let mate = d.path().join("equipier");
+    std::process::Command::new("git")
+        .args(["clone", "-q", &remote, mate.to_str().unwrap()])
+        .status()
+        .unwrap();
+    let path = mate.join(revel_project::SITE_FILE);
+    let mut doc: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    doc["name"] = "Nom de Bruno".into();
+    std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap() + "\n").unwrap();
+    revel_git::versions::sync(&mate, None, "Bruno", "bruno@local", "Nom", "f").unwrap();
+    // Ici : une modification en cours ailleurs (titre d'une page), annulable.
+    let page = c.edit_site(&site).unwrap().pages[0].id.clone();
+    c.edit_apply(
+        &site,
+        Command::SetPageName {
+            id: page.clone(),
+            name: Some("Accueil d'Anne".into()),
+        },
+        false,
+    )
+    .unwrap();
+    assert!(c.versions_incoming(&site).unwrap());
+    let before = c.versions_list(&site, 50).unwrap().len();
+    let r = c.versions_receive(&site, "Fusion").unwrap();
+    assert_eq!(
+        (r.pulled, r.conflicts.len(), r.waiting),
+        (1, 0, false),
+        "{r:?}"
+    );
+    // Reçu sans version de plus que celle de Bruno ; changement en cours gardé.
+    assert_eq!(c.versions_list(&site, 50).unwrap().len(), before + 1);
+    let s = c.edit_site(&site).unwrap();
+    assert_eq!(s.name, "Nom de Bruno");
+    assert_eq!(s.pages[0].name.as_deref(), Some("Accueil d'Anne"));
+    assert_eq!(c.versions_status(&site).unwrap().unwrap().changes, 1);
+    // Ctrl+Z annule sa propre modification, celle de Bruno reste.
+    c.edit_undo(&site).unwrap();
+    let s = c.edit_site(&site).unwrap();
+    assert_eq!(
+        (s.name.as_str(), s.pages[0].name.as_deref()),
+        ("Nom de Bruno", None)
+    );
+    // Même endroit des deux côtés : rien n'est changé, endroit à vérifier.
+    c.edit_apply(
+        &site,
+        Command::SetPageName {
+            id: page.clone(),
+            name: Some("A".into()),
+        },
+        false,
+    )
+    .unwrap();
+    let mut doc: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    revel_git::versions::receive(&mate, None).unwrap();
+    doc = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap_or(doc);
+    doc["pages"][0]["name"] = "B".into();
+    std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap() + "\n").unwrap();
+    revel_git::versions::sync(&mate, None, "Bruno", "bruno@local", "Titre", "f").unwrap();
+    let r = c.versions_receive(&site, "Fusion").unwrap();
+    assert_eq!(
+        (r.pulled, r.conflicts.len(), r.items.len()),
+        (0, 1, 1),
+        "{r:?}"
+    );
+    assert_eq!(
+        c.edit_site(&site).unwrap().pages[0].name.as_deref(),
+        Some("A")
+    );
 }
 
 #[test]

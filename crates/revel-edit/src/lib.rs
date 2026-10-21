@@ -87,6 +87,10 @@ pub enum EditError {
     /// Code de langue invalide, déjà présent ou langue inconnue.
     #[error("langue refusée : {0}")]
     InvalidLocale(String),
+    /// Étape d'annulation dont l'endroit a été modifié depuis par une version reçue d'un collègue
+    /// (travail à plusieurs, D-108) : elle n'est plus appliquée.
+    #[error("modifié depuis par une version reçue")]
+    Outdated,
     /// Réglage du site refusé (nom vide, adresse invalide).
     #[error("{0}")]
     InvalidSite(String),
@@ -118,6 +122,7 @@ impl EditError {
             Self::SelfUse(_) => "error-edit-self-use",
             Self::InvalidLocale(_) => "error-edit-locale",
             Self::InvalidSite(_) => "error-edit-site",
+            Self::Outdated => "error-edit-outdated",
         }
     }
 }

@@ -65,6 +65,8 @@
 
 .toolbar { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .toolbar--start { justify-content: flex-start; }
+/* `.btn--small` se cale en haut dans les panneaux (inspector.css) : centré dans une barre. */
+:is(.toolbar, .map-toolbar) > .btn--small { align-self: center; }
 
 /* --- Champs ---------------------------------------------------------------- */
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -393,6 +395,11 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .settings-nav-group.is-on::after {
   bottom: -8px;
   background: radial-gradient(circle at 0 100%, transparent 7px, var(--stage-line) 7px, var(--stage-line) 8px, var(--part-bg) 8.5px);
+}
+/* Rubrique sans parties : l'onglet entier est le bouton (fond de l'accent étendu compris). */
+.settings-nav-group.is-on.is-single { padding: 0; }
+.settings-nav-group.is-on.is-single > .settings-nav-item {
+  margin-right: 0; border-radius: calc(var(--radius-lg) - var(--border)) 0 0 calc(var(--radius-lg) - var(--border));
 }
 .settings-nav-item {
   display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
@@ -1334,3 +1341,6 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .import-error { display: flex; flex-direction: column; gap: var(--s-1); }
 .import-error .import-build-log summary { color: inherit; }
 .import-log-copy { margin-top: var(--s-1); }
+
+/* Paramètres › Versions : synchronisation automatique (D-108). */
+.versions-auto { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--text-sm); color: var(--text-muted); cursor: pointer; }

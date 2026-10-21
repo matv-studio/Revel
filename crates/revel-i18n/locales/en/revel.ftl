@@ -500,6 +500,30 @@ error-edit-tag = Invalid tag name: letters, digits and hyphens only. ({ $detail 
 error-edit-not-open = This site is not open in the editor.
 error-font = Font: { $detail }
 error-edit-site = Invalid address: “{ $detail }” (expected: https://…)
+sync-title = Working together
+sync-ok = Up to date · checked at { $time }
+sync-busy = Receiving versions…
+sync-off = Automatic sync is off (Settings › Versions)
+sync-offline = No answer from the shared repository: trying again in a minute
+sync-waiting = Versions were made on both sides: they will be combined the next time you save a version
+sync-paused = { $count ->
+    [one] Sync could not finish: { $count } place was changed on both sides. Check which version to keep, or postpone.
+   *[other] Sync could not finish: { $count } places were changed on both sides. Check which version to keep, or postpone.
+}
+sync-received = { $count ->
+    [one] Version received from { $authors }
+   *[other] { $count } versions received from { $authors }
+}
+sync-last-received = { $count ->
+    [one] Last version received from { $authors } at { $time }
+   *[other] { $count } versions received from { $authors } at { $time }
+}
+sync-verify = Check
+sync-later = Later
+sync-now = Sync
+versions-auto = Automatic sync
+versions-auto-help = Other people's versions arrive by themselves (without creating a version, at the first pause); yours leave as soon as you save a version
+error-edit-outdated = This change can no longer be undone: a colleague has changed the same place since
 error-translate-pair = No translation model for { $from } → { $to }.
 error-translate = Automatic translation failed: { $detail }
 error-versions-conflict = Same lines changed online and in the site: resolve the conflict in Settings › Versions before publishing.
@@ -2737,6 +2761,52 @@ map-count-orphans = { $count ->
 }
 map-broken-help = Links lead to an address of the site that has no page (in red): create the page, redirect the address or change the links
 map-orphan-help = No link leads to this page: visitors only reach it by its address
+map-media = Media & social
+map-media-help = Videos (YouTube, Vimeo…), audio and social networks used by the site, grouped by platform; their addresses are checked
+map-kind-media = Video & audio
+map-kind-social = Social network
+map-urls-count = { $count ->
+    [one] { $count } address
+   *[other] { $count } addresses
+}
+map-urls = Addresses ({ $count })
+map-urls-check = Check
+map-urls-check-help = Check every address again (results are kept for a day)
+map-urls-checking = Checking addresses…
+map-urls-review = { $count ->
+    [one] { $count } address to review
+   *[other] { $count } addresses to review
+}
+map-urls-review-help = Addresses of other sites that are missing, failing, private or moved: show other sites and media
+map-url-ok = Online
+map-url-redirected = Moved
+map-url-missing = Not found
+map-url-restricted = Private
+map-url-blocked = Can't be checked
+map-url-failing = Failing
+map-url-unreachable = No response
+map-url-unchecked = Not checked
+map-url-final = Leads to
+map-url-use-final = Use this address
+map-url-open = Open in the browser
+map-url-replace = Replace
+map-url-replace-help = Replace this address everywhere it is used (pages, media, menus, CMS entries, site information)
+map-url-replace-title = Replace the address everywhere
+map-url-new = New address
+map-url-replaced = { $count ->
+    [one] Address replaced in { $count } place: { $url }
+   *[other] Address replaced in { $count } places: { $url }
+}
+map-url-uses = { $count ->
+    [one] Used in { $count } place
+   *[other] Used in { $count } places
+}
+map-source-info = Site information › { $name }
+map-source-cms = CMS › { $name }
+map-via-src = Embedded media
+map-via-field = Field “{ $field }”
+map-via-body = CMS text
+map-via-info = Site information
 map-arrange = Arrange
 map-arrange-help = Put every node back in the order of the addresses, moved nodes included (Ctrl+Z undoes it)
 map-show-in-editor = Show in the Editor

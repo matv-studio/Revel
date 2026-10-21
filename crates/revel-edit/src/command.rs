@@ -176,6 +176,15 @@ pub enum Command {
         #[serde(default)]
         text: Option<String>,
     },
+    /// Adresse remplacée dans le fichier d'un contenu (en-tête et texte), partout où elle est
+    /// écrite, la mise en forme du fichier gardée (plan du site, D-107). Appliquée par le cœur ;
+    /// inverse : `WriteEntry` (texte exact d'avant).
+    ReplaceInEntry {
+        folder: String,
+        file: String,
+        find: String,
+        replace: String,
+    },
     /// Champ d'une collection dans `.pages.yml`, le schéma partagé avec Pages CMS (D-27) :
     /// modification fusionnée (objets fusionnés clé par clé, `null` : clé retirée) ; le nom du
     /// champ ne change pas. Appliquée par le cœur, qui
@@ -1038,6 +1047,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         | Command::SetEntryBody { .. }
         | Command::CreateEntry { .. }
         | Command::WriteEntry { .. }
+        | Command::ReplaceInEntry { .. }
         | Command::SetCmsField { .. }
         | Command::AddCmsField { .. }
         | Command::RemoveCmsField { .. }

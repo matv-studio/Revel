@@ -191,6 +191,19 @@ impl Core {
                 )
                 .map_err(f)?,
             ),
+            "links_check" => json(
+                crate::links::check_site(
+                    site,
+                    &arg::<Vec<String>>(args, "urls")?,
+                    crate::links::CheckMode::parse(&arg::<String>(args, "mode")?),
+                )
+                .map_err(f)?,
+            ),
+            "versions_incoming" => json(self.versions_incoming(site).map_err(f)?),
+            "versions_receive" => json(
+                self.versions_receive(site, &arg::<String>(args, "merge")?)
+                    .map_err(f)?,
+            ),
             "versions_sync" => json(
                 self.versions_sync(
                     site,

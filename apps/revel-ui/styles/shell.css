@@ -126,6 +126,41 @@
 .profile-pick { gap: 6px; }
 .profile-pick svg.icon { width: 14px; height: 14px; }
 
+/* Synchronisation automatique du travail à plusieurs (D-108). */
+.sync { position: relative; display: flex; align-items: center; }
+.sync-btn { position: relative; width: var(--control-lg); height: var(--control-lg); color: var(--text-muted); }
+.sync-btn svg.icon { width: 16px; height: 16px; }
+.sync-btn--busy svg.icon { animation: sync-spin 1s linear infinite; color: var(--text); }
+.sync-btn--off, .sync-btn--offline { color: var(--text-faint); }
+.sync-btn--waiting { color: var(--warning-text); }
+.sync-btn--paused { color: var(--warning-text); }
+.sync-dot {
+  position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--warning-text); box-shadow: 0 0 0 2px var(--chrome, var(--surface));
+}
+@keyframes sync-spin { to { transform: rotate(360deg); } }
+.sync-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; width: 300px;
+  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
+  border: var(--border) solid var(--line-strong); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-dialog, 0 8px 28px rgb(0 0 0 / .28));
+}
+.sync-pop-title { font-size: var(--text-sm); }
+.sync-pop-state { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.sync-pop-state--paused { color: var(--warning-text); }
+.sync-pop p { margin: 0; }
+.sync-pop-actions { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.sync-pop-actions .btn--small { align-self: center; }
+.sync-pop-actions svg.icon { width: 13px; height: 13px; }
+.sync-flash {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 59; max-width: 320px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; padding: 6px var(--s-2); border-radius: var(--radius-md);
+  background: var(--surface); border: var(--border) solid var(--line-strong); color: var(--text);
+  font-size: var(--text-sm); box-shadow: 0 6px 18px rgb(0 0 0 / .22); pointer-events: none;
+  animation: view-in var(--normal) var(--ease) backwards;
+}
+@media (prefers-reduced-motion: reduce) { .sync-btn--busy svg.icon { animation: none; } }
+
 /* Menu flottant (commun) */
 .menu {
   position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;

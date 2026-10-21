@@ -575,6 +575,22 @@ pub async fn rollback(site: &str, profile_id: &str, on: impl Fn(DeployEvent) + '
 }
 
 /// Vérifie qu'un domaine mène au site publié sur un hébergement (5.7).
+/// Vérifie des adresses d'autres sites (D-107) ; `mode` : `cached` (résultats gardés),
+/// `stale` (plus vieux qu'un jour), `all`.
+pub async fn links_check(
+    site: &str,
+    urls: &[String],
+    mode: &str,
+) -> Res<Vec<Option<revel_protocol::LinkCheck>>> {
+    #[derive(Serialize)]
+    struct A<'a> {
+        site: &'a str,
+        urls: &'a [String],
+        mode: &'a str,
+    }
+    call("links_check", &A { site, urls, mode }).await
+}
+
 pub async fn domain_check(
     site: &str,
     profile_id: &str,
@@ -697,6 +713,20 @@ pub async fn versions_sync(
     call(
         "versions_sync",
         &serde_json::json!({ "path": path, "message": message, "merge": merge }),
+    )
+    .await
+}
+
+/// Le dépôt commun a une version que le site n'a pas (D-108).
+pub async fn versions_incoming(path: &str) -> Res<bool> {
+    call("versions_incoming", &serde_json::json!({ "path": path })).await
+}
+
+/// Reçoit les versions du dépôt commun sans en enregistrer, envoie celles enregistrées (D-108).
+pub async fn versions_receive(path: &str, merge: &str) -> Res<revel_protocol::ReceiveInfo> {
+    call(
+        "versions_receive",
+        &serde_json::json!({ "path": path, "merge": merge }),
     )
     .await
 }

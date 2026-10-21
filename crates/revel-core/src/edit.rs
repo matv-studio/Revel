@@ -183,6 +183,24 @@ fn exec(
                 .map_err(revel_edit::EditError::Bound)?;
             write_entry(project, folder, file, text.as_deref(), old)
         }
+        Command::ReplaceInEntry {
+            folder,
+            file,
+            find,
+            replace,
+        } => {
+            let old = project
+                .entry_text(folder, file)
+                .map_err(revel_edit::EditError::Bound)?
+                .ok_or_else(|| revel_edit::EditError::Bound(format!("{folder}/{file}")))?;
+            let new = revel_edit::linkmap::replace_link_text(&old, find, replace);
+            if new == old {
+                return Err(revel_edit::EditError::Bound(format!(
+                    "{find} : absente de {folder}/{file}"
+                )));
+            }
+            write_entry(project, folder, file, Some(&new), Some(old))
+        }
         Command::SetCmsField {
             folder,
             field,
@@ -472,6 +490,7 @@ fn external(c: &Command) -> bool {
         | Command::SetEntryBody { .. }
         | Command::CreateEntry { .. }
         | Command::WriteEntry { .. }
+        | Command::ReplaceInEntry { .. }
         | Command::SetCmsField { .. }
         | Command::AddCmsField { .. }
         | Command::RemoveCmsField { .. }
@@ -981,6 +1000,19 @@ impl Core {
         if let Some(s) = map.get_mut(&key(path)) {
             s.project = Project::open(path)?;
             s.history = History::default();
+            s.revision += 1;
+            s.saved_mtime = mtime(path);
+        }
+        Ok(())
+    }
+
+    /// Document relu après des versions reçues d'un collègue (D-108) : l'historique d'annulation
+    /// est gardé, ses étapes vérifiées avant d'être annulées (`files` : fichiers reçus).
+    pub fn edit_received(&self, path: &Path, files: &[String]) -> Result<()> {
+        let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(s) = map.get_mut(&key(path)) {
+            s.project = Project::open(path)?;
+            s.history.received(files);
             s.revision += 1;
             s.saved_mtime = mtime(path);
         }

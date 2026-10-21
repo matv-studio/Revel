@@ -815,6 +815,24 @@ async fn domain_check(
         .map_err(err)
 }
 
+/// Vérifie des adresses d'autres sites : vidéos, réseaux sociaux, liens (plan du site, D-107).
+#[tauri::command]
+async fn links_check(
+    s: State<'_, AppState>,
+    site: String,
+    urls: Vec<String>,
+    mode: String,
+) -> Res<Vec<Option<revel_protocol::LinkCheck>>> {
+    let core = s.core.clone();
+    core.links_check(
+        &PathBuf::from(site),
+        urls,
+        revel_core::links::CheckMode::parse(&mode),
+    )
+    .await
+    .map_err(err)
+}
+
 /// Remet en ligne la version précédente d'un hébergement (5.5).
 #[tauri::command]
 async fn rollback(
@@ -1089,6 +1107,32 @@ async fn versions_restore(
     let core = s.core.clone();
     tauri::async_runtime::spawn_blocking(move || {
         core.versions_restore(&PathBuf::from(path), &id, &before, &message)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Le dépôt commun a une version nouvelle (synchronisation automatique, D-108).
+#[tauri::command]
+async fn versions_incoming(s: State<'_, AppState>, path: String) -> Res<bool> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.versions_incoming(&PathBuf::from(path)))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Reçoit les versions du dépôt commun sans en enregistrer (D-108).
+#[tauri::command]
+async fn versions_receive(
+    s: State<'_, AppState>,
+    path: String,
+    merge: String,
+) -> Res<revel_protocol::ReceiveInfo> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.versions_receive(&PathBuf::from(path), &merge)
     })
     .await
     .map_err(sys)?
@@ -1491,6 +1535,9 @@ pub fn run() {
             versions_diff,
             versions_restore,
             versions_sync,
+            versions_incoming,
+            versions_receive,
+            links_check,
             versions_resolve,
             versions_resolve_items,
             versions_set_shared,

@@ -362,7 +362,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
                     let title = step.map(|n| ui.tx("planned-step", &[("step", n.to_string())]));
                     let parts = parts_of(sec);
                     view! {
-                        <div class="settings-nav-group" class:is-on=on>
+                        <div class="settings-nav-group" class:is-on=on class:is-single={parts.len() < 2}>
                             <button class="settings-nav-item" class:is-on=on class:is-planned=step.is_some()
                                 data-section=*key title=title aria-current=on.then_some("page")
                                 on:click=move |_| if on { scroll_to_part(parts[0].0) } else { ui.tab(Tab::Settings(sec)) }>

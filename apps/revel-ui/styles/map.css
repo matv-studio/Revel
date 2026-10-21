@@ -171,6 +171,36 @@
 .map-link-text { max-width: 100%; font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .map-link-to { max-width: 100%; font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Autres sites, vidéos et réseaux (D-107) : état des adresses vérifiées. */
+.map-node--media .map-node-icon { background: color-mix(in srgb, var(--map-lit) 18%, transparent); color: var(--map-lit); }
+.map-status-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
+.map-status-dot--ok { background: var(--success-text); }
+.map-status-dot--warn { background: var(--warning-text); }
+.map-status-dot--bad { background: var(--danger-text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger-text) 22%, transparent); }
+.map-count-urls { border: 0; background: none; padding: 0; font: inherit; cursor: pointer; }
+.map-count-urls:hover { text-decoration: underline; }
+.map-checking { color: var(--text-faint); }
+.map-urls { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.map-url { display: flex; flex-direction: column; gap: 4px; padding: var(--s-2); border: var(--border) solid var(--line); border-radius: var(--radius-md); background: var(--bg); }
+.map-url-head { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.map-url-text { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-url-head .map-url-text {
+  white-space: normal; word-break: break-all; line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.map-url-via { flex: none; white-space: nowrap; }
+.map-status {
+  flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: var(--radius-full);
+  font-size: 10px; font-weight: var(--weight-medium); background: var(--surface-active); color: var(--text-muted);
+}
+.map-status--ok { background: color-mix(in srgb, var(--success-text) 16%, transparent); color: var(--success-text); }
+.map-status--warn { background: color-mix(in srgb, var(--warning-text) 18%, transparent); color: var(--warning-text); }
+.map-status--bad { background: color-mix(in srgb, var(--danger-text) 18%, transparent); color: var(--danger-text); }
+.map-url-final { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.map-url-places { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.map-url-places li { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.map-url-place { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 @media (prefers-reduced-motion: reduce) {
   .map-node, .map-edge-line, .map-port, .map-expand svg.icon { transition: none; }
 }

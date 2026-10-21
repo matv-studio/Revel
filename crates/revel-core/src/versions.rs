@@ -6,7 +6,7 @@
 use crate::{Core, CoreError, Result};
 use revel_git::versions as v;
 use revel_protocol::{
-    DiffLine, FileChange, SyncConflictItem, SyncInfo, VersionInfo, VersionsStatus,
+    DiffLine, FileChange, ReceiveInfo, SyncConflictItem, SyncInfo, VersionInfo, VersionsStatus,
 };
 use std::path::Path;
 
@@ -274,11 +274,82 @@ impl Core {
         }
         let token = self.remote_token(path)?;
         let (n, e) = self.author();
+        let before = v::head_id(path);
         let r = v::sync(path, token.as_deref(), &n, &e, message, merge)?;
         if r.pulled > 0 || r.merged {
-            self.edit_reload(path)?;
+            self.received(path, before.as_deref())?;
         }
         Ok(sync_info(r, path))
+    }
+
+    /// Document relu après des versions reçues, l'historique d'annulation gardé (D-108).
+    fn received(&self, path: &Path, before: Option<&str>) -> Result<()> {
+        let files = v::files_between(path, before, v::head_id(path).as_deref());
+        self.edit_received(path, &files)
+    }
+
+    /// Le dépôt commun a une version que le site n'a pas (rien n'est téléchargé, D-108).
+    pub fn versions_incoming(&self, path: &Path) -> Result<bool> {
+        if !v::is_repo(path) || v::status(path)?.remote.is_none() {
+            return Ok(false);
+        }
+        let token = self.remote_token(path)?;
+        Ok(v::incoming(path, token.as_deref())?)
+    }
+
+    /// Synchronisation automatique (D-108) : versions du dépôt commun reçues sans enregistrer de
+    /// version (changements en cours gardés, historique d'annulation gardé), versions enregistrées
+    /// envoyées. Versions faites des deux côtés : fusion enregistrée quand rien n'est en cours,
+    /// sinon au prochain enregistrement. Endroit modifié des deux côtés : rien n'est changé.
+    pub fn versions_receive(&self, path: &Path, merge: &str) -> Result<ReceiveInfo> {
+        let status = v::status(path)?;
+        if status.remote.is_none() {
+            return Err(CoreError::Other("aucun dépôt distant".into()));
+        }
+        let token = self.remote_token(path)?;
+        let mut out = ReceiveInfo::default();
+        let r = v::receive(path, token.as_deref())?;
+        if r.diverged {
+            if status.changes == 0 {
+                let (n, e) = self.author();
+                let before = v::head_id(path);
+                let s = v::sync(path, token.as_deref(), &n, &e, merge, merge)?;
+                if s.pulled > 0 || s.merged {
+                    self.received(path, before.as_deref())?;
+                }
+                let info = sync_info(s, path);
+                out.pulled = info.pulled;
+                out.merged = info.merged;
+                out.pushed = info.pushed;
+                out.conflicts = info.conflicts;
+                out.items = info.items;
+            } else {
+                out.waiting = true;
+            }
+            return Ok(out);
+        }
+        if !r.conflicts.is_empty() {
+            let info = sync_info(
+                v::SyncReport {
+                    conflicts: r.conflicts,
+                    items: r.items,
+                    ..Default::default()
+                },
+                path,
+            );
+            out.conflicts = info.conflicts;
+            out.items = info.items;
+            return Ok(out);
+        }
+        if r.pulled > 0 {
+            self.edit_received(path, &r.files)?;
+        }
+        out.pulled = r.pulled;
+        out.authors = r.authors;
+        if v::status(path)?.ahead > 0 {
+            out.pushed = v::send(path, token.as_deref())?;
+        }
+        Ok(out)
     }
 
     /// Règle les endroits modifiés des deux côtés un par un (`items` : `fichier#chemin` → garder
@@ -293,8 +364,9 @@ impl Core {
         let token = self.remote_token(path)?;
         let (n, e) = self.author();
         let map: std::collections::HashMap<String, bool> = items.iter().cloned().collect();
+        let before = v::head_id(path);
         let r = v::resolve_items(path, token.as_deref(), keep_ours, &map, &n, &e, message)?;
-        self.edit_reload(path)?;
+        self.received(path, before.as_deref())?;
         Ok(sync_info(r, path))
     }
 

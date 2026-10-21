@@ -719,3 +719,17 @@ pub fn camera() -> AnyView {
         r#"<path d="M2.25 5.25h2.5l1.1-1.75h4.3l1.1 1.75h2.5v7.5H2.25z"/><circle cx="8" cy="8.75" r="2.25"/>"#,
     )
 }
+
+/// Partage (réseaux sociaux : trois points reliés).
+pub fn share() -> AnyView {
+    svg(
+        r#"<circle cx="12" cy="3.75" r="1.75"/><circle cx="4" cy="8" r="1.75"/><circle cx="12" cy="12.25" r="1.75"/><path d="m5.6 7.15 4.8-2.55M5.6 8.85l4.8 2.55"/>"#,
+    )
+}
+
+/// Synchronisation (deux flèches en cercle).
+pub fn sync() -> AnyView {
+    svg(
+        r#"<path d="M13 6.5A5.2 5.2 0 0 0 3.6 5"/><path d="M3.25 2.5v2.75H6"/><path d="M3 9.5A5.2 5.2 0 0 0 12.4 11"/><path d="M12.75 13.5v-2.75H10"/>"#,
+    )
+}

@@ -2,10 +2,11 @@
 //!
 //! - nœuds : pages, collections (une page par contenu ; contenus dépliables), menus du site et
 //!   parties communes qui portent des liens (composants, gabarits), adresses sans page, autres
-//!   sites ;
+//!   sites, plateformes de vidéos et réseaux sociaux (D-107 : adresses vérifiées, remplacées
+//!   partout où elles servent, champs et texte des contenus du CMS compris) ;
 //! - liens : liens écrits, listes de contenus, liens des menus, redirections ;
-//! - plan infini : glisser le fond (ou la molette) pour se déplacer, Ctrl+molette (pincer) pour
-//!   zoomer, ajuster (F), minicarte ;
+//! - plan infini : glisser le fond (ou la molette) pour se déplacer, Alt ou Ctrl+molette (pincer)
+//!   pour zoomer, ajuster (F), minicarte ;
 //! - les nœuds se déplacent (positions gardées dans le site, annulables) ; « Ranger » rétablit
 //!   l'ordre des adresses ;
 //! - glisser le bout d'un lien sélectionné sur une autre page change sa destination ; glisser le
@@ -18,10 +19,13 @@ use crate::site::{DocSession, doc_session};
 use crate::{Section, Tab, Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use revel_edit::linkmap::{self as lm, EntryRef, LinkMap, LinkVia, MapLink, MapNode, NodeKind};
+use revel_edit::linkmap::{
+    self as lm, EntryRef, EntryText, LinkMap, LinkVia, MapLink, MapNode, NodeKind, PlatformKind,
+};
 use revel_edit::{Command, Owner, Parent};
 use revel_model::Node;
 use revel_protocol::{CmsCollection, SiteSummary};
+use revel_protocol::{LinkCheck, LinkState};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use wasm_bindgen::JsCast;
 
@@ -100,7 +104,7 @@ fn edges_of(map: &LinkMap) -> Vec<Edge> {
             EdgeKind::Redirect
         } else if to == Some(NodeKind::Missing) {
             EdgeKind::Broken
-        } else if to == Some(NodeKind::External) {
+        } else if matches!(to, Some(NodeKind::External | NodeKind::Media)) {
             EdgeKind::External
         } else if vias.iter().all(|v| matches!(v, LinkVia::List { .. })) {
             EdgeKind::List
@@ -350,7 +354,7 @@ fn arrange(map: &LinkMap) -> HashMap<String, (f64, f64)> {
     // Adresses sans page et autres sites.
     let xr = max_x + NODE_W + COL_GAP * 1.6;
     let mut yr = 0.0;
-    for kind in [NodeKind::Missing, NodeKind::External] {
+    for kind in [NodeKind::Missing, NodeKind::Media, NodeKind::External] {
         for n in map.nodes.iter().filter(|n| n.kind == kind) {
             pos.insert(n.key.clone(), (xr, yr));
             yr += node_h(n.kind) + ROW_GAP;
@@ -443,6 +447,78 @@ enum Gesture {
     Minimap,
 }
 
+/// Titre d'un contenu du CMS (champ du titre, sinon nom du fichier).
+fn entry_title(e: &revel_protocol::CmsEntry) -> String {
+    ["title", "titre", "name", "nom", "label"]
+        .iter()
+        .find_map(|k| e.data.get(*k).and_then(|v| v.as_str()))
+        .unwrap_or(&e.file)
+        .to_string()
+}
+
+/// Adresses d'autres sites du plan (autres sites, vidéos, réseaux), une fois chacune.
+fn external_urls(m: &LinkMap) -> Vec<String> {
+    let ext: HashSet<&str> = m
+        .nodes
+        .iter()
+        .filter(|n| matches!(n.kind, NodeKind::External | NodeKind::Media))
+        .map(|n| n.key.as_str())
+        .collect();
+    let mut out: Vec<String> = Vec::new();
+    for l in &m.links {
+        if ext.contains(l.to.as_str()) && !out.contains(&l.href) {
+            out.push(l.href.clone());
+        }
+    }
+    out
+}
+
+/// Gravité d'un état : 0 en ligne, 1 non vérifiable, 2 à revoir (déplacée, privée), 3 en panne.
+fn severity(s: LinkState) -> u8 {
+    match s {
+        LinkState::Ok => 0,
+        LinkState::Blocked => 1,
+        LinkState::Redirected | LinkState::Restricted => 2,
+        LinkState::Missing | LinkState::Failing | LinkState::Unreachable => 3,
+    }
+}
+
+/// Classe et texte d'un état.
+fn state_key(s: LinkState) -> (&'static str, &'static str) {
+    match s {
+        LinkState::Ok => ("ok", "map-url-ok"),
+        LinkState::Redirected => ("warn", "map-url-redirected"),
+        LinkState::Missing => ("bad", "map-url-missing"),
+        LinkState::Restricted => ("warn", "map-url-restricted"),
+        LinkState::Blocked => ("unknown", "map-url-blocked"),
+        LinkState::Failing => ("bad", "map-url-failing"),
+        LinkState::Unreachable => ("bad", "map-url-unreachable"),
+    }
+}
+
+/// Adresse affichée : sans protocole, `www.` ni paramètres, caractères encodés rendus.
+fn short_url(url: &str) -> String {
+    let u = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url);
+    let u = u.strip_prefix("www.").unwrap_or(u);
+    let u = u.split(['?', '#']).next().unwrap_or(u);
+    js_sys::decode_uri_component(u)
+        .ok()
+        .and_then(|s| s.as_string())
+        .unwrap_or_else(|| u.to_string())
+}
+
+/// Outils des adresses d'autres sites passés au panneau (D-107).
+#[derive(Clone, Copy)]
+struct ExtTools {
+    checks: RwSignal<HashMap<String, LinkCheck>>,
+    checking: RwSignal<bool>,
+    run_check: Callback<(Vec<String>, &'static str)>,
+    replace: Callback<(String, String)>,
+}
+
 /// Nœud qui peut recevoir un lien écrit (adresse connue).
 fn linkable(n: &MapNode) -> bool {
     matches!(n.kind, NodeKind::Page | NodeKind::Entry)
@@ -468,6 +544,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
     let open = RwSignal::new(HashSet::<String>::new());
     let show_shared = RwSignal::new(true);
     let show_external = RwSignal::new(false);
+    let show_media = RwSignal::new(false);
     let query = RwSignal::new(String::new());
     // Contenus des collections (adresse, titre), et identifiant de leur collection dans le CMS.
     let cms_id = Memo::new(move |_| {
@@ -510,11 +587,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                 };
                 for e in &c.entries {
                     let Some(url) = &e.url else { continue };
-                    let title = ["title", "titre", "name", "nom", "label"]
-                        .iter()
-                        .find_map(|k| e.data.get(*k).and_then(|v| v.as_str()))
-                        .unwrap_or(&e.file)
-                        .to_string();
+                    let title = entry_title(e);
                     out.push(EntryRef {
                         collection: id.clone(),
                         file: e.file.clone(),
@@ -543,12 +616,47 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                 .collect::<HashMap<String, String>>()
         })
     });
+    // Contenus de toutes les collections : adresses d'autres sites écrites dans leurs champs et
+    // leur texte (D-107).
+    let texts = Memo::new(move |_| {
+        let folders: Vec<(String, String)> = s.doc.with(|d| {
+            d.as_ref()
+                .map(|d| {
+                    d.collections
+                        .iter()
+                        .map(|c| (c.folder.clone(), c.id.clone()))
+                        .collect()
+                })
+                .unwrap_or_default()
+        });
+        cms.with(|cs| {
+            let mut out = Vec::new();
+            for c in cs {
+                let id = folders
+                    .iter()
+                    .find(|(f, _)| *f == c.folder)
+                    .map_or(c.id.clone(), |f| f.1.clone());
+                for e in &c.entries {
+                    out.push(EntryText {
+                        collection: id.clone(),
+                        folder: c.folder.clone(),
+                        file: e.file.clone(),
+                        title: entry_title(e),
+                        data: e.data.clone(),
+                        body: e.body.clone(),
+                    });
+                }
+            }
+            out
+        })
+    });
     let full = Memo::new(move |_| {
         let info = info.get();
         let entries = entries.get();
+        let texts = texts.get();
         s.doc.with(|d| {
             d.as_ref()
-                .map(|d| lm::build(d, info.as_ref(), &entries))
+                .map(|d| lm::build_with(d, info.as_ref(), &entries, &texts))
                 .unwrap_or_default()
         })
     });
@@ -565,9 +673,11 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
         }
         let shared = show_shared.get();
         let ext = show_external.get();
+        let media = show_media.get();
         m.nodes.retain(|n| match n.kind {
             NodeKind::Menu | NodeKind::Component | NodeKind::Layout => shared,
             NodeKind::External => ext,
+            NodeKind::Media => media,
             _ => true,
         });
         let keep: HashSet<String> = m.nodes.iter().map(|n| n.key.clone()).collect();
@@ -576,6 +686,55 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
         m
     });
     let orphans = Memo::new(move |_| full.with(|m| m.orphans()));
+    // Adresses d'autres sites vérifiées (D-107) : résultats gardés relus à l'ouverture, adresses
+    // vérifiées quand leur groupe est montré (plus d'un jour : de nouveau).
+    let ext_urls = Memo::new(move |_| full.with(external_urls));
+    let checks = RwSignal::new(HashMap::<String, LinkCheck>::new());
+    let checking = RwSignal::new(false);
+    let run_check = Callback::new(move |(urls, mode): (Vec<String>, &'static str)| {
+        if urls.is_empty() {
+            return;
+        }
+        let p = path.get_value();
+        let busy = mode != "cached";
+        if busy {
+            checking.set(true);
+        }
+        spawn_local(async move {
+            match api::links_check(&p, &urls, mode).await {
+                Ok(r) => {
+                    let _ = checks.try_update(|c| {
+                        for x in r.into_iter().flatten() {
+                            c.insert(x.url.clone(), x);
+                        }
+                    });
+                }
+                Err(e) if busy => ui.fail(e),
+                Err(_) => {}
+            }
+            if busy {
+                let _ = checking.try_set(false);
+            }
+        });
+    });
+    Effect::new(move |prev: Option<(usize, bool)>| {
+        let urls = ext_urls.get();
+        let shown = show_media.get() || show_external.get();
+        let now = (urls.len(), shown);
+        if prev != Some(now) {
+            run_check.run((urls, if shown { "stale" } else { "cached" }));
+        }
+        now
+    });
+    // Adresses à revoir (introuvables, en erreur, privées, déplacées).
+    let to_review = Memo::new(move |_| {
+        let c = checks.get();
+        ext_urls.with(|u| {
+            u.iter()
+                .filter(|x| c.get(*x).is_some_and(|c| severity(c.state) >= 2))
+                .count()
+        })
+    });
     let edges = Memo::new(move |_| map.with(edges_of));
     let auto = Memo::new(move |_| map.with(arrange));
     // Positions choisies (gardées dans le site) ; en cours d'écriture ; pendant un glisser.
@@ -832,6 +991,57 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
             picked.set(Some(Picked::Edge(from, new_to)));
             say(ui.now("map-retargeted", &[("count", n.to_string()), ("to", addr)]));
         }
+    };
+    // Adresse d'un autre site remplacée partout où elle sert (D-107).
+    let replace = Callback::new(move |(old, new): (String, String)| {
+        let new = new.trim().to_string();
+        if new.is_empty() || new == old {
+            return;
+        }
+        let links: Vec<MapLink> =
+            full.with_untracked(|m| m.links.iter().filter(|l| l.href == old).cloned().collect());
+        let refs: Vec<&MapLink> = links.iter().collect();
+        let cmd = s.doc.with_untracked(|d| {
+            d.as_ref().and_then(|d| {
+                lm::replace_url(
+                    d,
+                    info.get_untracked().as_ref(),
+                    &texts.get_untracked(),
+                    &refs,
+                    &old,
+                    &new,
+                )
+            })
+        });
+        let Some(cmd) = cmd else { return };
+        let cms_touched = links
+            .iter()
+            .any(|l| matches!(l.via, LinkVia::Field { .. } | LinkVia::Body { .. }));
+        apply(cmd);
+        if cms_touched {
+            let p = path.get_value();
+            set_timeout(
+                move || {
+                    spawn_local(async move {
+                        if let Ok(c) = api::cms_collections(&p).await {
+                            let _ = cms.try_set(c);
+                        }
+                    })
+                },
+                std::time::Duration::from_millis(300),
+            );
+        }
+        say(ui.now(
+            "map-url-replaced",
+            &[("count", links.len().to_string()), ("url", new.clone())],
+        ));
+        run_check.run((vec![new], "all"));
+    });
+    let ext = ExtTools {
+        checks,
+        checking,
+        run_check,
+        replace,
     };
     let last_added = RwSignal::new(None::<(String, String)>);
     // Lien ajouté : au menu (point d'un menu), à la fin de la page (point d'une page).
@@ -1111,7 +1321,10 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
             _ => 1.0,
         };
         let (dx, dy) = (e.delta_x() * unit, e.delta_y() * unit);
-        if e.ctrl_key() || e.meta_key() {
+        // Zoom : Alt, Ctrl ou Cmd + molette, comme le canevas d'édition.
+        if e.alt_key() || e.ctrl_key() || e.meta_key() {
+            // Avec Alt, certains systèmes envoient le défilement en horizontal.
+            let dy = if dy == 0.0 { dx } else { dy };
             let f = (-dy * 0.0025).exp();
             zoom_at(
                 f64::from(e.client_x()) - r.left(),
@@ -1361,6 +1574,11 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                     NodeKind::Menu => icons::menu(),
                     NodeKind::Missing => icons::warning(),
                     NodeKind::External => icons::globe(),
+                    NodeKind::Media => match lm::platform(&n.key).map(|p| p.2) {
+                        Some(PlatformKind::Video) => icons::video(),
+                        Some(PlatformKind::Audio) => icons::audio(),
+                        _ => icons::share(),
+                    },
                 };
                 let kind_class = match kind {
                     NodeKind::Page => "page",
@@ -1371,7 +1589,33 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                     NodeKind::Menu => "menu",
                     NodeKind::Missing => "missing",
                     NodeKind::External => "external",
+                    NodeKind::Media => "media",
                 };
+                // Adresses d'un autre site ou d'une plateforme : état le plus grave vérifié.
+                let urls: Vec<String> = matches!(kind, NodeKind::External | NodeKind::Media)
+                    .then(|| full.with(|fm| {
+                        let mut v: Vec<String> = fm.links.iter().filter(|l| l.to == key).map(|l| l.href.clone()).collect();
+                        v.sort();
+                        v.dedup();
+                        v
+                    }))
+                    .unwrap_or_default();
+                let status = (!urls.is_empty()).then(|| {
+                    let c = checks.get();
+                    let worst = urls.iter().filter_map(|u| c.get(u)).map(|c| c.state).max_by_key(|s| severity(*s));
+                    let n_bad = urls.iter().filter(|u| c.get(*u).is_some_and(|c| severity(c.state) >= 2)).count();
+                    match worst {
+                        Some(w) if severity(w) >= 2 => {
+                            let (cls, _) = state_key(w);
+                            view! { <span class=format!("map-status-dot map-status-dot--{cls}") title=ui.now("map-urls-review", &[("count", n_bad.to_string())])></span> }.into_any()
+                        }
+                        Some(w) => {
+                            let (cls, label) = state_key(w);
+                            view! { <span class=format!("map-status-dot map-status-dot--{cls}") title=ui.now(label, &[])></span> }.into_any()
+                        }
+                        None => ().into_any(),
+                    }
+                });
                 let sub = match kind {
                     NodeKind::Page | NodeKind::Missing | NodeKind::Collection => {
                         n.path.clone().unwrap_or_default()
@@ -1381,6 +1625,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                         "map-shared-pages",
                         &[("count", n.count.unwrap_or(0).to_string())],
                     ),
+                    NodeKind::Media => ui.now("map-urls-count", &[("count", urls.len().to_string())]),
                     _ => String::new(),
                 };
                 let port = matches!(kind, NodeKind::Page | NodeKind::Menu)
@@ -1412,6 +1657,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                             <span class="map-node-name" title=label.clone()>{label.clone()}</span>
                             {draft.then(|| view! { <span class="map-badge" title=ui.t("map-draft-help")>{ui.t("map-draft")}</span> })}
                             {orphan.then(|| view! { <span class="map-badge map-badge--warn" title=ui.t("map-orphan-help")>{icons::unlink()}</span> })}
+                            {status}
                         </div>
                         {(!sub.is_empty()).then(|| view! { <div class="map-node-sub" title=sub.clone()>{crate::ltr(&sub)}</div> })}
                         {expand}
@@ -1451,6 +1697,13 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
             </svg>
         }
     };
+    // Groupe montré (autres sites, médias) : plan ajusté pour que ses nœuds soient visibles.
+    let show_group = move |g: RwSignal<bool>| {
+        g.update(|v| *v = !*v);
+        if g.get_untracked() {
+            set_timeout(fit, std::time::Duration::from_millis(80));
+        }
+    };
     let counts = move || {
         map.with(|m| {
             let pages = m.nodes.iter().filter(|n| n.kind == NodeKind::Page).count();
@@ -1477,7 +1730,9 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                     <button class:is-on=move || show_shared.get() aria-pressed=move || show_shared.get().to_string()
                         title=ui.t("map-shared-help") on:click=move |_| show_shared.update(|v| *v = !*v)>{icons::component()}{ui.t("map-shared")}</button>
                     <button class:is-on=move || show_external.get() aria-pressed=move || show_external.get().to_string()
-                        title=ui.t("map-external-help") on:click=move |_| show_external.update(|v| *v = !*v)>{icons::globe()}{ui.t("map-external")}</button>
+                        title=ui.t("map-external-help") on:click=move |_| show_group(show_external)>{icons::globe()}{ui.t("map-external")}</button>
+                    <button class:is-on=move || show_media.get() aria-pressed=move || show_media.get().to_string()
+                        title=ui.t("map-media-help") on:click=move |_| show_group(show_media)>{icons::video()}{ui.t("map-media")}</button>
                 </div>
                 <span class="map-counts muted small">
                     {move || {
@@ -1486,6 +1741,13 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                             <span>{ui.now("map-count-pages", &[("count", p.to_string())])}</span>
                             {(b > 0).then(|| view! { <span class="map-count-warn" title=ui.t("map-broken-help")>{icons::warning()}{ui.now("map-count-broken", &[("count", b.to_string())])}</span> })}
                             {(o > 0).then(|| view! { <span class="map-count-warn" title=ui.t("map-orphan-help")>{icons::unlink()}{ui.now("map-count-orphans", &[("count", o.to_string())])}</span> })}
+                            {move || { let r = to_review.get(); (r > 0).then(|| view! {
+                                <button class="map-count-warn map-count-urls" title=ui.t("map-urls-review-help")
+                                    on:click=move |_| { show_media.set(true); show_external.set(true); set_timeout(fit, std::time::Duration::from_millis(80)); }>
+                                    {icons::warning()}{ui.now("map-urls-review", &[("count", r.to_string())])}
+                                </button>
+                            }) }}
+                            {move || checking.get().then(|| view! { <span class="map-checking">{ui.t("map-urls-checking")}</span> })}
                         }
                     }}
                 </span>
@@ -1550,7 +1812,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
             </div>
             {move || picked.get().map(|p| view! {
                 <aside class="map-panel" aria-label=ui.t("map-panel")>
-                    {panel(ui, s, map, full, edges, open, cms_id, p, picked, retarget, open_in_editor)}
+                    {panel(ui, s, map, full, edges, open, cms_id, p, picked, retarget, open_in_editor, ext)}
                 </aside>
             })}
         </div>
@@ -1672,7 +1934,7 @@ fn node_actions(
                 .icon(icons::external),
             );
         }
-        NodeKind::Component | NodeKind::Layout => {}
+        NodeKind::Component | NodeKind::Layout | NodeKind::Media => {}
     }
     items
 }
@@ -1811,6 +2073,7 @@ fn panel(
     picked: RwSignal<Option<Picked>>,
     retarget: impl Fn(String, String, String) + Copy + Send + Sync + 'static,
     open_in_editor: impl Fn(String, Option<String>) + Copy + Send + Sync + 'static,
+    ext: ExtTools,
 ) -> AnyView {
     let name_of = move |k: &str| {
         map.with_untracked(|m| m.node(k).map(|n| n.label.clone()))
@@ -1823,27 +2086,8 @@ fn panel(
     // Ligne d'un lien : texte, adresse ; « Montrer » (lien écrit dans une page).
     // Ligne d'un nœud : le lien (trait) sélectionné ; ligne d'un trait : le nœud d'où part le lien.
     let link_row = move |l: MapLink, other: String, pick: Picked| {
-        let show = match &l.via {
-            LinkVia::Attr { at } | LinkVia::Arg { at, .. } => match &at.owner {
-                Owner::Page(pid) => s.doc.with_untracked(|d| {
-                    d.as_ref()?
-                        .pages
-                        .iter()
-                        .find(|p| p.id == *pid && !p.path.contains("{{"))
-                        .map(|p| (p.path.clone(), at.node.clone()))
-                }),
-                _ => None,
-            },
-            _ => None,
-        };
-        let kind = match &l.via {
-            LinkVia::List { .. } => ui.now("map-via-list", &[]),
-            LinkVia::Menu { .. } => ui.now("map-via-menu", &[]),
-            LinkVia::MenuItem { .. } => ui.now("map-via-menu-item", &[]),
-            LinkVia::Redirect { .. } => ui.now("map-via-redirect", &[]),
-            LinkVia::Arg { .. } => ui.now("map-via-arg", &[]),
-            LinkVia::Attr { .. } => String::new(),
-        };
+        let show = shown_at(s, &l.via);
+        let kind = via_label(ui, &l.via);
         // Texte du lien, sinon son adresse, sinon sa sorte (liste, menu).
         let text = [l.text.clone(), l.href.clone(), kind.clone()]
             .into_iter()
@@ -1943,6 +2187,10 @@ fn panel(
                     NodeKind::Menu => "map-kind-menu",
                     NodeKind::Missing => "map-kind-missing",
                     NodeKind::External => "map-kind-external",
+                    NodeKind::Media => match lm::platform(&key).map(|p| p.2) {
+                        Some(PlatformKind::Social) => "map-kind-social",
+                        _ => "map-kind-media",
+                    },
                 },
                 &[],
             );
@@ -2092,19 +2340,13 @@ fn panel(
                     }
                     .into_any())
                 }
-                NodeKind::External => {
-                    let host = n.label.clone();
-                    Some(view! {
-                        <div class="map-actions">
-                            <button class="btn btn--small" on:click=move |_| {
-                                let url = format!("https://{host}");
-                                spawn_local(async move { let _ = api::open_external(&url).await; });
-                            }>{icons::external()}{ui.t("map-open-site")}</button>
-                        </div>
-                    }
-                    .into_any())
+                NodeKind::External | NodeKind::Media => {
+                    let site = (n.kind == NodeKind::External).then(|| n.label.clone());
+                    Some(addresses(ui, s, full, key.clone(), site, ext, open_in_editor).into_any())
                 }
             };
+            // Autre site, plateforme : les adresses tiennent lieu de liens entrants.
+            let external = matches!(n.kind, NodeKind::External | NodeKind::Media);
             let n_out = outgoing.len();
             let n_in = incoming.len();
             view! {
@@ -2114,15 +2356,204 @@ fn panel(
                 </header>
                 <h2 class="map-panel-title">{n.label.clone()}</h2>
                 {settings}
-                <h3 class="map-panel-h">{ui.now("map-links-in", &[("count", n_in.to_string())])}</h3>
-                {(n_in == 0).then(|| view! { <p class="muted small">{ui.t(if n.kind == NodeKind::Page { "map-orphan-help" } else { "map-none" })}</p> })}
-                <ul class="map-links">{incoming.into_iter().map(|l| { let o = l.from.clone(); let e = Picked::Edge(l.from.clone(), l.to.clone()); link_row(l, o, e) }).collect_view()}</ul>
-                <h3 class="map-panel-h">{ui.now("map-links-out", &[("count", n_out.to_string())])}</h3>
-                {(n_out == 0).then(|| view! { <p class="muted small">{ui.t("map-none")}</p> })}
-                <ul class="map-links">{outgoing.into_iter().map(|l| { let o = l.to.clone(); let e = Picked::Edge(l.from.clone(), l.to.clone()); link_row(l, o, e) }).collect_view()}</ul>
+                {(!external).then(|| view! {
+                    <h3 class="map-panel-h">{ui.now("map-links-in", &[("count", n_in.to_string())])}</h3>
+                    {(n_in == 0).then(|| view! { <p class="muted small">{ui.t(if n.kind == NodeKind::Page { "map-orphan-help" } else { "map-none" })}</p> })}
+                    <ul class="map-links">{incoming.into_iter().map(|l| { let o = l.from.clone(); let e = Picked::Edge(l.from.clone(), l.to.clone()); link_row(l, o, e) }).collect_view()}</ul>
+                    <h3 class="map-panel-h">{ui.now("map-links-out", &[("count", n_out.to_string())])}</h3>
+                    {(n_out == 0).then(|| view! { <p class="muted small">{ui.t("map-none")}</p> })}
+                    <ul class="map-links">{outgoing.into_iter().map(|l| { let o = l.to.clone(); let e = Picked::Edge(l.from.clone(), l.to.clone()); link_row(l, o, e) }).collect_view()}</ul>
+                })}
             }
             .into_any()
         }
+    }
+}
+
+/// Sorte d'un lien (vide pour un lien écrit dans une page).
+fn via_label(ui: Ui, via: &LinkVia) -> String {
+    match via {
+        LinkVia::List { .. } => ui.now("map-via-list", &[]),
+        LinkVia::Menu { .. } => ui.now("map-via-menu", &[]),
+        LinkVia::MenuItem { .. } => ui.now("map-via-menu-item", &[]),
+        LinkVia::Redirect { .. } => ui.now("map-via-redirect", &[]),
+        LinkVia::Arg { .. } => ui.now("map-via-arg", &[]),
+        LinkVia::Src { .. } => ui.now("map-via-src", &[]),
+        LinkVia::Field { pointer, .. } => ui.now(
+            "map-via-field",
+            &[(
+                "field",
+                pointer
+                    .trim_start_matches('/')
+                    .split('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
+            )],
+        ),
+        LinkVia::Body { .. } => ui.now("map-via-body", &[]),
+        LinkVia::Info { .. } => ui.now("map-via-info", &[]),
+        LinkVia::Attr { .. } => String::new(),
+    }
+}
+
+/// Page et élément où montrer un lien dans l'éditeur (lien ou média écrit dans une page).
+fn shown_at(s: DocSession, via: &LinkVia) -> Option<(String, String)> {
+    match via {
+        LinkVia::Attr { at } | LinkVia::Arg { at, .. } | LinkVia::Src { at, .. } => match &at.owner
+        {
+            Owner::Page(pid) => s.doc.with_untracked(|d| {
+                d.as_ref()?
+                    .pages
+                    .iter()
+                    .find(|p| p.id == *pid && !p.path.contains("{{"))
+                    .map(|p| (p.path.clone(), at.node.clone()))
+            }),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Adresses d'un autre site ou d'une plateforme (D-107) : état vérifié, endroits où chacune
+/// sert, ouvrir, remplacer partout où elle sert.
+fn addresses(
+    ui: Ui,
+    s: DocSession,
+    full: Memo<LinkMap>,
+    key: String,
+    site: Option<String>,
+    ext: ExtTools,
+    open_in_editor: impl Fn(String, Option<String>) + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    // Liens par adresse, dans l'ordre du plan.
+    let groups: Vec<(String, Vec<MapLink>)> = full.with_untracked(|m| {
+        let mut g: Vec<(String, Vec<MapLink>)> = Vec::new();
+        for l in m.links.iter().filter(|l| l.to == key) {
+            match g.iter_mut().find(|(u, _)| *u == l.href) {
+                Some((_, v)) => v.push(l.clone()),
+                None => g.push((l.href.clone(), vec![l.clone()])),
+            }
+        }
+        g
+    });
+    // Adresses à revoir d'abord.
+    let mut groups = groups;
+    ext.checks.with_untracked(|c| {
+        groups.sort_by_key(|(u, _)| std::cmp::Reverse(c.get(u).map_or(1, |c| severity(c.state))))
+    });
+    let urls: Vec<String> = groups.iter().map(|g| g.0.clone()).collect();
+    // Nom d'un endroit : nœud du plan, contenu du CMS, information du site.
+    let place = move |l: &MapLink| -> String {
+        if l.from == "info:site" {
+            return ui.now("map-source-info", &[("name", l.text.clone())]);
+        }
+        if l.from.starts_with("cms:") {
+            return ui.now("map-source-cms", &[("name", l.text.clone())]);
+        }
+        full.with_untracked(|m| m.node(&l.from).map(|n| n.label.clone()))
+            .unwrap_or_else(|| l.from.clone())
+    };
+    let n = urls.len();
+    let rows = groups
+        .into_iter()
+        .map(|(url, links)| {
+            let u = StoredValue::new(url.clone());
+            let state = move || ext.checks.with(|c| u.with_value(|u| c.get(u).cloned()));
+            let chip = move || match state() {
+                Some(c) => {
+                    let (cls, label) = state_key(c.state);
+                    let when = crate::assistants::when((c.checked.max(0) as u64) * 1000, &ui.lang());
+                    let detail = match (&c.error, c.status) {
+                        (Some(e), _) => format!("{e} · {when}"),
+                        (None, Some(st)) => format!("HTTP {st} · {when}"),
+                        (None, None) => when,
+                    };
+                    view! { <span class=format!("map-status map-status--{cls}") title=detail>{ui.now(label, &[])}</span> }.into_any()
+                }
+                None => view! { <span class="map-status map-status--none">{ui.t("map-url-unchecked")}</span> }.into_any(),
+            };
+            let (u_fin, u_open, u_rep) = (url.clone(), url.clone(), url.clone());
+            let final_row = move || {
+                state()
+                    .filter(|c| c.state == LinkState::Redirected)
+                    .and_then(|c| c.final_url)
+                    .map(|f| {
+                        let (old, f2) = (u_fin.clone(), f.clone());
+                        view! {
+                            <div class="map-url-final small">
+                                <span class="muted">{ui.t("map-url-final")}</span>
+                                <span class="map-url-text" title=f.clone()>{crate::ltr(&f)}</span>
+                                <button class="link-btn" on:click=move |_| ext.replace.run((old.clone(), f2.clone()))>{ui.t("map-url-use-final")}</button>
+                            </div>
+                        }
+                    })
+            };
+            let places = links
+                .iter()
+                .map(|l| {
+                    let name = place(l);
+                    let via = via_label(ui, &l.via);
+                    let show = shown_at(s, &l.via);
+                    view! {
+                        <li>
+                            <span class="map-url-place" title=name.clone()>{name.clone()}</span>
+                            {(!via.is_empty()).then(|| view! { <span class="map-url-via muted">{via}</span> })}
+                            {show.map(|(page, node)| view! {
+                                <button class="icon-btn icon-btn--small" title=ui.t("map-show-in-editor") aria-label=ui.t("map-show-in-editor")
+                                    on:click=move |_| open_in_editor(page.clone(), Some(node.clone()))>{icons::edit()}</button>
+                            })}
+                        </li>
+                    }
+                })
+                .collect_view();
+            let uses = links.len();
+            view! {
+                <li class="map-url" data-url=url.clone()>
+                    <div class="map-url-head">
+                        {chip}
+                        <span class="map-url-text" title=url.clone()>{crate::ltr(&short_url(&url))}</span>
+                        <button class="icon-btn icon-btn--small" title=ui.t("map-url-open") aria-label=ui.t("map-url-open")
+                            on:click=move |_| { let u = u_open.clone(); spawn_local(async move { let _ = api::open_external(&u).await; }); }>
+                            {icons::external()}
+                        </button>
+                        <button class="icon-btn icon-btn--small map-url-replace" title=ui.t("map-url-replace-help") aria-label=ui.t("map-url-replace")
+                            on:click=move |_| {
+                                let old = u_rep.clone();
+                                ui.ask.set(Some(Ask::input(
+                                    ui.now("map-url-replace-title", &[]),
+                                    ui.now("map-url-new", &[]),
+                                    old.clone(),
+                                    ui.now("map-url-replace", &[]),
+                                    move |v| ext.replace.run((old.clone(), v)),
+                                )));
+                            }>
+                            {icons::edit()}
+                        </button>
+                    </div>
+                    {final_row}
+                    <div class="map-url-uses muted small">{ui.now("map-url-uses", &[("count", uses.to_string())])}</div>
+                    <ul class="map-url-places small">{places}</ul>
+                </li>
+            }
+        })
+        .collect_view();
+    view! {
+        <div class="map-actions">
+            <button class="btn btn--small map-urls-check" disabled=move || ext.checking.get()
+                title=ui.t("map-urls-check-help")
+                on:click=move |_| ext.run_check.run((urls.clone(), "all"))>
+                {icons::reset()}{ui.t("map-urls-check")}
+            </button>
+            {site.map(|host| view! {
+                <button class="btn btn--small" on:click=move |_| {
+                    let url = format!("https://{host}");
+                    spawn_local(async move { let _ = api::open_external(&url).await; });
+                }>{icons::external()}{ui.t("map-open-site")}</button>
+            })}
+        </div>
+        <h3 class="map-panel-h">{ui.now("map-urls", &[("count", n.to_string())])}</h3>
+        <ul class="map-urls">{rows}</ul>
     }
 }
 

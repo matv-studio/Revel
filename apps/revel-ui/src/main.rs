@@ -46,6 +46,7 @@ mod siteinfo;
 mod sitemap;
 mod sitesettings;
 mod styles;
+mod sync;
 mod textfield;
 mod variables;
 mod versions;
@@ -183,6 +184,8 @@ pub struct Ui {
     pub update: RwSignal<Option<revel_protocol::UpdateInfo>>,
     /// Dernier site ouvert et sa vue : gardés dans les réglages de Revel pour y revenir.
     pub last_site: RwSignal<Option<(SiteSummary, Tab)>>,
+    /// Synchronisation automatique du travail à plusieurs (D-108).
+    pub sync: RwSignal<sync::SyncState>,
 }
 
 impl Ui {
@@ -418,6 +421,7 @@ fn App() -> impl IntoView {
         domain_for: RwSignal::new(None),
         update: RwSignal::new(None),
         last_site: RwSignal::new(None),
+        sync: RwSignal::new(sync::SyncState::default()),
     };
     provide_context(ui);
     // Site ouvert retenu (menu du site gardé dans les réglages de Revel) ; oublié une fois revenu
@@ -672,6 +676,7 @@ fn TopBar() -> impl IntoView {
                         </Show>
                     </div>
                     <publishbar::PublishButton/>
+                    <sync::SyncButton/>
                 </Show>
                 <profile::ProfileButton/>
             </div>

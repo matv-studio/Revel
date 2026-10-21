@@ -503,6 +503,30 @@ error-edit-tag = Nom de balise invalide : lettres, chiffres et tirets uniquement
 error-edit-not-open = Ce site n'est pas ouvert dans l'éditeur.
 error-font = Police : { $detail }
 error-edit-site = Adresse invalide : « { $detail } » (attendue : https://…)
+sync-title = Travail à plusieurs
+sync-ok = À jour · vérifié à { $time }
+sync-busy = Réception des versions…
+sync-off = Synchronisation automatique désactivée (Paramètres › Versions)
+sync-offline = Pas de réponse du dépôt commun : nouvel essai dans une minute
+sync-waiting = Des versions ont été faites des deux côtés : elles seront réunies au prochain enregistrement d'une version
+sync-paused = { $count ->
+    [one] La synchronisation n'a pas pu aboutir : { $count } endroit modifié des deux côtés. Vérifiez la version à garder, ou reportez.
+   *[other] La synchronisation n'a pas pu aboutir : { $count } endroits modifiés des deux côtés. Vérifiez la version à garder, ou reportez.
+}
+sync-received = { $count ->
+    [one] Version reçue de { $authors }
+   *[other] { $count } versions reçues de { $authors }
+}
+sync-last-received = { $count ->
+    [one] Dernière version reçue de { $authors } à { $time }
+   *[other] { $count } versions reçues de { $authors } à { $time }
+}
+sync-verify = Vérifier
+sync-later = Plus tard
+sync-now = Synchroniser
+versions-auto = Synchronisation automatique
+versions-auto-help = Les versions des autres arrivent d'elles-mêmes (sans créer de version, à la première pause) ; les vôtres partent dès que vous enregistrez une version
+error-edit-outdated = Cette modification ne peut plus être annulée : un collègue a changé le même endroit depuis
 error-translate-pair = Aucun modèle de traduction pour { $from } → { $to }.
 error-translate = Traduction automatique impossible : { $detail }
 error-versions-conflict = Mêmes lignes modifiées en ligne et dans le site : conflit à régler dans Paramètres › Versions avant de publier.
@@ -2740,6 +2764,52 @@ map-count-orphans = { $count ->
 }
 map-broken-help = Des liens mènent à une adresse du site qui n'a pas de page (en rouge) : créer la page, rediriger l'adresse ou changer les liens
 map-orphan-help = Aucun lien ne mène à cette page : on n'y arrive que par son adresse
+map-media = Médias et réseaux
+map-media-help = Vidéos (YouTube, Vimeo…), sons et réseaux sociaux utilisés par le site, regroupés par plateforme ; leurs adresses sont vérifiées
+map-kind-media = Vidéos et sons
+map-kind-social = Réseau social
+map-urls-count = { $count ->
+    [one] { $count } adresse
+   *[other] { $count } adresses
+}
+map-urls = Adresses ({ $count })
+map-urls-check = Vérifier
+map-urls-check-help = Vérifie de nouveau chaque adresse (les résultats sont gardés un jour)
+map-urls-checking = Vérification des adresses…
+map-urls-review = { $count ->
+    [one] { $count } adresse à revoir
+   *[other] { $count } adresses à revoir
+}
+map-urls-review-help = Adresses d'autres sites introuvables, en erreur, privées ou déplacées : montrer les autres sites et les médias
+map-url-ok = En ligne
+map-url-redirected = Déplacée
+map-url-missing = Introuvable
+map-url-restricted = Privée
+map-url-blocked = Non vérifiable
+map-url-failing = En erreur
+map-url-unreachable = Sans réponse
+map-url-unchecked = Non vérifiée
+map-url-final = Mène à
+map-url-use-final = Utiliser cette adresse
+map-url-open = Ouvrir dans le navigateur
+map-url-replace = Remplacer
+map-url-replace-help = Remplacer cette adresse partout où elle sert (pages, médias, menus, contenus du CMS, informations du site)
+map-url-replace-title = Remplacer l'adresse partout
+map-url-new = Nouvelle adresse
+map-url-replaced = { $count ->
+    [one] Adresse remplacée à { $count } endroit : { $url }
+   *[other] Adresse remplacée à { $count } endroits : { $url }
+}
+map-url-uses = { $count ->
+    [one] Utilisée à { $count } endroit
+   *[other] Utilisée à { $count } endroits
+}
+map-source-info = Informations du site › { $name }
+map-source-cms = CMS › { $name }
+map-via-src = Média intégré
+map-via-field = Champ « { $field } »
+map-via-body = Texte du CMS
+map-via-info = Information du site
 map-arrange = Ranger
 map-arrange-help = Remet chaque nœud dans l'ordre des adresses, nœuds déplacés compris (Ctrl+Z l'annule)
 map-show-in-editor = Montrer dans l'éditeur

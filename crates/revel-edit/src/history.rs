@@ -22,6 +22,66 @@ fn flatten(c: Command) -> Vec<Command> {
 pub struct Step {
     pub forward: Command,
     pub inverse: Command,
+    /// Un fichier qu'elle écrit (contenu, données) a été changé par une version reçue (D-108).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stale: bool,
+}
+
+impl Step {
+    fn new(forward: Command, inverse: Command) -> Self {
+        Self {
+            forward,
+            inverse,
+            stale: false,
+        }
+    }
+}
+
+/// Commandes d'une suite, suites imbriquées comprises.
+fn all(c: &Command) -> Vec<&Command> {
+    match c {
+        Command::Batch { commands } => commands.iter().flat_map(all).collect(),
+        other => vec![other],
+    }
+}
+
+/// La commande écrit un des fichiers `files` (chemins relatifs au site) : contenus du CMS,
+/// schéma, données, fichiers déplacés, textes liés.
+fn writes(c: &Command, files: &[String]) -> bool {
+    let entry = |folder: &str, file: &str| {
+        let prefix = format!("{}/{file}.", folder.trim_end_matches('/'));
+        files.iter().any(|f| f.starts_with(&prefix))
+    };
+    let data = || {
+        files.iter().any(|f| {
+            f != "site.revel.json"
+                && [".json", ".yml", ".yaml", ".md", ".toml"]
+                    .iter()
+                    .any(|e| f.ends_with(e))
+        })
+    };
+    all(c).into_iter().any(|c| match c {
+        Command::SetEntryField { folder, file, .. }
+        | Command::SetEntryBody { folder, file, .. }
+        | Command::CreateEntry { folder, file, .. }
+        | Command::WriteEntry { folder, file, .. }
+        | Command::ReplaceInEntry { folder, file, .. } => entry(folder, file),
+        Command::SetCmsField { .. }
+        | Command::AddCmsField { .. }
+        | Command::RemoveCmsField { .. }
+        | Command::MoveCmsField { .. }
+        | Command::SetCmsCollection { .. }
+        | Command::CreateCmsCollection { .. }
+        | Command::RemoveCmsCollection { .. }
+        | Command::WriteCmsConfig { .. } => files.iter().any(|f| f.ends_with(".pages.yml")),
+        Command::MoveFiles { moves } => moves
+            .iter()
+            .any(|(a, b)| files.contains(a) || files.contains(b)),
+        Command::SetDataValue { .. } | Command::WriteDataFile { .. } | Command::SetBound { .. } => {
+            data()
+        }
+        _ => false,
+    })
 }
 
 /// Historique d'un document ouvert. `limit` : nombre maximal d'étapes conservées.
@@ -34,6 +94,9 @@ pub struct History {
     open_field: bool,
     /// Groupe de la dernière étape (voir [`History::apply_grouped`]).
     group: Option<String>,
+    /// Des versions reçues d'ailleurs ont changé le document (D-108) : chaque étape est vérifiée
+    /// avant d'être annulée ou rétablie.
+    foreign: bool,
 }
 
 impl Default for History {
@@ -50,6 +113,49 @@ impl History {
             limit: limit.max(1),
             open_field: false,
             group: None,
+            foreign: false,
+        }
+    }
+
+    /// Versions reçues d'un collègue (D-108) : l'historique est gardé ; les étapes qui écrivent un
+    /// fichier changé par elles (`files`) ne seront plus appliquées, les autres seront vérifiées.
+    pub fn received(&mut self, files: &[String]) {
+        self.foreign = true;
+        self.open_field = false;
+        self.group = None;
+        for st in self.done.iter_mut().chain(self.undone.iter_mut()) {
+            if writes(&st.forward, files) || writes(&st.inverse, files) {
+                st.stale = true;
+            }
+        }
+    }
+
+    /// L'étape peut encore être appliquée (`back` : l'annuler) sans toucher à ce qu'un collègue a
+    /// changé : appliquée puis défaite sur une copie, le document doit revenir à l'identique.
+    /// Une commande qui écrit des fichiers n'est jugée que par `stale`.
+    fn still_applies(&self, site: &Site, st: &Step, back: bool) -> bool {
+        if !self.foreign {
+            return true;
+        }
+        if st.stale {
+            return false;
+        }
+        let (go, ret) = if back {
+            (&st.inverse, &st.forward)
+        } else {
+            (&st.forward, &st.inverse)
+        };
+        let mut a = site.clone();
+        match apply(&mut a, go) {
+            Ok(_) => {}
+            Err(EditError::External | EditError::Bound(_)) => return true,
+            Err(_) => return false,
+        }
+        let mut b = a;
+        match apply(&mut b, ret) {
+            Ok(_) => b == *site,
+            Err(EditError::External | EditError::Bound(_)) => true,
+            Err(_) => false,
         }
     }
 
@@ -94,10 +200,7 @@ impl History {
             // L'inverse d'origine (état d'avant la saisie) est conservé.
             last.forward = cmd;
         } else {
-            self.done.push(Step {
-                forward: cmd,
-                inverse,
-            });
+            self.done.push(Step::new(cmd, inverse));
             if self.done.len() > self.limit {
                 self.done.remove(0);
             }
@@ -133,10 +236,7 @@ impl History {
             last.forward = Command::Batch { commands: fw };
             last.inverse = Command::Batch { commands: inv };
         } else {
-            self.done.push(Step {
-                forward: cmd,
-                inverse,
-            });
+            self.done.push(Step::new(cmd, inverse));
             if self.done.len() > self.limit {
                 self.done.remove(0);
             }
@@ -166,6 +266,10 @@ impl History {
         let Some(step) = self.done.pop() else {
             return Ok(None);
         };
+        // Endroit changé depuis par un collègue : l'étape est abandonnée (la suivante reste).
+        if !self.still_applies(site, &step, true) {
+            return Err(EditError::Outdated);
+        }
         match exec(site, &step.inverse) {
             Ok(_) => {
                 let applied = step.inverse.clone();
@@ -194,13 +298,13 @@ impl History {
         let Some(step) = self.undone.pop() else {
             return Ok(None);
         };
+        if !self.still_applies(site, &step, false) {
+            return Err(EditError::Outdated);
+        }
         match exec(site, &step.forward) {
             Ok(inverse) => {
                 let applied = step.forward.clone();
-                self.done.push(Step {
-                    forward: step.forward,
-                    inverse,
-                });
+                self.done.push(Step::new(step.forward, inverse));
                 Ok(Some(applied))
             }
             Err(e) => {
@@ -208,5 +312,145 @@ impl History {
                 Err(e)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::address::{Owner, Parent, Target};
+    use revel_model::{Attr, Node, Page};
+
+    fn el(id: &str, class: &str) -> Node {
+        Node::Element {
+            id: Some(id.into()),
+            tag: "p".into(),
+            attrs: vec![Attr {
+                name: "class".into(),
+                value: Some(class.into()),
+                when: None,
+            }],
+            children: vec![],
+        }
+    }
+
+    fn site() -> Site {
+        let mut s = Site::new("Essai", "fr");
+        s.pages = vec![Page {
+            id: "index".into(),
+            path: "/".into(),
+            layout: None,
+            props: Default::default(),
+            computed: Default::default(),
+            body: vec![el("a", "a"), el("b", "b"), el("c", "c")],
+            draft: false,
+            name: None,
+            code: Default::default(),
+        }];
+        s
+    }
+
+    fn at(id: &str) -> Target {
+        Target {
+            owner: Owner::Page("index".into()),
+            node: id.into(),
+        }
+    }
+
+    fn class(id: &str, v: &str) -> Command {
+        Command::SetAttr {
+            at: at(id),
+            name: "class".into(),
+            value: Some(v.into()),
+        }
+    }
+
+    fn body() -> Parent {
+        Parent {
+            owner: Owner::Page("index".into()),
+            node: None,
+            branch: Default::default(),
+        }
+    }
+
+    #[test]
+    fn annuler_apres_une_version_recue() {
+        let mut s = site();
+        let mut h = History::default();
+        h.apply(&mut s, class("a", "mienne"), false).unwrap();
+        h.apply(&mut s, class("b", "mienne"), false).unwrap();
+        // Version reçue : le collègue change `c` et `b`.
+        apply(&mut s, &class("c", "collegue")).unwrap();
+        apply(&mut s, &class("b", "collegue")).unwrap();
+        h.received(&["site.revel.json".to_string()]);
+        // `b` : changé depuis par le collègue, l'étape est abandonnée.
+        assert!(matches!(h.undo(&mut s), Err(EditError::Outdated)));
+        // `a` : toujours à moi, annulé ; le changement du collègue reste.
+        assert!(h.undo(&mut s).unwrap().is_some());
+        let classes: Vec<String> = s.pages[0]
+            .body
+            .iter()
+            .map(|n| match n {
+                Node::Element { attrs, .. } => attrs[0].value.clone().unwrap(),
+                _ => String::new(),
+            })
+            .collect();
+        assert_eq!(classes, vec!["a", "collegue", "collegue"]);
+        assert!(!h.can_undo());
+    }
+
+    #[test]
+    fn position_decalee_par_un_collegue() {
+        let mut s = site();
+        let mut h = History::default();
+        h.apply(
+            &mut s,
+            Command::Insert {
+                parent: body(),
+                index: 2,
+                node: el("n", "nouveau"),
+            },
+            false,
+        )
+        .unwrap();
+        // Le collègue ajoute un élément au début : l'élément ajouté est maintenant en 3e place.
+        apply(
+            &mut s,
+            &Command::Insert {
+                parent: body(),
+                index: 0,
+                node: el("x", "collegue"),
+            },
+        )
+        .unwrap();
+        h.received(&["site.revel.json".to_string()]);
+        let before = s.clone();
+        assert!(matches!(h.undo(&mut s), Err(EditError::Outdated)));
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn contenu_ecrit_par_un_collegue() {
+        let mut h = History::default();
+        h.done.push(Step::new(
+            Command::SetEntryField {
+                folder: "src/content/projets".into(),
+                file: "force".into(),
+                key: "title".into(),
+                value: Some("A".into()),
+            },
+            Command::SetEntryField {
+                folder: "src/content/projets".into(),
+                file: "force".into(),
+                key: "title".into(),
+                value: Some("B".into()),
+            },
+        ));
+        h.received(&["src/content/projets/autre.md".to_string()]);
+        assert!(!h.done[0].stale);
+        h.received(&["src/content/projets/force.md".to_string()]);
+        assert!(h.done[0].stale);
+        let mut s = site();
+        assert!(matches!(h.undo(&mut s), Err(EditError::Outdated)));
     }
 }

@@ -241,13 +241,12 @@ pub fn Menus(s: DocSession) -> impl IntoView {
         })
     };
     view! {
+        // Aucune liste de liens dans les gabarits : rien (partie retirée des paramètres).
+        {move || (!lists.with(Vec::is_empty)).then(|| view! {
         <section class="page settings-page">
             <header class="page-head"><h1 title=ui.t("menus-help")>{ui.t("settings-menus")}</h1></header>
             {move || {
                 let ls = lists.get();
-                if ls.is_empty() {
-                    return view! { <div class="section"><p class="muted">{ui.t("menus-none")}</p></div> }.into_any();
-                }
                 ls.into_iter().enumerate().map(|(n, l)| {
                     let list = StoredValue::new(l.clone());
                     let write = move |links: Vec<Link>| s.apply.run(list.with_value(|l| l.command(&links)));
@@ -309,9 +308,10 @@ pub fn Menus(s: DocSession) -> impl IntoView {
                             }>{icons::plus()}{ui.t("menus-add")}</button>
                         </div>
                     }
-                }).collect_view().into_any()
+                }).collect_view()
             }}
         </section>
+        })}
     }
 }
 

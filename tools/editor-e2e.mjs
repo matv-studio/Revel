@@ -422,6 +422,13 @@ try {
   await page.click('.layers .layer[data-tech*="section.hero"]');
   await page.waitForFunction(() => [...document.querySelectorAll('.editor-status .node-crumb')].some((c) => c.dataset.tech.startsWith('section.hero')));
   check('calques : ligne cliquée sélectionnée dans le canevas', true);
+  // Masquer (Ctrl+Maj+H) : l'élément disparaît du canevas aussitôt, sans recharger ; annulé.
+  await f.evaluate(() => { window.__hid = 1; });
+  await page.keyboard.press('Control+Shift+H');
+  f = await waitFrame(() => getComputedStyle(document.querySelector('section.hero')).display === 'none', 'calque masqué');
+  check('calque masqué : caché dans le canevas, sans rechargement', await f.evaluate(() => window.__hid === 1));
+  await page.click('.editor-toolbar .btn-undo');
+  f = await waitFrame(() => getComputedStyle(document.querySelector('section.hero')).display !== 'none', 'calque montré');
 
   const docBefore = await invoke('edit_open');
   const bodyOf = (site) => JSON.stringify(site.pages.find((p) => p.id === 'index').body);
@@ -1147,6 +1154,11 @@ try {
       await page.click('.hover-media[data-hover="display"] .hover-row .icon-btn');
       await page.waitForSelector('.hover-media[data-hover="trigger"] [data-hover="shown-in"] select');
       check('média au survol : élément survolé sélectionné, média où il s\'affiche', true);
+      // Champ de la vidéo : seulement les champs qui en donnent une (fichier, adresse de vidéo).
+      const srcOpts = await page.$$eval('.hover-media [data-hover="src-field"] select option', (o) => o.map((x) => x.value).filter(Boolean));
+      const noField = await page.$('.hover-media [data-hover="no-field"]');
+      check('média au survol : seuls les champs qui donnent une vidéo proposés',
+        (srcOpts.length > 0 || !!noField) && !srcOpts.some((v) => /^(title|titre|slug|client|description)$/.test(v)), srcOpts.join(', ') || 'aucun (message)');
       await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
       for (let i = 0; i < 30; i++) {
         if (JSON.stringify(await siteE()) === docE) break;
@@ -1608,6 +1620,140 @@ try {
     if (shots) await page.screenshot({ path: `${shots}/vue-cms.png` });
     await page.click('.view-tab[data-view="view-settings"]');
     await page.waitForSelector('.settings-nav');
+    // Paramètres (D-104) : rubrique ouverte raccordée à la page (ses parties listées) ;
+    // informations du site alignées, sans code affiché ; partie suivie au défilement.
+    {
+      await page.waitForSelector('.settings-sub[data-sub="site-info"] .siteinfo-row');
+      const tab = await page.$eval('.settings-nav-group.is-on', (g) => ({
+        parts: [...g.querySelectorAll('.settings-nav-part')].filter((x) => x.offsetParent).length,
+        bg: getComputedStyle(g).backgroundColor,
+        right: Math.round(g.getBoundingClientRect().right),
+      }));
+      const content = await page.$eval('.settings-content', (c) => ({ bg: getComputedStyle(c).backgroundColor, left: Math.round(c.getBoundingClientRect().left) }));
+      const raw = await page.$$eval('.siteinfo-row, .navlist-head', (rs) => rs.some((r) => /on\s*:\s*click|move \||=>/.test(r.textContent)));
+      const cols = await page.$$eval('.siteinfo-list .siteinfo-uses', (us) => new Set(us.map((u) => Math.round(u.getBoundingClientRect().right))).size);
+      check('paramètres : rubrique raccordée à la page (parties), informations du site alignées, sans code affiché',
+        tab.parts === 4 && tab.bg === content.bg && tab.right > content.left && !raw && cols === 1, `${tab.parts} parties, ${cols} colonne(s)`);
+      if (shots) await page.screenshot({ path: `${shots}/parametres-general.png` });
+      await page.$eval('.settings-content', (c) => c.scrollTo(0, c.scrollHeight));
+      await page.waitForFunction(() => document.querySelector('.settings-nav-part[data-part="forms"]')?.classList.contains('is-on'));
+      await page.click('.settings-nav-part[data-part="site-info"]');
+      await page.waitForFunction(() => {
+        const c = document.querySelector('.settings-content').getBoundingClientRect().top;
+        const t = document.querySelector('.settings-sub[data-sub="site-info"]').getBoundingClientRect().top;
+        return Math.abs(t - c) < 40;
+      });
+      check('paramètres : partie à l\'écran marquée dans le rail, aller à une partie', true);
+      await page.$eval('.settings-content', (c) => c.scrollTo(0, 0));
+    }
+    // Plan du site (D-103) : pages, collections, menus et liens ; zoom, déplacement, nœud
+    // déplacé (gardé dans le site), panneau, destination d'un lien changée, lien ajouté à un
+    // menu, page ouverte dans l'éditeur ; tout annulé.
+    {
+      const docM = await invoke('edit_open');
+      const doc0 = JSON.stringify(docM.site);
+      await page.click('.view-tab[data-view="view-map"]');
+      await page.waitForSelector('.map-node[data-node="page:index"]');
+      await page.waitForTimeout(400);
+      const keys = await page.$$eval('.map-node', (n) => n.map((x) => x.dataset.node));
+      const nEdges = await page.$$eval('.map-edge', (e) => e.length);
+      check('plan du site : pages, collections, parties communes et liens',
+        keys.includes('page:index') && keys.some((k) => k.startsWith('col:')) && keys.some((k) => k.startsWith('comp:')) && nEdges > 5,
+        `${keys.length} nœuds, ${nEdges} traits`);
+      if (shots) await page.screenshot({ path: `${shots}/plan-du-site.png` });
+      const tr = () => page.$eval('.map-world', (w) => w.style.transform);
+      const st = await page.locator('.map-stage').boundingBox();
+      const t0 = await tr();
+      await page.mouse.move(st.x + st.width / 2, st.y + st.height / 2);
+      await page.keyboard.down('Control');
+      await page.mouse.wheel(0, -240);
+      await page.keyboard.up('Control');
+      await page.waitForFunction((t) => document.querySelector('.map-world').style.transform !== t, t0);
+      const t1 = await tr();
+      // Plan déplacé (bouton du milieu, n'importe où).
+      await page.mouse.move(st.x + st.width / 2, st.y + st.height / 2);
+      await page.mouse.down({ button: 'middle' });
+      await page.mouse.move(st.x + st.width / 2 + 100, st.y + st.height / 2 + 60, { steps: 5 });
+      await page.mouse.up({ button: 'middle' });
+      const t2 = await tr();
+      check('plan du site : zoom (Ctrl+molette), déplacement (glisser)', t0 !== t1 && t1 !== t2, `${t0} → ${t1} → ${t2}`);
+      await page.keyboard.press('f');
+      // Nœud déplacé : position gardée dans le site.
+      const node = page.locator('.map-node[data-node="page:contact"]');
+      const nb = await node.boundingBox();
+      await page.mouse.move(nb.x + 30, nb.y + 12);
+      await page.mouse.down();
+      await page.mouse.move(nb.x + 130, nb.y + 92, { steps: 8 });
+      await page.mouse.up();
+      let saved = null;
+      for (let i = 0; i < 40 && !saved; i++) {
+        saved = (await invoke('edit_open')).site.library?.map?.['page:contact'] || null;
+        if (!saved) await page.waitForTimeout(100);
+      }
+      await page.waitForSelector('.map-panel .map-panel-title');
+      const title = (await page.textContent('.map-panel .map-panel-title')).trim();
+      check('plan du site : nœud déplacé (position gardée), sélectionné (panneau)', !!saved && title.length > 0, `${JSON.stringify(saved)} « ${title} »`);
+      // Lien écrit dans l'accueil : destination changée par le panneau du trait.
+      await page.click('.map-node[data-node="page:index"]', { position: { x: 20, y: 10 } });
+      await page.waitForSelector('.map-panel .map-link');
+      const row = page.locator('.map-panel .map-link:has(.icon-btn)').first();
+      if (await row.count()) {
+        const before = JSON.stringify((await invoke('edit_open')).site.pages);
+        await row.locator('.map-link-main').click();
+        await page.waitForSelector('.map-panel select');
+        const target = await page.$eval('.map-panel select', (sel) => [...sel.options].map((o) => o.value).find((v) => v === 'page:mentions-legales') || [...sel.options].map((o) => o.value).filter(Boolean).pop());
+        await page.selectOption('.map-panel select', target);
+        let changed = false;
+        for (let i = 0; i < 40 && !changed; i++) {
+          changed = JSON.stringify((await invoke('edit_open')).site.pages) !== before;
+          if (!changed) await page.waitForTimeout(100);
+        }
+        check('plan du site : destination d\'un lien changée (panneau du trait)', changed, target);
+      } else {
+        check('plan du site : lien écrit dans l\'accueil trouvé', false);
+      }
+      // Lien ajouté : point d'une page tiré sur une autre (lien écrit à la fin de la page).
+      await page.locator('.map-stage').focus();
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('f');
+      await page.waitForTimeout(300);
+      const port = page.locator('.map-node[data-node="page:contact"] .map-port');
+      const pb = await port.boundingBox();
+      const tb = await page.locator('.map-node[data-node="page:agence"]').boundingBox();
+      const hitAt = await page.evaluate(([x, y]) => String(document.elementFromPoint(x, y)?.className || ''), [pb.x + pb.width / 2, pb.y + pb.height / 2]);
+      await page.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2, { steps: 10 });
+      await page.mouse.up();
+      let added = false;
+      for (let i = 0; i < 40 && !added; i++) {
+        const body = (await invoke('edit_open')).site.pages.find((p) => p.id === 'contact')?.body || [];
+        added = JSON.stringify(body[body.length - 1] || {}).includes('"/agence/"');
+        if (!added) await page.waitForTimeout(100);
+      }
+      const notice = added ? (await page.waitForSelector('.map-notice').then((n) => n.textContent()).catch(() => '')) : `point : ${hitAt}`;
+      check('plan du site : lien ajouté (point d\'une page tiré sur une autre)', added, notice.trim());
+      if (shots) await page.screenshot({ path: `${shots}/plan-du-site-lien.png` });
+      // Tout annulé (Ctrl+Z dans le plan).
+      await page.locator('.map-stage').focus();
+      for (let i = 0; i < 8; i++) {
+        if (JSON.stringify((await invoke('edit_open')).site) === doc0) break;
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(400);
+      }
+      check('plan du site : Ctrl+Z, document identique', JSON.stringify((await invoke('edit_open')).site) === doc0);
+      // Double-clic : page ouverte dans l'éditeur.
+      await page.dblclick('.map-node[data-node="page:contact"]', { position: { x: 20, y: 10 } });
+      await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
+      f = await waitFrame(() => location.pathname === '/contact/', 'page ouverte depuis le plan');
+      check('plan du site : double-clic, page ouverte dans l\'éditeur', true);
+      // Retour à l'accueil (canevas marqué : la suite vérifie qu'il n'est pas rechargé).
+      await page.click('.pages .page-row[data-url="/"]');
+      f = await waitFrame(() => location.pathname === '/', 'accueil après le plan');
+      await f.evaluate(() => { window.__keep = 1; });
+      await page.click('.view-tab[data-view="view-settings"]');
+      await page.waitForSelector('.settings-nav');
+    }
     // Transition entre les pages (6.4) : Paramètres › Général, choisie puis retirée.
     const transition = async (v) => {
       for (let i = 0; i < 40; i++) {
@@ -2923,6 +3069,16 @@ try {
     await page.click('.site-menu-pop .menu-item:has-text("Réglages de Revel")');
     await page.waitForSelector('.section[data-section="translate"] :is(.packs-more, .packs-none, .pack)');
     const kept = await page.locator('.site-menu-btn').count() === 1;
+    // Rail des parties (D-104) : six parties, la partie choisie montrée et marquée.
+    const rail = await page.$$eval('.app-settings .settings-nav-item', (b) => b.map((x) => x.dataset.section));
+    await page.click('.app-settings .settings-nav-item[data-section="updates"]');
+    await page.waitForFunction(() => {
+      const c = document.querySelector('.app-settings .settings-content').getBoundingClientRect().top;
+      const t = document.querySelector('.settings-sub[data-sub="updates"]').getBoundingClientRect().top;
+      return Math.abs(t - c) < 40 || document.querySelector('.app-settings .settings-nav-group.is-on [data-section="updates"]');
+    });
+    check('réglages de Revel : rail des parties, aller à une partie', rail.length === 6, rail.join(', '));
+    if (shots) await page.screenshot({ path: `${shots}/reglages-revel.png` });
     await page.click('.site-menu-btn');
     await page.click('.site-menu-back');
     await page.waitForSelector('iframe.canvas-frame');

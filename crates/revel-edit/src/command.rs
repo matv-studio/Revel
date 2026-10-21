@@ -4,6 +4,7 @@ use revel_model::ids::{node_id, walk};
 use revel_model::{Attr, Breakpoint, Decl, ImageNode, Node, Site, StyleItem};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 use crate::EditError;
 use crate::address::{self, Parent, Target};
@@ -393,6 +394,10 @@ pub enum Command {
     SetShelf {
         kind: ShelfKind,
         shelf: revel_model::Shelf,
+    },
+    /// Positions des nœuds du plan du site (`None` : rangé d'après les adresses), D-103.
+    SetMapPositions {
+        positions: BTreeMap<String, Option<[i32; 2]>>,
     },
     /// Largeur d'un point de rupture changée ; les règles de style écrites pour lui suivent
     /// (`@media` réécrite). La largeur reste entre celles des points voisins du même sens (ordre
@@ -1494,6 +1499,17 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 kind: *kind,
                 shelf: std::mem::replace(slot, shelf.clone()),
             })
+        }
+        Command::SetMapPositions { positions } => {
+            let mut old = BTreeMap::new();
+            for (key, pos) in positions {
+                let before = match pos {
+                    Some(p) => site.library.map.insert(key.clone(), *p),
+                    None => site.library.map.remove(key),
+                };
+                old.insert(key.clone(), before);
+            }
+            Ok(Command::SetMapPositions { positions: old })
         }
         Command::SetBreakpoints { breakpoints } => {
             check_breakpoints(breakpoints)?;

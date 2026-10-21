@@ -189,6 +189,15 @@ fn modes_xml_et_texte() {
     .nodes;
     assert!(matches!(&n[0], Node::Html { .. }));
     assert!(matches!(&n[1], Node::If { .. }));
+    // Texte qui commence par une lettre accentuée (après une balise) : coupé entre deux caractères.
+    let n = parse("{{ a }}Été {{ b }}É", &o).unwrap().nodes;
+    assert_eq!(
+        n[1],
+        Node::Html {
+            html: "Été ".into()
+        }
+    );
+    assert_eq!(n[3], Node::Html { html: "É".into() });
 }
 
 #[test]

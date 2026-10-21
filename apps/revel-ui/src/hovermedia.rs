@@ -102,19 +102,55 @@ fn each_collection(d: &Site, each: &Target) -> Option<String> {
         })
 }
 
+const VIDEO_EXT: &[&str] = &["mp4", "webm", "mov", "m4v", "ogv", "ogg"];
+const IMAGE_EXT: &[&str] = &["jpg", "jpeg", "png", "webp", "avif", "gif", "svg"];
+
+/// Adresse d'un fichier vidéo (ou image) : extension du chemin, sans la requête.
+fn is_media_address(v: &str, image: bool) -> bool {
+    let path = v.split(['?', '#']).next().unwrap_or("").to_lowercase();
+    let ext = path.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+    (if image { IMAGE_EXT } else { VIDEO_EXT }).contains(&ext)
+}
+
+/// Le champ `f` peut-il donner une vidéo (ou une image) ? Image : champ image ; fichier ou
+/// texte : ses valeurs sont des adresses de média, ou, sans valeur encore, son nom le dit.
+fn holds_media(
+    f: &revel_protocol::CmsField,
+    entries: &[revel_protocol::CmsEntry],
+    image: bool,
+) -> bool {
+    let kind = f.kind.as_deref();
+    if kind == Some("image") {
+        return image;
+    }
+    if !matches!(kind, None | Some("string" | "text" | "file")) {
+        return false;
+    }
+    let values: Vec<&str> = entries
+        .iter()
+        .filter_map(|e| e.data.get(&f.name)?.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .take(50)
+        .collect();
+    if values.is_empty() {
+        let words = if image { POSTER_WORDS } else { VIDEO_WORDS };
+        let (n, l) = (
+            f.name.to_lowercase(),
+            f.label.as_deref().unwrap_or("").to_lowercase(),
+        );
+        return kind == Some("file") || words.iter().any(|w| n.contains(w) || l.contains(w));
+    }
+    values.iter().any(|v| is_media_address(v, image))
+}
+
 /// Champs d'une collection qui peuvent donner le média : vidéo (adresse, fichier) ou image.
 fn media_fields(c: Option<&CmsCollection>, image: bool) -> Vec<(String, String)> {
     c.map(|c| {
         c.fields
             .iter()
             .filter(|f| !f.list)
-            .filter(|f| {
-                if image {
-                    matches!(f.kind.as_deref(), Some("image" | "file"))
-                } else {
-                    matches!(f.kind.as_deref(), None | Some("string" | "text" | "file"))
-                }
-            })
+            .filter(|f| holds_media(f, &c.entries, image))
             .map(|f| {
                 (
                     f.name.clone(),
@@ -298,6 +334,9 @@ fn field_selects(
                 </select>
             </div>
         </label>
+        {move || (cols.with(|c| !c.is_empty()) && of(image).is_empty()).then(|| view! {
+            <p class="muted small" data-hover="no-field">{ui.t(if image { "hover-image-field-none" } else { "hover-video-field-none" })}</p>
+        })}
         {(!image).then(|| view! {
             <label class="field" data-hover="poster-field" title=ui.t("hover-poster-help")>
                 <span class="label">{ui.t("hover-poster-field")}</span>

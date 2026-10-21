@@ -1765,7 +1765,7 @@ seo-share-default = Default share image
 seo-canonical-base = Official address
 seo-canonical-base-help = Address the canonical links and share images of pages start from (https://…)
 seo-canonical-invalid = Invalid address (expected: https://…)
-settings-menus = Navigation
+settings-menus = Template link lists
 settings-navigation = Navigation
 menus-help = Link lists of the templates (site menu): text, address and order of each link
 menus-none = No link list found in the site templates
@@ -2326,7 +2326,7 @@ settings-transition = Page transition
 settings-transition-help = Going from one page of the site to another; no effect in Firefox, off for visitors who ask for less motion
 settings-feeds = RSS feeds
 settings-feeds-help = One feed per collection, refreshed on every build; feed readers find the latest entries there
-settings-feeds-none = No collection: RSS feeds list the entries of a collection.
+settings-feeds-none = No collection with a page per entry: an RSS feed lists entries that have their own page.
 settings-feed-path = Feed address
 settings-feed-limit = Number of entries
 settings-feed-title = Title
@@ -2568,6 +2568,8 @@ hover-video-field = Video of each entry
 hover-video-field-help = Field of the entry that gives the address of its video (.mp4 file from the media or direct link)
 hover-image-field = Image of each entry
 hover-image-field-help = Field of the entry that gives its image
+hover-video-field-none = No field of these entries holds a video. Add one in the CMS: a file, or a text field with the address of a video file (.mp4, .webm).
+hover-image-field-none = No field of these entries holds an image. Add an image field in the CMS.
 hover-poster-field = Waiting image
 hover-poster-help = Shown while the video loads
 hover-items = Changes on hover of
@@ -2715,3 +2717,116 @@ role-picker = Role
 role-picker-help = What this element does in the interactive element around it or in the page (tab, carousel arrow, filter button, consent button, sound switch…).
 pages-file-row-help = Server file: its text is edited in its settings
 canvas-render-error = The page can no longer be displayed after this change (the previous one stays shown; Ctrl+Z undoes it): { $error }
+# Plan du site (D-103)
+map-search = Find a page
+map-shared = Shared parts
+map-shared-help = Site menus, components and templates whose links appear on several pages
+map-external = Other sites
+map-external-help = Links to other sites, grouped by domain
+map-count-pages = { $count ->
+    [one] 1 page
+   *[other] { $count } pages
+}
+map-count-broken = { $count ->
+    [one] 1 address without a page
+   *[other] { $count } addresses without a page
+}
+map-count-orphans = { $count ->
+    [one] 1 page without a link
+   *[other] { $count } pages without a link
+}
+map-broken-help = Links lead to an address of the site that has no page (in red): create the page, redirect the address or change the links
+map-orphan-help = No link leads to this page: visitors only reach it by its address
+map-arrange = Arrange
+map-arrange-help = Put every node back in the order of the addresses, moved nodes included (Ctrl+Z undoes it)
+map-show-in-editor = Show in the Editor
+map-retargeted = { $count ->
+    [one] The link now leads to { $to }
+   *[other] { $count } links now lead to { $to }
+}
+map-linked-menu = Link to { $to } added to the menu
+map-linked-page = Link to { $to } added at the end of the page
+map-entries = { $count ->
+    [0] No entry
+    [one] 1 entry
+   *[other] { $count } entries
+}
+map-entries-help = Show or hide the entries of the collection on the map
+map-entries-show = Show the entries
+map-entries-hide = Hide the entries
+map-draft = Draft
+map-draft-help = Draft page: not published
+map-port-help = Drag onto a page to add a link to it
+map-menu-links = { $count ->
+    [one] 1 link
+   *[other] { $count } links
+}
+map-shared-pages = { $count ->
+    [0] On no page
+    [one] On 1 page
+   *[other] On { $count } pages
+}
+map-minimap = Overview: click or drag to move the view
+map-zoom-out = Zoom out (−)
+map-zoom-in = Zoom in (+)
+map-zoom-reset = Actual size (0)
+map-fit = Fit the whole map (F)
+map-key-link = Link
+map-key-list = List of entries
+map-key-menu = Menu
+map-key-redirect = Redirect
+map-key-broken = No page
+map-panel = Selection
+map-edge = Links
+map-retarget = Lead to
+map-retarget-help = Change where these links lead (written links, menu links, redirects; a list follows its collection). The end of the selected line can also be dragged onto another page.
+map-retarget-choose = Choose a page…
+map-links-count = { $count ->
+    [one] 1 link
+   *[other] { $count } links
+}
+map-links-in = Links to it ({ $count })
+map-links-out = Links from it ({ $count })
+map-none = None
+map-via-list = List of entries
+map-via-menu = Site menu
+map-via-menu-item = Menu link
+map-via-redirect = Redirect
+map-via-arg = Component value
+map-redirected-help = The address written in the link redirects (301) to this page
+map-kind-page = Page
+map-kind-collection = Collection
+map-kind-entry = Entry
+map-kind-layout = Template
+map-kind-component = Component
+map-kind-menu = Site menu
+map-kind-missing = Address without a page
+map-kind-external = Other site
+map-page-name = Name
+map-page-path = Address
+map-page-path-help = Changing the address of a published page adds a redirect from the old one
+map-page-path-taken = Invalid address, or already used by another page
+map-open = Open in the Editor
+map-new-child = New page inside
+map-open-entry = Edit the entry
+map-open-template = Edit the template
+map-open-template-help = Opens the page of the first entry in the Editor: changes apply to every entry
+map-open-cms = Open in the CMS
+map-edit-menus = Edit the menus
+map-menu-help = Drag its point onto a page to add a link to this menu.
+map-shared-note = Its links are on every page that shows it.
+map-missing-help = Links lead to this address, but no page has it.
+map-missing-redirected = This old address redirects to another page.
+map-create-page = Create this page
+map-redirect = Redirect to
+map-redirect-help = Permanent redirect (301) from this address to a page
+map-open-site = Open the site
+view-map = Sitemap
+
+# Paramètres (D-104)
+settings-general-lead = Name, public address and language of the site, RSS feeds, structure and environments.
+settings-seo-lead = Sitemap, robots.txt, sharing image and organization: what search engines and social networks read.
+settings-publish-lead = Where the site is published (SFTP hosting): checked and sent from here.
+settings-app-general-lead = Language, theme and colour of Revel, and the folder of new sites.
+settings-accounts-lead = Accounts used by Revel, and the name written on the versions you save.
+siteinfo-remove-used = Still used: unlink it where it is used before removing it

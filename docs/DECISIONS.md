@@ -895,6 +895,50 @@ connue d'avance → son contenu. Site cobaye d'Alunites : 273 → 0 point ; 13 p
 préférences de mouvement : aucun écart de styles calculés ni de captures ; `.htaccess` et consignes aux
 moteurs identiques en recette.
 
+**D-103 — 19/10/2026 — prise.** **Plan du site nodal.** Nouvel onglet « Plan du site », avant les
+Paramètres : toutes les pages et ce qui les relie, sur un plan infini à points (comme un canevas nodal de
+type Weavy : fond glissé ou molette pour se déplacer, Ctrl+molette ou pincement pour zoomer, F pour tout
+voir, minicarte cliquable). Le relevé des liens est dans `revel-edit` (`linkmap`), utilisé aussi par l'outil
+`get_site_map` des assistants :
+- nœuds : pages ; collections qui ont une page par contenu (contenus dépliables) ; menus du site,
+  composants et gabarits qui portent des liens (« parties communes », avec le nombre de pages qui les
+  affichent) ; adresses du site sans page (en rouge) ; autres sites (par domaine, masqués par défaut) ;
+- liens : lien écrit (`href`, `{{ '/x/' | url }}`, relatif, adresse absolue du site, adresse d'une autre
+  langue), valeur d'un composant (`href: "'/contact/'"`), lien d'un menu du site, liste de contenus (vers la
+  collection), liste d'un menu (vers le menu), redirection ; une adresse redirigée mène à sa destination ;
+  plusieurs liens entre deux nœuds : un trait plus épais ; un gabarit propre à une collection est le
+  modèle de ses pages (ses liens partent de la collection) ;
+- rangement automatique d'après les adresses (page parente à gauche ; une collection sous la page qui la
+  liste) ; un nœud déplacé garde sa place dans le site (`library.map`, commande `set_map_positions`,
+  annulable), « Ranger » rend tout au rangement automatique ;
+- ajuster les liens : bout du trait sélectionné tiré sur une autre page, ou « Mener à » dans le panneau
+  (lien écrit, lien de menu, redirection ; requête et ancre gardées) ; point d'un menu tiré sur une page :
+  lien ajouté au menu ; point d'une page : lien ajouté à la fin de la page (« Montrer dans l'éditeur ») ;
+- panneau : nom, adresse (redirection de l'ancienne si la page est publiée), brouillon, ouvrir dans
+  l'éditeur (double-clic), nouvelle page dedans, dupliquer, supprimer ; adresse sans page : créer la page ou
+  rediriger l'adresse ; liens entrants et sortants (« Montrer dans l'éditeur » sélectionne l'élément) ;
+  pages sans lien qui y mène signalées.
+Ctrl+Z annule dans le plan (même historique que l'éditeur).
+
+**D-104 — 19/10/2026 — prise.** **Paramètres réorganisés.** Paramètres du site et réglages de Revel ont la
+même forme : un rail à gauche ; la rubrique ouverte prend la teinte de la page et s'y raccorde comme
+l'onglet actif de la barre supérieure (contour qui en fait le tour, coins incurvés) et liste ses parties
+(partie à l'écran marquée au défilement, clic : la partie montrée) ; chaque partie a son titre et sa
+présentation à gauche (restent visibles en défilant), ses réglages à droite, au centre de la page (plus de
+colonnes de hauteurs différentes côte à côte ni de grande zone vide). Partie vide retirée (listes de liens
+des gabarits absentes) ; flux RSS proposés seulement pour les collections qui ont des pages ; informations du
+site en colonnes alignées (nom, valeur, utilisations, retrait), retrait d'une valeur utilisée expliqué.
+
+**D-105 — 19/10/2026 — prise.** **Calque masqué caché dans le canevas, champs de média.** La règle qui cache
+les calques masqués est posée par le script du canevas dès son chargement (un calque masqué sur place, sans
+nouveau rendu, disparaît aussitôt) et ne compte plus dans l'en-tête comparé (plus de rechargement). Média au
+survol : « Vidéo de chaque contenu » ne propose que les champs qui peuvent en donner une (fichier, ou texte
+dont les valeurs sont des adresses de vidéo `.mp4`, `.webm`, `.mov`… ; sans valeur encore : nom qui le dit),
+l'image d'attente que des champs d'image ; aucun champ : message qui dit quoi ajouter au CMS. Valeurs
+d'attribut qui contiennent `>` dans les vues de l'interface toujours entre accolades (sinon la balise se
+fermait et le code s'affichait). Texte d'un fichier du serveur ou d'un flux qui commence par une lettre
+accentuée après une balise : coupé entre deux caractères (le rendu s'arrêtait).
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

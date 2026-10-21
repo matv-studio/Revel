@@ -183,8 +183,9 @@ pub fn SiteInfo(s: DocSession, path: String) -> impl IntoView {
                                         <span class="siteinfo-uses muted small" title=ui.t("siteinfo-uses-help")>
                                             {ui.now("siteinfo-uses", &[("count", uses.to_string())])}
                                         </span>
-                                        <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
-                                            disabled=uses > 0
+                                        <button class="icon-btn icon-btn--small siteinfo-remove" aria-label=ui.t("action-remove")
+                                            title={if uses > 0 { ui.tx("siteinfo-remove-used", &[]) } else { ui.tx("action-remove", &[]) }}
+                                            disabled={uses > 0}
                                             on:click=move |_| write(s, p.get_value(), None)>{icons::trash()}</button>
                                     </div>
                                 }
@@ -279,9 +280,10 @@ pub fn SiteMenus(s: DocSession, path: String) -> impl IntoView {
                             <h2 class="navlist-head">
                                 <input class="input navlist-name" aria-label=ui.t("sitemenus-name") prop:value=title.clone()
                                     on:change=move |e| s.apply.run(Command::SetSiteLabel { path: format!("{}.{}", si::MENUS, key.get_value()), label: Some(event_target_value(&e)) })/>
-                                <span class="muted small">{ui.now("siteinfo-uses", &[("count", uses.to_string())])}</span>
-                                <button class="icon-btn icon-btn--small" title=ui.t("sitemenus-remove") aria-label=ui.t("sitemenus-remove")
-                                    disabled=uses > 0
+                                <span class="siteinfo-uses muted small">{ui.now("siteinfo-uses", &[("count", uses.to_string())])}</span>
+                                <button class="icon-btn icon-btn--small siteinfo-remove" aria-label=ui.t("sitemenus-remove")
+                                    title={if uses > 0 { ui.tx("siteinfo-remove-used", &[]) } else { ui.tx("sitemenus-remove", &[]) }}
+                                    disabled={uses > 0}
                                     on:click=move |_| write(s, vec![si::MENUS.to_string(), key.get_value()], None)>{icons::trash()}</button>
                             </h2>
                             <datalist id=dl.clone()>
@@ -335,7 +337,7 @@ pub fn SiteMenus(s: DocSession, path: String) -> impl IntoView {
                     }
                 }).collect_view().into_any()
             }}
-            <div class="section siteinfo-add">
+            <div class="section sitemenus-add">
                 <input class="input" placeholder=ui.t("sitemenus-new") aria-label=ui.t("sitemenus-new")
                     prop:value=move || new_name.get() on:input=move |e| new_name.set(event_target_value(&e))
                     on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { create() }/>

@@ -1768,7 +1768,7 @@ seo-share-default = Image de partage par défaut
 seo-canonical-base = Adresse officielle
 seo-canonical-base-help = Adresse d’où partent les liens canoniques et les images de partage des pages (https://…)
 seo-canonical-invalid = Adresse invalide (attendue : https://…)
-settings-menus = Navigation
+settings-menus = Listes de liens des gabarits
 settings-navigation = Navigation
 menus-help = Listes de liens des gabarits (menu du site) : texte, adresse et ordre de chaque lien
 menus-none = Aucune liste de liens reconnue dans les gabarits du site
@@ -2329,7 +2329,7 @@ settings-transition = Transition entre les pages
 settings-transition-help = Passage d'une page à l'autre du site ; sans effet dans Firefox, coupé pour les visiteurs qui demandent moins de mouvement
 settings-feeds = Flux RSS
 settings-feeds-help = Un flux par collection, mis à jour à chaque génération ; les lecteurs de flux y trouvent les derniers contenus
-settings-feeds-none = Aucune collection : les flux RSS listent les contenus d'une collection.
+settings-feeds-none = Aucune collection avec une page par contenu : un flux RSS liste des contenus qui ont leur page.
 settings-feed-path = Adresse du flux
 settings-feed-limit = Nombre de contenus
 settings-feed-title = Titre
@@ -2571,6 +2571,8 @@ hover-video-field = Vidéo de chaque contenu
 hover-video-field-help = Champ du contenu qui donne l'adresse de sa vidéo (fichier .mp4 des médias ou lien direct)
 hover-image-field = Image de chaque contenu
 hover-image-field-help = Champ du contenu qui donne son image
+hover-video-field-none = Aucun champ de ces contenus ne donne une vidéo. Ajoutez-en un dans le CMS : fichier, ou texte avec l'adresse d'un fichier vidéo (.mp4, .webm).
+hover-image-field-none = Aucun champ de ces contenus ne donne une image. Ajoutez un champ image dans le CMS.
 hover-poster-field = Image d'attente
 hover-poster-help = Montrée pendant le chargement de la vidéo
 hover-items = Change au survol de
@@ -2718,3 +2720,116 @@ role-picker = Rôle
 role-picker-help = Ce que fait cet élément dans l'élément interactif qui l'entoure ou dans la page (onglet, flèche d'un carrousel, bouton de filtre, bouton du consentement, interrupteur des sons…).
 pages-file-row-help = Fichier du serveur : son texte se modifie dans ses paramètres
 canvas-render-error = La page ne peut plus s'afficher après cette modification (la précédente reste affichée ; Ctrl+Z l'annule) : { $error }
+# Plan du site (D-103)
+map-search = Chercher une page
+map-shared = Parties communes
+map-shared-help = Menus du site, composants et gabarits dont les liens sont sur plusieurs pages
+map-external = Autres sites
+map-external-help = Liens vers d'autres sites, regroupés par domaine
+map-count-pages = { $count ->
+    [one] 1 page
+   *[other] { $count } pages
+}
+map-count-broken = { $count ->
+    [one] 1 adresse sans page
+   *[other] { $count } adresses sans page
+}
+map-count-orphans = { $count ->
+    [one] 1 page sans lien
+   *[other] { $count } pages sans lien
+}
+map-broken-help = Des liens mènent à une adresse du site qui n'a pas de page (en rouge) : créer la page, rediriger l'adresse ou changer les liens
+map-orphan-help = Aucun lien ne mène à cette page : on n'y arrive que par son adresse
+map-arrange = Ranger
+map-arrange-help = Remet chaque nœud dans l'ordre des adresses, nœuds déplacés compris (Ctrl+Z l'annule)
+map-show-in-editor = Montrer dans l'éditeur
+map-retargeted = { $count ->
+    [one] Le lien mène maintenant à { $to }
+   *[other] { $count } liens mènent maintenant à { $to }
+}
+map-linked-menu = Lien vers { $to } ajouté au menu
+map-linked-page = Lien vers { $to } ajouté à la fin de la page
+map-entries = { $count ->
+    [0] Aucun contenu
+    [one] 1 contenu
+   *[other] { $count } contenus
+}
+map-entries-help = Montrer ou cacher les contenus de la collection sur le plan
+map-entries-show = Montrer les contenus
+map-entries-hide = Cacher les contenus
+map-draft = Brouillon
+map-draft-help = Page en brouillon : non publiée
+map-port-help = Glisser sur une page pour y ajouter un lien
+map-menu-links = { $count ->
+    [one] 1 lien
+   *[other] { $count } liens
+}
+map-shared-pages = { $count ->
+    [0] Sur aucune page
+    [one] Sur 1 page
+   *[other] Sur { $count } pages
+}
+map-minimap = Vue d'ensemble : cliquer ou glisser pour déplacer la vue
+map-zoom-out = Dézoomer (−)
+map-zoom-in = Zoomer (+)
+map-zoom-reset = Taille réelle (0)
+map-fit = Tout le plan (F)
+map-key-link = Lien
+map-key-list = Liste de contenus
+map-key-menu = Menu
+map-key-redirect = Redirection
+map-key-broken = Sans page
+map-panel = Sélection
+map-edge = Liens
+map-retarget = Mener à
+map-retarget-help = Change la destination de ces liens (liens écrits, liens d'un menu, redirections ; une liste suit sa collection). Le bout du trait sélectionné se glisse aussi sur une autre page.
+map-retarget-choose = Choisir une page…
+map-links-count = { $count ->
+    [one] 1 lien
+   *[other] { $count } liens
+}
+map-links-in = Liens qui y mènent ({ $count })
+map-links-out = Liens qui en partent ({ $count })
+map-none = Aucun
+map-via-list = Liste de contenus
+map-via-menu = Menu du site
+map-via-menu-item = Lien du menu
+map-via-redirect = Redirection
+map-via-arg = Valeur d'un composant
+map-redirected-help = L'adresse écrite dans le lien est redirigée (301) vers cette page
+map-kind-page = Page
+map-kind-collection = Collection
+map-kind-entry = Contenu
+map-kind-layout = Gabarit
+map-kind-component = Composant
+map-kind-menu = Menu du site
+map-kind-missing = Adresse sans page
+map-kind-external = Autre site
+map-page-name = Nom
+map-page-path = Adresse
+map-page-path-help = Changer l'adresse d'une page publiée ajoute une redirection depuis l'ancienne
+map-page-path-taken = Adresse invalide, ou déjà prise par une autre page
+map-open = Ouvrir dans l'éditeur
+map-new-child = Nouvelle page dedans
+map-open-entry = Modifier le contenu
+map-open-template = Modifier le modèle
+map-open-template-help = Ouvre la page du premier contenu dans l'éditeur : les changements valent pour tous les contenus
+map-open-cms = Ouvrir dans le CMS
+map-edit-menus = Modifier les menus
+map-menu-help = Glisser son point sur une page pour ajouter un lien à ce menu.
+map-shared-note = Ses liens sont sur chaque page qui l'affiche.
+map-missing-help = Des liens mènent à cette adresse, mais aucune page ne l'a.
+map-missing-redirected = Cette ancienne adresse redirige vers une autre page.
+map-create-page = Créer cette page
+map-redirect = Rediriger vers
+map-redirect-help = Redirection permanente (301) de cette adresse vers une page
+map-open-site = Ouvrir le site
+view-map = Plan du site
+
+# Paramètres (D-104)
+settings-general-lead = Nom, adresse publique et langue du site, flux RSS, structure et environnements.
+settings-seo-lead = Plan du site, robots.txt, image de partage et organisation : ce que lisent les moteurs de recherche et les réseaux sociaux.
+settings-publish-lead = Où le site est publié (hébergement SFTP) : vérifié et envoyé d'ici.
+settings-app-general-lead = Langue, thème et couleur de Revel, et dossier des nouveaux sites.
+settings-accounts-lead = Comptes utilisés par Revel, et nom inscrit sur les versions que vous enregistrez.
+siteinfo-remove-used = Encore utilisée : la délier là où elle sert avant de la retirer

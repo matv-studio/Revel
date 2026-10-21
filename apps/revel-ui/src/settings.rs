@@ -11,37 +11,83 @@ use revel_protocol::{AppSettings, PackState, TranslateEvent, TranslatePack};
 /// Couleurs proposées (une seule est utilisée à la fois).
 const PRESETS: &[&str] = &["#3D7EFF", "#7C5CFF", "#1F9D6B", "#E8890C", "#E5487A"];
 
-/// Réglages de l'application sur une seule page : cartes rangées en colonnes (général, comptes,
-/// traduction automatique, assistants IA), sans navigation ni page presque vide.
+/// Parties des réglages de Revel : (clé, titre, présentation).
+const PARTS: &[(&str, &str, &str)] = &[
+    ("general", "settings-general", "settings-app-general-lead"),
+    ("accounts", "settings-accounts", "settings-accounts-lead"),
+    ("translate", "settings-translate", "settings-translate-help"),
+    ("updates", "update-title", "update-help"),
+    (
+        "build-tools",
+        "settings-build-tools",
+        "settings-build-tools-help",
+    ),
+    ("assistants", "settings-mcp", "settings-mcp-help"),
+];
+
+/// Réglages de l'application sur une seule page, comme les paramètres d'un site (D-104) : rail
+/// des parties à gauche (la partie à l'écran raccordée à la page), chaque partie avec son titre
+/// et sa présentation à gauche, ses réglages à droite.
 #[component]
 pub fn Settings() -> impl IntoView {
     let ui = expect_context::<Ui>();
+    let content = NodeRef::<leptos::html::Div>::new();
+    let current = RwSignal::new(PARTS[0].0.to_string());
+    let shown = RwSignal::new(PARTS.iter().map(|p| p.0.to_string()).collect::<Vec<_>>());
+    let spy = move || crate::site::scroll_spy(content, current, shown);
+    let part = move |key: &'static str, body: AnyView| {
+        let (_, title, lead) = PARTS
+            .iter()
+            .find(|p| p.0 == key)
+            .copied()
+            .unwrap_or(PARTS[0]);
+        crate::site::settings_part(ui, key, title, lead, body)
+    };
     view! {
-        <div class="app-settings">
-            <div class="settings-cards">
-                <General/>
-                <section class="section settings-card" data-section="accounts">
-                    <h2>{ui.t("settings-accounts")}</h2>
-                    <div class="form-grid">
-                        <span class="label" title=ui.t("settings-github-help")>"GitHub"</span>
-                        <crate::account::GithubAccount/>
-                        // Nom inscrit sur les versions (travail à plusieurs, D-89).
-                        <label class="label" for="settings-author" title=ui.t("settings-author-help")>{ui.t("settings-author")}</label>
-                        <input id="settings-author" class="input settings-author" spellcheck="false" autocomplete="name"
-                            placeholder=ui.t("settings-author-placeholder") title=ui.t("settings-author-help")
-                            prop:value=move || ui.settings.with(|s| s.author.clone().unwrap_or_default())
-                            on:change=move |e| {
-                                let v = event_target_value(&e).trim().to_string();
-                                update(ui, &|s| s.author = (!v.is_empty()).then(|| v.clone()));
-                            }/>
-                    </div>
-                </section>
-                <TranslatePacks/>
-                <Updates/>
-                <BuildToolsCard/>
-                <section class="settings-card settings-card--bare" data-section="assistants">
-                    <crate::assistants::Assistants/>
-                </section>
+        <div class="settings-layout app-settings">
+            <nav class="settings-nav" aria-label=ui.t("nav-settings")>
+                {PARTS.iter().map(|(key, title, _)| {
+                    let key: &'static str = key;
+                    let on = move || current.with(|c| c == key);
+                    view! {
+                        <div class="settings-nav-group" class:is-on=on>
+                            <button class="settings-nav-item" class:is-on=on data-section=key
+                                aria-current=move || on().then_some("location")
+                                on:click=move |_| { current.set(key.to_string()); crate::site::scroll_to_part(key) }>
+                                <span>{ui.t(title)}</span>
+                            </button>
+                        </div>
+                    }
+                }).collect_view()}
+            </nav>
+            <div class="settings-content" node_ref=content on:scroll=move |_| spy()>
+                {part("general", view! { <General/> }.into_any())}
+                {part("accounts", view! {
+                    <section class="section settings-card" data-section="accounts">
+                        <h2>{ui.t("settings-accounts")}</h2>
+                        <div class="form-grid">
+                            <span class="label" title=ui.t("settings-github-help")>"GitHub"</span>
+                            <crate::account::GithubAccount/>
+                            // Nom inscrit sur les versions (travail à plusieurs, D-89).
+                            <label class="label" for="settings-author" title=ui.t("settings-author-help")>{ui.t("settings-author")}</label>
+                            <input id="settings-author" class="input settings-author" spellcheck="false" autocomplete="name"
+                                placeholder=ui.t("settings-author-placeholder") title=ui.t("settings-author-help")
+                                prop:value=move || ui.settings.with(|s| s.author.clone().unwrap_or_default())
+                                on:change=move |e| {
+                                    let v = event_target_value(&e).trim().to_string();
+                                    update(ui, &|s| s.author = (!v.is_empty()).then(|| v.clone()));
+                                }/>
+                        </div>
+                    </section>
+                }.into_any())}
+                {part("translate", view! { <TranslatePacks/> }.into_any())}
+                {part("updates", view! { <Updates/> }.into_any())}
+                {part("build-tools", view! { <BuildToolsCard/> }.into_any())}
+                {part("assistants", view! {
+                    <section class="settings-card settings-card--bare" data-section="assistants">
+                        <crate::assistants::Assistants/>
+                    </section>
+                }.into_any())}
             </div>
         </div>
     }

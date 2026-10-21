@@ -881,6 +881,7 @@ impl Ed {
                 cmd,
                 Command::SetBreakpoints { .. }
                     | Command::SetShelf { .. }
+                    | Command::SetMapPositions { .. }
                     | Command::SetRedirects { .. }
                     | Command::SetSeoSettings { .. }
                     | Command::SetFormSettings { .. }
@@ -2508,6 +2509,34 @@ pub fn node_label(ui: Ui, n: &revel_model::Node) -> String {
 }
 
 /// Balise et classes (hors expressions) d'un nœud.
+/// Élément demandé par une autre vue (plan du site) : sélectionné et montré dans la page.
+fn take_goto_node(ui: Ui, ed: Ed) {
+    let Some(id) = ui.goto_node.get_untracked() else {
+        return;
+    };
+    ui.goto_node.set(None);
+    let found = ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let mut out = None;
+        for (_, _, nodes) in d.owners() {
+            revel_model::ids::walk(nodes, &mut |n| {
+                if out.is_none() && revel_model::ids::node_id(n) == Some(id.as_str()) {
+                    out = Some((node_tag_class(n).0, node_label(ui, n)));
+                }
+            });
+        }
+        out
+    });
+    if let Some((tag, label)) = found {
+        ed.selected.set(Some(Selection {
+            id: id.clone(),
+            tag,
+            label,
+        }));
+        ed.select_and_reveal(&id);
+    }
+}
+
 fn node_tag_class(n: &revel_model::Node) -> (String, String) {
     match n {
         revel_model::Node::Element { tag, attrs, .. } => {
@@ -2788,6 +2817,10 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 ed.page.set(url);
                 ed.scroll.set((0.0, 0.0));
                 ed.selected.set(None);
+            } else {
+                // Page déjà affichée : élément demandé sélectionné tout de suite (sinon quand le
+                // canevas l'a chargée).
+                take_goto_node(ui, ed);
             }
         }
     });
@@ -2872,6 +2905,9 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 if let Some(s) = ed.selected.get_untracked() {
                     ed.post(serde_json::json!({ "type": "select", "id": s.id }));
                     ed.post_multi();
+                }
+                if active {
+                    take_goto_node(ui, ed);
                 }
             }
             FromCanvas::RenderError { text } => {

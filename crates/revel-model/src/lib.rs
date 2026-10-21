@@ -91,6 +91,10 @@ pub struct Library {
     /// Texte alternatif par défaut d'un média (adresse -> texte), repris quand l'image est placée.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub alt: BTreeMap<String, String>,
+    /// Plan du site (D-103) : position choisie de chaque nœud déplacé (clé du nœud -> `[x, y]`) ;
+    /// les autres sont rangés d'après les adresses.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub map: BTreeMap<String, [i32; 2]>,
 }
 
 impl Library {
@@ -99,6 +103,7 @@ impl Library {
             && self.components.is_empty()
             && self.pages.is_empty()
             && self.alt.is_empty()
+            && self.map.is_empty()
     }
 }
 

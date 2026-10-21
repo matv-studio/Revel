@@ -4,6 +4,7 @@ use crate::{Route, Section, Tab, Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_protocol::{BuildEvent, BuildPhase, BuildSummary, Failure, SiteSummary};
+use wasm_bindgen::JsCast;
 
 /// Vues d'un site. L'éditeur, une fois ouvert, reste en place (caché) pendant que les autres
 /// vues sont affichées : on y revient sans recharger le canevas.
@@ -19,7 +20,8 @@ pub fn SiteView(site: SiteSummary) -> impl IntoView {
         Tab::Editor => 0,
         Tab::Cms => 1,
         Tab::Locales => 2,
-        Tab::Settings(_) => 3,
+        Tab::Map => 3,
+        Tab::Settings(_) => 4,
     };
     let dir = Memo::new(move |prev: Option<&(i32, i32, bool)>| {
         let now = order(tab.get());
@@ -59,6 +61,7 @@ pub fn SiteView(site: SiteSummary) -> impl IntoView {
                 Tab::Editor => ().into_any(),
                 Tab::Cms => view! { <div class="view-pane"><crate::cms::CmsView site=site.get_value()/></div> }.into_any(),
                 Tab::Locales => view! { <div class="view-pane view-pane--scroll"><crate::locales::Locales site=site.get_value()/></div> }.into_any(),
+                Tab::Map => view! { <div class="view-pane"><crate::sitemap::SiteMap site=site.get_value()/></div> }.into_any(),
                 Tab::Settings(sec) => view! { <div class="view-pane" class:is-quiet=quiet()><SiteSettings site=site.get_value() section=sec/></div> }.into_any(),
             }}
         </div>
@@ -161,33 +164,155 @@ fn group_of(s: Section) -> Section {
     }
 }
 
-/// Paramètres du site : rubriques à gauche (comme les réglages d'un site Webflow), contenu à droite.
+/// Parties de chaque rubrique : (clé, titre, présentation).
+fn parts_of(group: Section) -> &'static [(&'static str, &'static str, &'static str)] {
+    match group {
+        Section::General => &[
+            ("general", "settings-general", "settings-general-lead"),
+            ("site-info", "siteinfo-title", "siteinfo-help"),
+            ("seo", "settings-seo", "settings-seo-lead"),
+            ("forms", "settings-forms", "forms-help"),
+        ],
+        Section::Publish => &[
+            ("publish", "settings-publish", "settings-publish-lead"),
+            ("export", "export-title", "export-lead"),
+        ],
+        Section::Fonts => &[("fonts", "settings-fonts", "fonts-help")],
+        Section::Code => &[("code", "settings-code", "code-help")],
+        Section::Versions => &[("versions", "settings-versions", "versions-help")],
+        _ => &[
+            ("site-menus", "sitemenus-title", "sitemenus-help"),
+            ("menus", "settings-menus", "menus-help"),
+            ("redirects", "settings-redirects", "redirects-help"),
+        ],
+    }
+}
+
+/// Une partie des paramètres : titre et présentation à gauche, réglages à droite (D-104).
+pub(crate) fn settings_part(
+    ui: Ui,
+    key: &'static str,
+    title: &'static str,
+    lead: &'static str,
+    body: AnyView,
+) -> AnyView {
+    view! {
+        <section class="settings-sub" data-sub=key id=format!("set-{key}")>
+            <header class="settings-sub-head">
+                <h2>{ui.t(title)}</h2>
+                <p class="settings-sub-lead">{ui.t(lead)}</p>
+            </header>
+            <div class="settings-sub-body">{body}</div>
+        </section>
+    }
+    .into_any()
+}
+
+/// Partie des paramètres montrée en haut de la zone qui défile (rubrique en cours d'un rail) ;
+/// parties vides (rien à régler) retirées du rail.
+pub(crate) fn scroll_spy(
+    content: NodeRef<leptos::html::Div>,
+    current: RwSignal<String>,
+    shown: RwSignal<Vec<String>>,
+) {
+    let Some(el) = content.get_untracked() else {
+        return;
+    };
+    let top = el.get_bounding_client_rect().top();
+    let Ok(list) = el.query_selector_all(".settings-sub") else {
+        return;
+    };
+    let mut on = None;
+    let mut keys = Vec::new();
+    // Bas de la zone atteint : la dernière partie est celle montrée.
+    let end = el.scroll_top() + el.client_height() >= el.scroll_height() - 4;
+    for i in 0..list.length() {
+        let Some(n) = list
+            .item(i)
+            .and_then(|n| n.dyn_into::<web_sys::HtmlElement>().ok())
+        else {
+            continue;
+        };
+        let empty = n
+            .query_selector(".settings-sub-body")
+            .ok()
+            .flatten()
+            .is_some_and(|b| {
+                b.child_element_count() == 0 || b.text_content().is_none_or(|t| t.trim().is_empty())
+            });
+        if empty || n.offset_height() == 0 {
+            continue;
+        }
+        let key = n.get_attribute("data-sub").unwrap_or_default();
+        if on.is_none() || n.get_bounding_client_rect().top() - top <= 96.0 || end {
+            on = Some(key.clone());
+        }
+        keys.push(key);
+    }
+    if shown.get_untracked() != keys {
+        shown.set(keys);
+    }
+    if let Some(k) = on
+        && current.get_untracked() != k
+    {
+        current.set(k);
+    }
+}
+
+/// Va à une partie des paramètres (défilement doux, sauf mouvement réduit).
+pub(crate) fn scroll_to_part(key: &str) {
+    if let Ok(Some(el)) = document().query_selector(&format!(".settings-sub[data-sub=\"{key}\"]")) {
+        let opts = web_sys::ScrollIntoViewOptions::new();
+        let reduce = window()
+            .match_media("(prefers-reduced-motion: reduce)")
+            .ok()
+            .flatten()
+            .is_some_and(|m| m.matches());
+        opts.set_behavior(if reduce {
+            web_sys::ScrollBehavior::Instant
+        } else {
+            web_sys::ScrollBehavior::Smooth
+        });
+        opts.set_block(web_sys::ScrollLogicalPosition::Start);
+        el.scroll_into_view_with_scroll_into_view_options(&opts);
+    }
+}
+
+/// Paramètres du site : rubriques dans un rail à gauche ; la rubrique ouverte, raccordée à la
+/// page comme un onglet, liste ses parties (D-104). Chaque partie : titre et présentation à
+/// gauche, réglages à droite.
 #[component]
 fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let group = group_of(section);
-    let sub =
-        |key: &'static str, v: AnyView| view! { <div class="settings-sub" data-sub=key>{v}</div> };
+    let part = |key: &'static str, v: AnyView| {
+        let (_, title, lead) = parts_of(group)
+            .iter()
+            .find(|p| p.0 == key)
+            .copied()
+            .unwrap_or((key, "settings-general", "settings-general-lead"));
+        settings_part(ui, key, title, lead, v)
+    };
     let body = match group {
         Section::General => view! {
-            {sub("general", view! { <crate::sitesettings::General site=site.clone()/> }.into_any())}
-            {sub("site-info", view! { <crate::siteinfo::SiteInfo s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
-            {sub("seo", view! { <Seo site=site.clone()/> }.into_any())}
-            {sub("forms", view! { <Forms site=site.clone()/> }.into_any())}
+            {part("general", view! { <crate::sitesettings::General site=site.clone()/> }.into_any())}
+            {part("site-info", view! { <crate::siteinfo::SiteInfo s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
+            {part("seo", view! { <Seo site=site.clone()/> }.into_any())}
+            {part("forms", view! { <Forms site=site.clone()/> }.into_any())}
         }
         .into_any(),
-        Section::Fonts => view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any(),
-        Section::Code => view! { <crate::sitesettings::Code site=site.clone()/> }.into_any(),
-        Section::Versions => view! { <crate::versions::Versions site=site.clone()/> }.into_any(),
+        Section::Fonts => part("fonts", view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any()),
+        Section::Code => part("code", view! { <crate::sitesettings::Code site=site.clone()/> }.into_any()),
+        Section::Versions => part("versions", view! { <crate::versions::Versions site=site.clone()/> }.into_any()),
         Section::Publish => view! {
-            {sub("publish", view! { <crate::publish::Publish site=site.clone()/> }.into_any())}
-            {sub("export", view! { <Export site=site.clone()/> }.into_any())}
+            {part("publish", view! { <crate::publish::Publish site=site.clone()/> }.into_any())}
+            {part("export", view! { <Export site=site.clone()/> }.into_any())}
         }
         .into_any(),
         _ => view! {
-            {sub("site-menus", view! { <crate::siteinfo::SiteMenus s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
-            {sub("menus", view! { <crate::readable::Menus s=doc_session(ui, site.path.clone())/> }.into_any())}
-            {sub("redirects", view! { <Redirects site=site.clone()/> }.into_any())}
+            {part("site-menus", view! { <crate::siteinfo::SiteMenus s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
+            {part("menus", view! { <crate::readable::Menus s=doc_session(ui, site.path.clone())/> }.into_any())}
+            {part("redirects", view! { <Redirects site=site.clone()/> }.into_any())}
         }
         .into_any(),
     };
@@ -200,6 +325,26 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         Section::Redirects => Some("redirects"),
         _ => None,
     };
+    let content = NodeRef::<leptos::html::Div>::new();
+    let current = RwSignal::new(wanted.unwrap_or(parts_of(group)[0].0).to_string());
+    let shown = RwSignal::new(
+        parts_of(group)
+            .iter()
+            .map(|p| p.0.to_string())
+            .collect::<Vec<_>>(),
+    );
+    let spy = move || scroll_spy(content, current, shown);
+    // Parties chargées après l'ouverture : rail mis à jour.
+    for ms in [150u64, 600, 1500] {
+        set_timeout(
+            move || {
+                if !current.is_disposed() {
+                    spy()
+                }
+            },
+            std::time::Duration::from_millis(ms),
+        );
+    }
     if let Some(key) = wanted {
         request_animation_frame(move || {
             if let Ok(Some(el)) =
@@ -214,18 +359,38 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
             <nav class="settings-nav" aria-label=ui.t("view-settings")>
                 {SECTIONS.iter().map(|(sec, key, step)| {
                     let sec = *sec;
+                    let on = group == sec;
                     let title = step.map(|n| ui.tx("planned-step", &[("step", n.to_string())]));
+                    let parts = parts_of(sec);
                     view! {
-                        <button class="settings-nav-item" class:is-on=group == sec class:is-planned=step.is_some()
-                            data-section=*key title=title
-                            on:click=move |_| ui.tab(Tab::Settings(sec))>
-                            <span>{ui.t(key)}</span>
-                            {step.map(|n| view! { <span class="settings-nav-step">{n}</span> })}
-                        </button>
+                        <div class="settings-nav-group" class:is-on=on>
+                            <button class="settings-nav-item" class:is-on=on class:is-planned=step.is_some()
+                                data-section=*key title=title aria-current=on.then_some("page")
+                                on:click=move |_| if on { scroll_to_part(parts[0].0) } else { ui.tab(Tab::Settings(sec)) }>
+                                <span>{ui.t(key)}</span>
+                                {step.map(|n| view! { <span class="settings-nav-step">{n}</span> })}
+                            </button>
+                            {(on && parts.len() > 1).then(|| view! {
+                                <ul class="settings-nav-parts">
+                                    {parts.iter().map(|(k, title, _)| {
+                                        let k: &'static str = k;
+                                        view! {
+                                            <li class:is-gone=move || shown.with(|s| !s.iter().any(|x| x == k))>
+                                                <button class="settings-nav-part" data-part=k
+                                                    class:is-on=move || current.with(|c| c == k)
+                                                    on:click=move |_| { current.set(k.to_string()); scroll_to_part(k) }>
+                                                    {ui.t(title)}
+                                                </button>
+                                            </li>
+                                        }
+                                    }).collect_view()}
+                                </ul>
+                            })}
+                        </div>
                     }
                 }).collect_view()}
             </nav>
-            <div class="settings-content">{body}</div>
+            <div class="settings-content" node_ref=content on:scroll=move |_| spy()>{body}</div>
         </div>
     }
 }

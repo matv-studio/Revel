@@ -93,6 +93,8 @@ layout (header, footer: hide a block, a subtitle) is a layout property: `apply_c
 `{\"cmd\": \"set_layout_fields\", \"id\": \"<layout>\", \"fields\": [{\"name\": \"hideCta\", \"label\": \"Hide the call to action\", \"type\": \"switch\"}]}` \
 (types text, image, link, switch), read in the layout like a component property (`{% if not hideCta %}`), each \
 page giving its value with `{\"cmd\": \"set_page_prop\", \"page\": \"<page id>\", \"key\": \"hideCta\", \"value\": true}`.\n\
+- Site map: `get_site_map` lists every page and link (broken links, orphan pages); fix a broken link by changing \
+its `href`, creating the page, or adding a redirect.\n\
 Existing sites may still contain {{ expressions }} from data files: read them with `get_data`/`set_data`; CMS entries \
 with `list_collections`, `get_entry`, `set_entry_field`. Keep the site's language and tone.";
 
@@ -561,6 +563,7 @@ impl Revel {
                 "insert_preset" => go!(insert_preset),
                 "set_layer" => go!(set_layer),
                 "check_site" => go!(check_site),
+                "get_site_map" => go!(get_site_map),
                 "remove_node" => go!(remove_node),
                 "apply_commands" => go!(apply_commands),
                 "undo" => go!(undo),
@@ -1152,6 +1155,73 @@ impl Revel {
                 .map(|(k, n)| json!({ "kind": k, "count": n }))
                 .collect::<Vec<_>>(),
             "issues": issues,
+        }))
+        .unwrap_or_default())
+    }
+
+    #[tool(
+        description = "Site map: pages, collections (one page per entry), site menus and shared parts (components, templates) with every link between them: written links (with the element id), lists of entries, menu links, redirects. Lists addresses linked to without a page (broken links) and pages no link leads to (orphans). Change a link with set_attributes (href) or apply_commands; node positions on the Sitemap view are `set_map_positions` commands."
+    )]
+    async fn get_site_map(&self, Parameters(a): Parameters<SiteArg>) -> CallToolResult {
+        let d = match self.doc(&a.site).await {
+            Ok(d) => d,
+            Err(e) => return fail(e),
+        };
+        // Informations du site (menus) : dans le document, sinon dans le fichier de données.
+        let info = match d.data.get(revel_edit::siteinfo::ROOT) {
+            Some(v) => Some(v.clone()),
+            None => self
+                .call(
+                    "readable_data",
+                    &a.site,
+                    json!({ "paths": [[revel_edit::siteinfo::ROOT]], "collections": [] }),
+                )
+                .await
+                .ok()
+                .and_then(|v| v.get("values")?.get(0).cloned())
+                .filter(|v| !v.is_null()),
+        };
+        let folders: Vec<(String, String)> = d
+            .collections
+            .iter()
+            .filter(|c| c.path.is_some())
+            .map(|c| (c.folder.clone(), c.id.clone()))
+            .collect();
+        let entries: Vec<revel_edit::linkmap::EntryRef> = self
+            .collections(&a.site)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|c| {
+                let id = folders.iter().find(|(f, _)| *f == c.folder)?.1.clone();
+                Some(c.entries.into_iter().filter_map(move |e| {
+                    Some(revel_edit::linkmap::EntryRef {
+                        collection: id.clone(),
+                        title: e
+                            .data
+                            .get("title")
+                            .and_then(Value::as_str)
+                            .unwrap_or(&e.file)
+                            .to_string(),
+                        file: e.file,
+                        url: e.url?,
+                    })
+                }))
+            })
+            .flatten()
+            .collect();
+        let map = revel_edit::linkmap::build(&d, info.as_ref(), &entries);
+        let broken: Vec<&str> = map
+            .nodes
+            .iter()
+            .filter(|n| n.kind == revel_edit::linkmap::NodeKind::Missing)
+            .filter_map(|n| n.path.as_deref())
+            .collect();
+        ok(serde_json::to_string_pretty(&json!({
+            "nodes": map.nodes,
+            "links": map.links,
+            "broken": broken,
+            "orphans": map.orphans(),
         }))
         .unwrap_or_default())
     }

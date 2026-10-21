@@ -1,0 +1,176 @@
+/* Revel — plan du site (D-103) : plan infini à points, nœuds, liens courbes, minicarte, panneau
+   du nœud sélectionné. */
+
+.map {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  background: var(--bg);
+  --map-dot: color-mix(in srgb, var(--text) 13%, transparent);
+  --map-node: var(--surface-raised);
+  --map-edge: color-mix(in srgb, var(--text) 38%, transparent);
+  --map-lit: var(--accent, var(--blue-text-dark));
+}
+.map.has-panel { grid-template-columns: minmax(0, 1fr) 340px; }
+.map-toolbar {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: var(--s-2); height: 44px; padding: 0 var(--s-3);
+  background: var(--surface); border-bottom: var(--border) solid var(--line);
+}
+.map-search { position: relative; display: flex; align-items: center; width: 240px; }
+.map-search svg.icon { position: absolute; left: 8px; width: 14px; height: 14px; color: var(--text-faint); pointer-events: none; }
+.map-search .input { padding-left: 28px; height: var(--control-md); }
+.map-filters button { display: inline-flex; align-items: center; gap: 6px; }
+.map-filters svg.icon { width: 13px; height: 13px; }
+.map-counts { display: inline-flex; align-items: center; gap: var(--s-3); white-space: nowrap; }
+.map-count-warn { display: inline-flex; align-items: center; gap: 4px; color: var(--warning-text); }
+.map-count-warn svg.icon { width: 13px; height: 13px; }
+.map-notice {
+  display: inline-flex; align-items: center; gap: var(--s-2); max-width: 46ch;
+  padding: 3px var(--s-2); border-radius: var(--radius-md); background: var(--accent-soft, var(--surface-active));
+  color: var(--text); font-size: var(--text-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+
+/* Plan : fond à points qui suit le déplacement ; le pointeur dit ce qu'on peut faire. */
+.map-stage {
+  position: relative; overflow: hidden; outline: none; cursor: grab; touch-action: none; user-select: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, var(--map-dot) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+.map-stage:active { cursor: grabbing; }
+.map-stage.is-linking, .map-stage.is-linking * { cursor: crosshair !important; }
+.map-stage:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.map-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.map-edges { position: absolute; overflow: visible; pointer-events: none; }
+
+/* Liens : un trait par paire de nœuds (plus épais quand il réunit plusieurs liens). */
+.map-edge-line { fill: none; stroke: var(--map-edge); transition: stroke var(--fast) var(--ease), opacity var(--fast) var(--ease); }
+.map-edge-hit { fill: none; stroke: transparent; stroke-width: 14px; pointer-events: stroke; cursor: pointer; }
+.map-edge--list .map-edge-line { stroke-dasharray: 6 4; }
+.map-edge--menu .map-edge-line { stroke-dasharray: 2 4; stroke-linecap: round; }
+.map-edge--redirect .map-edge-line { stroke-dasharray: 10 5; stroke: var(--warning-text); opacity: .8; }
+.map-edge--broken .map-edge-line { stroke: var(--danger-text); }
+.map-edge--external .map-edge-line { stroke-dasharray: 1 5; stroke-linecap: round; }
+.map-edge:hover .map-edge-line, .map-edge.is-lit .map-edge-line { stroke: var(--map-lit); }
+.map-edge.is-on .map-edge-line { stroke: var(--map-lit); stroke-width: 2.6px; }
+.map-edge.is-shared:not(.is-lit):not(.is-on):not(:hover) .map-edge-line { opacity: .5; }
+.map-edge.is-dim .map-edge-line { opacity: .14; }
+.map-arrow path { fill: var(--map-edge); }
+.map-arrow--redirect path { fill: var(--warning-text); }
+.map-arrow--broken path { fill: var(--danger-text); }
+.map-ghost { fill: none; stroke: var(--map-lit); stroke-width: 2px; stroke-dasharray: 5 4; }
+.map-handle { fill: var(--map-lit); stroke: var(--bg); stroke-width: 2px; pointer-events: all; cursor: grab; }
+.map-handle:hover { r: 9; }
+
+/* Nœuds. */
+.map-node {
+  position: absolute; left: 0; top: 0; width: 220px; min-height: 60px;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: 8px 12px; border-radius: 10px;
+  background: var(--map-node); border: var(--border) solid var(--line-strong);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .18);
+  cursor: pointer; transition: opacity var(--fast) var(--ease), border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.map-node:hover { border-color: color-mix(in srgb, var(--map-lit) 55%, var(--line-strong)); }
+.map-node.is-on { border-color: var(--map-lit); box-shadow: 0 0 0 2px color-mix(in srgb, var(--map-lit) 35%, transparent), 0 6px 18px rgb(0 0 0 / .25); }
+.map-node.is-drop { border-color: var(--map-lit); box-shadow: 0 0 0 3px color-mix(in srgb, var(--map-lit) 45%, transparent); }
+.map-node.is-hit { box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning-text) 60%, transparent); }
+.map-node.is-dim { opacity: .3; }
+.map-node.is-draft { border-style: dashed; }
+.map-node-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.map-node-icon { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--surface-active); color: var(--text-muted); }
+.map-node-icon svg.icon { width: 12px; height: 12px; }
+.map-node-name { flex: 1; min-width: 0; font-weight: var(--weight-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-node-sub { padding-left: 26px; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-badge {
+  flex: none; display: inline-flex; align-items: center; gap: 2px; height: 18px; padding: 0 5px;
+  border-radius: var(--radius-sm); background: var(--surface-active); color: var(--text-muted); font-size: 10px; font-weight: var(--weight-medium);
+}
+.map-badge svg.icon { width: 11px; height: 11px; }
+.map-badge--warn { background: color-mix(in srgb, var(--warning-text) 18%, transparent); color: var(--warning-text); }
+.map-node--collection .map-node-icon { background: color-mix(in srgb, var(--blue-text-dark) 20%, transparent); color: var(--blue-text-dark); }
+.map-node--menu .map-node-icon, .map-node--component .map-node-icon, .map-node--layout .map-node-icon {
+  background: color-mix(in srgb, var(--green-text-dark) 18%, transparent); color: var(--green-text-dark);
+}
+.map-node--menu, .map-node--component, .map-node--layout { background: color-mix(in srgb, var(--map-node) 80%, var(--bg)); }
+.map-node--missing { border-color: color-mix(in srgb, var(--danger-text) 60%, transparent); border-style: dashed; background: color-mix(in srgb, var(--danger-text) 8%, var(--map-node)); }
+.map-node--missing .map-node-icon { background: color-mix(in srgb, var(--danger-text) 18%, transparent); color: var(--danger-text); }
+.map-node--entry, .map-node--external { min-height: 32px; padding: 4px 10px; border-radius: 8px; }
+.map-node--entry .map-node-icon, .map-node--external .map-node-icon { width: 16px; height: 16px; background: none; }
+.map-node--entry .map-node-name, .map-node--external .map-node-name { font-weight: var(--weight-regular); font-size: var(--text-sm); }
+.map-expand {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: 2px 0 0 20px; padding: 0 6px 0 2px; height: 20px;
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-muted); font-size: var(--text-xs);
+}
+.map-expand:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.map-expand svg.icon { width: 12px; height: 12px; transition: transform var(--fast) var(--ease); }
+.map-expand.is-open svg.icon { transform: rotate(90deg); }
+/* Point d'où tirer un lien vers une autre page. */
+.map-port {
+  position: absolute; right: -7px; top: 50%; width: 12px; height: 12px; margin-top: -6px;
+  border-radius: 50%; background: var(--map-node); border: 2px solid var(--line-strong);
+  cursor: crosshair; opacity: 0; transition: opacity var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.map-node:hover .map-port, .map-node.is-on .map-port { opacity: 1; }
+.map-port:hover { border-color: var(--map-lit); background: var(--map-lit); transform: scale(1.25); }
+
+/* Minicarte, zoom, légende. */
+.map-minimap {
+  position: absolute; right: 12px; bottom: 12px; width: 200px; height: 130px;
+  border: var(--border) solid var(--line-strong); border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); overflow: hidden; cursor: pointer;
+  box-shadow: 0 4px 14px rgb(0 0 0 / .18);
+}
+.map-minimap svg { width: 100%; height: 100%; padding: 6px; display: block; }
+.map-mini-node { fill: var(--text-faint); opacity: .55; }
+.map-mini-node.is-missing { fill: var(--danger-text); }
+.map-mini-view { fill: color-mix(in srgb, var(--map-lit) 12%, transparent); stroke: var(--map-lit); stroke-width: 6; vector-effect: non-scaling-stroke; }
+.map-zoom {
+  position: absolute; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 2px; padding: 2px;
+  border: var(--border) solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface);
+  box-shadow: 0 4px 14px rgb(0 0 0 / .18);
+}
+.map-zoom .icon-btn { font-size: 15px; }
+.map-zoom-value { min-width: 54px; height: var(--control-sm); border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.map-zoom-value:hover { background: var(--surface-hover); color: var(--text); }
+.map-legend {
+  position: absolute; left: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: var(--s-3);
+  padding: 4px var(--s-2); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface) 85%, transparent);
+  pointer-events: none;
+}
+.map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.map-key { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--map-edge); }
+.map-key--list { border-top-style: dashed; }
+.map-key--menu { border-top-style: dotted; }
+.map-key--redirect { border-top-style: dashed; border-top-color: var(--warning-text); }
+.map-key--broken { border-top-color: var(--danger-text); }
+
+/* Panneau du nœud ou du lien sélectionné. */
+.map-panel {
+  grid-row: 2; grid-column: 2; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3) var(--s-4) var(--s-6);
+  background: var(--surface); border-left: var(--border) solid var(--line);
+}
+.map-panel-head { display: flex; align-items: center; justify-content: space-between; }
+.map-panel-kind { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); }
+.map-panel-title { margin: 0; font-size: var(--text-lg); overflow-wrap: anywhere; }
+.map-panel-h { margin: var(--s-2) 0 0; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-muted); }
+.map-panel-route { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.map-panel-route svg.icon { width: 14px; height: 14px; color: var(--text-faint); }
+.map-form { grid-template-columns: 96px minmax(0, 1fr); }
+.map-path-field { display: flex; flex-direction: column; gap: 2px; }
+.map-path-field .input.is-invalid { border-color: var(--danger-text); }
+.map-actions { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.map-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.map-link { display: flex; align-items: center; gap: var(--s-1); }
+.map-link-main {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+  padding: 4px var(--s-2); border: 0; border-radius: var(--radius-md); background: none; color: var(--text); text-align: left;
+}
+.map-link-main:hover { background: var(--surface-hover); }
+.map-link-text { max-width: 100%; font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-link-to { max-width: 100%; font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (prefers-reduced-motion: reduce) {
+  .map-node, .map-edge-line, .map-port, .map-expand svg.icon { transition: none; }
+}

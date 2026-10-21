@@ -608,10 +608,12 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Position de la prochaine balise de gabarit (`{{` ou `{%`), au moins 1.
+/// Position de la prochaine balise de gabarit (`{{` ou `{%`), après le premier caractère (un
+/// texte qui commence par une lettre accentuée est coupé à une limite de caractère).
 fn next_template_tag(r: &str) -> usize {
-    let a = r[1..].find("{{").map(|i| i + 1);
-    let b = r[1..].find("{%").map(|i| i + 1);
+    let first = r.chars().next().map_or(0, char::len_utf8);
+    let a = r[first..].find("{{").map(|i| i + first);
+    let b = r[first..].find("{%").map(|i| i + first);
     match (a, b) {
         (Some(a), Some(b)) => a.min(b),
         (Some(x), None) | (None, Some(x)) => x,

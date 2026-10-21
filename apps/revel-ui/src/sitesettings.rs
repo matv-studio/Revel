@@ -29,13 +29,17 @@ fn info(s: DocSession) -> Option<Info> {
     })
 }
 
-/// Flux RSS : un interrupteur par collection, l'adresse du flux et le nombre de contenus.
+/// Flux RSS : un interrupteur par collection qui a une page par contenu (un flux mène aux
+/// pages), l'adresse du flux et le nombre de contenus.
 fn feeds_section(ui: Ui, s: DocSession) -> AnyView {
     let Some((cols, feeds)) = s.doc.with(|d| {
         d.as_ref().map(|d| {
             (
                 d.collections
                     .iter()
+                    .filter(|c| {
+                        c.path.is_some() || d.settings.feeds.iter().any(|f| f.collection == c.id)
+                    })
                     .map(|c| c.id.clone())
                     .collect::<Vec<_>>(),
                 d.settings.feeds.clone(),

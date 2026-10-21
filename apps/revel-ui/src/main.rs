@@ -42,6 +42,7 @@ mod settings;
 mod setup;
 mod site;
 mod siteinfo;
+mod sitemap;
 mod sitesettings;
 mod styles;
 mod textfield;
@@ -141,6 +142,8 @@ pub struct Ui {
     pub github: RwSignal<Option<String>>,
     /// Page à afficher dans l'éditeur (demandée par une autre vue, la vue CMS par exemple).
     pub goto_page: RwSignal<Option<String>>,
+    /// Élément à sélectionner dans la page demandée (plan du site : « Montrer dans l'éditeur »).
+    pub goto_node: RwSignal<Option<String>>,
     /// Élément copié (Ctrl+C), collé avec de nouveaux identifiants (Ctrl+V), d'un site à l'autre.
     pub clipboard: RwSignal<Vec<revel_model::Node>>,
     /// Page affichée dans l'éditeur (l'aperçu s'ouvre sur elle).
@@ -305,6 +308,8 @@ pub enum Tab {
     Editor,
     Cms,
     Locales,
+    /// Plan du site (D-103).
+    Map,
     Settings(Section),
 }
 
@@ -394,6 +399,7 @@ fn App() -> impl IntoView {
         ask: RwSignal::new(None),
         github: RwSignal::new(None),
         goto_page: RwSignal::new(None),
+        goto_node: RwSignal::new(None),
         clipboard: RwSignal::new(Vec::new()),
         current_page: RwSignal::new(None),
         context: RwSignal::new(None),
@@ -515,7 +521,7 @@ fn App() -> impl IntoView {
     // Teinte du haut du plateau (raccord de l'onglet actif) : barre d'outils ou page.
     let stage = move || match ui.route.get() {
         Route::Site {
-            tab: Tab::Editor | Tab::Cms,
+            tab: Tab::Editor | Tab::Cms | Tab::Map,
             ..
         } => "tool",
         _ => "page",
@@ -560,6 +566,7 @@ pub(crate) const VIEWS: &[(Tab, &str)] = &[
     (Tab::Editor, "view-editor"),
     (Tab::Cms, "view-cms"),
     (Tab::Locales, "view-locales"),
+    (Tab::Map, "view-map"),
     (Tab::Settings(Section::General), "view-settings"),
 ];
 

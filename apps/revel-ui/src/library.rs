@@ -951,7 +951,7 @@ pub fn Media() -> impl IntoView {
                         }).into_any();
                     }
                     view! {
-                        <div class="asset-grid" class:is-small=move || thumb.get() < 60
+                        <div class="asset-grid" class:is-small=move || { thumb.get() < 60 }
                             style=move || format!("--thumb:{}px", thumb.get())>{v.into_iter().map(tile).collect_view()}</div>
                     }.into_any()
                 }}
@@ -1034,7 +1034,7 @@ fn media_folder<V: IntoView + 'static>(
             view! {
                 {subs.into_iter().map(|s| media_folder(t, s, depth + 1, tile)).collect_view()}
                 {(!items.is_empty()).then(|| view! {
-                    <div class="asset-grid is-nested" class:is-small=move || t.thumb.get() < 60
+                    <div class="asset-grid is-nested" class:is-small=move || { t.thumb.get() < 60 }
                         style=move || format!("--thumb:{}px;--depth:{}", t.thumb.get(), depth + 1)>
                         {items.into_iter().map(tile).collect_view()}
                     </div>

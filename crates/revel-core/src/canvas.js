@@ -21,6 +21,15 @@
   let vars = [];
   try { vars = JSON.parse(varsEl ? varsEl.textContent : "[]"); } catch (_) { vars = []; }
 
+  // Calques masqués : cachés dès qu'ils le sont (attribut posé sur place, sans recharger) ; la
+  // règle, posée ici, ne compte pas dans la signature de l'en-tête.
+  if (!document.querySelector("style[data-rv-hidden]")) {
+    const hid = document.createElement("style");
+    hid.setAttribute("data-rv-hidden", "");
+    hid.textContent = "[data-revel-hidden]{display:none!important}";
+    document.head.appendChild(hid);
+  }
+
   // La page doit rester identique au site généré : les éléments ajoutés par Revel sont retirés
   // (sinon `:last-child` changerait), et les commentaires repères sont remplacés par des plages
   // (Range) vivantes, puis les textes adjacents fusionnés comme dans le site (sinon la mise en
@@ -30,6 +39,7 @@
   // place (voir `refreshPage`).
   const headSig = (h) => [...h.children]
     .filter((e) => !/^(TITLE|META)$/.test(e.tagName) && !(e.tagName === "LINK" && /\b(canonical|alternate)\b/.test(e.getAttribute("rel") || "")))
+    .filter((e) => !(e.tagName === "STYLE" && e.hasAttribute("data-rv-hidden")))
     .map((e) => (e.tagName === "LINK" && /stylesheet/.test(e.getAttribute("rel") || "")
       ? "css:" + new URL(e.getAttribute("href") || "", location.href).pathname
       : e.outerHTML))

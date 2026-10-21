@@ -1167,6 +1167,15 @@ try {
       }
       check('éléments : Ctrl+Z, document identique', await untilE(async () => JSON.stringify(await siteE()) === docE));
     }
+    // Tri et filtre des médias : liste ouverte aux couleurs de Revel (sélecteur personnalisable).
+    {
+      await page.click('.dock-tab[data-panel="assets"]').catch(() => {});
+      const sel = await page.$('.media-tools .mini-select select');
+      if (sel) {
+        const st = await sel.evaluate((s) => ({ supported: CSS.supports('appearance', 'base-select'), appearance: getComputedStyle(s).appearance }));
+        check('médias : tri et filtre en listes de Revel (pas la liste du système)', !st.supported || st.appearance === 'base-select', JSON.stringify(st));
+      }
+    }
     // Composants : dossier, rangement par le menu contextuel.
     await page.click('.dock-tab[data-panel="components"]');
     await page.waitForSelector('.components .component-row');
@@ -1633,7 +1642,7 @@ try {
       const raw = await page.$$eval('.siteinfo-row, .navlist-head', (rs) => rs.some((r) => /on\s*:\s*click|move \||=>/.test(r.textContent)));
       const cols = await page.$$eval('.siteinfo-list .siteinfo-uses', (us) => new Set(us.map((u) => Math.round(u.getBoundingClientRect().right))).size);
       check('paramètres : rubrique raccordée à la page (parties), informations du site alignées, sans code affiché',
-        tab.parts === 4 && tab.bg === content.bg && tab.right > content.left && !raw && cols === 1, `${tab.parts} parties, ${cols} colonne(s)`);
+        tab.parts === 5 && tab.bg === content.bg && tab.right > content.left && !raw && cols === 1, `${tab.parts} parties, ${cols} colonne(s)`);
       if (shots) await page.screenshot({ path: `${shots}/parametres-general.png` });
       await page.$eval('.settings-content', (c) => c.scrollTo(0, c.scrollHeight));
       await page.waitForFunction(() => document.querySelector('.settings-nav-part[data-part="forms"]')?.classList.contains('is-on'));
@@ -2488,8 +2497,10 @@ try {
       check('réglages du site : code personnalisé (en-tête) enregistré', true);
       if (shots) await page.screenshot({ path: `${shots}/code-personnalise.png` });
       // Polices : fichier importé (graisse et style lus dans le nom), puis retiré.
-      await page.click('.settings-nav-item[data-section="settings-fonts"]');
-      await page.waitForSelector('.font-list');
+      // Polices : partie de Général.
+      await page.click('.settings-nav-item[data-section="settings-general"]');
+      await page.click('.settings-nav-part[data-part="fonts"]');
+      await page.waitForSelector('.settings-sub[data-sub="fonts"] .font-list');
       const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.fonts-page .page-head .btn:not(.btn--primary)')]);
       await chooser.setFiles({ name: 'EssaiSans-BoldItalic.woff2', mimeType: 'font/woff2', buffer: Buffer.from('wOF2essai-e2e') });
       await page.waitForSelector('.fonts-dialog .fi-row');
@@ -3079,10 +3090,14 @@ try {
     });
     check('réglages de Revel : rail des parties, aller à une partie', rail.length === 6, rail.join(', '));
     if (shots) await page.screenshot({ path: `${shots}/reglages-revel.png` });
+    // Retour au site d'un clic (bouton de la barre, hors du menu du site).
+    const back = (await page.textContent('.topbar-back')).trim();
     await page.click('.site-menu-btn');
-    await page.click('.site-menu-back');
+    const inMenu = await page.$$eval('.site-menu-pop .menu-item', (l) => l.some((x) => x.textContent.includes('Revenir')));
+    await page.keyboard.press('Escape');
+    await page.click('.topbar-back');
     await page.waitForSelector('iframe.canvas-frame');
-    check('réglages : menu du site gardé, retour au projet', kept);
+    check('réglages : menu du site gardé, retour au projet d\'un clic', kept && /^Revenir à /.test(back) && !inMenu, back);
   }
 
   // ---------------------------------------------------------------- Langues de traduction (D-36)
@@ -3133,6 +3148,33 @@ try {
     await page.locator('.settings-author').blur();
     await page.waitForFunction(() => window.__revelSettings && !window.__revelSettings.author);
     check('réglages : nom inscrit sur les versions (enregistré puis retiré)', /qui a modifié quoi/.test(help || ''));
+  }
+
+  // Profil (D-106) : en haut à droite, photo et nom modifiés sans quitter l'écran ; photo
+  // recadrée et gardée dans les réglages, retirée ; mêmes réglages dans Réglages › Comptes.
+  {
+    const png = fs.readFileSync(path.join(siteDir, 'src/static/apple-touch-icon.png'));
+    await page.click('.profile-btn');
+    await page.waitForSelector('.profile-pop');
+    await page.fill('.profile-pop .settings-author', 'Anne Martin');
+    await page.locator('.profile-pop .settings-author').blur();
+    await page.waitForFunction(() => window.__revelSettings?.author === 'Anne Martin');
+    const shown = await page.getAttribute('.profile-btn', 'title');
+    const nameInBar = await page.$$eval('.topbar .profile-btn', (b) => b[0].textContent.replace(/AM/, '').trim());
+    const initials = (await page.textContent('.profile-btn .avatar')).trim();
+    await page.setInputFiles('.profile-pop .profile-file', { name: 'photo.png', mimeType: 'image/png', buffer: png });
+    await page.waitForFunction(() => /^data:image\/(webp|png);base64,/.test(window.__revelSettings?.avatar || ''));
+    await page.waitForSelector('.profile-btn .avatar img');
+    const inSettings = await page.$$eval('.settings-sub[data-sub="accounts"] .avatar img', (l) => l.length);
+    if (shots) await page.screenshot({ path: `${shots}/profil.png` });
+    await page.click('.profile-pop .profile-picture-reset');
+    await page.waitForFunction(() => !window.__revelSettings?.avatar);
+    await page.fill('.profile-pop .settings-author', '');
+    await page.locator('.profile-pop .settings-author').blur();
+    await page.waitForFunction(() => !window.__revelSettings?.author);
+    await page.keyboard.press('Escape');
+    check('profil : nom et photo (recadrée, gardée, retirée), mêmes réglages dans Comptes',
+      shown === 'Anne Martin' && initials === 'AM' && nameInBar === '' && inSettings === 1, `${shown} ${initials}`);
   }
 
   // Réglages › Outils de construction (D-88) : Node.js téléchargé pour l'import construit,

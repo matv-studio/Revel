@@ -143,12 +143,11 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
 }
 
 /// Rubriques des paramètres : (rubrique, libellé, étape prévue si pas encore disponible).
-/// Six rubriques (au lieu de dix) : les réglages proches sur une même page.
+/// Cinq rubriques : les réglages proches sur une même page (polices dans Général).
 pub(crate) const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::General, "settings-general", None),
     (Section::Publish, "settings-publish", None),
     (Section::Menus, "settings-navigation", None),
-    (Section::Fonts, "settings-fonts", None),
     (Section::Code, "settings-code", None),
     (Section::Versions, "settings-versions", None),
 ];
@@ -170,6 +169,7 @@ fn parts_of(group: Section) -> &'static [(&'static str, &'static str, &'static s
         Section::General => &[
             ("general", "settings-general", "settings-general-lead"),
             ("site-info", "siteinfo-title", "siteinfo-help"),
+            ("fonts", "settings-fonts", "fonts-help"),
             ("seo", "settings-seo", "settings-seo-lead"),
             ("forms", "settings-forms", "forms-help"),
         ],
@@ -177,7 +177,6 @@ fn parts_of(group: Section) -> &'static [(&'static str, &'static str, &'static s
             ("publish", "settings-publish", "settings-publish-lead"),
             ("export", "export-title", "export-lead"),
         ],
-        Section::Fonts => &[("fonts", "settings-fonts", "fonts-help")],
         Section::Code => &[("code", "settings-code", "code-help")],
         Section::Versions => &[("versions", "settings-versions", "versions-help")],
         _ => &[
@@ -297,11 +296,11 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         Section::General => view! {
             {part("general", view! { <crate::sitesettings::General site=site.clone()/> }.into_any())}
             {part("site-info", view! { <crate::siteinfo::SiteInfo s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
+            {part("fonts", view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any())}
             {part("seo", view! { <Seo site=site.clone()/> }.into_any())}
             {part("forms", view! { <Forms site=site.clone()/> }.into_any())}
         }
         .into_any(),
-        Section::Fonts => part("fonts", view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any()),
         Section::Code => part("code", view! { <crate::sitesettings::Code site=site.clone()/> }.into_any()),
         Section::Versions => part("versions", view! { <crate::versions::Versions site=site.clone()/> }.into_any()),
         Section::Publish => view! {

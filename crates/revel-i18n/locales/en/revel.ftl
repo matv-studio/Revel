@@ -2828,5 +2828,15 @@ settings-general-lead = Name, public address and language of the site, RSS feeds
 settings-seo-lead = Sitemap, robots.txt, sharing image and organization: what search engines and social networks read.
 settings-publish-lead = Where the site is published (SFTP hosting): checked and sent from here.
 settings-app-general-lead = Language, theme and colour of Revel, and the folder of new sites.
-settings-accounts-lead = Accounts used by Revel, and the name written on the versions you save.
+settings-accounts-lead = Your picture, shown at the top right, your name, written on the versions you save, and the accounts Revel uses.
 siteinfo-remove-used = Still used: unlink it where it is used before removing it
+
+# Profil (D-106)
+profile-title = Profile
+profile-picture = Picture
+profile-picture-help = Shown at the top right. Without a picture of your own: the one of the connected GitHub account.
+profile-picture-change = Change picture
+profile-picture-remove = Remove
+profile-picture-github = Use the GitHub picture
+settings-profile = Profile and accounts
+error-profile-picture = This image can't be read: choose a PNG, JPEG, WebP, GIF or AVIF file.

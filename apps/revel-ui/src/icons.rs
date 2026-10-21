@@ -705,3 +705,17 @@ pub fn navbar() -> AnyView {
         r#"<rect x="1.5" y="3" width="13" height="4" rx="1"/><path d="M3.5 5h2.5M10 5h.01M12 5h.01M3 10h10M3 12.5h7"/>"#,
     )
 }
+
+/// Personne (profil).
+pub fn user() -> AnyView {
+    svg(
+        r#"<circle cx="8" cy="5.5" r="2.75"/><path d="M2.75 13.75c.6-2.6 2.7-4.1 5.25-4.1s4.65 1.5 5.25 4.1"/>"#,
+    )
+}
+
+/// Appareil photo (changer la photo du profil).
+pub fn camera() -> AnyView {
+    svg(
+        r#"<path d="M2.25 5.25h2.5l1.1-1.75h4.3l1.1 1.75h2.5v7.5H2.25z"/><circle cx="8" cy="8.75" r="2.25"/>"#,
+    )
+}

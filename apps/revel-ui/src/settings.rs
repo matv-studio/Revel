@@ -14,7 +14,7 @@ const PRESETS: &[&str] = &["#3D7EFF", "#7C5CFF", "#1F9D6B", "#E8890C", "#E5487A"
 /// Parties des réglages de Revel : (clé, titre, présentation).
 const PARTS: &[(&str, &str, &str)] = &[
     ("general", "settings-general", "settings-app-general-lead"),
-    ("accounts", "settings-accounts", "settings-accounts-lead"),
+    ("accounts", "settings-profile", "settings-accounts-lead"),
     ("translate", "settings-translate", "settings-translate-help"),
     ("updates", "update-title", "update-help"),
     (
@@ -66,17 +66,14 @@ pub fn Settings() -> impl IntoView {
                     <section class="section settings-card" data-section="accounts">
                         <h2>{ui.t("settings-accounts")}</h2>
                         <div class="form-grid">
+                            // Profil (D-106) : photo et nom, montrés en haut à droite ; le nom signe les
+                            // versions (travail à plusieurs, D-89). Sans eux : ceux du compte GitHub.
+                            <span class="label" title=ui.t("profile-picture-help")>{ui.t("profile-picture")}</span>
+                            {crate::profile::picture_controls(ui)}
+                            <label class="label" for="settings-author" title=ui.t("settings-author-help")>{ui.t("settings-author")}</label>
+                            {crate::profile::name_input(ui, "settings-author")}
                             <span class="label" title=ui.t("settings-github-help")>"GitHub"</span>
                             <crate::account::GithubAccount/>
-                            // Nom inscrit sur les versions (travail à plusieurs, D-89).
-                            <label class="label" for="settings-author" title=ui.t("settings-author-help")>{ui.t("settings-author")}</label>
-                            <input id="settings-author" class="input settings-author" spellcheck="false" autocomplete="name"
-                                placeholder=ui.t("settings-author-placeholder") title=ui.t("settings-author-help")
-                                prop:value=move || ui.settings.with(|s| s.author.clone().unwrap_or_default())
-                                on:change=move |e| {
-                                    let v = event_target_value(&e).trim().to_string();
-                                    update(ui, &|s| s.author = (!v.is_empty()).then(|| v.clone()));
-                                }/>
                         </div>
                     </section>
                 }.into_any())}
@@ -188,7 +185,7 @@ fn Updates() -> impl IntoView {
 }
 
 /// Réglages enregistrés (interface mise à jour aussitôt, fichier ensuite).
-fn update(ui: Ui, f: &dyn Fn(&mut AppSettings)) {
+pub(crate) fn update(ui: Ui, f: &dyn Fn(&mut AppSettings)) {
     ui.settings.update(|s| f(s));
     let s = ui.settings.get_untracked();
     spawn_local(async move {

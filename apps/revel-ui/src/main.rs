@@ -34,6 +34,7 @@ mod pagesettings;
 mod pagetree;
 mod palette;
 mod panels;
+mod profile;
 mod publish;
 mod publishbar;
 mod readable;
@@ -323,7 +324,6 @@ pub enum Section {
     Seo,
     Redirects,
     Forms,
-    Fonts,
     Code,
     Menus,
     Versions,
@@ -602,6 +602,16 @@ fn TopBar() -> impl IntoView {
                     fallback=|| view! { <span class="topbar-title">"Revel"</span> }>
                     <SiteMenu/>
                 </Show>
+                // Réglages de Revel ouverts depuis un site : retour au site d'un clic (vue quittée).
+                {move || matches!(ui.route.get(), Route::Settings).then(|| ui.last_site.get()).flatten().map(|(site, tab)| {
+                    let name = site.name.clone();
+                    view! {
+                        <button class="btn btn--small topbar-back" title=site.path.clone()
+                            on:click=move |_| ui.route.set(Route::Site { site: site.clone(), tab })>
+                            {icons::arrow_left()}<span>{ui.tx("nav-back-to-site", &[("name", name)])}</span>
+                        </button>
+                    }
+                })}
             </div>
             // Onglets raccordés au plateau : vues du site ouvert, ou accueil et réglages de Revel.
             <nav class="views" role="tablist" aria-label=ui.t("views")>
@@ -663,6 +673,7 @@ fn TopBar() -> impl IntoView {
                     </div>
                     <publishbar::PublishButton/>
                 </Show>
+                <profile::ProfileButton/>
             </div>
             <div class="activity" class:activity--on=move || ui.activity.get().is_some()>
                 <div class="activity-bar" style:width=move || format!("{}%", (ui.activity.get().unwrap_or(0.0) * 100.0).max(4.0))></div>
@@ -681,7 +692,6 @@ fn SiteMenu() -> impl IntoView {
         Route::Site { site, .. } => Some(site),
         _ => ui.last_site.get().map(|(s, _)| s),
     };
-    let away = move || !matches!(ui.route.get(), Route::Site { .. });
     let on_down =
         window_event_listener(leptos::ev::pointerdown, move |e: web_sys::PointerEvent| {
             let inside = e
@@ -714,17 +724,6 @@ fn SiteMenu() -> impl IntoView {
             </button>
             <Show when=move || open.get()>
                 <div class="menu site-menu-pop" role="menu">
-                    // Depuis les réglages de Revel : retour au site, dans la vue quittée.
-                    {move || away().then(|| ui.last_site.get()).flatten().map(|(site, tab)| {
-                        let name = site.name.clone();
-                        view! {
-                            <button class="menu-item site-menu-back" role="menuitem"
-                                on:click=move |_| { open.set(false); ui.route.set(Route::Site { site: site.clone(), tab }) }>
-                                {icons::arrow_left()}<span class="menu-label">{ui.tx("nav-back-to-site", &[("name", name)])}</span>
-                            </button>
-                            <div class="menu-sep"></div>
-                        }
-                    })}
                     {move || {
                         let here = current().map(|s| s.path).unwrap_or_default();
                         let others: Vec<_> = ui.recents.get().into_iter().filter(|r| r.path != here).take(6).collect();

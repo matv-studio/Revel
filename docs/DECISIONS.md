@@ -939,6 +939,20 @@ d'attribut qui contiennent `>` dans les vues de l'interface toujours entre accol
 fermait et le code s'affichait). Texte d'un fichier du serveur ou d'un flux qui commence par une lettre
 accentuée après une balise : coupé entre deux caractères (le rendu s'arrêtait).
 
+**D-106 — 21/10/2026 — prise.** **Profil, retour au site, polices dans Général, listes des médias.**
+- Profil en haut à droite, à côté de « Publier » : la photo seule (le nom en bulle d'aide) ; un clic ouvre
+  la fenêtre du profil : changer la photo (image de l'ordinateur recadrée en carré de 160 px, gardée dans
+  les réglages de Revel, `avatar`), reprendre la photo GitHub ou la retirer, nom (celui qui signe les
+  versions, D-89), compte GitHub, lien vers les réglages. Sans photo ni nom choisis : ceux du compte GitHub
+  connecté (`github.com/<compte>.png`) ; sans compte : initiales, sinon une silhouette. Mêmes réglages dans
+  Réglages de Revel › Profil et comptes.
+- Réglages de Revel ouverts depuis un site : « Revenir à <site> » est un bouton de la barre supérieure, à
+  côté du nom du site (un clic), et n'est plus dans le menu du site.
+- Polices : partie de Paramètres › Général (rubrique « Polices » retirée du rail).
+- Tri et filtre des médias : listes ouvertes comme les autres listes de Revel (fond relevé, coins arrondis,
+  coche) ; une règle `appearance: none` laissait la liste du système, claire et illisible sur le thème
+  sombre. Sélecteur personnalisable de Chromium 135 et suivants (WebView2).
+
 ## Décisions ouvertes
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`

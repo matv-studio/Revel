@@ -93,6 +93,39 @@
 .site-menu-btn svg.icon { flex: none; width: 12px; height: 12px; color: var(--text-muted); }
 .site-menu-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Retour au site depuis les réglages de Revel : un clic, hors du menu du site. */
+.topbar .topbar-back { flex: none; align-self: center; gap: 6px; max-width: 260px; margin-left: var(--s-1); }
+.topbar-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-back svg.icon { width: 14px; height: 14px; }
+
+/* Profil (D-106) : photo seule en haut à droite ; fenêtre du profil sous elle. */
+.profile { position: relative; display: inline-flex; }
+.profile-btn {
+  display: grid; place-items: center; width: var(--control-lg); height: var(--control-lg); padding: 0;
+  border: 0; border-radius: 50%; background: none; color: var(--text);
+}
+.profile-btn:hover .avatar, .profile-btn[aria-expanded="true"] .avatar { box-shadow: 0 0 0 2px var(--line-strong); }
+.profile-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.avatar {
+  flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 50%;
+  background: var(--surface-active); color: var(--text-muted); box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-weight: var(--weight-medium); letter-spacing: .02em; user-select: none;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar--sm { width: 26px; height: 26px; font-size: 10px; }
+.avatar--sm svg.icon { width: 14px; height: 14px; }
+.avatar--lg { width: 56px; height: 56px; font-size: 18px; }
+.avatar--lg svg.icon { width: 26px; height: 26px; }
+.menu.profile-pop { left: auto; right: 0; width: 300px; max-width: 300px; padding: var(--s-3); gap: var(--s-3); }
+.profile-pop .field { display: flex; flex-direction: column; gap: 4px; }
+.profile-pop .menu-sep { margin: 0 calc(-1 * var(--s-3)); }
+.profile-pop .menu-item { margin: calc(-1 * var(--s-2)) calc(-1 * var(--s-2)) calc(-1 * var(--s-1)); width: auto; }
+.profile-pop .account { flex-wrap: wrap; }
+.profile-picture { display: flex; align-items: center; gap: var(--s-3); }
+.profile-picture-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.profile-pick { gap: 6px; }
+.profile-pick svg.icon { width: 14px; height: 14px; }
+
 /* Menu flottant (commun) */
 .menu {
   position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;

@@ -798,9 +798,13 @@ pub struct AppSettings {
     /// Mises à jour : préversions proposées aussi (versions d'essai publiées sur GitHub, D-86).
     #[serde(default)]
     pub prereleases: bool,
-    /// Nom qui signe les versions enregistrées du site (travail à plusieurs, D-89).
+    /// Nom qui signe les versions enregistrées du site (travail à plusieurs, D-89), affiché dans le
+    /// profil (en haut à droite) ; `None` : nom du compte GitHub connecté.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
+    /// Photo du profil (image carrée en `data:`, D-106) ; `None` : photo du compte GitHub connecté.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<String>,
 }
 
 fn default_theme() -> String {
@@ -821,6 +825,7 @@ impl Default for AppSettings {
             projects_dir: None,
             prereleases: false,
             author: None,
+            avatar: None,
         }
     }
 }

@@ -30,7 +30,7 @@ web-sys = { version = "0.3", features = [
     "FocusEvent", "InputEvent", "HtmlCanvasElement", "CanvasRenderingContext2d",
     "HtmlTemplateElement", "DocumentFragment",
     "AddEventListenerOptions", "HtmlTextAreaElement", "HtmlDetailsElement", "File", "FileList", "Blob", "HtmlImageElement",
-    "ScrollBehavior", "MediaQueryList",
+    "ScrollBehavior", "MediaQueryList", "Url",
 ] }
 # Texte riche en Markdown (vue CMS) : Markdown -> HTML dans l'éditeur visuel (même lecteur que
 # la génération du site).

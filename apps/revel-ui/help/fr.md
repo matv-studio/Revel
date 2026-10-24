@@ -47,6 +47,8 @@ L'apparence se règle dans **Styles**, par **classe** : tous les éléments qui 
 
 **États** : le menu à côté de la classe règle le survol, l'appui ou le focus.
 
+**Maçonnerie** : le bouton de la disposition en grille range les éléments de hauteurs différentes en colonnes, sans trous.
+
 **Couleurs et polices du site** : dans un sélecteur de couleur, **+** ajoute la couleur aux couleurs du site ; les polices se gèrent dans **Paramètres › Polices**.
 
 ## Textes
@@ -81,6 +83,10 @@ Une date reliée s'écrit comme vous le voulez (16 octobre 2026, 16.10.2026…) 
 - **Interactions › Animations** : choisissez un moment (apparition, texte, survol, appui, boucle, défilement), puis une animation. Réglez la durée et le délai ; le bouton ▶ la rejoue.
 - **Interactions › Actions** : un appui, un survol ou le défilement agit sur un élément (ouvrir un menu, rendre l'en-tête opaque, fermer un bandeau).
 - **Paramètres › Général › Transition entre les pages** : fondu ou glissement d'une page à l'autre.
+- **Paramètres › Général › Défilement doux** : la page, ou la colonne sous le pointeur, glisse vers sa destination à la molette.
+- **Ajouter › Barre de progression** : se remplit avec le défilement de la colonne qui la contient, ou de la page (réglage « Suit »).
+- **Suit la section affichée** (élément qui contient des liens vers des sections de la page) : le lien de la section en cours de lecture prend l'état « Actif ».
+- Une action peut viser **l'élément d'une classe qui contient** celui qu'on appuie : chaque carte d'une liste s'ouvre seule.
 
 ## Langues
 

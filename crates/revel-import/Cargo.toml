@@ -25,6 +25,7 @@ dom_query = { version = "0.28.0", default-features = false }
 ureq = { version = "3.4.2", features = ["platform-verifier"] }
 url = "2.5.8"
 percent-encoding = "2.3.2"
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
 # Fichier d'export de WordPress (7.6).
 roxmltree = "0.21.1"
 

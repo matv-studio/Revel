@@ -454,12 +454,37 @@ fn GridFlow(sx: Sx) -> impl IntoView {
             }),
         );
     };
+    // Maçonnerie (D-110) : attribut de l'élément sélectionné, lu par le script du site.
+    let masonry = Memo::new(move |_| {
+        sx.ed.selected.with(|_| ());
+        sx.ed.doc.with(|_| ());
+        sx.ed.selected_node().is_some_and(|(_, n)| {
+            matches!(n, revel_model::Node::Element { attrs, .. }
+                if attrs.iter().any(|a| a.name == "data-revel-masonry"))
+        })
+    });
+    let set_masonry = move |on: bool| {
+        if let Some((at, _)) = sx.ed.selected_node() {
+            sx.ed.apply(
+                ui,
+                revel_edit::Command::SetAttr {
+                    at,
+                    name: "data-revel-masonry".into(),
+                    value: on.then(String::new),
+                },
+                false,
+            );
+        }
+    };
     view! {
         <div class="ctl-line">
             <Seg sx prop="grid-auto-flow" options=GRID_FLOW/>
             <button class="tool-toggle" class:is-on=dense aria-pressed=move || dense().to_string()
                 title=ui.t("grid-dense") aria-label=ui.t("grid-dense")
                 on:click=move |_| set_dense(!dense())>{icons::grid()}</button>
+            <button class="tool-toggle" data-tool="masonry" class:is-on=move || masonry.get() aria-pressed=move || masonry.get().to_string()
+                title=ui.t("grid-masonry-help") aria-label=ui.t("grid-masonry")
+                on:click=move |_| set_masonry(!masonry.get_untracked())>{icons::masonry()}</button>
         </div>
     }
 }

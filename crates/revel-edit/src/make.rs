@@ -210,6 +210,9 @@ pub enum Preset {
     /// Média au survol : vidéo qui montre le média de l'élément survolé (contenus d'une liste
     /// de collection ou éléments choisis), voir [`crate::hover`].
     HoverMedia,
+    /// Barre de progression (D-110) : remplie selon le défilement de la colonne qui la contient
+    /// (ou de la page), comme le composant ScrollProgress de Framer.
+    ScrollProgress,
 }
 
 impl Preset {
@@ -229,7 +232,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 36] = [
+    pub const ALL: [Preset; 37] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -266,6 +269,7 @@ impl Preset {
         Preset::Consent,
         Preset::Switch,
         Preset::HoverMedia,
+        Preset::ScrollProgress,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -333,6 +337,29 @@ impl Preset {
                 ".video",
                 vec![("display", "block"), ("width", "100%"), ("height", "auto")],
             )],
+            Preset::ScrollProgress => vec![
+                (
+                    ".barre-progression",
+                    vec![
+                        ("position", "relative"),
+                        ("width", "100%"),
+                        ("height", "4px"),
+                        ("overflow", "hidden"),
+                        ("border-radius", "2px"),
+                        ("background-color", "rgba(127, 127, 127, 0.25)"),
+                    ],
+                ),
+                (
+                    ".barre-progression__remplissage",
+                    vec![
+                        ("width", "calc(var(--revel-progress, 0) * 100%)"),
+                        ("height", "100%"),
+                        ("border-radius", "inherit"),
+                        ("background-color", "currentColor"),
+                        ("transition", "width 0.45s cubic-bezier(0.33, 1, 0.68, 1)"),
+                    ],
+                ),
+            ],
             Preset::HoverMedia => vec![(
                 ".media-survol",
                 vec![
@@ -806,6 +833,22 @@ impl Preset {
                     attr("preload", "metadata"),
                 ],
                 vec![],
+            ),
+            // Piste (suit le défilement de son conteneur) et remplissage (variable CSS).
+            Preset::ScrollProgress => el(
+                id(),
+                "div",
+                vec![
+                    attr("class", "barre-progression"),
+                    attr("data-revel-progress", "parent"),
+                    attr("aria-hidden", "true"),
+                ],
+                vec![el(
+                    id(),
+                    "div",
+                    vec![attr("class", "barre-progression__remplissage")],
+                    vec![],
+                )],
             ),
             // Sans nom : relié à des éléments survolés depuis ses réglages (nom attribué alors).
             Preset::HoverMedia => {

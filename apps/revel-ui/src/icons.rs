@@ -685,6 +685,20 @@ pub fn ticker() -> AnyView {
     )
 }
 
+/// Maçonnerie : colonnes de blocs de hauteurs différentes.
+pub fn masonry() -> AnyView {
+    svg(
+        r#"<rect x="2" y="2" width="5" height="7" rx="1"/><rect x="9" y="2" width="5" height="4" rx="1"/><rect x="2" y="11" width="5" height="3" rx="1"/><rect x="9" y="8" width="5" height="6" rx="1"/>"#,
+    )
+}
+
+/// Barre de progression : piste et partie remplie.
+pub fn progress() -> AnyView {
+    svg(
+        r#"<rect x="1.5" y="6" width="13" height="4" rx="2"/><path d="M3.5 8h5" stroke-width="2.5"/>"#,
+    )
+}
+
 /// Carrousel : diapositive entière et voisines coupées.
 pub fn carousel() -> AnyView {
     svg(

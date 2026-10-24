@@ -271,6 +271,13 @@ pub fn General(site: SiteSummary) -> impl IntoView {
                             }}
                         </select>
                     </div>
+                    <span class="label" title=ui.t("settings-smooth-scroll-help")>{ui.t("settings-smooth-scroll")}</span>
+                    <span class="switch">
+                        <input type="checkbox" id="site-smooth-scroll" aria-label=ui.t("settings-smooth-scroll")
+                            prop:checked=move || s.doc.with(|d| d.as_ref().is_some_and(|d| d.settings.smooth_scroll))
+                            on:change=move |e| { let on = event_target_checked(&e); s.apply.run(Command::SetSmoothScroll { on }); }/>
+                        <span class="switch-track"></span>
+                    </span>
                     <span class="label">{ui.t("settings-site-folder")}</span>
                     <span class="muted path">{move || fresh.with(|s| s.path.clone())}</span>
                 </div>

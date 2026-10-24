@@ -19,6 +19,8 @@
     if (t === "parent") return el.parentElement ? [el.parentElement] : [];
     if (t === "next") return el.nextElementSibling ? [el.nextElementSibling] : [];
     if (t === "body") return [document.body];
+    // `closest:.carte` : l'élément de la classe qui contient le déclencheur.
+    if (t.indexOf("closest:") === 0) { var c = null; try { c = el.closest(t.slice(8)); } catch (_) { /* sélecteur invalide */ } return c ? [c] : []; }
     try { return Array.prototype.slice.call(document.querySelectorAll(t)); } catch (_) { return []; }
   }
   function shown(el) { return getComputedStyle(el).display !== "none"; }

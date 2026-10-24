@@ -310,6 +310,13 @@ impl Core {
             site.base_url = Some(start.origin().ascii_serialization());
         }
         report.files = crawled.files;
+        // Framer : collections du CMS, gabarit des contenus, listes, autres langues (D-109).
+        if report.tool.as_deref() == Some("Framer") || crawled.tool.as_deref() == Some("Framer") {
+            revel_import::framer_site::import_cms(&mut site, &dest, fetch, &mut report);
+            revel_import::framer_click::import_click_variants(&mut site, &dest, fetch, &mut report);
+            let names = revel_import::framer::Modules::load(&dest).component_names;
+            revel_import::framer_components::make_components(&mut site, &names, &mut report);
+        }
         if report.tool.is_none() {
             report.tool = crawled.tool.clone();
         }

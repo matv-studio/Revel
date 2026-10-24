@@ -160,14 +160,39 @@ pub fn import(root: &Path, opts: &Options) -> Result<(Site, Report), ImportError
     let tool = adapt::tool(&docs[0].head, &docs[0].html_attrs);
     report.tool = tool.map(|t| t.name().to_string());
     let mut extra_css = String::new();
+    let mut smooth_scroll = false;
     match tool {
         Some(Tool::Framer) => {
+            // Modules du site copiés (7.4) : effets, états de survol, composants de code (D-109).
+            let modules = crate::framer::Modules::load(root);
             for d in &mut docs {
                 report.animations += adapt::framer(&mut d.head, &mut d.body);
+                report.animations += crate::framer_site::apply_page(
+                    &mut d.head,
+                    &mut d.body,
+                    &modules,
+                    &mut extra_css,
+                );
             }
+            if !modules.hover_css.is_empty() {
+                extra_css.push_str(&modules.hover_css);
+            }
+            smooth_scroll = modules.smooth_scroll;
             report.warnings.push(
-                "Framer : menus, carrousels et effets au survol produits par le moteur de Framer non repris ; animations d'apparition reprises dans le panneau Interactions".into(),
+                "Framer : animations au défilement et états de survol repris (panneaux Interactions et Styles)".into(),
             );
+            // Composants au clic relus dans leur code (framer_click) ; les autres sont à refaire.
+            let left: Vec<&String> = modules
+                .click_components
+                .iter()
+                .filter(|c| !modules.clicks.iter().any(|k| &k.name == *c))
+                .collect();
+            if !left.is_empty() {
+                report.warnings.push(format!(
+                    "Framer : contenu affiché au clic absent de la page publiée, à refaire (accordéon) : {}",
+                    left.iter().map(|c| c.as_str()).collect::<Vec<_>>().join(", ")
+                ));
+            }
         }
         Some(Tool::Webflow) => {
             let ix2 = webflow_interactions(root, &docs);
@@ -418,6 +443,8 @@ pub fn import(root: &Path, opts: &Options) -> Result<(Site, Report), ImportError
     if root.join("sitemap.xml").is_file() {
         site.settings.seo.no_sitemap = true;
     }
+    // Défilement doux du site d'origine (Lenis dans Framer, D-110).
+    site.settings.smooth_scroll |= smooth_scroll;
     Ok((site, report))
 }
 

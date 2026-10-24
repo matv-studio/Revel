@@ -33,14 +33,14 @@ impl Tool {
     }
 }
 
-fn attr<'a>(attrs: &'a [Attr], name: &str) -> Option<&'a str> {
+pub(crate) fn attr<'a>(attrs: &'a [Attr], name: &str) -> Option<&'a str> {
     attrs
         .iter()
         .find(|a| a.name.eq_ignore_ascii_case(name))
         .and_then(|a| a.value.as_deref())
 }
 
-fn set_attr(attrs: &mut Vec<Attr>, name: &str, value: String) {
+pub(crate) fn set_attr(attrs: &mut Vec<Attr>, name: &str, value: String) {
     match attrs.iter_mut().find(|a| a.name == name) {
         Some(a) => a.value = Some(value),
         None => attrs.push(Attr {
@@ -76,7 +76,7 @@ pub fn tool(head: &[Node], html_attrs: &[Attr]) -> Option<Tool> {
 }
 
 /// Parcourt les éléments (enfants compris) ; `f` renvoie `false` pour retirer l'élément.
-fn retain_deep(nodes: &mut Vec<Node>, f: &mut dyn FnMut(&mut Node) -> bool) {
+pub(crate) fn retain_deep(nodes: &mut Vec<Node>, f: &mut dyn FnMut(&mut Node) -> bool) {
     nodes.retain_mut(|n| {
         if !f(n) {
             return false;
@@ -107,7 +107,7 @@ fn without_props(style: &str, props: &[&str]) -> String {
 }
 
 /// Retire de l'attribut `style` les propriétés d'un état de départ d'animation.
-fn clear_initial_state(attrs: &mut Vec<Attr>) {
+pub(crate) fn clear_initial_state(attrs: &mut Vec<Attr>) {
     const PROPS: &[&str] = &[
         "opacity",
         "transform",
@@ -130,7 +130,13 @@ fn clear_initial_state(attrs: &mut Vec<Attr>) {
 }
 
 /// Valeur `data-revel-appear` : animation, durée et délai (secondes), courbe, distance.
-fn appear_value(preset: &str, dur: f64, delay: f64, ease: &str, dist: Option<f64>) -> String {
+pub(crate) fn appear_value(
+    preset: &str,
+    dur: f64,
+    delay: f64,
+    ease: &str,
+    dist: Option<f64>,
+) -> String {
     let mut v = format!("{preset} dur={} delay={}", round(dur), round(delay));
     if ease != "smooth" {
         v.push_str(&format!(" ease={ease}"));
@@ -154,7 +160,7 @@ fn round(x: f64) -> String {
 }
 
 /// Animation Revel d'après un état de départ (décalage, échelle, opacité).
-fn preset_for(x: f64, y: f64, scale: f64, rotate: f64) -> (&'static str, Option<f64>) {
+pub(crate) fn preset_for(x: f64, y: f64, scale: f64, rotate: f64) -> (&'static str, Option<f64>) {
     if y.abs() >= x.abs() && y.abs() > 0.5 {
         if y > 0.0 {
             ("up", Some(y))
@@ -408,7 +414,9 @@ fn text_piece_node(tag: &str, attrs: &[Attr], children: &[Node]) -> bool {
 fn text_piece_or_wrap(n: &Node) -> bool {
     text_piece(n)
         || matches!(n, Node::Element { tag, children, .. }
-            if tag == "span" && !children.is_empty() && children.iter().all(|c| text_piece(c) || matches!(c, Node::Text { text } if text.trim().is_empty())))
+            if tag == "span"
+                && children.iter().any(text_piece)
+                && children.iter().all(|c| text_piece(c) || matches!(c, Node::Text { text } if text.trim().is_empty())))
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -870,11 +878,29 @@ mod tests {
                 }],
             ),
         ];
+        // Texte coloré par morceaux (`<span> </span>`) : pas un effet de texte.
+        body.push(el(
+            "p",
+            &[("class", "framer-text")],
+            vec![
+                Node::Text {
+                    text: "Je trouve — ".into(),
+                },
+                el(
+                    "span",
+                    &[("style", "--framer-text-color:#aaa")],
+                    vec![Node::Text { text: " ".into() }],
+                ),
+                Node::Text {
+                    text: "fin.".into(),
+                },
+            ],
+        ));
         assert_eq!(framer(&mut head, &mut body), 1);
         let html = crate::html::to_html(&body);
         assert_eq!(
             html,
-            r#"<div class="framer-x"><p class="framer-text" data-revel-text="blur split=chars"><span style="white-space:nowrap">+SF</span></p></div><div>Masqué</div>"#
+            r#"<div class="framer-x"><p class="framer-text" data-revel-text="blur split=chars"><span style="white-space:nowrap">+SF</span></p></div><div>Masqué</div><p class="framer-text">Je trouve — <span style="--framer-text-color:#aaa"> </span>fin.</p>"#
         );
     }
 

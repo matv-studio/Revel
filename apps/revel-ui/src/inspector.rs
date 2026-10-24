@@ -157,7 +157,10 @@ pub fn ContentSettings() -> impl IntoView {
         <div class="content-settings">
             {move || current.get().and_then(|(at, node)| crate::blocks::extra_settings(ui, ed, at, node))}
             {move || current.get().map(|(at, node)| match node {
-                Node::Element { tag, attrs, .. } => element_content(ui, ed, apply, at, tag, attrs).into_any(),
+                Node::Element { tag, attrs, children, .. } => {
+                    let anchors = has_section_links(&children);
+                    element_content(ui, ed, apply, at, tag, attrs, anchors).into_any()
+                }
                 Node::Image(img) => image(ui, ed, apply, at, img).into_any(),
                 Node::If { cond, .. } => {
                     // Champ du contenu (liste, modèle) : condition choisie dans une liste ;
@@ -233,6 +236,30 @@ fn setter(
     }
 }
 
+/// Liens vers une section de la page (`#id`) parmi les descendants.
+fn has_section_links(nodes: &[Node]) -> bool {
+    nodes.iter().any(|n| match n {
+        Node::Element {
+            tag,
+            attrs,
+            children,
+            ..
+        } => {
+            (tag == "a"
+                && attr(attrs, "href")
+                    .and_then(|a| a.value.as_deref())
+                    .and_then(|h| h.split_once('#'))
+                    .is_some_and(|(p, id)| matches!(p, "" | "./" | "/" | ".") && !id.is_empty()))
+                || has_section_links(children)
+        }
+        Node::If {
+            then, otherwise, ..
+        } => has_section_links(then) || has_section_links(otherwise),
+        Node::Each { children, .. } => has_section_links(children),
+        _ => false,
+    })
+}
+
 /// Contenu d'un élément : lien (adresse, nouvel onglet), source d'un média et texte alternatif.
 fn element_content(
     ui: Ui,
@@ -241,9 +268,13 @@ fn element_content(
     at: Target,
     tag: String,
     attrs: Vec<Attr>,
+    anchors: bool,
 ) -> impl IntoView {
     let set = setter(apply, at.clone());
     let lower = tag.to_ascii_lowercase();
+    // Navigation vers les sections de la page : lien de la section affichée marqué « actif ».
+    let spy = attr(&attrs, "data-revel-spy").is_some();
+    let set_spy = set.clone();
     let is_link = lower == "a";
     let href = attr(&attrs, "href")
         .and_then(|a| a.value.clone())
@@ -280,6 +311,15 @@ fn element_content(
     let section =
         attr(&attrs, "data-revel-current").and_then(|a| a.value.as_deref()) == Some("section");
     let set_section = set.clone();
+    // Barre de progression : défilement suivi (colonne qui la contient ou page).
+    let progress = attr(&attrs, "data-revel-progress").map(|a| {
+        if a.value.as_deref() == Some("page") {
+            "page"
+        } else {
+            "parent"
+        }
+    });
+    let set_progress = set.clone();
     let media = matches!(lower.as_str(), "img" | "video" | "audio" | "source");
     // Média au survol : son adresse est celle de l'élément survolé (réglée plus haut).
     let hover_display = attr(&attrs, revel_edit::hover::DISPLAY).is_some();
@@ -351,6 +391,24 @@ fn element_content(
                 </div>
             </div>
         })}
+        {progress.map(|cur| view! {
+            <div class="stack insp-content">
+                <div class="field">
+                    <span class="label" title=ui.t("inspector-progress-help")>{ui.t("inspector-progress")}</span>
+                    <div class="seg seg--small" role="radiogroup" aria-label=ui.t("inspector-progress")>
+                        {[("parent", "inspector-progress-parent"), ("page", "inspector-progress-page")].into_iter().map(|(v, k)| {
+                            let set = set_progress.clone();
+                            view! {
+                                <button role="radio" class:is-on=v == cur aria-checked=(v == cur).to_string()
+                                    on:click=move |_| if v != cur { set("data-revel-progress", v.to_string()) }>
+                                    <span>{ui.t(k)}</span>
+                                </button>
+                            }
+                        }).collect_view()}
+                    </div>
+                </div>
+            </div>
+        })}
         {is_link.then(|| view! {
             <div class="stack insp-content">
                 // Adresse reliée (contenu, information du site, menu) : réglée plus haut.
@@ -372,6 +430,19 @@ fn element_content(
                         <span class="switch-track"></span>
                     </span>
                     <span>{ui.t("inspector-current-section")}</span>
+                </label>
+            </div>
+        })}
+        {(anchors || spy).then(|| view! {
+            <div class="stack insp-content">
+                <label class="row-switch" title=ui.t("inspector-spy-help")>
+                    <span class="switch">
+                        <input type="checkbox" id="insp-spy" prop:checked=spy on:change=move |e| {
+                            set_spy("data-revel-spy", if event_target_checked(&e) { "section".into() } else { String::new() })
+                        }/>
+                        <span class="switch-track"></span>
+                    </span>
+                    <span>{ui.t("inspector-spy")}</span>
                 </label>
             </div>
         })}
@@ -798,6 +869,9 @@ const MANAGED: &[&str] = &[
     "data-revel-media",
     "data-revel-media-poster",
     "data-revel-current",
+    "data-revel-progress",
+    "data-revel-masonry",
+    "data-revel-spy",
     "data-revel-on",
     "data-revel-name",
     "data-revel-hidden",

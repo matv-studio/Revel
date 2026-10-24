@@ -456,6 +456,33 @@ const ACTS: &[(&str, &str)] = &[
 ];
 
 /// Classes et identifiants du site (éléments visés).
+/// Classes des éléments qui contiennent `at`, du plus proche au plus lointain.
+fn ancestor_classes(d: &revel_model::Site, at: &revel_edit::address::Target) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = at.clone();
+    while let Ok((parent, _)) = revel_edit::address::locate(d, &cur) {
+        let Some(id) = parent.node else { break };
+        cur = revel_edit::address::Target {
+            owner: parent.owner,
+            node: id,
+        };
+        if let Ok(Node::Element { attrs, .. }) = revel_edit::address::node(d, &cur) {
+            for c in attrs
+                .iter()
+                .find(|a| a.name == "class")
+                .and_then(|a| a.value.as_deref())
+                .unwrap_or("")
+                .split_whitespace()
+            {
+                if revel_edit::actions::target_ok(&format!(".{c}")) && !out.iter().any(|x| x == c) {
+                    out.push(c.to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
 fn site_targets(d: &revel_model::Site) -> (Vec<String>, Vec<String>) {
     let mut classes: Vec<String> = d
         .style_rules()
@@ -542,6 +569,15 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
     let targets = Memo::new(move |_| {
         ed.doc
             .with(|d| d.as_ref().map(site_targets).unwrap_or_default())
+    });
+    // Classes des éléments qui contiennent celui-ci (cible « … qui le contient »).
+    let enclosing = Memo::new(move |_| {
+        let at = at.get_value();
+        ed.doc.with(|d| {
+            d.as_ref()
+                .map(|d| ancestor_classes(d, &at))
+                .unwrap_or_default()
+        })
     });
     view! {
         <section class="anim-family act-family" class:is-on=move || value.with(Option::is_some) data-family="actions">
@@ -676,13 +712,20 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                                             .into_iter().map(|(v, k)| view! { <option value=v selected=v == target>{ui.t(k)}</option> }).collect_view()}
                                         {move || {
                                             let (classes, ids) = targets.get();
+                                            let around = enclosing.get();
                                             let cur = target2.clone();
                                             let known = matches!(cur.as_str(), "self" | "parent" | "next" | "body")
                                                 || classes.iter().any(|c| format!(".{c}") == cur)
+                                                || around.iter().any(|c| format!("closest:.{c}") == cur)
                                                 || ids.iter().any(|x| format!("#{x}") == cur);
                                             let extra = (!known).then(|| view! { <option value=cur.clone() selected=true>{cur.clone()}</option> });
                                             view! {
                                                 {extra}
+                                                {around.into_iter().map(|c| {
+                                                    let v = format!("closest:.{c}");
+                                                    let on = v == cur;
+                                                    view! { <option value=v.clone() selected=on>{ui.tx("act-target-closest", &[("class", c.clone())])}</option> }
+                                                }).collect_view()}
                                                 {ids.into_iter().map(|x| {
                                                     let v = format!("#{x}");
                                                     let on = v == cur;

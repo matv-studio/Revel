@@ -15,7 +15,8 @@
 //!   `music:<adresse>|…[~<volume %>]` (une musique au hasard, jouée en boucle ; remplace la
 //!   précédente) : sons et musique se coupent avec les interrupteurs `data-revel-switch` ;
 //! - élément visé : `self`, `parent`, `next` (élément suivant), `body`, `.<classe>` (tous les
-//!   éléments de la classe), `#<identifiant>`.
+//!   éléments de la classe), `closest:.<classe>` (l'élément de la classe qui contient le
+//!   déclencheur : la carte d'une liste de cartes semblables), `#<identifiant>`.
 //!
 //! Le script du site (`revel-render/src/actions.js`) les exécute.
 
@@ -123,6 +124,7 @@ fn class_ok(c: &str) -> bool {
 pub fn target_ok(t: &str) -> bool {
     matches!(t, "self" | "parent" | "next" | "body")
         || t.strip_prefix('.').is_some_and(class_ok)
+        || t.strip_prefix("closest:.").is_some_and(class_ok)
         || t.strip_prefix('#').is_some_and(class_ok)
 }
 
@@ -240,6 +242,9 @@ mod tests {
             target: "self".into(),
         };
         assert_eq!(r.write(), "click music:/music/Full%20Moon.mp3~40 self");
+        let card = parse("click class:is-active closest:.carte").unwrap();
+        assert_eq!(card[0].target, "closest:.carte");
+        assert_eq!(write(&card), "click class:is-active closest:.carte");
         assert_eq!(parse(&r.write()).unwrap()[0], r);
         for bad in [
             "click",
@@ -249,6 +254,8 @@ mod tests {
             "click class: self",
             "click toggle #a.b",
             "click sound:/a.wav~150 self",
+            "click class:is-active closest:card",
+            "click class:is-active closest:.a.b",
         ] {
             assert_eq!(parse(bad), None, "{bad}");
         }

@@ -877,6 +877,9 @@ pub(crate) fn js_modules(js: &str) -> Vec<String> {
             || spec.starts_with("http://")
             || spec.starts_with("https://"))
             && !spec.contains("${")
+            // Données du CMS de Framer : adresse calculée autrement par le script (`/cms/`),
+            // lues par l'import Framer (D-109).
+            && !spec.ends_with(".framercms")
             && !out.iter().any(|o| o == spec)
         {
             out.push(spec.to_string());

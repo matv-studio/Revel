@@ -1131,6 +1131,53 @@ try {
       await addIn('accordion');
       const accIn = await untilE(async () => (await frame.locator('details.accordeon > summary.accordeon__titre').count()) === 1);
       check('éléments : onglets (deux boutons, deux panneaux), accordéon', tabsIn && accIn);
+      // Barre de progression (D-110) : ajoutée, suit la colonne qui la contient puis la page.
+      await addIn('progress');
+      const barIn = await untilE(async () => (await frame.locator('.barre-progression[data-revel-progress="parent"] > .barre-progression__remplissage').count()) === 1);
+      await frame.locator('.barre-progression').first().click();
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.locator('.content-settings .seg button', { hasText: 'Page' }).click();
+      const barPage = await untilE(async () => (await frame.locator('.barre-progression[data-revel-progress="page"]').count()) === 1);
+      check('éléments : barre de progression (colonne, puis page)', barIn && barPage);
+      // Maçonnerie (D-110) : grille du bloc « avantages » mise en maçonnerie puis remise.
+      await frame.locator('.bloc-avantages__grille').first().click({ position: { x: 2, y: 2 } });
+      const gridSel = await untilE(async () => (await page.locator('.tool-toggle[data-tool="masonry"]').count()) > 0);
+      if (gridSel) {
+        await page.click('.tool-toggle[data-tool="masonry"]');
+        const masOn = await untilE(async () => (await frame.locator('.bloc-avantages__grille[data-revel-masonry]').count()) === 1);
+        await page.click('.tool-toggle[data-tool="masonry"]');
+        const masOff = await untilE(async () => (await frame.locator('[data-revel-masonry]').count()) === 0);
+        check('grille : maçonnerie posée puis retirée', masOn && masOff);
+      } else {
+        check('grille : maçonnerie posée puis retirée', false, 'bouton absent');
+      }
+      // Navigation qui suit la section affichée (D-111) : réglage proposé pour un élément qui
+      // contient des liens vers des sections ; cible « … qui le contient » des interactions.
+      {
+        const s0 = await siteE();
+        let owner = null; let sectionId = null;
+        const findSec = (nodes, o) => { for (const n of nodes || []) { if (n.node === 'element' && (n.attrs || []).some((a) => a.name === 'class' && /intro-agency/.test(a.value || ''))) { owner = o; sectionId = n.id; return; } findSec(n.children, o); } };
+        for (const pg of s0.pages) if (!sectionId) findSec(pg.body, { kind: 'page', id: pg.id });
+        const link = { node: 'element', tag: 'a', attrs: [{ name: 'href', value: '#e2e-cible' }], children: [{ node: 'text', text: 'Cible' }] };
+        await invoke('edit_apply', { command: { cmd: 'insert', parent: { owner, node: sectionId, branch: 'children' }, index: 0, node: { node: 'element', tag: 'nav', attrs: [{ name: 'class', value: 'nav-e2e' }], children: [link] } }, coalesce: false });
+        await page.click('.dock-tab[data-panel="layers"]');
+        await page.click('.layers .layer[data-tech*="nav.nav-e2e"] .layer-label');
+        await page.click('.dock-tab[data-panel="styles"]');
+        await page.waitForSelector('#insp-spy');
+        await page.check('#insp-spy');
+        const spyOn = await untilE(async () => (await frame.locator('nav.nav-e2e[data-revel-spy="section"]').count()) === 1);
+        check('navigation : suit la section affichée (réglage de l\'élément)', spyOn);
+        await frame.locator('nav.nav-e2e a').click();
+        await page.click('.dock-tab[data-panel="interactions"]');
+        await page.click('.act-family .anim-add');
+        const closest = await untilE(async () => (await page.$$eval('.act-family select option', (o) => o.map((x) => x.value))).includes('closest:.nav-e2e'));
+        check('interactions : cible « élément qui le contient »', closest);
+        const s1 = await siteE();
+        let navId = null;
+        const findNav = (nodes) => { for (const n of nodes || []) { if (n.node === 'element' && n.tag === 'nav' && (n.attrs || []).some((a) => a.value === 'nav-e2e')) navId = n.id; findNav(n.children); } };
+        for (const pg of s1.pages) findNav(pg.body);
+        if (navId) await invoke('edit_apply', { command: { cmd: 'remove', at: { owner, node: navId } }, coalesce: false });
+      }
       await addIn('lottie');
       const lottieIn = await untilE(async () => (await frame.locator('.lottie[data-lottie]').count()) === 1);
       await page.click('.dock-tab[data-panel="styles"]');
@@ -1841,6 +1888,18 @@ try {
     const slide = await transition('slide');
     await page.selectOption('#site-transition', '');
     check('paramètres : transition entre les pages choisie puis retirée', slide && await transition(''));
+    // Défilement doux (D-110) : Paramètres › Général, activé puis coupé.
+    const smooth = async (v) => {
+      for (let i = 0; i < 40; i++) {
+        if (((await invoke('edit_open')).site.settings.smooth_scroll ?? false) === v) return true;
+        await page.waitForTimeout(100);
+      }
+      return false;
+    };
+    await page.check('#site-smooth-scroll');
+    const smoothOn = await smooth(true);
+    await page.uncheck('#site-smooth-scroll');
+    check('paramètres : défilement doux activé puis coupé', smoothOn && await smooth(false));
     await page.click('.view-tab[data-view="view-editor"]');
     await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
     check('retour à l\'éditeur : canevas gardé (pas rechargé)', await frameOf().evaluate(() => window.__keep === 1));

@@ -412,6 +412,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     "details",
                     true,
                 ),
+                item(
+                    Preset::ScrollProgress,
+                    "insert-progress",
+                    "insert-help-progress",
+                    "",
+                    icons::progress,
+                    "div",
+                    false,
+                ),
             ],
         ),
         (

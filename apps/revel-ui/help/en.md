@@ -47,6 +47,8 @@ The look is set in **Styles**, per **class**: every element with the same class 
 
 **States**: the menu next to the class sets hover, pressed or focus.
 
+**Masonry**: the grid layout button stacks items of different heights in columns, without gaps.
+
 **Site colors and fonts**: in a color picker, **+** adds the color to the site colors; fonts are managed in **Settings › Fonts**.
 
 ## Text
@@ -81,6 +83,10 @@ A linked date is written the way you want (October 16, 2026, 16.10.2026…); an 
 - **Interactions › Animations**: pick a moment (appear, text, hover, press, loop, scroll), then an animation. Set duration and delay; the ▶ button replays it.
 - **Interactions › Actions**: a press, a hover or scrolling acts on an element (open a menu, make the header opaque, close a banner).
 - **Settings › General › Page transition**: fade or slide from one page to the next.
+- **Settings › General › Smooth scrolling**: the page, or the column under the pointer, glides to its destination with the wheel.
+- **Add › Progress bar**: fills as the column that contains it, or the page, scrolls (“Follows” setting).
+- **Follows the visible section** (element containing links to sections of the page): the link of the section being read gets the “Active” state.
+- An action can target **the enclosing element of a class**: each card of a list opens on its own.
 
 ## Languages
 

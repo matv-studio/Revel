@@ -365,6 +365,11 @@ pub struct Settings {
     /// aucune.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page_transition: Option<String>,
+    /// Défilement doux (D-110) : la molette fait glisser la page, ou le conteneur qui défile sous
+    /// le pointeur, au lieu de sauter d'un cran (comme Lenis). Coupé pour les visiteurs qui
+    /// demandent moins de mouvement.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub smooth_scroll: bool,
     /// Flux RSS des collections (abonnement aux actualités), produits à la génération.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub feeds: Vec<FeedSettings>,

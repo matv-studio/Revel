@@ -5566,6 +5566,7 @@ dependencies = [
 name = "revel-import"
 version = "0.6.6"
 dependencies = [
+ "chrono",
  "dom_query",
  "percent-encoding",
  "regex",

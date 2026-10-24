@@ -273,6 +273,8 @@ pub enum Command {
         #[serde(default)]
         transition: Option<String>,
     },
+    /// Défilement doux du site (D-110).
+    SetSmoothScroll { on: bool },
     /// Flux RSS des collections (adresse en `.xml`, collection existante).
     SetFeeds {
         #[serde(default)]
@@ -1234,6 +1236,9 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 ),
             })
         }
+        Command::SetSmoothScroll { on } => Ok(Command::SetSmoothScroll {
+            on: std::mem::replace(&mut site.settings.smooth_scroll, *on),
+        }),
         Command::SetFeeds { feeds } => {
             for f in feeds {
                 if !f.path.starts_with('/')

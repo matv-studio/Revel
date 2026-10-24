@@ -65,10 +65,11 @@ href=\"{{ lien.url }}\">{{ lien.label }}</a>{% endfor %}`; set them with `apply_
 use sets; variants for alternate looks.\n\
 - Behaviour without code: `data-revel-on` on the triggering element, `<trigger> <action> <target>` separated by \
 `;`: trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss|random:<ms>|spin:<deg>, \
-target self|parent|next|body|.<class>|#<id> (e.g. `click class:menu-open body; scroll:40 class:is-solid self`); \
+target self|parent|next|body|.<class>|closest:.<class> (enclosing element)|#<id> (e.g. `click class:menu-open body; scroll:40 class:is-solid self`); \
 sound: `hover sound:/media/a.wav~50 self` (several files `a.wav|b.wav`: one at random; `~50` volume %), music on a loop: \
 `click music:/media/x.mp3|/media/y.mp3 self` (spaces as %20); music/sound switches: `<button data-revel-switch=\"music|sounds\">` \
 with a `data-revel-switch-text=\"On|Off\"` child (insert_preset switch). \
+Scrolling: smooth scrolling `{\"cmd\": \"set_smooth_scroll\", \"on\": true}`; progress bar insert_preset scroll_progress (`data-revel-progress=\"parent|page\"`, fill width `calc(var(--revel-progress, 0) * 100%)`); masonry grid `data-revel-masonry`; navigation following the visible section `data-revel-spy=\"section\"` (its link to the current `#id` gets `is-active`). \
 Tabs: `data-revel-tabs` (options `hover`, `keys` for arrows/WASD anywhere, `sound=<url>`) with `data-revel-tab` \
 triggers and `data-revel-panel` panels (several series of panels each follow the tabs in order; the active tab and \
 filter get the class `is-active`); media on hover (a background video showing the hovered item's video, e.g. a \
@@ -241,7 +242,7 @@ pub struct InsertPresetArg {
     /// list, grid, columns, rich_text, video, icon, embed, lottie, tabs, accordion,
     /// collection_list, locale_switch, navbar, ticker, carousel, slideshow, block_hero,
     /// block_features, block_text_image, block_cta, block_testimonial, block_faq, block_contact,
-    /// block_form, video_player, list_filters, consent, switch.
+    /// block_form, video_player, list_filters, consent, switch, scroll_progress.
     pub preset: String,
     /// Default text of the new element (site's language). navbar: "Brand|Menu|Link 1|Link 2|…";
     /// carousel/slideshow: "Slide|Previous|Next"; switch: "Label|On|Off"; icon: icon name

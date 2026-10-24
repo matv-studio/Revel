@@ -21,8 +21,10 @@ mod forms;
 mod head;
 mod html;
 pub mod lottie;
+pub mod masonry;
 pub mod rebase;
 mod redirects;
+pub mod scroll;
 pub mod transitions;
 mod typography;
 
@@ -558,11 +560,13 @@ fn build_pages(
             used.lottie |= l;
             let (html, i) = actions::wire(html, scripts);
             used.actions |= i;
-            transitions::wire(
+            let html = transitions::wire(
                 html,
                 input.site.settings.page_transition.as_deref(),
                 scripts,
-            )
+            );
+            let html = scroll::wire(html, input.site.settings.smooth_scroll, scripts);
+            masonry::wire(html)
         } else {
             html
         };
@@ -1610,6 +1614,8 @@ fn editor_page(
         input.site.settings.page_transition.as_deref(),
         opts.scripts,
     );
+    let html = scroll::wire(html, input.site.settings.smooth_scroll, opts.scripts);
+    let html = masonry::wire(html);
     warnings.extend(b.take_warnings());
     let (slots, vars) = b
         .editor

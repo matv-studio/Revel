@@ -549,6 +549,7 @@ fn looks_different(a: &revel_model::Site, b: &revel_model::Site) -> bool {
     let plain = |s: &revel_model::Site| {
         let mut s = s.clone();
         s.settings.page_transition = None;
+        s.settings.smooth_scroll = false;
         s.settings.seo = Default::default();
         s.settings.forms = Default::default();
         s.redirects.clear();
@@ -886,6 +887,7 @@ impl Ed {
                     | Command::SetSeoSettings { .. }
                     | Command::SetFormSettings { .. }
                     | Command::SetPageTransition { .. }
+                    | Command::SetSmoothScroll { .. }
                     | Command::SetFeeds { .. }
             ) {
                 // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.

@@ -1017,6 +1017,60 @@ plusieurs — Liveblocks](https://development.liveblocks.io/blog/how-to-build-un
 
 ## Décisions ouvertes
 
+**D-109 — 24/10/2026 — prise.** **Import Framer : modules du site et CMS.** Demande de l'utilisateur (site
+matv.framer.website : animations, projets au-delà des six premiers, survol, barre de progression et menus
+dépliants perdus à l'import). La page publiée par Framer n'est que le premier rendu de React ; le reste est
+relu dans les modules copiés avec le site (`_externe/framerusercontent.com/**/*.mjs`, `framer.rs`) :
+- apparition au défilement (`__framer__enter`, `__framer__animate`) → `data-revel-appear` ; états de survol
+  (variantes `…-hover` et règles `.hover`) → règles `:hover` ;
+- barre de progression de code (`ScrollProgress`) → barre Revel (D-110) ; Lenis → défilement doux (D-110) ;
+- CMS : fichiers `.framercms` (adresse `/modules/` → `/cms/`, format binaire gros-boutiste décodé :
+  nombre de contenus, champs nommés et typés — texte, texte riche, image, lien, date, liste, objet) et
+  schéma du module de la collection → collection Revel (`content/projects/*.md`, ordre de Framer), gabarit
+  tiré de la page la plus complète (champs reliés par valeur, galerie reconstruite en liste, parties
+  facultatives sous condition quand leurs champs sont vides ensemble), listes des autres pages reliées
+  à la collection (tous les contenus, plus la limite de pagination du rendu publié), maçonnerie reprise ;
+- langues : table `{code,id,name,slug}`, pages `/fr/…` alignées sur les pages principales (textes et
+  attributs ; paragraphe mis en forme autrement découpé aux tirets), contenus traduits
+  `content/fr/projects` (D-35) ; un même texte traduit différemment dans une page et un gabarit garde la
+  traduction de la page (une traduction par texte, avertissement) ;
+- vidéos copiées avec le site : adresse de la copie (`/_externe/…`, D-36) ; vidéo lancée seule coupée
+  (`muted`, posé par le script de Framer) ; texte riche du CMS stylé comme dans Framer (conteneur
+  `rich-text-wrapper` avec les styles de texte de chaque balise, règles de base `p.framer-text` étendues
+  à `.rich-text-wrapper > p`).
+Mesuré sur matv : différence de pixels 0,36 % (1280 px) et 0,07 à 1,9 % (375 px, bandeau de logos et vidéos
+en mouvement exclus), textes visibles identiques en anglais.
+
+**D-110 — 24/10/2026 — prise.** **Défilement doux, barre de progression, maçonnerie.** Outils manquants pour
+refaire matv dans l'interface :
+- Défilement doux (Paramètres › Général, `settings.smooth_scroll`) : la molette fixe une cible, la page ou la
+  colonne qui défile sous le pointeur glisse vers elle ; clavier, barre et toucher inchangés ; coupé pour
+  « moins de mouvement ».
+- Barre de progression (panneau Ajouter) : `data-revel-progress="parent|page"` (réglage « Suit » : colonne
+  qui la contient ou page), variable `--revel-progress` de 0 à 1, remplissage
+  `width: calc(var(--revel-progress, 0) * 100%)`.
+- Maçonnerie (bouton de la grille) : `data-revel-masonry`, lignes de 1 px, chaque élément couvre
+  `round(hauteur + écart)` lignes, recalculé au changement de taille ; aussi dans le canevas.
+- Aperçu de l'application : morceaux de fichiers servis (`Range`, réponse 206) pour la lecture des vidéos,
+  comme l'exemple de diffusion de wry.
+Source : [wry, exemple streaming](https://docs.rs/crate/wry/0.56.0/source/examples/streaming.rs).
+
+**D-111 — 24/10/2026 — prise.** **Section affichée et variantes au clic.**
+- Navigation qui suit la section affichée (réglage de l'élément qui contient des liens `#section`,
+  `data-revel-spy="section"`) : le lien de la section en cours (dernière dont le haut a passé 40 % de la
+  fenêtre, colonnes à défilement propre comprises) reçoit `is-active`, l'élément `data-revel-section`.
+  Import Framer : variantes choisies par `__framer__targets` → règles
+  `.racine[data-revel-section="work"] .élément`.
+- Cible d'interaction « élément de la classe qui le contient » (`closest:.classe`) : un appui ouvre sa carte
+  seulement, dans une liste de cartes semblables.
+- Import Framer des variantes au clic (cartes « Outils ») : le rendu du composant est lu dans son code
+  (`framer_jsx.rs` : appels `jsx(balise, props)`, conditions de variante, surcharges `…({id:{…}})`, textes
+  des propriétés de l'utilisation, images de fond, rapport `fitImageDimension`) ; parties de la variante
+  ouverte ajoutées à la page et masquées hors de `.is-active`, règles `.framer-v-ouverte` réécrites en
+  `.framer-v-défaut.is-active`, interaction `click class:is-active closest:.framer-v-défaut` sur les
+  éléments appuyés, images copiées. Mesuré sur matv : les quatre cartes ouvertes à 1,3–2,7 % de différence
+  de pixels avec le site en ligne (lissage du texte).
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

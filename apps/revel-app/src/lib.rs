@@ -1364,20 +1364,64 @@ fn canvas_protocol(
         .path_and_query()
         .map(|p| p.as_str().to_string())
         .unwrap_or_else(|| request.uri().path().to_string());
+    let range = request
+        .headers()
+        .get(tauri::http::header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
     std::thread::spawn(move || {
         let r = if preview {
             core.preview_respond(&path)
         } else {
             core.canvas_respond(&path)
         };
-        let response = tauri::http::Response::builder()
-            .status(r.status)
+        let mut builder = tauri::http::Response::builder()
             .header(tauri::http::header::CONTENT_TYPE, r.content_type)
             .header(tauri::http::header::CACHE_CONTROL, "no-store")
-            .body(r.body)
+            .header(tauri::http::header::ACCEPT_RANGES, "bytes");
+        let mut status = r.status;
+        let mut body = r.body;
+        // Vidéos et sons : lecture par morceaux demandée par le lecteur du navigateur.
+        if status == 200
+            && let Some((start, end)) = range.as_deref().and_then(|h| byte_range(h, body.len()))
+        {
+            builder = builder.header(
+                tauri::http::header::CONTENT_RANGE,
+                format!("bytes {start}-{end}/{}", body.len()),
+            );
+            body = body[start..=end].to_vec();
+            status = 206;
+        }
+        let response = builder
+            .status(status)
+            .body(body)
             .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()));
         responder.respond(response);
     });
+}
+
+/// Morceau demandé par un en-tête `Range: bytes=début-fin` (un seul morceau ; `bytes=-n` : les
+/// n derniers octets), borné à la taille ; `None` si l'en-tête ne se lit pas ou sort du fichier.
+fn byte_range(header: &str, len: usize) -> Option<(usize, usize)> {
+    let spec = header.trim().strip_prefix("bytes=")?;
+    if spec.contains(',') || len == 0 {
+        return None;
+    }
+    let (a, b) = spec.split_once('-')?;
+    let (a, b) = (a.trim(), b.trim());
+    let (start, end) = if a.is_empty() {
+        let n: usize = b.parse().ok()?;
+        (len.saturating_sub(n), len - 1)
+    } else {
+        let start: usize = a.parse().ok()?;
+        let end = if b.is_empty() {
+            len - 1
+        } else {
+            b.parse::<usize>().ok()?.min(len - 1)
+        };
+        (start, end)
+    };
+    (start <= end && start < len).then_some((start, end))
 }
 
 /// Site à ouvrir dans l'éditeur au démarrage : argument `--open DOSSIER` (ou `--open=DOSSIER`),
@@ -1560,7 +1604,19 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::open_arg;
+    use super::{byte_range, open_arg};
+
+    /// Lecture des vidéos dans l'aperçu : morceaux demandés par le lecteur.
+    #[test]
+    fn morceaux_demandes() {
+        assert_eq!(byte_range("bytes=0-", 10), Some((0, 9)));
+        assert_eq!(byte_range("bytes=2-5", 10), Some((2, 5)));
+        assert_eq!(byte_range("bytes=8-99", 10), Some((8, 9)));
+        assert_eq!(byte_range("bytes=-3", 10), Some((7, 9)));
+        assert_eq!(byte_range("bytes=10-", 10), None);
+        assert_eq!(byte_range("bytes=0-1,4-5", 10), None);
+        assert_eq!(byte_range("items=0-1", 10), None);
+    }
 
     fn args(list: &[&str]) -> impl Iterator<Item = String> {
         list.iter()

@@ -144,6 +144,7 @@ cd /home/claude/revel
 export CARGO_INCREMENTAL=0
 cargo fmt --all && (cd apps/revel-ui && cargo fmt)
 cargo clippy -q --workspace --all-targets -- -D warnings 2>&1 | tail -20
+cargo test -q --manifest-path apps/revel-ui/Cargo.toml 2>&1 | grep -E "FAILED|panicked" | head -5
 (cd apps/revel-ui && cargo clippy -q --target wasm32-unknown-unknown -- -D warnings 2>&1 | tail -20)
 REVEL_SFTP_HOST=127.0.0.1 REVEL_SFTP_PORT=2222 REVEL_SFTP_USER=revelsftp REVEL_SFTP_PASSWORD=essai-sftp-7Qk2 REVEL_SFTP_HOME=/home/revelsftp \
   cargo test -q --no-fail-fast --workspace --exclude revel-app > $SP/tests.log 2>&1; echo "tests $?"
@@ -574,6 +575,13 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
     `tour2.mjs` ; appel MCP en ligne de commande : `$SP/tools/mcp.sh <outil> '<json>'`.
   - Piège : `revel build` écrit son cache d'images dans `<site>/.revel` (79 Mo) : l'exclure des archives.
   - Piège : le shell du PC (`device_bash`) peut répondre « Workspace unavailable » : réessayer.
+  - Commits 68c10b5, 5d3e078 (pastilles bordées), 776308c « Version 0.6.8 », 039e650 (essai natif de la
+    disposition : `cargo test --manifest-path apps/revel-ui/Cargo.toml`, ajouté à `verify.sh`) ; essais de
+    l'interface 326/326, animations 17/17 ; CI entièrement réussie sur 039e650 (flux 40212658729).
+    Installateurs 0.6.8 : flux 40215053080 → brouillon « Revel v0.6.8 » (préversion, id 423549259, cible
+    039e650, 17 fichiers), **à publier par l'utilisateur** ; installateur Windows copié dans
+    `_Claude\Installateurs` (morceaux dans `_morceaux`, supprimables) ; étiquette `v0.6.8`
+    sur 039e650 (flux 40215054689). Captures `_Claude\Captures\0.6.8-matv-*` (deux thèmes).
 
 | Étape | État |
 |---|---|

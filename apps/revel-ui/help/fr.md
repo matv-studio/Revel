@@ -47,7 +47,7 @@ L'apparence se règle dans **Styles**, par **classe** : tous les éléments qui 
 
 **États** : le menu à côté de la classe règle le survol, l'appui ou le focus.
 
-**Maçonnerie** : le bouton de la disposition en grille range les éléments de hauteurs différentes en colonnes, sans trous.
+**Maçonnerie** : le bouton de la disposition en grille range les éléments de hauteurs différentes en colonnes, sans trous ; « Colonnes à tour de rôle » les place dans l'ordre, une colonne après l'autre.
 
 **Couleurs et polices du site** : dans un sélecteur de couleur, **+** ajoute la couleur aux couleurs du site ; les polices se gèrent dans **Paramètres › Polices**.
 

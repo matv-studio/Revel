@@ -423,17 +423,45 @@
   function onScroll() { if (!pending) { pending = true; requestAnimationFrame(update); } }
 
   function start() {
+    function enter(el, st) {
+      FAMILIES.forEach(function (f) {
+        var o = st[f];
+        if (!o || o.played || o.trigger === "load") return;
+        if (f === "appear") { o.played = true; o.anims = appear(el, o); }
+        else if (f === "text") { o.played = true; o.anims = text(el, o); }
+      });
+    }
+    // Élément dans le dernier dixième de l'écran quand la page ou sa colonne ne peut plus
+    // défiler (bas du site, fin d'une colonne) : joué quand même.
+    var near = new Set(), nearQ = false;
+    function scroller(el) {
+      for (var e = el.parentElement; e && e !== doc.body; e = e.parentElement) {
+        var o = getComputedStyle(e).overflowY;
+        if ((o === "auto" || o === "scroll") && e.scrollHeight > e.clientHeight + 1) return e;
+      }
+      return doc.scrollingElement || doc.documentElement;
+    }
+    function atEnd(c) { return c.scrollTop + c.clientHeight >= c.scrollHeight - 2; }
+    function checkNear() {
+      nearQ = false;
+      near.forEach(function (el) {
+        if (atEnd(scroller(el))) { near.delete(el); if (el.__rv) enter(el, el.__rv); }
+      });
+    }
+    var edge = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) near.add(e.target); else near.delete(e.target);
+      });
+      checkNear();
+    }, { threshold: 0 });
+    doc.addEventListener("scroll", function () { if (near.size && !nearQ) { nearQ = true; requestAnimationFrame(checkNear); } }, { passive: true, capture: true });
     var inView = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
         var el = e.target, st = el.__rv;
         if (!st) return;
         if (e.isIntersecting) {
-          FAMILIES.forEach(function (f) {
-            var o = st[f];
-            if (!o || o.played || o.trigger === "load") return;
-            if (f === "appear") { o.played = true; o.anims = appear(el, o); }
-            else if (f === "text") { o.played = true; o.anims = text(el, o); }
-          });
+          near.delete(el);
+          enter(el, st);
           if (st.loop && st.loop.anims) st.loop.anims.forEach(function (a) { a.play(); });
         } else {
           ["appear", "text"].forEach(function (f) {
@@ -482,6 +510,7 @@
         if (anims.length) scrolls.push({ el: el, anims: anims });
       }
       inView.observe(el);
+      if (st.appear || st.text) edge.observe(el);
     });
     if (scrolls.length) {
       addEventListener("scroll", onScroll, { passive: true });

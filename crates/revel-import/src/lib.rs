@@ -23,6 +23,7 @@ pub mod framer;
 pub mod framer_click;
 pub mod framer_components;
 pub mod framer_jsx;
+pub mod framer_names;
 pub mod framer_site;
 pub mod html;
 pub mod webflow;

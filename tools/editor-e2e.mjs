@@ -305,7 +305,7 @@ try {
     await page.waitForSelector('.import-wp-probe');
     const counts = (await page.textContent('.import-wp-probe')).replace(/\s+/g, ' ').trim();
     await page.waitForFunction(() => /atelier-lumen$/.test(document.querySelector('.import-target')?.textContent.trim() || ''));
-    await page.click('.import-wp-media-row .switch-track');
+    await page.click('.import-wp-media-row .switch');
     await page.waitForFunction(() => !document.querySelector('.import-wp-media').checked);
     if (shots) await page.locator('.import-dialog').screenshot({ path: `${shots}/import-wordpress.png` });
     await page.click('.import-run');
@@ -1134,20 +1134,24 @@ try {
       // Barre de progression (D-110) : ajoutée, suit la colonne qui la contient puis la page.
       await addIn('progress');
       const barIn = await untilE(async () => (await frame.locator('.barre-progression[data-revel-progress="parent"] > .barre-progression__remplissage').count()) === 1);
-      await frame.locator('.barre-progression').first().click();
+      // Barre ajoutée : déjà choisie (la cliquer dans le canevas viserait 4 px de haut).
       await page.click('.dock-tab[data-panel="styles"]');
       await page.locator('.content-settings .seg button', { hasText: 'Page' }).click();
       const barPage = await untilE(async () => (await frame.locator('.barre-progression[data-revel-progress="page"]').count()) === 1);
       check('éléments : barre de progression (colonne, puis page)', barIn && barPage);
       // Maçonnerie (D-110) : grille du bloc « avantages » mise en maçonnerie puis remise.
-      await frame.locator('.bloc-avantages__grille').first().click({ position: { x: 2, y: 2 } });
+      await frame.locator('.bloc-avantages .bloc-avantage').first().click();
+      await page.click('.node-crumb[data-tech*="bloc-avantages__grille"]');
+      await page.click('.dock-tab[data-panel="styles"]');
       const gridSel = await untilE(async () => (await page.locator('.tool-toggle[data-tool="masonry"]').count()) > 0);
       if (gridSel) {
         await page.click('.tool-toggle[data-tool="masonry"]');
         const masOn = await untilE(async () => (await frame.locator('.bloc-avantages__grille[data-revel-masonry]').count()) === 1);
+        await page.click('.tool-toggle[data-tool="masonry-order"]');
+        const masOrder = await untilE(async () => (await frame.locator('.bloc-avantages__grille[data-revel-masonry="order"]').count()) === 1);
         await page.click('.tool-toggle[data-tool="masonry"]');
         const masOff = await untilE(async () => (await frame.locator('[data-revel-masonry]').count()) === 0);
-        check('grille : maçonnerie posée puis retirée', masOn && masOff);
+        check('grille : maçonnerie posée (colonnes à tour de rôle) puis retirée', masOn && masOrder && masOff);
       } else {
         check('grille : maçonnerie posée puis retirée', false, 'bouton absent');
       }
@@ -1158,16 +1162,17 @@ try {
         let owner = null; let sectionId = null;
         const findSec = (nodes, o) => { for (const n of nodes || []) { if (n.node === 'element' && (n.attrs || []).some((a) => a.name === 'class' && /intro-agency/.test(a.value || ''))) { owner = o; sectionId = n.id; return; } findSec(n.children, o); } };
         for (const pg of s0.pages) if (!sectionId) findSec(pg.body, { kind: 'page', id: pg.id });
-        const link = { node: 'element', tag: 'a', attrs: [{ name: 'href', value: '#e2e-cible' }], children: [{ node: 'text', text: 'Cible' }] };
-        await invoke('edit_apply', { command: { cmd: 'insert', parent: { owner, node: sectionId, branch: 'children' }, index: 0, node: { node: 'element', tag: 'nav', attrs: [{ name: 'class', value: 'nav-e2e' }], children: [link] } }, coalesce: false });
+        const link = { node: 'element', id: 'xliene2e', tag: 'a', attrs: [{ name: 'href', value: '#e2e-cible' }], children: [{ node: 'text', text: 'Cible' }] };
+        await invoke('edit_apply', { command: { cmd: 'insert', parent: { owner, node: sectionId, branch: 'children' }, index: 0, node: { node: 'element', id: 'xnave2e0', tag: 'nav', attrs: [{ name: 'class', value: 'nav-e2e' }], children: [link] } }, coalesce: false });
         await page.click('.dock-tab[data-panel="layers"]');
         await page.click('.layers .layer[data-tech*="nav.nav-e2e"] .layer-label');
         await page.click('.dock-tab[data-panel="styles"]');
         await page.waitForSelector('#insp-spy');
-        await page.check('#insp-spy');
+        await page.click('.row-switch:has(#insp-spy) .switch');
         const spyOn = await untilE(async () => (await frame.locator('nav.nav-e2e[data-revel-spy="section"]').count()) === 1);
         check('navigation : suit la section affichée (réglage de l\'élément)', spyOn);
-        await frame.locator('nav.nav-e2e a').click();
+        await page.click('.dock-tab[data-panel="layers"]');
+        await page.click('.layers .layer:has-text("Cible") .layer-label');
         await page.click('.dock-tab[data-panel="interactions"]');
         await page.click('.act-family .anim-add');
         const closest = await untilE(async () => (await page.$$eval('.act-family select option', (o) => o.map((x) => x.value))).includes('closest:.nav-e2e'));
@@ -1177,6 +1182,9 @@ try {
         const findNav = (nodes) => { for (const n of nodes || []) { if (n.node === 'element' && n.tag === 'nav' && (n.attrs || []).some((a) => a.value === 'nav-e2e')) navId = n.id; findNav(n.children); } };
         for (const pg of s1.pages) findNav(pg.body);
         if (navId) await invoke('edit_apply', { command: { cmd: 'remove', at: { owner, node: navId } }, coalesce: false });
+        // Retrait fait hors de l'interface : attendre qu'elle l'ait repris.
+        await untilE(async () => (await frame.locator('nav.nav-e2e').count()) === 0
+          && (await page.locator('.layers .layer[data-tech*="nav.nav-e2e"]').count()) === 0, 15000);
       }
       await addIn('lottie');
       const lottieIn = await untilE(async () => (await frame.locator('.lottie[data-lottie]').count()) === 1);
@@ -1896,10 +1904,14 @@ try {
       }
       return false;
     };
-    await page.check('#site-smooth-scroll');
+    await page.click('.switch:has(> #site-smooth-scroll)');
     const smoothOn = await smooth(true);
-    await page.uncheck('#site-smooth-scroll');
-    check('paramètres : défilement doux activé puis coupé', smoothOn && await smooth(false));
+    await page.waitForFunction(() => document.querySelector('#site-smooth-scroll').checked);
+    await page.waitForTimeout(300);
+    await page.click('.switch:has(> #site-smooth-scroll)');
+    const smoothOff = await smooth(false);
+    if (!smoothOff) console.log('défilement doux', await page.$eval('#site-smooth-scroll', (e) => e.checked), JSON.stringify((await invoke('edit_open')).site.settings.smooth_scroll));
+    check('paramètres : défilement doux activé puis coupé', smoothOn && smoothOff);
     await page.click('.view-tab[data-view="view-editor"]');
     await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
     check('retour à l\'éditeur : canevas gardé (pas rechargé)', await frameOf().evaluate(() => window.__keep === 1));

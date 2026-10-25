@@ -47,7 +47,7 @@ The look is set in **Styles**, per **class**: every element with the same class 
 
 **States**: the menu next to the class sets hover, pressed or focus.
 
-**Masonry**: the grid layout button stacks items of different heights in columns, without gaps.
+**Masonry**: the grid layout button stacks items of different heights in columns, without gaps; “Columns in turn” places them in order, one column after the other.
 
 **Site colors and fonts**: in a color picker, **+** adds the color to the site colors; fonts are managed in **Settings › Fonts**.
 

@@ -33,6 +33,8 @@ for (const [f, ps] of Object.entries(FAMILIES)) {
     else body.push(`<div class="b" id="${f}-${p}" data-revel-${f}="${p}${extra}"><span>${f} ${p}</span><span>b</span></div>`);
   }
 }
+// Dernier élément de la page, dans le dernier dixième de l'écran une fois en bas : joué quand même.
+body.push('<div id="appear-fin" data-revel-appear="fade" style="height:20px">fin</div>');
 const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Animations</title>${head}<style>.b{width:200px;height:60px;margin:40px;background:#3d7eff;color:#fff}</style></head><body>${body.join('\n')}</body></html>`;
 const URL = 'http://revel.test/';
 const serve = async (page, missing = false) => {

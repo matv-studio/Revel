@@ -858,7 +858,7 @@ fn rebuild_group(
             st.push(format!("row-gap:{g}"));
         }
         set_attr(attrs, "style", st.join(";"));
-        set_attr(attrs, "data-revel-masonry", String::new());
+        set_attr(attrs, "data-revel-masonry", "order".into());
         *children = vec![each(template)];
     } else {
         let idx: HashSet<usize> = card_roots.iter().map(|p| p[container.len()]).collect();
@@ -1664,7 +1664,7 @@ fn gallery_rebuild(
             st.push(format!("row-gap:{g}"));
         }
         set_attr(attrs, "style", st.join(";"));
-        set_attr(attrs, "data-revel-masonry", String::new());
+        set_attr(attrs, "data-revel-masonry", "order".into());
     }
     let mut kids = sib_nodes;
     kids.push(Node::Each {

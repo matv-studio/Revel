@@ -463,17 +463,41 @@ fn GridFlow(sx: Sx) -> impl IntoView {
                 if attrs.iter().any(|a| a.name == "data-revel-masonry"))
         })
     });
-    let set_masonry = move |on: bool| {
+    // Colonnes à tour de rôle (`order`, colonnes de Framer) plutôt que la moins haute.
+    let in_order = Memo::new(move |_| {
+        sx.ed.selected.with(|_| ());
+        sx.ed.doc.with(|_| ());
+        sx.ed.selected_node().is_some_and(|(_, n)| {
+            matches!(n, revel_model::Node::Element { attrs, .. }
+                if attrs.iter().any(|a| a.name == "data-revel-masonry" && a.value.as_deref() == Some("order")))
+        })
+    });
+    let set_order = move |on: bool| {
         if let Some((at, _)) = sx.ed.selected_node() {
             sx.ed.apply(
                 ui,
                 revel_edit::Command::SetAttr {
                     at,
                     name: "data-revel-masonry".into(),
-                    value: on.then(String::new),
+                    value: Some(if on { "order" } else { "on" }.into()),
                 },
                 false,
             );
+        }
+    };
+    let set_masonry = move |on: bool| {
+        if let Some((at, _)) = sx.ed.selected_node() {
+            let name = "data-revel-masonry".to_string();
+            let cmd = if on {
+                revel_edit::Command::SetAttr {
+                    at,
+                    name,
+                    value: Some("on".into()),
+                }
+            } else {
+                revel_edit::Command::RemoveAttr { at, name }
+            };
+            sx.ed.apply(ui, cmd, false);
         }
     };
     view! {
@@ -485,6 +509,12 @@ fn GridFlow(sx: Sx) -> impl IntoView {
             <button class="tool-toggle" data-tool="masonry" class:is-on=move || masonry.get() aria-pressed=move || masonry.get().to_string()
                 title=ui.t("grid-masonry-help") aria-label=ui.t("grid-masonry")
                 on:click=move |_| set_masonry(!masonry.get_untracked())>{icons::masonry()}</button>
+            {move || masonry.get().then(|| view! {
+                <button class="tool-toggle" data-tool="masonry-order" class:is-on=move || in_order.get()
+                    aria-pressed=move || in_order.get().to_string()
+                    title=ui.t("grid-masonry-order-help") aria-label=ui.t("grid-masonry-order")
+                    on:click=move |_| set_order(!in_order.get_untracked())>{icons::columns()}</button>
+            })}
         </div>
     }
 }

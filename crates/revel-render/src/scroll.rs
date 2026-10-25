@@ -28,8 +28,9 @@ const SMOOTH: &str = concat!(
     "if(e.hasAttribute(\"data-revel-no-smooth\")||/^(TEXTAREA|SELECT)$/.test(e.tagName))return null;if(can(e,y))return e}",
     "return d.scrollingElement||d.documentElement}",
     "function step(){M.forEach(function(s,e){var c=e.scrollTop;if(Math.abs(c-s.last)>1){M.delete(e);return}",
-    "var n=c+(s.t-c)*.12;if(Math.abs(s.t-n)<.5)n=s.t;e.scrollTop=n;s.last=e.scrollTop;",
-    "if(Math.abs(s.t-s.last)<.5||s.last===c)M.delete(e)});",
+    // Pas d'au moins 1 px : les derniers pixels sont atteints (un pas plus petit est arrondi).
+    "var d=s.t-c,n=Math.abs(d)<=1?s.t:c+(d>0?Math.max(1,d*.12):Math.min(-1,d*.12));e.scrollTop=n;s.last=e.scrollTop;",
+    "if(Math.abs(s.t-s.last)<1||s.last===c)M.delete(e)});",
     "if(M.size)requestAnimationFrame(step);else run=false}",
     "w.addEventListener(\"wheel\",function(v){if(v.ctrlKey||v.defaultPrevented||Math.abs(v.deltaX)>Math.abs(v.deltaY))return;",
     "var y=v.deltaY*(v.deltaMode===1?16:v.deltaMode===2?innerHeight:1),e=find(v.target,y);if(!e)return;",

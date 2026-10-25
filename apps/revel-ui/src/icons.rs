@@ -692,6 +692,13 @@ pub fn masonry() -> AnyView {
     )
 }
 
+/// Colonnes à tour de rôle : deux colonnes numérotées 1 et 2.
+pub fn columns() -> AnyView {
+    svg(
+        r#"<rect x="2" y="2" width="5" height="12" rx="1"/><rect x="9" y="2" width="5" height="12" rx="1"/><path d="M4.5 5v2.5M10.5 5h1.5v1.25h-1.5v1.25h1.5"/>"#,
+    )
+}
+
 /// Barre de progression : piste et partie remplie.
 pub fn progress() -> AnyView {
     svg(

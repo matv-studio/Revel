@@ -282,6 +282,9 @@ fn at_ref<'a>(nodes: &'a [Node], path: &[usize]) -> Option<&'a Node> {
     }
 }
 
+/// Utilisation : (page, chemin d'index dans son corps).
+type Spot = (usize, Vec<usize>);
+
 /// Crée les composants ; `names` : classe du composant Framer → son nom (`displayName`).
 pub fn make_components(
     site: &mut Site,
@@ -289,7 +292,7 @@ pub fn make_components(
     report: &mut Report,
 ) -> usize {
     // Utilisations par page (les gabarits gardent leurs copies).
-    let mut groups: BTreeMap<(String, String), Vec<(usize, Vec<usize>)>> = BTreeMap::new();
+    let mut groups: BTreeMap<(String, String), Vec<Spot>> = BTreeMap::new();
     for (pi, p) in site.pages.iter().enumerate() {
         let mut found = Vec::new();
         find(&p.body, &mut Vec::new(), &mut found);

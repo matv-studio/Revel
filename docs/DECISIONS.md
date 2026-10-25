@@ -1049,8 +1049,15 @@ refaire matv dans l'interface :
 - Barre de progression (panneau Ajouter) : `data-revel-progress="parent|page"` (réglage « Suit » : colonne
   qui la contient ou page), variable `--revel-progress` de 0 à 1, remplissage
   `width: calc(var(--revel-progress, 0) * 100%)`.
-- Maçonnerie (bouton de la grille) : `data-revel-masonry`, lignes de 1 px, chaque élément couvre
-  `round(hauteur + écart)` lignes, recalculé au changement de taille ; aussi dans le canevas.
+- Maçonnerie (bouton de la grille) : `data-revel-masonry`, lignes de 1 px, chaque élément placé
+  (colonne, première ligne) et couvrant `round(hauteur + écart)` lignes, dans la colonne la moins haute
+  ou, « Colonnes à tour de rôle » (`="order"`, colonnes de Framer), dans la colonne suivante ;
+  recalculé au changement de taille ; aussi dans le canevas.
+- Défilement doux : pas d'au moins 1 px (les derniers pixels d'une colonne étaient arrondis et jamais
+  atteints) ; apparition au défilement jouée aussi pour un élément resté dans le dernier dixième de
+  l'écran quand sa page ou sa colonne ne peut plus défiler (bouton en bas de la colonne des projets).
+- Interrupteurs de l'interface : la case passe au-dessus de la poignée (un appui sur la poignée d'un
+  interrupteur hors d'un libellé ne basculait pas).
 - Aperçu de l'application : morceaux de fichiers servis (`Range`, réponse 206) pour la lecture des vidéos,
   comme l'exemple de diffusion de wry.
 Source : [wry, exemple streaming](https://docs.rs/crate/wry/0.56.0/source/examples/streaming.rs).
@@ -1070,6 +1077,17 @@ Source : [wry, exemple streaming](https://docs.rs/crate/wry/0.56.0/source/exampl
   `.framer-v-défaut.is-active`, interaction `click class:is-active closest:.framer-v-défaut` sur les
   éléments appuyés, images copiées. Mesuré sur matv : les quatre cartes ouvertes à 1,3–2,7 % de différence
   de pixels avec le site en ligne (lissage du texte).
+
+**D-112 — 25/10/2026 — prise.** **Import Framer dans la forme de l'interface : composants et noms.**
+- Composants Framer utilisés plusieurs fois dans une page, même variante et même structure
+  (`framer_components.rs`) : composant Revel nommé comme dans Framer (`displayName`), ce qui change
+  d'une utilisation à l'autre (textes, images, liens, textes alternatifs) devient une propriété nommée
+  d'après le calque ; chaque utilisation garde ses valeurs. Sur matv : Stats (4 utilisations),
+  Experience (2), Primary (2).
+- Classes d'empreinte de Framer (`framer-1p11shv`) renommées d'après les calques (`intro`,
+  `about-title`, rôle « text » ou « image » sans nom de calque) dans les pages, gabarits, composants,
+  la feuille du site et les cibles d'interaction (`framer_names.rs`) ; 465 classes sur matv, rendu
+  inchangé.
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.

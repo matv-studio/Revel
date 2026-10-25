@@ -1264,7 +1264,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "revel-edit"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "revel-markup",
  "revel-model",
@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "revel-i18n"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "fluent-bundle",
  "unic-langid",
@@ -1284,7 +1284,7 @@ dependencies = [
 
 [[package]]
 name = "revel-markup"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "htmlize",
  "revel-model",
@@ -1293,7 +1293,7 @@ dependencies = [
 
 [[package]]
 name = "revel-model"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -1302,7 +1302,7 @@ dependencies = [
 
 [[package]]
 name = "revel-protocol"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -1310,7 +1310,7 @@ dependencies = [
 
 [[package]]
 name = "revel-style"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "revel-model",
  "thiserror 2.0.21",
@@ -1318,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "revel-ui"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "base64",
  "console_error_panic_hook",

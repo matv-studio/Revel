@@ -1051,8 +1051,10 @@ refaire matv dans l'interface :
   `width: calc(var(--revel-progress, 0) * 100%)`.
 - Maçonnerie (bouton de la grille) : `data-revel-masonry`, lignes de 1 px, chaque élément placé
   (colonne, première ligne) et couvrant `round(hauteur + écart)` lignes, dans la colonne la moins haute
-  ou, « Colonnes à tour de rôle » (`="order"`, colonnes de Framer), dans la colonne suivante ;
-  recalculé au changement de taille ; aussi dans le canevas.
+  ou, « Colonnes à tour de rôle » (`="order"`, colonnes de Framer), dans la colonne suivante ; le
+  dernier élément de chaque colonne sans l'écart qui le suit (même hauteur qu'une grille ordinaire) ;
+  recalculé au changement de taille, à l'ajout d'un élément et au réglage (grilles suivies dans le
+  canevas : retirer la maçonnerie rend la grille ordinaire).
 - Défilement doux : pas d'au moins 1 px (les derniers pixels d'une colonne étaient arrondis et jamais
   atteints) ; apparition au défilement jouée aussi pour un élément resté dans le dernier dixième de
   l'écran quand sa page ou sa colonne ne peut plus défiler (bouton en bas de la colonne des projets).

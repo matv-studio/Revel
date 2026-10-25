@@ -375,7 +375,7 @@
 .colors-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .colors-label::first-letter { text-transform: uppercase; }
 .color-cell { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
-.color-swatch-input { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: var(--r-1, 4px); background: none; cursor: default; }
+.color-swatch-input { flex: none; width: 24px; height: 24px; padding: 0; border: var(--border) solid var(--line-strong); border-radius: var(--radius-sm); background: none; cursor: default; overflow: hidden; }
 .color-swatch-input::-webkit-color-swatch-wrapper { padding: 0; }
 .color-swatch-input::-webkit-color-swatch { border: none; border-radius: 3px; }
 .color-value { min-width: 0; flex: 1; }

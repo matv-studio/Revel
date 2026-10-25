@@ -1275,6 +1275,7 @@ mod tests {
         assert!(all_once(&l));
         // La colonne de droite peut se vider.
         l.put(PanelId::Interactions, Drop::Column { side: Side::Left });
+        l.put(PanelId::Classes, Drop::Column { side: Side::Left });
         assert!(l.right.is_empty());
         assert!(all_once(&l));
     }

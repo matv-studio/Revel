@@ -127,6 +127,7 @@ fn set_include_image() {
             args: Default::default(),
             variant: None,
             attrs: Vec::new(),
+            children: vec![],
         }
     );
     let Node::Image(img) = &n[2] else { panic!() };

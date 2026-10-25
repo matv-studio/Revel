@@ -381,3 +381,6 @@
 .color-value { min-width: 0; flex: 1; }
 .colors-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-top: var(--s-1); }
 .row-switch { display: inline-flex; align-items: center; gap: var(--s-2); }
+
+/* Emplacement d'un composant (D-118). */
+.instance-slot .slot-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }

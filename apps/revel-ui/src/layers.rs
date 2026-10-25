@@ -262,6 +262,18 @@ impl<'a> Builder<'a> {
                 }
                 Node::Each { children, .. } => Some((Branch::Children, children.len())),
                 Node::If { then, .. } => Some((Branch::Then, then.len())),
+                // Composant à emplacement : son contenu propre (D-118).
+                Node::Use {
+                    component,
+                    children,
+                    ..
+                } if self
+                    .doc
+                    .component(component)
+                    .is_some_and(|c| revel_edit::make::slot_of(c).is_some()) =>
+                {
+                    Some((Branch::Children, children.len()))
+                }
                 _ => None,
             };
             // Texte dans un élément, éventuellement à travers des conditions sans ligne.
@@ -372,7 +384,11 @@ impl<'a> Builder<'a> {
                 // Utilisation de composant : une ligne, sans son contenu (modifié dans le canevas du
                 // composant, ouvert par un double-clic sur la ligne) ; ses variables restent relevées
                 // pour le panneau Variables.
-                Node::Use { component, .. } => {
+                Node::Use {
+                    component,
+                    children,
+                    ..
+                } => {
                     if let Some(c) = self.doc.component(component)
                         && !self.stack.contains(component)
                     {
@@ -385,6 +401,9 @@ impl<'a> Builder<'a> {
                         self.vis = vis;
                         self.stack.pop();
                     }
+                    // Contenu propre de l'utilisation (emplacement du composant, D-118) : calques
+                    // de la page, sous l'utilisation.
+                    self.list(children, owner, of(Branch::Children), &k, &anc, slot_level);
                 }
                 Node::Slot => {
                     if let Some((o, body)) = self.inner.get(slot_level + 1).cloned() {

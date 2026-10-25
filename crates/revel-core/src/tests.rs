@@ -983,6 +983,36 @@ fn schema_modifie_dans_pages_cms_et_annule() {
     assert!(!site.join("contenus/offres/stage.md").exists());
     c.edit_redo(&site).unwrap();
     assert_eq!(config(), with);
+    // Collection créée avec ses pages (D-119) : une seule étape.
+    let opened = c.edit_open(&site).unwrap().site;
+    let layout = revel_edit::make::collection_template(&opened, "annonces", "title");
+    let lid = layout.id.clone();
+    c.edit_apply(
+        &site,
+        Command::Batch {
+            commands: vec![
+                Command::CreateCmsCollection {
+                    id: "annonces".into(),
+                    label: "Annonces".into(),
+                    folder: "contenus/annonces".into(),
+                    fields: fields.clone(),
+                },
+                Command::AddLayout {
+                    layout,
+                    index: None,
+                },
+                Command::SetCollectionPages {
+                    id: "annonces".into(),
+                    path: Some("/annonces/{{ slug }}/".into()),
+                    layout: Some(lid),
+                },
+            ],
+        },
+        false,
+    )
+    .unwrap();
+    c.edit_undo(&site).unwrap();
+    assert_eq!(config(), with);
     // Dossier qui a déjà des contenus (site existant repris) : leurs champs décrits en plus.
     std::fs::create_dir_all(site.join("contenus/clients")).unwrap();
     std::fs::write(

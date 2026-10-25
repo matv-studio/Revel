@@ -1743,6 +1743,7 @@ fn component_drag_item(id: &str, label: &str) -> crate::editor::DragItem {
             args: Default::default(),
             variant: None,
             attrs: Vec::new(),
+            children: vec![],
         }),
     }
 }

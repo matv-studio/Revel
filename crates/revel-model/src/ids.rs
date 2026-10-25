@@ -59,7 +59,9 @@ pub fn node_id_mut(n: &mut Node) -> Option<&mut Option<String>> {
 /// Listes d'enfants d'un nœud, dans l'ordre (enfants, `then`, `otherwise`, `empty`).
 pub fn child_lists(n: &Node) -> Vec<&Vec<Node>> {
     match n {
-        Node::Element { children, .. } | Node::SetBlock { children, .. } => vec![children],
+        Node::Element { children, .. }
+        | Node::SetBlock { children, .. }
+        | Node::Use { children, .. } => vec![children],
         Node::If {
             then, otherwise, ..
         } => vec![then, otherwise],
@@ -72,7 +74,9 @@ pub fn child_lists(n: &Node) -> Vec<&Vec<Node>> {
 
 pub fn child_lists_mut(n: &mut Node) -> Vec<&mut Vec<Node>> {
     match n {
-        Node::Element { children, .. } | Node::SetBlock { children, .. } => vec![children],
+        Node::Element { children, .. }
+        | Node::SetBlock { children, .. }
+        | Node::Use { children, .. } => vec![children],
         Node::If {
             then, otherwise, ..
         } => vec![then, otherwise],

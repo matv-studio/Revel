@@ -1033,6 +1033,10 @@ pub enum Node {
         /// `data-revel-*`).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attrs: Vec<Attr>,
+        /// Contenu propre à cette utilisation, placé dans l'emplacement du composant (élément
+        /// `data-revel-slot`, D-118) ; vide : contenu par défaut de l'emplacement.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        children: Vec<Node>,
     },
     /// Image responsive (variantes AVIF/WebP/JPEG générées).
     Image(ImageNode),
@@ -1084,6 +1088,9 @@ pub struct ImageNode {
 /// Attribut du nom de calque donné par l'utilisateur (élément, utilisation de composant) ; jamais
 /// écrit dans les pages.
 pub const LAYER_NAME_ATTR: &str = "data-revel-name";
+/// Attribut de l'emplacement d'un composant (D-118) : élément du composant dont le contenu est,
+/// pour chaque utilisation, celui qu'elle donne (sinon le contenu de l'élément, par défaut).
+pub const SLOT_ATTR: &str = "data-revel-slot";
 /// Attribut d'un calque masqué : l'élément n'est pas écrit dans le site publié, le canevas et
 /// l'aperçu le cachent.
 pub const HIDDEN_ATTR: &str = "data-revel-hidden";

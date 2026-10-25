@@ -1571,6 +1571,7 @@ mod tests {
                         args: [("url".to_string(), "p.url".to_string())].into(),
                         variant: None,
                         attrs: vec![],
+                        children: vec![],
                     }],
                     empty: vec![],
                 }],

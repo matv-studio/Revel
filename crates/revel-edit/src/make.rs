@@ -1856,6 +1856,7 @@ pub fn make_component(
                         args: Default::default(),
                         variant: None,
                         attrs: Vec::new(),
+                        children: Vec::new(),
                     },
                 },
             ],
@@ -2023,6 +2024,30 @@ fn substitute(nodes: &mut Vec<Node>, name: &str, expr: &str) -> bool {
     rest
 }
 
+/// Élément emplacement d'un contenu de composant (D-118) : son attribut retiré et, si `own` n'est
+/// pas vide, ses enfants remplacés par `own`.
+fn fill_slot(nodes: &mut [Node], own: &[Node]) {
+    for n in nodes {
+        if let Node::Element {
+            attrs, children, ..
+        } = n
+            && attrs.iter().any(|a| a.name == revel_model::SLOT_ATTR)
+        {
+            attrs.retain(|a| a.name != revel_model::SLOT_ATTR);
+            if !own.is_empty() {
+                *children = own.to_vec();
+            }
+            continue;
+        }
+        if matches!(n, Node::Use { .. }) {
+            continue;
+        }
+        for list in revel_model::ids::child_lists_mut(n) {
+            fill_slot(list, own);
+        }
+    }
+}
+
 /// Utilisation de composant remplacée par une copie de son contenu (nouveaux identifiants),
 /// les valeurs des propriétés écrites dedans (une affectation au début si une propriété est
 /// lue dans une expression plus complexe).
@@ -2033,6 +2058,7 @@ pub fn detach(site: &Site, at: &Target) -> Result<Command, EditError> {
         args,
         variant,
         attrs,
+        children: own,
         ..
     } = address::node(site, at)?
     else {
@@ -2045,6 +2071,8 @@ pub fn detach(site: &Site, at: &Target) -> Result<Command, EditError> {
     let mut body = c
         .patched_body(variant.as_deref(), attrs)
         .unwrap_or_else(|| c.body.clone());
+    // Emplacement : le contenu propre de l'utilisation remplace le contenu par défaut.
+    fill_slot(&mut body, own);
     let mut sets = Vec::new();
     for p in &c.props {
         let e = prop_expr(p, args);
@@ -2199,4 +2227,131 @@ pub fn free_prop_name(c: &revel_model::Component, base: &str) -> String {
         n += 1;
     }
     name
+}
+
+/// Emplacement d'un composant (D-118) : élément `data-revel-slot` de son contenu.
+pub fn slot_of(c: &revel_model::Component) -> Option<&Node> {
+    fn find(nodes: &[Node]) -> Option<&Node> {
+        for n in nodes {
+            if let Node::Element { attrs, .. } = n
+                && attrs.iter().any(|a| a.name == revel_model::SLOT_ATTR)
+            {
+                return Some(n);
+            }
+            if matches!(n, Node::Use { .. }) {
+                continue;
+            }
+            for list in revel_model::ids::child_lists(n) {
+                if let Some(f) = find(list) {
+                    return Some(f);
+                }
+            }
+        }
+        None
+    }
+    find(&c.body)
+}
+
+/// Contenu par défaut de l'emplacement copié dans l'utilisation `at` (nouveaux identifiants),
+/// pour le modifier à cet endroit seulement.
+pub fn customize_slot(site: &Site, at: &Target) -> Result<Command, EditError> {
+    let Node::Use {
+        component,
+        children,
+        args,
+        ..
+    } = address::node(site, at)?
+    else {
+        return Err(EditError::WrongKind(at.node.clone()));
+    };
+    let c = site
+        .component(component)
+        .ok_or_else(|| EditError::NotFound(component.clone()))?;
+    let Some(Node::Element {
+        children: default, ..
+    }) = slot_of(c)
+    else {
+        return Err(EditError::NotFound(format!(
+            "emplacement de « {component} »"
+        )));
+    };
+    // Propriétés lues dans l'emplacement : valeur de cette utilisation écrite à leur place.
+    let mut default = default.clone();
+    for p in &c.props {
+        substitute(&mut default, &p.name, &prop_expr(p, args));
+    }
+    let parent = Parent {
+        owner: at.owner.clone(),
+        node: Some(at.node.clone()),
+        branch: Branch::Children,
+    };
+    let mut taken = site.node_ids();
+    let start = children.len();
+    let commands = default
+        .into_iter()
+        .enumerate()
+        .map(|(i, mut n)| {
+            refresh_ids(&mut n, &mut taken);
+            Command::Insert {
+                parent: parent.clone(),
+                index: start + i,
+                node: n,
+            }
+        })
+        .collect();
+    Ok(Command::Batch { commands })
+}
+
+/// Contenu propre de l'utilisation `at` retiré : l'emplacement montre de nouveau le contenu du
+/// composant.
+pub fn reset_slot(site: &Site, at: &Target) -> Result<Command, EditError> {
+    let Node::Use { children, .. } = address::node(site, at)? else {
+        return Err(EditError::WrongKind(at.node.clone()));
+    };
+    let commands = children
+        .iter()
+        .filter_map(revel_model::ids::node_id)
+        .map(|id| Command::Remove {
+            at: Target {
+                owner: at.owner.clone(),
+                node: id.to_string(),
+            },
+        })
+        .collect();
+    Ok(Command::Batch { commands })
+}
+
+/// L'élément `at` d'un composant devient (ou n'est plus) son emplacement ; un seul emplacement
+/// par composant : l'ancien est retiré.
+pub fn set_slot(site: &Site, at: &Target, on: bool) -> Result<Command, EditError> {
+    let Owner::Component(cid) = &at.owner else {
+        return Err(EditError::WrongKind(at.node.clone()));
+    };
+    let mut commands = Vec::new();
+    if on
+        && let Some(c) = site.component(cid)
+        && let Some(old) = slot_of(c).and_then(revel_model::ids::node_id)
+        && old != at.node
+    {
+        commands.push(Command::RemoveAttr {
+            at: Target {
+                owner: at.owner.clone(),
+                node: old.to_string(),
+            },
+            name: revel_model::SLOT_ATTR.into(),
+        });
+    }
+    commands.push(if on {
+        Command::SetAttr {
+            at: at.clone(),
+            name: revel_model::SLOT_ATTR.into(),
+            value: None,
+        }
+    } else {
+        Command::RemoveAttr {
+            at: at.clone(),
+            name: revel_model::SLOT_ATTR.into(),
+        }
+    });
+    Ok(Command::Batch { commands })
 }

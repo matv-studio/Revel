@@ -1234,6 +1234,7 @@ fn composants_creer_proprietes_detacher() {
                     args: Default::default(),
                     variant: None,
                     attrs: Vec::new(),
+                    children: vec![],
                 },
             },
         ),
@@ -1303,6 +1304,7 @@ fn detacher_condition_et_expression() {
         args: [("lien".to_string(), "p.url".to_string())].into(),
         variant: None,
         attrs: Vec::new(),
+        children: vec![],
     });
     s.ensure_ids();
     let at = Target {
@@ -1338,6 +1340,7 @@ fn variantes_et_attributs_d_une_utilisation() {
         args: Default::default(),
         variant: None,
         attrs: Vec::new(),
+        children: vec![],
     });
     s.ensure_ids();
     let doc = json(&s);
@@ -2540,4 +2543,85 @@ fn informations_du_site_comptees() {
     ));
     let p = vec!["phone".to_string()];
     assert_eq!(siteinfo::uses(&s, &p), 2);
+}
+
+#[test]
+fn emplacement_personnalise_puis_retabli() {
+    // D-118 : emplacement d'un composant posé, contenu par défaut copié dans une utilisation
+    // (modifiable à cet endroit), puis retiré ; tout annulable.
+    let mut s = Site::new("t", "fr");
+    s.components.push(Component::new(
+        "groupe",
+        vec![el(
+            "section",
+            &[("class", "g")],
+            vec![el(
+                "ul",
+                &[("class", "l")],
+                vec![
+                    el("li", &[], vec![text("Un")]),
+                    el("li", &[], vec![text("Deux")]),
+                ],
+            )],
+        )],
+    ));
+    let mut p: revel_model::Page =
+        serde_json::from_value(serde_json::json!({"id": "index", "path": "/", "body": []}))
+            .unwrap();
+    p.body.push(Node::Use {
+        id: Some("u1".into()),
+        component: "groupe".into(),
+        args: Default::default(),
+        variant: None,
+        attrs: vec![],
+        children: vec![],
+    });
+    s.pages.push(p);
+    s.ensure_ids();
+    let before = s.clone();
+    let ul = revel_model::ids::node_id(match &s.components[0].body[0] {
+        Node::Element { children, .. } => &children[0],
+        _ => panic!(),
+    })
+    .unwrap()
+    .to_string();
+    let comp = |node: &str| Target {
+        owner: Owner::Component("groupe".into()),
+        node: node.into(),
+    };
+    let cmd = crate::make::set_slot(&s, &comp(&ul), true).unwrap();
+    let inv1 = apply(&mut s, &cmd).unwrap();
+    assert!(crate::make::slot_of(&s.components[0]).is_some());
+    let at = Target {
+        owner: Owner::Page("index".into()),
+        node: "u1".into(),
+    };
+    let cmd = crate::make::customize_slot(&s, &at).unwrap();
+    let inv2 = apply(&mut s, &cmd).unwrap();
+    let Node::Use { children, .. } = crate::address::node(&s, &at).unwrap() else {
+        panic!()
+    };
+    assert_eq!(children.len(), 2);
+    // Contenu propre adressable dans la page (texte modifiable).
+    let li = revel_model::ids::node_id(&children[0]).unwrap().to_string();
+    assert!(
+        crate::address::node(
+            &s,
+            &Target {
+                owner: Owner::Page("index".into()),
+                node: li
+            }
+        )
+        .is_ok()
+    );
+    let reset = crate::make::reset_slot(&s, &at).unwrap();
+    let inv3 = apply(&mut s, &reset).unwrap();
+    let Node::Use { children, .. } = crate::address::node(&s, &at).unwrap() else {
+        panic!()
+    };
+    assert!(children.is_empty());
+    for inv in [inv3, inv2, inv1] {
+        apply(&mut s, &inv).unwrap();
+    }
+    assert_eq!(s, before);
 }

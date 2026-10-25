@@ -193,6 +193,7 @@ impl<'a> Out<'a> {
                 args,
                 variant,
                 attrs,
+                children,
             } => {
                 let label = self
                     .site
@@ -222,6 +223,11 @@ impl<'a> Out<'a> {
                         }
                     ),
                 );
+                // Contenu propre de l'utilisation, placé dans l'emplacement du composant.
+                if !children.is_empty() {
+                    self.push(depth + 1, "[slot content]".into());
+                    self.nodes(children, depth + 2);
+                }
             }
             Node::Slot => {
                 if self.inner.is_empty() {

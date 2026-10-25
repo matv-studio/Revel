@@ -714,6 +714,7 @@ impl Project {
                 args: Default::default(),
                 variant: variant.map(str::to_string),
                 attrs: Vec::new(),
+                children: vec![],
             }],
             draft: false,
             name: None,

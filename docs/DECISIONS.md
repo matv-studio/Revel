@@ -1123,13 +1123,33 @@ l'accordéon de la sélection et le referme ensuite. Images : un GIF animé est 
 WebP ou GIF redimensionné n'en gardaient que la première image) ; nombre d'images lu dans la structure du fichier.
 
 **D-117 — 25/10/2026 — prise.** **Site matv recréé.** Recréation à la main de https://matv.framer.website dans la forme
-de l'interface (demande du 25/10/2026) : collections `projects`, `clients`, `services`, `toolsets`, `tools`,
-`experiences`, `ranks` ; composants à propriétés reliées aux champs (Button, Stat, Service, Toolset, Tool,
+de l'interface (demande du 25/10/2026) : collection `projects` (pages des projets, cartes de l'accueil) ; d'abord
+des collections pour les clients, services, outils, parcours et classements, remplacées le jour même par des
+composants (D-119) ; composants à propriétés reliées aux champs (Button, Stat, Service, Toolset, Tool,
 Experience, Rank, Project card, Fact, Contact) ; classes nommées par rôle (`profile-name`, `toolset-head`,
 `project-card-media`) ; couleurs du site claires et sombres ; défilement de logos (Défilement), accordéons des
 outils, maçonnerie « colonnes à tour de rôle », 6 projets puis la suite ; informations du site (courriel,
 téléphone, menu « social ») ; anglais et français. Écarts voulus : espacements des cartes « Outils » réguliers
 (Framer les décale), lettre « M » du nom en image avec le nom complet pour les lecteurs d'écran.
+
+**D-118 — 25/10/2026 — prise.** **Emplacement des composants.** Un élément d'un composant peut être son
+emplacement (`data-revel-slot`, interrupteur « Emplacement du contenu » de Styles dans le composant ouvert ; un seul
+par composant). Chaque utilisation peut y mettre son propre contenu (`children` du nœud `use`, nœuds de la page :
+calques sous l'utilisation, sélection et texte modifiables dans le canevas, ajouts, glisser-déposer) ; sans contenu
+propre, l'emplacement montre le contenu du composant. Styles d'une utilisation : « Modifier ici » copie le contenu du
+composant dans l'utilisation (propriétés lues remplacées par les valeurs de l'utilisation), « Revenir au contenu du
+composant » le retire. Détacher place le contenu propre dans la copie. Canevas : un emplacement rempli porte
+`data-rv-slot-filled` ; ce qu'il contient se sélectionne à part, le reste de l'utilisation reste un bloc. L'attribut
+n'est pas écrit dans le site publié. Comme les « slots » de Webflow et l'enfant d'un composant de Framer.
+
+**D-119 — 25/10/2026 — prise (règle de l'utilisateur).** **Le CMS sert aux pages, les composants aux blocs.** Une
+collection est faite pour des contenus qui ont chacun leur page (projets, articles) et pour les listes qui montrent
+ces pages ; les blocs d'une page, même répétés (services, outils, classements, logos), sont des composants placés sur
+la page, leur contenu dans leurs propriétés (valeurs par défaut dans le composant, remplacées par utilisation dans
+Styles) et leur emplacement. Nouvelle collection : créée avec son modèle de pages et l'adresse
+`/<collection>/{{ slug }}/` (une seule action, annulable d'un coup). Instructions des assistants (MCP) réécrites dans
+ce sens. Site matv refait ainsi (D-117) : seule la collection `projects` reste ; services, boîtes à outils, outils,
+parcours, classements et logos sont des composants et des éléments de la page.
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.

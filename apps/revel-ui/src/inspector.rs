@@ -433,6 +433,26 @@ fn element_content(
                 </label>
             </div>
         })}
+        // Élément d'un composant : emplacement du contenu propre à chaque utilisation (D-118).
+        {matches!(at.owner, revel_edit::Owner::Component(_)).then(|| {
+            let slot = attr(&attrs, revel_model::SLOT_ATTR).is_some();
+            let slot_at = at.clone();
+            view! {
+                <div class="stack insp-content">
+                    <label class="row-switch" title=ui.t("inspector-slot-help")>
+                        <span class="switch">
+                            <input type="checkbox" id="insp-slot" prop:checked=slot on:change=move |e| {
+                                let on = event_target_checked(&e);
+                                let cmd = ed.doc.with_untracked(|d| revel_edit::make::set_slot(d.as_ref()?, &slot_at, on).ok());
+                                if let Some(c) = cmd { apply(c) }
+                            }/>
+                            <span class="switch-track"></span>
+                        </span>
+                        <span>{ui.t("inspector-slot")}</span>
+                    </label>
+                </div>
+            }
+        })}
         {(anchors || spy).then(|| view! {
             <div class="stack insp-content">
                 <label class="row-switch" title=ui.t("inspector-spy-help")>
@@ -872,6 +892,7 @@ const MANAGED: &[&str] = &[
     "data-revel-progress",
     "data-revel-masonry",
     "data-revel-spy",
+    "data-revel-slot",
     "data-revel-more",
     "data-revel-on",
     "data-revel-name",

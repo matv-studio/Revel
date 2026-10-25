@@ -1086,7 +1086,9 @@ impl Fl<'_, '_> {
                 args,
                 variant,
                 attrs,
+                children,
             } => {
+                let children = self.nodes(children, scope);
                 let mut new_args = BTreeMap::new();
                 for (k, e) in args {
                     let e2 = self.inline(e, scope);
@@ -1108,6 +1110,7 @@ impl Fl<'_, '_> {
                     args: new_args,
                     variant: variant.clone(),
                     attrs,
+                    children,
                 });
             }
             Node::Image(img) => {

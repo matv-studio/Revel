@@ -828,7 +828,22 @@ impl Ed {
             // gardée.
             let text_format = matches!(cmd, Command::Batch { commands }
                 if matches!(commands.first(), Some(Command::Replace { .. })));
+            // Contenu d'un composant copié dans l'utilisation (emplacement, D-118) : l'utilisation
+            // reste sélectionnée.
+            let into_use = first_insert_parent(cmd).is_some_and(|p| {
+                self.doc.with_untracked(|d| {
+                    d.as_ref().is_some_and(|d| {
+                        p.node.as_ref().is_some_and(|id| {
+                            matches!(
+                                revel_edit::address::node(d, &revel_edit::Target { owner: p.owner.clone(), node: id.clone() }),
+                                Ok(revel_model::Node::Use { children, .. }) if children.is_empty()
+                            )
+                        })
+                    })
+                })
+            });
             if !text_format
+                && !into_use
                 && let Some(n) = inserted(cmd)
                 && let Some(id) = revel_model::ids::node_id(n)
             {
@@ -2516,6 +2531,15 @@ pub(crate) fn node_tag(n: &revel_model::Node) -> String {
         revel_model::Node::Element { tag, .. } => tag.clone(),
         revel_model::Node::Image(_) => "img".into(),
         _ => String::new(),
+    }
+}
+
+/// Liste où arrive la première insertion d'une commande.
+fn first_insert_parent(c: &Command) -> Option<&revel_edit::Parent> {
+    match c {
+        Command::Insert { parent, .. } => Some(parent),
+        Command::Batch { commands } => commands.iter().find_map(first_insert_parent),
+        _ => None,
     }
 }
 

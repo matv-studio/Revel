@@ -240,6 +240,9 @@ pub(crate) struct Builder<'a> {
     attr_cache: RefCell<HashMap<String, Vec<Node>>>,
     /// Composants en cours de rendu (un composant utilisé dans lui-même est ignoré).
     using: RefCell<Vec<String>>,
+    /// Contenu propre des utilisations en cours de rendu (D-118) : nœuds et adresse dans la page,
+    /// placés dans l'emplacement (`data-revel-slot`) du composant.
+    slots_in: RefCell<Vec<(Vec<Node>, At)>>,
     pub(crate) editor: Option<Editor>,
 }
 
@@ -274,6 +277,7 @@ impl<'a> Builder<'a> {
             warnings: RefCell::new(Vec::new()),
             attr_cache: RefCell::new(HashMap::new()),
             using: RefCell::new(Vec::new()),
+            slots_in: RefCell::new(Vec::new()),
             editor: None,
             lang: Lang::default(),
         }
@@ -748,6 +752,19 @@ impl<'a> Builder<'a> {
                     out.push_str(&escape_attr(id));
                     out.push('"');
                 }
+                // Emplacement rempli par l'utilisation (canevas) : son contenu est de la page.
+                let slot = matches!(at.owner, Some(Owner::Component(_)))
+                    && attrs.iter().any(|a| a.name == revel_model::SLOT_ATTR);
+                if slot
+                    && self.editor.is_some()
+                    && self
+                        .slots_in
+                        .borrow()
+                        .last()
+                        .is_some_and(|(own, _)| !own.is_empty())
+                {
+                    out.push_str(" data-rv-slot-filled");
+                }
                 // Canevas : scripts du site neutralisés (sauf données JSON).
                 let lower = tag.to_ascii_lowercase();
                 let neutralize = lower == "script"
@@ -762,7 +779,9 @@ impl<'a> Builder<'a> {
                     out.push_str(" type=\"text/plain\" data-rv-script");
                 }
                 for a in attrs {
-                    if a.name == revel_model::LAYER_NAME_ATTR {
+                    if a.name == revel_model::LAYER_NAME_ATTR
+                        || (a.name == revel_model::SLOT_ATTR && self.editor.is_none())
+                    {
                         continue;
                     }
                     if let Some(w) = &a.when
@@ -800,7 +819,25 @@ impl<'a> Builder<'a> {
                         Branch::Children,
                         !RAW_TEXT.contains(&lower.as_str()),
                     );
-                    self.nodes(children, scope, out, mode, ctx, &inner)?;
+                    // Emplacement d'un composant (D-118) : contenu propre de l'utilisation s'il y
+                    // en a un, sinon contenu par défaut de l'emplacement.
+                    let own = if slot {
+                        self.slots_in.borrow_mut().pop()
+                    } else {
+                        None
+                    };
+                    match own {
+                        Some((nodes, own_at)) => {
+                            let r = if nodes.is_empty() {
+                                self.nodes(children, scope, out, mode, ctx, &inner)
+                            } else {
+                                self.nodes(&nodes, scope, out, mode, ctx, &own_at)
+                            };
+                            self.slots_in.borrow_mut().push((nodes, own_at));
+                            r?;
+                        }
+                        None => self.nodes(children, scope, out, mode, ctx, &inner)?,
+                    }
                     out.push_str("</");
                     out.push_str(tag);
                     out.push('>');
@@ -975,6 +1012,7 @@ impl<'a> Builder<'a> {
                 args,
                 variant,
                 attrs,
+                children: own,
             } => match self.site.component(component) {
                 Some(_) if self.using.borrow().contains(component) => self.warn(format!(
                     "{ctx} : composant « {component} » utilisé dans lui-même, ignoré"
@@ -1016,14 +1054,22 @@ impl<'a> Builder<'a> {
                     // l'élément racine du composant.
                     let patched = c.patched_body(variant.as_deref(), attrs);
                     let nodes: &[Node] = patched.as_deref().unwrap_or(&c.body);
+                    let own_at = At {
+                        owner: at.owner.clone(),
+                        parent: id.clone(),
+                        branch: Branch::Children,
+                        mark: at.mark && id.is_some(),
+                    };
                     let body = |out: &mut String| {
                         scope.push_with(values, origins);
                         self.using.borrow_mut().push(c.id.clone());
+                        self.slots_in.borrow_mut().push((own.clone(), own_at));
                         let inner = At {
                             mark: at.mark,
                             ..At::root(Owner::Component(c.id.clone()))
                         };
                         let r = self.nodes(nodes, scope, out, mode, &ctx, &inner);
+                        self.slots_in.borrow_mut().pop();
                         self.using.borrow_mut().pop();
                         scope.pop();
                         r

@@ -619,7 +619,25 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
                 let e = expand(&scratch, c)?;
                 // Commande appliquée par le cœur (fichiers du projet) : sans effet sur la copie.
                 match apply(&mut scratch, &e) {
-                    Ok(_) | Err(EditError::External) => {}
+                    Ok(_) => {}
+                    // Nouvelle collection : présente sur la copie pour la suite (ses pages).
+                    Err(EditError::External) => {
+                        if let Command::CreateCmsCollection { id, folder, .. } = &e
+                            && !scratch.collections.iter().any(|c| &c.id == id)
+                        {
+                            scratch.collections.push(revel_model::Collection {
+                                id: id.clone(),
+                                source: revel_model::CollectionSource::Folder,
+                                folder: folder.clone(),
+                                path: None,
+                                layout: None,
+                                props: Default::default(),
+                                filter: None,
+                                sort: None,
+                                fields: Vec::new(),
+                            });
+                        }
+                    }
                     Err(err) => return Err(err),
                 }
                 out.push(e);

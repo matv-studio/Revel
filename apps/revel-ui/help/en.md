@@ -69,14 +69,18 @@ The look is set in **Styles**, per **class**: every element with the same class 
 
 ## Components
 
-A component is a piece of page reused everywhere (header, footer, card). Right-click an element in the layers › **Create component**. Editing the component changes all its uses; each use can have its own texts and variant (hover, pressed…).
+A component is a piece of page reused everywhere (header, footer, card, service, tool). Right-click an element in the layers › **Create component**. Editing the component changes all its uses; each use can have its own texts, images and links (its **properties**, in **Styles**) and variant (hover, pressed…).
+
+**Slot**: in the component, the **Content slot** switch of an element (a card's list of tools, a service's points) lets each use put its own content there. On the page, **Edit here** copies the component's content into the use to change it there only; **Back to the component content** undoes it.
+
+The CMS is for content that has its own page (projects, articles); blocks of a page, even repeated (services, tools, rankings), are components placed on the page.
 
 ## Content (CMS)
 
 1. Open **CMS** at the top. Create a **collection** (Projects, News…) and its **fields** (title, date, image, rich text…).
 2. Add **items**: each one is a file of the site, also editable with Pages CMS.
 3. In the editor, add a **Collection list**: one element per item. Select a text or an image of the list and link it to a field in **Styles › Linked to the entry**.
-4. In **Pages**, create **each item's page**: its template is set once for all.
+4. Each item has its **page**, made from a shared template created with the collection: set it once for all from **Pages**.
 
 A long list can **show first** only a few items (list setting): the rest appears when the visitor reaches the bottom.
 

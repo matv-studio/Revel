@@ -977,6 +977,12 @@ try {
       check('composants : ouvert (reste estompé), texte relié à une nouvelle propriété (valeur par défaut : le texte)',
         bound.props[0].name === 'texte' && bound.props[0].default === 'Mettre la vidéo en pause'
           && bound.body[0].children[0].expr === 'texte' && !!(await page.$('.iso-bar')));
+      // Emplacement (D-118) : le bouton du composant reçoit le contenu propre de chaque utilisation.
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.waitForSelector('#insp-slot');
+      await page.click('label.row-switch:has(#insp-slot) .switch');
+      const slotted = await untilC(async () => ((await comp()).body[0].attrs || []).some((a) => a.name === 'data-revel-slot'));
+      check('composants : élément du composant marqué comme emplacement du contenu', slotted);
       await page.click('.iso-bar .iso-done');
       await page.waitForFunction(() => !document.querySelector('.iso-bar'));
       await frame.locator('.hero__pause').click();
@@ -985,6 +991,15 @@ try {
       await page.keyboard.press('Enter');
       const own = await untilC(async () => ((await frame.locator('.hero__pause').first().textContent()) || '').trim() === 'Pause');
       check('composants : valeur propre à une utilisation', own);
+      // Contenu du composant copié dans l'utilisation (« Modifier ici ») : texte de la page.
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.waitForSelector('.instance-slot[data-slot="default"]');
+      if (shots) await page.locator('.dock-col--right').screenshot({ path: `${shots}/editeur-emplacement.png` });
+      await page.click('.instance-slot [data-action="slot-edit"]');
+      await page.waitForSelector('.instance-slot[data-slot="own"]');
+      const ownSlot = await untilC(async () => JSON.stringify((await site()).pages).includes('"component":"bouton-pause","args":{"texte":"\\"Pause\\""},"children":[{"node":"text","text":"Pause"}]')
+        && ((await frame.locator('.hero__pause').first().textContent()) || '').trim() === 'Pause');
+      check('composants : contenu propre à l’utilisation (copie du contenu du composant, valeurs écrites)', ownSlot);
       // Glisser depuis le panneau Composants : nouvelle utilisation, valeur par défaut.
       await page.click('.dock-tab[data-panel="components"]');
       const rowSel = '.components .component-row[data-component="bouton-pause"]';
@@ -1009,12 +1024,12 @@ try {
         && JSON.stringify((await site()).pages).includes('"text":"Pause"'));
       if (shots) await page.locator('.dock-col--left').screenshot({ path: `${shots}/editeur-composants-panneau.png` });
       await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 7; i++) {
         await page.keyboard.press('Control+z');
         await page.waitForTimeout(250);
       }
       const backC = await untilC(async () => JSON.stringify(await site()) === docC);
-      check('composants : Ctrl+Z (détacher, glisser, valeur, propriété, création), document identique', backC);
+      check('composants : Ctrl+Z (détacher, glisser, contenu propre, valeur, emplacement, propriété, création), document identique', backC);
     }
     // Éléments (3.7) : liste de collection (tri, nombre, texte relié à un champ), grille avec ses
     // styles, icône, code HTML ; tout annulé.
@@ -1056,8 +1071,11 @@ try {
       const moreOff = await untilE(async () => !(await pageJson()).includes('data-revel-more'));
       check('éléments : liste à affichage progressif (réglée puis retirée, tout montré dans le canevas)', moreOn && allShown && moreOff);
       // Liste de plusieurs collections (D-97) : « + Autre collection », puis retirée.
-      await page.waitForFunction(() => document.querySelectorAll('.list-also select option').length > 1);
-      const others2 = await page.$$eval('.list-also select option', (o) => o.map((x) => x.value).filter(Boolean));
+      let others2 = [];
+      for (let i = 0; i < 50 && !others2.length; i++) {
+        others2 = await page.$$eval('.list-also select option', (o) => o.map((x) => x.value).filter(Boolean)).catch(() => []);
+        if (!others2.length) await page.waitForTimeout(100);
+      }
       await page.selectOption('.list-also select', others2[0]);
       const multi = await untilE(async () => (await pageJson()).includes(` + collections.${others2[0]})`));
       await page.waitForSelector('.list-also .prop-chip');
@@ -2722,7 +2740,8 @@ try {
     await until(() => cfg().includes('- name: offres_de_stage\n    label: Offres de stage\n    type: collection\n    path: src/content/offres-de-stage\n'), 'collection décrite');
     await page.waitForSelector('.cms-col.is-on[data-collection="offres_de_stage"]');
     await page.waitForSelector('.schema-row[data-field="slug"]');
-    check('collection : créée (site, .pages.yml), ouverte dans « Champs »', fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8').includes('"offres_de_stage"'));
+    await until(() => fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8').includes('"path": "/offres-de-stage/{{ slug }}/"'), 'pages de la collection');
+    check('collection : créée avec ses pages (site, .pages.yml, modèle), ouverte dans « Champs »', fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8').includes('"modele-offres-de-stage"'));
     await page.click('.cms-fields-btn');
     await page.click('.cms-new');
     await page.fill('.dialog input', 'Stage design graphique');

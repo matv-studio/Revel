@@ -359,6 +359,7 @@ pub fn make_components(
                     args,
                     variant: None,
                     attrs: Vec::new(),
+                    children: vec![],
                 },
             ));
         }

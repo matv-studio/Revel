@@ -598,6 +598,7 @@ fn proprietes_de_composant() {
             .collect(),
         variant: None,
         attrs: Vec::new(),
+        children: vec![],
     };
     s.pages[0].body.push(use_("u1", &[]));
     s.pages[0]
@@ -669,6 +670,7 @@ fn variante_et_animation_d_une_utilisation() {
         args: Default::default(),
         variant: variant.map(str::to_string),
         attrs,
+        children: vec![],
     };
     s.pages[0].body = vec![
         use_(None, Vec::new()),
@@ -1824,4 +1826,85 @@ fn reconstruction_garde_les_environnements() {
     assert!(file(&after, ".htaccess").contains("X-Robots-Tag"));
     let prod = build(&input(&r.site, vec![])).unwrap();
     assert!(!file(&prod, ".htaccess").contains("X-Robots-Tag"));
+}
+
+#[test]
+fn emplacement_de_composant() {
+    // D-118 : contenu propre d'une utilisation placé dans l'emplacement du composant ; contenu
+    // par défaut sinon ; utilisation imbriquée dans l'emplacement.
+    let mut s = site();
+    s.pages[0].body.clear();
+    s.components.push(Component::new(
+        "groupe",
+        parse(r#"<section class="groupe"><h3>{{ titre }}</h3><ul class="liste" data-revel-slot><li>Défaut</li></ul></section>"#),
+    ));
+    s.components.last_mut().unwrap().props = vec![revel_model::PropDef {
+        name: "titre".into(),
+        label: None,
+        kind: revel_model::PropKind::Text,
+        default: Some(json!("Outils")),
+    }];
+    s.components.push(Component::new(
+        "outil",
+        parse(r#"<li class="outil">{{ nom }}</li>"#),
+    ));
+    s.components.last_mut().unwrap().props = vec![revel_model::PropDef {
+        name: "nom".into(),
+        label: None,
+        kind: revel_model::PropKind::Text,
+        default: Some(json!("Outil")),
+    }];
+    let use_ = |id: &str, component: &str, args: &[(&str, &str)], children: Vec<Node>| Node::Use {
+        id: Some(id.into()),
+        component: component.into(),
+        args: args
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+        variant: None,
+        attrs: Vec::new(),
+        children,
+    };
+    s.pages[0].body.push(use_("g1", "groupe", &[], vec![]));
+    s.pages[0].body.push(use_(
+        "g2",
+        "groupe",
+        &[("titre", "\"3D\"")],
+        vec![
+            use_("o1", "outil", &[("nom", "\"Blender\"")], vec![]),
+            use_("o2", "outil", &[("nom", "\"Maya\"")], vec![]),
+        ],
+    ));
+    s.ensure_ids();
+    let inp = input(&s, Vec::new());
+    let out = build(&inp).unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains(r#"<section class="groupe"><h3>Outils</h3><ul class="liste"><li>Défaut</li></ul></section><section class="groupe"><h3>3D</h3><ul class="liste"><li class="outil">Blender</li><li class="outil">Maya</li></ul></section>"#),
+        "{home}"
+    );
+    // Éditeur : contenu propre repéré dans la page, emplacement marqué rempli.
+    let ed = render_editor(&inp, "/", &EditorOptions { scripts: false })
+        .unwrap()
+        .unwrap();
+    assert!(ed.html.contains("data-rv-slot-filled"), "{}", ed.html);
+    assert_eq!(ed.html.matches("data-rv-slot-filled").count(), 1);
+    let blocks: Vec<String> = ed
+        .slots
+        .iter()
+        .filter_map(|sl| match sl {
+            Slot::Block { node, owner, .. } => Some(format!("{owner:?}:{node}")),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        blocks.iter().any(|b| b.contains("o1")) && blocks.iter().any(|b| b.contains("Page")),
+        "{blocks:?}"
+    );
+    assert_eq!(
+        strip_editor_marks(&ed.html)
+            .matches("data-revel-slot")
+            .count(),
+        0
+    );
 }

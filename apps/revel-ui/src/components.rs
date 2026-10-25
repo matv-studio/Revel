@@ -391,6 +391,48 @@ pub fn instance_settings(
             </label>
         }
     });
+    // Emplacement du composant (D-118) : contenu du composant, ou propre à cette utilisation.
+    let slot_row = revel_edit::make::slot_of(&c).is_some().then(|| {
+        let own = ed.doc.with_untracked(|d| {
+            match d.as_ref().and_then(|d| revel_edit::address::node(d, &at.get_value()).ok()) {
+                Some(Node::Use { children, .. }) => !children.is_empty(),
+                _ => false,
+            }
+        });
+        let run = move |reset: bool| {
+            let cmd = ed.doc.with_untracked(|d| {
+                let d = d.as_ref()?;
+                let at = at.get_value();
+                if reset {
+                    revel_edit::make::reset_slot(d, &at).ok()
+                } else {
+                    revel_edit::make::customize_slot(d, &at).ok()
+                }
+            });
+            if let Some(cmd) = cmd {
+                ed.apply(ui, cmd, false);
+            }
+        };
+        view! {
+            <div class="insp-group instance-slot" data-slot=if own { "own" } else { "default" }>
+                <p class="panel-title" title=ui.t("slot-help")>{ui.t("slot-title")}</p>
+                <div class="slot-row">
+                    <span class="muted small">{ui.t(if own { "slot-own" } else { "slot-default" })}</span>
+                    {if own {
+                        view! {
+                            <button class="btn btn--small" data-action="slot-reset" title=ui.t("slot-reset-help")
+                                on:click=move |_| run(true)>{icons::undo()}<span>{ui.t("slot-reset")}</span></button>
+                        }.into_any()
+                    } else {
+                        view! {
+                            <button class="btn btn--small" data-action="slot-edit" title=ui.t("slot-edit-help")
+                                on:click=move |_| run(false)>{icons::edit()}<span>{ui.t("slot-edit")}</span></button>
+                        }.into_any()
+                    }}
+                </div>
+            </div>
+        }
+    });
     view! {
         <div class="stack instance">
             <div class="instance-head">
@@ -404,6 +446,7 @@ pub fn instance_settings(
                     on:click=move |_| detach(ui, ed, at.get_value())>{icons::unlink()}{ui.t("component-detach")}</button>
             </div>
             {variant_row}
+            {slot_row}
             {has_props.then(|| view! {
                 <div class="insp-group">
                     <p class="panel-title">{ui.t("component-props")}</p>

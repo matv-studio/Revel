@@ -1213,6 +1213,7 @@ fn components(
                         args,
                         variant: None,
                         attrs: Vec::new(),
+                        children: vec![],
                     };
                     continue;
                 }

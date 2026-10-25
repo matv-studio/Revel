@@ -634,6 +634,8 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         let path = path.get_value();
         leptos::task::spawn_local(async move {
             let folders = crate::api::cms_folders(&path).await.unwrap_or_default();
+            // Document du site : modèle des pages de la collection créé avec elle.
+            let doc = crate::api::edit_open(&path).await.ok().map(|o| o.site);
             let chosen = RwSignal::new(String::new());
             let mut ask = Ask::input(
                 ui.now("cms-collection-new", &[]),
@@ -688,12 +690,36 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                             "description": ui.now("cms-new-slug-help", &[]),
                         }
                     ]);
-                    apply.run(Command::CreateCmsCollection {
+                    // Une collection donne des pages : chaque contenu a la sienne, faite d'un même
+                    // modèle (créé ici, modifiable dans Pages).
+                    let create = Command::CreateCmsCollection {
                         id: id.clone(),
                         label,
-                        folder,
+                        folder: folder.clone(),
                         fields,
-                    });
+                    };
+                    let cmd = match &doc {
+                        Some(d) => {
+                            let layout = revel_edit::make::collection_template(d, &id, "title");
+                            let lid = layout.id.clone();
+                            Command::Batch {
+                                commands: vec![
+                                    create,
+                                    Command::AddLayout {
+                                        layout,
+                                        index: None,
+                                    },
+                                    Command::SetCollectionPages {
+                                        id: id.clone(),
+                                        path: Some(format!("/{slug}/{{{{ slug }}}}/")),
+                                        layout: Some(lid),
+                                    },
+                                ],
+                            }
+                        }
+                        _ => create,
+                    };
+                    apply.run(cmd);
                     current.set(Some(id));
                     fields_mode.set(true);
                 },

@@ -1755,7 +1755,10 @@ fn page_seo(p: &revel_model::Page, data: &BTreeMap<String, Value>) -> PageSeo {
 /// HTML du canevas sans les repères de l'éditeur (`data-rv="…"`, `<!--rv:N-->`, `<!--/rv:N-->`) :
 /// identique à la page générée quand les scripts du site sont gardés (vérification).
 pub fn strip_editor_marks(html: &str) -> String {
-    let re = regex::Regex::new(r#"<!--/?rv:\d+-->| data-rv="[0-9a-z]+""#).expect("regex");
+    let re = regex::Regex::new(
+        r#"<!--/?rv:\d+-->| data-rv="[0-9a-z]+"| data-rv-slot-filled| data-revel-slot(="[^"]*")?"#,
+    )
+    .expect("regex");
     re.replace_all(html, "").into_owned()
 }
 

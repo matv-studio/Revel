@@ -85,6 +85,12 @@
   const post = (msg) => window.parent.postMessage(Object.assign({ revel: 1 }, msg), "*");
   // Canevas des composants : page d'un composant seul, variante de geste éventuelle.
   const STAGE = location.pathname === "/__revel/component/";
+  // Canevas d'un composant : emplacement du contenu (D-118) montré en pointillé.
+  if (STAGE) {
+    const st = document.createElement("style");
+    st.textContent = "[data-revel-slot]{outline:1px dashed rgba(124,92,255,.75);outline-offset:-1px;min-height:24px}";
+    document.head.appendChild(st);
+  }
   const stageState = STAGE ? new URLSearchParams(location.search).get("rvstate") : null;
 
   // ---------------------------------------------------------------- calque de sélection
@@ -175,10 +181,20 @@
   const depth = (node) => { let d = 0; for (let x = node; x; x = x.parentNode) d++; return d; };
   for (const i of instances) i.depth = depth(rangeOfInst(i).startContainer);
   // `el` est dans l'utilisation `i` (pas un de ses ancêtres).
-  const within = (i, el) => {
+  const withinRaw = (i, el) => {
     const r = rangeOfInst(i);
     try { return r.isPointInRange(el, 0) && !el.contains(r.startContainer); } catch (_) { return false; }
   };
+  // Contenu propre d'une utilisation, placé dans l'emplacement de son composant (D-118) : de la
+  // page, sélectionnable à part.
+  const inOwnSlot = (i, el) => {
+    for (let s = el.parentElement && el.parentElement.closest("[data-rv-slot-filled]"); s;
+      s = s.parentElement && s.parentElement.closest("[data-rv-slot-filled]")) {
+      if (withinRaw(i, s) && !instances.some((j) => j !== i && j.depth > i.depth && withinRaw(j, s))) return true;
+    }
+    return false;
+  };
+  const within = (i, el) => withinRaw(i, el) && !inOwnSlot(i, el);
   // Premier élément repéré d'une utilisation (sa racine, qui la représente).
   const rootOf = (i) => {
     const r = rangeOfInst(i);
@@ -239,7 +255,25 @@
     return tagNames ? tagNames[t] || otherName || t : t;
   };
 
-  const boxOf = (el, inst) => (inst ? rangeOfInst(inst).getBoundingClientRect() : el.getBoundingClientRect());
+  // Cadre d'une utilisation : ses éléments de premier niveau (le contenu replié d'un `details`
+  // fermé garde des boîtes que le rectangle de la plage compterait), sinon la plage.
+  const instBox = (inst) => {
+    const r = rangeOfInst(inst);
+    if (r.startContainer === r.endContainer && r.startContainer.nodeType === 1) {
+      const kids = [...r.startContainer.childNodes].slice(r.startOffset, r.endOffset).filter((k) => k.nodeType === 1);
+      if (kids.length) {
+        let L = Infinity, T = Infinity, R = -Infinity, B = -Infinity;
+        for (const k of kids) {
+          const b = k.getBoundingClientRect();
+          if (!b.width && !b.height) continue;
+          L = Math.min(L, b.left); T = Math.min(T, b.top); R = Math.max(R, b.right); B = Math.max(B, b.bottom);
+        }
+        if (L !== Infinity) return { left: L, top: T, right: R, bottom: B, width: R - L, height: B - T, x: L, y: T };
+      }
+    }
+    return r.getBoundingClientRect();
+  };
+  const boxOf = (el, inst) => (inst ? instBox(inst) : el.getBoundingClientRect());
   const place = (box, el, inst) => {
     if (!el || !el.isConnected) { box.style.display = "none"; return null; }
     const r = boxOf(el, inst);
@@ -263,7 +297,7 @@
     // contenue, superposés, s'annuleraient deux à deux).
     for (const i of instances) {
       if (i.component !== isolated) continue;
-      const b = rangeOfInst(i).getBoundingClientRect();
+      const b = instBox(i);
       if (b.width && b.height) d += "M" + b.left + " " + b.top + "H" + b.right + "V" + b.bottom + "H" + b.left + "Z";
     }
     dimBox.style.clipPath = "path(evenodd, '" + d + "')";

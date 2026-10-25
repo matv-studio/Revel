@@ -556,8 +556,13 @@ impl Audit<'_> {
                 self.nodes(children, ctx);
             }
             Node::Use {
-                component, args, ..
+                component,
+                args,
+                children,
+                ..
             } => {
+                // Contenu propre de l'utilisation (emplacement du composant) : relevé comme la page.
+                self.nodes(children, ctx);
                 let props = self
                     .site
                     .component(component)

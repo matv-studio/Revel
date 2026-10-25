@@ -37,7 +37,15 @@ state (`set_styles`, states :hover :active :focus-visible [aria-current=\"page\"
 inside an active element `.is-active .x`); text-shadow, transform-origin and clip-path are panel controls. Prefer `insert_preset` (Add panel) \
 for sections, grids, buttons, images, video, video player (YouTube/Vimeo/file with cover), icons, navbar, ticker \
 (endless scroll of logos/team), carousel, slideshow, tabs, accordion, list filters, collection list, blocks.\n\
-- Repeated content (projects, team, logos, articles): a CMS collection and a collection list: `{% for item in \
+- CMS collections are for content that has its own pages (projects, articles, products: each entry is a page \
+built from the collection's template) and the lists that show those pages (cards of the latest projects, read from \
+the entries' fields). Fixed blocks of a page, even repeated (services, tools, team members, rankings, logos, stats), \
+are NOT collections: make a component whose properties hold the content (defaults stored in the component) and place \
+one use per item, each with its own property values (`args`). Content that differs in structure from one use to the \
+other (a card's list of tools, a service's points) goes in the component's slot: an element of the component with the \
+`data-revel-slot` attribute; each use gives its own nodes as its `children` (`{\"node\": \"use\", \"component\": \"toolset\", \
+\"args\": {…}, \"children\": [ uses of the \"tool\" component … ]}`), otherwise the slot's own content shows.\n\
+- Lists of pages: a collection list: `{% for item in \
 (collections.<id> | selectattr(\"data.<field>\") | where_contains(\"data.<listfield>\", <value>) | without(page.url) | \
 sort(attribute=\"<path>\", reverse=true) | pick_first(<field or [\"slug\",…]>))[:<n>] %}` (each part optional, in this \
 order; `collections.<id> | by_slugs([\"a\",\"b\"])` for chosen entries; several collections read one after the other: \
@@ -62,7 +70,7 @@ href=\"{{ lien.url }}\">{{ lien.label }}</a>{% endfor %}`; set them with `apply_
 - Server files (`.htaccess`, `robots.txt`) are text pages edited as text in the page settings; they may contain \
 `{{ site.url }}`, `{% if env.staging %}…{% endif %}` (publishing environment) and `{% for e in collections.<id> %}…{% endfor %}`.\n\
 - Components: repeated blocks become components with properties (text, image, link, visibility, list) that each \
-use sets; variants for alternate looks.\n\
+use sets, and a slot (`data-revel-slot`) for per-use content; variants for alternate looks.\n\
 - Behaviour without code: `data-revel-on` on the triggering element, `<trigger> <action> <target>` separated by \
 `;`: trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss|random:<ms>|spin:<deg>, \
 target self|parent|next|body|.<class>|closest:.<class> (enclosing element)|#<id> (e.g. `click class:menu-open body; scroll:40 class:is-solid self`); \

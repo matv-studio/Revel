@@ -329,6 +329,7 @@ impl<'a> Parser<'a> {
                     args: Default::default(),
                     variant: None,
                     attrs: Vec::new(),
+                    children: Vec::new(),
                 }
             }
             "raw" => {

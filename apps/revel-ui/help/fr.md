@@ -69,14 +69,18 @@ Les **vidéos**, les **animations Lottie** (fichier `.json` ou `.lottie`) et les
 
 ## Composants
 
-Un composant est un morceau de page réutilisé partout (en-tête, pied de page, carte). Clic droit sur un élément dans les calques › **Créer un composant**. Modifier le composant change toutes ses utilisations ; une utilisation peut avoir ses propres textes et sa variante (survol, appui…).
+Un composant est un morceau de page réutilisé partout (en-tête, pied de page, carte, service, outil). Clic droit sur un élément dans les calques › **Créer un composant**. Modifier le composant change toutes ses utilisations ; une utilisation peut avoir ses propres textes, images et liens (ses **propriétés**, dans **Styles**) et sa variante (survol, appui…).
+
+**Emplacement** : dans le composant, l'interrupteur **Emplacement du contenu** d'un élément (la liste des outils d'une carte, les points d'un service) permet à chaque utilisation d'y mettre son propre contenu. Sur la page, **Modifier ici** copie le contenu du composant dans l'utilisation pour le changer à cet endroit seulement ; **Revenir au contenu du composant** l'annule.
+
+Le CMS sert aux contenus qui ont leur propre page (projets, articles) ; les blocs d'une page, même répétés (services, outils, classements), sont des composants placés sur la page.
 
 ## Contenus (CMS)
 
 1. Ouvrez **CMS** en haut. Créez une **collection** (Projets, Actualités…) et ses **champs** (titre, date, image, texte riche…).
 2. Ajoutez des **contenus** : chacun est un fichier du site, modifiable aussi avec Pages CMS.
 3. Dans l'éditeur, ajoutez une **Liste de collection** : un élément par contenu. Sélectionnez un texte ou une image de la liste et reliez-le à un champ dans **Styles › Relié au contenu**.
-4. Dans **Pages**, créez la **page de chaque contenu** : son modèle se règle une fois pour tous.
+4. Chaque contenu a sa **page**, faite d'un modèle commun créé avec la collection : réglez-le une fois pour tous depuis **Pages**.
 
 Une liste longue peut n'**afficher d'abord** que quelques contenus (réglage de la liste) : la suite apparaît quand le visiteur arrive en bas.
 

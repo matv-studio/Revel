@@ -45,6 +45,11 @@ pub fn insertion_point(ed: Ed) -> Option<(Parent, usize)> {
                     {
                         (Parent::of(&t, Branch::Children), children.len())
                     }
+                    // Utilisation au contenu propre (emplacement rempli, D-118) : à la fin de ce
+                    // contenu.
+                    Node::Use { children, .. } if !children.is_empty() => {
+                        (Parent::of(&t, Branch::Children), children.len())
+                    }
                     _ => {
                         let (p, i) = revel_edit::address::locate(d, &t).ok()?;
                         (p, i + 1)
@@ -179,6 +184,17 @@ pub fn drop_point(ed: Ed, t: &DropTarget) -> Option<(Parent, usize)> {
             }
             Place::Inside => match revel_edit::address::node(d, &target).ok()? {
                 Node::Element { children, .. } => {
+                    (Parent::of(&target, Branch::Children), children.len())
+                }
+                // Utilisation d'un composant à emplacement : son contenu propre (D-118).
+                Node::Use {
+                    component,
+                    children,
+                    ..
+                } if d
+                    .component(component)
+                    .is_some_and(|c| revel_edit::make::slot_of(c).is_some()) =>
+                {
                     (Parent::of(&target, Branch::Children), children.len())
                 }
                 _ => return None,

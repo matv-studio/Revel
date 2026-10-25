@@ -54,6 +54,251 @@ const STATES: &[(&str, &str)] = &[
     ("^.is-paused", "styles-state-in-paused"),
 ];
 
+/// Champ « Ajouter une classe » des pastilles : propose les classes du site d'après la place de
+/// l'élément (voisins, classe du parent, même balise), filtrées par la saisie ; ↑ ↓ pour choisir,
+/// Entrée pour ajouter (la classe proposée ou celle saisie), Échap pour fermer.
+#[component]
+fn ClassAdd(add: Callback<String>, has_classes: Signal<bool>) -> impl IntoView {
+    use revel_edit::classes::Why;
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let typed = RwSignal::new(String::new());
+    let open = RwSignal::new(false);
+    let hl = RwSignal::new(None::<usize>);
+    let input = NodeRef::<leptos::html::Input>::new();
+    let list = Memo::new(move |_| {
+        if !open.get() {
+            return Vec::new();
+        }
+        let Some(at) = ed.selected_target() else {
+            return Vec::new();
+        };
+        let q = typed.get().trim().trim_start_matches('.').to_lowercase();
+        ed.doc.with(|d| {
+            d.as_ref()
+                .map(|d| {
+                    revel_edit::classes::suggest(d, &at)
+                        .into_iter()
+                        .filter(|(n, _)| q.is_empty() || n.to_lowercase().contains(&q))
+                        .take(8)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+    });
+    // Nom saisi absent des classes proposées : « Créer ».
+    let create = Memo::new(move |_| {
+        let q = typed.get().trim().trim_start_matches('.').to_string();
+        (!q.is_empty()
+            && revel_edit::classes::valid_name(&q)
+            && !list.with(|l| l.iter().any(|(n, _)| *n == q)))
+        .then_some(q)
+    });
+    let count = move || list.with(Vec::len) + usize::from(create.with(Option::is_some));
+    let pick = move |name: String| {
+        add.run(name);
+        typed.set(String::new());
+        hl.set(None);
+        if let Some(i) = input.get_untracked() {
+            i.set_value("");
+        }
+    };
+    let choose = move |i: usize| {
+        let n = list.with_untracked(Vec::len);
+        if i < n {
+            pick(list.with_untracked(|l| l[i].0.clone()));
+        } else if let Some(c) = create.get_untracked() {
+            pick(c);
+        }
+    };
+    let why_key = |w: Why| match w {
+        Why::Sibling => "class-why-sibling",
+        Why::Family => "class-why-family",
+        Why::Neighbour => "class-why-neighbour",
+        Why::SameTag => "class-why-tag",
+        Why::Other => "class-why-other",
+    };
+    let keydown = move |e: ev::KeyboardEvent| {
+        let n = count();
+        match e.key().as_str() {
+            "ArrowDown" if n > 0 => {
+                e.prevent_default();
+                open.set(true);
+                hl.update(|h| *h = Some(h.map_or(0, |h| (h + 1) % n)));
+            }
+            "ArrowUp" if n > 0 => {
+                e.prevent_default();
+                hl.update(|h| *h = Some(h.map_or(n - 1, |h| (h + n - 1) % n)));
+            }
+            "Enter" => {
+                e.prevent_default();
+                match hl.get_untracked() {
+                    Some(i) => choose(i),
+                    None => {
+                        let q = typed.get_untracked();
+                        if !q.trim().is_empty() {
+                            pick(q);
+                        }
+                    }
+                }
+            }
+            "Escape" if open.get_untracked() => {
+                e.stop_propagation();
+                open.set(false);
+                hl.set(None);
+            }
+            _ => {}
+        }
+    };
+    let visible = move || open.get() && count() > 0;
+    view! {
+        <input class="selector-add" node_ref=input autocomplete="off" spellcheck="false"
+            placeholder=move || if has_classes.get() { ui.tx("styles-class-new", &[]) } else { ui.tx("styles-class-first", &[]) }
+            aria-label=ui.t("styles-class-new") role="combobox" aria-autocomplete="list"
+            aria-expanded=move || (open.get() && count() > 0).to_string()
+            on:focus=move |_| open.set(true)
+            on:blur=move |_| { open.set(false); hl.set(None); }
+            on:input=move |e| { typed.set(event_target_value(&e)); open.set(true); hl.set(None); }
+            on:keydown=keydown/>
+        <Show when=visible>
+            <div class="class-suggest" role="listbox" aria-label=ui.t("styles-class-suggest")>
+                {move || {
+                    let mut prev: Option<Why> = None;
+                    list.get().into_iter().enumerate().map(|(i, (name, why))| {
+                        let sep = prev.is_some_and(|p| p != why);
+                        prev = Some(why);
+                        let n2 = name.clone();
+                        let n3 = name.clone();
+                        view! {
+                            {sep.then(|| view! { <div class="menu-sep" role="separator"></div> })}
+                            <button class="menu-item class-suggest-item" role="option" data-class=n3
+                                class:is-hl=move || hl.get() == Some(i) aria-selected=move || (hl.get() == Some(i)).to_string()
+                                title=ui.t(why_key(why))
+                                on:mousedown=move |e| { e.prevent_default(); pick(n2.clone()); }
+                                on:mouseenter=move |_| hl.set(Some(i))>
+                                <span class="class-suggest-dot"></span><span class="class-suggest-name">{name}</span>
+                            </button>
+                        }
+                    }).collect_view()
+                }}
+                {move || create.get().map(|c| {
+                    let i = list.with(Vec::len);
+                    let c2 = c.clone();
+                    view! {
+                        {(i > 0).then(|| view! { <div class="menu-sep" role="separator"></div> })}
+                        <button class="menu-item class-suggest-item is-create" role="option" data-create=c.clone()
+                            class:is-hl=move || hl.get() == Some(i) aria-selected=move || (hl.get() == Some(i)).to_string()
+                            on:mousedown=move |e| { e.prevent_default(); pick(c2.clone()); }
+                            on:mouseenter=move |_| hl.set(Some(i))>
+                            {icons::plus()}<span class="class-suggest-name">{ui.tx("styles-class-create", &[("name", c.clone())])}</span>
+                        </button>
+                    }
+                })}
+            </div>
+        </Show>
+    }
+}
+
+/// États toujours proposés (tout élément se survole) ; les autres le sont d'après l'élément
+/// (canevas : `--rv-states`) ou s'ils ont déjà des styles pour la classe.
+const ALWAYS: &[&str] = &["", ":hover"];
+/// États des éléments qui réagissent au clic et au clavier, en tête du menu.
+const BASIC: &[&str] = &["", ":hover", ":active", ":focus-visible"];
+
+/// Menu « État » du panneau de styles : Normal et Survol, puis les états utiles à l'élément
+/// (appui, focus, page actuelle, onglet actif, accordéon ouvert…), un point devant ceux qui ont
+/// des styles pour la classe choisie.
+#[component]
+fn StateMenu(sx: Sx) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = sx.ed;
+    let id = ctx::menu_id();
+    let state = sx.state;
+    // États réglés pour la classe (tous écrans confondus).
+    let styled = Memo::new(move |_| {
+        let sel = sx.selector.get();
+        if sel.is_empty() {
+            return Vec::new();
+        }
+        let scope = sx.scope.get();
+        let root = sx.root_selected();
+        ed.doc.with(|d| {
+            let Some(d) = d.as_ref() else {
+                return Vec::new();
+            };
+            STATES
+                .iter()
+                .map(|(st, _)| *st)
+                .filter(|st| {
+                    let full = ctx::scoped(&scope, root, &sel, st);
+                    d.style_rules()
+                        .any(|r| r.selector == full && !r.decls.is_empty())
+                })
+                .collect()
+        })
+    });
+    let shown = Memo::new(move |_| {
+        let ctx_states = sx.computed("--rv-states");
+        let useful: Vec<&str> = ctx_states.lines().collect();
+        let set = styled.get();
+        let cur = state.get();
+        STATES
+            .iter()
+            .filter(|(st, _)| {
+                ALWAYS.contains(st) || useful.contains(st) || set.contains(st) || *st == cur
+            })
+            .map(|(st, k)| (*st, *k))
+            .collect::<Vec<_>>()
+    });
+    let label = move || {
+        let cur = state.get();
+        STATES
+            .iter()
+            .find(|(st, _)| *st == cur)
+            .map(|(_, k)| ui.tx(k, &[]))
+            .unwrap_or(cur)
+    };
+    let item = move |st: &'static str, key: &'static str| {
+        let help = format!("{key}-help");
+        view! {
+            <button class="menu-item state-item" role="menuitemradio" data-state=st
+                class:is-on=move || state.get() == st
+                aria-checked=move || (state.get() == st).to_string()
+                title=move || ui.tx(&help, &[])
+                on:click=move |_| { state.set(st.to_string()); sx.menu.set(None); }>
+                <span class="state-dot" class:is-set=move || styled.with(|v| v.contains(&st))></span>
+                <span>{ui.t(key)}</span>
+                <span class="state-check">{move || (state.get() == st).then(icons::check)}</span>
+            </button>
+        }
+    };
+    view! {
+        <div class="state-menu">
+            <button class="state-btn pop-trigger" class:is-active=move || !state.get().is_empty()
+                class:is-set=move || { let c = state.get(); !c.is_empty() && styled.with(|v| v.contains(&c.as_str())) }
+                aria-haspopup="menu" aria-expanded=move || (sx.menu.get() == Some(id)).to_string()
+                title=ui.t("styles-state") aria-label=ui.t("styles-state")
+                on:click=move |_| sx.menu.update(|m| *m = if *m == Some(id) { None } else { Some(id) })>
+                <span class="state-btn-label">{label}</span>{icons::chevron_down()}
+            </button>
+            <controls::Pop sx id narrow=true>
+                <div class="pop-menu state-pop" role="menu" aria-label=ui.t("styles-state")>
+                    {move || {
+                        let list = shown.get();
+                        let (basic, more): (Vec<_>, Vec<_>) = list.into_iter().partition(|(st, _)| BASIC.contains(st));
+                        let sep = !more.is_empty();
+                        view! {
+                            {basic.into_iter().map(|(st, k)| item(st, k)).collect_view()}
+                            {sep.then(|| view! { <div class="menu-sep" role="separator"></div> })}
+                            {more.into_iter().map(|(st, k)| item(st, k)).collect_view()}
+                        }
+                    }}
+                </div>
+            </controls::Pop>
+        </div>
+    }
+}
+
 /// Sélecteur d'une classe dans un état : ajouté à la classe (`.onglet:hover`), ou, commençant par
 /// `^`, porté par un élément qui la contient (`.is-active .onglet-texte`).
 pub(crate) fn with_state(sel: &str, state: &str) -> String {
@@ -410,8 +655,16 @@ pub fn Styles() -> impl IntoView {
             return None;
         }
         let at = ed.selected_target()?;
+        // Même nom que dans les calques : nom du calque, sinon classe lisible ou nature (D-124).
         let name = revel_model::layer_name(&n)
             .map(str::to_string)
+            .or_else(|| match &n {
+                Node::Element { tag, .. } => Some(crate::names::element_name(ui, tag, &classes_of(&n).join(" "))),
+                Node::Use { component, .. } => ed.doc.with_untracked(|d| {
+                    d.as_ref()?.component(component).map(crate::names::component_name)
+                }),
+                _ => None,
+            })
             .or_else(|| ed.selected.with(|s| s.as_ref().map(|s| s.label.clone())))
             .unwrap_or_default();
         let hidden = revel_model::is_hidden(&n);
@@ -488,23 +741,10 @@ pub fn Styles() -> impl IntoView {
                                     }>{icons::tag()}{ui.t(key)}</button>
                                 </span>
                             })}
-                            <input class="selector-add" placeholder=move || if classes.get().is_empty() { ui.tx("styles-class-first", &[]) } else { ui.tx("styles-class-new", &[]) }
-                                aria-label=ui.t("styles-class-new")
-                                on:change=move |e| {
-                                    add_class(event_target_value(&e));
-                                    if let Some(t) = e.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) {
-                                        t.set_value("");
-                                    }
-                                }/>
+                            <ClassAdd add=Callback::new(add_class) has_classes=Signal::derive(move || !classes.get().is_empty())/>
                         </div>
                         <div class="target-meta">
-                            <div class="select select--state" class:is-active=move || !state.get().is_empty() title=ui.t("styles-state")>
-                                <select class="input" aria-label=ui.t("styles-state") on:change=move |e| state.set(event_target_value(&e))>
-                                    {STATES.iter().map(|(s, k)| view! {
-                                        <option value=*s selected=move || state.get() == *s>{ui.t(k)}</option>
-                                    }).collect_view()}
-                                </select>
-                            </div>
+                            <StateMenu sx/>
                             <span class="target-where muted" title=move || format!("{} — {}", sx.full_selector(), bp_full().unwrap_or_default())>
                                 {move || bp_label().unwrap_or_default()}
                                 {move || ed.count.get().filter(|(s, _)| *s == selector.get()).map(|(_, n)| format!(" · {}", ui.tx("styles-count", &[("count", n.to_string())])))}

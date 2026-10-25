@@ -225,6 +225,21 @@ pub async fn update_install() -> Res<()> {
     call("update_install", &serde_json::json!({})).await
 }
 
+/// Chemins des derniers dossiers déposés sur la fenêtre (Windows, D-122).
+pub async fn dropped_paths() -> Res<Vec<String>> {
+    call("dropped_paths", &serde_json::json!({})).await
+}
+
+/// Dossiers déposés retrouvés par leur nom dans les emplacements connus (D-122).
+pub async fn find_dropped(names: &[String]) -> Res<Vec<String>> {
+    call("find_dropped", &serde_json::json!({ "names": names })).await
+}
+
+/// Le dossier contient un site Revel.
+pub async fn has_site(path: &str) -> Res<bool> {
+    call("has_site", &PathArg { path }).await
+}
+
 pub async fn open_site(path: &str) -> Res<SiteSummary> {
     call("open_site", &PathArg { path }).await
 }

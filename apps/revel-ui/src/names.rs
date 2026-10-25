@@ -105,10 +105,45 @@ pub fn type_name(ui: Ui, tag: &str) -> String {
     }
 }
 
+/// Classes des éléments du panneau « Ajouter » : leur nom est celui de la tuile, dans la langue
+/// de l'interface (« Accordéon », « Ticker ») plutôt que la classe rendue lisible.
+const PRESET_NAMES: &[(&str, &str)] = &[
+    ("accordeon", "insert-accordion"),
+    ("barre-nav", "insert-navbar"),
+    ("barre-progression", "insert-progress"),
+    ("bloc-appel", "insert-block-cta"),
+    ("bloc-avantages", "insert-block-features"),
+    ("bloc-contact", "insert-block-contact"),
+    ("bloc-faq", "insert-block-faq"),
+    ("bloc-formulaire", "insert-form"),
+    ("bloc-hero", "insert-block-hero"),
+    ("bloc-temoignage", "insert-block-testimonial"),
+    ("bloc-texte-image", "insert-block-text-image"),
+    ("carrousel", "insert-carousel"),
+    ("colonnes", "insert-columns"),
+    ("consentement", "insert-consent"),
+    ("defilement", "insert-ticker"),
+    ("diaporama", "insert-slideshow"),
+    ("filtres", "insert-filters"),
+    ("grille", "insert-grid"),
+    ("icone", "insert-icon"),
+    ("interrupteur", "insert-switch"),
+    ("langues", "insert-locale-switch"),
+    ("lecteur", "insert-video-player"),
+    ("liste-collection", "insert-collection-list"),
+    ("lottie", "insert-lottie"),
+    ("media-survol", "insert-hover-media"),
+    ("onglets", "insert-tabs"),
+    ("texte-riche", "insert-rich-text"),
+];
+
 /// Nom affiché d'un élément : classe principale rendue lisible, sinon sa nature.
 pub fn element_name(ui: Ui, tag: &str, classes: &str) -> String {
-    main_class(classes)
-        .map(humanize)
+    let main = main_class(classes);
+    if let Some((_, key)) = main.and_then(|m| PRESET_NAMES.iter().find(|(c, _)| *c == m)) {
+        return ui.tx(key, &[]);
+    }
+    main.map(humanize)
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| type_name(ui, tag))
 }

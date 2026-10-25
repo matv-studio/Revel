@@ -31,6 +31,17 @@ struct Mcp {
 /// Identifiant de l'application (`tauri.conf.json`) : dossier des réglages, lu aussi par le relais.
 const IDENTIFIER: &str = "app.revel-studio.desktop";
 
+mod drops;
+
+/// Dossiers déposés (hors Windows, ou chemin non transmis) retrouvés par leur nom (D-122).
+#[tauri::command]
+fn find_dropped(app: tauri::AppHandle, s: State<AppState>, names: Vec<String>) -> Vec<String> {
+    let recent: Vec<String> = s.core.recent_sites().into_iter().map(|r| r.path).collect();
+    let sites = PathBuf::from(default_sites_dir(app.clone(), s));
+    let places = drops::places(&recent, Some(sites), app.path().home_dir().ok());
+    drops::find_named(&names, &places)
+}
+
 /// Démarre le serveur des assistants sur le cœur de l'application.
 async fn start_mcp(
     core: &Arc<Core>,
@@ -1496,6 +1507,9 @@ pub fn run() {
                 mcp: std::sync::Mutex::new(mcp),
                 activity,
             });
+            // Dossiers déposés sur la fenêtre (D-122).
+            app.manage(drops::Dropped::default());
+            drops::watch(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1596,7 +1610,9 @@ pub fn run() {
             edit_import_media,
             edit_replace_media,
             canvas_open,
-            startup_site
+            startup_site,
+            drops::dropped_paths,
+            find_dropped
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de Revel");

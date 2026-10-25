@@ -194,6 +194,130 @@ pub fn inventory(site: &Site) -> Vec<ClassInfo> {
     map.into_values().collect()
 }
 
+/// Raison qui place une classe proposée en tête (ajout d'une classe, D-120).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Why {
+    /// Portée par un élément voisin de même balise (carte d'une liste de cartes).
+    Sibling,
+    /// Nommée d'après une classe du parent (`carte` → `carte-titre`, `carte__titre`).
+    Family,
+    /// Portée par un voisin d'une autre balise.
+    Neighbour,
+    /// Portée ailleurs par la même balise.
+    SameTag,
+    /// Autre classe du site.
+    Other,
+}
+
+/// Classes proposées à l'ajout sur l'élément `at`, les plus probables d'abord : celles des
+/// voisins de même balise, celles nommées d'après le parent, celles des autres voisins, celles de
+/// la même balise ailleurs, puis les autres (plus utilisées d'abord). Les classes de l'élément et
+/// les classes d'état ne sont pas proposées.
+pub fn suggest(site: &Site, at: &Target) -> Vec<(String, Why)> {
+    let Ok(node) = crate::address::node(site, at) else {
+        return Vec::new();
+    };
+    let (own, tag) = node_classes(node)
+        .map(|(v, t)| {
+            (
+                attr_classes(&v)
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect::<Vec<_>>(),
+                t,
+            )
+        })
+        .unwrap_or_else(|| {
+            let tag = match node {
+                Node::Element { tag, .. } => tag.clone(),
+                Node::Image(_) => "img".into(),
+                Node::Use { component, .. } => component.clone(),
+                _ => String::new(),
+            };
+            (Vec::new(), tag)
+        });
+    let inv = inventory(site);
+    let mut best: BTreeMap<String, Why> = BTreeMap::new();
+    let mut put = |name: &str, why: Why| {
+        if own.iter().any(|o| o == name) || is_state(name) || !valid_name(name) {
+            return;
+        }
+        let e = best.entry(name.to_string()).or_insert(why);
+        if why < *e {
+            *e = why;
+        }
+    };
+    if let Ok((parent, _)) = crate::address::locate(site, at) {
+        if let Ok(list) = crate::address::list(site, &parent) {
+            for n in list {
+                if revel_model::ids::node_id(n) == Some(at.node.as_str()) {
+                    continue;
+                }
+                if let Some((v, t)) = node_classes(n) {
+                    let why = if t == tag {
+                        Why::Sibling
+                    } else {
+                        Why::Neighbour
+                    };
+                    for c in attr_classes(&v) {
+                        put(c, why);
+                    }
+                }
+            }
+        }
+        let parent_classes: Vec<String> = parent
+            .node
+            .as_ref()
+            .and_then(|id| {
+                crate::address::node(
+                    site,
+                    &Target {
+                        owner: at.owner.clone(),
+                        node: id.clone(),
+                    },
+                )
+                .ok()
+            })
+            .and_then(node_classes)
+            .map(|(v, _)| attr_classes(&v).into_iter().map(str::to_string).collect())
+            .unwrap_or_default();
+        // Famille : nommées d'après une classe du parent (`carte-titre` dans `carte`), ou de même
+        // racine que le parent ou l'élément (`text-small` pour un `text-body`).
+        let stem = |c: &str| {
+            c.split(['-', '_'])
+                .next()
+                .filter(|s| s.len() >= 3 && s.len() < c.len())
+                .map(str::to_string)
+        };
+        let mut roots: Vec<String> = parent_classes.clone();
+        roots.extend(parent_classes.iter().filter_map(|c| stem(c)));
+        roots.extend(own.iter().filter_map(|c| stem(c)));
+        for c in &inv {
+            if roots.iter().any(|p| {
+                c.name.len() > p.len()
+                    && c.name.starts_with(p.as_str())
+                    && matches!(c.name.as_bytes()[p.len()], b'-' | b'_')
+            }) {
+                put(&c.name, Why::Family);
+            }
+        }
+    }
+    for c in &inv {
+        if c.uses.iter().any(|u| u.tag == tag) {
+            put(&c.name, Why::SameTag);
+        } else {
+            put(&c.name, Why::Other);
+        }
+    }
+    let uses = |n: &str| inv.iter().find(|c| c.name == n).map_or(0, |c| c.uses.len());
+    let mut out: Vec<(String, Why)> = best.into_iter().collect();
+    out.sort_by(|(a, wa), (b, wb)| wa.cmp(wb).then(uses(b).cmp(&uses(a))).then(a.cmp(b)));
+    out
+}
+
 /// `text` avec la classe `from` remplacée par `to`, mot entier (`.carte` mais pas `.carte-titre`) :
 /// `dot`, dans du CSS ou une cible (`.carte`) ; sinon dans une liste de classes (`carte grande`).
 fn replace_token(text: &str, from: &str, to: &str, dot: bool) -> String {
@@ -480,6 +604,54 @@ mod tests {
         assert_eq!(carte.rules, vec!["r1", "r2"]);
         assert_eq!(carte.uses.len(), 1);
         assert!(inv[4].uses.is_empty() && inv[4].rules == vec!["r2", "r3"]);
+    }
+
+    #[test]
+    fn classes_proposees_selon_le_contexte() {
+        let mut s = site();
+        // Liste de cartes : une carte vide à côté des autres, un titre vide dans une carte.
+        let mut list = el("l", "liste", None);
+        let mut carte = el("c1", "carte", None);
+        if let Node::Element { children, .. } = &mut carte {
+            children.push(el("t1", "carte-titre", None));
+            children.push(Node::Element {
+                id: Some("t2".into()),
+                tag: "p".into(),
+                attrs: vec![],
+                children: vec![],
+            });
+        }
+        let vide = Node::Element {
+            id: Some("c2".into()),
+            tag: "div".into(),
+            attrs: vec![],
+            children: vec![],
+        };
+        if let Node::Element { children, .. } = &mut list {
+            children.push(carte);
+            children.push(vide);
+        }
+        s.pages[0].body.push(list);
+        let at = |n: &str| Target {
+            owner: Owner::Page("index".into()),
+            node: n.into(),
+        };
+        let got = suggest(&s, &at("c2"));
+        assert_eq!(got[0], ("carte".to_string(), Why::Sibling));
+        // Nommées d'après la classe du parent : `carte-…` en tête pour le paragraphe vide.
+        let got = suggest(&s, &at("t2"));
+        assert_eq!(got[0], ("carte-titre".to_string(), Why::Family));
+        assert!(
+            got.iter()
+                .any(|(n, w)| n == "carte-grande" && *w == Why::Family)
+        );
+        // Ni les classes de l'élément, ni les classes d'état.
+        let got = suggest(&s, &at("a2"));
+        assert!(
+            !got.iter()
+                .any(|(n, _)| n == "carte-titre" || n.starts_with("is-"))
+        );
+        assert!(got.iter().any(|(n, _)| n == "vieille"));
     }
 
     #[test]

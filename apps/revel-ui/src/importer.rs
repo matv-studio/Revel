@@ -123,7 +123,13 @@ fn size(bytes: u64, fr: bool) -> String {
 }
 
 #[component]
-pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl IntoView {
+pub fn ImportSite(
+    close: Callback<()>,
+    done: Callback<ImportResult>,
+    /// Dossier à examiner d'emblée (dossier déposé sur l'accueil, D-122).
+    #[prop(optional)]
+    start: Option<String>,
+) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let source = RwSignal::new(Source::Folder);
     let parent = RwSignal::new(String::new());
@@ -343,6 +349,10 @@ pub fn ImportSite(close: Callback<()>, done: Callback<ImportResult>) -> impl Int
             run(path, false);
         }
     };
+    if let Some(p) = start.filter(|p| !p.is_empty()) {
+        folder.set(p.clone());
+        examine(p);
+    }
     let choose = move |_| {
         spawn_local(async move {
             match api::pick_folder().await {

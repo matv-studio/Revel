@@ -158,7 +158,6 @@ pub fn SiteInfo(s: DocSession, path: String) -> impl IntoView {
         <section class="page settings-page" data-sub="site-info">
             <header class="page-head"><h1 title=ui.t("siteinfo-help")>{ui.t("siteinfo-title")}</h1></header>
             <div class="section">
-                <p class="muted small">{ui.t("siteinfo-intro")}</p>
                 {move || {
                     let vals: Vec<InfoValue> = obj.get().map(|o| si::values(&o)).unwrap_or_default();
                     if vals.is_empty() {
@@ -972,8 +971,8 @@ fn value_settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                                 </div>
                             </label>
                         })}
-                        <button type="button" class="link-btn" on:click=move |_| ui.tab(Tab::Settings(Section::SiteInfo))>
-                            {ui.t("siteinfo-edit")}
+                        <button type="button" class="btn btn--small siteinfo-go" on:click=move |_| ui.tab(Tab::Settings(Section::SiteInfo))>
+                            {crate::icons::settings()}<span>{ui.t("siteinfo-edit")}</span>
                         </button>
                     </div>
                 }.into_any()

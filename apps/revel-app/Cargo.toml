@@ -33,6 +33,11 @@ tauri-plugin-opener = "2.7.1"
 # Mises à jour de Revel (6.6) : versions publiées sur GitHub, vérifiées par signature.
 tauri-plugin-updater = "2.14.0"
 
+# Chemins des dossiers déposés sur la fenêtre (D-122) : objets joints aux messages de WebView2.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39.1"
+windows-core = "0.62.2"
+
 [features]
 # Interface intégrée à l'exécutable (au lieu du serveur de développement `devUrl`) : activée par
 # `cargo tauri build` ; à demander pour un exécutable de débogage (essais de l'application).

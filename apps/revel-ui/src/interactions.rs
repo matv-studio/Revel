@@ -853,6 +853,8 @@ pub fn TickerSettings(at: Target) -> impl IntoView {
                 .into_iter()
                 .map(|s| setting_row(ui, f, s, anim, write))
                 .collect_view()}
+            // Éléments qui défilent : ajouter, remplacer, ranger, retirer (D-123).
+            <crate::items::ItemsList at=at.get_value()/>
         </div>
     }
 }

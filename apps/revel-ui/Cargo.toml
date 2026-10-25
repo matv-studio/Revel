@@ -24,7 +24,7 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = [
     "Element", "HtmlElement", "CssStyleDeclaration", "HtmlIFrameElement", "MessageEvent",
     "Window", "KeyboardEvent", "DomRect", "EventTarget", "HtmlSelectElement", "DragEvent",
-    "DataTransfer", "ScrollIntoViewOptions", "ScrollLogicalPosition", "PointerEvent", "MouseEvent",
+    "DataTransfer", "DataTransferItem", "DataTransferItemList", "ScrollIntoViewOptions", "ScrollLogicalPosition", "PointerEvent", "MouseEvent",
     "HtmlInputElement", "ResizeObserver", "Storage", "NodeList", "WheelEvent",
     "Node", "Text", "Document", "ClipboardEvent", "Selection", "Range", "HtmlDocument",
     "FocusEvent", "InputEvent", "HtmlCanvasElement", "CanvasRenderingContext2d",

@@ -198,9 +198,9 @@ pub(crate) fn settings_part(
 ) -> AnyView {
     view! {
         <section class="settings-sub" data-sub=key id=format!("set-{key}")>
+            // Présentation de la partie en info-bulle (aucune phrase d'explication affichée, D-124).
             <header class="settings-sub-head">
-                <h2>{ui.t(title)}</h2>
-                <p class="settings-sub-lead">{ui.t(lead)}</p>
+                <h2>{ui.t(title)}<span class="settings-sub-info" title=ui.t(lead) aria-label=ui.t(lead) role="img">{crate::icons::info()}</span></h2>
             </header>
             <div class="settings-sub-body">{body}</div>
         </section>

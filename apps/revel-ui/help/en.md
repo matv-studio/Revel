@@ -8,7 +8,7 @@ Revel builds a website without writing code: you place elements on the page, set
 2. Name it and pick a template: **Blank**, **Showcase** or **Blog**.
 3. Revel opens the **Editor**. Your recent sites stay on the home screen.
 
-A Revel site opens with **Open a site**. An existing site comes in with **Import**:
+A Revel site opens with **Open a site**, or by dropping its folder on the home screen. An existing site comes in with **Import**:
 
 - **Folder**: a folder of HTML pages (hand-made, or an unzipped Webflow code export) or an Eleventy project. Each page keeps its address; the shared header and footer go into a layout, the styles into the Styles panel. Webflow export: add the collections' CSV files (CMS › collection › Export) or a Webflow API token to bring in the CMS content.
 - **Link**: the address of a live site (made with Framer, Webflow or anything else). Revel reads its pages and copies its images, fonts and styles into the projects folder; appear animations become Revel animations.
@@ -34,6 +34,8 @@ Panels can move: drag a tab to another column, or onto the canvas to make it a w
 3. **Ready-made blocks** (page header, features, FAQ, form…) add a whole section.
 
 To move an element, drag it on the page or in **Layers**. Alt+drag makes a copy.
+
+The items of a **Ticker**, a **Carousel**, **Tabs** or a menu are set in **Styles**: **Add an image** (or a tab, a link), replace, reorder, remove.
 
 ## Set the look
 
@@ -69,7 +71,7 @@ The look is set in **Styles**, per **class**: every element with the same class 
 
 ## Components
 
-A component is a piece of page reused everywhere (header, footer, card, service, tool). Right-click an element in the layers › **Create component**. Editing the component changes all its uses; each use can have its own texts, images and links (its **properties**, in **Styles**) and variant (hover, pressed…).
+A component is a piece of page reused everywhere (header, footer, card, service, tool). Right-click an element in the layers › **Create component**. Editing the component changes all its uses; each use can have its own texts, images and links (its **properties**, in **Styles**) and variant (hover, pressed…). In the component canvas, arrows link the primary variant to the variants taken by a gesture; **+ › On click…** creates a variant taken on click on the component.
 
 **Slot**: in the component, the **Content slot** switch of an element (a card's list of tools, a service's points) lets each use put its own content there. On the page, **Edit here** copies the component's content into the use to change it there only; **Back to the component content** undoes it.
 

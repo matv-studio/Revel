@@ -89,7 +89,7 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
   restent à un clic (bouton de la carte).
 - **Changer de vue ne recharge rien** : l'éditeur reste monté, caché, pendant que les autres vues sont affichées.
 - **Activité** (génération, publication) : ligne de 2 px en haut de la fenêtre, visible depuis n'importe quelle vue.
-- **Paramètres du site** : rubriques à gauche (comme les réglages d'un site Webflow) — Général, Publication,
+- **Paramètres du site** : chaque partie a son titre, sa présentation en info-bulle (ⓘ), ses réglages (D-124) ; rubriques à gauche (comme les réglages d'un site Webflow) — Général, Publication,
   Export, Référencement, Redirections, Polices, Code personnalisé, Formulaires, Sauvegardes ; les rubriques
   prévues sont affichées en gris avec leur étape.
 - **Aperçu** (D-26) : le site tel qu'il sera publié, dans une fenêtre, à la page affichée dans l'éditeur ; rien à
@@ -108,7 +108,7 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Liste déroulante | `.select` > `select.input` | Chevron dessiné par Revel, identique sur les trois systèmes |
 | Formulaire | `.form-grid` (libellé / contrôle), `.form-cols` (2 colonnes de champs) | Réglages ; saisie d'un hébergement |
 | Choix exclusif | `.segmented` (`role="radiogroup"`, boutons `role="radio"`) | 2 à 4 options courtes |
-| Interrupteur | `.switch` | Option activable immédiatement |
+| Interrupteur | `.switch` | Option activable immédiatement ; au dessin des barres de défilement (trait fin, poignée en pilule, progression jusqu'à la poignée quand il est allumé) ; dans les panneaux de l'éditeur, au bout de la ligne, libellé à gauche (D-124) |
 | Couleurs | `.swatches`, `.swatch` | Réglage de l'accent |
 | Sites | `.site-grid` > `.site-card` (vignette à monogramme teintée d'après le nom, nom, date ; paramètres et retrait au survol) ou `.table` | Accueil : grille ou liste, recherche, tri (récents, nom) ; clic : éditeur |
 | Nouveau site | `.dialog--form` + `.path-field` | Nom, langue, emplacement proposé (`Documents/Revel/nom-du-site`) ; la fenêtre du système ne s'ouvre que sur « Changer… » |
@@ -169,7 +169,7 @@ Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arr
 | Médias | Filtre par type et tri (récents, anciens, nom, type, taille) en deux petites listes sous la recherche ; dossiers en lignes puis grille de vignettes (icône et extension pour les fichiers non image) ; fil d'Ariane dans un dossier ; glisser une vignette sur un dossier ou le fil d'Ariane pour la ranger, sur la page pour la placer ; pied : nombre, glissière courte de taille des vignettes (piste seule), nouveau dossier, import (icônes seules) ; fichiers du système déposés sur le panneau (contour d'accent) ; clic : détails par-dessus la colonne (aperçu, adresse, taille, texte alternatif par défaut, Remplacer, Placer) |
 | Choisir une image | Fenêtre centrée au-dessus de tout (y compris des volets par-dessus la colonne) : titre, recherche, dossier (dans l'éditeur), vignettes cliquables, nombre et « Importer » en pied ; Échap ou clic hors de la fenêtre : fermée ; ouverte par un bouton icône à droite du champ (source d'image, image de partage, champ image du CMS), désactivé pour une valeur calculée |
 | Composants | Arbre de dossiers repliables, nom et nombre d'utilisations ; glisser sur un dossier (rangement) ou sur la page (utilisation) ; double-clic : modifier ; menu : modifier, placer, renommer, déplacer, supprimer (s'il n'est pas utilisé) ; pied : nombre, nouveau dossier, « + » créer à partir de la sélection |
-| Utilisation de composant | Couleur des composants : vert (comme Webflow). Un clic sélectionne l'utilisation entière (cadre et étiquette « ◆ nom ») ; double-clic : composant ouvert, le reste de la page estompé, barre en bas du canevas (nom, « Terminer ») ; Réglages : nom, Modifier le composant, Détacher, valeur de chaque propriété (vide : valeur par défaut en indication, bouton pour y revenir) |
+| Utilisation de composant | Couleur des composants : vert (comme Webflow). Un clic sélectionne l'utilisation entière (cadre et étiquette « ◆ nom ») ; double-clic : composant ouvert, le reste de la page estompé, barre en bas du canevas (nom, « Terminer » ; rayons concentriques, contrôles sans cadre, D-124) ; canevas des composants : flèches de la principale vers les variantes prises par un geste, geste écrit sur la flèche (D-121) ; Réglages : nom, Modifier le composant, Détacher, valeur de chaque propriété (vide : valeur par défaut en indication, bouton pour y revenir) |
 | Propriétés d'un composant | Dans les réglages d'un élément du composant ouvert : « Relié aux propriétés » (texte, image, lien, visibilité : point vert pour relier, pastille verte avec × pour délier) puis « Propriétés » (cartes : type, nom modifiable, valeur par défaut, suppression ; « + » par type) |
 | Dossiers (médias, composants) | Rangement de l'éditeur (`Site::library`) : aucun fichier déplacé, aucune adresse changée ; nouveau dossier (pied du panneau, menu d'un dossier), renommer, supprimer (le contenu remonte d'un niveau) ; nom saisi sur place, refusé (bordure rouge) s'il est vide ou déjà pris |
 | Fonction prévue | Bouton désactivé (`.is-planned`), étape en info-bulle ; panneau prévu : `Planned` |
@@ -225,7 +225,7 @@ couleur) ; la saisie au clavier reste possible partout pour qui la préfère.
 
 | Fonction | Retenu | Repris de | Pourquoi |
 |---|---|---|---|
-| Cible | Classes en pastilles dans un champ (clic : classe réglée, × : retirée, saisie : ajoutée ; classes combinées en italique), état (Normal, Survol, Appui, Focus clavier), point de rupture et nombre d'éléments qui portent la classe | Webflow [W1][W16] | seul modèle fidèle à une vraie cascade CSS |
+| Cible | Classes en pastilles dans un champ (clic : classe réglée, × : retirée, saisie : ajoutée avec les classes proposées d'après les voisins et le parent ; classes combinées en italique), état (Normal et Survol, puis les états utiles à l'élément ; point bleu : état qui a des styles, D-120), point de rupture et nombre d'éléments qui portent la classe | Webflow [W1][W16] | seul modèle fidèle à une vraie cascade CSS |
 | Origine d'une valeur | Libellé sur fond bleu : réglé ici ; orange : hérité d'un écran plus large ou de l'état de base (D-21) ; sinon gris (valeur effective en indication). Clic sur le libellé : origine et bouton de réinitialisation (flèche) ; Alt+clic : réinitialise | Webflow [W1][W18], Framer [F5] | code connu des utilisateurs de Webflow |
 | Nombres | Glisser le libellé (Maj ×10, Alt ×0,1) ; ↑/↓ ±1, Maj ±10, Alt ±0,1 ; calculs `12+4`, `*2` ; unité tapée ou choisie dans un menu court (`px`, `%`… ; explication en info-bulle) ; champ vide = valeur retirée | Figma [G5], Webflow [W15], Framer [F1] | glisser sans touche spéciale se découvre seul |
 | Couleur | Pastille + valeur ; panneau : plan saturation-luminosité, curseur de teinte, curseur d'opacité, pipette (si le système la permet), modèle Hex / RVB / TSL / TSV, couleurs du site (variables d'abord, puis couleurs utilisées), contraste du texte (AA/AAA) | Figma [G7][G8], Webflow [W11][W19] | aucune valeur à taper |

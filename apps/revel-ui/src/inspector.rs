@@ -155,7 +155,8 @@ pub fn ContentSettings() -> impl IntoView {
     };
     view! {
         <div class="content-settings">
-            {move || current.get().and_then(|(at, node)| crate::blocks::extra_settings(ui, ed, at, node))}
+            // Média (vidéo, son, image écrite) : sa source d'abord, ses réglages ensuite (D-124).
+            {move || current.get().filter(|(_, n)| !is_media(n)).and_then(|(at, node)| crate::blocks::extra_settings(ui, ed, at, node))}
             {move || current.get().map(|(at, node)| match node {
                 Node::Element { tag, attrs, children, .. } => {
                     let anchors = has_section_links(&children);
@@ -188,6 +189,7 @@ pub fn ContentSettings() -> impl IntoView {
                 Node::Use { component, args, .. } => crate::components::instance_settings(ui, ed, at, component, args),
                 _ => ().into_any(),
             })}
+            {move || current.get().filter(|(_, n)| is_media(n)).and_then(|(at, node)| crate::blocks::extra_settings(ui, ed, at, node))}
             {in_component}
         </div>
     }
@@ -479,6 +481,11 @@ fn element_content(
             </div>
         })}
     }
+}
+
+/// Élément de média écrit (vidéo, son, image) : sa source passe avant ses réglages.
+fn is_media(n: &Node) -> bool {
+    matches!(n, Node::Element { tag, .. } if matches!(tag.to_ascii_lowercase().as_str(), "video" | "audio" | "img"))
 }
 
 /// Destination d'un lien : nature de l'adresse écrite (`mailto:`, `tel:`, page du site, autre).

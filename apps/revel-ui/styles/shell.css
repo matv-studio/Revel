@@ -353,3 +353,19 @@
 :root[data-accent-scope="full"] .range:not(.is-here):not(.is-inherited) { --range-fill-color: var(--accent); }
 :root[data-accent-scope="full"] .meter-fill { background: var(--accent); }
 :root[data-accent-scope="full"] .editor-toolbar .tool-toggle.is-on { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+/* Ajouts de D-120 : état choisi, classe proposée en évidence, barre de défilement tenue. */
+:root[data-accent-scope="full"] :is(.state-pop .menu-item.is-on, .class-suggest-item.is-hl) { background: var(--accent-soft); color: var(--accent-text); }
+:root[data-accent-scope="full"] .state-pop .menu-item.is-on svg.icon { color: var(--accent-text); }
+:root[data-accent-scope="full"] ::-webkit-scrollbar-thumb:active { background-color: var(--accent); }
+
+/* Dossier déposé sur l'accueil (D-122) : voile sur la fenêtre, cadre en pointillés. */
+.drop-veil {
+  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: var(--s-8);
+  background: color-mix(in srgb, var(--bg) 72%, transparent); pointer-events: none;
+}
+.drop-veil-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-3);
+  width: 100%; height: 100%; border: 2px dashed var(--focus); border-radius: var(--radius-lg);
+  color: var(--text); font-size: var(--text-lg); font-weight: var(--weight-medium);
+}
+.drop-veil-card svg.icon { width: 28px; height: 28px; color: var(--text-muted); }

@@ -73,6 +73,23 @@ try {
     await page.waitForFunction(() => ![...document.querySelectorAll('.site-card')].some((c) => c.textContent.includes('Maison Oka')));
     check('accueil : site supprimé après confirmation', title);
   }
+  // Dossier déposé sur l'accueil (D-122) : voile pendant le glisser ; des fichiers seuls sont
+  // refusés (le dépôt d'un dossier est vérifié par les essais de l'application).
+  {
+    await page.evaluate(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['x'], 'notes.txt', { type: 'text/plain' }));
+      window.__dt = dt;
+      document.querySelector('.page').dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    });
+    await page.waitForSelector('.drop-veil');
+    await page.evaluate(() => document.querySelector('.page').dispatchEvent(new DragEvent('drop', { dataTransfer: window.__dt, bubbles: true, cancelable: true })));
+    await page.waitForSelector('.drop-veil', { state: 'detached' });
+    await page.waitForSelector('.notice--error');
+    const msg = (await page.textContent('.notice--error')).trim();
+    check('accueil : dépôt de fichiers montré, refusé (dossier attendu)', /dossier de site/.test(msg), msg);
+    await page.click('.notice--error .icon-btn');
+  }
   // Import (étape 7), une boîte pour toutes les sources : dossier de pages HTML examiné puis
   // importé (bilan dans la boîte) ; export Webflow et contenus de son CMS (CSV ou API) ; site
   // lu depuis un lien (avancement, annulation) ; dépôt Git copié (site à construire signalé,
@@ -552,6 +569,32 @@ try {
   await page.click('.dock-panel[data-panel="styles"] .sel-chip:has(.sel-chip-name:text-is("essai-classe")) .sel-chip-x');
   f = await waitFrame(() => !document.querySelector('section.hero')?.classList.contains('essai-classe'), 'classe retirée');
   check('réglages : classe retirée', true);
+  // Classes proposées à l'ajout (D-120) : liste au focus (sans les classes de l'élément), filtrée
+  // par la saisie, « Créer » pour un nom nouveau ; Échap ferme.
+  {
+    const add = '.dock-panel[data-panel="styles"] .selector-add';
+    await page.click(add);
+    await page.waitForSelector('.class-suggest .class-suggest-item[data-class]');
+    const sugg = await page.$$eval('.class-suggest .class-suggest-item[data-class]', (els) => els.map((e) => e.dataset.class));
+    await page.fill(add, 'zz-nouvelle');
+    await page.waitForSelector('.class-suggest .is-create[data-create="zz-nouvelle"]');
+    await page.fill(add, '');
+    await page.press(add, 'Escape');
+    await page.waitForSelector('.class-suggest', { state: 'detached' });
+    check('classes proposées : liste au focus (sans celles de l\'élément), création d\'un nom nouveau, Échap',
+      sugg.length > 0 && !sugg.includes('hero'), sugg.slice(0, 4).join(', '));
+    // État (D-120) : une section n'a que Normal et Survol (et les états déjà réglés).
+    await page.click('.dock-panel[data-panel="styles"] .state-btn');
+    await page.waitForSelector('.state-pop .state-item');
+    const st = await page.$$eval('.state-pop .state-item', (els) => els.map((e) => e.dataset.state));
+    check('état : Normal et Survol pour une section, pas d\'état propre aux liens ni aux accordéons',
+      st[0] === '' && st[1] === ':hover' && !st.includes('[aria-current="page"]') && !st.includes('[open]'), st.join(' | '));
+    await page.click('.state-pop .state-item[data-state=":hover"]');
+    await page.waitForSelector('.dock-panel[data-panel="styles"] .state-btn.is-active');
+    await page.click('.dock-panel[data-panel="styles"] .state-btn');
+    await page.click('.state-pop .state-item[data-state=""]');
+    await page.waitForSelector('.dock-panel[data-panel="styles"] .state-btn:not(.is-active)');
+  }
 
   // Ajouter un titre dans la section sélectionnée.
   await page.click('.dock-tab[data-panel="insert"]');
@@ -559,6 +602,19 @@ try {
   f = await waitFrame(() => [...document.querySelectorAll('section.hero h2')].some((h) => h.textContent === 'Nouveau titre'), 'titre ajouté');
   await page.waitForFunction(() => document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech === 'h2');
   check('ajouter : titre inséré dans la section, sélectionné', true);
+  // Défilement (D-123) : éléments réglés depuis Styles ; « Ajouter une image » en ajoute un.
+  await page.dblclick('.insert-item[data-item="insert-ticker"]');
+  await page.waitForSelector('.dock-panel[data-panel="styles"] .items-list .items-row');
+  {
+    const n0 = await page.$$eval('.items-list .items-row', (r) => r.length);
+    await page.click('.items-list [data-action="items-add"]');
+    await page.waitForSelector('.picker .asset');
+    const url = await page.getAttribute('.picker .asset >> nth=0', 'data-url');
+    await page.click('.picker .asset >> nth=0');
+    await page.waitForFunction((n) => document.querySelectorAll('.items-list .items-row').length === n + 1, n0);
+    const last = await page.$eval('.items-list .items-row:last-child .items-thumb img', (i) => i.getAttribute('src')).catch(() => '');
+    check('défilement : éléments listés dans Styles, image ajoutée à la fin', n0 > 0 && last.endsWith(url.replace(/^\//, '')), `${n0} → ${n0 + 1} (${url})`);
+  }
   await page.click('.dock-tab[data-panel="layers"]');
 
   // Lien : nouvel onglet (target + rel). Le lien est dans le composant de l'en-tête : un clic
@@ -574,9 +630,35 @@ try {
   await page.frameLocator('iframe.canvas-frame[data-key="@"]').locator('header nav a', { hasText: 'Agence' }).first().click();
   await page.waitForSelector('.dock-panel[data-panel="styles"] #insp-new-tab', { state: 'attached' });
   check('composant : canevas du composant ouvert (variante principale), lien sélectionné', !!(await page.$('.comp-bar')));
+  // État d'un lien (D-120) : appui, focus clavier, page actuelle proposés.
+  await page.waitForFunction(() => document.querySelector('.dock-panel[data-panel="styles"] .state-btn'));
+  await page.waitForTimeout(400);
+  await page.click('.dock-panel[data-panel="styles"] .state-btn');
+  await page.waitForSelector('.state-pop .state-item');
+  {
+    const st = await page.$$eval('.state-pop .state-item', (els) => els.map((e) => e.dataset.state));
+    check('état : appui, focus clavier et page actuelle proposés pour un lien',
+      [':active', ':focus-visible', '[aria-current="page"]'].every((x) => st.includes(x)) && !st.includes('[open]'), st.join(' | '));
+  }
+  await page.keyboard.press('Escape');
   await page.click('.dock-panel[data-panel="styles"] .row-switch:has(#insp-new-tab) .switch');
   f = await waitFrame(() => [...document.querySelectorAll('header nav a')].some((a) => a.textContent.trim() === 'Agence' && a.target === '_blank' && a.rel === 'noopener'), 'nouvel onglet');
   check('lien : ouverture dans un nouvel onglet', true);
+  // Variante prise au clic (D-121) : interaction de l'élément racine, flèche et geste dans le
+  // canevas des composants.
+  await page.click('.frame-add');
+  await page.click('.ctx-menu .menu-item:has-text("Au clic")');
+  await page.waitForSelector('.dialog input');
+  await page.fill('.dialog input', 'Ouvert');
+  await page.press('.dialog input', 'Enter');
+  await page.waitForSelector('.variant-trigger[data-variant="@ouvert"]');
+  {
+    const c = (await invoke('edit_open')).site.components.find((x) => x.id === 'partials/header');
+    const root = c && c.body.find((n) => n.node === 'element');
+    const on = root && (root.attrs.find((a) => a.name === 'data-revel-on') || {}).value;
+    check('variante au clic : interaction de la racine, flèche et geste dans le canevas',
+      /(^|; )click class:is-ouvert self$/.test(on || '') && (await page.$$('.variant-arrow')).length >= 1, on);
+  }
   await page.click('.comp-back');
   await page.waitForFunction(() => !document.querySelector('.comp-bar') && !!document.querySelector('iframe.canvas-frame[data-key="desktop"]'));
 
@@ -586,7 +668,7 @@ try {
   check('image : source et texte alternatif proposés', true);
 
   // Tout annuler.
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 12; i++) {
     const st = await invoke('edit_open');
     if (JSON.stringify(st.site) === JSON.stringify(base25.site)) break;
     await page.click('.editor-toolbar .btn-undo');

@@ -80,10 +80,10 @@ fn label_of(c: &CmsCollection) -> String {
 pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView> {
     let mut parts: Vec<AnyView> = Vec::new();
     if let Node::Element {
+        id,
         tag,
         attrs,
         children,
-        ..
     } = &node
     {
         let lower = tag.to_ascii_lowercase();
@@ -180,6 +180,20 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
                 parts.push(v);
             }
         }
+        // Accordéon (`details`) : ouvert au chargement, un seul ouvert à la fois (D-123).
+        if lower == "details" {
+            parts.push(accordion_settings(ui, ed, at.clone(), attrs));
+        }
+        // Menu de liens (barre de navigation) : liens réglés ici (D-123).
+        if lower == "nav"
+            && let Some(menu) = links_box(id.as_deref(), children)
+        {
+            let t = Target {
+                owner: at.owner.clone(),
+                node: menu,
+            };
+            parts.push(view! { <crate::items::ItemsList at=t links=true/> }.into_any());
+        }
         if let Some(v) = attr(attrs, "data-revel-slider") {
             parts.push(slider_options(
                 ui,
@@ -187,6 +201,14 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
                 at.clone(),
                 v.value.clone().unwrap_or_default(),
             ));
+            // Diapositives de la piste, réglées ici (D-123).
+            if let Some(track) = with_attr(children, "data-revel-track") {
+                let t = Target {
+                    owner: at.owner.clone(),
+                    node: track,
+                };
+                parts.push(view! { <crate::items::ItemsList at=t/> }.into_any());
+            }
         }
         // Liste de collection : son conteneur (une seule boucle dedans).
         let loops: Vec<&Node> = children
@@ -968,6 +990,7 @@ fn tabs_options(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
                         on:click=move |_| put("sound", None)>{icons::close()}</button>
                 })}
             </div>
+            <crate::items::TabsList at=at.get_value()/>
         </div>
     }
     .into_any()
@@ -1417,6 +1440,149 @@ fn role_select(
 }
 
 // ------------------------------------------------------------------ carrousel, diaporama
+
+/// Réglages d'un volet d'accordéon (`details`) : ouvert au chargement (`open`) ; un seul volet
+/// ouvert à la fois parmi ses voisins (`name` commun, accordéon exclusif du navigateur : Chrome et
+/// Edge 120, Firefox 130, Safari 17.2) ; « Ajouter un volet » (copie après celui-ci).
+fn accordion_settings(ui: Ui, ed: Ed, at: Target, attrs: &[Attr]) -> AnyView {
+    let open = attr(attrs, "open").is_some();
+    let group = attr(attrs, "name").and_then(|a| a.value.clone());
+    let at = StoredValue::new(at);
+    // Volets voisins (même parent) : identifiants.
+    let siblings = move || -> Vec<String> {
+        ed.doc.with_untracked(|d| {
+            let Some(d) = d.as_ref() else {
+                return Vec::new();
+            };
+            let Ok((parent, _)) = revel_edit::address::locate(d, &at.get_value()) else {
+                return Vec::new();
+            };
+            revel_edit::address::list(d, &parent)
+                .map(|l| {
+                    l.iter()
+                        .filter_map(|n| match n {
+                            Node::Element {
+                                id: Some(id), tag, ..
+                            } if tag == "details" => Some(id.clone()),
+                            _ => None,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    };
+    let many = siblings().len() > 1;
+    let set_open = move |on: bool| {
+        let at = at.get_value();
+        ed.apply(
+            ui,
+            if on {
+                Command::SetAttr {
+                    at,
+                    name: "open".into(),
+                    value: None,
+                }
+            } else {
+                Command::RemoveAttr {
+                    at,
+                    name: "open".into(),
+                }
+            },
+            false,
+        );
+    };
+    let set_group = move |on: bool| {
+        let owner = at.get_value().owner;
+        let name = format!("accordeon-{}", at.get_value().node);
+        let commands: Vec<Command> = siblings()
+            .into_iter()
+            .map(|node| {
+                let at = Target {
+                    owner: owner.clone(),
+                    node,
+                };
+                if on {
+                    Command::SetAttr {
+                        at,
+                        name: "name".into(),
+                        value: Some(name.clone()),
+                    }
+                } else {
+                    Command::RemoveAttr {
+                        at,
+                        name: "name".into(),
+                    }
+                }
+            })
+            .collect();
+        if !commands.is_empty() {
+            ed.apply(ui, Command::Batch { commands }, false);
+        }
+    };
+    view! {
+        <div class="insp-group accordion-settings">
+            <p class="panel-title">{ui.t("insert-accordion")}</p>
+            <label class="view-line" title=ui.t("accordion-open-help")>
+                <span>{ui.t("accordion-open")}</span>
+                <span class="switch">
+                    <input type="checkbox" prop:checked=open on:change=move |e| set_open(event_target_checked(&e))/>
+                    <span class="switch-track"></span>
+                </span>
+            </label>
+            {many.then(|| view! {
+                <label class="view-line" title=ui.t("accordion-single-help")>
+                    <span>{ui.t("accordion-single")}</span>
+                    <span class="switch">
+                        <input type="checkbox" prop:checked=group.is_some() on:change=move |e| set_group(event_target_checked(&e))/>
+                        <span class="switch-track"></span>
+                    </span>
+                </label>
+            })}
+            <button class="btn btn--small items-add" data-action="accordion-add"
+                on:click=move |_| ed.apply(ui, Command::Duplicate { at: at.get_value() }, false)>
+                {icons::plus()}<span>{ui.t("accordion-add")}</span>
+            </button>
+        </div>
+    }
+    .into_any()
+}
+
+/// Élément d'un menu dont les enfants sont des liens (deux au moins) : le menu lui-même
+/// (`own`) ou un de ses descendants.
+fn links_box(own: Option<&str>, children: &[Node]) -> Option<String> {
+    let links = children
+        .iter()
+        .filter(|n| matches!(n, Node::Element { tag, .. } if tag == "a"))
+        .count();
+    if links >= 2 {
+        return own.map(str::to_string);
+    }
+    children.iter().find_map(|n| match n {
+        Node::Element { id, children, .. } => links_box(id.as_deref(), children),
+        _ => None,
+    })
+}
+
+/// Identifiant du premier élément descendant qui porte l'attribut `name`.
+fn with_attr(nodes: &[Node], name: &str) -> Option<String> {
+    nodes.iter().find_map(|n| match n {
+        Node::Element {
+            id,
+            attrs,
+            children,
+            ..
+        } => {
+            if attr(attrs, name).is_some() {
+                id.clone()
+            } else {
+                with_attr(children, name)
+            }
+        }
+        _ => revel_model::ids::child_lists(n)
+            .into_iter()
+            .find_map(|l| with_attr(l, name)),
+    })
+}
 
 /// Carrousel et diaporama : lecture automatique (secondes, vide : à la main) et boucle, écrits
 /// dans `data-revel-slider` (`autoplay=5 loop`).

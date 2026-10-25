@@ -88,6 +88,104 @@ pub fn Home() -> impl IntoView {
         ];
         open(ui, e, items);
     };
+    // Dossiers du système déposés sur l'accueil (D-122) : site Revel ajouté (ouvert s'il est
+    // seul), autre site proposé à l'import.
+    let drop_over = RwSignal::new(false);
+    let import_from = RwSignal::new(None::<String>);
+    let add_paths = move |paths: Vec<String>| {
+        spawn_local(async move {
+            let mut sites = Vec::new();
+            let mut other = None;
+            for p in paths {
+                if api::has_site(&p).await.unwrap_or(false) {
+                    sites.push(p);
+                } else if other.is_none() {
+                    other = Some(p);
+                }
+            }
+            match sites.as_slice() {
+                [one] if other.is_none() => open_path(one.clone()),
+                _ => {
+                    for p in &sites {
+                        if let Err(e) = api::open_site(p).await {
+                            ui.fail(e);
+                        }
+                    }
+                    ui.reload_recents();
+                    if let Some(p) = other {
+                        import_from.set(Some(p));
+                        importing.set(true);
+                    }
+                }
+            }
+        });
+    };
+    let on_over = window_event_listener(leptos::ev::dragover, move |e: web_sys::DragEvent| {
+        if !crate::files::has_files(&e) || importing.get_untracked() || creating.get_untracked() {
+            return;
+        }
+        e.prevent_default();
+        if let Some(dt) = e.data_transfer() {
+            dt.set_drop_effect("copy");
+        }
+        drop_over.set(true);
+    });
+    let on_leave = window_event_listener(leptos::ev::dragleave, move |e: web_sys::DragEvent| {
+        // Sortie de la fenêtre : plus d'élément d'arrivée.
+        if e.related_target().is_none() {
+            drop_over.set(false);
+        }
+    });
+    let on_drop = window_event_listener(leptos::ev::drop, move |e: web_sys::DragEvent| {
+        drop_over.set(false);
+        if !crate::files::has_files(&e) || importing.get_untracked() || creating.get_untracked() {
+            return;
+        }
+        e.prevent_default();
+        let Some(dt) = e.data_transfer() else { return };
+        let names = crate::files::dropped_folders(&dt);
+        if names.is_empty() {
+            ui.fail(revel_protocol::Failure::new("error-drop-folder-only"));
+            return;
+        }
+        let posted = crate::files::post_dropped(&dt);
+        spawn_local(async move {
+            let mut paths = Vec::new();
+            if posted {
+                // Chemins reçus par l'application juste après le message.
+                for _ in 0..20 {
+                    if let Ok(p) = api::dropped_paths().await
+                        && !p.is_empty()
+                    {
+                        paths = p;
+                        break;
+                    }
+                    crate::sleep_ms(50).await;
+                }
+                // Seulement les dossiers déposés (pas les fichiers à côté).
+                paths.retain(|p: &String| {
+                    let name = p.rsplit(['/', '\\']).next().unwrap_or_default();
+                    names.iter().any(|n| n == name)
+                });
+            }
+            if paths.is_empty() {
+                paths = api::find_dropped(&names).await.unwrap_or_default();
+            }
+            if paths.is_empty() {
+                ui.fail(
+                    revel_protocol::Failure::new("error-drop-folder-unknown")
+                        .arg("name", names.join(", ")),
+                );
+            } else {
+                add_paths(paths);
+            }
+        });
+    });
+    on_cleanup(move || {
+        on_over.remove();
+        on_leave.remove();
+        on_drop.remove();
+    });
     let query = RwSignal::new(String::new());
     // Vue en grille ou en liste (préférence gardée dans ce navigateur).
     let grid = RwSignal::new(
@@ -249,8 +347,13 @@ pub fn Home() -> impl IntoView {
                 <NewSite close=Callback::new(move |()| creating.set(false))/>
             </Show>
             <Show when=move || importing.get()>
-                <crate::importer::ImportSite close=Callback::new(move |()| importing.set(false))
-                    done=Callback::new(move |_: ImportResult| {})/>
+                <crate::importer::ImportSite close=Callback::new(move |()| { importing.set(false); import_from.set(None); })
+                    done=Callback::new(move |_: ImportResult| {}) start=import_from.get_untracked().unwrap_or_default()/>
+            </Show>
+            <Show when=move || drop_over.get()>
+                <div class="drop-veil" aria-hidden="true">
+                    <div class="drop-veil-card">{icons::folder_plus()}<span>{ui.t("home-drop")}</span></div>
+                </div>
             </Show>
         </section>
     }

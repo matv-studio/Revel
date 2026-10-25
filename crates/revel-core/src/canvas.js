@@ -552,6 +552,50 @@
   // Valeurs calculées des propriétés suivies par le panneau de styles, pour l'élément sélectionné.
   let watched = [];
   let computedTimer = 0;
+  // Éléments visés par les actions d'un verbe (`random`, `play`) des interactions de la page
+  // (`data-revel-on="click play:… #entete"`), résolus comme le script du site.
+  const actionTargets = (verb) => {
+    const out = new Set();
+    document.querySelectorAll("[data-revel-on]").forEach((el) => {
+      for (const part of (el.getAttribute("data-revel-on") || "").split(";")) {
+        const w = part.trim().split(/\s+/);
+        if (w.length < 3 || !w[1].startsWith(verb)) continue;
+        const t = w.slice(2).join(" ");
+        let list = [];
+        if (t === "self") list = [el];
+        else if (t === "parent") list = el.parentElement ? [el.parentElement] : [];
+        else if (t === "next") list = el.nextElementSibling ? [el.nextElementSibling] : [];
+        else if (t === "body") list = [document.body];
+        else if (t.startsWith("closest:")) { try { const c = el.closest(t.slice(8)); if (c) list = [c]; } catch (_) { /* sélecteur invalide */ } }
+        else { try { list = [...document.querySelectorAll(t)]; } catch (_) { /* sélecteur invalide */ } }
+        list.forEach((x) => out.add(x));
+      }
+    });
+    return out;
+  };
+  // États utiles à un élément (menu « État » du panneau de styles, mêmes valeurs que `STATES`) :
+  // appui pour ce qui réagit au clic, focus pour ce qui se prend au clavier, page affichée pour
+  // un lien ; les autres seulement si la page les pose sur l'élément ou sur ce qui le contient
+  // (onglets, interrupteurs, médias au survol, élément pris au hasard, accordéon, vidéo arrêtée).
+  const statesOf = (el) => {
+    const s = [];
+    const up = (test) => { for (let p = el.parentElement; p; p = p.parentElement) if (test(p)) return true; return false; };
+    if (el.matches("input,select,textarea") || el.closest("a,button,summary,label,[tabindex],[data-revel-on],[data-revel-tab],[data-revel-switch],[data-revel-media-for],[data-revel-prev],[data-revel-next]")) s.push(":active");
+    if (el.matches("a[href],button,input,select,textarea,summary,[tabindex]")) s.push(":focus-visible");
+    if (el.matches("a[href]")) s.push('[aria-current="page"]');
+    const randoms = actionTargets("random");
+    const active = (x) => x.matches("[data-revel-tab],[data-revel-switch],[data-revel-media-for]") || (!!x.parentElement && randoms.has(x.parentElement));
+    if (active(el)) s.push(".is-active");
+    if (up(active)) s.push("^.is-active");
+    if (el.matches("details")) s.push("[open]");
+    if (up((p) => p.matches("details"))) s.push("^[open]");
+    if (el.matches("[data-revel-switch]")) s.push('[aria-pressed="false"]');
+    if (up((p) => p.matches("[data-revel-switch]"))) s.push('^[aria-pressed="false"]');
+    if (el.matches("[data-revel-hover-media]")) s.push(".is-ready");
+    const paused = actionTargets("play");
+    if (up((p) => paused.has(p))) s.push("^.is-paused");
+    return s;
+  };
   const sendComputed = () => {
     clearTimeout(computedTimer);
     computedTimer = setTimeout(() => {
@@ -569,6 +613,7 @@
         if (c && c !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(c)) bg = c;
       }
       values["--rv-background"] = bg || "rgb(255, 255, 255)";
+      values["--rv-states"] = statesOf(styled(selected)).join("\n");
       post({ type: "computed", id: selected.getAttribute("data-rv"), values });
     }, 30);
   };
@@ -1807,6 +1852,8 @@
       if ([...el.childNodes].some((c) => c.nodeType === 1 || (c.nodeType === 3 && c.nodeValue.trim()))) continue;
       // Masqué (lui ou un parent) : laissé tel quel.
       if (!el.getClientRects().length) continue;
+      // Décor vide à dessein (barre de progression, élément caché aux lecteurs d'écran).
+      if (el.closest('[data-revel-progress],[aria-hidden="true"]')) continue;
       const r = el.getBoundingClientRect();
       if (r.height >= 2 && r.width >= 2) continue;
       found.push(el);

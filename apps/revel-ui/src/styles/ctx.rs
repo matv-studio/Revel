@@ -213,7 +213,7 @@ pub struct Sx {
 
 /// Sélecteur complet : classe et état ; dans une variante, préfixé par la racine du composant
 /// dans cette variante (`.carte:hover .titre`, `.carte.is-sombre`).
-fn scoped(
+pub(crate) fn scoped(
     scope: &Option<(String, String, String, String)>,
     root_selected: bool,
     sel: &str,
@@ -345,7 +345,7 @@ impl Sx {
     }
 
     /// L'élément sélectionné est la racine du composant ouvert dans une variante.
-    fn root_selected(self) -> bool {
+    pub(crate) fn root_selected(self) -> bool {
         self.scope.with(|sc| {
             sc.as_ref().is_some_and(|(_, _, r, _)| {
                 self.ed

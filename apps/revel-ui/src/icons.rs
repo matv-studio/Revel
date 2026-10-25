@@ -367,6 +367,11 @@ pub fn bolt() -> AnyView {
     svg(r#"<path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/>"#)
 }
 
+/// Pointeur de la souris (déclencheur « au clic »).
+pub fn pointer() -> AnyView {
+    svg(r#"<path d="M4 2.5v10l2.8-2.6 1.9 4.1 1.8-.8-1.9-4.1H12.5z"/>"#)
+}
+
 /// Plus d'actions.
 pub fn more() -> AnyView {
     view! {

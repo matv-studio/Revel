@@ -8,7 +8,7 @@ Revel construit un site sans écrire de code : vous placez des éléments sur la
 2. Donnez-lui un nom et choisissez un modèle : **Vide**, **Vitrine** ou **Blog**.
 3. Revel ouvre l'**Éditeur**. Vos sites récents restent sur l'accueil.
 
-Un site Revel s'ouvre avec **Ouvrir un site**. Un site existant se reprend avec **Importer** :
+Un site Revel s'ouvre avec **Ouvrir un site**, ou en déposant son dossier sur l'accueil. Un site existant se reprend avec **Importer** :
 
 - **Dossier** : un dossier de pages HTML (fait à la main, ou export du code de Webflow décompressé) ou un projet Eleventy. Chaque page garde son adresse ; l'en-tête et le pied communs vont dans un gabarit, les styles dans le panneau Styles. Export Webflow : ajoutez les fichiers CSV des collections (CMS › collection › Export) ou un jeton de l'API de Webflow pour reprendre les contenus du CMS.
 - **Lien** : l'adresse d'un site en ligne (fait avec Framer, Webflow ou autre). Revel lit ses pages et copie ses images, polices et styles dans le dossier des projets ; les animations d'apparition deviennent des animations Revel.
@@ -34,6 +34,8 @@ Les panneaux se déplacent : glissez un onglet vers une autre colonne ou sur le 
 3. Les **blocs prêts à l'emploi** (en-tête de page, avantages, questions fréquentes, formulaire…) ajoutent une section complète.
 
 Pour déplacer un élément, glissez-le sur la page ou dans les **Calques**. Alt+glisser en fait une copie.
+
+Les éléments d'un **Défilement**, d'un **Carrousel**, d'**Onglets** ou d'un menu se règlent dans **Styles** : **Ajouter une image** (ou un onglet, un lien), remplacer, ranger, retirer.
 
 ## Régler l'apparence
 
@@ -69,7 +71,7 @@ Les **vidéos**, les **animations Lottie** (fichier `.json` ou `.lottie`) et les
 
 ## Composants
 
-Un composant est un morceau de page réutilisé partout (en-tête, pied de page, carte, service, outil). Clic droit sur un élément dans les calques › **Créer un composant**. Modifier le composant change toutes ses utilisations ; une utilisation peut avoir ses propres textes, images et liens (ses **propriétés**, dans **Styles**) et sa variante (survol, appui…).
+Un composant est un morceau de page réutilisé partout (en-tête, pied de page, carte, service, outil). Clic droit sur un élément dans les calques › **Créer un composant**. Modifier le composant change toutes ses utilisations ; une utilisation peut avoir ses propres textes, images et liens (ses **propriétés**, dans **Styles**) et sa variante (survol, appui…). Dans le canevas du composant, des flèches relient la variante principale aux variantes prises par un geste ; **+ › Au clic…** crée une variante prise au clic sur le composant.
 
 **Emplacement** : dans le composant, l'interrupteur **Emplacement du contenu** d'un élément (la liste des outils d'une carte, les points d'un service) permet à chaque utilisation d'y mettre son propre contenu. Sur la page, **Modifier ici** copie le contenu du composant dans l'utilisation pour le changer à cet endroit seulement ; **Revenir au contenu du composant** l'annule.
 

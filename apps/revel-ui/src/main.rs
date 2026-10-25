@@ -26,6 +26,7 @@ mod importer;
 mod insert;
 mod inspector;
 mod interactions;
+mod items;
 mod layers;
 mod library;
 mod locales;
@@ -764,4 +765,12 @@ fn SiteMenu() -> impl IntoView {
 /// visible) : marque de gauche à droite en tête, sinon `/` ou `\` du début passe à la fin.
 pub(crate) fn ltr(path: &str) -> String {
     format!("\u{200E}{path}")
+}
+
+/// Attente (millisecondes) dans une tâche de l'interface.
+pub async fn sleep_ms(ms: i32) {
+    let p = js_sys::Promise::new(&mut |res, _| {
+        let _ = window().set_timeout_with_callback_and_timeout_and_arguments_0(&res, ms);
+    });
+    let _ = wasm_bindgen_futures::JsFuture::from(p).await;
 }

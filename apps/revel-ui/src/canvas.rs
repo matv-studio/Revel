@@ -254,8 +254,9 @@ pub fn CanvasArea(failed: RwSignal<bool>) -> impl IntoView {
                 let name = ed.doc.with(|d| d.as_ref().and_then(|d| d.component(&c).map(crate::names::component_name))).unwrap_or(c);
                 view! {
                     <div class="iso-bar" role="status">
-                        <span class="iso-name">{crate::icons::component()}{name}</span>
-                        <button class="btn btn--small iso-done" on:click=move |_| ed.close_component()>{ui.t("component-done")}</button>
+                        <span class="iso-name">{crate::icons::component()}<span>{name}</span></span>
+                        <span class="iso-sep" aria-hidden="true"></span>
+                        <button class="iso-btn iso-done" on:click=move |_| ed.close_component()>{ui.t("component-done")}</button>
                     </div>
                 }
             })}
@@ -413,25 +414,45 @@ fn ComponentFrames() -> impl IntoView {
     let add_menu = move |e: leptos::ev::MouseEvent| {
         use crate::ctxmenu::{CtxItem, open};
         let id = comp();
-        let (i1, i2, i3) = (id.clone(), id.clone(), id.clone());
+        let (i1, i2, i3, i4) = (id.clone(), id.clone(), id.clone(), id.clone());
+        // Survol et appui déjà là : coche (le choix montre la variante).
+        let has = |k: VariantKind| {
+            ed.doc.with_untracked(|d| {
+                d.as_ref()
+                    .and_then(|d| d.component(&id))
+                    .is_some_and(|c| c.variants.iter().any(|v| v.kind == k))
+            })
+        };
+        let mark = |on: bool| {
+            if on {
+                crate::icons::check as fn() -> leptos::prelude::AnyView
+            } else {
+                crate::icons::bolt
+            }
+        };
+        let (hover_on, press_on) = (has(VariantKind::Hover), has(VariantKind::Pressed));
         open(
             ui,
             &e,
             vec![
                 CtxItem::new(ui.now("variant-add-hover", &[]), move || {
-                    crate::components::add_variant(ui, ed, &i1, VariantKind::Hover)
-                }),
-                CtxItem::new(ui.now("variant-add-pressed", &[]), move || {
-                    crate::components::add_variant(ui, ed, &i2, VariantKind::Pressed)
-                }),
-                CtxItem::new(ui.now("variant-add-custom", &[]), move || {
-                    crate::components::add_variant(ui, ed, &i3, VariantKind::Custom)
+                    crate::components::add_variant(ui, ed, &i1, VariantKind::Hover, false)
                 })
+                .icon(mark(hover_on)),
+                CtxItem::new(ui.now("variant-add-pressed", &[]), move || {
+                    crate::components::add_variant(ui, ed, &i2, VariantKind::Pressed, false)
+                })
+                .icon(mark(press_on)),
+                // Variante prise au clic sur le composant, le clic suivant revient (D-121).
+                CtxItem::new(ui.now("variant-add-click", &[]), move || {
+                    crate::components::add_variant(ui, ed, &i4, VariantKind::Custom, true)
+                })
+                .icon(crate::icons::pointer)
                 .sep(),
-                // Interactions entre variantes (clic, survol d'un autre élément) : étape 6.3.
-                CtxItem::new(ui.now("variant-add-interaction", &[]), || {})
-                    .disabled(true)
-                    .sep(),
+                CtxItem::new(ui.now("variant-add-custom", &[]), move || {
+                    crate::components::add_variant(ui, ed, &i3, VariantKind::Custom, false)
+                })
+                .icon(crate::icons::component),
             ],
         );
     };
@@ -474,10 +495,15 @@ fn ComponentFrames() -> impl IntoView {
                     e.prevent_default();
                     let Some(var) = v.get_value() else { return };
                     let id = comp();
-                    let (i1, i2, vid1, vid2) = (id.clone(), id, var.id.clone(), var.id.clone());
+                    let (i1, i2, vid1, vid2) = (id.clone(), id.clone(), var.id.clone(), var.id.clone());
                     let mut items = Vec::new();
                     if var.kind == VariantKind::Custom {
                         items.push(CtxItem::new(ui.now("variant-rename", &[]), move || crate::components::rename_variant(ui, ed, &i1, &vid1)).icon(crate::icons::edit));
+                        // Passage à la variante au clic sur le composant (flèche dans le canevas).
+                        let on = ed.doc.with_untracked(|d| d.as_ref().and_then(|d| d.component(&id)).is_some_and(|c| crate::components::variant_on_click(c, &var.id)));
+                        let (i5, vid5) = (id.clone(), var.id.clone());
+                        items.push(CtxItem::new(ui.now("variant-on-click", &[]), move || crate::components::set_variant_click(ui, ed, &i5, &vid5, !on))
+                            .icon(if on { crate::icons::check } else { crate::icons::pointer }));
                     }
                     items.push(CtxItem::new(ui.now("variant-remove", &[]), move || crate::components::remove_variant(ui, ed, &i2, &vid2)).icon(crate::icons::trash).danger().sep());
                     open(ui, &e, items);
@@ -491,8 +517,106 @@ fn ComponentFrames() -> impl IntoView {
                 }
             }
         </For>
+        <VariantArrows/>
         <button class="frame-add" style=move || plus_style().unwrap_or_default() title=ui.t("variant-add")
             aria-label=ui.t("variant-add") on:click=add_menu>{crate::icons::plus()}</button>
+    }
+}
+
+/// Flèches entre variantes, comme Framer (D-121) : de la variante principale à chaque variante
+/// prise par un geste (survol, appui, clic), le geste écrit sur la flèche. Clic sur le geste : la
+/// variante est choisie. Une variante prise au clic revient au clic suivant (flèche à deux pointes).
+#[component]
+fn VariantArrows() -> impl IntoView {
+    use revel_model::VariantKind;
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let links = Memo::new(move |_| {
+        let id = ed.comp.get().unwrap_or_default();
+        ed.doc.with(|d| {
+            let Some(c) = d.as_ref().and_then(|d| d.component(&id)) else {
+                return Vec::new();
+            };
+            c.variants
+                .iter()
+                .filter_map(|v| {
+                    let (key, both) = match v.kind {
+                        VariantKind::Hover => ("variant-arrow-hover", false),
+                        VariantKind::Pressed => ("variant-arrow-pressed", false),
+                        VariantKind::Custom if crate::components::variant_on_click(c, &v.id) => {
+                            ("variant-arrow-click", true)
+                        }
+                        VariantKind::Custom => return None,
+                    };
+                    Some((format!("@{}", v.id), key, both))
+                })
+                .collect::<Vec<_>>()
+        })
+    });
+    // Tracés : (clé, chemin, position du geste, deux pointes, libellé, geste à gauche).
+    let paths = Memo::new(move |_| {
+        let w = ed.world();
+        let Some(base) = w.frames.first().cloned() else {
+            return Vec::new();
+        };
+        let fh = ed.comp_frame_h();
+        let stacked = w.frames.len() > 1 && w.frames[1].oy > 0.0;
+        let at =
+            |f: &crate::editor::FrameBox| (w.x + f.ox * w.s, w.y + f.oy * w.s, f.w * w.s, fh * w.s);
+        let (bx, by, bw, bh) = at(&base);
+        links
+            .get()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, (key, label, both))| {
+                let f = w.frames.iter().find(|f| f.bp == key)?;
+                let (tx, ty, tw, th) = at(f);
+                let d = 20.0 + crate::editor::ARROW_LANE * i as f64;
+                let (path, lx, ly) = if stacked {
+                    let (x0, y0) = (bx - 8.0, by + (bh / 2.0).min(28.0));
+                    let (x1, y1) = (tx - 8.0, ty + (th / 2.0).min(28.0));
+                    (
+                        format!("M{x0} {y0} C{} {y0} {} {y1} {x1} {y1}", x0 - d, x1 - d),
+                        x0 - 0.75 * d - 4.0,
+                        (y0 + y1) / 2.0,
+                    )
+                } else {
+                    let top = crate::editor::SIDE_LABEL + 6.0;
+                    let (x0, y0) = (bx + bw / 2.0, by - top);
+                    let (x1, y1) = (tx + tw / 2.0, ty - top);
+                    (
+                        format!("M{x0} {y0} C{x0} {} {x1} {} {x1} {y1}", y0 - d, y1 - d),
+                        (x0 + x1) / 2.0,
+                        y0 - 0.75 * d,
+                    )
+                };
+                Some((key, path, lx, ly, both, label, stacked))
+            })
+            .collect()
+    });
+    view! {
+        <svg class="variant-arrows" aria-hidden="true">
+            <defs>
+                <marker id="rv-arrow-end" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M0 0 8 4 0 8z"/>
+                </marker>
+            </defs>
+            {move || paths.get().into_iter().map(|(_, d, _, _, both, _, _)| view! {
+                <path class="variant-arrow" d=d marker-end="url(#rv-arrow-end)"
+                    marker-start=both.then_some("url(#rv-arrow-end)")/>
+            }).collect_view()}
+        </svg>
+        {move || paths.get().into_iter().map(|(key, _, x, y, both, label, left)| {
+            let k = key.clone();
+            view! {
+                <button class="variant-trigger" class:is-left=left data-variant=key.clone() style=format!("left:{x}px;top:{y}px")
+                    class:is-on=move || ed.active_key() == k
+                    title=move || if both { ui.tx("variant-arrow-click-help", &[]) } else { ui.tx(label, &[]) }
+                    on:click=move |_| ed.activate_key(&key)>
+                    {if both { crate::icons::pointer() } else { crate::icons::bolt() }}<span>{ui.t(label)}</span>
+                </button>
+            }
+        }).collect_view()}
     }
 }
 
@@ -524,11 +648,13 @@ fn ComponentBar(id: String) -> impl IntoView {
             .unwrap_or(url)
     };
     view! {
-        <div class="iso-bar comp-bar" role="toolbar">
-            <button class="btn btn--small comp-back" title=ui.t("component-back-help") on:click=move |_| ed.close_comp()>
+        <div class="iso-bar comp-bar" role="toolbar" aria-label=ui.t("component-bar")>
+            <button class="iso-btn comp-back" title=ui.t("component-back-help") on:click=move |_| ed.close_comp()>
                 {crate::icons::arrow_left()}<span>{page}</span>
             </button>
-            <span class="iso-name">{crate::icons::component()}{name}</span>
+            <span class="iso-sep" aria-hidden="true"></span>
+            <span class="iso-name">{crate::icons::component()}<span>{name}</span></span>
+            <span class="iso-sep" aria-hidden="true"></span>
             <crate::components::TransitionSelect id=id.get_value()/>
         </div>
     }

@@ -31,7 +31,21 @@ pub fn SelectedTexts() -> impl IntoView {
         let sel = ed.selected.with(|s| s.as_ref().map(|s| s.id.clone()));
         ed.texts.with(|(id, items)| {
             if sel.is_some() && *id == sel {
-                items.clone()
+                // Propriétés de texte de l'utilisation sélectionnée : déjà dans ses réglages
+                // (« Propriétés »), pas répétées ici (D-124).
+                items
+                    .iter()
+                    .filter(|t| {
+                        !matches!(&t.slot, revel_edit::canvas::Slot::Expr {
+                            binding: Some(revel_edit::canvas::Binding {
+                                source: revel_edit::canvas::Source::Prop { node, .. },
+                                ..
+                            }),
+                            ..
+                        } if Some(node) == sel.as_ref())
+                    })
+                    .cloned()
+                    .collect()
             } else {
                 Vec::new()
             }

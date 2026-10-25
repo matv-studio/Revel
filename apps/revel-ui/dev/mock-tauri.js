@@ -156,7 +156,10 @@
       case "update_install": return null;
       // Sans pont : document minimal (vue CMS, captures) ; modifications non simulées.
       case "edit_open": return { site: { schema_version: 3, name: site.name, default_locale: "fr" }, state: { revision: 0, can_undo: false, can_redo: false } };
-      case "has_site": return true;
+      case "has_site": return !/import|eleventy|static/i.test(args.path || "");
+      // Dossiers déposés (D-122) : pas de chemin transmis hors de Windows ; recherche par le nom.
+      case "dropped_paths": return [];
+      case "find_dropped": return (args.names || []).filter((n) => n !== "absent").map((n) => "C:\\Projets\\" + n);
       // Import d'un site (étape 7) : nature d'après le nom du dossier (`svelte` : site à
       // construire, `eleventy`, `vide` : rien à importer), copie de dépôt simulée.
       case "plugin:dialog|open": {

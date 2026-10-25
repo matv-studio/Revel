@@ -144,6 +144,43 @@ pub fn map(site: &Site, box_at: &Target) -> TabsMap {
     m
 }
 
+/// Onglet ajouté à la fin (D-123) : copie du dernier onglet et de ses panneaux (un par série),
+/// chacun placé après son modèle. `None` sans onglet à copier ou si une liste les répète.
+pub fn add_tab(site: &Site, box_at: &Target) -> Option<crate::command::Command> {
+    use crate::command::Command;
+    let m = map(site, box_at);
+    if m.repeated {
+        return None;
+    }
+    let last = m.tabs.len().checked_sub(1)?;
+    let mut commands = vec![Command::Duplicate {
+        at: m.tabs[last].clone(),
+    }];
+    // Panneaux copiés en partant de la fin : une copie ne décale pas les suivants.
+    for p in m.panels_of(last).into_iter().rev() {
+        commands.push(Command::Duplicate { at: p });
+    }
+    Some(Command::Batch { commands })
+}
+
+/// Onglet `i` retiré avec ses panneaux (D-123).
+pub fn remove_tab(site: &Site, box_at: &Target, i: usize) -> Option<crate::command::Command> {
+    use crate::command::Command;
+    let m = map(site, box_at);
+    if m.repeated || i >= m.tabs.len() || m.tabs.len() < 2 {
+        return None;
+    }
+    let mut commands = vec![Command::Remove {
+        at: m.tabs[i].clone(),
+    }];
+    commands.extend(
+        m.panels_of(i)
+            .into_iter()
+            .map(|p| Command::Remove { at: p }),
+    );
+    Some(Command::Batch { commands })
+}
+
 /// Onglet ou panneau qui est `at` ou le contient : (onglet ?, rang).
 pub fn place_of(site: &Site, m: &TabsMap, at: &Target) -> Option<(bool, usize)> {
     let mut cur = at.clone();

@@ -1151,6 +1151,62 @@ Styles) et leur emplacement. Nouvelle collection : créée avec son modèle de p
 ce sens. Site matv refait ainsi (D-117) : seule la collection `projects` reste ; services, boîtes à outils, outils,
 parcours, classements et logos sont des composants et des éléments de la page.
 
+**D-120 — 25/10/2026 — prise.** **Classes proposées, états selon l'élément.** Le champ « Ajouter une classe… »
+propose au focus les classes du site les plus probables pour l'élément (`revel_edit::classes::suggest`) : celles des
+voisins de même balise (carte d'une liste de cartes), celles nommées d'après la classe du parent ou de même racine
+(`carte-titre` dans `carte`, `text-small` pour un `text-body`), celles des autres voisins, celles de la même balise
+ailleurs, puis les autres, les plus utilisées d'abord ; groupes séparés par un trait, raison en info-bulle ; la
+saisie filtre, « Créer « nom » » pour un nom nouveau ; ↑ ↓ Entrée Échap. Le choix d'état n'est plus une liste de
+treize états : Normal et Survol toujours ; Appui pour ce qui réagit au clic ; Focus clavier pour ce qui se prend au
+clavier ; Page actuelle pour un lien ; Actif, Parent actif, Ouvert, Accordéon ouvert, Éteint, Interrupteur éteint,
+Média prêt, Vidéo en pause seulement quand la page les pose sur l'élément ou ce qui le contient (le canevas les
+relève : onglets, interrupteurs, médias au survol, élément pris au hasard, `details`, vidéo arrêtée) ; un état qui a
+déjà des styles pour la classe reste proposé, marqué d'un point bleu. Libellés courts, explication en info-bulle.
+
+**D-121 — 25/10/2026 — prise.** **Flèches entre variantes, variante prise au clic (comme Framer).** Le canevas des
+composants relie la variante principale à chaque variante prise par un geste : flèche verte (couleur des
+composants), geste écrit dans une pastille (« Au survol », « À l'appui », « Au clic ») ; clic sur la pastille : la
+variante est choisie. Cadres empilés : flèches à gauche, place réservée ; côte à côte : au-dessus. « Au clic… »
+(menu « + ») crée une variante personnalisée prise au clic sur le composant : interaction de l'élément racine
+`click class:is-<variante> self` (D-75), un clic la prend, le suivant revient à la principale (flèche à deux
+pointes) ; le menu d'une variante personnalisée active ou retire ce passage. Survol et appui déjà créés : cochés
+dans le menu. L'entrée désactivée « Au clic (étape 6.3) » disparaît.
+
+**D-122 — 25/10/2026 — prise.** **Site ajouté en déposant son dossier sur l'accueil.** Pendant le glisser, voile sur
+la fenêtre ; au dépôt, chaque dossier est ajouté : un site Revel seul s'ouvre, plusieurs sont ajoutés à la liste, un
+autre site ouvre l'import (dossier examiné d'emblée). Des fichiers seuls sont refusés (message). Le glisser-déposer
+de Tauri reste coupé (`dragDropEnabled: false`, nécessaire sous Windows aux glisser-déposer internes : calques,
+pages, médias ; vérifié dans `tauri-utils` 2.10) ; le navigateur ne donne pas le chemin d'un dossier déposé. Sous
+Windows, l'interface transmet les fichiers déposés à l'application par `chrome.webview.postMessageWithAdditionalObjects`
+(message objet, ignoré par le relais des commandes) et l'application lit leurs chemins (`ICoreWebView2File`,
+WebView2) ; ailleurs, ou sans chemin, le dossier est cherché par son nom dans les dossiers des sites récents, le
+dossier des sites, Documents, Bureau, Téléchargements et le dossier personnel ; introuvable : message qui renvoie à
+« Ouvrir un site ».
+
+**D-123 — 25/10/2026 — prise.** **Éléments des outils réglés depuis Styles.** Défilement, carrousel et diaporama
+listent leurs éléments sous leurs réglages : vignette (première image), nom (calque, texte alternatif, nom du
+fichier, sinon « Élément n »), remplacer l'image, monter, descendre, dupliquer, retirer ; « Ajouter une image »
+copie le dernier élément (cadre et classes compris) avec l'image choisie, ou pose une image seule
+(`make::add_image_item`). Onglets : liste des onglets, « Ajouter un onglet » copie le dernier onglet et son panneau
+dans chaque série, retirer emporte les panneaux de l'onglet (`tabs::add_tab`, `tabs::remove_tab`). Barre de
+navigation : liens du menu, « Ajouter un lien ». Accordéon (`details`) : « Ouvert au chargement », « Un seul ouvert
+à la fois » (attribut `name` commun aux volets voisins, accordéon exclusif du navigateur : Chrome et Edge 120,
+Firefox 130, Safari 17.2, vérifié sur developer.chrome.com/docs/css-ui/exclusive-accordion), « Ajouter un volet ».
+
+**D-124 — 25/10/2026 — prise.** **Revue d'ergonomie (demande du 25/10/2026).** Interrupteurs au dessin des barres
+de défilement et des glissières : trait fin sombre, poignée en pilule, trait de progression jusqu'à la poignée
+quand il est allumé (couleur de l'action : accent dès l'étendue standard). Dans les panneaux de l'éditeur, une
+seule disposition : libellé à gauche, interrupteur au bout de la ligne. Barre du composant ouvert : rayons
+concentriques (rayon des contrôles + marge), contrôles sans cadre séparés par un trait, contour neutre, nom en
+vert. Mode sombre du site à côté de la langue affichée. Paramètres : présentation de chaque partie en info-bulle
+(icône ⓘ du titre) au lieu d'un paragraphe (D-104 revu : aucune phrase d'explication affichée). Média : source avant
+les réglages de lecture. Éléments ajoutés nommés comme leur tuile, dans la langue de l'interface (« Accordéon »
+plutôt que « Accordeon »). Gestionnaire de classes : pastilles neutres comme celles du panneau de styles, bleues
+pour les classes de l'élément sélectionné. Bouton « Modifier les informations du site » en petit bouton. Libellés
+d'outils raccourcis pour tenir dans leur colonne (« Bandeau cookies », « Lecture auto »). Repère des éléments vides
+du canevas pas posé sur un décor vide à dessein (barre de progression, élément caché aux lecteurs d'écran).
+Étendue de l'accent « Étendue » : aussi l'état choisi, la classe proposée en évidence et la barre de défilement tenue.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

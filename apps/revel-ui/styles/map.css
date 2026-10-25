@@ -152,7 +152,7 @@
   background: var(--surface); border-left: var(--border) solid var(--line);
 }
 .map-panel-head { display: flex; align-items: center; justify-content: space-between; }
-.map-panel-kind { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); }
+.map-panel-kind { font-size: var(--text-xs); color: var(--text-faint); }
 .map-panel-title { margin: 0; font-size: var(--text-lg); overflow-wrap: anywhere; }
 .map-panel-h { margin: var(--s-2) 0 0; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-muted); }
 .map-panel-route { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }

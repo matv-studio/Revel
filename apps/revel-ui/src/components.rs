@@ -435,11 +435,13 @@ pub fn instance_settings(
     });
     view! {
         <div class="stack instance">
-            <div class="instance-head">
-                <span class="instance-icon">{icons::component()}</span>
-                <span class="instance-name">{crate::names::component_name(&c)}</span>
-            </div>
+            // Composant utilisé (pastille verte) et ses actions sur une ligne ; le nom du calque est
+            // dans la barre du haut (D-124).
             <div class="instance-actions">
+                <span class="instance-head" title=ui.t("component-of")>
+                    <span class="instance-icon">{icons::component()}</span>
+                    <span class="instance-name">{crate::names::component_name(&c)}</span>
+                </span>
                 <button class="btn btn--small" on:click=move |_| open_component(ed, &at.get_value())>
                     {icons::edit()}{ui.t("component-edit")}</button>
                 <button class="btn btn--small" title=ui.t("component-detach-help")
@@ -1260,6 +1262,74 @@ pub fn variant_label(ui: Ui, v: Option<&Variant>) -> String {
     }
 }
 
+/// Variante personnalisée prise au clic sur le composant (D-121) : interaction de l'élément
+/// racine `click class:is-<variante> self` (un clic la prend, le suivant revient à la principale).
+pub fn variant_on_click(c: &Component, vid: &str) -> bool {
+    root_rules(c).iter().any(|r| is_click_rule(r, vid))
+}
+
+fn is_click_rule(r: &revel_edit::actions::Rule, vid: &str) -> bool {
+    use revel_edit::actions::{Act, Trigger};
+    r.trigger == Trigger::Click && r.target == "self" && r.act == Act::Class(format!("is-{vid}"))
+}
+
+fn root_rules(c: &Component) -> Vec<revel_edit::actions::Rule> {
+    let Some(Node::Element { attrs, .. }) = c.root() else {
+        return Vec::new();
+    };
+    attrs
+        .iter()
+        .find(|a| a.name == "data-revel-on")
+        .and_then(|a| a.value.as_deref())
+        .and_then(revel_edit::actions::parse)
+        .unwrap_or_default()
+}
+
+/// Commande qui ajoute ou retire le passage à la variante au clic sur l'élément racine.
+fn click_command(c: &Component, vid: &str, on: bool) -> Option<Command> {
+    use revel_edit::actions::{Act, Rule, Trigger};
+    let Some(Node::Element { id: Some(root), .. }) = c.root() else {
+        return None;
+    };
+    let mut rules: Vec<Rule> = root_rules(c)
+        .into_iter()
+        .filter(|r| !is_click_rule(r, vid))
+        .collect();
+    if on {
+        rules.push(Rule {
+            trigger: Trigger::Click,
+            act: Act::Class(format!("is-{vid}")),
+            target: "self".into(),
+        });
+    }
+    let at = Target {
+        owner: Owner::Component(c.id.clone()),
+        node: root.clone(),
+    };
+    Some(if rules.is_empty() {
+        Command::RemoveAttr {
+            at,
+            name: "data-revel-on".into(),
+        }
+    } else {
+        Command::SetAttr {
+            at,
+            name: "data-revel-on".into(),
+            value: Some(revel_edit::actions::write(&rules)),
+        }
+    })
+}
+
+/// Passage à une variante au clic : ajouté ou retiré.
+pub fn set_variant_click(ui: Ui, ed: Ed, comp_id: &str, vid: &str, on: bool) {
+    let Some(c) = component(ed, comp_id) else {
+        return;
+    };
+    if let Some(cmd) = click_command(&c, vid, on) {
+        ed.apply(ui, cmd, false);
+    }
+}
+
 /// Commande qui donne une classe à l'élément racine du composant s'il n'en a pas (les styles
 /// des variantes s'écrivent à partir d'elle) : d'après le nom du composant.
 fn root_class_command(d: &revel_model::Site, c: &Component) -> Option<Command> {
@@ -1315,7 +1385,7 @@ fn root_class_command(d: &revel_model::Site, c: &Component) -> Option<Command> {
 }
 
 /// Ajoute une variante au composant ouvert et l'affiche ; geste déjà présent : affiché.
-pub fn add_variant(ui: Ui, ed: Ed, comp_id: &str, kind: VariantKind) {
+pub fn add_variant(ui: Ui, ed: Ed, comp_id: &str, kind: VariantKind, click: bool) {
     let Some(c) = component(ed, comp_id) else {
         return;
     };
@@ -1352,6 +1422,9 @@ pub fn add_variant(ui: Ui, ed: Ed, comp_id: &str, kind: VariantKind) {
             id: comp_id.clone(),
             variants,
         });
+        if click && let Some(cmd) = click_command(&c, &id, true) {
+            commands.push(cmd);
+        }
         ed.apply(ui, Command::Batch { commands }, false);
         ed.variant.set(id);
     };

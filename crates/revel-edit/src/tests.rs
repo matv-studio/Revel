@@ -2625,3 +2625,122 @@ fn emplacement_personnalise_puis_retabli() {
     }
     assert_eq!(s, before);
 }
+
+#[test]
+fn image_ajoutee_au_defilement() {
+    // D-123 : une image ajoutée à un défilement copie le dernier logo (cadre et classe compris)
+    // avec la nouvelle image ; un défilement vide reçoit une image seule.
+    let mut s = Site::new("t", "fr");
+    let logo = |src: &str| {
+        el(
+            "div",
+            &[("class", "logo")],
+            vec![Node::Image(revel_model::ImageNode {
+                src: format!("\"{src}\""),
+                alt: Some("\"A\"".into()),
+                class: Some("\"logo-image\"".into()),
+                ..Default::default()
+            })],
+        )
+    };
+    let mut p: revel_model::Page =
+        serde_json::from_value(serde_json::json!({"id": "index", "path": "/", "body": []}))
+            .unwrap();
+    p.body.push(el(
+        "div",
+        &[("data-revel-loop", "ticker")],
+        vec![logo("/media/a.svg"), logo("/media/b.svg")],
+    ));
+    p.body
+        .push(el("div", &[("data-revel-loop", "ticker")], vec![]));
+    s.pages.push(p);
+    s.ensure_ids();
+    let before = s.clone();
+    let ids: Vec<String> = (0..2)
+        .map(|i| node_id(&s.pages[0].body[i]).unwrap().to_string())
+        .collect();
+    let at = Target {
+        owner: Owner::Page("index".into()),
+        node: ids[0].clone(),
+    };
+    let (cmd, new_id) = crate::make::add_image_item(&s, &at, "/media/c.svg", "C").unwrap();
+    let inv = apply(&mut s, &cmd).unwrap();
+    let Node::Element { children, .. } = &s.pages[0].body[0] else {
+        panic!()
+    };
+    assert_eq!(children.len(), 3);
+    assert_eq!(node_id(&children[2]), Some(new_id.as_str()));
+    let img = crate::make::first_image(&children[2]).unwrap();
+    assert_eq!(img.src, "\"/media/c.svg\"");
+    assert_eq!(img.alt.as_deref(), Some("\"C\""));
+    assert_eq!(img.class.as_deref(), Some("\"logo-image\""));
+    assert_ne!(img.id, crate::make::first_image(&children[1]).unwrap().id);
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(s, before);
+    let empty = Target {
+        owner: Owner::Page("index".into()),
+        node: ids[1].clone(),
+    };
+    let (cmd, _) = crate::make::add_image_item(&s, &empty, "/media/d.svg", "").unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let Node::Element { children, .. } = &s.pages[0].body[1] else {
+        panic!()
+    };
+    assert!(matches!(&children[0], Node::Image(i) if i.src == "\"/media/d.svg\""));
+}
+
+#[test]
+fn onglet_ajoute_et_retire_avec_ses_panneaux() {
+    // D-123 : deux séries de panneaux (texte, image) suivent les onglets ; un onglet ajouté copie
+    // le dernier onglet et son panneau dans chaque série ; un onglet retiré emporte les siens.
+    let mut s = Site::new("Essai", "fr");
+    let tab = |n: &str| el("button", &[("data-revel-tab", "")], vec![text(n)]);
+    let panel = |n: &str| el("p", &[("data-revel-panel", "")], vec![text(n)]);
+    s.pages.push(Page {
+        id: "accueil".into(),
+        path: "/".into(),
+        layout: None,
+        props: Default::default(),
+        computed: Default::default(),
+        body: vec![el(
+            "section",
+            &[("data-revel-tabs", "")],
+            vec![
+                el("div", &[], vec![tab("A"), tab("B")]),
+                el("div", &[], vec![panel("a1"), panel("b1")]),
+                el("div", &[], vec![panel("a2"), panel("b2")]),
+            ],
+        )],
+        draft: false,
+        code: Default::default(),
+        name: None,
+    });
+    s.ensure_ids();
+    let before = s.clone();
+    let boite = at(&s, "section");
+    let cmd = tabs::add_tab(&s, &boite).unwrap();
+    let inv = apply(&mut s, &cmd).unwrap();
+    let m = tabs::map(&s, &boite);
+    assert_eq!((m.tabs.len(), m.panels.len()), (3, 6));
+    // Le nouvel onglet montre les copies de « b1 » et « b2 ».
+    let texts = |t: &Target| match revel_edit_node(&s, t) {
+        Node::Element { children, .. } => match &children[0] {
+            Node::Text { text } => text.clone(),
+            _ => String::new(),
+        },
+        _ => String::new(),
+    };
+    let shown: Vec<String> = m.panels_of(2).iter().map(texts).collect();
+    assert_eq!(shown, vec!["b1", "b2"]);
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(s, before);
+    let cmd = tabs::remove_tab(&s, &boite, 0).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let m = tabs::map(&s, &boite);
+    assert_eq!((m.tabs.len(), m.panels.len()), (1, 2));
+    assert!(tabs::remove_tab(&s, &boite, 0).is_none());
+}
+
+fn revel_edit_node<'a>(s: &'a Site, t: &Target) -> &'a Node {
+    crate::address::node(s, t).unwrap()
+}

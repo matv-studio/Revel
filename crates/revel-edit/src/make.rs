@@ -41,6 +41,81 @@ pub fn duplicate(site: &Site, at: &Target) -> Result<(Command, String), EditErro
     ))
 }
 
+/// Première image écrite d'un élément (lui-même ou un descendant) : vignette et remplacement
+/// des éléments d'un défilement ou d'un carrousel (D-123).
+pub fn first_image(n: &Node) -> Option<&revel_model::ImageNode> {
+    if let Node::Image(img) = n {
+        return Some(img);
+    }
+    revel_model::ids::child_lists(n)
+        .into_iter()
+        .flat_map(|l| l.iter())
+        .find_map(first_image)
+}
+
+fn first_image_mut(n: &mut Node) -> Option<&mut revel_model::ImageNode> {
+    if let Node::Image(img) = n {
+        return Some(img);
+    }
+    for l in revel_model::ids::child_lists_mut(n) {
+        for c in l.iter_mut() {
+            if let Some(i) = first_image_mut(c) {
+                return Some(i);
+            }
+        }
+    }
+    None
+}
+
+/// Ajoute un élément à une suite d'éléments semblables (défilement, carrousel) avec l'image
+/// `src` : copie du dernier élément (nouveaux identifiants), sa première image remplacée ; sans
+/// élément ou sans image à copier, une image seule. Renvoie la commande et l'identifiant ajouté.
+pub fn add_image_item(
+    site: &Site,
+    list: &Target,
+    src: &str,
+    alt: &str,
+) -> Result<(Command, String), EditError> {
+    let host = address::node(site, list)?;
+    let kids = revel_model::ids::child_lists(host)
+        .into_iter()
+        .next()
+        .ok_or(EditError::NoBranch)?;
+    let mut taken = site.node_ids();
+    let template = kids
+        .iter()
+        .rev()
+        .find(|n| matches!(n, Node::Element { .. } | Node::Image(_)) && first_image(n).is_some())
+        .cloned();
+    let node = match template {
+        Some(mut copy) => {
+            refresh_ids(&mut copy, &mut taken);
+            if let Some(img) = first_image_mut(&mut copy) {
+                img.src = crate::canvas::quote(src);
+                img.alt = Some(crate::canvas::quote(alt));
+            }
+            copy
+        }
+        None => Node::Image(revel_model::ImageNode {
+            id: Some(fresh(&taken)),
+            src: crate::canvas::quote(src),
+            alt: Some(crate::canvas::quote(alt)),
+            ..Default::default()
+        }),
+    };
+    let id = revel_model::ids::node_id(&node)
+        .unwrap_or_default()
+        .to_string();
+    Ok((
+        Command::Insert {
+            parent: Parent::of(list, Branch::Children),
+            index: kids.len(),
+            node,
+        },
+        id,
+    ))
+}
+
 /// Enveloppe un nœud dans un nouvel élément (`div` par défaut). Renvoie la commande et
 /// l'identifiant de l'enveloppe.
 pub fn wrap(site: &Site, at: &Target, tag: &str) -> Result<(Command, String), EditError> {

@@ -153,20 +153,36 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .segmented.is-disabled { opacity: .45; }
 .segmented button:disabled { cursor: default; }
 
-/* Interrupteur */
-.switch { position: relative; display: inline-flex; width: 32px; height: 18px; }
+/* Interrupteur, au dessin des barres de défilement et des glissières : trait fin sombre (piste),
+   poignée en pilule (la partie visible d'une barre de défilement). Éteint : poignée grise à gauche.
+   Allumé : poignée à droite, trait de progression plus épais jusqu'à elle, à la couleur de
+   l'action (accent ou contraste). */
+.switch {
+  --sw-w: 26px; --sw-knob: 12px; --sw-knob-h: 6px;
+  position: relative; display: inline-flex; flex: none; width: var(--sw-w); height: 16px;
+}
 /* Case au-dessus de la poignée (positionnée) : un appui sur la poignée bascule aussi. */
 .switch input { position: absolute; inset: 0; z-index: 1; opacity: 0; margin: 0; cursor: default; }
 .switch-track {
-  width: 100%; height: 100%; border-radius: var(--radius-full);
-  background: var(--surface-active); transition: background var(--fast) var(--ease);
+  position: relative; width: 100%; height: 100%; border-radius: var(--radius-sm);
+  background: linear-gradient(var(--range-track-bg), var(--range-track-bg)) center / 100% var(--range-track) no-repeat;
+}
+/* Trait de progression (allumé), arrondi comme celui des glissières. */
+.switch-track::before {
+  content: ""; position: absolute; top: calc(50% - var(--range-fill) / 2); left: 0;
+  width: 0; height: var(--range-fill); border-radius: calc(var(--range-fill) / 2);
+  background: var(--primary); transition: width var(--fast) var(--ease);
 }
 .switch-track::after {
-  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
-  border-radius: 50%; background: var(--gray-0); transition: transform var(--fast) var(--ease);
+  content: ""; position: absolute; top: calc(50% - var(--sw-knob-h) / 2); left: 0;
+  width: var(--sw-knob); height: var(--sw-knob-h); border-radius: var(--radius-full);
+  background: var(--text-faint);
+  transition: transform var(--fast) var(--ease), background-color var(--fast) var(--ease);
 }
-.switch input:checked + .switch-track { background: var(--primary); }
-.switch input:checked + .switch-track::after { transform: translateX(14px); background: var(--primary-ink); }
+.switch:hover .switch-track::after { background: var(--text-muted); }
+.switch input:checked + .switch-track::before { width: calc(100% - var(--sw-knob) / 2); }
+.switch input:checked + .switch-track::after { transform: translateX(calc(var(--sw-w) - var(--sw-knob))); background: var(--primary); }
+.switch input:disabled + .switch-track { opacity: .45; }
 .switch input:focus-visible + .switch-track { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Pastilles de couleur (réglage d'accent) */
@@ -448,8 +464,10 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .settings-sub:has(> .settings-sub-body:empty) { display: none; }
 .settings-sub[data-sub="versions"] { grid-template-columns: minmax(200px, 280px) minmax(0, 1120px); }
 .settings-sub-head { position: sticky; top: var(--s-6); align-self: start; display: flex; flex-direction: column; gap: var(--s-2); padding-top: 2px; }
-.settings-sub-head h2 { margin: 0; font-size: var(--text-lg); }
-.settings-sub-lead { margin: 0; color: var(--text-muted); font-size: var(--text-sm); line-height: 1.5; max-width: 34ch; }
+.settings-sub-head h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-lg); }
+.settings-sub-info { display: inline-grid; place-items: center; color: var(--text-faint); cursor: help; }
+.settings-sub-info:hover { color: var(--text-muted); }
+.settings-sub-info svg.icon { width: 14px; height: 14px; }
 .settings-sub-body { min-width: 0; }
 /* Page d'un réglage dans une partie : titre donné par la partie, actions gardées en haut. */
 .settings-sub-body .page { padding: 0; max-width: none; margin: 0; }
@@ -461,7 +479,6 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 @media (max-width: 1180px) {
   .settings-sub { grid-template-columns: minmax(0, 1fr); row-gap: var(--s-4); padding: var(--s-6) var(--s-5); }
   .settings-sub-head { position: static; }
-  .settings-sub-lead { max-width: 70ch; }
 }
 @media (max-width: 760px) {
   .settings-layout { grid-template-columns: 172px minmax(0, 1fr); }
@@ -1288,7 +1305,7 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .import-frames { display: flex; flex-direction: column; gap: var(--s-2); max-height: 220px; overflow: auto; padding: var(--s-2);
   border: var(--border) solid var(--line-strong); border-radius: var(--radius-md); background: var(--bg); }
 .import-canvas { display: flex; flex-direction: column; gap: 2px; }
-.import-canvas-name { font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; padding: 2px 4px; }
+.import-canvas-name { font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--text-faint); padding: 2px 4px; }
 .import-frame { display: flex; align-items: center; gap: var(--s-2); min-height: 26px; padding: 0 4px; border-radius: var(--radius-sm); font-size: var(--text-sm); cursor: pointer; }
 .import-frame:hover { background: var(--surface-hover); }
 .import-frame input { margin: 0; accent-color: var(--primary); }

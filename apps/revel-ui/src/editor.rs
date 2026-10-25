@@ -340,6 +340,14 @@ pub const GUTTER: f64 = 48.0;
 /// (pixels de l'écran).
 pub const SIDE_GAP: f64 = 96.0;
 pub const SIDE_LABEL: f64 = 24.0;
+
+/// Écart d'une flèche entre variantes à la suivante (D-121), et place prise par `n` flèches.
+pub const ARROW_LANE: f64 = 16.0;
+/// Largeur réservée au geste écrit à gauche des flèches (cadres empilés).
+pub const ARROW_LABEL: f64 = 84.0;
+pub fn arrow_room(n: usize) -> f64 {
+    28.0 + ARROW_LANE * n as f64
+}
 /// Vue côte à côte : hauteur des cadres par défaut (pixels de la page, écran d'ordinateur).
 pub const SIDE_HEIGHT: f64 = 900.0;
 
@@ -1806,7 +1814,22 @@ impl Ed {
         } else {
             fh
         };
-        let fit = ((aw - GUTTER) / total).clamp(0.05, 1.0);
+        // Place des flèches entre variantes (D-121) : à gauche des cadres empilés, au-dessus des
+        // cadres côte à côte.
+        let room = if n > 1.0 {
+            arrow_room(n as usize - 1)
+        } else {
+            0.0
+        };
+        // Empilés : les gestes s'écrivent à gauche des flèches.
+        let (left, top) = if !stacked {
+            (0.0, room)
+        } else if n > 1.0 {
+            (room + ARROW_LABEL, 0.0)
+        } else {
+            (0.0, 0.0)
+        };
+        let fit = ((aw - GUTTER - left) / total).clamp(0.05, 1.0);
         match self.zoom.get() {
             None => World {
                 frames,
@@ -1815,8 +1838,8 @@ impl Ed {
                 base_h: fh,
                 fit,
                 s: fit,
-                x: ((aw - total * fit) / 2.0).max(GUTTER / 2.0),
-                y: GUTTER / 2.0 + SIDE_LABEL,
+                x: ((aw - total * fit + left) / 2.0).max(GUTTER / 2.0 + left),
+                y: GUTTER / 2.0 + SIDE_LABEL + top,
             },
             Some(z) => {
                 let (x, y) = self.pan.get();
@@ -3397,6 +3420,12 @@ fn Toolbar() -> impl IntoView {
         <div class="editor-toolbar">
             <crate::pagetree::PageContext/>
             <LocaleSwitch/>
+            // Mode sombre du site, à côté de la langue : deux façons de voir le même contenu.
+            <Show when=move || ed.has_schemes()>
+                <button class="tool-toggle scheme-toggle" class:is-on=move || ed.dark.get() aria-pressed=move || ed.dark.get().to_string()
+                    title=ui.t("editor-dark-help") aria-label=ui.t("editor-dark")
+                    on:click=move |_| { ed.dark.update(|d| *d = !*d); ed.post_scheme(); }>{icons::moon()}</button>
+            </Show>
             <div class="segmented" role="group" aria-label=ui.t("editor-breakpoints")>
                 {move || breakpoints().into_iter().map(|b| {
                     let id = b.id.clone();
@@ -3425,11 +3454,6 @@ fn Toolbar() -> impl IntoView {
                 title=ui.t("editor-side-help") aria-label=ui.t("editor-side")
                 on:click=move |_| ed.set_side(!ed.side.get_untracked())>{icons::screens()}</button>
             <BreakpointMenu/>
-            <Show when=move || ed.has_schemes()>
-                <button class="tool-toggle scheme-toggle" class:is-on=move || ed.dark.get() aria-pressed=move || ed.dark.get().to_string()
-                    title=ui.t("editor-dark-help") aria-label=ui.t("editor-dark")
-                    on:click=move |_| { ed.dark.update(|d| *d = !*d); ed.post_scheme(); }>{icons::moon()}</button>
-            </Show>
             <div class="select editor-zoom" title=ui.t("editor-zoom-help")>
                 <select class="input" aria-label=ui.t("editor-zoom")
                     on:change=move |e| {

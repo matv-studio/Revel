@@ -127,6 +127,10 @@ async function settle(page) {
       v.currentTime = 0;
       await seeked;
     }));
+    // Vidéo déclarée prête par le script du site à sa lecture (`playing`, classe `is-ready` du
+    // héros) : l'événement arrive ou non avant la mesure selon le réseau ; envoyé à toutes les
+    // vidéos pour que les deux sites soient mesurés dans le même état.
+    document.querySelectorAll('video').forEach((v) => v.dispatchEvent(new Event('playing')));
   });
   await page.waitForTimeout(200);
   await page.evaluate(async () => {

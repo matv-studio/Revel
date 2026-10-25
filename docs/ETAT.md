@@ -6,7 +6,7 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 25/10/2026 (conversation dédiée à Revel). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 25/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.6, site matv recréé). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
 ## Compte et emplacements actuels (depuis le 24/10/2026 — prime sur les chemins plus bas)
@@ -547,6 +547,34 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
     refuse les fichiers de 28 Mo (HTTP 400) ; morceaux de 9 Mo acceptés (`split -b 9M`), puis
     `cat … | tar -x` et `sha256sum -c` dans le shell du PC.
 
+- **Site matv recréé et outils de structure (25/10/2026, 8.6, D-113 à D-117)** — demande : recréer tout matv
+  bien organisé (composants pour services, outils, rangs…, classes nommées), gérer les classes, corriger la
+  surbrillance du rail des paramètres, créer les outils manquants. Ticker de l'import non converti en
+  Défilement et « afficher les 10 projets mais garder le chargement après 6 » : traités dans la recréation,
+  l'import Framer n'est plus à retravailler pour l'instant.
+  - Rail des paramètres (`site.rs`) : aller à une partie verrouille la surbrillance (`GOTO`) jusqu'à 150 ms
+    sans défilement ; plus de va-et-vient.
+  - D-113 panneau **Classes** (à droite avec Styles et Interactions ; `apps/revel-ui/src/classes.rs`,
+    `crates/revel-edit/src/classes.rs`, `Command::RenameClass`, outils MCP `list_classes`, `rename_class`,
+    `remove_class`) ; classes des images (`"classe"` écrite) comprises. Piège : la classe `.classes` existait
+    déjà (pastilles de l'inspecteur) → racine du panneau `.class-manager`.
+  - D-114 `data-revel-more` (`crates/revel-render/src/more.rs`, champ « Afficher d'abord » de la liste).
+  - D-115 Paramètres › Général › Couleurs (`sitecolors.rs`) + bouton lune « Aperçu en mode sombre » (message
+    `scheme` du canevas : requêtes `prefers-color-scheme` réécrites dans le cadre).
+  - D-116 états `[open]` / `^[open]` (message `state-preview` : le canevas ouvre l'accordéon) ; GIF animés
+    servis tels quels (`revel-assets`, `gif_frames`).
+  - D-117 site : générateur `$SP/matv/rebuild/gen.py` (copie sur le PC : `_Claude\Livrables\matv-gen.py`) →
+    `$SP/matv/rebuild/matv` ; données des outils relevées par `$SP/tools/tools-data.cjs`, traductions
+    `$SP/matv/en-fr.json`. Remis dans **`<dossier Revel du PC>\Projects\matv-revel`** (154 Mo ; l'import reste
+    dans `Projects\matv`) ; morceaux dans `_Claude\Livrables\matv-revel-transfert` (supprimables).
+    Comparaison avec l'import (`$SP/tools/cmp.cjs`, colonnes dépliées) à 1280, 1000 et 375 px, FR et mode
+    sombre : rendu identique à quelques pixels près (espacement des cartes Outils régularisé). `revel audit`
+    et `check_site` : tout est éditable dans l'interface.
+  - Visite de l'éditeur sur le site : `$SP/tools/tour-serve.sh` (pont 8164, MCP 8165) puis `tour.mjs`,
+    `tour2.mjs` ; appel MCP en ligne de commande : `$SP/tools/mcp.sh <outil> '<json>'`.
+  - Piège : `revel build` écrit son cache d'images dans `<site>/.revel` (79 Mo) : l'exclure des archives.
+  - Piège : le shell du PC (`device_bash`) peut répondre « Workspace unavailable » : réessayer.
+
 | Étape | État |
 |---|---|
 | 0 | squelette modulaire, CI |
@@ -557,7 +585,7 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
 | 5 | mise en ligne directe (bouton Publier, hébergeurs guidés, contrôles, retour arrière, GitHub Pages, domaine, formulaires) — **terminée** (0.4.0) |
 | 6 | animations et interactions, Lottie, mises à jour, signature, documentation, installateur 1.0 — **terminée** (18/10/2026) ; 0.6.2 : outils des sites animés et sonores (D-94) |
 | 7 | import depuis d'autres outils — **terminée** (0.6.0) ; 7.9 sites à construire (0.6.1, D-88) ; 7.10 imports reconstruits dans la forme de l'interface (0.6.2 à 0.6.4, D-90 à D-92, D-96 à D-98, D-102) — **terminée** |
-| 8 | fonctions optionnelles : 8.1 signature du code (ancienne 6.7, D-09), à venir ; 8.2 plan du site nodal, 8.3 paramètres réorganisés (D-103 à D-106), 8.4 liens externes vérifiés et synchronisation automatique (D-107, D-108), 8.5 import Framer complet et outils de défilement (D-109 à D-112) — **faites** |
+| 8 | fonctions optionnelles : 8.1 signature du code (ancienne 6.7, D-09), à venir ; 8.2 plan du site nodal, 8.3 paramètres réorganisés (D-103 à D-106), 8.4 liens externes vérifiés et synchronisation automatique (D-107, D-108), 8.5 import Framer complet et outils de défilement (D-109 à D-112), 8.6 outils de structure et site matv recréé (D-113 à D-117) — **faites** |
 
 ## `matv-studio/alunites-revel-lab` (public)
 Copie du site Alunites servant de cobaye (avec son `.pages.yml`). Copie sur le PC :

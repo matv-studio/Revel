@@ -13,7 +13,7 @@
 const SCRIPT: &str = concat!(
     "<script>(function(w,d){var Q=new Set(),q=false,G=new Set(),R=w.ResizeObserver?new ResizeObserver(function(es){es.forEach(function(e){var g=e.target.hasAttribute(\"data-revel-masonry\")?e.target:e.target.parentElement;if(g)ask(g)})}):null;",
     "function reset(g,kids){g.style.gridAutoRows=g.style.rowGap=\"\";kids.forEach(function(c){c.style.gridRow=c.style.gridColumn=c.style.alignSelf=\"\"});delete g.__rvm}",
-    "function lay(g){var s=getComputedStyle(g),kids=[].filter.call(g.children,function(c){return c.nodeType===1});",
+    "function lay(g){var s=getComputedStyle(g),kids=[].filter.call(g.children,function(c){return c.nodeType===1&&getComputedStyle(c).display!==\"none\"});",
     "if(!g.hasAttribute(\"data-revel-masonry\")||s.display.indexOf(\"grid\")<0){if(g.__rvm!==undefined)reset(g,kids);return}",
     "if(g.__rvm===undefined){g.__rvm=parseFloat(s.rowGap)||0;g.style.gridAutoRows=\"1px\";g.style.rowGap=\"0px\"}",
     "var n=Math.max(1,s.gridTemplateColumns.split(\" \").filter(Boolean).length),H=[],i,o=g.getAttribute(\"data-revel-masonry\")===\"order\";",

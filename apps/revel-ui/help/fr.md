@@ -45,11 +45,13 @@ L'apparence se règle dans **Styles**, par **classe** : tous les éléments qui 
 
 **Écrans** : choisissez la tablette ou le téléphone en haut ; ce que vous réglez alors ne vaut que pour cet écran et les plus petits.
 
-**États** : le menu à côté de la classe règle le survol, l'appui ou le focus.
+**États** : le menu à côté de la classe règle le survol, l'appui ou le focus. « Ouvert (accordéon) » règle un accordéon ouvert : le canevas l'ouvre le temps du réglage.
 
 **Maçonnerie** : le bouton de la disposition en grille range les éléments de hauteurs différentes en colonnes, sans trous ; « Colonnes à tour de rôle » les place dans l'ordre, une colonne après l'autre.
 
-**Couleurs et polices du site** : dans un sélecteur de couleur, **+** ajoute la couleur aux couleurs du site ; les polices se gèrent dans **Paramètres › Polices**.
+**Classes** : le panneau **Classes** liste les classes du site et les éléments qui les portent. **Renommer** change le nom partout (styles, éléments, actions) ; le filtre montre les classes inutilisées, que la corbeille retire. Double-cliquez sur une classe dans **Styles** pour la renommer.
+
+**Couleurs et polices du site** : dans un sélecteur de couleur, **+** ajoute la couleur aux couleurs du site. **Paramètres › Général › Couleurs** les liste toutes ; **Mode sombre** donne à chacune une valeur pour les visiteurs dont l'appareil est en thème sombre, et le bouton lune de la barre d'outils montre le site ainsi. Les polices se gèrent dans **Paramètres › Général › Polices**.
 
 ## Textes
 
@@ -75,6 +77,8 @@ Un composant est un morceau de page réutilisé partout (en-tête, pied de page,
 2. Ajoutez des **contenus** : chacun est un fichier du site, modifiable aussi avec Pages CMS.
 3. Dans l'éditeur, ajoutez une **Liste de collection** : un élément par contenu. Sélectionnez un texte ou une image de la liste et reliez-le à un champ dans **Styles › Relié au contenu**.
 4. Dans **Pages**, créez la **page de chaque contenu** : son modèle se règle une fois pour tous.
+
+Une liste longue peut n'**afficher d'abord** que quelques contenus (réglage de la liste) : la suite apparaît quand le visiteur arrive en bas.
 
 Une date reliée s'écrit comme vous le voulez (16 octobre 2026, 16.10.2026…) ; un élément peut n'être affiché que si un champ est rempli.
 

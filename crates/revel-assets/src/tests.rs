@@ -113,3 +113,38 @@ fn production_et_cache() {
     let s2 = p2.process(&out, &|_, _| {});
     assert_eq!((s2.produced, s2.from_cache), (0, 4));
 }
+
+#[test]
+fn gif_anime_servi_tel_quel() {
+    // GIF de 1×1 à une image, puis à deux images.
+    let one: &[u8] = &[
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0x80, 0, 0, 0, 0, 0, 255, 255, 255, 0x2C,
+        0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 2, 0x44, 0x01, 0, 0x3B,
+    ];
+    let mut two = one[..one.len() - 1].to_vec();
+    two.extend_from_slice(&[
+        0x21, 0xF9, 4, 0, 10, 0, 0, 0, 0x2C, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 2, 0x44, 0x01, 0, 0x3B,
+    ]);
+    assert_eq!(super::gif_frames(one), 1);
+    assert_eq!(super::gif_frames(&two), 2);
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().to_path_buf();
+    let media = dir.join("media");
+    std::fs::create_dir_all(&media).unwrap();
+    std::fs::write(media.join("anim.gif"), &two).unwrap();
+    let p = Pipeline::new(
+        &dir,
+        &[revel_model::Passthrough {
+            from: "media".into(),
+            to: "media".into(),
+        }],
+        &[320, 640],
+    );
+    let html = p
+        .image(&ImageArgs {
+            src: "/media/anim.gif".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(html.starts_with("<img src=\"/media/anim.gif\""), "{html}");
+}

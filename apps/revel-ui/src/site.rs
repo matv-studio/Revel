@@ -170,6 +170,7 @@ fn parts_of(group: Section) -> &'static [(&'static str, &'static str, &'static s
             ("general", "settings-general", "settings-general-lead"),
             ("site-info", "siteinfo-title", "siteinfo-help"),
             ("fonts", "settings-fonts", "fonts-help"),
+            ("colors", "colors-title", "colors-help"),
             ("seo", "settings-seo", "settings-seo-lead"),
             ("forms", "settings-forms", "forms-help"),
         ],
@@ -214,6 +215,21 @@ pub(crate) fn scroll_spy(
     current: RwSignal<String>,
     shown: RwSignal<Vec<String>>,
 ) {
+    // Défilement lancé par un clic du rail : la partie choisie reste allumée jusqu'à l'arrêt
+    // (sinon la surbrillance passe par chaque partie traversée).
+    let going = GOTO.with(|g| {
+        let mut g = g.borrow_mut();
+        g.as_mut().map(|(k, t)| {
+            *t = now();
+            k.clone()
+        })
+    });
+    if let Some(k) = going {
+        if current.get_untracked() != k {
+            current.set(k);
+        }
+        return;
+    }
     let Some(el) = content.get_untracked() else {
         return;
     };
@@ -258,8 +274,49 @@ pub(crate) fn scroll_spy(
     }
 }
 
+thread_local! {
+    /// Partie visée par un clic du rail et heure du dernier défilement vers elle.
+    static GOTO: std::cell::RefCell<Option<(String, f64)>> = const { std::cell::RefCell::new(None) };
+}
+
+fn now() -> f64 {
+    js_sys::Date::now()
+}
+
+/// Fin du défilement vers la partie visée (plus de défilement depuis 150 ms) : le suivi reprend
+/// et le rail est recalculé une fois.
+fn release_goto() {
+    set_timeout(
+        || {
+            let done = GOTO.with(|g| {
+                let mut g = g.borrow_mut();
+                match g.as_ref() {
+                    Some((_, t)) if now() - *t >= 150.0 => {
+                        *g = None;
+                        true
+                    }
+                    Some(_) => false,
+                    None => true,
+                }
+            });
+            if done {
+                if let Ok(Some(el)) = document().query_selector(".settings-content")
+                    && let Ok(ev) = web_sys::Event::new("scroll")
+                {
+                    let _ = el.dispatch_event(&ev);
+                }
+            } else {
+                release_goto();
+            }
+        },
+        std::time::Duration::from_millis(80),
+    );
+}
+
 /// Va à une partie des paramètres (défilement doux, sauf mouvement réduit).
 pub(crate) fn scroll_to_part(key: &str) {
+    GOTO.with(|g| *g.borrow_mut() = Some((key.to_string(), now())));
+    release_goto();
     if let Ok(Some(el)) = document().query_selector(&format!(".settings-sub[data-sub=\"{key}\"]")) {
         let opts = web_sys::ScrollIntoViewOptions::new();
         let reduce = window()
@@ -297,6 +354,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
             {part("general", view! { <crate::sitesettings::General site=site.clone()/> }.into_any())}
             {part("site-info", view! { <crate::siteinfo::SiteInfo s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
             {part("fonts", view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any())}
+            {part("colors", view! { <crate::sitecolors::SiteColors s=doc_session(ui, site.path.clone())/> }.into_any())}
             {part("seo", view! { <Seo site=site.clone()/> }.into_any())}
             {part("forms", view! { <Forms site=site.clone()/> }.into_any())}
         }

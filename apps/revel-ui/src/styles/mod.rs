@@ -42,6 +42,9 @@ const STATES: &[(&str, &str)] = &[
     // Élément placé dans un élément actif (le texte d'un onglet actif…).
     ("^.is-active", "styles-state-in-active"),
     // Interrupteur éteint (son, musique), et ce qu'il contient.
+    // Accordéon ouvert (`details`), et ce qu'il contient : le canevas l'ouvre pendant le réglage.
+    ("[open]", "styles-state-open"),
+    ("^[open]", "styles-state-in-open"),
     ("[aria-pressed=\"false\"]", "styles-state-off"),
     ("^[aria-pressed=\"false\"]", "styles-state-in-off"),
     // Média au survol lancé (vidéo) ou chargé (image) : classe posée par le script du site.
@@ -251,6 +254,13 @@ pub fn Styles() -> impl IntoView {
     let sx = Sx::new(ui, ed);
     let selector = sx.selector;
     let state = sx.state;
+    // État réglé montré dans le canevas quand il peut l'être (accordéon ouvert).
+    Effect::new(move |_| {
+        let st = state.get();
+        ed.selected.track();
+        ed.post(serde_json::json!({ "type": "state-preview", "state": st }));
+    });
+    on_cleanup(move || ed.post(serde_json::json!({ "type": "state-preview", "state": "" })));
 
     let node = Memo::new(move |_| {
         let t = ed.selected_target()?;
@@ -450,12 +460,15 @@ pub fn Styles() -> impl IntoView {
                                     let s2 = sel.clone();
                                     let s3 = sel.clone();
                                     let combo = class.is_none();
-                                    let title = if combo { ui.tx("styles-combo", &[]) } else { sel.clone() };
+                                    let title = if combo { ui.tx("styles-combo", &[]) } else { ui.tx("styles-class-title", &[("name", sel.clone())]) };
+                                    let rename_name = class.clone();
                                     view! {
                                         <span class="sel-chip" class:is-on=move || selector.get() == s2 class:is-combo=combo
                                             role="option" aria-selected=move || (selector.get() == s3).to_string()
                                             title=title>
-                                            <button class="sel-chip-name" on:click=move |_| selector.set(sel.clone())>{label}</button>
+                                            // Double-clic : renommer la classe partout (D-113).
+                                            <button class="sel-chip-name" on:click=move |_| selector.set(sel.clone())
+                                                on:dblclick=move |_| if let Some(c) = rename_name.clone() { crate::classes::rename(ui, ed, c) }>{label}</button>
                                             {class.map(|c| view! {
                                                 <button class="sel-chip-x" title=ui.t("styles-class-remove") aria-label=ui.t("styles-class-remove")
                                                     on:click=move |_| remove_class(c.clone())>{icons::close()}</button>

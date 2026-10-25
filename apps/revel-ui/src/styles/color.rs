@@ -84,7 +84,9 @@ fn site_colors(sx: Sx) -> (Vec<(String, Rgba)>, Vec<Rgba>) {
             let StyleItem::Rule(r) = item else { continue };
             for d in &r.decls {
                 if d.prop.starts_with("--") {
+                    // Couleurs du site : valeurs claires (le mode sombre est réglé dans les paramètres).
                     if (r.selector.contains(":root") || r.selector == "html")
+                        && r.media.is_none()
                         && let Some(c) = Rgba::parse(&d.value)
                         && !vars.iter().any(|(n, _)| *n == d.prop)
                     {

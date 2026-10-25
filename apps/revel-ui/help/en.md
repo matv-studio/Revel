@@ -45,11 +45,13 @@ The look is set in **Styles**, per **class**: every element with the same class 
 
 **Screens**: pick tablet or phone at the top; what you set then only applies to that screen and smaller ones.
 
-**States**: the menu next to the class sets hover, pressed or focus.
+**States**: the menu next to the class sets hover, pressed or focus. “Open (accordion)” styles an open accordion: the canvas opens it while you set it.
 
 **Masonry**: the grid layout button stacks items of different heights in columns, without gaps; “Columns in turn” places them in order, one column after the other.
 
-**Site colors and fonts**: in a color picker, **+** adds the color to the site colors; fonts are managed in **Settings › Fonts**.
+**Classes**: the **Classes** panel lists the site's classes and the elements that carry them. **Rename** changes the name everywhere (styles, elements, actions); the filter shows unused classes, which the trash button removes. Double-click a class in **Styles** to rename it.
+
+**Site colors and fonts**: in a color picker, **+** adds the color to the site colors. **Settings › General › Colors** lists them all; **Dark mode** gives each one a value for visitors whose device uses a dark theme, and the moon button of the toolbar shows the site that way. Fonts are managed in **Settings › General › Fonts**.
 
 ## Text
 
@@ -75,6 +77,8 @@ A component is a piece of page reused everywhere (header, footer, card). Right-c
 2. Add **items**: each one is a file of the site, also editable with Pages CMS.
 3. In the editor, add a **Collection list**: one element per item. Select a text or an image of the list and link it to a field in **Styles › Linked to the entry**.
 4. In **Pages**, create **each item's page**: its template is set once for all.
+
+A long list can **show first** only a few items (list setting): the rest appears when the visitor reaches the bottom.
 
 A linked date is written the way you want (October 16, 2026, 16.10.2026…); an element can be shown only when a field is set.
 

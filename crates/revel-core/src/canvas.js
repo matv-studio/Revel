@@ -1802,6 +1802,40 @@
 
   // Feuille de style rechargée (même chemin) : la nouvelle remplace l'ancienne une fois chargée,
   // sans éclair ni animation rejouée.
+  // ---------------------------------------------------------------- mode sombre (D-115)
+  // Thème montré : les requêtes `prefers-color-scheme` des feuilles du site deviennent vraies ou
+  // fausses selon le choix de l'éditeur, quel que soit le thème de l'appareil (le cadre suit
+  // sinon celui du système, différemment selon le moteur).
+  let scheme = null;
+  let stateOpened = null;
+  const SCHEME_RE = /\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)/g;
+  const applyScheme = () => {
+    const walk = (rules) => {
+      for (const r of rules) {
+        if (r.media && r.cssRules) {
+          if (r.__rvMedia === undefined) r.__rvMedia = r.media.mediaText;
+          const orig = r.__rvMedia;
+          if (/prefers-color-scheme/.test(orig)) {
+            const next = scheme
+              ? orig.replace(SCHEME_RE, (_, v) => (v === scheme ? "(min-width: 0px)" : "(max-width: 0.001px)"))
+              : orig;
+            if (r.media.mediaText !== next) { try { r.media.mediaText = next; } catch (_) { /* moteur ancien */ } }
+          }
+          walk(r.cssRules);
+        } else if (r.cssRules) {
+          walk(r.cssRules);
+        }
+      }
+    };
+    for (const sh of document.styleSheets) {
+      let rules = null;
+      try { rules = sh.cssRules; } catch (_) { rules = null; }
+      if (rules) walk(rules);
+    }
+    document.documentElement.toggleAttribute("data-rv-scheme-dark", scheme === "dark");
+  };
+  window.addEventListener("load", () => { if (scheme) applyScheme(); });
+
   const reloadSheet = (path) => {
     for (const l of document.querySelectorAll('link[rel~="stylesheet"]')) {
       const u = new URL(l.href, location.href);
@@ -1809,7 +1843,7 @@
       u.searchParams.set("rv", String(Date.now()));
       const next = l.cloneNode();
       next.href = u.pathname + u.search;
-      next.addEventListener("load", () => { l.remove(); setPreview(""); release_held(); buildForced(); markEmpty(); redraw(); sendComputed(); }, { once: true });
+      next.addEventListener("load", () => { l.remove(); setPreview(""); release_held(); if (scheme) applyScheme(); buildForced(); markEmpty(); redraw(); sendComputed(); }, { once: true });
       l.after(next);
     }
   };
@@ -2038,6 +2072,21 @@
         // Aperçu retiré (geste refusé) : taille tenue par les poignées rétablie.
         if (!m.css) release_held();
         setPreview(m.css || "");
+        break;
+      case "state-preview": {
+        // État choisi dans le panneau de styles : accordéon de la sélection ouvert le temps du réglage.
+        if (stateOpened) { stateOpened.open = !!stateOpened.__rvWasOpen; stateOpened = null; }
+        const st = String(m.state || "");
+        const d = (st === "[open]" || st === "^[open]") && selected ? selected.closest("details") : null;
+        if (d) { d.__rvWasOpen = d.open; d.open = true; stateOpened = d; }
+        redraw();
+        sendComputed();
+        break;
+      }
+      case "scheme":
+        scheme = m.value === "dark" || m.value === "light" ? m.value : null;
+        applyScheme();
+        sendComputed();
         break;
       case "stylesheet":
         // Feuille de style régénérée : rechargée sans recharger la page.

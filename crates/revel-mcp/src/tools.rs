@@ -170,6 +170,24 @@ pub struct NodeArg {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RenameClassArg {
+    /// Current class name, without the dot (e.g. "card").
+    pub from: String,
+    /// New class name: letters, digits, dashes, not starting with a digit (e.g. "project-card").
+    pub to: String,
+    #[serde(default)]
+    pub site: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ClassArg {
+    /// Class name, without the dot.
+    pub name: String,
+    #[serde(default)]
+    pub site: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct StylesArg {
     /// Only rules whose selector contains this text (e.g. ".hero"). Omit for all rules (long).
     #[serde(default)]
@@ -688,6 +706,9 @@ impl Revel {
                 "check_links" => go!(check_links),
                 "replace_link" => go!(replace_link),
                 "remove_node" => go!(remove_node),
+                "list_classes" => go!(list_classes),
+                "rename_class" => go!(rename_class),
+                "remove_class" => go!(remove_class),
                 "apply_commands" => go!(apply_commands),
                 "undo" => go!(undo),
                 "redo" => go!(redo),
@@ -1366,6 +1387,72 @@ impl Revel {
             &a.site,
             cmd,
             &format!("{} replaced by {} ({} uses)", a.url, a.new_url, links.len()),
+        )
+        .await
+    }
+
+    #[tool(
+        description = "Classes of the site: for each, the number of elements that have it and of style rules that use it (unused classes are listed too)."
+    )]
+    async fn list_classes(&self, Parameters(a): Parameters<SiteArg>) -> CallToolResult {
+        let d = match self.doc(&a.site).await {
+            Ok(d) => d,
+            Err(e) => return fail(e),
+        };
+        let lines: Vec<String> = revel_edit::classes::inventory(&d)
+            .into_iter()
+            .map(|c| {
+                format!(
+                    ".{} — {} element(s), {} rule(s)",
+                    c.name,
+                    c.uses.len(),
+                    c.rules.len()
+                )
+            })
+            .collect();
+        if lines.is_empty() {
+            return ok("No class.");
+        }
+        ok(lines.join("\n"))
+    }
+
+    #[tool(
+        description = "Rename a class everywhere: stylesheet rules, elements of pages, templates and components, interaction targets. Refused if the new name is already a class."
+    )]
+    async fn rename_class(&self, Parameters(a): Parameters<RenameClassArg>) -> CallToolResult {
+        let to = a.to.trim().trim_start_matches('.').to_string();
+        let from = a.from.trim().trim_start_matches('.').to_string();
+        self.apply(
+            &a.site,
+            Command::RenameClass {
+                from: from.clone(),
+                to: to.clone(),
+            },
+            &format!(".{from} renamed .{to}"),
+        )
+        .await
+    }
+
+    #[tool(
+        description = "Remove a class: from the elements that have it, and its style rules (a rule with several selectors keeps the others)."
+    )]
+    async fn remove_class(&self, Parameters(a): Parameters<ClassArg>) -> CallToolResult {
+        let d = match self.doc(&a.site).await {
+            Ok(d) => d,
+            Err(e) => return fail(e),
+        };
+        let name = a.name.trim().trim_start_matches('.').to_string();
+        let cmds = match revel_edit::classes::remove_commands(&d, &name) {
+            Ok(c) => c,
+            Err(e) => return fail(e.to_string()),
+        };
+        if cmds.is_empty() {
+            return ok("Nothing to change.");
+        }
+        self.apply(
+            &a.site,
+            Command::Batch { commands: cmds },
+            &format!(".{name} removed"),
         )
         .await
     }

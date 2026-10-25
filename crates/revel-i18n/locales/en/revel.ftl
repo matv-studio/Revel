@@ -117,6 +117,8 @@ editor-bp-toggle = { $name }: show or hide in the canvas
 editor-frame-height = Page height
 editor-frame-height-help = Shown height: { $height } px. Drag to lengthen or shorten; double-click: default height
 editor-side = All screens
+editor-dark = Dark mode preview
+editor-dark-help = Show the site with its dark mode colors, as on a device using a dark theme
 editor-free = Free canvas
 editor-free-help = Free canvas: move the view, zoom, set the frame width and height. Off: page fitted to the area, the wheel scrolls it
 editor-side-help = Shows every screen side by side; click inside a screen to choose it
@@ -292,6 +294,8 @@ styles-state-focus = Keyboard focus
 styles-state-current = Current page
 styles-state-is-active = Active (tab, filter, switch, hovered item)
 styles-state-in-active = Inside an active element
+styles-state-open = Open (accordion)
+styles-state-in-open = Inside an open accordion
 styles-state-off = Off (switch)
 styles-state-in-off = Inside a switch that is off
 styles-state-active = Pressed
@@ -500,6 +504,8 @@ error-edit-tag = Invalid tag name: letters, digits and hyphens only. ({ $detail 
 error-edit-not-open = This site is not open in the editor.
 error-font = Font: { $detail }
 error-edit-site = Invalid address: “{ $detail }” (expected: https://…)
+error-edit-class = Class name refused: letters, digits and dashes, not starting with a digit.
+error-edit-class-taken = This class already exists.
 sync-title = Working together
 sync-ok = Up to date · checked at { $time }
 sync-busy = Receiving versions…
@@ -745,6 +751,17 @@ color-site-add = Add to the site colors
 color-site-name = Color name
 color-site-default = Color { $n }
 color-site-create = Add
+colors-title = Colors
+colors-help = Site colors, reused by styles. With dark mode, each color also has a value for visitors whose device uses a dark theme.
+colors-name = Name
+colors-light = Light
+colors-dark = Dark
+colors-none = No site colors
+colors-dark-mode = Dark mode
+colors-dark-help = The site follows the visitor's device light or dark theme
+colors-dark-off-title = Remove dark mode colors?
+colors-remove-title = Remove the color “{ $name }”?
+colors-remove-used = Used { $count } times in styles: those styles will lose their color.
 styles-contrast = Contrast with the background: { $ratio }:1 — { $level }
 styles-contrast-aaa = AAA
 styles-contrast-aa = AA
@@ -768,6 +785,56 @@ panel-pages = Pages
 panel-cms = CMS
 panel-components = Components
 panel-assets = Assets
+panel-classes = Classes
+classes-search = Search classes
+classes-count = { $count ->
+    [one] 1 class
+   *[other] { $count } classes
+}
+classes-none = No classes
+classes-no-match = No class found.
+classes-unused = unused
+classes-unused-note = No element has this class
+classes-unused-filter = Unused classes only
+classes-clean = { $count ->
+    [0] No unused class
+    [one] Remove the unused class
+   *[other] Remove the { $count } unused classes
+}
+classes-clean-title = { $count ->
+    [one] Remove the unused class?
+   *[other] Remove the { $count } unused classes?
+}
+classes-row-title = { $uses ->
+    [0] No element
+    [one] 1 element
+   *[other] { $uses } elements
+} · { $count ->
+    [0] no style
+    [one] 1 style
+   *[other] { $count } styles
+}
+classes-go = Go to the element
+classes-in-layout = Template { $name }
+classes-rename = Rename
+classes-rename-title = Rename “{ $name }”
+classes-rename-label = New name (everywhere: styles, elements, interactions)
+classes-remove = Remove
+classes-remove-title = Remove the class “{ $name }”?
+classes-remove-body = { $uses ->
+    [one] Removed from 1 element
+   *[other] Removed from { $uses } elements
+}; { $count ->
+    [0] no style to delete.
+    [one] 1 style deleted.
+   *[other] { $count } styles deleted.
+}
+classes-remove-unused-body = { $count ->
+    [0] No element has it and it has no style.
+    [one] No element has it; 1 style deleted.
+   *[other] No element has it; { $count } styles deleted.
+}
+styles-class-title = { $name } — double-click to rename everywhere
 panel-interactions = Interactions
 anim-appear = Appear
 anim-appear-help = When the element comes into view or when the page loads
@@ -1561,6 +1628,8 @@ block-list-asc = Ascending
 block-list-desc = Descending
 block-list-limit = Number of entries
 block-list-limit-all = All
+block-list-more = Show first
+block-list-more-help = Number of items shown at first; the next ones appear by the same number when the end of the list is reached (empty: all at once)
 block-list-date = Date
 block-bound = Linked to the entry
 block-bound-text = Text

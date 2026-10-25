@@ -57,6 +57,10 @@ pub fn import() -> AnyView {
     svg(r#"<path d="M8 2v8M5 7l3 3 3-3M3 12.5h10"/>"#)
 }
 
+pub fn moon() -> AnyView {
+    svg(r#"<path d="M13 9.5A5.5 5.5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5z"/>"#)
+}
+
 pub fn plus() -> AnyView {
     svg(r#"<path d="M8 3v10M3 8h10"/>"#)
 }

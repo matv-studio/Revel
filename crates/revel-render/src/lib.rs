@@ -22,6 +22,7 @@ mod head;
 mod html;
 pub mod lottie;
 pub mod masonry;
+pub mod more;
 pub mod rebase;
 mod redirects;
 pub mod scroll;
@@ -566,6 +567,7 @@ fn build_pages(
                 scripts,
             );
             let html = scroll::wire(html, input.site.settings.smooth_scroll, scripts);
+            let html = more::wire(html, scripts);
             masonry::wire(html)
         } else {
             html
@@ -1615,6 +1617,7 @@ fn editor_page(
         opts.scripts,
     );
     let html = scroll::wire(html, input.site.settings.smooth_scroll, opts.scripts);
+    let html = more::wire(html, opts.scripts);
     let html = masonry::wire(html);
     warnings.extend(b.take_warnings());
     let (slots, vars) = b

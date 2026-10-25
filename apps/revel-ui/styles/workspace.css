@@ -350,3 +350,34 @@
 .picker-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .picker-name { font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-foot { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: var(--text-xs); }
+
+/* --- Classes (D-113) ------------------------------------------------------------------------ */
+.class-row .list-label { display: flex; align-items: center; }
+.class-chip {
+  min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 1px 6px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-xs);
+  background: var(--set-bg); color: var(--set-text);
+}
+.class-row.is-unused .class-chip { background: var(--surface-active); color: var(--text-muted); }
+.class-row.is-selected { box-shadow: inset 2px 0 0 var(--set-text); }
+.class-row.is-open { background: var(--surface-active); }
+.class-badge { flex: none; font-size: var(--text-xs); color: var(--text-faint); }
+.class-detail { padding: 2px 0 8px; border-bottom: var(--border) solid var(--line); }
+.class-use { padding-left: 34px; height: 26px; }
+.class-use .list-count { max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.class-actions { display: flex; gap: 6px; padding: 6px 12px 0 34px; }
+
+/* Couleurs du site et mode sombre (D-115). */
+.site-colors { display: flex; flex-direction: column; gap: var(--s-2); }
+.colors-head, .colors-row { display: grid; grid-template-columns: minmax(96px, 1fr) minmax(0, 1.4fr) 28px; gap: var(--s-2); align-items: center; }
+.site-colors:has(.colors-row.has-dark) .colors-head,
+.colors-row.has-dark { grid-template-columns: minmax(96px, 1fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 28px; }
+.colors-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.colors-label::first-letter { text-transform: uppercase; }
+.color-cell { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.color-swatch-input { flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: var(--r-1, 4px); background: none; cursor: default; }
+.color-swatch-input::-webkit-color-swatch-wrapper { padding: 0; }
+.color-swatch-input::-webkit-color-swatch { border: none; border-radius: 3px; }
+.color-value { min-width: 0; flex: 1; }
+.colors-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-top: var(--s-1); }
+.row-switch { display: inline-flex; align-items: center; gap: var(--s-2); }

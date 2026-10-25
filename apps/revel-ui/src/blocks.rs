@@ -2048,6 +2048,25 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     let desc = q.with_value(|q| q.sort.as_ref().is_some_and(|s| s.1));
     let limit = q.with_value(|q| q.limit.map(|n| n.to_string()).unwrap_or_default());
     let exclude = q.with_value(|q| q.exclude_current);
+    // Affichage progressif (D-114) : élément qui contient la liste, et nombre montré d'abord.
+    let holder = ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let at = at.get_value();
+        let (parent, _) = revel_edit::address::locate(d, &at).ok()?;
+        let t = Target {
+            owner: at.owner.clone(),
+            node: parent.node?,
+        };
+        let more = match revel_edit::address::node(d, &t).ok()? {
+            Node::Element { attrs, .. } => attrs
+                .iter()
+                .find(|a| a.name == "data-revel-more")
+                .and_then(|a| a.value.clone())
+                .unwrap_or_default(),
+            _ => return None,
+        };
+        Some((t, more))
+    });
     // Sur la page d'un contenu (modèle de collection) : liste sans le contenu affiché.
     let on_template = exclude
         || ed.doc.with_untracked(|d| {
@@ -2354,6 +2373,24 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                         write(Box::new(move |q| q.limit = n))
                     }/>
             </label>
+            {holder.map(|(t, more)| {
+                let t = StoredValue::new(t);
+                view! {
+                    <label class="field" title=ui.t("block-list-more-help")>
+                        <span class="label">{ui.t("block-list-more")}</span>
+                        <input class="input" type="number" min="1" step="1" data-list="more" prop:value=more
+                            placeholder=ui.t("block-list-limit-all")
+                            on:change=move |e| {
+                                let n = event_target_value(&e).trim().parse::<usize>().ok().filter(|n| *n > 0);
+                                let at = t.get_value();
+                                ed.apply(ui, match n {
+                                    Some(n) => Command::SetAttr { at, name: "data-revel-more".into(), value: Some(n.to_string()) },
+                                    None => Command::RemoveAttr { at, name: "data-revel-more".into() },
+                                }, false);
+                            }/>
+                    </label>
+                }
+            })}
             {on_template.then(|| view! {
                 <label class="view-line" title=ui.t("block-list-exclude-help")>
                     <span>{ui.t("block-list-exclude")}</span>

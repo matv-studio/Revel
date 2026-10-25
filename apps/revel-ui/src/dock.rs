@@ -21,6 +21,8 @@ pub enum PanelId {
     Insert,
     Components,
     Assets,
+    /// Classes du site (D-113).
+    Classes,
     Styles,
     /// Ancien onglet Réglages, fondu dans Styles : gardé pour relire les dispositions
     /// enregistrées, retiré à la lecture.
@@ -29,7 +31,7 @@ pub enum PanelId {
 }
 
 impl PanelId {
-    pub const ALL: [PanelId; 9] = [
+    pub const ALL: [PanelId; 10] = [
         PanelId::Pages,
         PanelId::Layers,
         PanelId::Variables,
@@ -37,6 +39,7 @@ impl PanelId {
         PanelId::Insert,
         PanelId::Components,
         PanelId::Assets,
+        PanelId::Classes,
         PanelId::Styles,
         PanelId::Interactions,
     ];
@@ -51,6 +54,7 @@ impl PanelId {
             PanelId::Insert => "insert-title",
             PanelId::Components => "panel-components",
             PanelId::Assets => "panel-assets",
+            PanelId::Classes => "panel-classes",
             PanelId::Styles => "styles-title",
             PanelId::Settings => "inspector-settings",
             PanelId::Interactions => "panel-interactions",
@@ -67,6 +71,7 @@ impl PanelId {
             PanelId::Insert => "insert",
             PanelId::Components => "components",
             PanelId::Assets => "assets",
+            PanelId::Classes => "classes",
             PanelId::Styles => "styles",
             PanelId::Settings => "settings",
             PanelId::Interactions => "interactions",
@@ -158,7 +163,7 @@ pub const MAX_COL: f64 = 520.0;
 
 impl Default for Layout {
     /// Disposition par défaut : pages, composants et médias au-dessus des calques (comme Figma),
-    /// CMS entre calques et ajouter ; styles, réglages et interactions à droite.
+    /// CMS entre calques et ajouter ; styles, réglages, interactions et classes à droite.
     fn default() -> Self {
         Self {
             left: vec![
@@ -177,7 +182,7 @@ impl Default for Layout {
             ],
             right: vec![Group {
                 id: 3,
-                tabs: vec![PanelId::Styles, PanelId::Interactions],
+                tabs: vec![PanelId::Styles, PanelId::Interactions, PanelId::Classes],
                 active: PanelId::Styles,
                 size: 1.0,
             }],

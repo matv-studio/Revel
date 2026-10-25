@@ -25,6 +25,12 @@ const mock = fs.readFileSync(new URL('../apps/revel-ui/dev/mock-tauri.js', impor
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
 const results = [];
+// Premier écart entre deux textes (message d'un essai qui compare des documents).
+const diffHint = (a, b) => {
+  let i = 0;
+  while (i < a.length && a[i] === b[i]) i++;
+  return i >= a.length && i >= b.length ? '' : `écart à ${i} : …${a.slice(Math.max(0, i - 60), i + 80)}… / …${b.slice(Math.max(0, i - 60), i + 80)}…`;
+};
 const check = (name, ok, detail = '') => {
   results.push(ok);
   console.log(`${ok ? 'ok ' : 'ÉCHEC'} ${name}${detail ? ' — ' + detail : ''}`);
@@ -1034,12 +1040,23 @@ try {
       await page.waitForSelector('.collection-list select');
       await page.selectOption('.collection-list select[data-list="sort"]', 'date');
       await untilE(async () => (await pageJson()).includes('sort(attribute=\\"date\\", reverse=true)'));
-      await page.fill('.collection-list input[type=number]', '2');
+      await page.fill('.collection-list input[type=number]:not([data-list])', '2');
       await page.keyboard.press('Tab');
       const two = await untilE(async () => (await frame.locator('.liste-collection__element').count()) === 2);
       check('éléments : liste de collection (collection, tri par date décroissante, 2 contenus)', listed && two
         && (await pageJson()).includes('[:2]'));
+      // Affichage progressif (D-114) : « Afficher d'abord » sur la liste ; le canevas montre tout.
+      await page.fill('.collection-list input[data-list="more"]', '1');
+      await page.keyboard.press('Tab');
+      const moreOn = await untilE(async () => (await pageJson()).includes('"name":"data-revel-more","value":"1"'));
+      const allShown = (await frame.locator('.liste-collection__element').count()) === 2
+        && (await frame.locator('[data-revel-more="1"]').count()) === 1;
+      await page.fill('.collection-list input[data-list="more"]', '');
+      await page.keyboard.press('Tab');
+      const moreOff = await untilE(async () => !(await pageJson()).includes('data-revel-more'));
+      check('éléments : liste à affichage progressif (réglée puis retirée, tout montré dans le canevas)', moreOn && allShown && moreOff);
       // Liste de plusieurs collections (D-97) : « + Autre collection », puis retirée.
+      await page.waitForFunction(() => document.querySelectorAll('.list-also select option').length > 1);
       const others2 = await page.$$eval('.list-also select option', (o) => o.map((x) => x.value).filter(Boolean));
       await page.selectOption('.list-also select', others2[0]);
       const multi = await untilE(async () => (await pageJson()).includes(` + collections.${others2[0]})`));
@@ -1186,6 +1203,47 @@ try {
         await untilE(async () => (await frame.locator('nav.nav-e2e').count()) === 0
           && (await page.locator('.layers .layer[data-tech*="nav.nav-e2e"]').count()) === 0, 15000);
       }
+      // Gestionnaire de classes (D-113) : liste, recherche, renommer partout, inutilisées.
+      {
+        await page.click('.panels-menu > summary');
+        const listed = await page.$('.panels-pop .menu-item--check:has-text("Classes")');
+        await page.click('.panels-menu > summary');
+        await page.click('.dock-tab[data-panel="classes"]');
+        await page.waitForSelector('.class-row');
+        const nClasses = await page.locator('.class-row').count();
+        await page.fill('.class-manager .panel-search input', 'intro-agency');
+        await page.click('.class-row[data-class="intro-agency"]');
+        await page.waitForSelector('.class-detail .class-use');
+        const uses = await page.locator('.class-detail .class-use').count();
+        await page.click('.class-detail [data-action="rename"]');
+        await page.waitForSelector('.dialog input');
+        await page.fill('.dialog input', 'Intro Agence E2E');
+        await page.click('.dialog button[type="submit"]');
+        const renamed = await untilE(async () => (await frame.locator('section.intro-agence-e2e').count()) > 0
+          && (await frame.locator('.intro-agency').count()) === 0, 15000);
+        const ruleOk = (await siteE()).stylesheet.items.some((i) => i.item === 'rule' && i.selector.includes('.intro-agence-e2e'));
+        check('classes : panneau listé, classe renommée partout (éléments et styles, nom proposé)',
+          !!listed && nClasses > 20 && uses > 0 && renamed && ruleOk, `${nClasses} classes, ${uses} élément(s)`);
+        if (shots) await page.screenshot({ path: `${shots}/editeur-classes.png` });
+        // Retour au nom d'origine par le même panneau (double-clic d'une pastille dans Styles).
+        await page.fill('.class-manager .panel-search input', 'intro-agence-e2e');
+        await page.click('.class-row[data-class="intro-agence-e2e"]');
+        await page.click('.class-detail .class-use');
+        await page.click('.dock-tab[data-panel="styles"]');
+        await page.dblclick('.sel-chip-name:has-text("intro-agence-e2e")');
+        await page.waitForSelector('.dialog input');
+        await page.fill('.dialog input', 'intro-agency');
+        await page.click('.dialog button[type="submit"]');
+        const back = await untilE(async () => (await frame.locator('section.intro-agency').count()) > 0, 15000);
+        await page.click('.dock-tab[data-panel="classes"]');
+        await page.fill('.class-manager .panel-search input', '');
+        await page.click('.class-manager [data-action="unused-filter"]');
+        const unusedRows = await page.locator('.class-row').count();
+        const allUnused = await page.locator('.class-row:not(.is-unused)').count() === 0;
+        await page.click('.class-manager [data-action="unused-filter"]');
+        check('classes : renommée depuis Styles (double-clic), filtre des classes inutilisées', back && allUnused, `${unusedRows} inutilisée(s)`);
+        await page.click('.dock-tab[data-panel="pages"]');
+      }
       await addIn('lottie');
       const lottieIn = await untilE(async () => (await frame.locator('.lottie[data-lottie]').count()) === 1);
       await page.click('.dock-tab[data-panel="styles"]');
@@ -1216,12 +1274,13 @@ try {
       check('média au survol : seuls les champs qui donnent une vidéo proposés',
         (srcOpts.length > 0 || !!noField) && !srcOpts.some((v) => /^(title|titre|slug|client|description)$/.test(v)), srcOpts.join(', ') || 'aucun (message)');
       await page.click('.canvas-area', { position: { x: 5, y: 5 } }).catch(() => {});
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 50; i++) {
         if (JSON.stringify(await siteE()) === docE) break;
         await page.keyboard.press('Control+z');
         await page.waitForTimeout(300);
       }
-      check('éléments : Ctrl+Z, document identique', await untilE(async () => JSON.stringify(await siteE()) === docE));
+      const undoneE = await untilE(async () => JSON.stringify(await siteE()) === docE, 20000);
+      check('éléments : Ctrl+Z, document identique', undoneE, undoneE ? '' : diffHint(docE, JSON.stringify(await siteE())));
     }
     // Tri et filtre des médias : liste ouverte aux couleurs de Revel (sélecteur personnalisable).
     {
@@ -1698,17 +1757,91 @@ try {
       const raw = await page.$$eval('.siteinfo-row, .navlist-head', (rs) => rs.some((r) => /on\s*:\s*click|move \||=>/.test(r.textContent)));
       const cols = await page.$$eval('.siteinfo-list .siteinfo-uses', (us) => new Set(us.map((u) => Math.round(u.getBoundingClientRect().right))).size);
       check('paramètres : rubrique raccordée à la page (parties), informations du site alignées, sans code affiché',
-        tab.parts === 5 && tab.bg === content.bg && tab.right > content.left && !raw && cols === 1, `${tab.parts} parties, ${cols} colonne(s)`);
+        tab.parts === 6 && tab.bg === content.bg && tab.right > content.left && !raw && cols === 1, `${tab.parts} parties, ${cols} colonne(s)`);
       if (shots) await page.screenshot({ path: `${shots}/parametres-general.png` });
       await page.$eval('.settings-content', (c) => c.scrollTo(0, c.scrollHeight));
       await page.waitForFunction(() => document.querySelector('.settings-nav-part[data-part="forms"]')?.classList.contains('is-on'));
+      // Surbrillance relevée pendant le défilement vers la partie : jamais une partie traversée.
+      await page.evaluate(() => {
+        window.__railSeen = new Set();
+        const tick = () => {
+          const on = document.querySelector('.settings-nav-part.is-on');
+          if (on) window.__railSeen.add(on.dataset.part);
+          if (window.__railSeen.size < 50) window.__railTick = requestAnimationFrame(tick);
+        };
+        window.__railTick = requestAnimationFrame(tick);
+      });
       await page.click('.settings-nav-part[data-part="site-info"]');
       await page.waitForFunction(() => {
         const c = document.querySelector('.settings-content').getBoundingClientRect().top;
         const t = document.querySelector('.settings-sub[data-sub="site-info"]').getBoundingClientRect().top;
         return Math.abs(t - c) < 40;
       });
-      check('paramètres : partie à l\'écran marquée dans le rail, aller à une partie', true);
+      await page.waitForTimeout(400);
+      const railSeen = await page.evaluate(() => { cancelAnimationFrame(window.__railTick); return [...window.__railSeen]; });
+      check('paramètres : partie à l\'écran marquée dans le rail, aller à une partie (sans passer par les autres)',
+        railSeen.filter((p) => p !== 'forms' && p !== 'site-info').length === 0
+          && await page.$eval('.settings-nav-part[data-part="site-info"]', (b) => b.classList.contains('is-on')), railSeen.join(' → '));
+      // Couleurs du site et mode sombre (D-115) : couleur ajoutée, mode sombre activé, valeur
+      // sombre réglée ; aperçu sombre du canevas ; tout retiré.
+      {
+        const docC = JSON.stringify((await invoke('edit_open')).site);
+        const rootOf = async (media) => ((await invoke('edit_open')).site.stylesheet.items
+          .find((i) => i.item === 'rule' && i.selector === ':root' && (i.media || null) === media) || { decls: [] }).decls;
+        await page.click('.settings-nav-part[data-part="colors"]');
+        await page.waitForSelector('.site-colors [data-action="add-color"]');
+        const before = await page.locator('.colors-row').count();
+        await page.click('.site-colors [data-action="add-color"]');
+        await page.waitForSelector('.dialog input');
+        await page.fill('.dialog input', 'Accent E2E');
+        await page.click('.dialog button[type="submit"]');
+        await page.waitForSelector('.colors-row[data-var="--accent-e2e"]');
+        const added = (await rootOf(null)).some((d) => d.prop === '--accent-e2e');
+        await page.click('.colors-foot .switch');
+        await page.waitForSelector('.colors-row.has-dark[data-var="--accent-e2e"]');
+        const dark = '(prefers-color-scheme: dark)';
+        const copied = (await rootOf(dark)).length === before + 1;
+        const darkInput = page.locator('.colors-row[data-var="--accent-e2e"] .color-value').nth(1);
+        await darkInput.fill('#112233');
+        await darkInput.press('Enter');
+        await page.waitForFunction(() => true);
+        const darkSet = await (async () => {
+          for (let i = 0; i < 40; i++) {
+            if ((await rootOf(dark)).some((d) => d.prop === '--accent-e2e' && d.value === '#112233')) return true;
+            await page.waitForTimeout(100);
+          }
+          return false;
+        })();
+        check('couleurs du site : couleur ajoutée, mode sombre activé (valeurs claires reprises), valeur sombre réglée',
+          added && copied && darkSet, `${before} → ${before + 1} couleur(s)`);
+        if (shots) await page.locator('.settings-sub[data-sub="colors"]').screenshot({ path: `${shots}/parametres-couleurs.png` });
+        // Aperçu sombre du canevas : la variable prend sa valeur sombre, quel que soit le système.
+        await page.click('.view-tab[data-view="view-editor"]');
+        await page.waitForSelector('.scheme-toggle');
+        const varIn = () => frameOf().evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent-e2e').trim());
+        if (await page.$('.scheme-toggle.is-on')) await page.click('.scheme-toggle');
+        await page.waitForFunction(() => !document.querySelector('.scheme-toggle.is-on'));
+        let light = '';
+        for (let i = 0; i < 40 && light !== '#808080'; i++) { light = await varIn(); await page.waitForTimeout(100); }
+        await page.click('.scheme-toggle');
+        let darkV = '';
+        for (let i = 0; i < 40 && darkV !== '#112233'; i++) { darkV = await varIn(); await page.waitForTimeout(100); }
+        check('canevas : aperçu en mode sombre (couleurs sombres du site)', light === '#808080' && darkV === '#112233', `${light} / ${darkV}`);
+        if (shots) await page.screenshot({ path: `${shots}/editeur-apercu-sombre.png` });
+        await page.click('.scheme-toggle');
+        await page.click('.view-tab[data-view="view-settings"]');
+        await page.waitForSelector('.colors-row[data-var="--accent-e2e"]');
+        await page.click('.colors-row[data-var="--accent-e2e"] .icon-btn');
+        await page.click('.dialog button[type="submit"]');
+        await page.waitForSelector('.colors-row[data-var="--accent-e2e"]', { state: 'detached' });
+        await page.click('.colors-foot .switch');
+        await page.click('.dialog button[type="submit"]');
+        await page.waitForSelector('.colors-row.has-dark', { state: 'detached' });
+        let same = false;
+        let lastC = '';
+        for (let i = 0; i < 40 && !same; i++) { lastC = JSON.stringify((await invoke('edit_open')).site); same = lastC === docC; if (!same) await page.waitForTimeout(100); }
+        check('couleurs du site : couleur et mode sombre retirés, document identique', same, diffHint(docC, lastC));
+      }
       await page.$eval('.settings-content', (c) => c.scrollTo(0, 0));
       // Rubrique sans parties : le bouton remplit tout l'onglet (fond de l'accent étendu compris).
       await page.click('.settings-nav-item[data-section="settings-code"]');

@@ -12,6 +12,7 @@ pub mod actions;
 pub mod address;
 pub mod attrbind;
 pub mod canvas;
+pub mod classes;
 pub mod collection;
 pub mod command;
 pub mod dates;
@@ -94,6 +95,12 @@ pub enum EditError {
     /// Réglage du site refusé (nom vide, adresse invalide).
     #[error("{0}")]
     InvalidSite(String),
+    /// Nom de classe invalide (D-113).
+    #[error("nom de classe refusé : {0}")]
+    InvalidClass(String),
+    /// Nom de classe déjà utilisé par le site (D-113).
+    #[error("classe déjà utilisée : {0}")]
+    ClassTaken(String),
 }
 
 impl EditError {
@@ -122,6 +129,8 @@ impl EditError {
             Self::SelfUse(_) => "error-edit-self-use",
             Self::InvalidLocale(_) => "error-edit-locale",
             Self::InvalidSite(_) => "error-edit-site",
+            Self::InvalidClass(_) => "error-edit-class",
+            Self::ClassTaken(_) => "error-edit-class-taken",
             Self::Outdated => "error-edit-outdated",
         }
     }

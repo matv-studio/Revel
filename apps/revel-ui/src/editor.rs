@@ -450,6 +450,9 @@ pub struct Ed {
     pub live_scroll: RwSignal<(f64, f64)>,
     /// Règles en pixels (Ctrl+R).
     pub rulers: RwSignal<bool>,
+    /// Canevas montré en mode sombre (couleurs `prefers-color-scheme: dark` du site, D-115) ;
+    /// au départ, le thème de l'appareil.
+    pub dark: RwSignal<bool>,
     /// Valeurs des affectations `{% set %}` de la page affichée (relevées au rendu du canevas).
     pub vars: RwSignal<Vec<revel_edit::canvas::VarValue>>,
     /// Guides de colonnes.
@@ -705,6 +708,29 @@ impl Ed {
 
     /// Hauteur normale des cadres transmise au canevas quand ils sont allongés (unités `vh`
     /// inchangées), retirée sinon.
+    /// Thème montré dans les canevas (le site a des couleurs du mode sombre).
+    pub fn post_scheme(self) {
+        let v = if self.dark.get_untracked() {
+            "dark"
+        } else {
+            "light"
+        };
+        self.post(serde_json::json!({ "type": "scheme", "value": v }));
+    }
+
+    /// Le site règle des styles selon le thème de l'appareil.
+    pub fn has_schemes(self) -> bool {
+        self.doc.with(|d| {
+            d.as_ref().is_some_and(|d| {
+                d.style_rules().any(|r| {
+                    r.media
+                        .as_deref()
+                        .is_some_and(|m| m.contains("prefers-color-scheme"))
+                })
+            })
+        })
+    }
+
     pub fn post_viewport(self) {
         let w = untrack(|| self.world());
         let h = if self.frame_h.get_untracked().is_some() && (w.h - w.base_h).abs() > 0.5 {
@@ -2513,7 +2539,7 @@ pub fn node_label(ui: Ui, n: &revel_model::Node) -> String {
 
 /// Balise et classes (hors expressions) d'un nœud.
 /// Élément demandé par une autre vue (plan du site) : sélectionné et montré dans la page.
-fn take_goto_node(ui: Ui, ed: Ed) {
+pub(crate) fn take_goto_node(ui: Ui, ed: Ed) {
     let Some(id) = ui.goto_node.get_untracked() else {
         return;
     };
@@ -2663,6 +2689,11 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         live_scroll: RwSignal::new((0.0, 0.0)),
         vars: RwSignal::new(Vec::new()),
         rulers: RwSignal::new(crate::pref_get("rulers").as_deref() == Some("1")),
+        dark: RwSignal::new(
+            web_sys::window()
+                .and_then(|w| w.match_media("(prefers-color-scheme: dark)").ok().flatten())
+                .is_some_and(|m| m.matches()),
+        ),
         guides: RwSignal::new(
             crate::pref_get("guides")
                 .and_then(|g| serde_json::from_str(&g).ok())
@@ -2904,6 +2935,10 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 }
                 ed.post_isolation();
                 ed.post_viewport();
+                post_to(
+                    &from_frame,
+                    serde_json::json!({ "type": "scheme", "value": if ed.dark.get_untracked() { "dark" } else { "light" } }),
+                );
                 ed.post(serde_json::json!({ "type": "scale", "s": ed.scale() }));
                 if let Some(s) = ed.selected.get_untracked() {
                     ed.post(serde_json::json!({ "type": "select", "id": s.id }));
@@ -3258,6 +3293,7 @@ fn panel_view(p: crate::dock::PanelId) -> AnyView {
         PanelId::Cms => view! { <crate::panels::Cms/> }.into_any(),
         PanelId::Insert => view! { <crate::insert::Insert/> }.into_any(),
         PanelId::Components => view! { <crate::library::Components/> }.into_any(),
+        PanelId::Classes => view! { <crate::classes::Classes/> }.into_any(),
         PanelId::Assets => view! { <crate::library::Media/> }.into_any(),
         PanelId::Styles => {
             view! { <div class="panel-pad"><crate::styles::Styles/></div> }.into_any()
@@ -3365,6 +3401,11 @@ fn Toolbar() -> impl IntoView {
                 title=ui.t("editor-side-help") aria-label=ui.t("editor-side")
                 on:click=move |_| ed.set_side(!ed.side.get_untracked())>{icons::screens()}</button>
             <BreakpointMenu/>
+            <Show when=move || ed.has_schemes()>
+                <button class="tool-toggle scheme-toggle" class:is-on=move || ed.dark.get() aria-pressed=move || ed.dark.get().to_string()
+                    title=ui.t("editor-dark-help") aria-label=ui.t("editor-dark")
+                    on:click=move |_| { ed.dark.update(|d| *d = !*d); ed.post_scheme(); }>{icons::moon()}</button>
+            </Show>
             <div class="select editor-zoom" title=ui.t("editor-zoom-help")>
                 <select class="input" aria-label=ui.t("editor-zoom")
                     on:change=move |e| {

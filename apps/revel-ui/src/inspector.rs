@@ -872,6 +872,7 @@ const MANAGED: &[&str] = &[
     "data-revel-progress",
     "data-revel-masonry",
     "data-revel-spy",
+    "data-revel-more",
     "data-revel-on",
     "data-revel-name",
     "data-revel-hidden",

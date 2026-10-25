@@ -137,6 +137,9 @@ pub enum Command {
     RemoveStyleAt { index: usize },
     /// Supprime une règle de style.
     RemoveRule { rule: String },
+    /// Renomme une classe partout : règles de la feuille du site, éléments des pages, gabarits et
+    /// composants, cibles des interactions (D-113). Refusé si le nouveau nom est déjà une classe.
+    RenameClass { from: String, to: String },
     /// Texte d'une valeur liée (D-19) : fichier de données, en-tête d'un contenu, variable de page
     /// ou de gabarit. Appliquée par le cœur, qui écrit le fichier (`apply` la refuse).
     SetBound {
@@ -1043,6 +1046,13 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         Command::RemoveRule { rule } => {
             let index = crate::style::rule_index(site, rule)?;
             apply(site, &Command::RemoveStyleAt { index })
+        }
+        Command::RenameClass { from, to } => {
+            crate::classes::rename(site, from, to)?;
+            Ok(Command::RenameClass {
+                from: to.clone(),
+                to: from.clone(),
+            })
         }
         Command::SetBound { .. }
         | Command::SetEntryField { .. }

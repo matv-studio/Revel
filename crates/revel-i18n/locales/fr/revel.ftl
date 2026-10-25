@@ -120,6 +120,8 @@ editor-bp-toggle = { $name } : afficher ou masquer dans le canevas
 editor-frame-height = Hauteur de la page
 editor-frame-height-help = Hauteur affichée : { $height } px. Glisser pour allonger ou raccourcir ; double-clic : hauteur par défaut
 editor-side = Tous les écrans
+editor-dark = Aperçu en mode sombre
+editor-dark-help = Montrer le site avec ses couleurs du mode sombre, comme sur un appareil en thème sombre
 editor-free = Canevas libre
 editor-free-help = Canevas libre : déplacer la vue, zoomer, régler la largeur et la hauteur du cadre. Désactivé : page calée sur la zone, la molette la fait défiler
 editor-side-help = Affiche tous les écrans côte à côte ; un clic dans un écran le choisit
@@ -295,6 +297,8 @@ styles-state-focus = Focus clavier
 styles-state-current = Page actuelle
 styles-state-is-active = Actif (onglet, filtre, interrupteur, élément survolé)
 styles-state-in-active = Dans un élément actif
+styles-state-open = Ouvert (accordéon)
+styles-state-in-open = Dans un accordéon ouvert
 styles-state-off = Éteint (interrupteur)
 styles-state-in-off = Dans un interrupteur éteint
 styles-state-active = Appui
@@ -503,6 +507,8 @@ error-edit-tag = Nom de balise invalide : lettres, chiffres et tirets uniquement
 error-edit-not-open = Ce site n'est pas ouvert dans l'éditeur.
 error-font = Police : { $detail }
 error-edit-site = Adresse invalide : « { $detail } » (attendue : https://…)
+error-edit-class = Nom de classe refusé : lettres, chiffres, tirets, sans commencer par un chiffre.
+error-edit-class-taken = Cette classe existe déjà.
 sync-title = Travail à plusieurs
 sync-ok = À jour · vérifié à { $time }
 sync-busy = Réception des versions…
@@ -748,6 +754,17 @@ color-site-add = Ajouter aux couleurs du site
 color-site-name = Nom de la couleur
 color-site-default = Couleur { $n }
 color-site-create = Ajouter
+colors-title = Couleurs
+colors-help = Couleurs du site, réutilisées par les styles. Avec le mode sombre, chaque couleur a aussi une valeur pour les visiteurs dont l'appareil est en thème sombre.
+colors-name = Nom
+colors-light = Clair
+colors-dark = Sombre
+colors-none = Aucune couleur du site
+colors-dark-mode = Mode sombre
+colors-dark-help = Le site suit le thème clair ou sombre de l'appareil du visiteur
+colors-dark-off-title = Retirer les couleurs du mode sombre ?
+colors-remove-title = Retirer la couleur « { $name } » ?
+colors-remove-used = Utilisée { $count } fois dans les styles : ces styles perdront leur couleur.
 styles-contrast = Contraste avec le fond : { $ratio }:1 — { $level }
 styles-contrast-aaa = AAA
 styles-contrast-aa = AA
@@ -771,6 +788,56 @@ panel-pages = Pages
 panel-cms = CMS
 panel-components = Composants
 panel-assets = Médias
+panel-classes = Classes
+classes-search = Rechercher une classe
+classes-count = { $count ->
+    [one] 1 classe
+   *[other] { $count } classes
+}
+classes-none = Aucune classe
+classes-no-match = Aucune classe trouvée.
+classes-unused = inutilisée
+classes-unused-note = Aucun élément ne porte cette classe
+classes-unused-filter = Seulement les classes inutilisées
+classes-clean = { $count ->
+    [0] Aucune classe inutilisée
+    [one] Retirer la classe inutilisée
+   *[other] Retirer les { $count } classes inutilisées
+}
+classes-clean-title = { $count ->
+    [one] Retirer la classe inutilisée ?
+   *[other] Retirer les { $count } classes inutilisées ?
+}
+classes-row-title = { $uses ->
+    [0] Aucun élément
+    [one] 1 élément
+   *[other] { $uses } éléments
+} · { $count ->
+    [0] aucun style
+    [one] 1 style
+   *[other] { $count } styles
+}
+classes-go = Aller à l’élément
+classes-in-layout = Gabarit { $name }
+classes-rename = Renommer
+classes-rename-title = Renommer « { $name } »
+classes-rename-label = Nouveau nom (partout : styles, éléments, interactions)
+classes-remove = Retirer
+classes-remove-title = Retirer la classe « { $name } » ?
+classes-remove-body = { $uses ->
+    [one] Retirée de 1 élément
+   *[other] Retirée de { $uses } éléments
+} ; { $count ->
+    [0] aucun style à supprimer.
+    [one] 1 style supprimé.
+   *[other] { $count } styles supprimés.
+}
+classes-remove-unused-body = { $count ->
+    [0] Aucun élément ne la porte et elle n’a pas de style.
+    [one] Aucun élément ne la porte ; 1 style supprimé.
+   *[other] Aucun élément ne la porte ; { $count } styles supprimés.
+}
+styles-class-title = { $name } — double-clic pour renommer partout
 panel-interactions = Interactions
 anim-appear = Apparition
 anim-appear-help = Quand l’élément arrive à l’écran ou au chargement de la page
@@ -1564,6 +1631,8 @@ block-list-asc = Croissant
 block-list-desc = Décroissant
 block-list-limit = Nombre de contenus
 block-list-limit-all = Tous
+block-list-more = Afficher d’abord
+block-list-more-help = Nombre de contenus montrés au départ ; les suivants apparaissent par le même nombre quand on arrive au bout de la liste (vide : tous d’un coup)
 block-list-date = Date
 block-bound = Relié au contenu
 block-bound-text = Texte

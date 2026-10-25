@@ -1091,6 +1091,46 @@ Source : [wry, exemple streaming](https://docs.rs/crate/wry/0.56.0/source/exampl
   la feuille du site et les cibles d'interaction (`framer_names.rs`) ; 465 classes sur matv, rendu
   inchangé.
 
+**D-113 — 25/10/2026 — prise.** **Gestionnaire de classes.** Panneau « Classes » (à droite, avec Styles et
+Interactions) : chaque classe du site avec le nombre d'éléments qui la portent, ses éléments (sélectionnés d'un clic,
+page, gabarit ou composant ouvert) et ses règles ; recherche ; « Renommer » partout (règles et blocs CSS de la feuille,
+attributs `class` des éléments, utilisations de composants et images, cibles d'interaction `.classe`,
+`closest:.classe`) en une commande annulable (`Command::RenameClass`) ; « Retirer » une classe (éléments et règles,
+une règle à plusieurs sélecteurs garde les autres) ; filtre et retrait groupé des classes inutilisées (règles sans
+élément). Double-clic sur une pastille du panneau Styles : renommer. Classes d'état posées par les scripts (`is-…`,
+`rv-…`) non listées. Assistants : `list_classes`, `rename_class`, `remove_class` (`crates/revel-edit/src/classes.rs`).
+Les classes écrites dans les contenus du CMS (texte riche) et le code ajouté ne sont pas relevées.
+
+**D-114 — 25/10/2026 — prise.** **Liste à affichage progressif.** Réglage « Afficher d'abord » d'une liste de
+collection (`data-revel-more="6"` sur l'élément qui contient la liste) : le site publié montre les 6 premiers
+éléments, puis, quand le bas de la liste arrive à l'écran (dans la page ou dans la colonne qui défile), un indicateur
+de chargement tourne 0,45 s et les 6 suivants apparaissent (sans attente si le visiteur demande moins de mouvement).
+Tous les contenus sont dans la page (référencement, lecteurs d'écran, sans script) ; le canevas montre tout ;
+compatible avec la maçonnerie (éléments masqués ignorés). Comme la pagination de Framer sur matv.
+
+**D-115 — 25/10/2026 — prise.** **Couleurs du site et mode sombre.** Paramètres › Général › Couleurs : variables de
+couleur de `:root` (celles du sélecteur de couleur) listées par nom lisible, valeur claire réglable (pastille ou
+texte), ajout, retrait (règles qui l'utilisent signalées). Interrupteur « Mode sombre » : règle
+`@media (prefers-color-scheme: dark) { :root { … } }` créée avec les valeurs claires, une colonne « Sombre » par
+couleur (vide : valeur claire) ; le site suit le thème de l'appareil du visiteur. Canevas : bouton « Aperçu en mode
+sombre » de la barre d'outils quand le site a des couleurs selon le thème : les requêtes `prefers-color-scheme` des
+feuilles du cadre deviennent vraies ou fausses (le cadre suivrait sinon le thème du système, différemment selon le
+moteur de WebView2, WebKitGTK ou WKWebView) ; au départ, le thème de l'appareil.
+
+**D-116 — 25/10/2026 — prise.** **État « Ouvert » d'un accordéon, GIF animés.** Panneau Styles : états « Ouvert
+(accordéon) » (`[open]`) et « Dans un accordéon ouvert » (`[open] .x`) ; pendant le réglage, le canevas ouvre
+l'accordéon de la sélection et le referme ensuite. Images : un GIF animé est servi tel quel (ses variantes AVIF,
+WebP ou GIF redimensionné n'en gardaient que la première image) ; nombre d'images lu dans la structure du fichier.
+
+**D-117 — 25/10/2026 — prise.** **Site matv recréé.** Recréation à la main de https://matv.framer.website dans la forme
+de l'interface (demande du 25/10/2026) : collections `projects`, `clients`, `services`, `toolsets`, `tools`,
+`experiences`, `ranks` ; composants à propriétés reliées aux champs (Button, Stat, Service, Toolset, Tool,
+Experience, Rank, Project card, Fact, Contact) ; classes nommées par rôle (`profile-name`, `toolset-head`,
+`project-card-media`) ; couleurs du site claires et sombres ; défilement de logos (Défilement), accordéons des
+outils, maçonnerie « colonnes à tour de rôle », 6 projets puis la suite ; informations du site (courriel,
+téléphone, menu « social ») ; anglais et français. Écarts voulus : espacements des cartes « Outils » réguliers
+(Framer les décale), lettre « M » du nom en image avec le nom complet pour les lecteurs d'écran.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

@@ -403,6 +403,70 @@ impl Pipeline {
     }
 }
 
+/// GIF animé : servi tel quel (ses variantes AVIF, WebP ou GIF redimensionné n'en garderaient que
+/// la première image).
+fn animated_gif(path: &Path) -> bool {
+    let is_gif = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("gif"));
+    if !is_gif {
+        return false;
+    }
+    let Ok(bytes) = std::fs::read(path) else {
+        return false;
+    };
+    gif_frames(&bytes) > 1
+}
+
+/// Nombre d'images d'un GIF (blocs de contrôle graphique, sinon descripteurs d'image), compté
+/// en suivant la structure du fichier.
+fn gif_frames(b: &[u8]) -> usize {
+    if b.len() < 13 || !b.starts_with(b"GIF8") {
+        return 0;
+    }
+    let mut i = 13;
+    // Palette globale.
+    if b[10] & 0x80 != 0 {
+        i += 3 * (1 << ((b[10] & 0x07) + 1));
+    }
+    let skip_blocks = |mut i: usize| -> usize {
+        while i < b.len() {
+            let n = b[i] as usize;
+            i += 1;
+            if n == 0 {
+                break;
+            }
+            i += n;
+        }
+        i
+    };
+    let mut frames = 0;
+    while i < b.len() {
+        match b[i] {
+            0x2C => {
+                frames += 1;
+                if frames > 1 {
+                    return frames;
+                }
+                if i + 10 > b.len() {
+                    break;
+                }
+                let flags = b[i + 9];
+                i += 10;
+                if flags & 0x80 != 0 {
+                    i += 3 * (1 << ((flags & 0x07) + 1));
+                }
+                // Taille minimale du code LZW, puis données.
+                i = skip_blocks(i + 1);
+            }
+            0x21 => i = skip_blocks(i + 2),
+            _ => break,
+        }
+    }
+    frames
+}
+
 fn load_index(path: &Path) -> HashMap<PathBuf, SourceInfo> {
     let Ok(text) = std::fs::read_to_string(path) else {
         return HashMap::new();
@@ -478,7 +542,7 @@ impl AssetHooks for Pipeline {
         } else {
             format!(" class=\"{}\"", escape(&a.class))
         };
-        if !Self::is_raster(&path) {
+        if !Self::is_raster(&path) || animated_gif(&path) {
             return Some(format!(
                 "<img src=\"{}\" alt=\"{}\"{class} loading=\"{loading}\" decoding=\"async\"{style}>",
                 encode_uri(&a.src),

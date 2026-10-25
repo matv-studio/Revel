@@ -572,9 +572,9 @@ try {
   await page.waitForSelector('iframe.canvas-frame[data-key="@"]');
   await page.waitForTimeout(800);
   await page.frameLocator('iframe.canvas-frame[data-key="@"]').locator('header nav a', { hasText: 'Agence' }).first().click();
-  await page.waitForSelector('.dock-panel[data-panel="styles"] .row-switch');
+  await page.waitForSelector('.dock-panel[data-panel="styles"] #insp-new-tab', { state: 'attached' });
   check('composant : canevas du composant ouvert (variante principale), lien sélectionné', !!(await page.$('.comp-bar')));
-  await page.click('.dock-panel[data-panel="styles"] .row-switch .switch');
+  await page.click('.dock-panel[data-panel="styles"] .row-switch:has(#insp-new-tab) .switch');
   f = await waitFrame(() => [...document.querySelectorAll('header nav a')].some((a) => a.textContent.trim() === 'Agence' && a.target === '_blank' && a.rel === 'noopener'), 'nouvel onglet');
   check('lien : ouverture dans un nouvel onglet', true);
   await page.click('.comp-back');

@@ -417,7 +417,7 @@ fn element_content(
                 })}
                 <label class="row-switch">
                     <span class="switch">
-                        <input type="checkbox" prop:checked=blank on:change=move |e| toggle_blank(event_target_checked(&e))/>
+                        <input type="checkbox" id="insp-new-tab" prop:checked=blank on:change=move |e| toggle_blank(event_target_checked(&e))/>
                         <span class="switch-track"></span>
                     </span>
                     <span>{ui.t("inspector-new-tab")}</span>

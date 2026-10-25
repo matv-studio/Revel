@@ -6,7 +6,7 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 25/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.6, site matv recréé). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 25/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.7, composants à emplacement, CMS réservé aux pages). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
 ## Compte et emplacements actuels (depuis le 24/10/2026 — prime sur les chemins plus bas)
@@ -583,6 +583,35 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
     `_Claude\Installateurs` (morceaux dans `_morceaux`, supprimables) ; étiquette `v0.6.8`
     sur 039e650 (flux 40215054689). Captures `_Claude\Captures\0.6.8-matv-*` (deux thèmes).
 
+- **Composants à emplacement, CMS réservé aux pages (25/10/2026, 8.7, D-118, D-119)** — règle de
+  l'utilisateur : « les composants sont à part du CMS ; le CMS ne sert qu'à construire des pages entières ;
+  le contenu se range dans le composant et se remplace par utilisation dans Styles ; les cartes de projets
+  lisent la page du projet ; pas de sous-CMS pour contourner ; ne pas répartir sur plusieurs outils ce qu'un
+  seul peut faire ».
+  - D-118 emplacement : `Node::Use.children` (contenu propre), élément `data-revel-slot` du composant
+    (`revel_model::SLOT_ATTR`), rendu `slots_in` dans `eval.rs`, `data-rv-slot-filled` dans le canevas
+    (`inOwnSlot` de `canvas.js`), `make::{slot_of, customize_slot, reset_slot, set_slot}`, Styles
+    « Contenu » (Modifier ici / Revenir au contenu du composant), interrupteur « Emplacement du contenu »
+    dans le composant, calques sous l'utilisation, ajout et dépôt dans l'utilisation, détacher. Cadre d'une
+    utilisation calculé sur ses éléments (`instBox` : un `details` fermé gardait la hauteur de son contenu).
+  - D-119 : nouvelle collection = collection + modèle + adresse `/<slug>/{{ slug }}/` en une commande
+    (`expand` d'une suite simule la création de collection sur sa copie) ; instructions MCP réécrites.
+  - Site matv refait : seule la collection `projects` ; Services (points dans l'emplacement), Toolset
+    (outils = utilisations de Tool dans l'emplacement), Experience, Rank, Stat placés sur la page avec leurs
+    valeurs ; logos dans le Défilement ; sections nommées dans les calques. Rendu comparé : 1280 px hauteur
+    3336 contre 3337, FR et sombre identiques à quelques pixels.
+  - Pièges : le `revel` de `target/release` doit être reconstruit après un changement de `canvas.js` ou du
+    rendu (sinon l'ancien rendu) ; le disque (quota ~44 Go) se remplit vite : supprimer
+    `target/debug` et `apps/revel-ui/target/wasm32-unknown-unknown/debug/incremental` (7 Go), lancer avec
+    `CARGO_INCREMENTAL=0`.
+  - Remis sur le PC : **`<dossier Revel du PC>\Projects\matv-revel`** (version à emplacements) ; ancienne
+    version déplacée dans `Projects\_to_delete\matv-revel-v1` (à supprimer par l'utilisateur) ; dossiers de
+    transfert `_Claude\Livrables\matv-revel-transfert`, `matv-revel-v2-transfert`, `matv-transfert`
+    supprimables. Générateur à jour : `_Claude\Livrables\matv-gen.py`.
+  - Essais : e2e 328/328, tests Rust, clippy, fmt. CI de 52fe932 en échec sur « canevas : nouvel onglet »
+    (l'essai cliquait le premier interrupteur, désormais celui de l'emplacement) → interrupteur
+    `#insp-new-tab` et essai ciblé (d0e8bd3). Pas de nouvelle version : 0.6.8 reste le dernier brouillon.
+
 | Étape | État |
 |---|---|
 | 0 | squelette modulaire, CI |
@@ -593,7 +622,7 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
 | 5 | mise en ligne directe (bouton Publier, hébergeurs guidés, contrôles, retour arrière, GitHub Pages, domaine, formulaires) — **terminée** (0.4.0) |
 | 6 | animations et interactions, Lottie, mises à jour, signature, documentation, installateur 1.0 — **terminée** (18/10/2026) ; 0.6.2 : outils des sites animés et sonores (D-94) |
 | 7 | import depuis d'autres outils — **terminée** (0.6.0) ; 7.9 sites à construire (0.6.1, D-88) ; 7.10 imports reconstruits dans la forme de l'interface (0.6.2 à 0.6.4, D-90 à D-92, D-96 à D-98, D-102) — **terminée** |
-| 8 | fonctions optionnelles : 8.1 signature du code (ancienne 6.7, D-09), à venir ; 8.2 plan du site nodal, 8.3 paramètres réorganisés (D-103 à D-106), 8.4 liens externes vérifiés et synchronisation automatique (D-107, D-108), 8.5 import Framer complet et outils de défilement (D-109 à D-112), 8.6 outils de structure et site matv recréé (D-113 à D-117) — **faites** |
+| 8 | fonctions optionnelles : 8.1 signature du code (ancienne 6.7, D-09), à venir ; 8.2 plan du site nodal, 8.3 paramètres réorganisés (D-103 à D-106), 8.4 liens externes vérifiés et synchronisation automatique (D-107, D-108), 8.5 import Framer complet et outils de défilement (D-109 à D-112), 8.6 outils de structure et site matv recréé (D-113 à D-117), 8.7 composants à emplacement et CMS réservé aux pages (D-118, D-119) — **faites** |
 
 ## `matv-studio/alunites-revel-lab` (public)
 Copie du site Alunites servant de cobaye (avec son `.pages.yml`). Copie sur le PC :

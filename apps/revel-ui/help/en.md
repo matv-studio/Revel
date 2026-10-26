@@ -67,7 +67,7 @@ The look is set in **Styles**, per **class**: every element with the same class 
 2. Import your files in **Media** (drag and drop). Revel makes light images for each screen.
 3. Write an **alternative text**: it describes the image to people who cannot see it.
 
-**Videos**, **Lottie animations** (`.json` or `.lottie` file) and documents are added the same way.
+**Videos**, **Lottie animations** (`.json` or `.lottie` file) and documents are added the same way. A **Hover reveal** shows a second image on hover (sketch, then finished work): entirely, up to the pointer or around it.
 
 ## Components
 
@@ -128,6 +128,8 @@ A linked date is written the way you want (October 16, 2026, 16.10.2026…); an 
 - **Receive pre-releases** also offers test versions, published before the stable release.
 
 ## Useful shortcuts
+
+Keys can be changed in **Settings › Shortcuts**.
 
 | Action | Shortcut |
 |---|---|

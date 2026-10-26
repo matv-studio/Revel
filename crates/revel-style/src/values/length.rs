@@ -51,6 +51,74 @@ pub fn parse_num(s: &str) -> Option<Num> {
     })
 }
 
+/// Propriétés dont une valeur négative n'a pas de sens (CSS la refuse ou l'ignore) : un glisser,
+/// une flèche ou une saisie s'arrête à zéro (D-125). Marges extérieures, décalages, espacement des
+/// lettres, superposition, ombres restent libres.
+pub fn non_negative(prop: &str) -> bool {
+    matches!(
+        prop,
+        "padding"
+            | "padding-top"
+            | "padding-right"
+            | "padding-bottom"
+            | "padding-left"
+            | "padding-inline"
+            | "padding-block"
+            | "width"
+            | "height"
+            | "min-width"
+            | "min-height"
+            | "max-width"
+            | "max-height"
+            | "gap"
+            | "row-gap"
+            | "column-gap"
+            | "font-size"
+            | "line-height"
+            | "border-width"
+            | "border-top-width"
+            | "border-right-width"
+            | "border-bottom-width"
+            | "border-left-width"
+            | "border-radius"
+            | "border-top-left-radius"
+            | "border-top-right-radius"
+            | "border-bottom-right-radius"
+            | "border-bottom-left-radius"
+            | "opacity"
+            | "flex-grow"
+            | "flex-shrink"
+            | "flex-basis"
+            | "outline-width"
+            | "column-count"
+            | "aspect-ratio"
+            | "font-weight"
+            | "transition-duration"
+            | "animation-duration"
+            | "-webkit-line-clamp"
+    )
+}
+
+/// Valeur ramenée à zéro, nombre par nombre (`-4px 12px` → `0px 12px`), pour une propriété qui
+/// n'accepte pas de valeur négative ; inchangée sinon.
+pub fn clamp_non_negative(prop: &str, value: &str) -> String {
+    if !non_negative(prop) || !value.contains('-') {
+        return value.to_string();
+    }
+    value
+        .split_whitespace()
+        .map(|t| match parse_num(t) {
+            Some(n) if n.value < 0.0 => Num {
+                value: 0.0,
+                unit: n.unit,
+            }
+            .to_css(),
+            _ => t.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Lecteur des calculs saisis : `+ - * /`, parenthèses, nombres avec une unité facultative.
 struct Calc<'a> {
     s: &'a [u8],

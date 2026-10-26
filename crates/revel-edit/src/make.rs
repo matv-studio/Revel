@@ -288,6 +288,10 @@ pub enum Preset {
     /// Barre de progression (D-110) : remplie selon le défilement de la colonne qui la contient
     /// (ou de la page), comme le composant ScrollProgress de Framer.
     ScrollProgress,
+    /// Image révélée au survol (D-125) : une seconde image par-dessus la première, montrée en
+    /// entier, jusqu'au pointeur (volet) ou autour de lui (halo), comme un croquis qui laisse
+    /// voir l'œuvre finie.
+    Reveal,
 }
 
 impl Preset {
@@ -307,7 +311,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 37] = [
+    pub const ALL: [Preset; 38] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -345,6 +349,7 @@ impl Preset {
         Preset::Switch,
         Preset::HoverMedia,
         Preset::ScrollProgress,
+        Preset::Reveal,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -412,6 +417,34 @@ impl Preset {
                 ".video",
                 vec![("display", "block"), ("width", "100%"), ("height", "auto")],
             )],
+            Preset::Reveal => vec![
+                (
+                    ".revele",
+                    vec![
+                        ("position", "relative"),
+                        ("overflow", "hidden"),
+                        ("display", "block"),
+                    ],
+                ),
+                (
+                    ".revele__avant",
+                    vec![("display", "block"), ("width", "100%"), ("height", "auto")],
+                ),
+                (
+                    ".revele__apres",
+                    vec![
+                        ("position", "absolute"),
+                        ("inset", "0"),
+                        ("width", "100%"),
+                        ("height", "100%"),
+                        ("object-fit", "cover"),
+                        ("opacity", "0"),
+                        ("transition", "opacity 0.35s ease"),
+                    ],
+                ),
+                // Sans script (canevas) : montrée en entier au survol.
+                (".revele:hover .revele__apres", vec![("opacity", "1")]),
+            ],
             Preset::ScrollProgress => vec![
                 (
                     ".barre-progression",
@@ -908,6 +941,31 @@ impl Preset {
                     attr("preload", "metadata"),
                 ],
                 vec![],
+            ),
+            // Image de dessous, puis image révélée (la dernière) ; halo de 140 px par défaut.
+            Preset::Reveal => el(
+                id(),
+                "div",
+                vec![
+                    attr("class", "revele"),
+                    attr("data-revel-reveal", "spot radius=140 soft=40"),
+                ],
+                vec![
+                    Node::Image(ImageNode {
+                        id: id(),
+                        src: "\"\"".into(),
+                        alt: Some("\"\"".into()),
+                        class: Some("\"revele__avant\"".into()),
+                        ..Default::default()
+                    }),
+                    Node::Image(ImageNode {
+                        id: id(),
+                        src: "\"\"".into(),
+                        alt: Some("\"\"".into()),
+                        class: Some("\"revele__apres\"".into()),
+                        ..Default::default()
+                    }),
+                ],
             ),
             // Piste (suit le défilement de son conteneur) et remplissage (variable CSS).
             Preset::ScrollProgress => el(

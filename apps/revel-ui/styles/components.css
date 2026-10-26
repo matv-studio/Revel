@@ -153,10 +153,10 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .segmented.is-disabled { opacity: .45; }
 .segmented button:disabled { cursor: default; }
 
-/* Interrupteur, au dessin des barres de défilement et des glissières : trait fin sombre (piste),
-   poignée en pilule (la partie visible d'une barre de défilement). Éteint : poignée grise à gauche.
-   Allumé : poignée à droite, trait de progression plus épais jusqu'à elle, à la couleur de
-   l'action (accent ou contraste). */
+/* Interrupteur, au dessin des barres de défilement et des glissières : trait fin sombre (piste).
+   Éteint : poignée en pilule grise à gauche (la partie visible d'une barre de défilement).
+   Allumé : la poignée devient la poignée verticale des glissières, à droite, et le trait de
+   progression jusqu'à elle prend la couleur d'accent (contraste sans accent). */
 .switch {
   --sw-w: 26px; --sw-knob: 12px; --sw-knob-h: 6px;
   position: relative; display: inline-flex; flex: none; width: var(--sw-w); height: 16px;
@@ -167,22 +167,29 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
   position: relative; width: 100%; height: 100%; border-radius: var(--radius-sm);
   background: linear-gradient(var(--range-track-bg), var(--range-track-bg)) center / 100% var(--range-track) no-repeat;
 }
-/* Trait de progression (allumé), arrondi comme celui des glissières. */
 .switch-track::before {
   content: ""; position: absolute; top: calc(50% - var(--range-fill) / 2); left: 0;
   width: 0; height: var(--range-fill); border-radius: calc(var(--range-fill) / 2);
-  background: var(--primary); transition: width var(--fast) var(--ease);
+  background: var(--accent, var(--primary)); transition: width var(--normal) var(--ease);
 }
 .switch-track::after {
   content: ""; position: absolute; top: calc(50% - var(--sw-knob-h) / 2); left: 0;
   width: var(--sw-knob); height: var(--sw-knob-h); border-radius: var(--radius-full);
   background: var(--text-faint);
-  transition: transform var(--fast) var(--ease), background-color var(--fast) var(--ease);
+  transition: transform var(--normal) var(--ease), width var(--normal) var(--ease), height var(--normal) var(--ease),
+    top var(--normal) var(--ease), border-radius var(--normal) var(--ease), background-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
 }
 .switch:hover .switch-track::after { background: var(--text-muted); }
-.switch input:checked + .switch-track::before { width: calc(100% - var(--sw-knob) / 2); }
-.switch input:checked + .switch-track::after { transform: translateX(calc(var(--sw-w) - var(--sw-knob))); background: var(--primary); }
+.switch input:checked + .switch-track::before { width: calc(100% - var(--range-handle-w)); }
+.switch input:checked + .switch-track::after {
+  top: calc(50% - var(--range-handle-h) / 2); width: var(--range-handle-w); height: var(--range-handle-h); border-radius: 2px;
+  transform: translateX(calc(var(--sw-w) - var(--range-handle-w)));
+  background: var(--gray-0); box-shadow: 0 0 0 1px var(--range-handle-ring), 0 1px 3px rgb(0 0 0 / .35);
+}
+.switch:hover input:checked + .switch-track::after { transform: translateX(calc(var(--sw-w) - var(--range-handle-w))) scaleY(1.12); }
 .switch input:disabled + .switch-track { opacity: .45; }
+@media (prefers-reduced-motion: reduce) { .switch-track::before, .switch-track::after { transition: none; } }
 .switch input:focus-visible + .switch-track { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Pastilles de couleur (réglage d'accent) */
@@ -1246,6 +1253,7 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .settings-card { margin: 0; }
 .settings-card > h2, .settings-card .mcp > h2 { margin: 0; }
 .settings-sub-body .settings-card > h2, .settings-sub-body .settings-card .mcp > h2 { display: none; }
+.settings-sub-body .settings-card.is-titled > h2 { display: block; font-size: var(--text-md); font-weight: var(--weight-medium); color: var(--text-muted); }
 .settings-card--bare > .section { margin: 0; }
 .settings-card .packs { margin: 0; }
 
@@ -1362,3 +1370,23 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 
 /* Paramètres › Versions : synchronisation automatique (D-108). */
 .versions-auto { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--text-sm); color: var(--text-muted); cursor: pointer; }
+
+/* Réglages de l'éditeur (D-125) : couleurs de l'interface, raccourcis. */
+.ui-color-row { display: flex; align-items: center; gap: var(--s-2); }
+.ui-color-value { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.shortcut-list { display: flex; flex-direction: column; }
+.shortcut-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: var(--s-3); align-items: center;
+  min-height: 36px; padding: 2px 0; border-bottom: var(--border) solid var(--line);
+}
+.shortcut-row:last-child { border-bottom: 0; }
+.shortcut-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shortcut-row.is-custom .shortcut-label { color: var(--set-text); }
+.shortcut-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.shortcut-keys kbd { font-size: var(--text-xs); }
+.shortcut-none { font-size: var(--text-xs); }
+.shortcut-conflict { display: inline-grid; color: var(--warning-text); cursor: help; }
+.shortcut-conflict svg.icon { width: 14px; height: 14px; }
+.shortcut-actions { display: flex; align-items: center; gap: 2px; justify-content: flex-end; min-width: 132px; }
+.key-capture { height: var(--control-sm); width: 100%; max-width: 220px; font-size: var(--text-xs); border-color: var(--focus); }
+.shortcut-foot { display: flex; justify-content: flex-end; margin-top: var(--s-3); }

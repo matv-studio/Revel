@@ -398,7 +398,6 @@
 .chip--toggle.is-on { color: var(--text); border-color: var(--text-muted); }
 
 /* --- Composants (3.6) : utilisation, propriétés, liaisons ---------------------------- */
-:root { --comp: #2fb67c; --comp-bg: rgb(47 182 124 / .14); }
 .instance-head {
   display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; height: var(--control-sm); padding: 0 8px 0 6px;
   border-radius: var(--radius-md); background: var(--comp-bg); color: var(--comp); font-size: var(--text-sm); font-weight: var(--weight-medium);
@@ -425,7 +424,7 @@
 .prop-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prop-chip svg.icon { width: 12px; height: 12px; flex: none; }
 .prop-chip .chip-x { display: grid; place-items: center; width: 18px; height: 18px; border: 0; padding: 0; border-radius: 9px; background: none; color: inherit; }
-.prop-chip .chip-x:hover { background: rgb(47 182 124 / .25); }
+.prop-chip .chip-x:hover { background: color-mix(in srgb, var(--comp) 25%, transparent); }
 .small { font-size: var(--text-xs); }
 
 /* --- Éléments de 3.7 : icône, code HTML, liste de collection ------------------------- */
@@ -697,3 +696,14 @@
 .dock-panel .style-control:has(> .switch) { align-items: flex-end; }
 .dock-panel .view-line:has(> .switch) > .switch { margin-left: auto; }
 .items-thumb--icon { background: var(--surface-active); box-shadow: none; }
+
+/* Choix d'icône (D-125) : onglets en texte qui passent à la ligne, grille, icônes importées. */
+.icon-tabs { display: flex; flex-wrap: wrap; gap: 2px; }
+.icon-tab {
+  height: 22px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: none;
+  color: var(--text-muted); font-size: var(--text-xs); font-weight: var(--weight-medium);
+}
+.icon-tab:hover { background: var(--surface-hover); color: var(--text); }
+.icon-tab.is-on { background: var(--surface-active); color: var(--text); }
+.icon-grid--custom .icon-choice img { width: 20px; height: 20px; object-fit: contain; }
+.icon-import { border-style: dashed; border-color: var(--line-strong); color: var(--text-muted); }

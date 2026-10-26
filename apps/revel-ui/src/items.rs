@@ -15,7 +15,10 @@ use revel_model::Node;
 struct Item {
     id: String,
     tag: String,
+    /// Adresse de l'image (vide : pas encore choisie).
     src: Option<String>,
+    /// L'élément a une image (à remplacer).
+    img: bool,
     name: String,
 }
 
@@ -33,7 +36,7 @@ fn items_of(n: &Node) -> Vec<Item> {
                 _ => return None,
             };
             let img = revel_edit::make::first_image(k);
-            let src = img.and_then(|i| literal(&i.src));
+            let src = img.and_then(|i| literal(&i.src)).filter(|s| !s.is_empty());
             let name = revel_model::layer_name(k)
                 .map(str::to_string)
                 .or_else(|| (tag == "a").then(|| first_text(k)).flatten())
@@ -48,7 +51,13 @@ fn items_of(n: &Node) -> Vec<Item> {
                     })
                 })
                 .unwrap_or_default();
-            Some(Item { id, tag, src, name })
+            Some(Item {
+                id,
+                tag,
+                src,
+                img: img.is_some(),
+                name,
+            })
         })
         .collect()
 }
@@ -59,6 +68,9 @@ pub fn ItemsList(
     /// Liens d'un menu : « Ajouter un lien » copie le dernier lien (sinon : image ajoutée).
     #[prop(optional)]
     links: bool,
+    /// Nombre d'éléments fixe (image révélée : dessous et dessus) : ni ajout, ni retrait.
+    #[prop(optional)]
+    fixed: bool,
 ) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
@@ -79,7 +91,17 @@ pub fn ItemsList(
             .into_iter()
             .enumerate()
             .map(|(i, mut it)| {
-                if it.name.is_empty() {
+                if fixed {
+                    // Image révélée : dessous, puis dessus.
+                    it.name = ui.now(
+                        if i == 0 {
+                            "reveal-under"
+                        } else {
+                            "reveal-over"
+                        },
+                        &[],
+                    );
+                } else if it.name.is_empty() {
                     it.name = ui.now("items-item", &[("n", (i + 1).to_string())]);
                 }
                 it
@@ -149,7 +171,7 @@ pub fn ItemsList(
     };
     let add_link = move |_| {
         if let Some(last) = items.with_untracked(|l| l.last().map(|x| x.id.clone())) {
-            ed.apply(ui, Command::Duplicate { at: target(&last) }, false);
+            ed.apply_keep(ui, Command::Duplicate { at: target(&last) });
         }
     };
     let add = move |_| {
@@ -160,7 +182,7 @@ pub fn ItemsList(
                 revel_edit::make::add_image_item(d, &at.get_value(), &url, &alt).ok()
             });
             if let Some((c, _)) = cmd {
-                ed.apply(ui, c, false);
+                ed.apply_keep(ui, c);
             }
         });
     };
@@ -175,7 +197,7 @@ pub fn ItemsList(
                     let it = StoredValue::new(it);
                     let id = it.with_value(|i| i.id.clone());
                     let (i1, i2, i3, i4, i5) = (id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
-                    let has_img = it.with_value(|i| i.src.is_some());
+                    let has_img = it.with_value(|i| i.img);
                     let first = move || items.with(|l| l.first().is_some_and(|x| x.id == i4));
                     let last = move || items.with(|l| l.last().is_some_and(|x| x.id == i5));
                     let on = { let id = id.clone(); move || ed.selected.with(|s| s.as_ref().is_some_and(|s| s.id == id)) };
@@ -197,20 +219,24 @@ pub fn ItemsList(
                                     <button class="icon-btn icon-btn--small" title=ui.t("items-replace") aria-label=ui.t("items-replace")
                                         on:click=move |_| replace(i1.clone())>{icons::image()}</button>
                                 })}
-                                <button class="icon-btn icon-btn--small" title=ui.t("items-up") aria-label=ui.t("items-up")
-                                    prop:disabled=first on:click=move |_| step(i2.clone(), -1)>{icons::arrow_up()}</button>
-                                <button class="icon-btn icon-btn--small" title=ui.t("items-down") aria-label=ui.t("items-down")
-                                    prop:disabled=last on:click=move |_| step(i3.clone(), 1)>{icons::arrow_down()}</button>
-                                <button class="icon-btn icon-btn--small" title=ui.t("layers-duplicate") aria-label=ui.t("layers-duplicate")
-                                    on:click={ let id = id.clone(); move |_| ed.apply(ui, Command::Duplicate { at: target(&id) }, false) }>{icons::copy()}</button>
-                                <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
-                                    on:click={ let id = id.clone(); move |_| ed.apply(ui, Command::Remove { at: target(&id) }, false) }>{icons::trash()}</button>
+                                {(!fixed).then(|| view! {
+                                    <button class="icon-btn icon-btn--small" title=ui.t("items-up") aria-label=ui.t("items-up")
+                                        prop:disabled=first on:click=move |_| step(i2.clone(), -1)>{icons::arrow_up()}</button>
+                                    <button class="icon-btn icon-btn--small" title=ui.t("items-down") aria-label=ui.t("items-down")
+                                        prop:disabled=last on:click=move |_| step(i3.clone(), 1)>{icons::arrow_down()}</button>
+                                    <button class="icon-btn icon-btn--small" title=ui.t("layers-duplicate") aria-label=ui.t("layers-duplicate")
+                                        on:click={ let id = id.clone(); move |_| ed.apply_keep(ui, Command::Duplicate { at: target(&id) }) }>{icons::copy()}</button>
+                                    <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
+                                        on:click={ let id = id.clone(); move |_| ed.apply(ui, Command::Remove { at: target(&id) }, false) }>{icons::trash()}</button>
+                                })}
                             </span>
                         </div>
                     }
                 }
             </For>
-            {if links {
+            {if fixed {
+                ().into_any()
+            } else if links {
                 view! { <button class="btn btn--small items-add" data-action="items-add-link" on:click=add_link>{icons::plus()}<span>{ui.t("items-add-link")}</span></button> }.into_any()
             } else {
                 view! { <button class="btn btn--small items-add" data-action="items-add" on:click=add>{icons::plus()}<span>{ui.t("items-add-image")}</span></button> }.into_any()
@@ -242,7 +268,7 @@ pub fn TabsList(at: Target) -> impl IntoView {
     let tabs = Memo::new(move |_| {
         let at = at.get_value();
         ed.doc.with(|d| {
-            let Some(d) = d.as_ref() else { return None };
+            let d = d.as_ref()?;
             let m = revel_edit::tabs::map(d, &at);
             if m.repeated {
                 return None;
@@ -276,7 +302,7 @@ pub fn TabsList(at: Target) -> impl IntoView {
                 .and_then(|d| revel_edit::tabs::add_tab(d, &at.get_value()))
         });
         if let Some(c) = cmd {
-            ed.apply(ui, c, false);
+            ed.apply_keep(ui, c);
         }
     };
     let remove = move |i: usize| {

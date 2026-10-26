@@ -538,6 +538,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     false,
                 ),
                 item(
+                    Preset::Reveal,
+                    "insert-reveal",
+                    "insert-help-reveal",
+                    "",
+                    icons::reveal,
+                    "div",
+                    false,
+                ),
+                item(
                     Preset::Icon,
                     "insert-icon",
                     "insert-help-icon",

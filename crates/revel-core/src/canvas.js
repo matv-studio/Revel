@@ -133,8 +133,8 @@
     ".line{background:#3d7eff;border-radius:2px;box-shadow:0 0 0 1px #fff}" +
     ".into{background:#1f1f1f;color:#fff}" +
     ".ghost{background:#3d7eff;box-shadow:0 4px 12px rgba(0,0,0,.25)}" +
-    // Utilisation de composant (vert, comme Webflow) ; modification isolée : le reste estompé.
-    ".hover.comp{outline-color:#2fb67c}.sel.comp{outline-color:#2fb67c}.tag.comp{background:#2fb67c}" +
+    // Utilisation de composant (couleur des composants, réglable : D-125) ; modification isolée : le reste estompé.
+    ".hover.comp{outline-color:var(--rv-comp,#a684ff)}.sel.comp{outline-color:var(--rv-comp,#a684ff)}.tag.comp{background:var(--rv-comp,#a684ff)}" +
     ".dim{position:fixed;inset:0;pointer-events:none;display:none;z-index:2147483645;background:rgba(20,20,24,.5)}" +
     // Barre de mise en forme du texte en cours de modification.
     ".fbar{position:fixed;display:none;align-items:center;gap:calc(2px*var(--k));z-index:2147483647;padding:calc(3px*var(--k));" +
@@ -2213,6 +2213,12 @@
         else if (m.phase === "out") { if (drag) { drag.out = true; showDrop(null); lastDrop = null; } }
         else endDrag();
         break;
+      case "ui-colors": {
+        // Couleur des composants choisie dans les réglages de Revel (D-125).
+        if (m.comp) document.documentElement.style.setProperty("--rv-comp", m.comp);
+        else document.documentElement.style.removeProperty("--rv-comp");
+        break;
+      }
       case "nav": {
         // Parcours de la sélection : parent, premier enfant, frère suivant ou précédent.
         if (!selected) break;

@@ -364,11 +364,16 @@ kbd {
 .comp-transition select.input:hover:not(:disabled) { background-color: var(--surface-hover); color: var(--text); }
 .canvas-area.is-comp .frame-ring { box-shadow: 0 0 0 2px var(--comp); }
 .canvas-area.is-comp .frame-label.is-on { color: var(--comp); }
-/* Flèches entre variantes (D-121) : trait fin vert (couleur des composants), geste écrit dans une
-   pastille sur la flèche ; pastille de la variante choisie pleine. */
+/* Liens entre variantes (D-121, dessin de Blender en D-125) : prises rondes au bord des cadres,
+   trait à la couleur des composants sur un contour sombre, flèche pleine dont le milieu est sur le
+   trait ; lien de la variante choisie plus marqué. */
 .variant-arrows { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 1; }
-.variant-arrow { fill: none; stroke: color-mix(in srgb, var(--comp) 70%, transparent); stroke-width: 1.5; stroke-linecap: round; }
-.variant-arrows marker path { fill: color-mix(in srgb, var(--comp) 85%, transparent); }
+.variant-link-outline { fill: none; stroke: var(--bg); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.variant-link-wire { fill: none; stroke: color-mix(in srgb, var(--comp) 72%, var(--text-faint)); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.variant-link-head { fill: color-mix(in srgb, var(--comp) 72%, var(--text-faint)); stroke: var(--bg); stroke-width: 1.25; stroke-linejoin: round; paint-order: stroke; }
+.variant-socket { fill: var(--comp); stroke: var(--bg); stroke-width: 1.5; }
+.variant-link.is-on .variant-link-wire { stroke: var(--comp); stroke-width: 2.5; }
+.variant-link.is-on .variant-link-head { fill: var(--comp); }
 .variant-trigger {
   position: absolute; z-index: 2; transform: translate(-50%, -50%);
   display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px 0 5px;
@@ -378,7 +383,7 @@ kbd {
 .variant-trigger.is-left { transform: translate(-100%, -50%); }
 .variant-trigger svg.icon { width: 11px; height: 11px; }
 .variant-trigger:hover { background: var(--comp-bg); }
-.variant-trigger.is-on { background: var(--comp); border-color: var(--comp); color: #06140d; }
+.variant-trigger.is-on { background: var(--comp); border-color: var(--comp); color: var(--surface); }
 .frame-add {
   position: absolute; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
   border: var(--border) dashed var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text-muted);

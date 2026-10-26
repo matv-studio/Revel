@@ -659,9 +659,15 @@ pub fn Styles() -> impl IntoView {
         let name = revel_model::layer_name(&n)
             .map(str::to_string)
             .or_else(|| match &n {
-                Node::Element { tag, .. } => Some(crate::names::element_name(ui, tag, &classes_of(&n).join(" "))),
+                Node::Element { tag, .. } => Some(crate::names::element_name(
+                    ui,
+                    tag,
+                    &classes_of(&n).join(" "),
+                )),
                 Node::Use { component, .. } => ed.doc.with_untracked(|d| {
-                    d.as_ref()?.component(component).map(crate::names::component_name)
+                    d.as_ref()?
+                        .component(component)
+                        .map(crate::names::component_name)
                 }),
                 _ => None,
             })

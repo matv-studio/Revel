@@ -46,6 +46,7 @@ pub fn uses(html: &str) -> bool {
         || html.contains(" data-revel-consent")
         || html.contains(" data-revel-switch")
         || html.contains(" data-revel-hover-media")
+        || html.contains(" data-revel-reveal")
 }
 
 /// Page avec des interactions : script ajouté avant `</head>` (pas dans le canevas). Rend la page
@@ -155,6 +156,7 @@ mod tests {
         );
         assert_eq!(prefill_hover("<p>x</p>"), "<p>x</p>");
         assert!(uses(r#"<video data-revel-hover-media="h">"#));
+        assert!(uses(r#"<div class="revele" data-revel-reveal="spot">"#));
     }
     use super::*;
 

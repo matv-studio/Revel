@@ -90,7 +90,8 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         if lower == "svg"
             && let Some(name) = attr(attrs, "data-icon").and_then(|a| a.value.clone())
         {
-            parts.push(icon_picker(ui, ed, at.clone(), name));
+            let at = at.clone();
+            parts.push(view! { <IconPicker at current=name/> }.into_any());
         }
         if let [Node::Html { html }] = children.as_slice()
             && lower != "svg"
@@ -180,6 +181,15 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
                 parts.push(v);
             }
         }
+        // Image révélée au survol (D-125) : manière, halo, les deux images.
+        if let Some(v) = attr(attrs, "data-revel-reveal") {
+            parts.push(reveal_settings(
+                ui,
+                ed,
+                at.clone(),
+                v.value.clone().unwrap_or_default(),
+            ));
+        }
         // Accordéon (`details`) : ouvert au chargement, un seul ouvert à la fois (D-123).
         if lower == "details" {
             parts.push(accordion_settings(ui, ed, at.clone(), attrs));
@@ -264,47 +274,179 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
 
 // ------------------------------------------------------------------ icône
 
-fn icon_picker(ui: Ui, ed: Ed, at: Target, current: String) -> AnyView {
+/// Choix d'icône (D-125) : onglets (flèches, interface, contact, médias, objets, création) et
+/// onglet des icônes importées (fichiers SVG des médias du site) avec « Importer ».
+#[component]
+fn IconPicker(at: Target, current: String) -> impl IntoView {
+    const CUSTOM: &str = "icons-custom";
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
     let at = StoredValue::new(at);
+    let current = StoredValue::new(current);
+    // Onglet ouvert : celui de l'icône en place, sinon le premier.
+    let first = current.with_value(|c| {
+        if c.starts_with("file:") {
+            CUSTOM
+        } else {
+            revel_edit::icons::GROUPS
+                .iter()
+                .find(|(_, l)| l.contains(&c.as_str()))
+                .map(|(k, _)| *k)
+                .unwrap_or(revel_edit::icons::GROUPS[0].0)
+        }
+    });
+    let tab = RwSignal::new(first);
     let choose = move |name: &'static str, path: &'static str| {
-        let at = at.get_value();
-        ed.apply(
-            ui,
-            Command::Batch {
-                commands: vec![
-                    Command::SetAttr {
-                        at: at.clone(),
-                        name: "data-icon".into(),
-                        value: Some(name.into()),
-                    },
-                    Command::Replace {
-                        parent: Parent::of(&at, Branch::Children),
-                        index: 0,
-                        node: Node::Html { html: path.into() },
-                    },
-                ],
-            },
-            false,
-        );
+        let cmd = ed.doc.with_untracked(|d| {
+            d.as_ref().map(|d| {
+                revel_edit::icons::set_icon(d, &at.get_value(), name, "0 0 24 24", path, true)
+            })
+        });
+        if let Some(c) = cmd {
+            ed.apply(ui, c, false);
+        }
+    };
+    // Icônes importées : fichiers SVG des médias du site.
+    let svgs = RwSignal::new(Vec::<String>::new());
+    let reload = move || {
+        let path = ed.path.get_value();
+        spawn_local(async move {
+            if let Ok(list) = api::edit_media(&path).await
+                && !svgs.is_disposed()
+            {
+                svgs.set(
+                    list.into_iter()
+                        .map(|m| m.url)
+                        .filter(|u| u.to_ascii_lowercase().ends_with(".svg"))
+                        .collect(),
+                );
+            }
+        });
+    };
+    reload();
+    let base = move || ed.base.get().unwrap_or_default();
+    let choose_file = move |url: String| {
+        let src = crate::library::thumb_src(&base(), &url);
+        spawn_local(async move {
+            let Some(text) = fetch_text(&src).await else {
+                return;
+            };
+            let Some((vb, inner)) = revel_edit::icons::clean_svg(&text) else {
+                ui.fail(revel_protocol::Failure::new("error-icon-not-svg"));
+                return;
+            };
+            let cmd = ed.doc.with_untracked(|d| {
+                d.as_ref().map(|d| {
+                    revel_edit::icons::set_icon(
+                        d,
+                        &at.get_value(),
+                        &format!("file:{url}"),
+                        &vb,
+                        &inner,
+                        false,
+                    )
+                })
+            });
+            if let Some(c) = cmd {
+                ed.apply(ui, c, false);
+            }
+        });
+    };
+    let import = move |_| {
+        crate::files::pick(".svg,image/svg+xml", true, move |fs| {
+            let path = ed.path.get_value();
+            spawn_local(async move {
+                let mut first = None;
+                for f in fs {
+                    let Ok(bytes) = crate::files::read(&f).await else {
+                        continue;
+                    };
+                    if revel_edit::icons::clean_svg(&String::from_utf8_lossy(&bytes)).is_none() {
+                        ui.fail(revel_protocol::Failure::new("error-icon-not-svg"));
+                        continue;
+                    }
+                    match api::edit_import_media(&path, &f.name(), &bytes).await {
+                        Ok(m) => {
+                            first.get_or_insert(m.url);
+                        }
+                        Err(e) => ui.fail(e),
+                    }
+                }
+                reload();
+                tab.set(CUSTOM);
+                if let Some(u) = first {
+                    choose_file(u);
+                }
+            });
+        });
     };
     view! {
-        <div class="insp-group">
+        <div class="insp-group icon-picker">
             <p class="panel-title">{ui.t("block-icon")}</p>
-            <div class="icon-grid" role="listbox" aria-label=ui.t("block-icon")>
-                {revel_edit::icons::ICONS.iter().map(|(name, path)| {
-                    let on = *name == current;
-                    view! {
-                        <button type="button" class="icon-choice" class:is-on=on title=*name aria-label=*name data-icon=*name
-                            on:click=move |_| choose(name, path)>
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
-                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" inner_html=*path></svg>
-                        </button>
-                    }
+            <div class="icon-tabs" role="tablist" aria-label=ui.t("block-icon")>
+                {revel_edit::icons::GROUPS.iter().map(|(k, _)| *k).chain(std::iter::once(CUSTOM)).map(|k| view! {
+                    <button role="tab" class="icon-tab" data-tab=k class:is-on=move || tab.get() == k
+                        aria-selected=move || (tab.get() == k).to_string()
+                        on:click=move |_| tab.set(k)>{ui.t(k)}</button>
                 }).collect_view()}
             </div>
+            {move || {
+                let t = tab.get();
+                if t == CUSTOM {
+                    let list = svgs.get();
+                    view! {
+                        <div class="icon-grid icon-grid--custom" role="listbox" aria-label=ui.t(CUSTOM)>
+                            {list.into_iter().map(|u| {
+                                let on = current.with_value(|c| c.strip_prefix("file:") == Some(u.as_str()));
+                                let name = u.rsplit('/').next().unwrap_or(&u).to_string();
+                                let u2 = u.clone();
+                                view! {
+                                    <button type="button" class="icon-choice" class:is-on=on title=name.clone() aria-label=name data-file=u.clone()
+                                        on:click=move |_| choose_file(u2.clone())>
+                                        <img alt="" src=crate::library::thumb_src(&base(), &u)/>
+                                    </button>
+                                }
+                            }).collect_view()}
+                            <button type="button" class="icon-choice icon-import" data-action="icons-import" title=ui.t("icons-import")
+                                aria-label=ui.t("icons-import") on:click=import>{icons::upload()}</button>
+                        </div>
+                    }.into_any()
+                } else {
+                    let names = revel_edit::icons::GROUPS.iter().find(|(k, _)| *k == t).map(|(_, l)| *l).unwrap_or(&[]);
+                    view! {
+                        <div class="icon-grid" role="listbox" aria-label=ui.t(t)>
+                            {names.iter().filter_map(|n| revel_edit::icons::ICONS.iter().find(|(x, _)| x == n)).map(|(name, path)| {
+                                let on = current.with_value(|c| c == name);
+                                view! {
+                                    <button type="button" class="icon-choice" class:is-on=on title=*name aria-label=*name data-icon=*name
+                                        on:click=move |_| choose(name, path)>
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" inner_html=*path></svg>
+                                    </button>
+                                }
+                            }).collect_view()}
+                        </div>
+                    }.into_any()
+                }
+            }}
         </div>
     }
-    .into_any()
+}
+
+/// Texte d'un fichier servi par le canevas (icône SVG importée).
+async fn fetch_text(url: &str) -> Option<String> {
+    use wasm_bindgen::JsCast;
+    let resp = wasm_bindgen_futures::JsFuture::from(window().fetch_with_str(url))
+        .await
+        .ok()?;
+    let resp: web_sys::Response = resp.dyn_into().ok()?;
+    if !resp.ok() {
+        return None;
+    }
+    let text = wasm_bindgen_futures::JsFuture::from(resp.text().ok()?)
+        .await
+        .ok()?;
+    text.as_string()
 }
 
 // ------------------------------------------------------------------ code HTML
@@ -1441,6 +1583,86 @@ fn role_select(
 
 // ------------------------------------------------------------------ carrousel, diaporama
 
+/// Image révélée au survol (D-125) : `fade` (en entier), `wipe` (jusqu'au pointeur), `spot`
+/// (halo autour du pointeur, rayon et douceur du bord) ; images de dessous et révélée.
+fn reveal_settings(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
+    let at = StoredValue::new(at);
+    let mut parts = value.split_whitespace();
+    let mode = parts.next().unwrap_or("fade").to_string();
+    let opt = |k: &str, d: &str| {
+        value
+            .split_whitespace()
+            .find_map(|o| o.strip_prefix(&format!("{k}=")).map(str::to_string))
+            .unwrap_or_else(|| d.to_string())
+    };
+    let (radius, soft) = (opt("radius", "140"), opt("soft", "40"));
+    let write = move |mode: String, radius: String, soft: String| {
+        let v = if mode == "spot" {
+            format!("spot radius={radius} soft={soft}")
+        } else {
+            mode
+        };
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at: at.get_value(),
+                name: "data-revel-reveal".into(),
+                value: Some(v),
+            },
+            false,
+        );
+    };
+    let (m1, r1, s1) = (mode.clone(), radius.clone(), soft.clone());
+    let (m2, s2) = (mode.clone(), soft.clone());
+    let (m3, r3) = (mode.clone(), radius.clone());
+    let num = |n: String| {
+        n.trim()
+            .parse::<u32>()
+            .ok()
+            .map(|v| v.min(2000).to_string())
+    };
+    view! {
+        <div class="insp-group reveal-settings">
+            <p class="panel-title">{ui.t("insert-reveal")}</p>
+            <div class="seg reveal-mode" role="radiogroup" aria-label=ui.t("reveal-mode")>
+                {[("fade", "reveal-fade", "reveal-fade-help"), ("wipe", "reveal-wipe", "reveal-wipe-help"), ("spot", "reveal-spot", "reveal-spot-help")]
+                    .into_iter().map(|(v, k, h)| {
+                        let on = mode == v;
+                        let (r, s) = (r1.clone(), s1.clone());
+                        view! {
+                            <button role="radio" data-mode=v class:is-on=on aria-checked=on.to_string() title=ui.t(h)
+                                on:click=move |_| write(v.to_string(), r.clone(), s.clone())>{ui.t(k)}</button>
+                        }
+                    }).collect_view()}
+            </div>
+            {(m1 == "spot").then(|| view! {
+                <div class="style-row" title=ui.t("reveal-radius-help")>
+                    <span class="style-label"><span class="style-label-text">{ui.t("reveal-radius")}</span></span>
+                    <div class="style-control">
+                        <div class="nbox has-units">
+                            <input class="nbox-input" type="text" inputmode="numeric" data-reveal="radius" prop:value=radius.clone()
+                                on:change=move |e| if let Some(v) = num(event_target_value(&e)) { write(m2.clone(), v, s2.clone()) }/>
+                            <span class="nbox-suffix" aria-hidden="true">"px"</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="style-row" title=ui.t("reveal-soft-help")>
+                    <span class="style-label"><span class="style-label-text">{ui.t("reveal-soft")}</span></span>
+                    <div class="style-control">
+                        <div class="nbox has-units">
+                            <input class="nbox-input" type="text" inputmode="numeric" data-reveal="soft" prop:value=soft.clone()
+                                on:change=move |e| if let Some(v) = num(event_target_value(&e)) { write(m3.clone(), r3.clone(), v) }/>
+                            <span class="nbox-suffix" aria-hidden="true">"px"</span>
+                        </div>
+                    </div>
+                </div>
+            })}
+            <crate::items::ItemsList at=at.get_value() fixed=true/>
+        </div>
+    }
+    .into_any()
+}
+
 /// Réglages d'un volet d'accordéon (`details`) : ouvert au chargement (`open`) ; un seul volet
 /// ouvert à la fois parmi ses voisins (`name` commun, accordéon exclusif du navigateur : Chrome et
 /// Edge 120, Firefox 130, Safari 17.2) ; « Ajouter un volet » (copie après celui-ci).
@@ -1539,7 +1761,7 @@ fn accordion_settings(ui: Ui, ed: Ed, at: Target, attrs: &[Attr]) -> AnyView {
                 </label>
             })}
             <button class="btn btn--small items-add" data-action="accordion-add"
-                on:click=move |_| ed.apply(ui, Command::Duplicate { at: at.get_value() }, false)>
+                on:click=move |_| ed.apply_keep(ui, Command::Duplicate { at: at.get_value() })>
                 {icons::plus()}<span>{ui.t("accordion-add")}</span>
             </button>
         </div>

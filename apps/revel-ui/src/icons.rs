@@ -367,6 +367,13 @@ pub fn bolt() -> AnyView {
     svg(r#"<path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/>"#)
 }
 
+/// Image révélée au survol : cadre et halo.
+pub fn reveal() -> AnyView {
+    svg(
+        r#"<rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="9.5" cy="8" r="3" stroke-dasharray="2 1.6"/>"#,
+    )
+}
+
 /// Pointeur de la souris (déclencheur « au clic »).
 pub fn pointer() -> AnyView {
     svg(r#"<path d="M4 2.5v10l2.8-2.6 1.9 4.1 1.8-.8-1.9-4.1H12.5z"/>"#)

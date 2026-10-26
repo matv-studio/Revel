@@ -6,7 +6,7 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 25/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.7, composants à emplacement, CMS réservé aux pages). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 25/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.9, revue d'ergonomie et réglages de l'éditeur). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
 ## Compte et emplacements actuels (depuis le 24/10/2026 — prime sur les chemins plus bas)
@@ -612,6 +612,24 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
     (l'essai cliquait le premier interrupteur, désormais celui de l'emplacement) → interrupteur
     `#insp-new-tab` et essai ciblé (d0e8bd3). Pas de nouvelle version : 0.6.8 reste le dernier brouillon.
 
+- **Revue d'ergonomie (25-26/10/2026, 8.8 et 8.9, D-120 à D-125)** — demandes de l'utilisateur : revue complète
+  de l'interface, puis réglages de l'éditeur.
+  - D-120 classes proposées (`classes::suggest`) et menu d'état selon l'élément (`--rv-states` du canevas) ;
+    D-121 flèches entre variantes, variante au clic (`click class:is-<v> self` sur la racine) ; D-122 dossier
+    déposé sur l'accueil (WebView2 `postMessageWithAdditionalObjects` → `drops.rs`, ailleurs recherche par nom) ;
+    D-123 éléments des outils dans Styles (`items.rs` : défilement, carrousel, onglets `tabs::add_tab`, liens,
+    accordéon `name` exclusif) ; D-124 interrupteurs, barre du composant, paramètres sans phrases (ⓘ), noms des
+    éléments ajoutés (`names::PRESET_NAMES`), pastilles du gestionnaire de classes.
+  - D-125 : interrupteur allumé à poignée verticale + accent ; vignettes continues ; `clamp_non_negative`
+    (revel-style) dans `Sx::set_many`/`preview` ; Réglages de Revel › Éditeur (liens `variant_links`
+    curve/square/straight, bout `variant_link_end`, familles `palette_hidden`), Couleurs (`ui_colors` : comp,
+    set, inherit, auto ; composants violets, traduction cyan), Raccourcis (`shortcuts`, `keys.rs`,
+    `Ed::run_action`) ; liens de variantes à la Blender (prises, contour, flèche sur la tangente) ; « Image
+    révélée » (`Preset::Reveal`, `data-revel-reveal` fade/wipe/spot, `actions.js`) ; 95 icônes en onglets +
+    import SVG (`icons::clean_svg`, `icons::set_icon`) ; `Ed::apply_keep` (ajout sans changer la sélection).
+  - Pièges : `pgrep -f` dans une commande Bash qui contient le motif tue le shell (code 144) : lancer depuis
+    un script ; WebView2 non vérifiable ici (compile pour Windows dans un crate de contrôle sous /tmp).
+
 | Étape | État |
 |---|---|
 | 0 | squelette modulaire, CI |
@@ -622,7 +640,7 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
 | 5 | mise en ligne directe (bouton Publier, hébergeurs guidés, contrôles, retour arrière, GitHub Pages, domaine, formulaires) — **terminée** (0.4.0) |
 | 6 | animations et interactions, Lottie, mises à jour, signature, documentation, installateur 1.0 — **terminée** (18/10/2026) ; 0.6.2 : outils des sites animés et sonores (D-94) |
 | 7 | import depuis d'autres outils — **terminée** (0.6.0) ; 7.9 sites à construire (0.6.1, D-88) ; 7.10 imports reconstruits dans la forme de l'interface (0.6.2 à 0.6.4, D-90 à D-92, D-96 à D-98, D-102) — **terminée** |
-| 8 | fonctions optionnelles : 8.1 signature du code (ancienne 6.7, D-09), à venir ; 8.2 plan du site nodal, 8.3 paramètres réorganisés (D-103 à D-106), 8.4 liens externes vérifiés et synchronisation automatique (D-107, D-108), 8.5 import Framer complet et outils de défilement (D-109 à D-112), 8.6 outils de structure et site matv recréé (D-113 à D-117), 8.7 composants à emplacement et CMS réservé aux pages (D-118, D-119) — **faites** |
+| 8 | fonctions optionnelles : 8.1 signature du code (ancienne 6.7, D-09), à venir ; 8.2 plan du site nodal, 8.3 paramètres réorganisés (D-103 à D-106), 8.4 liens externes vérifiés et synchronisation automatique (D-107, D-108), 8.5 import Framer complet et outils de défilement (D-109 à D-112), 8.6 outils de structure et site matv recréé (D-113 à D-117), 8.7 composants à emplacement et CMS réservé aux pages (D-118, D-119), 8.8 revue d'ergonomie (D-120 à D-124), 8.9 réglages de l'éditeur, liens de variantes, image révélée, icônes (D-125) — **faites** |
 
 ## `matv-studio/alunites-revel-lab` (public)
 Copie du site Alunites servant de cobaye (avec son `.pages.yml`). Copie sur le PC :

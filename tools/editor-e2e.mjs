@@ -612,7 +612,7 @@ try {
     const url = await page.getAttribute('.picker .asset >> nth=0', 'data-url');
     await page.click('.picker .asset >> nth=0');
     await page.waitForFunction((n) => document.querySelectorAll('.items-list .items-row').length === n + 1, n0);
-    const last = await page.$eval('.items-list .items-row:last-child .items-thumb img', (i) => i.getAttribute('src')).catch(() => '');
+    const last = await page.$$eval('.items-list .items-row .items-thumb img', (l) => (l.length ? l[l.length - 1].getAttribute('src') : ''));
     check('défilement : éléments listés dans Styles, image ajoutée à la fin', n0 > 0 && last.endsWith(url.replace(/^\//, '')), `${n0} → ${n0 + 1} (${url})`);
   }
   await page.click('.dock-tab[data-panel="layers"]');
@@ -657,7 +657,7 @@ try {
     const root = c && c.body.find((n) => n.node === 'element');
     const on = root && (root.attrs.find((a) => a.name === 'data-revel-on') || {}).value;
     check('variante au clic : interaction de la racine, flèche et geste dans le canevas',
-      /(^|; )click class:is-ouvert self$/.test(on || '') && (await page.$$('.variant-arrow')).length >= 1, on);
+      /(^|; )click class:is-ouvert self$/.test(on || '') && (await page.$$('.variant-link')).length >= 1, on);
   }
   await page.click('.comp-back');
   await page.waitForFunction(() => !document.querySelector('.comp-bar') && !!document.querySelector('iframe.canvas-frame[data-key="desktop"]'));
@@ -1195,6 +1195,7 @@ try {
       // Icône : dessin choisi dans les réglages.
       await page.dblclick('.insert-item[data-item="insert-icon"]');
       await page.click('.dock-tab[data-panel="styles"]');
+      await page.click('.icon-tab[data-tab="icons-objects"]');
       await page.waitForSelector('.icon-choice[data-icon="coeur"]');
       await page.click('.icon-choice[data-icon="coeur"]');
       const heart = await untilE(async () => (await frame.locator('svg.icone[data-icon="coeur"]').count()) === 1);
@@ -3515,7 +3516,34 @@ try {
       const t = document.querySelector('.settings-sub[data-sub="updates"]').getBoundingClientRect().top;
       return Math.abs(t - c) < 40 || document.querySelector('.app-settings .settings-nav-group.is-on [data-section="updates"]');
     });
-    check('réglages de Revel : rail des parties, aller à une partie', rail.length === 6, rail.join(', '));
+    check('réglages de Revel : rail des parties, aller à une partie', rail.length === 9, rail.join(', '));
+    // Éditeur, couleurs, raccourcis (D-125).
+    {
+      await page.click('.app-settings .settings-nav-item[data-section="shortcuts"]');
+      const row = '.shortcut-row[data-action="duplicate"]';
+      await page.click(`${row} [data-action="record"]`);
+      await page.waitForSelector(`${row} .key-capture`);
+      await page.keyboard.press('Control+Shift+KeyU');
+      await page.waitForSelector(`${row}.is-custom`);
+      const shown = (await page.textContent(`${row} .shortcut-keys`)).trim();
+      const saved = await page.evaluate(() => window.__revelSettings?.shortcuts?.duplicate);
+      await page.click(`${row} .shortcut-actions .icon-btn >> nth=-1`);
+      await page.waitForSelector(`${row}:not(.is-custom)`);
+      check('raccourcis : combinaison enregistrée, affichée, puis touches par défaut', saved === 'Ctrl+Shift+U' && shown === 'Ctrl+Maj+U', `${saved} · ${shown}`);
+      await page.click('.prefs-links [data-value="square"]');
+      await page.waitForFunction(() => document.querySelector('.prefs-links [data-value="square"]')?.classList.contains('is-on'));
+      const links = await page.evaluate(() => window.__revelSettings?.variant_links);
+      await page.click('.prefs-links [data-value="curve"]');
+      await page.click('.switch[data-group="palette-pages"]');
+      const hidden = await page.evaluate(() => window.__revelSettings?.palette_hidden || []);
+      await page.click('.switch[data-group="palette-pages"]');
+      check('éditeur : forme des liens de variantes, familles de la recherche rapide', links === 'square' && hidden.includes('palette-pages'), `${links} · ${hidden}`);
+      await page.fill('.ui-color-row[data-color="comp"] input[type="color"]', '#ff0000');
+      await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--comp').trim() === '#ff0000');
+      await page.click('.ui-color-row[data-color="comp"] .icon-btn');
+      await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--comp').trim() !== '#ff0000');
+      check('couleurs de l\'interface : composants recolorés, puis couleur par défaut', true);
+    }
     if (shots) await page.screenshot({ path: `${shots}/reglages-revel.png` });
     // Retour au site d'un clic (bouton de la barre, hors du menu du site).
     const back = (await page.textContent('.topbar-back')).trim();

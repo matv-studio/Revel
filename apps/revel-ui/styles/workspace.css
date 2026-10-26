@@ -312,7 +312,9 @@
 .media-facts dt { color: var(--text-muted); }
 .media-facts dd { margin: 0; min-width: 0; display: flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }
 
-.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--thumb, 72px), 1fr)); gap: 8px; padding: 4px 10px 10px; }
+/* Vignettes à la taille réglée, sans paliers : colonnes de largeur fixe (la glissière agrandit les
+   vignettes en continu ; une colonne s'ajoute quand la place le permet). */
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--thumb, 72px)); justify-content: start; gap: 8px; padding: 4px 10px 10px; }
 .asset-grid.is-small { gap: 4px; }
 .asset-grid.is-small figcaption { display: none; }
 /* Dossier de médias déplié sur place : médias en retrait sous sa ligne. */

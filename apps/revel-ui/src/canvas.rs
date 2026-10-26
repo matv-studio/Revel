@@ -523,9 +523,12 @@ fn ComponentFrames() -> impl IntoView {
     }
 }
 
-/// Flèches entre variantes, comme Framer (D-121) : de la variante principale à chaque variante
-/// prise par un geste (survol, appui, clic), le geste écrit sur la flèche. Clic sur le geste : la
-/// variante est choisie. Une variante prise au clic revient au clic suivant (flèche à deux pointes).
+/// Liens entre variantes (D-121, dessin repris de Blender en D-125) : de la variante principale à
+/// chaque variante prise par un geste (survol, appui, clic), un lien relie deux prises rondes
+/// posées sur le bord des cadres ; trait vert… couleur des composants, souligné d'un contour sombre ;
+/// courbe, en équerre ou droit, terminé par une flèche ou un rond (réglages de Revel). Le geste est
+/// écrit dans une pastille ; clic : la variante est choisie. Une variante prise au clic revient au
+/// clic suivant (flèche aux deux bouts).
 #[component]
 fn VariantArrows() -> impl IntoView {
     use revel_model::VariantKind;
@@ -553,8 +556,35 @@ fn VariantArrows() -> impl IntoView {
                 .collect::<Vec<_>>()
         })
     });
-    // Tracés : (clé, chemin, position du geste, deux pointes, libellé, geste à gauche).
+    /// Tracé d'un lien : clé de la variante, chemin, prises (départ, arrivée), pointes (arrivée,
+    /// et départ pour un aller-retour), position du geste, libellé, geste à gauche.
+    #[derive(Clone, PartialEq)]
+    struct Link {
+        key: String,
+        d: String,
+        from: (f64, f64),
+        to: (f64, f64),
+        heads: Vec<String>,
+        label_at: (f64, f64),
+        label: &'static str,
+        both: bool,
+        left: bool,
+    }
+    // Pointe de flèche qui finit à `tip`, dans la direction `t` (unitaire) : chevron plein, son
+    // milieu sur le trait.
+    let head = |tip: (f64, f64), t: (f64, f64)| {
+        let n = (-t.1, t.0);
+        let (l, w, notch) = (10.0, 5.0, 7.0);
+        let p = |a: f64, b: f64| (tip.0 - t.0 * a + n.0 * b, tip.1 - t.1 * a + n.1 * b);
+        let (b1, m, b2) = (p(l, w), p(notch, 0.0), p(l, -w));
+        format!(
+            "M{:.1} {:.1}L{:.1} {:.1}L{:.1} {:.1}L{:.1} {:.1}Z",
+            tip.0, tip.1, b1.0, b1.1, m.0, m.1, b2.0, b2.1
+        )
+    };
     let paths = Memo::new(move |_| {
+        let style = ui.settings.with(|s| s.variant_links.clone());
+        let arrows = ui.settings.with(|s| s.variant_link_end != "dot");
         let w = ed.world();
         let Some(base) = w.frames.first().cloned() else {
             return Vec::new();
@@ -564,52 +594,113 @@ fn VariantArrows() -> impl IntoView {
         let at =
             |f: &crate::editor::FrameBox| (w.x + f.ox * w.s, w.y + f.oy * w.s, f.w * w.s, fh * w.s);
         let (bx, by, bw, bh) = at(&base);
-        links
-            .get()
-            .into_iter()
-            .enumerate()
-            .filter_map(|(i, (key, label, both))| {
-                let f = w.frames.iter().find(|f| f.bp == key)?;
-                let (tx, ty, tw, th) = at(f);
-                let d = 20.0 + crate::editor::ARROW_LANE * i as f64;
-                let (path, lx, ly) = if stacked {
-                    let (x0, y0) = (bx - 8.0, by + (bh / 2.0).min(28.0));
-                    let (x1, y1) = (tx - 8.0, ty + (th / 2.0).min(28.0));
+        // Rayon des prises.
+        const R: f64 = 4.0;
+        links.get().into_iter().enumerate().filter_map(|(i, (key, label, both))| {
+            let f = w.frames.iter().find(|f| f.bp == key)?;
+            let (tx, ty, tw, th) = at(f);
+            let d = 22.0 + crate::editor::ARROW_LANE * i as f64;
+            // Prises : bord gauche des cadres empilés, bord haut des cadres côte à côte ; sens de
+            // sortie (vers l'extérieur du cadre).
+            let (s, t, out) = if stacked {
+                ((bx - R, by + (bh / 2.0).min(28.0)), (tx - R, ty + (th / 2.0).min(28.0)), (-1.0, 0.0))
+            } else {
+                ((bx + bw / 2.0, by - R), (tx + tw / 2.0, ty - R), (0.0, -1.0))
+            };
+            let (h0, h1) = ((s.0 + out.0 * d, s.1 + out.1 * d), (t.0 + out.0 * d, t.1 + out.1 * d));
+            let (path, end_dir, start_dir, mid) = match style.as_str() {
+                "square" => {
+                    // Équerre aux coins arrondis.
+                    let r = 8.0_f64.min(d / 2.0);
+                    let along = |a: (f64, f64), b: (f64, f64)| {
+                        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+                        let l = (dx * dx + dy * dy).sqrt().max(0.001);
+                        (dx / l, dy / l)
+                    };
+                    let u1 = along(h0, h1);
+                    let c = |p: (f64, f64), u: (f64, f64), k: f64| (p.0 + u.0 * k, p.1 + u.1 * k);
+                    let a1 = c(h0, (-out.0, -out.1), r);
+                    let a2 = c(h0, u1, r);
+                    let b1 = c(h1, (-u1.0, -u1.1), r);
+                    let b2 = c(h1, (-out.0, -out.1), r);
                     (
-                        format!("M{x0} {y0} C{} {y0} {} {y1} {x1} {y1}", x0 - d, x1 - d),
-                        x0 - 0.75 * d - 4.0,
-                        (y0 + y1) / 2.0,
+                        format!(
+                            "M{:.1} {:.1}L{:.1} {:.1}Q{:.1} {:.1} {:.1} {:.1}L{:.1} {:.1}Q{:.1} {:.1} {:.1} {:.1}L{:.1} {:.1}",
+                            s.0, s.1, a1.0, a1.1, h0.0, h0.1, a2.0, a2.1, b1.0, b1.1, h1.0, h1.1, b2.0, b2.1, t.0, t.1
+                        ),
+                        (-out.0, -out.1),
+                        (-out.0, -out.1),
+                        ((h0.0 + h1.0) / 2.0, (h0.1 + h1.1) / 2.0),
                     )
-                } else {
-                    let top = crate::editor::SIDE_LABEL + 6.0;
-                    let (x0, y0) = (bx + bw / 2.0, by - top);
-                    let (x1, y1) = (tx + tw / 2.0, ty - top);
+                }
+                "straight" => {
+                    // Deux segments droits par le milieu du couloir.
+                    let m = ((h0.0 + h1.0) / 2.0, (h0.1 + h1.1) / 2.0);
+                    let dir = |a: (f64, f64), b: (f64, f64)| {
+                        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+                        let l = (dx * dx + dy * dy).sqrt().max(0.001);
+                        (dx / l, dy / l)
+                    };
                     (
-                        format!("M{x0} {y0} C{x0} {} {x1} {} {x1} {y1}", y0 - d, y1 - d),
-                        (x0 + x1) / 2.0,
-                        y0 - 0.75 * d,
+                        format!("M{:.1} {:.1}L{:.1} {:.1}L{:.1} {:.1}", s.0, s.1, m.0, m.1, t.0, t.1),
+                        dir(m, t),
+                        dir(m, s),
+                        m,
                     )
-                };
-                Some((key, path, lx, ly, both, label, stacked))
-            })
-            .collect()
+                }
+                _ => {
+                    // Courbe de Bézier aux poignées perpendiculaires au bord (comme Blender).
+                    let m = (
+                        0.125 * s.0 + 0.375 * h0.0 + 0.375 * h1.0 + 0.125 * t.0,
+                        0.125 * s.1 + 0.375 * h0.1 + 0.375 * h1.1 + 0.125 * t.1,
+                    );
+                    (
+                        format!(
+                            "M{:.1} {:.1}C{:.1} {:.1} {:.1} {:.1} {:.1} {:.1}",
+                            s.0, s.1, h0.0, h0.1, h1.0, h1.1, t.0, t.1
+                        ),
+                        (-out.0, -out.1),
+                        (-out.0, -out.1),
+                        m,
+                    )
+                }
+            };
+            let mut heads = Vec::new();
+            if arrows {
+                // Pointe juste avant la prise : son milieu sur le trait.
+                heads.push(head((t.0 - end_dir.0 * (R + 1.5), t.1 - end_dir.1 * (R + 1.5)), end_dir));
+                if both {
+                    heads.push(head((s.0 - start_dir.0 * (R + 1.5), s.1 - start_dir.1 * (R + 1.5)), start_dir));
+                }
+            }
+            let left = stacked;
+            let label_at = if stacked { (mid.0 - 6.0, mid.1) } else { (mid.0, mid.1) };
+            Some(Link { key, d: path, from: s, to: t, heads, label_at, label, both, left })
+        }).collect::<Vec<_>>()
     });
     view! {
         <svg class="variant-arrows" aria-hidden="true">
-            <defs>
-                <marker id="rv-arrow-end" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                    <path d="M0 0 8 4 0 8z"/>
-                </marker>
-            </defs>
-            {move || paths.get().into_iter().map(|(_, d, _, _, both, _, _)| view! {
-                <path class="variant-arrow" d=d marker-end="url(#rv-arrow-end)"
-                    marker-start=both.then_some("url(#rv-arrow-end)")/>
+            {move || paths.get().into_iter().map(|l| {
+                let k = l.key.clone();
+                let on = move || ed.active_key() == k;
+                view! {
+                    <g class="variant-link" class:is-on=on data-variant=l.key.clone()>
+                        <path class="variant-link-outline" d=l.d.clone()/>
+                        <path class="variant-link-wire" d=l.d.clone()/>
+                        {l.heads.iter().map(|h| view! { <path class="variant-link-head" d=h.clone()/> }).collect_view()}
+                        <circle class="variant-socket" cx=l.from.0 cy=l.from.1 r="4"/>
+                        <circle class="variant-socket" cx=l.to.0 cy=l.to.1 r="4"/>
+                    </g>
+                }
             }).collect_view()}
         </svg>
-        {move || paths.get().into_iter().map(|(key, _, x, y, both, label, left)| {
-            let k = key.clone();
+        {move || paths.get().into_iter().map(|l| {
+            let k = l.key.clone();
+            let key = l.key.clone();
+            let (both, label) = (l.both, l.label);
             view! {
-                <button class="variant-trigger" class:is-left=left data-variant=key.clone() style=format!("left:{x}px;top:{y}px")
+                <button class="variant-trigger" class:is-left=l.left data-variant=l.key.clone()
+                    style=format!("left:{:.1}px;top:{:.1}px", l.label_at.0, l.label_at.1)
                     class:is-on=move || ed.active_key() == k
                     title=move || if both { ui.tx("variant-arrow-click-help", &[]) } else { ui.tx(label, &[]) }
                     on:click=move |_| ed.activate_key(&key)>

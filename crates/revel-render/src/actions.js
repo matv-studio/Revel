@@ -569,6 +569,46 @@
       });
     }
   }
+  // Image révélée au survol (`data-revel-reveal="spot radius=140 soft=40"`, D-125) : la dernière
+  // image de l'élément se montre au survol, en entier (`fade`), jusqu'au pointeur (`wipe`, un volet
+  // qui le suit) ou autour de lui (`spot`, un halo de `radius` px aux bords adoucis de `soft` px).
+  // Au toucher, le doigt la déplace de même.
+  function reveal(box) {
+    var imgs = box.querySelectorAll("img");
+    var top = imgs[imgs.length - 1];
+    if (!top || imgs.length < 2) return;
+    var parts = (box.getAttribute("data-revel-reveal") || "fade").split(/\s+/);
+    var mode = parts[0] || "fade", radius = 140, soft = 40;
+    parts.forEach(function (p) {
+      if (p.indexOf("radius=") === 0) radius = parseFloat(p.slice(7)) || radius;
+      if (p.indexOf("soft=") === 0) soft = Math.max(0, parseFloat(p.slice(5)) || 0);
+    });
+    var on = false;
+    var set = function (x, y) {
+      if (mode === "fade") {
+        top.style.opacity = on ? "1" : "0";
+      } else if (mode === "wipe") {
+        top.style.transition = "none";
+        top.style.opacity = "1";
+        top.style.clipPath = "inset(0 " + (on ? 100 - x : 100) + "% 0 0)";
+      } else {
+        top.style.transition = "none";
+        top.style.opacity = "1";
+        var r = on ? radius : 0;
+        var m = "radial-gradient(circle at " + x + "% " + y + "%, #000 " + Math.max(0, r - soft) + "px, transparent " + r + "px)";
+        top.style.webkitMaskImage = m;
+        top.style.maskImage = m;
+      }
+    };
+    var at = function (e) {
+      var b = box.getBoundingClientRect();
+      set(Math.min(100, Math.max(0, (e.clientX - b.left) / b.width * 100)), Math.min(100, Math.max(0, (e.clientY - b.top) / b.height * 100)));
+    };
+    set(0, 0);
+    box.addEventListener("pointerenter", function (e) { on = true; at(e); });
+    box.addEventListener("pointermove", at);
+    box.addEventListener("pointerleave", function () { on = false; set(0, 0); });
+  }
   function all() {
     var els = document.querySelectorAll("[data-revel-on]");
     for (var i = 0; i < els.length; i++) {
@@ -587,6 +627,8 @@
     for (var v = 0; v < vs.length; v++) video(vs[v]);
     var hm = document.querySelectorAll("[data-revel-hover-media]");
     for (var m = 0; m < hm.length; m++) hoverMedia(hm[m]);
+    var rv = document.querySelectorAll("[data-revel-reveal]");
+    for (var q = 0; q < rv.length; q++) reveal(rv[q]);
     switches();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", all);

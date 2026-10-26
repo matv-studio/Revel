@@ -1207,6 +1207,32 @@ d'outils raccourcis pour tenir dans leur colonne (« Bandeau cookies », « Lect
 du canevas pas posé sur un décor vide à dessein (barre de progression, élément caché aux lecteurs d'écran).
 Étendue de l'accent « Étendue » : aussi l'état choisi, la classe proposée en évidence et la barre de défilement tenue.
 
+**D-125 — 26/10/2026 — prise.** **Réglages de l'éditeur, liens de variantes à la Blender, image révélée, icônes.**
+- Interrupteur allumé : la poignée devient la poignée verticale des glissières (animée), le trait de
+  progression prend la couleur d'accent (contraste sans accent). Vignettes des médias : taille continue (pas de
+  1 px, colonnes de largeur fixe) au lieu de paliers.
+- Valeurs glissées, tapées ou aux flèches ramenées à zéro pour les propriétés qui refusent un négatif (intérieur,
+  tailles, écarts, taille du texte, interligne, arrondis, épaisseurs, opacité…) ; marges extérieures, décalages,
+  espacement des lettres et ombres restent libres (`revel_style::values::clamp_non_negative`).
+- Réglages de Revel › Éditeur : forme des liens entre variantes (courbes, en équerre, droits) et leur bout
+  (flèche ou rond) ; familles montrées par la recherche rapide (Ctrl+K). › Couleurs de l'interface : composants,
+  réglé ici, hérité, traduction automatique (couleur choisie ou celle du thème). Composants violets par défaut
+  (vert auparavant) ; traduction automatique en cyan pour rester distincte. › Raccourcis : une ligne par action,
+  « Modifier » enregistre la combinaison suivante (Échap annule), retirer, touches par défaut, conflit signalé ;
+  l'éditeur, la palette et le menu « ? » lisent les touches en vigueur (`keys.rs`).
+- Liens entre variantes dessinés comme ceux des nœuds de Blender : prises rondes au bord des cadres, courbe aux
+  poignées perpendiculaires au bord, contour sombre sous le trait, flèche pleine calculée sur la tangente, son
+  milieu sur le trait (sources : changements de dessin des liens de Blender, lists.blender.org, 09/2022).
+- « Image révélée » (panneau Ajouter, médias) : deux images superposées, la seconde montrée au survol en entier
+  (fondu), jusqu'au pointeur (volet) ou dans un halo autour de lui (rayon, bord adouci) ; script du site
+  (`data-revel-reveal`), au survol en entier sans script (canevas). « Média au survol » renommé « Média des
+  éléments survolés » (il change avec l'élément survolé d'une liste).
+- Icônes : 95 dessins de Revel (37 auparavant) rangés en onglets (flèches, interface, contact, médias, objets, création) et un
+  onglet « Importées » : fichiers SVG des médias du site, « Importer » en ajoute ; dessin importé nettoyé (sans
+  script, gestionnaire d'événement ni adresse `javascript:`), rempli de la couleur du texte sauf réglage du fichier.
+- Mode sombre du site à gauche de la langue affichée. Défilement : un élément ajouté depuis Styles laisse l'outil
+  choisi (la liste reste à l'écran).
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

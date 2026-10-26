@@ -17,7 +17,7 @@ pub use fx::{
     Func, Tracks, Transition, format_funcs, format_tracks, format_transitions, parse_funcs,
     parse_tracks, parse_transitions, span_of,
 };
-pub use length::{Num, eval, fmt_num, step};
+pub use length::{Num, clamp_non_negative, eval, fmt_num, non_negative, step};
 pub use shadow::{Shadow, format_shadows, format_text_shadows, parse_shadows};
 pub use shorthand::{Edit, Found, edits, read};
 

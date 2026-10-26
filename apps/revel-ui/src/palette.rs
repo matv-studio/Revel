@@ -2,7 +2,7 @@
 //! éléments à ajouter, pages, écrans, calques de la page affichée, vues et rubriques du site.
 //! Recherche sans tenir compte des accents ni de la casse ; flèches, Entrée, Échap.
 
-use crate::editor::{Ed, Key, Selection};
+use crate::editor::{Ed, Selection};
 use crate::{Tab, Ui, icons};
 use leptos::ev;
 use leptos::html;
@@ -12,7 +12,8 @@ use revel_edit::make::Preset;
 /// Action d'une ligne de la palette.
 #[derive(Clone)]
 enum Act {
-    Key(&'static str, bool),
+    /// Action d'un raccourci (touches réglables, D-125).
+    Action(&'static str),
     ZoomFit,
     Zoom100,
     ZoomSel,
@@ -110,71 +111,71 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
         act(
             "palette-actions",
             k("editor-undo-short"),
-            k("key-undo"),
+            crate::keys::display(ui, "undo"),
             Some(icons::undo as fn() -> AnyView),
-            Act::Key("z", false),
+            Act::Action("undo"),
             !can(|s| s.can_undo),
         ),
         act(
             "palette-actions",
             k("editor-redo-short"),
-            k("key-redo"),
+            crate::keys::display(ui, "redo"),
             Some(icons::redo),
-            Act::Key("z", true),
+            Act::Action("redo"),
             !can(|s| s.can_redo),
         ),
         act(
             "palette-actions",
             k("layers-duplicate-short"),
-            k("key-duplicate"),
+            crate::keys::display(ui, "duplicate"),
             Some(icons::copy),
-            Act::Key("d", false),
+            Act::Action("duplicate"),
             sel,
         ),
         act(
             "palette-actions",
             k("layers-delete-short"),
-            k("key-delete"),
+            crate::keys::display(ui, "delete"),
             Some(icons::trash),
-            Act::Key("delete", false),
+            Act::Action("delete"),
             sel,
         ),
         act(
             "palette-actions",
             k("layers-wrap"),
-            k("key-wrap"),
+            crate::keys::display(ui, "wrap"),
             Some(icons::wrap),
-            Act::Key("g", false),
+            Act::Action("wrap"),
             sel,
         ),
         act(
             "palette-actions",
             k("editor-unwrap"),
-            k("key-unwrap"),
+            crate::keys::display(ui, "unwrap"),
             Some(icons::reverse),
-            Act::Key("g", true),
+            Act::Action("unwrap"),
             sel,
         ),
         act(
             "palette-actions",
             k("editor-copy"),
-            k("key-copy"),
+            crate::keys::display(ui, "copy"),
             Some(icons::copy),
-            Act::Key("c", false),
+            Act::Action("copy"),
             sel,
         ),
         act(
             "palette-actions",
             k("editor-paste"),
-            k("key-paste"),
+            crate::keys::display(ui, "paste"),
             Some(icons::copy),
-            Act::Key("v", false),
+            Act::Action("paste"),
             ui.clipboard.with_untracked(Vec::is_empty),
         ),
         act(
             "palette-actions",
             k("editor-select-parent"),
-            k("key-parent"),
+            crate::keys::display(ui, "parent"),
             Some(icons::parent),
             Act::Parent,
             sel,
@@ -182,7 +183,7 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
         act(
             "palette-view",
             k("editor-zoom-fit-short"),
-            k("key-zoom-fit"),
+            crate::keys::display(ui, "zoom-fit"),
             Some(icons::search),
             Act::ZoomFit,
             false,
@@ -190,7 +191,7 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
         act(
             "palette-view",
             k("editor-zoom-100"),
-            k("key-zoom-100"),
+            crate::keys::display(ui, "zoom-100"),
             Some(icons::search),
             Act::Zoom100,
             false,
@@ -198,7 +199,7 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
         act(
             "palette-view",
             k("editor-zoom-selection"),
-            k("key-zoom-sel"),
+            crate::keys::display(ui, "zoom-sel"),
             Some(icons::search),
             Act::ZoomSel,
             sel,
@@ -206,7 +207,7 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
         act(
             "palette-view",
             k("editor-rulers"),
-            k("key-rulers"),
+            crate::keys::display(ui, "rulers"),
             Some(icons::ruler),
             Act::Rulers,
             false,
@@ -246,7 +247,7 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
     ];
     if !in_editor {
         // Hors de l'éditeur : actions de la page sans objet.
-        v.retain(|i| !matches!(i.act, Act::Key(..) | Act::Parent | Act::ZoomSel));
+        v.retain(|i| !matches!(i.act, Act::Action(..) | Act::Parent | Act::ZoomSel));
     }
     for (_, label, text, icon, preset) in crate::insert::palette_items() {
         v.push(act(
@@ -366,15 +367,8 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
 fn run(ui: Ui, ed: Ed, dock: crate::dock::Dock, a: Act) {
     let editor = move || ui.tab(Tab::Editor);
     match a {
-        Act::Key(key, shift) => {
-            let k = Key {
-                key: key.into(),
-                code: String::new(),
-                ctrl: !matches!(key, "delete"),
-                shift,
-                alt: false,
-            };
-            ed.shortcut(ui, &k);
+        Act::Action(id) => {
+            ed.run_action(ui, id);
         }
         Act::ZoomFit => ed.zoom_to(None),
         Act::Zoom100 => ed.zoom_to(Some(1.0)),
@@ -453,11 +447,12 @@ pub fn Palette() -> impl IntoView {
     });
     let on_key = window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
         // Ctrl+K ou Ctrl+Espace.
-        let space = e.key() == " " || e.code() == "Space";
-        if !(e.ctrl_key() || e.meta_key())
-            || !(e.key().to_lowercase() == "k" || space)
-            || e.shift_key()
-        {
+        // Touches de la palette (réglables, D-125) ; Ctrl+Espace toujours.
+        let space = (e.ctrl_key() || e.meta_key())
+            && !e.shift_key()
+            && (e.key() == " " || e.code() == "Space");
+        let k = crate::editor::Key::of(&e);
+        if !space && crate::keys::action_of(ui, &k) != Some("palette") {
             return;
         }
         if !matches!(ui.route.get_untracked(), crate::Route::Site { .. }) {
@@ -482,6 +477,11 @@ pub fn Palette() -> impl IntoView {
             l.iter()
                 .enumerate()
                 .filter(|(_, it)| !(q.is_empty() && it.group == "palette-layers"))
+                // Familles masquées dans les réglages de Revel (D-125).
+                .filter(|(_, it)| {
+                    ui.settings
+                        .with_untracked(|s| !s.palette_hidden.iter().any(|g| g == it.group))
+                })
                 .filter_map(|(i, it)| {
                     rank(it, &ui.now(it.group, &[]), &q).map(|r| (r, i, it.clone()))
                 })

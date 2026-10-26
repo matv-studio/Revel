@@ -312,14 +312,6 @@ impl Key {
             alt: e.alt_key(),
         }
     }
-    /// Chiffre de la rangée supérieure ou du pavé numérique (`Digit0`, `Numpad0`).
-    fn digit(&self) -> Option<u8> {
-        let c = self
-            .code
-            .strip_prefix("Digit")
-            .or_else(|| self.code.strip_prefix("Numpad"))?;
-        c.parse().ok()
-    }
 }
 
 /// Géométrie du canevas : cadre (largeur, hauteur en pixels CSS), zoom ajusté, échelle et position
@@ -461,6 +453,9 @@ pub struct Ed {
     /// Canevas montré en mode sombre (couleurs `prefers-color-scheme: dark` du site, D-115) ;
     /// au départ, le thème de l'appareil.
     pub dark: RwSignal<bool>,
+    /// Prochaine modification appliquée sans sélectionner ce qu'elle ajoute (éléments d'un outil
+    /// ajoutés depuis Styles : l'outil reste choisi, D-123).
+    pub keep_selection: StoredValue<bool>,
     /// Valeurs des affectations `{% set %}` de la page affichée (relevées au rendu du canevas).
     pub vars: RwSignal<Vec<revel_edit::canvas::VarValue>>,
     /// Guides de colonnes.
@@ -850,8 +845,11 @@ impl Ed {
                     })
                 })
             });
+            let keep = self.keep_selection.get_value();
+            self.keep_selection.set_value(false);
             if !text_format
                 && !into_use
+                && !keep
                 && let Some(n) = inserted(cmd)
                 && let Some(id) = revel_model::ids::node_id(n)
             {
@@ -1017,67 +1015,58 @@ impl Ed {
         });
     }
 
-    /// Raccourci clavier de l'éditeur (interface ou canevas) ; `true` s'il a été traité.
+    /// Raccourci clavier de l'éditeur (interface ou canevas) ; `true` s'il a été traité. Les
+    /// touches de chaque action se changent dans les réglages de Revel (D-125).
     pub fn shortcut(self, ui: Ui, k: &Key) -> bool {
-        let key = k.key.to_lowercase();
-        let digit = k.digit();
-        match (key.as_str(), k.ctrl) {
-            ("z", true) if k.shift => self.redo(ui),
-            ("z", true) => self.undo(ui),
-            ("y", true) => self.redo(ui),
-            // Palette de commandes (le canevas transmet Ctrl+K).
-            ("k", true) if !k.shift => self.palette.set(true),
-            ("d", true) => return self.duplicate_selection(ui),
-            // Masquer ou afficher le calque (Ctrl+Maj+H, comme Figma).
-            ("h", true) if k.shift => {
+        match crate::keys::action_of(ui, k) {
+            Some(id) => self.run_action(ui, id),
+            None => false,
+        }
+    }
+
+    /// Action d'un raccourci (aussi lancée par la palette) ; `true` si elle a été faite.
+    pub fn run_action(self, ui: Ui, id: &str) -> bool {
+        match id {
+            "undo" => self.undo(ui),
+            "redo" => self.redo(ui),
+            "palette" => self.palette.set(true),
+            "duplicate" => return self.duplicate_selection(ui),
+            // Masquer ou afficher le calque (comme Figma).
+            "hide" => {
                 let Some(at) = self.selected_target() else {
                     return false;
                 };
                 crate::layers::toggle_hidden(ui, self, at);
             }
-            // Envelopper dans un conteneur (Ctrl+G, comme Figma et Framer) ; Ctrl+Maj+G : retirer
-            // l'enveloppe (les enfants prennent sa place).
-            ("g", true) if !k.shift => return self.wrap_selection(ui),
-            ("g", true) => return self.unwrap(ui),
-            // Règles en pixels (Ctrl+R, comme Figma ; le rechargement de la fenêtre est neutralisé).
-            ("r", true) if !k.shift => {
+            // Envelopper dans un conteneur (comme Figma et Framer), retirer l'enveloppe.
+            "wrap" => return self.wrap_selection(ui),
+            "unwrap" => return self.unwrap(ui),
+            // Règles en pixels (le rechargement de la fenêtre par Ctrl+R est neutralisé).
+            "rulers" => {
                 let on = !self.rulers.get_untracked();
                 self.rulers.set(on);
                 crate::pref_set("rulers", if on { "1" } else { "0" });
             }
-            // Copier, couper, coller des éléments.
-            ("c", true) if !k.shift => return self.copy(ui, false),
-            ("x", true) if !k.shift => return self.copy(ui, true),
-            ("v", true) if !k.shift => return self.paste(ui),
-            ("delete" | "backspace", false) => return self.remove_selection(ui),
-            ("escape", false) => {
+            "copy" => return self.copy(ui, false),
+            "cut" => return self.copy(ui, true),
+            "paste" => return self.paste(ui),
+            "delete" => return self.remove_selection(ui),
+            "deselect" => {
                 self.selected.set(None);
                 self.multi.set(Vec::new());
                 self.post(serde_json::json!({ "type": "select", "id": null }));
             }
-            // Parcours de la sélection (comme Figma) : Entrée enfant, Maj+Entrée parent, Tab frères.
-            ("enter", false) if self.selected.get_untracked().is_some() => {
-                let dir = if k.shift { "parent" } else { "child" };
-                self.post(serde_json::json!({ "type": "nav", "dir": dir }));
+            // Parcours de la sélection (comme Figma).
+            "child" | "parent" | "next" | "prev" if self.selected.get_untracked().is_some() => {
+                self.post(serde_json::json!({ "type": "nav", "dir": id }));
             }
-            ("tab", false) if self.selected.get_untracked().is_some() => {
-                let dir = if k.shift { "prev" } else { "next" };
-                self.post(serde_json::json!({ "type": "nav", "dir": dir }));
-            }
-            // Ordre parmi les frères : Alt+flèches.
-            ("arrowup" | "arrowdown", false) if k.alt => {
-                return self.step(ui, if key == "arrowup" { -1 } else { 1 });
-            }
-            // Zoom (comme Figma) : Maj+0 100 %, Maj+1 ajusté, Maj+2 sélection ; aussi avec Ctrl.
-            _ if (k.ctrl || k.shift) && digit == Some(0) => self.zoom_to(Some(1.0)),
-            _ if (k.ctrl || k.shift) && digit == Some(1) => self.zoom_to(None),
-            _ if (k.ctrl || k.shift) && digit == Some(2) => self.zoom_selection(),
-            ("=" | "+", true) => self.zoom_step(1),
-            ("-", true) => self.zoom_step(-1),
-            _ if k.ctrl && matches!(k.code.as_str(), "NumpadAdd" | "Equal") => self.zoom_step(1),
-            _ if k.ctrl && matches!(k.code.as_str(), "NumpadSubtract" | "Minus") => {
-                self.zoom_step(-1)
-            }
+            "up" => return self.step(ui, -1),
+            "down" => return self.step(ui, 1),
+            "zoom-100" => self.zoom_to(Some(1.0)),
+            "zoom-fit" => self.zoom_to(None),
+            "zoom-sel" => self.zoom_selection(),
+            "zoom-in" => self.zoom_step(1),
+            "zoom-out" => self.zoom_step(-1),
             _ => return false,
         }
         true
@@ -2132,6 +2121,12 @@ impl Ed {
     }
 
     /// Applique une commande d'édition.
+    /// Applique sans sélectionner ce que la modification ajoute.
+    pub fn apply_keep(self, ui: Ui, cmd: Command) {
+        self.keep_selection.set_value(true);
+        self.apply(ui, cmd, false);
+    }
+
     pub fn apply(self, ui: Ui, cmd: Command, coalesce: bool) {
         let path = self.path.get_value();
         self.pending.update(|n| *n += 1);
@@ -2736,6 +2731,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         live_scroll: RwSignal::new((0.0, 0.0)),
         vars: RwSignal::new(Vec::new()),
         rulers: RwSignal::new(crate::pref_get("rulers").as_deref() == Some("1")),
+        keep_selection: StoredValue::new(false),
         dark: RwSignal::new(
             web_sys::window()
                 .and_then(|w| w.match_media("(prefers-color-scheme: dark)").ok().flatten())
@@ -2768,6 +2764,11 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         palette: RwSignal::new(false),
     };
     provide_context(ed);
+    // Couleur des composants changée dans les réglages : montrée aussitôt dans le canevas (D-125).
+    Effect::new(move |_| {
+        let c = ui.settings.with(|s| s.ui_colors.get("comp").cloned());
+        ed.post(serde_json::json!({ "type": "ui-colors", "comp": c }));
+    });
     let dock = crate::dock::Dock::provide();
     let failed = RwSignal::new(false);
     // Modification isolée d'un composant : ouverte quand la sélection est dans un composant,
@@ -2985,6 +2986,11 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 post_to(
                     &from_frame,
                     serde_json::json!({ "type": "scheme", "value": if ed.dark.get_untracked() { "dark" } else { "light" } }),
+                );
+                // Couleur des composants réglée dans Revel (D-125).
+                post_to(
+                    &from_frame,
+                    serde_json::json!({ "type": "ui-colors", "comp": ui.settings.with_untracked(|s| s.ui_colors.get("comp").cloned()) }),
                 );
                 ed.post(serde_json::json!({ "type": "scale", "s": ed.scale() }));
                 if let Some(s) = ed.selected.get_untracked() {
@@ -3419,13 +3425,13 @@ fn Toolbar() -> impl IntoView {
         <crate::help::Help open=help_open/>
         <div class="editor-toolbar">
             <crate::pagetree::PageContext/>
-            <LocaleSwitch/>
-            // Mode sombre du site, à côté de la langue : deux façons de voir le même contenu.
+            // Mode sombre du site, à gauche de la langue : deux façons de voir le même contenu.
             <Show when=move || ed.has_schemes()>
                 <button class="tool-toggle scheme-toggle" class:is-on=move || ed.dark.get() aria-pressed=move || ed.dark.get().to_string()
                     title=ui.t("editor-dark-help") aria-label=ui.t("editor-dark")
                     on:click=move |_| { ed.dark.update(|d| *d = !*d); ed.post_scheme(); }>{icons::moon()}</button>
             </Show>
+            <LocaleSwitch/>
             <div class="segmented" role="group" aria-label=ui.t("editor-breakpoints")>
                 {move || breakpoints().into_iter().map(|b| {
                     let id = b.id.clone();
@@ -3518,8 +3524,16 @@ fn Toolbar() -> impl IntoView {
                         ("key-panels", "dock-hide-all"),
                         ("key-alt-click", "styles-reset"),
                         ("key-drag-label", "editor-scrub"),
-                    ].into_iter().map(|(k, label)| view! {
-                        <div class="bp-line"><span>{ui.t(label)}</span><kbd>{ui.t(k)}</kbd></div>
+                    ].into_iter().map(|(k, label)| {
+                        // Touches réglables (D-125) : celles en vigueur.
+                        let action = crate::keys::ACTIONS.iter().find(|a| a.label == label).map(|a| a.id);
+                        let shown = move || match action {
+                            Some(id) => crate::keys::display(ui, id),
+                            None => ui.tx(k, &[]),
+                        };
+                        view! {
+                            <div class="bp-line"><span>{ui.t(label)}</span><kbd>{shown}</kbd></div>
+                        }
                     }).collect_view()}
                 </div>
             </details>

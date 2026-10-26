@@ -67,7 +67,7 @@ L'apparence se règle dans **Styles**, par **classe** : tous les éléments qui 
 2. Importez vos fichiers dans **Médias** (glisser-déposer). Revel produit des images légères pour chaque écran.
 3. Écrivez un **texte alternatif** : il décrit l'image aux personnes qui ne la voient pas.
 
-Les **vidéos**, les **animations Lottie** (fichier `.json` ou `.lottie`) et les documents s'ajoutent de la même façon.
+Les **vidéos**, les **animations Lottie** (fichier `.json` ou `.lottie`) et les documents s'ajoutent de la même façon. Une **Image révélée** montre une seconde image au survol (croquis puis œuvre finie) : en entier, jusqu'au pointeur ou autour de lui.
 
 ## Composants
 
@@ -128,6 +128,8 @@ Une date reliée s'écrit comme vous le voulez (16 octobre 2026, 16.10.2026…) 
 - **Recevoir les préversions** propose aussi les versions d'essai, publiées avant la version stable.
 
 ## Raccourcis utiles
+
+Les touches se changent dans **Réglages › Raccourcis**.
 
 | Action | Raccourci |
 |---|---|

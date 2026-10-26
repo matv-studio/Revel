@@ -454,6 +454,14 @@ impl Sx {
     /// Règle plusieurs propriétés en une seule étape d'annulation. `coalesce` : fusionnée avec la
     /// précédente si elle porte sur le même champ (flèches du clavier).
     pub fn set_many(self, list: Vec<(String, Option<String>)>, coalesce: bool) {
+        // Pas de valeur négative là où elle n'a pas de sens (D-125).
+        let list: Vec<(String, Option<String>)> = list
+            .into_iter()
+            .map(|(p, v)| {
+                let v = v.map(|v| revel_style::values::clamp_non_negative(&p, &v));
+                (p, v)
+            })
+            .collect();
         // Même modification reçue deux fois avant que le document ne change (Entrée puis
         // `change` d'un même champ) : une seule commande, sinon la règle serait créée deux fois.
         let key = format!(
@@ -497,7 +505,12 @@ impl Sx {
         let body: String = list
             .iter()
             .filter(|(_, v)| !v.trim().is_empty())
-            .map(|(p, v)| format!("{p}: {v} !important; "))
+            .map(|(p, v)| {
+                format!(
+                    "{p}: {} !important; ",
+                    revel_style::values::clamp_non_negative(p, v)
+                )
+            })
             .collect();
         self.ed.post(serde_json::json!({
             "type": "preview",

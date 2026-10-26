@@ -331,3 +331,18 @@ fn divers() {
     assert_eq!(grid_count("[a] 1fr"), None);
     assert_eq!(grid_columns(4), "repeat(4, minmax(0, 1fr))");
 }
+
+#[test]
+fn valeurs_negatives_ramenees_a_zero() {
+    // D-125 : intérieur, taille, écart, arrondi s'arrêtent à zéro ; marge extérieure et décalage
+    // restent libres.
+    assert_eq!(super::clamp_non_negative("padding-left", "-4px"), "0px");
+    assert_eq!(super::clamp_non_negative("gap", "-2rem 12px"), "0rem 12px");
+    assert_eq!(super::clamp_non_negative("opacity", "-0.2"), "0");
+    assert_eq!(super::clamp_non_negative("margin-left", "-4px"), "-4px");
+    assert_eq!(super::clamp_non_negative("top", "-10%"), "-10%");
+    assert_eq!(
+        super::clamp_non_negative("width", "calc(100% - 4px)"),
+        "calc(100% - 4px)"
+    );
+}

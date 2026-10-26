@@ -848,6 +848,32 @@ pub struct AppSettings {
     /// envoyées aussitôt (D-108).
     #[serde(default = "yes")]
     pub auto_sync: bool,
+    /// Raccourcis changés (D-125) : action (`undo`, `palette`…) → touches (`Ctrl+Shift+Z`) ;
+    /// vide : raccourci retiré. Les autres gardent leurs touches par défaut.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub shortcuts: std::collections::BTreeMap<String, String>,
+    /// Familles masquées dans la recherche rapide (Ctrl+K) : `palette-pages`, `palette-layers`…
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub palette_hidden: Vec<String>,
+    /// Couleurs fonctionnelles de l'interface changées (D-125) : `comp` (composants), `set`
+    /// (valeur réglée ici), `inherit` (valeur héritée), `auto` (traduction à relire) → `#rrggbb`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub ui_colors: std::collections::BTreeMap<String, String>,
+    /// Liens entre variantes du canevas des composants (D-125) : `curve` (courbe, comme Blender),
+    /// `square` (en équerre), `straight` (droits).
+    #[serde(default = "default_links")]
+    pub variant_links: String,
+    /// Bout des liens entre variantes : `arrow` (flèche) ou `dot` (rond, comme Blender).
+    #[serde(default = "default_link_end")]
+    pub variant_link_end: String,
+}
+
+fn default_links() -> String {
+    "curve".into()
+}
+
+fn default_link_end() -> String {
+    "arrow".into()
 }
 
 fn default_theme() -> String {
@@ -870,6 +896,11 @@ impl Default for AppSettings {
             author: None,
             avatar: None,
             auto_sync: true,
+            shortcuts: Default::default(),
+            palette_hidden: Vec::new(),
+            ui_colors: Default::default(),
+            variant_links: default_links(),
+            variant_link_end: default_link_end(),
         }
     }
 }

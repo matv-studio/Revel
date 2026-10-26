@@ -15,6 +15,9 @@ const PRESETS: &[&str] = &["#3D7EFF", "#7C5CFF", "#1F9D6B", "#E8890C", "#E5487A"
 const PARTS: &[(&str, &str, &str)] = &[
     ("general", "settings-general", "settings-app-general-lead"),
     ("accounts", "settings-profile", "settings-accounts-lead"),
+    ("editor", "prefs-editor", "prefs-editor-help"),
+    ("colors", "prefs-colors", "prefs-colors-help"),
+    ("shortcuts", "prefs-shortcuts", "prefs-shortcuts-help"),
     ("translate", "settings-translate", "settings-translate-help"),
     ("updates", "update-title", "update-help"),
     (
@@ -77,6 +80,9 @@ pub fn Settings() -> impl IntoView {
                         </div>
                     </section>
                 }.into_any())}
+                {part("editor", view! { <crate::prefs::EditorPrefs/> }.into_any())}
+                {part("colors", view! { <crate::prefs::UiColors/> }.into_any())}
+                {part("shortcuts", view! { <crate::prefs::Shortcuts/> }.into_any())}
                 {part("translate", view! { <TranslatePacks/> }.into_any())}
                 {part("updates", view! { <Updates/> }.into_any())}
                 {part("build-tools", view! { <BuildToolsCard/> }.into_any())}

@@ -27,6 +27,7 @@ mod insert;
 mod inspector;
 mod interactions;
 mod items;
+mod keys;
 mod layers;
 mod library;
 mod locales;
@@ -36,6 +37,7 @@ mod pagesettings;
 mod pagetree;
 mod palette;
 mod panels;
+mod prefs;
 mod profile;
 mod publish;
 mod publishbar;
@@ -366,6 +368,29 @@ fn apply_settings(s: &AppSettings) {
     };
     if let Ok(el) = root.dyn_into::<web_sys::HtmlElement>() {
         let style = el.style();
+        // Couleurs fonctionnelles choisies (D-125) : texte et fond assorti ; sinon celles du thème.
+        for (key, text, bg, pct) in [
+            ("comp", "--comp", "--comp-bg", 16),
+            ("set", "--set-text", "--set-bg", 18),
+            ("inherit", "--inherit-text", "--inherit-bg", 15),
+            ("auto", "--auto-text", "--auto-bg", 15),
+        ] {
+            match s
+                .ui_colors
+                .get(key)
+                .filter(|c| c.len() == 7 && c.starts_with('#'))
+            {
+                Some(c) => {
+                    let _ = style.set_property(text, c);
+                    let _ = style
+                        .set_property(bg, &format!("color-mix(in srgb, {c} {pct}%, transparent)"));
+                }
+                None => {
+                    let _ = style.remove_property(text);
+                    let _ = style.remove_property(bg);
+                }
+            }
+        }
         match &s.accent {
             Some(c) if c.len() == 7 && c.starts_with('#') => {
                 let _ = style.set_property("--accent", c);

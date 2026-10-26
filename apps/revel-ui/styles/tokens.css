@@ -129,8 +129,10 @@
   --inherit-text: var(--orange-text-dark);
   --warning-text: var(--orange-text-dark);
   --inherit-bg: rgb(243 160 64 / .14);
-  --auto-text: #b69cff;             /* traduction automatique à relire (D-36) */
-  --auto-bg: rgb(160 128 255 / .16);
+  --auto-text: #4fc3d1;             /* traduction automatique à relire (D-36, cyan depuis D-125) */
+  --auto-bg: rgb(79 195 209 / .16);
+  --comp: #a684ff;                  /* composants (violet par défaut depuis D-125) */
+  --comp-bg: rgb(166 132 255 / .16);
   --overlay: rgb(0 0 0 / .55);      /* fond derrière une boîte de dialogue */
   --range-track-bg: #0c0c0c;        /* glissière : trait fin sombre */
   --range-handle-ring: rgb(0 0 0 / .55);
@@ -162,8 +164,10 @@
   --inherit-text: var(--orange-text-light);
   --warning-text: var(--orange-text-light);
   --inherit-bg: rgb(243 160 64 / .16);
-  --auto-text: #6d45d9;
-  --auto-bg: rgb(120 80 230 / .12);
+  --auto-text: #0d7f8c;
+  --auto-bg: rgb(13 127 140 / .12);
+  --comp: #7446e0;
+  --comp-bg: rgb(116 70 224 / .12);
   --overlay: rgb(0 0 0 / .28);
   --range-track-bg: #c9c9c9;
   --range-handle-ring: rgb(0 0 0 / .28);
@@ -194,8 +198,10 @@
     --inherit-text: var(--orange-text-light);
     --warning-text: var(--orange-text-light);
     --inherit-bg: rgb(243 160 64 / .16);
-    --auto-text: #6d45d9;
-    --auto-bg: rgb(120 80 230 / .12);
+    --auto-text: #0d7f8c;
+    --auto-bg: rgb(13 127 140 / .12);
+    --comp: #7446e0;
+    --comp-bg: rgb(116 70 224 / .12);
     --overlay: rgb(0 0 0 / .28);
     --range-track-bg: #c9c9c9;
     --range-handle-ring: rgb(0 0 0 / .28);

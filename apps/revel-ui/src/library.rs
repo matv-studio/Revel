@@ -958,7 +958,7 @@ pub fn Media() -> impl IntoView {
             </div>
             <footer class="panel-foot">
                 <span class="panel-foot-text muted">{move || ui.tx("media-count", &[("count", shown.with(Vec::len).to_string())])}</span>
-                <input class="range range--plain thumb-size" type="range" min=THUMB_MIN max=THUMB_MAX step="4"
+                <input class="range range--plain thumb-size" type="range" min=THUMB_MIN max=THUMB_MAX step="1"
                     title=ui.t("media-thumb-size") aria-label=ui.t("media-thumb-size")
                     prop:value=move || thumb.get().to_string()
                     on:input=move |e| {

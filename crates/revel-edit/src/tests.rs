@@ -2744,3 +2744,38 @@ fn onglet_ajoute_et_retire_avec_ses_panneaux() {
 fn revel_edit_node<'a>(s: &'a Site, t: &Target) -> &'a Node {
     crate::address::node(s, t).unwrap()
 }
+
+#[test]
+fn icones_rangees_et_svg_importe_nettoye() {
+    // D-125 : chaque icône dans un onglet, au moins 80 icônes ; SVG importé sans script ni
+    // gestionnaire d'événement.
+    let grouped: Vec<&str> = icons::GROUPS
+        .iter()
+        .flat_map(|(_, l)| l.iter().copied())
+        .collect();
+    assert!(
+        icons::ICONS.iter().all(|(n, _)| grouped.contains(n)),
+        "icône hors onglet"
+    );
+    assert!(
+        grouped.iter().all(|n| icons::icon(n).is_some()),
+        "onglet sans dessin"
+    );
+    assert!(icons::ICONS.len() >= 80);
+    let svg = r#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="32" height="16" onload="alert(1)"><script>alert(2)</script><path d="M0 0h4" onclick='x()'/><a href="javascript:alert(3)"><circle r="2"/></a></svg>"#;
+    let (vb, inner) = icons::clean_svg(svg).unwrap();
+    assert_eq!(vb, "0 0 32 16");
+    assert!(
+        !inner.contains("script") && !inner.contains("onclick") && !inner.contains("javascript:"),
+        "{inner}"
+    );
+    assert!(
+        inner.contains(r#"<path d="M0 0h4"/>"#)
+            || inner.contains(r#"<path d="M0 0h4" />"#)
+            || inner.contains(r#"<path d="M0 0h4"/>"#.replace("/>", " />").as_str()),
+        "{inner}"
+    );
+    let (vb, _) = icons::clean_svg(r#"<svg viewBox="0 0 24 24"><path d="M1 1"/></svg>"#).unwrap();
+    assert_eq!(vb, "0 0 24 24");
+    assert!(icons::clean_svg("<p>pas un svg</p>").is_none());
+}

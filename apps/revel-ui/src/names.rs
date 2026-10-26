@@ -134,6 +134,7 @@ const PRESET_NAMES: &[(&str, &str)] = &[
     ("lottie", "insert-lottie"),
     ("media-survol", "insert-hover-media"),
     ("onglets", "insert-tabs"),
+    ("revele", "insert-reveal"),
     ("texte-riche", "insert-rich-text"),
 ];
 

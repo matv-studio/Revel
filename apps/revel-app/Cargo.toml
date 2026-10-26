@@ -43,5 +43,10 @@ windows-core = "0.62.2"
 # `cargo tauri build` ; à demander pour un exécutable de débogage (essais de l'application).
 custom-protocol = ["tauri/custom-protocol"]
 
-[lints]
-workspace = true
+# Règles de l'espace de travail, sauf `unsafe_code` refusé sans être interdit : la lecture des
+# fichiers déposés (WebView2, D-122) appelle des interfaces COM, seul code `unsafe` autorisé.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

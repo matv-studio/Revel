@@ -14,8 +14,10 @@ use std::sync::Mutex;
 #[derive(Default)]
 pub struct Dropped(pub Mutex<Vec<String>>);
 
-/// Branche la réception des fichiers déposés sur la fenêtre principale (Windows).
+/// Branche la réception des fichiers déposés sur la fenêtre principale (Windows). Appels COM de
+/// WebView2 (`unsafe` par nature) : lecture des objets joints au message, rien d'autre.
 #[cfg(windows)]
+#[allow(unsafe_code)]
 pub fn watch(app: &tauri::App) {
     use tauri::Manager;
     use webview2_com::Microsoft::Web::WebView2::Win32::{

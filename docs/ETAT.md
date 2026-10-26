@@ -9,6 +9,30 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 26/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.9 et brouillon 0.6.9). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 26/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.6.9
+Commits 933e49c et cd65eca sur `main` (CI de cd65eca : tout réussi sauf « Équivalence », relancée après un 504 de GitHub au
+téléchargement de wasm-bindgen). Décisions D-126 à D-139 (D-132 à trancher : modèles partagés en ligne) ;
+`docs/ETAPE-8.md`, lignes 8.10 et 8.11. À intégrer à la note du projet « Revel » :
+- D-126 liens de variantes carré + point ; D-127 sites du compte GitHub (liste, téléchargement, synchroniser).
+- D-128 26 modèles de site par métier (`crates/revel-core/templates/`, kit `_kit/`, `build.rs`), galerie dans
+  « Nouveau site » ; Médias › images en ligne copiées dans le site (`localize.rs`, `media_online`,
+  `media_localize`, outil MCP `copy_online_images`), bandeau discret sous la recherche, retiré une fois fait.
+- D-129 panier (`data-revel-cart*`) ; D-130 galerie du CMS ; D-131 volet du CMS réglable, « Modèle des pages ».
+- D-133 colonnes du CMS (épingle dans la fiche, menu, largeur) ; D-134 « garder le texte d'origine »
+  (Localisation, `Locale.kept`, commande `MarkKept`) ; D-135 contenus sous leur collection (plan du site) ;
+  D-136 défilement doux refait ; D-137 Paramètres (fiche Structure + pastille d'environnement en haut à droite,
+  Organisation sous « + », Code sous Publication, annuler/rétablir dans la barre du haut) ; D-138 variantes
+  de composant (`:hover` réel coupé dans le canevas des composants, `liveOff` de `canvas.js`), aperçu du
+  composant seul ou de la page affichée, liens externes de l'aperçu (`_blank` → navigateur, sinon chargés dans
+  le cadre ; CSP `frame-src https: http:`) ; D-139 deuxième revue d'ergonomie (reste listé dans D-139).
+- Recréation d'Alunites mise à D-119 sur le PC de l'ancien compte (composants « Chiffre », « Logo client »,
+  « Offre d'emploi » ; site généré identique).
+- Essais : éditeur 341/341, modèles (`tools/templates-e2e.mjs`) 20/20, animations 17/17.
+- Consigne de l'utilisateur : pas de 0.7.0 avant que tout soit fini (recréation d'Alunites comprise : faite).
+- Pièges : mémoire limitée à 5,8 Go par commande dans la session : `trunk build` seul, avec
+  `CARGO_PROFILE_DEV_DEBUG=0` (sinon rustc tué) ; jamais en parallèle d'un build release. Un moniteur expire
+  après 5 min : attendre par `Bash` en arrière-plan avec une boucle `until`.
+
 ## Compte et emplacements actuels (depuis le 24/10/2026 — prime sur les chemins plus bas)
 - Travail repris sur un autre compte Claude, projet claude.ai **« Revel »** (ce chat lui est dédié). Les chats
   et le projet « Sites Webs » de l'ancien compte ne sont pas lisibles d'ici : cette note est le seul relais.

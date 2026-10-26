@@ -1127,6 +1127,20 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         crate::pref_set("cms.item_w", &w.to_string());
     };
     let resizing = StoredValue::new(None::<(f64, f64)>);
+    let drag_to = move |x: f64| {
+        let Some((x0, w0)) = resizing.get_value() else {
+            return;
+        };
+        // Pas plus que ce qui laisse la liste lisible.
+        let room = window()
+            .inner_width()
+            .ok()
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1600.0)
+            - 220.0
+            - 360.0;
+        item_w.set((w0 - (x - x0)).clamp(ITEM_MIN, ITEM_MAX.min(room.max(ITEM_MIN))));
+    };
     view! {
         <div class="cms" class:has-item=move || if fields_mode.get() { sel_field.get().is_some() } else { open.get().is_some() }
             class:is-fields=move || fields_mode.get()
@@ -1139,14 +1153,11 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                     resizing.set_value(Some((f64::from(e.client_x()), item_w.get_untracked())));
                     crate::dock::dragging_cursor(Some("col-resize"));
                 }
-                on:pointermove=move |e: ev::PointerEvent| {
-                    let Some((x0, w0)) = resizing.get_value() else { return };
-                    // Pas plus que ce qui laisse la liste lisible.
-                    let room = window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1600.0) - 220.0 - 360.0;
-                    item_w.set((w0 - (f64::from(e.client_x()) - x0)).clamp(ITEM_MIN, ITEM_MAX.min(room.max(ITEM_MIN))));
-                }
-                on:pointerup=move |_| {
+                on:pointermove=move |e: ev::PointerEvent| drag_to(f64::from(e.client_x()))
+                on:pointerup=move |e: ev::PointerEvent| {
                     if resizing.get_value().is_some() {
+                        // Position finale appliquée même si des déplacements n'ont pas été reçus.
+                        drag_to(f64::from(e.client_x()));
                         resizing.set_value(None);
                         crate::dock::dragging_cursor(None);
                         set_item_w(item_w.get_untracked());

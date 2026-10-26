@@ -6,7 +6,7 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 25/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.9, revue d'ergonomie et réglages de l'éditeur). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 26/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.9 et brouillon 0.6.9). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
 ## Compte et emplacements actuels (depuis le 24/10/2026 — prime sur les chemins plus bas)
@@ -610,7 +610,7 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
     supprimables. Générateur à jour : `_Claude\Livrables\matv-gen.py`.
   - Essais : e2e 328/328, tests Rust, clippy, fmt. CI de 52fe932 en échec sur « canevas : nouvel onglet »
     (l'essai cliquait le premier interrupteur, désormais celui de l'emplacement) → interrupteur
-    `#insp-new-tab` et essai ciblé (d0e8bd3). Pas de nouvelle version : 0.6.8 reste le dernier brouillon.
+    `#insp-new-tab` et essai ciblé (d0e8bd3). (0.6.9 ensuite : voir plus bas.)
 
 - **Revue d'ergonomie (25-26/10/2026, 8.8 et 8.9, D-120 à D-125)** — demandes de l'utilisateur : revue complète
   de l'interface, puis réglages de l'éditeur.
@@ -627,7 +627,11 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
     `Ed::run_action`) ; liens de variantes à la Blender (prises, contour, flèche sur la tangente) ; « Image
     révélée » (`Preset::Reveal`, `data-revel-reveal` fade/wipe/spot, `actions.js`) ; 95 icônes en onglets +
     import SVG (`icons::clean_svg`, `icons::set_icon`) ; `Ed::apply_keep` (ajout sans changer la sélection).
-  - CI verte sur ca126e7 (revel-app : `unsafe_code = "deny"` au lieu de `forbid`, autorisé sur `drops::watch` seulement ; essai Figma de l'équivalence instable une fois, relancé). Pas de nouvelle version : 0.6.8 reste le dernier brouillon.
+  - CI verte sur ca126e7 (revel-app : `unsafe_code = "deny"` au lieu de `forbid`, autorisé sur `drops::watch` seulement ; essai Figma de l'équivalence instable une fois, relancé).
+  - Version 0.6.9 (ed100c0) : installateurs flux 40282598293 → brouillon « Revel v0.6.9 » (préversion, id
+    423951337, cible ed100c0, 17 fichiers), **à publier par l'utilisateur** ; étiquette `v0.6.9` (flux
+    40282600411) ; CI verte (40282584449). Installateur Windows copié dans `_Claude\Installateurs`
+    (`Revel_0.6.9_x64-setup.exe`, SHA-256 d385b6c2…, morceaux dans `_morceaux`, supprimables).
   - Pièges : `pgrep -f` dans une commande Bash qui contient le motif tue le shell (code 144) : lancer depuis
     un script ; WebView2 non vérifiable ici (compile pour Windows dans un crate de contrôle sous /tmp).
 

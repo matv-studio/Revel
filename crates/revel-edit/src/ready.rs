@@ -280,7 +280,14 @@ impl Block {
             Block::Cart => {
                 let mut r = Block::Form.rules();
                 r.extend(vec![
-                    (".panier__lignes", vec![("margin", "24px 0 0"), ("padding", "0"), ("list-style", "none")]),
+                    (
+                        ".panier__lignes",
+                        vec![
+                            ("margin", "24px 0 0"),
+                            ("padding", "0"),
+                            ("list-style", "none"),
+                        ],
+                    ),
                     (
                         ".panier__ligne",
                         vec![
@@ -292,7 +299,14 @@ impl Block {
                             ("border-bottom", "1px solid rgba(127, 127, 127, 0.3)"),
                         ],
                     ),
-                    (".panier__quantite", vec![("display", "inline-flex"), ("align-items", "center"), ("gap", "10px")]),
+                    (
+                        ".panier__quantite",
+                        vec![
+                            ("display", "inline-flex"),
+                            ("align-items", "center"),
+                            ("gap", "10px"),
+                        ],
+                    ),
                     (
                         ".panier__moins, .panier__plus, .panier__retirer",
                         vec![
@@ -306,8 +320,18 @@ impl Block {
                             ("cursor", "pointer"),
                         ],
                     ),
-                    (".panier__total", vec![("margin", "20px 0 0"), ("font-size", "20px"), ("text-align", "right")]),
-                    (".panier.is-empty .panier__total, .panier.is-empty .panier__commande", vec![("display", "none")]),
+                    (
+                        ".panier__total",
+                        vec![
+                            ("margin", "20px 0 0"),
+                            ("font-size", "20px"),
+                            ("text-align", "right"),
+                        ],
+                    ),
+                    (
+                        ".panier.is-empty .panier__total, .panier.is-empty .panier__commande",
+                        vec![("display", "none")],
+                    ),
                 ]);
                 return r;
             }

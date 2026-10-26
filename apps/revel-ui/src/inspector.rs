@@ -501,11 +501,18 @@ enum LinkKind {
 
 /// Fichier du site ou à télécharger (PDF, archive, document…).
 fn is_file_link(href: &str) -> bool {
-    let path = href.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase();
+    let path = href
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
     path.starts_with("/media/")
-        || [".pdf", ".zip", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".mp4", ".mp3", ".csv", ".txt"]
-            .iter()
-            .any(|e| path.ends_with(e))
+        || [
+            ".pdf", ".zip", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".mp4", ".mp3",
+            ".csv", ".txt",
+        ]
+        .iter()
+        .any(|e| path.ends_with(e))
 }
 
 fn link_kind(href: &str, pages: &[String]) -> LinkKind {
@@ -528,12 +535,17 @@ fn link_kind(href: &str, pages: &[String]) -> LinkKind {
 fn page_anchors(ed: Ed) -> Vec<String> {
     let page = ed.page.get_untracked();
     ed.doc.with_untracked(|d| {
-        let Some(d) = d.as_ref() else { return Vec::new() };
+        let Some(d) = d.as_ref() else {
+            return Vec::new();
+        };
         let mut ids: Vec<String> = Vec::new();
         let mut look = |nodes: &[Node]| {
             revel_model::ids::walk(nodes, &mut |n| {
                 if let Node::Element { attrs, .. } = n
-                    && let Some(v) = attrs.iter().find(|a| a.name == "id").and_then(|a| a.value.as_deref())
+                    && let Some(v) = attrs
+                        .iter()
+                        .find(|a| a.name == "id")
+                        .and_then(|a| a.value.as_deref())
                     && !v.is_empty()
                     && !v.contains("{{")
                     && !ids.iter().any(|x| x == v)
@@ -589,7 +601,11 @@ fn LinkTarget(
     let urls: Vec<String> = pages
         .iter()
         .map(|(u, _)| u.clone())
-        .chain(entries.iter().flat_map(|(_, v)| v.iter().map(|(u, _)| u.clone())))
+        .chain(
+            entries
+                .iter()
+                .flat_map(|(_, v)| v.iter().map(|(u, _)| u.clone())),
+        )
         .collect();
     let kind = RwSignal::new(link_kind(&href, &urls));
     let href = StoredValue::new(href);
@@ -741,7 +757,9 @@ fn element_advanced(
         // Vidéo et champ de formulaire : réglés par leurs groupes (source, image d'attente,
         // lecture ; type, nom, obligatoire, exemple, saisie automatique).
         .filter(|a| !(lower == "video" && VIDEO_ATTRS.contains(&a.name.as_str())))
-        .filter(|a| !(FIELD_TAGS.contains(&lower.as_str()) && FIELD_ATTRS.contains(&a.name.as_str())))
+        .filter(|a| {
+            !(FIELD_TAGS.contains(&lower.as_str()) && FIELD_ATTRS.contains(&a.name.as_str()))
+        })
         // Animations : réglées dans le panneau Interactions.
         .filter(|a| {
             !crate::interactions::FAMILIES
@@ -1014,12 +1032,25 @@ pub(crate) fn attr_label(ui: Ui, name: &str) -> String {
 
 /// Attributs d'une vidéo réglés par son groupe.
 const VIDEO_ATTRS: &[&str] = &[
-    "src", "data-src", "poster", "preload", "controls", "autoplay", "muted", "playsinline", "loop",
+    "src",
+    "data-src",
+    "poster",
+    "preload",
+    "controls",
+    "autoplay",
+    "muted",
+    "playsinline",
+    "loop",
 ];
 /// Champs de formulaire et leurs attributs réglés par le groupe « Champ ».
 pub(crate) const FIELD_TAGS: &[&str] = &["input", "textarea", "select"];
 const FIELD_ATTRS: &[&str] = &[
-    "type", "name", "required", "placeholder", "autocomplete", "rows",
+    "type",
+    "name",
+    "required",
+    "placeholder",
+    "autocomplete",
+    "rows",
 ];
 
 /// Attributs de Revel réglés par leurs propres contrôles.

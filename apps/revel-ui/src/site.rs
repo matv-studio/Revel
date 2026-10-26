@@ -91,7 +91,10 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
         match p.strip_prefix("/__revel/component/?component=") {
             Some(rest) => {
                 let id = rest.split('&').next().unwrap_or_default();
-                let id = js_sys::decode_uri_component(id).ok().and_then(|v| v.as_string()).unwrap_or_default();
+                let id = js_sys::decode_uri_component(id)
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_default();
                 ui.now("preview-component", &[("name", id)])
             }
             None => p,
@@ -106,9 +109,14 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
     // Lien vers un autre site en nouvel onglet (cadre de l'aperçu) : navigateur du système.
     let on_msg = window_event_listener(leptos::ev::message, move |e: web_sys::MessageEvent| {
         let d = e.data();
-        let get = |k: &str| js_sys::Reflect::get(&d, &k.into()).ok().and_then(|v| v.as_string());
+        let get = |k: &str| {
+            js_sys::Reflect::get(&d, &k.into())
+                .ok()
+                .and_then(|v| v.as_string())
+        };
         if get("type").as_deref() == Some("open-external")
-            && let Some(url) = get("url").filter(|u| u.starts_with("https://") || u.starts_with("http://"))
+            && let Some(url) =
+                get("url").filter(|u| u.starts_with("https://") || u.starts_with("http://"))
         {
             leptos::task::spawn_local(async move {
                 if let Err(err) = api::open_external(&url).await {
@@ -642,7 +650,10 @@ fn Seo(site: SiteSummary) -> impl IntoView {
         s.apply.run(revel_edit::Command::SetSeoSettings { seo: v });
     };
     let readable_share = move || {
-        s.doc.with(|d| d.as_ref().is_some_and(|d| revel_edit::readable::share_image(d).is_some()))
+        s.doc.with(|d| {
+            d.as_ref()
+                .is_some_and(|d| revel_edit::readable::share_image(d).is_some())
+        })
     };
     // Organisation ouverte quand elle est réglée (ou après « + »).
     let org_open = RwSignal::new(false);
@@ -808,7 +819,11 @@ fn color_row(
     let hex = move || {
         let v = value.get();
         let v = v.trim();
-        if v.len() == 7 && v.starts_with('#') { v.to_lowercase() } else { "#000000".into() }
+        if v.len() == 7 && v.starts_with('#') {
+            v.to_lowercase()
+        } else {
+            "#000000".into()
+        }
     };
     view! {
         <span class="label" title=ui.t(help)>{ui.t(label)}</span>
@@ -833,12 +848,18 @@ const COUNTRIES: &[&str] = &[
 fn country_name(lang: &str, code: &str) -> String {
     (|| {
         let intl = js_sys::Reflect::get(&js_sys::global(), &"Intl".into()).ok()?;
-        let ctor: js_sys::Function = js_sys::Reflect::get(&intl, &"DisplayNames".into()).ok()?.dyn_into().ok()?;
+        let ctor: js_sys::Function = js_sys::Reflect::get(&intl, &"DisplayNames".into())
+            .ok()?
+            .dyn_into()
+            .ok()?;
         let opts = js_sys::Object::new();
         js_sys::Reflect::set(&opts, &"type".into(), &"region".into()).ok()?;
         let args = js_sys::Array::of2(&js_sys::Array::of1(&lang.into()), &opts);
         let dn = js_sys::Reflect::construct(&ctor, &args).ok()?;
-        let of: js_sys::Function = js_sys::Reflect::get(&dn, &"of".into()).ok()?.dyn_into().ok()?;
+        let of: js_sys::Function = js_sys::Reflect::get(&dn, &"of".into())
+            .ok()?
+            .dyn_into()
+            .ok()?;
         of.call1(&dn, &code.into()).ok()?.as_string()
     })()
     .unwrap_or_else(|| code.to_string())
@@ -853,24 +874,14 @@ fn org_rows(
     type Get = fn(&revel_model::Organization) -> String;
     type Put = fn(&mut revel_model::Organization, String);
     let fields: [(&'static str, &'static str, Get, Put); 8] = [
-        (
-            "seo-org-name",
-            "",
-            |o| o.name.clone(),
-            |o, v| o.name = v,
-        ),
+        ("seo-org-name", "", |o| o.name.clone(), |o, v| o.name = v),
         (
             "seo-org-alt",
             "",
             |o| o.alternate_name.clone(),
             |o, v| o.alternate_name = v,
         ),
-        (
-            "seo-org-email",
-            "",
-            |o| o.email.clone(),
-            |o, v| o.email = v,
-        ),
+        ("seo-org-email", "", |o| o.email.clone(), |o, v| o.email = v),
         (
             "seo-org-phone",
             "",

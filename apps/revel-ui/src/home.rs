@@ -266,8 +266,10 @@ pub fn Home() -> impl IntoView {
         use crate::ctxmenu::{CtxItem, open};
         let (a, url) = (site.clone(), site.html_url.clone());
         let items = vec![
-            CtxItem::new(ui.now("gh-site-download", &[]), move || download(a.clone(), false))
-                .icon(icons::cloud_down),
+            CtxItem::new(ui.now("gh-site-download", &[]), move || {
+                download(a.clone(), false)
+            })
+            .icon(icons::cloud_down),
             CtxItem::new(ui.now("gh-site-github", &[]), move || {
                 let u = url.clone();
                 spawn_local(async move {
@@ -381,7 +383,11 @@ pub fn Home() -> impl IntoView {
                 .chain(r.failed.iter().map(|(n, m)| format!("{n} : {m}")))
                 .collect::<Vec<_>>()
                 .join("\n");
-            (parts.join(" · "), detail, !r.waiting.is_empty() || !r.failed.is_empty())
+            (
+                parts.join(" · "),
+                detail,
+                !r.waiting.is_empty() || !r.failed.is_empty(),
+            )
         })
     };
     view! {
@@ -599,8 +605,17 @@ fn hue(name: &str) -> u32 {
 
 /// Catégories de la galerie des modèles, dans l'ordre (D-128).
 const TEMPLATE_CATS: [&str; 11] = [
-    "business", "creative", "commerce", "editorial", "food", "events", "travel", "services",
-    "education", "community", "personal",
+    "business",
+    "creative",
+    "commerce",
+    "editorial",
+    "food",
+    "events",
+    "travel",
+    "services",
+    "education",
+    "community",
+    "personal",
 ];
 
 /// Clé de traduction d'une catégorie de modèles.

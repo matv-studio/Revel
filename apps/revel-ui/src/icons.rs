@@ -405,9 +405,7 @@ pub fn own_design() -> AnyView {
 
 /// Épingle (champ montré en colonne).
 pub fn pin() -> AnyView {
-    svg(
-        r#"<path d="M6 1.5h4l-.6 4.2 2.6 2.3v1.5H4V8l2.6-2.3z"/><path d="M8 9.5v5"/>"#,
-    )
+    svg(r#"<path d="M6 1.5h4l-.6 4.2 2.6 2.3v1.5H4V8l2.6-2.3z"/><path d="M8 9.5v5"/>"#)
 }
 
 /// Épingle pleine (champ montré en colonne).

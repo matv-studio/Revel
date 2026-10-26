@@ -265,7 +265,8 @@ pub fn blank(name: &str, lang: &str, scheme: crate::templates::Scheme) -> Site {
     use crate::templates::Scheme;
     let mut s = starter_from(name, lang, SiteTemplate::Blank, scheme == Scheme::Light);
     if scheme == Scheme::Auto {
-        let dark = DARK.replace(":root", "@media (prefers-color-scheme: dark) { :root")
+        let dark = DARK
+            .replace(":root", "@media (prefers-color-scheme: dark) { :root")
             .replace("}\n", "} }\n");
         s.stylesheet = Some(Stylesheet {
             url: "/assets/site.css".into(),

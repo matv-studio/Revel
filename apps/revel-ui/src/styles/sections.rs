@@ -419,9 +419,13 @@ fn weight_options(sx: Sx) -> Signal<Vec<Item>> {
         let fam = family.get().to_lowercase();
         let mut loaded: Vec<(u32, u32)> = Vec::new();
         sx.ed.doc.with(|d| {
-            let Some(sheet) = d.as_ref().and_then(|d| d.stylesheet.as_ref()) else { return };
+            let Some(sheet) = d.as_ref().and_then(|d| d.stylesheet.as_ref()) else {
+                return;
+            };
             for item in &sheet.items {
-                let StyleItem::Raw { css } = item else { continue };
+                let StyleItem::Raw { css } = item else {
+                    continue;
+                };
                 let c = css.trim_start();
                 if !c.starts_with("@font-face") {
                     continue;
@@ -437,7 +441,9 @@ fn weight_options(sx: Sx) -> Signal<Vec<Item>> {
                             .to_string()
                     })
                 };
-                let Some(f) = get("font-family") else { continue };
+                let Some(f) = get("font-family") else {
+                    continue;
+                };
                 if first_family(&f).to_lowercase() != fam {
                     continue;
                 }
@@ -457,13 +463,22 @@ fn weight_options(sx: Sx) -> Signal<Vec<Item>> {
                 }
             }
         });
-        let all: Vec<Item> = WEIGHTS.iter().map(|o| (o.v.to_string(), ui.tx(o.key, &[]), o.also)).collect();
+        let all: Vec<Item> = WEIGHTS
+            .iter()
+            .map(|o| (o.v.to_string(), ui.tx(o.key, &[]), o.also))
+            .collect();
         if loaded.is_empty() {
             return all;
         }
-        let has = |v: &str| v.parse::<u32>().is_ok_and(|n| loaded.iter().any(|(a, b)| n >= *a && n <= *b));
+        let has = |v: &str| {
+            v.parse::<u32>()
+                .is_ok_and(|n| loaded.iter().any(|(a, b)| n >= *a && n <= *b))
+        };
         let (mut on, off): (Vec<Item>, Vec<Item>) = all.into_iter().partition(|(v, _, _)| has(v));
-        on.extend(off.into_iter().map(|(v, l, a)| (v, ui.now("weight-not-loaded", &[("name", l)]), a)));
+        on.extend(
+            off.into_iter()
+                .map(|(v, l, a)| (v, ui.now("weight-not-loaded", &[("name", l)]), a)),
+        );
         on
     })
 }

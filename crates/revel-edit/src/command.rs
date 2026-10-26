@@ -1522,7 +1522,13 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 .ok_or_else(|| EditError::InvalidLocale(locale.clone()))?;
             let changed: Vec<String> = keys
                 .iter()
-                .filter(|k| if *on { l.kept.insert((*k).clone()) } else { l.kept.remove(*k) })
+                .filter(|k| {
+                    if *on {
+                        l.kept.insert((*k).clone())
+                    } else {
+                        l.kept.remove(*k)
+                    }
+                })
                 .cloned()
                 .collect();
             Ok(Command::MarkKept {

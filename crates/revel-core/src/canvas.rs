@@ -224,7 +224,7 @@ pub fn hide_hidden(html: &str) -> String {
 /// dans le cadre. Dans la fenêtre d'aperçu, rien ne change (l'application ouvre les nouveaux
 /// onglets dans le navigateur du système).
 const PREVIEW_LINKS: &str = concat!(
-    "<script data-rv-preview>(function(){if(window.top===window)return;",
+    "<script id=\"revel-preview-links\">(function(){if(window.top===window)return;",
     "document.addEventListener(\"click\",function(e){if(e.defaultPrevented||e.button)return;",
     "var a=e.target.closest&&e.target.closest(\"a[href]\");if(!a)return;var u;try{u=new URL(a.href,location.href)}catch(_){return}",
     "if(!/^https?:$/.test(u.protocol)||u.origin===location.origin)return;",

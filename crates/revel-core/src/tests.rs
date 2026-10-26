@@ -2885,7 +2885,6 @@ fn copies_des_sites_github() {
     assert_eq!(found.len(), 2);
 }
 
-
 /// Images en ligne d'un modèle (D-128) : trouvées dans les pages, composants, informations et
 /// contenus du CMS ; remplacées en une étape d'annulation (sans réseau : adresses déjà copiées).
 #[test]

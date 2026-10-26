@@ -843,7 +843,11 @@ fn UndoButtons() -> impl IntoView {
     let run = move |redo: bool| {
         let Some(p) = ui.site_path() else { return };
         spawn_local(async move {
-            let r = if redo { api::edit_redo(&p).await } else { api::edit_undo(&p).await };
+            let r = if redo {
+                api::edit_redo(&p).await
+            } else {
+                api::edit_undo(&p).await
+            };
             match r {
                 Ok(st) => {
                     if !state.is_disposed() {
@@ -856,11 +860,13 @@ fn UndoButtons() -> impl IntoView {
         });
     };
     let on_key = window_event_listener(leptos::ev::keydown, move |e: web_sys::KeyboardEvent| {
-        if !(e.ctrl_key() || e.meta_key()) {
+        // Raccourci déjà traité par la vue (plan du site) : une seule annulation.
+        if !(e.ctrl_key() || e.meta_key()) || e.default_prevented() {
             return;
         }
         let in_field = document().active_element().is_some_and(|el| {
-            matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT") || el.has_attribute("contenteditable")
+            matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
+                || el.has_attribute("contenteditable")
         });
         if in_field {
             return;

@@ -34,7 +34,11 @@ pub fn is_online_image(url: &str) -> bool {
     if IMAGE_HOSTS.contains(&host) {
         return true;
     }
-    let path = rest.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase();
+    let path = rest
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
     [".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg"]
         .iter()
         .any(|e| path.ends_with(e))
@@ -159,7 +163,11 @@ pub fn online_images(dir: &Path, site: &Site) -> Vec<String> {
 /// empreinte courte de l'adresse entière (deux tailles d'une même photo restent distinctes).
 fn file_name(url: &str, ext: &str) -> String {
     let path = url.split(['?', '#']).next().unwrap_or(url);
-    let last = path.trim_end_matches('/').rsplit('/').next().unwrap_or("image");
+    let last = path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or("image");
     let stem = last.rsplit_once('.').map(|(s, _)| s).unwrap_or(last);
     let mut slug = revel_model::slugify(stem);
     if slug.is_empty() {
@@ -190,7 +198,11 @@ fn extension(content_type: &str, url: &str) -> String {
             return e.into();
         }
     }
-    let path = url.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase();
+    let path = url
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
     path.rsplit_once('.')
         .map(|(_, e)| e.to_string())
         .filter(|e| e.len() <= 4)
@@ -436,7 +448,13 @@ mod tests {
                 "https://x.org/a.png".to_string()
             ]
         );
-        let n = file_name("https://images.unsplash.com/photo-123-abc?fm=jpg&w=1600&q=80", "jpg");
-        assert!(n.starts_with("photo-123-abc-1600-") && n.ends_with(".jpg"), "{n}");
+        let n = file_name(
+            "https://images.unsplash.com/photo-123-abc?fm=jpg&w=1600&q=80",
+            "jpg",
+        );
+        assert!(
+            n.starts_with("photo-123-abc-1600-") && n.ends_with(".jpg"),
+            "{n}"
+        );
     }
 }

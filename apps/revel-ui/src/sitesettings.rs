@@ -31,7 +31,11 @@ fn info(s: DocSession) -> Option<Info> {
 
 /// Flux RSS : un interrupteur par collection qui a une page par contenu (un flux mène aux
 /// pages), l'adresse du flux et le nombre de contenus.
-fn feeds_section(ui: Ui, s: DocSession, labels: &std::collections::BTreeMap<String, String>) -> AnyView {
+fn feeds_section(
+    ui: Ui,
+    s: DocSession,
+    labels: &std::collections::BTreeMap<String, String>,
+) -> AnyView {
     let Some((cols, feeds)) = s.doc.with(|d| {
         d.as_ref().map(|d| {
             (
@@ -160,7 +164,11 @@ pub fn General(site: SiteSummary) -> impl IntoView {
             if let Ok(cs) = api::cms_collections(&p).await
                 && !col_labels.is_disposed()
             {
-                col_labels.set(cs.into_iter().filter_map(|c| Some((c.id, c.label?))).collect());
+                col_labels.set(
+                    cs.into_iter()
+                        .filter_map(|c| Some((c.id, c.label?)))
+                        .collect(),
+                );
             }
         });
     }
@@ -327,7 +335,8 @@ pub fn SiteFacts(site: SiteSummary) -> impl IntoView {
         })
     };
     let envs_help = move || {
-        let names: Vec<String> = fresh.with(|s| s.environments.iter().map(|e| env_name(e)).collect());
+        let names: Vec<String> =
+            fresh.with(|s| s.environments.iter().map(|e| env_name(e)).collect());
         ui.now("site-facts-envs", &[("list", names.join(", "))])
     };
     let fact = move |key: &'static str, n: Signal<usize>| {

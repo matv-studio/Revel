@@ -221,7 +221,10 @@ pub fn backdrop_click(e: &web_sys::MouseEvent) -> bool {
 /// Saisie dans une fenêtre (événement `input` remonté jusqu'au fond) : fond marqué.
 pub fn mark_dirty(e: &web_sys::Event) {
     use wasm_bindgen::JsCast;
-    if let Some(el) = e.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) {
+    if let Some(el) = e
+        .current_target()
+        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+    {
         let _ = el.set_attribute("data-dirty", "");
     }
 }

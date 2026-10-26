@@ -567,7 +567,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
             return;
         };
         if c.schema.is_none() {
-            crate::pref_set(&format!("cms.cols.{}", c.id), &serde_json::to_string(&names).unwrap_or_default());
+            crate::pref_set(
+                &format!("cms.cols.{}", c.id),
+                &serde_json::to_string(&names).unwrap_or_default(),
+            );
             local_cols.set(Some(names));
             return;
         }
@@ -616,13 +619,25 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         let on = shown_columns();
         let mut items = Vec::new();
         if let Some(h) = hide {
-            let label = c.fields.iter().find(|f| f.name == h).map(label_of).unwrap_or_else(|| h.clone());
+            let label = c
+                .fields
+                .iter()
+                .find(|f| f.name == h)
+                .map(label_of)
+                .unwrap_or_else(|| h.clone());
             items.push(
-                CtxItem::new(ui.now("cms-column-hide", &[("name", label)]), move || toggle_column(h.clone()))
-                    .icon(icons::eye_off),
+                CtxItem::new(ui.now("cms-column-hide", &[("name", label)]), move || {
+                    toggle_column(h.clone())
+                })
+                .icon(icons::eye_off),
             );
         }
-        for (i, f) in c.fields.iter().filter(|f| !f.hidden && Some(&f.name) != primary.as_ref()).enumerate() {
+        for (i, f) in c
+            .fields
+            .iter()
+            .filter(|f| !f.hidden && Some(&f.name) != primary.as_ref())
+            .enumerate()
+        {
             let n = f.name.clone();
             let mut item = CtxItem::new(label_of(f), move || toggle_column(n.clone()));
             if on.contains(&f.name) {
@@ -699,7 +714,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         }
     };
     let width_style = move |key: &str| {
-        widths.with(|m| m.get(key).map(|w| format!("width:{w}px;min-width:{w}px;max-width:{w}px")))
+        widths.with(|m| {
+            m.get(key)
+                .map(|w| format!("width:{w}px;min-width:{w}px;max-width:{w}px"))
+        })
     };
     let sorting = Memo::new(move |_| {
         sort.get().unwrap_or_else(|| {
@@ -979,7 +997,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         busy_template.set(true);
         spawn_local(async move {
             let follows = |e: &CmsEntry| {
-                e.url.is_some() && e.data.get("layout").is_none_or(|l| l.is_null() || l.as_str() == Some(""))
+                e.url.is_some()
+                    && e.data
+                        .get("layout")
+                        .is_none_or(|l| l.is_null() || l.as_str() == Some(""))
             };
             let run = async {
                 let o = api::edit_open(&p).await?;
@@ -994,10 +1015,16 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                     let base = model.folder.rsplit('/').next().unwrap_or(&id).to_string();
                     let cmd = Command::Batch {
                         commands: vec![
-                            Command::AddLayout { layout, index: None },
+                            Command::AddLayout {
+                                layout,
+                                index: None,
+                            },
                             Command::SetCollectionPages {
                                 id: id.clone(),
-                                path: model.path.clone().or_else(|| Some(format!("/{base}/{{{{ slug }}}}/"))),
+                                path: model
+                                    .path
+                                    .clone()
+                                    .or_else(|| Some(format!("/{base}/{{{{ slug }}}}/"))),
                                 layout: Some(model.layout.clone().unwrap_or(lid)),
                             },
                         ],
@@ -1005,16 +1032,31 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                     last = Some(api::edit_apply(&p, &cmd, false).await?);
                 }
                 let find = |cs: &[CmsCollection]| {
-                    cs.iter().find(|c| c.id == id).and_then(|c| c.entries.iter().find(|e| follows(e)).and_then(|e| e.url.clone()))
+                    cs.iter().find(|c| c.id == id).and_then(|c| {
+                        c.entries
+                            .iter()
+                            .find(|e| follows(e))
+                            .and_then(|e| e.url.clone())
+                    })
                 };
                 let mut cs = api::cms_collections(&p).await?;
                 if find(&cs).is_none()
                     && let Some(c) = cs.iter().find(|c| c.id == id)
                     && c.entries.is_empty()
                 {
-                    let primary = c.view.as_ref().and_then(|v| v.primary.clone()).unwrap_or_else(|| "title".into());
-                    let (file, data) = new_entry_data(c, &primary, &ui.now("cms-template-sample", &[]));
-                    let cmd = Command::CreateEntry { folder: c.folder.clone(), file, data, body: String::new() };
+                    let primary = c
+                        .view
+                        .as_ref()
+                        .and_then(|v| v.primary.clone())
+                        .unwrap_or_else(|| "title".into());
+                    let (file, data) =
+                        new_entry_data(c, &primary, &ui.now("cms-template-sample", &[]));
+                    let cmd = Command::CreateEntry {
+                        folder: c.folder.clone(),
+                        file,
+                        data,
+                        body: String::new(),
+                    };
                     last = Some(api::edit_apply(&p, &cmd, false).await?);
                     cs = api::cms_collections(&p).await?;
                 }
@@ -1431,14 +1473,22 @@ fn EntryForm(
             return;
         }
         spawn_local(async move {
-            let mut redirects = api::edit_open(&p).await.map(|o| o.site.redirects).unwrap_or_default();
+            let mut redirects = api::edit_open(&p)
+                .await
+                .map(|o| o.site.redirects)
+                .unwrap_or_default();
             redirects.retain(|r| r.from != old_url);
             // Une redirection vers l'ancienne adresse suit la nouvelle.
             for r in redirects.iter_mut().filter(|r| r.to == old_url) {
                 r.to = new_url.clone();
             }
-            redirects.push(revel_model::Redirect { from: old_url, to: new_url });
-            apply.run(Command::Batch { commands: vec![set_field, Command::SetRedirects { redirects }] });
+            redirects.push(revel_model::Redirect {
+                from: old_url,
+                to: new_url,
+            });
+            apply.run(Command::Batch {
+                commands: vec![set_field, Command::SetRedirects { redirects }],
+            });
         });
     };
     let row = move |f: CmsField| {
@@ -1479,7 +1529,9 @@ fn EntryForm(
             .into_any()
         });
         // Épingle des colonnes : champs du schéma montrés dans la fiche (pas les valeurs hors schéma).
-        let pins = (!undeclared).then(use_context::<cmsfields::ColumnPins>).flatten();
+        let pins = (!undeclared)
+            .then(use_context::<cmsfields::ColumnPins>)
+            .flatten();
         cmsfields::field_row_pinned(
             f,
             value,

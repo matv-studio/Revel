@@ -533,7 +533,11 @@ fn video_options(ui: Ui, ed: Ed, at: Target, attrs: Vec<Attr>) -> AnyView {
     };
     // Source (fichier du site ou adresse) : `data-src` quand la vidéo est chargée tard, sinon `src`.
     let src_attr: &'static str = if has("data-src") { "data-src" } else { "src" };
-    let value_of = |n: &str| attr(&attrs, n).and_then(|a| a.value.clone()).unwrap_or_default();
+    let value_of = |n: &str| {
+        attr(&attrs, n)
+            .and_then(|a| a.value.clone())
+            .unwrap_or_default()
+    };
     let src = value_of(src_attr);
     let poster = value_of("poster");
     let preload = value_of("preload");
@@ -542,9 +546,16 @@ fn video_options(ui: Ui, ed: Ed, at: Target, attrs: Vec<Attr>) -> AnyView {
         ed.apply(
             ui,
             if v.trim().is_empty() {
-                Command::RemoveAttr { at, name: name.into() }
+                Command::RemoveAttr {
+                    at,
+                    name: name.into(),
+                }
             } else {
-                Command::SetAttr { at, name: name.into(), value: Some(v.trim().to_string()) }
+                Command::SetAttr {
+                    at,
+                    name: name.into(),
+                    value: Some(v.trim().to_string()),
+                }
             },
             false,
         );
@@ -552,7 +563,11 @@ fn video_options(ui: Ui, ed: Ed, at: Target, attrs: Vec<Attr>) -> AnyView {
     let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
     let poster_thumb = {
         let p = poster.clone();
-        move || (!p.trim().is_empty()).then(|| base.get().map(|b| crate::library::thumb_src(&b, p.trim()))).flatten()
+        move || {
+            (!p.trim().is_empty())
+                .then(|| base.get().map(|b| crate::library::thumb_src(&b, p.trim())))
+                .flatten()
+        }
     };
     view! {
         <div class="insp-group">
@@ -1401,7 +1416,12 @@ fn role_picker(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Option
         if matches!(tag, "a" | "button") {
             offers.push(("role-cart", "role-cart-add", "data-revel-cart-add", None));
         }
-        offers.push(("role-cart", "role-cart-count", "data-revel-cart-count", None));
+        offers.push((
+            "role-cart",
+            "role-cart-count",
+            "data-revel-cart-count",
+            None,
+        ));
     }
     if filters {
         offers.push((
@@ -1634,7 +1654,9 @@ fn attr_value_field(
     help: &'static str,
     number: bool,
 ) -> AnyView {
-    let value = attr(attrs, name).and_then(|a| a.value.clone()).unwrap_or_default();
+    let value = attr(attrs, name)
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
     let bound = crate::boundattr::attr_editor(ui, ed, at.clone(), name.into(), value.clone());
     let at2 = StoredValue::new(at.clone());
     let head = |button: Option<AnyView>| {
@@ -1648,10 +1670,12 @@ fn attr_value_field(
     match bound {
         Some(b) => {
             let unlink = crate::boundattr::unlink_button(ui, ed, at.clone(), name.into(), value);
-            view! { <div class="field field--bound" data-attr=name>{head(unlink)}{b}</div> }.into_any()
+            view! { <div class="field field--bound" data-attr=name>{head(unlink)}{b}</div> }
+                .into_any()
         }
         None => {
-            let link = crate::boundattr::link_button(ui, ed, at.clone(), name.into(), value.clone());
+            let link =
+                crate::boundattr::link_button(ui, ed, at.clone(), name.into(), value.clone());
             view! {
                 <div class="field" data-attr=name>
                     {head(Some(link))}
@@ -1701,26 +1725,44 @@ const AUTOCOMPLETE: &[(&str, &str)] = &[
 /// d'exemple, saisie automatique, lignes d'une zone de texte.
 fn field_settings(ui: Ui, ed: Ed, at: Target, tag: &str, attrs: &[Attr]) -> AnyView {
     let at = StoredValue::new(at);
-    let value_of = |n: &str| attr(attrs, n).and_then(|a| a.value.clone()).unwrap_or_default();
+    let value_of = |n: &str| {
+        attr(attrs, n)
+            .and_then(|a| a.value.clone())
+            .unwrap_or_default()
+    };
     let set = move |name: &'static str, v: Option<String>| {
         let at = at.get_value();
         ed.apply(
             ui,
             match v {
-                Some(v) => Command::SetAttr { at, name: name.into(), value: Some(v) },
-                None => Command::RemoveAttr { at, name: name.into() },
+                Some(v) => Command::SetAttr {
+                    at,
+                    name: name.into(),
+                    value: Some(v),
+                },
+                None => Command::RemoveAttr {
+                    at,
+                    name: name.into(),
+                },
             },
             false,
         )
     };
     let kind = if tag == "input" {
         let t = value_of("type");
-        if t.is_empty() { "text".to_string() } else { t.to_ascii_lowercase() }
+        if t.is_empty() {
+            "text".to_string()
+        } else {
+            t.to_ascii_lowercase()
+        }
     } else {
         String::new()
     };
     let required = attr(attrs, "required").is_some();
-    let has_placeholder = !matches!(kind.as_str(), "checkbox" | "radio" | "file" | "hidden" | "date") && tag != "select";
+    let has_placeholder = !matches!(
+        kind.as_str(),
+        "checkbox" | "radio" | "file" | "hidden" | "date"
+    ) && tag != "select";
     let name = value_of("name");
     let placeholder = value_of("placeholder");
     let auto = value_of("autocomplete");
@@ -1789,7 +1831,9 @@ fn field_settings(ui: Ui, ed: Ed, at: Target, tag: &str, attrs: &[Attr]) -> AnyV
 }
 
 /// Monnaies proposées pour un panier (codes ISO 4217).
-const CURRENCIES: &[&str] = &["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK", "NOK", "DKK"];
+const CURRENCIES: &[&str] = &[
+    "EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK", "NOK", "DKK",
+];
 
 /// Panier (D-129) : monnaie de la boîte du panier ; produit et prix d'un bouton d'achat ;
 /// compteur d'articles ; « Retirer ce rôle » pour le bouton et le compteur.
@@ -1802,7 +1846,10 @@ fn cart_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyView>
             Command::Batch {
                 commands: names
                     .iter()
-                    .map(|n| Command::RemoveAttr { at: atv.get_value(), name: (*n).into() })
+                    .map(|n| Command::RemoveAttr {
+                        at: atv.get_value(),
+                        name: (*n).into(),
+                    })
                     .collect(),
             },
             false,
@@ -1815,7 +1862,11 @@ fn cart_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyView>
         }
     };
     if let Some(cur) = attr(attrs, "data-revel-cart").map(|a| a.value.clone().unwrap_or_default()) {
-        let cur = if cur.trim().is_empty() { "EUR".to_string() } else { cur.trim().to_uppercase() };
+        let cur = if cur.trim().is_empty() {
+            "EUR".to_string()
+        } else {
+            cur.trim().to_uppercase()
+        };
         let mut list: Vec<String> = CURRENCIES.iter().map(|c| c.to_string()).collect();
         if !list.contains(&cur) {
             list.insert(0, cur.clone());
@@ -2345,8 +2396,15 @@ fn fields_of(ui: Ui, c: Option<&CmsCollection>) -> Vec<(String, String)> {
 /// Valeurs proposées pour un champ d'une collection (filtre, « contient ») : choix du schéma,
 /// contenus reliés (par titre), oui/non ; `true` : liste fermée (sinon suggestions tirées des
 /// valeurs déjà écrites dans les contenus).
-fn field_values(ui: Ui, cols: &[CmsCollection], c: Option<&CmsCollection>, path: &str) -> (Vec<(String, String)>, bool) {
-    let Some(c) = c else { return (Vec::new(), false) };
+fn field_values(
+    ui: Ui,
+    cols: &[CmsCollection],
+    c: Option<&CmsCollection>,
+    path: &str,
+) -> (Vec<(String, String)>, bool) {
+    let Some(c) = c else {
+        return (Vec::new(), false);
+    };
     let name = path.strip_prefix("data.").unwrap_or(path);
     let f = c.fields.iter().find(|f| f.name == name);
     match f.and_then(|f| f.kind.as_deref()) {
@@ -2354,9 +2412,12 @@ fn field_values(ui: Ui, cols: &[CmsCollection], c: Option<&CmsCollection>, path:
         Some("reference") => return (crate::cmsfields::reference_choices(cols, f.unwrap()), true),
         Some("boolean") => {
             return (
-                vec![("true".into(), ui.now("block-list-value-yes", &[])), ("false".into(), ui.now("block-list-value-no", &[]))],
+                vec![
+                    ("true".into(), ui.now("block-list-value-yes", &[])),
+                    ("false".into(), ui.now("block-list-value-no", &[])),
+                ],
                 true,
-            )
+            );
         }
         _ => {}
     }
@@ -2364,7 +2425,10 @@ fn field_values(ui: Ui, cols: &[CmsCollection], c: Option<&CmsCollection>, path:
     for e in &c.entries {
         let vals: Vec<String> = match e.data.get(name) {
             Some(serde_json::Value::String(s)) => vec![s.clone()],
-            Some(serde_json::Value::Array(a)) => a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
+            Some(serde_json::Value::Array(a)) => a
+                .iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect(),
             Some(serde_json::Value::Number(n)) => vec![n.to_string()],
             Some(serde_json::Value::Bool(b)) => vec![b.to_string()],
             _ => Vec::new(),

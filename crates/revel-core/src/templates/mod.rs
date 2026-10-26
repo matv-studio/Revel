@@ -484,7 +484,10 @@ pub fn build(id: &str, name: &str, lang: &str, scheme: Scheme) -> Result<Built, 
                             other => args.push_str(&format!(" x-{name}=\"{other}\"")),
                         }
                     }
-                    b = b.replace("<x-use c=\"navbar\">", &format!("<x-use c=\"navbar\"{args}>"));
+                    b = b.replace(
+                        "<x-use c=\"navbar\">",
+                        &format!("<x-use c=\"navbar\"{args}>"),
+                    );
                 }
                 (k, b)
             }
@@ -498,8 +501,8 @@ pub fn build(id: &str, name: &str, lang: &str, scheme: Scheme) -> Result<Built, 
         });
     }
     for c in &d.collections {
-        let col: Collection = serde_json::from_value(c.clone())
-            .map_err(|e| format!("{id} : collection : {e}"))?;
+        let col: Collection =
+            serde_json::from_value(c.clone()).map_err(|e| format!("{id} : collection : {e}"))?;
         s.collections.push(col);
     }
     for p in &d.pages {

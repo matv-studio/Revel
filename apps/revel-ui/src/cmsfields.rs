@@ -131,7 +131,9 @@ fn infer(v: Option<&Value>) -> Kind {
         }
         Some(Value::Array(a)) if a.iter().all(Value::is_string) => Kind::List,
         // Liste d'objets sans schéma (crédits d'un site importé…) : cartes, champs déduits.
-        Some(Value::Array(a)) if !a.is_empty() && a.iter().all(Value::is_object) => Kind::ObjectList,
+        Some(Value::Array(a)) if !a.is_empty() && a.iter().all(Value::is_object) => {
+            Kind::ObjectList
+        }
         Some(Value::Array(_) | Value::Object(_)) => Kind::Json,
         Some(Value::String(s)) if is_date(s) => Kind::Date,
         Some(Value::String(s)) if is_image(s) => Kind::Image,
@@ -651,7 +653,10 @@ pub fn field_row_pinned(
             for o in a.iter().filter_map(Value::as_object) {
                 for k in o.keys() {
                     if !f.fields.iter().any(|x| &x.name == k) {
-                        f.fields.push(CmsField { name: k.clone(), ..Default::default() });
+                        f.fields.push(CmsField {
+                            name: k.clone(),
+                            ..Default::default()
+                        });
                     }
                 }
             }
@@ -1228,7 +1233,9 @@ fn Gallery(
         spawn_local(async move {
             let mut urls = Vec::new();
             for f in fs {
-                let Ok(bytes) = crate::files::read(&f).await else { continue };
+                let Ok(bytes) = crate::files::read(&f).await else {
+                    continue;
+                };
                 match crate::api::edit_import_media(&p, &f.name(), &bytes).await {
                     Ok(m) => urls.push(m.url),
                     Err(e) => ui.fail(e),
@@ -1427,12 +1434,20 @@ fn repeat_view(
             .and_then(|o| {
                 o.iter()
                     .filter(|(k, _)| !k.starts_with('_'))
-                    .find_map(|(_, v)| v.as_str().filter(|s| !s.trim().is_empty()).map(str::to_string))
+                    .find_map(|(_, v)| {
+                        v.as_str()
+                            .filter(|s| !s.trim().is_empty())
+                            .map(str::to_string)
+                    })
             })
             .map(|s| {
                 let t: String = s.split_whitespace().collect::<Vec<_>>().join(" ");
                 let t = strip_tags(&t);
-                if t.chars().count() > 60 { format!("{}…", t.chars().take(60).collect::<String>()) } else { t }
+                if t.chars().count() > 60 {
+                    format!("{}…", t.chars().take(60).collect::<String>())
+                } else {
+                    t
+                }
             })
             .unwrap_or_default()
     };

@@ -15,7 +15,10 @@ fn couleurs_selon_le_theme() {
     assert!(!light.contains("prefers-color-scheme") && light.contains("--bg: #fff"));
     let dark = apply_scheme(css, Scheme::Dark);
     assert!(!dark.contains("prefers-color-scheme"), "{dark}");
-    assert!(dark.contains("--bg: #000") && dark.contains("--text: #eee"), "{dark}");
+    assert!(
+        dark.contains("--bg: #000") && dark.contains("--text: #eee"),
+        "{dark}"
+    );
     assert!(dark.contains("color-scheme: dark"), "{dark}");
 }
 

@@ -257,13 +257,24 @@ fn value_kind(key: &str, value: &str) -> InfoKind {
     let image_ext = [".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg"]
         .iter()
         .any(|e| lower.split(['?', '#']).next().unwrap_or("").ends_with(e));
-    if image_ext || ["image", "logo", "photo", "icon", "picture"].iter().any(|w| k.contains(w)) {
+    if image_ext
+        || ["image", "logo", "photo", "icon", "picture"]
+            .iter()
+            .any(|w| k.contains(w))
+    {
         InfoKind::Image
-    } else if (k.contains("mail") || (v.contains('@') && !v.contains(' ') && !v.contains('/'))) && !v.starts_with("http") {
+    } else if (k.contains("mail") || (v.contains('@') && !v.contains(' ') && !v.contains('/')))
+        && !v.starts_with("http")
+    {
         InfoKind::Email
     } else if k.contains("tel") || k.contains("phone") || k.contains("fax") {
         InfoKind::Phone
-    } else if v.starts_with("http://") || v.starts_with("https://") || k.ends_with("url") || k.contains("link") || k.contains("lien") {
+    } else if v.starts_with("http://")
+        || v.starts_with("https://")
+        || k.ends_with("url")
+        || k.contains("link")
+        || k.contains("lien")
+    {
         InfoKind::Url
     } else if v.contains('\n') || v.chars().count() > 70 {
         InfoKind::Long
@@ -274,12 +285,22 @@ fn value_kind(key: &str, value: &str) -> InfoKind {
 
 /// Contrôle d'une information : image (vignette et choix), e-mail, téléphone, lien (ouvrir),
 /// texte long (plusieurs lignes) ou texte.
-fn value_control(ui: Ui, kind: InfoKind, name: String, value: String, commit: Callback<String>) -> AnyView {
+fn value_control(
+    ui: Ui,
+    kind: InfoKind,
+    name: String,
+    value: String,
+    commit: Callback<String>,
+) -> AnyView {
     match kind {
         InfoKind::Image => {
             let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
             let v2 = value.clone();
-            let thumb = move || (!v2.trim().is_empty()).then(|| base.get().map(|b| crate::library::thumb_src(&b, v2.trim()))).flatten();
+            let thumb = move || {
+                (!v2.trim().is_empty())
+                    .then(|| base.get().map(|b| crate::library::thumb_src(&b, v2.trim())))
+                    .flatten()
+            };
             view! {
                 <span class="field-line siteinfo-value image-row">
                     <button type="button" class="image-row__thumb" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")

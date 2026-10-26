@@ -251,9 +251,9 @@ pub fn Transitions(sx: Sx) -> impl IntoView {
                      prefix: &'static str| {
         // Même unité que la durée de la transition (secondes ou millisecondes) : « 0,8 s + 0 s ».
         let seconds = list.with_untracked(|l| {
-            l.as_ref()
-                .and_then(|l| l.get(i))
-                .is_some_and(|t| t.duration.trim().ends_with('s') && !t.duration.trim().ends_with("ms"))
+            l.as_ref().and_then(|l| l.get(i)).is_some_and(|t| {
+                t.duration.trim().ends_with('s') && !t.duration.trim().ends_with("ms")
+            })
         });
         let zero: &'static str = if seconds { "0s" } else { "0ms" };
         view! {

@@ -156,7 +156,14 @@ fn readable_path(path: &str) -> String {
             return out;
         };
         let inner = rest[i + 2..i + j].trim();
-        let name = inner.rsplit('.').next().unwrap_or(inner).split('|').next().unwrap_or("").trim();
+        let name = inner
+            .rsplit('.')
+            .next()
+            .unwrap_or(inner)
+            .split('|')
+            .next()
+            .unwrap_or("")
+            .trim();
         out.push('‹');
         out.push_str(name);
         out.push('›');
@@ -804,7 +811,9 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
         auto.with(|a| {
             map.with(|m| {
                 for n in m.nodes.iter().filter(|n| n.kind == NodeKind::Entry) {
-                    let Some(parent) = n.parent.as_deref() else { continue };
+                    let Some(parent) = n.parent.as_deref() else {
+                        continue;
+                    };
                     if placed(&n.key) || !placed(parent) {
                         continue;
                     }
@@ -1429,8 +1438,26 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                 pending.set(HashMap::new());
                 s.doc.set(Some(o.site));
             }
+            // Boutons Annuler et Rétablir de la barre du haut mis à jour.
+            ui.doc_rev.update(|n| *n += 1);
         });
     };
+    // Annulation par les boutons de la barre du haut : plan relu.
+    Effect::new(move |prev: Option<u32>| {
+        let n = ui.undo_rev.get();
+        if prev.is_some_and(|p| p != n) {
+            let p = path.get_value();
+            spawn_local(async move {
+                if let Ok(o) = api::edit_open(&p).await
+                    && !s.doc.is_disposed()
+                {
+                    pending.set(HashMap::new());
+                    s.doc.set(Some(o.site));
+                }
+            });
+        }
+        n
+    });
     let on_key = move |e: web_sys::KeyboardEvent| {
         let ev: &web_sys::Event = e.as_ref();
         if closest(ev, "input, textarea, select, [contenteditable]").is_some() {

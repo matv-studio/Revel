@@ -2879,8 +2879,16 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         let page = ed.localized(&ed.page.get());
         let target = match ed.comp.get() {
             Some(c) => {
-                let enc = |t: &str| js_sys::encode_uri_component(t).as_string().unwrap_or_default();
-                format!("/__revel/component/?component={}&page={}", enc(&c), enc(&page))
+                let enc = |t: &str| {
+                    js_sys::encode_uri_component(t)
+                        .as_string()
+                        .unwrap_or_default()
+                };
+                format!(
+                    "/__revel/component/?component={}&page={}",
+                    enc(&c),
+                    enc(&page)
+                )
             }
             None => page,
         };

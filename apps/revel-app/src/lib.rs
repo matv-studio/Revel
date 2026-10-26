@@ -1380,7 +1380,9 @@ fn edit_media(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::Media
 /// Images en ligne d'un site ouvert (adresses, D-128).
 #[tauri::command]
 fn media_online(s: State<AppState>, path: String) -> Res<Vec<String>> {
-    s.core.media_online(std::path::Path::new(&path)).map_err(err)
+    s.core
+        .media_online(std::path::Path::new(&path))
+        .map_err(err)
 }
 
 /// Copie les images en ligne dans les médias du site (une étape d'annulation).

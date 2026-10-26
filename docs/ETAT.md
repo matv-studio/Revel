@@ -627,6 +627,7 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
     `Ed::run_action`) ; liens de variantes à la Blender (prises, contour, flèche sur la tangente) ; « Image
     révélée » (`Preset::Reveal`, `data-revel-reveal` fade/wipe/spot, `actions.js`) ; 95 icônes en onglets +
     import SVG (`icons::clean_svg`, `icons::set_icon`) ; `Ed::apply_keep` (ajout sans changer la sélection).
+  - CI verte sur ca126e7 (revel-app : `unsafe_code = "deny"` au lieu de `forbid`, autorisé sur `drops::watch` seulement ; essai Figma de l'équivalence instable une fois, relancé). Pas de nouvelle version : 0.6.8 reste le dernier brouillon.
   - Pièges : `pgrep -f` dans une commande Bash qui contient le motif tue le shell (code 144) : lancer depuis
     un script ; WebView2 non vérifiable ici (compile pour Windows dans un crate de contrôle sous /tmp).
 

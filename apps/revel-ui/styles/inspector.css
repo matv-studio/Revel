@@ -176,7 +176,11 @@
 }
 .nbox-unit:hover { color: var(--text); background: var(--surface-hover); }
 /* Pastille d'une valeur fluide ou d'une variable du site (D-139). */
-.nbox-input.is-hidden, .nbox-unit.is-hidden { display: none; }
+/* Champ gardé (clavier, double-clic sur la pastille) : invisible tant qu'il n'a pas le focus. */
+.nbox:has(.nbox-chip) { position: relative; }
+.nbox-input.is-hidden { position: absolute; inset: 0; z-index: 1; width: auto; opacity: 0; pointer-events: none; }
+.nbox-input.is-hidden:focus { opacity: 1; pointer-events: auto; background: var(--surface-raised); border-radius: inherit; }
+.nbox:has(.nbox-input:focus) .nbox-chip { visibility: hidden; }
 .nbox-chip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; height: 20px; margin: 0 2px; padding: 0 6px; border: 0;
   border-radius: var(--radius-sm); background: var(--set-bg); color: var(--set-text); font: inherit; font-size: var(--text-xs); cursor: pointer; }
 .nbox-chip.is-var { background: var(--comp-bg); color: var(--comp); }

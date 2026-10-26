@@ -3022,12 +3022,12 @@ fn modele_partage_fichier_leger() {
     );
 }
 
+/// Fichiers du dépôt imité (chemin → contenu).
+type FauxFichiers = std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>>;
+
 /// Serveur local qui imite l'API de GitHub (objets Git d'un dépôt) et ses fichiers bruts, pour
 /// l'envoi d'un modèle dans un catalogue (D-132).
-fn faux_github() -> (
-    String,
-    std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>>,
-) {
+fn faux_github() -> (String, FauxFichiers) {
     use base64::Engine;
     use std::collections::BTreeMap;
     use std::io::{BufRead, BufReader, Read, Write};

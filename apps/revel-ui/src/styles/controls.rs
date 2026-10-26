@@ -575,11 +575,22 @@ pub fn NumBox(
             on_commit.run((Some(o.v.to_string()), false));
             return;
         }
-        let cur = value
-            .get_untracked()
-            .or_else(|| Some(start.get_untracked()))
-            .and_then(|v| parse_num(&v))
-            .map(|n| n.value)
+        // Valeur de départ : réglée ici, sinon de départ, sinon effective (valeur fluide ou
+        // variable : sa taille à l'écran), convertie entre px et rem/em (16 px).
+        let base = [
+            value.get_untracked(),
+            Some(start.get_untracked()),
+            Some(hint.get_untracked()),
+        ]
+        .into_iter()
+        .flatten()
+        .find_map(|v| parse_num(&v));
+        let cur = base
+            .map(|n| match (n.unit.as_str(), o.v) {
+                ("px", "rem" | "em") => (n.value / 16.0 * 1000.0).round() / 1000.0,
+                ("rem" | "em", "px") => (n.value * 16.0).round(),
+                _ => n.value,
+            })
             .unwrap_or(if matches!(o.v, "%" | "vw" | "vh") {
                 100.0
             } else {
@@ -615,6 +626,19 @@ pub fn NumBox(
                 };
                 view! {
                     <button type="button" class="nbox-chip pop-trigger" class:is-var=move || var_name().is_some()
+                        on:dblclick=move |e: ev::MouseEvent| {
+                            // Double-clic : la valeur se tape dans le champ.
+                            sx.menu.set(None);
+                            if let Some(i) = e.current_target()
+                                .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                                .and_then(|el| el.parent_element())
+                                .and_then(|p| p.query_selector(".nbox-input").ok().flatten())
+                                .and_then(|i| i.dyn_into::<web_sys::HtmlInputElement>().ok())
+                            {
+                                let _ = i.focus();
+                                i.select();
+                            }
+                        }
                         title=move || value.get().unwrap_or_default()
                         on:click=move |_| sx.toggle_menu(chip_id)>
                         {move || fnv().map(|(n, _)| view! { <span class="nbox-chip__fn">{if n == "clamp" { ui.tx("nbox-fluid", &[]) } else { n }}</span> })}

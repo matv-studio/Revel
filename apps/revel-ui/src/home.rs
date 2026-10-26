@@ -950,7 +950,7 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                                 <p class="muted new-site__chosen-pages">{ui.now("template-pages", &[("n", t.pages.to_string())])}</p>
                                 {(!t.author.is_empty() || !t.license.is_empty()).then(|| view! {
                                     <p class="muted new-site__chosen-meta">
-                                        {[t.author.clone(), t.license.clone(), (t.size > 0).then(|| crate::settings::size(ui, t.size)).unwrap_or_default()]
+                                        {[t.author.clone(), t.license.clone(), if t.size > 0 { crate::settings::size(ui, t.size) } else { String::new() }]
                                             .into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(" · ")}
                                     </p>
                                 })}

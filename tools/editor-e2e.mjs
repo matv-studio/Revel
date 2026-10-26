@@ -2224,6 +2224,7 @@ try {
       await page.waitForSelector('.style-row[data-prop="font-size"] .nbox-chip');
       const chipText = (await page.textContent('.style-row[data-prop="font-size"] .nbox-chip')).trim();
       await page.click('.style-row[data-prop="font-size"] .nbox-chip');
+      await page.waitForSelector('.nbox-vars .menu-item');
       const varItems = await page.$$eval('.nbox-vars .menu-item', (m) => m.map((x) => x.textContent.trim()));
       await page.keyboard.press('Escape');
       check('styles : variable du site en pastille, autres variables et « Détacher » proposés', chipText === 'Step 5'
@@ -3621,7 +3622,7 @@ try {
       const t = document.querySelector('.settings-sub[data-sub="updates"]').getBoundingClientRect().top;
       return Math.abs(t - c) < 40 || document.querySelector('.app-settings .settings-nav-group.is-on [data-section="updates"]');
     });
-    check('réglages de Revel : rail des parties, aller à une partie', rail.length === 9, rail.join(', '));
+    check('réglages de Revel : rail des parties, aller à une partie', rail.length === 10, rail.join(', '));
     // Éditeur, couleurs, raccourcis (D-125).
     {
       await page.click('.app-settings .settings-nav-item[data-section="shortcuts"]');

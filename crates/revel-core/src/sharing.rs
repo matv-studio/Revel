@@ -914,8 +914,7 @@ impl Core {
         cat.format = FORMAT;
         cat.templates.retain(|e| e.id != id);
         cat.templates.push(entry);
-        cat.templates
-            .sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        cat.templates.sort_by_key(|a| a.name.to_lowercase());
         let meta_bytes =
             serde_json::to_vec_pretty(&pack.meta).map_err(|e| CoreError::Other(e.to_string()))?;
         let cat_bytes =

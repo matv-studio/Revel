@@ -10,6 +10,19 @@ use unic_langid::LanguageIdentifier;
 pub const LOCALES: &[(&str, &str)] = &[
     ("en", include_str!("../locales/en/revel.ftl")),
     ("fr", include_str!("../locales/fr/revel.ftl")),
+    ("es", include_str!("../locales/es/revel.ftl")),
+    ("de", include_str!("../locales/de/revel.ftl")),
+    ("it", include_str!("../locales/it/revel.ftl")),
+    ("pt", include_str!("../locales/pt/revel.ftl")),
+    ("nl", include_str!("../locales/nl/revel.ftl")),
+    ("pl", include_str!("../locales/pl/revel.ftl")),
+    ("tr", include_str!("../locales/tr/revel.ftl")),
+    ("ru", include_str!("../locales/ru/revel.ftl")),
+    ("id", include_str!("../locales/id/revel.ftl")),
+    ("hi", include_str!("../locales/hi/revel.ftl")),
+    ("zh", include_str!("../locales/zh/revel.ftl")),
+    ("ja", include_str!("../locales/ja/revel.ftl")),
+    ("ko", include_str!("../locales/ko/revel.ftl")),
 ];
 
 /// Langue utilisée si la langue demandée n'existe pas.
@@ -231,6 +244,8 @@ mod tests {
     fn negociation_et_repli() {
         assert_eq!(negotiate("fr-FR"), "fr");
         assert_eq!(negotiate("sv"), "en");
+        assert_eq!(negotiate("zh-CN"), "zh");
+        assert_eq!(negotiate("ja_JP"), "ja");
         let fr = Localizer::new("fr");
         assert_eq!(fr.t("app-title", &[]), "Revel");
         assert_eq!(fr.t("cle-inexistante", &[]), "cle-inexistante");

@@ -1,0 +1,21 @@
+media:
+  input: media
+  output: /media
+content:
+  - name: docs
+    label: "[[Pages de documentation||Doc pages]]"
+    type: collection
+    path: content/docs
+    filename: "{fields.slug}.md"
+    view:
+      fields: [order, title, section]
+      primary: title
+      default: { sort: order, order: asc }
+    fields:
+      - { name: title, label: "[[Titre||Title]]", type: string, required: true }
+      - { name: slug, label: "[[Adresse de la page||Page address]]", type: string, required: true }
+      - { name: order, label: "[[Ordre dans le sommaire||Order in sidebar]]", type: number }
+      - { name: section, label: "[[Rubrique||Section]]", type: string }
+      - { name: description, label: "[[Résumé||Summary]]", type: text }
+      - { name: image, label: Image, type: image }
+      - { name: body, label: "[[Texte||Text]]", type: rich-text }

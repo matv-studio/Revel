@@ -369,3 +369,5 @@
   color: var(--text); font-size: var(--text-lg); font-weight: var(--weight-medium);
 }
 .drop-veil-card svg.icon { width: 28px; height: 28px; color: var(--text-muted); }
+/* Annuler, rétablir dans la barre du haut (Paramètres, Localisation, Plan du site). */
+.topbar-undo { display: flex; align-items: center; gap: 2px; margin-right: 4px; }

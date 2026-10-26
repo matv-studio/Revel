@@ -1,0 +1,5 @@
+.cta-band { padding: var(--section) var(--pad); }
+.cta-band__inner { display: grid; justify-items: center; gap: 22px; max-width: var(--max); margin: 0 auto; padding: clamp(56px, 8vw, 104px) var(--pad); border-radius: var(--radius-lg); background: var(--accent); color: var(--accent-ink); text-align: center; }
+.cta-band__title { max-width: 760px; text-wrap: balance; }
+.cta-band__text { max-width: 560px; font-size: 19px; opacity: 0.85; }
+.cta-band__btn { background: var(--accent-ink); color: var(--accent); border-color: var(--accent-ink); }

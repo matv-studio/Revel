@@ -1,0 +1,30 @@
+:root { color-scheme: light; --bg: #f6f4ef; --surface: #ffffff; --text: #14130f; --muted: #66625a; --line: rgba(20, 19, 15, 0.1); --line-strong: rgba(20, 19, 15, 0.22); --accent: #3048d4; --accent-ink: #ffffff; --font-display: "Manrope", "Avenir Next", "Segoe UI", system-ui, sans-serif; --font-body: "Inter", "Segoe UI", system-ui, sans-serif; --display-weight: 800; --display-tracking: -0.035em; --radius: 12px; --radius-lg: 22px; --radius-btn: 999px; --max: 1240px; --pad: clamp(20px, 4vw, 40px); --section: clamp(80px, 10vw, 140px); }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; --bg: #0f0f12; --surface: #17171c; --text: #f3f2ee; --muted: #a29f97; --line: rgba(243, 242, 238, 0.1); --line-strong: rgba(243, 242, 238, 0.24); --accent: #7b8cff; --accent-ink: #0f0f12; }
+}
+.hero { padding: clamp(48px, 7vw, 96px) 0 clamp(64px, 8vw, 120px); }
+.hero__inner { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: clamp(32px, 6vw, 88px); align-items: center; }
+.hero__title { text-wrap: balance; }
+.hero__text .lead { margin-top: 28px; }
+.hero__media { position: relative; }
+.hero__badge { position: absolute; left: -28px; bottom: 36px; display: grid; gap: 2px; padding: 18px 22px; border-radius: 18px; background: var(--surface); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.14); }
+.hero__badge strong { font-family: var(--font-display); font-size: 30px; line-height: 1; }
+.hero__badge span { font-size: 14px; color: var(--muted); }
+.logos { padding: 0 0 clamp(56px, 6vw, 88px); }
+.logos__label { margin-bottom: 22px; font-size: 14px; text-align: center; }
+.logos__item { font-family: var(--font-display); font-size: 26px; font-weight: 800; letter-spacing: -0.03em; opacity: 0.45; }
+.stats { margin-top: 40px; }
+.about__text { display: grid; gap: 22px; }
+.about__text .lead { max-width: none; }
+.quote-wall { background: var(--surface); }
+.page-hero { padding: clamp(64px, 9vw, 128px) 0 clamp(40px, 5vw, 64px); }
+.page-hero .lead { margin-top: 24px; }
+.service { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 72px); align-items: center; }
+.service__list { display: grid; gap: 12px; margin: 24px 0 0; padding: 0; list-style: none; }
+.service__list li { padding-left: 28px; position: relative; }
+.service__list li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+.faqs { max-width: 860px; margin: 0 auto; }
+@media (max-width: 991px) {
+  .hero__inner, .service { grid-template-columns: minmax(0, 1fr); }
+  .hero__badge { left: 16px; }
+}

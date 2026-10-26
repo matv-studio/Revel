@@ -1,0 +1,28 @@
+media:
+  input: media
+  output: /media
+content:
+  - name: listings
+    label: "[[Biens||Listings]]"
+    type: collection
+    path: content/listings
+    filename: "{fields.slug}.md"
+    view:
+      fields: [title, price, place]
+      primary: title
+    fields:
+      - { name: title, label: "[[Titre||Title]]", type: string, required: true }
+      - { name: slug, label: "[[Adresse de la page||Page address]]", type: string, required: true }
+      - { name: order, label: "[[Ordre||Order]]", type: number }
+      - name: type
+        label: Type
+        type: select
+        options:
+          values: ["[[Maison||House]]", "[[Appartement||Apartment]]", "Loft"]
+      - { name: price, label: "[[Prix||Price]]", type: string }
+      - { name: place, label: "[[Lieu||Location]]", type: string }
+      - { name: area, label: "[[Surface||Area]]", type: string }
+      - { name: rooms, label: "[[Pièces||Rooms]]", type: string }
+      - { name: image, label: "[[Photo principale||Main photo]]", type: image }
+      - { name: gallery, label: "[[Galerie||Gallery]]", type: image, list: true }
+      - { name: body, label: Description, type: rich-text }

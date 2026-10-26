@@ -640,6 +640,9 @@ pub fn Media() -> impl IntoView {
     // Média ouvert dans le volet de détails ; dépôt de fichiers du système en cours.
     let details = RwSignal::new(None::<String>);
     let dropping = RwSignal::new(false);
+    // Images en ligne (photos libres d'un modèle) : relues après chaque modification.
+    let online = RwSignal::new(0usize);
+    let copying = RwSignal::new(false);
     Effect::new(move |_| {
         ed.load.track();
         refresh.track();
@@ -654,6 +657,35 @@ pub fn Media() -> impl IntoView {
             loaded.set(true);
         });
     });
+    let online_path = ed.path.get_value();
+    Effect::new(move |_| {
+        ed.state.with(|s| s.as_ref().map(|s| s.revision));
+        ed.load.track();
+        let path = online_path.clone();
+        spawn_local(async move {
+            if let Ok(v) = api::media_online(&path).await {
+                online.set(v.len());
+            }
+        });
+    });
+    let localize = move || {
+        if copying.get_untracked() {
+            return;
+        }
+        copying.set(true);
+        let path = ed.path.get_value();
+        spawn_local(async move {
+            match api::media_localize(&path).await {
+                Ok(r) => {
+                    online.set(0);
+                    ed.after(ui, r.state);
+                    ui.media_rev.update(|n| *n += 1);
+                }
+                Err(e) => ui.fail(e),
+            }
+            copying.set(false);
+        });
+    };
     // Dossier affiché supprimé ou renommé : retour au plus proche qui existe.
     Effect::new(move |_| {
         let cur = folder.get();
@@ -729,6 +761,7 @@ pub fn Media() -> impl IntoView {
     let tile = move |f: MediaFile| {
         let url = StoredValue::new(f.url.clone());
         let name = file_name(&f.url);
+        let aria = name.clone();
         let ext = name
             .rsplit_once('.')
             .map(|(_, e)| e.to_uppercase())
@@ -760,8 +793,15 @@ pub fn Media() -> impl IntoView {
         };
         let item = move || media_drag_item(ed, &url.get_value(), kind);
         view! {
-            <figure class="asset" title=tip data-url=f.url.clone()
+            <figure class="asset" title=tip data-url=f.url.clone() tabindex="0" role="button"
+                aria-label=aria
                 class:is-dragging=move || sh.dragging.get().as_deref() == Some(url.get_value().as_str())
+                // Clavier : Entrée ouvre les détails, Maj+Entrée insère le média dans la page.
+                on:keydown=move |e: leptos::ev::KeyboardEvent| {
+                    if e.key() != "Enter" && e.key() != " " { return; }
+                    e.prevent_default();
+                    if e.shift_key() { insert_media(ui, ed, &url.get_value(), kind) } else { details.set(Some(url.get_value())) }
+                }
                 on:contextmenu=menu
                 on:pointerdown=move |e: leptos::ev::PointerEvent| drag.down(&e)
                 on:pointermove=move |e: leptos::ev::PointerEvent| {
@@ -883,6 +923,19 @@ pub fn Media() -> impl IntoView {
                 }
             }>
             <Search value=q key="assets-search"/>
+            // Images en ligne (photos libres d'un modèle) : bandeau discret sous la recherche, retiré
+            // dès qu'elles sont copiées dans le site.
+            {move || (online.get() > 0).then(|| view! {
+                <div class="media-online" role="status" title=ui.t("media-online-help")>
+                    <span class="media-online__icon">{icons::cloud()}</span>
+                    <span class="media-online__text">{move || ui.tx("media-online", &[("count", online.get().to_string())])}</span>
+                    <button class="icon-btn icon-btn--small media-online__copy" class:is-busy=move || copying.get()
+                        disabled=move || copying.get()
+                        title=move || ui.now(if copying.get() { "media-online-copying" } else { "media-online-copy" }, &[])
+                        aria-label=move || ui.now(if copying.get() { "media-online-copying" } else { "media-online-copy" }, &[])
+                        on:click=move |_| localize()>{icons::download()}</button>
+                </div>
+            })}
             <div class="media-tools">
                 <label class="mini-select" title=ui.t("media-type-filter")>
                     {move || kind.get().map(kind_icon).unwrap_or_else(icons::grid)}
@@ -1228,6 +1281,8 @@ pub struct MediaPick {
     pub shelf: Option<Shelf>,
     /// Adresse choisie.
     pub on_pick: std::sync::Arc<dyn Fn(String) + Send + Sync>,
+    /// Choix de plusieurs médias (galerie) : adresses dans l'ordre choisi.
+    pub many: Option<std::sync::Arc<dyn Fn(Vec<String>) + Send + Sync>>,
 }
 
 /// Ouvre le choix d'un média du site ouvert (`images` : images seulement ; `shelf` : dossiers
@@ -1247,6 +1302,28 @@ pub fn pick_media(
         kind: None,
         shelf,
         on_pick: std::sync::Arc::new(on_pick),
+        many: None,
+    }));
+}
+
+/// Ouvre le choix de plusieurs médias du site ouvert (galerie) : chaque clic ajoute ou retire
+/// un média, « Ajouter » rend les adresses dans l'ordre des clics.
+pub fn pick_media_many(
+    ui: Ui,
+    images: bool,
+    shelf: Option<Shelf>,
+    on_pick: impl Fn(Vec<String>) + Send + Sync + 'static,
+) {
+    let Some(site) = ui.site_path() else {
+        return;
+    };
+    ui.pick_media.set(Some(MediaPick {
+        site,
+        images,
+        kind: None,
+        shelf,
+        on_pick: std::sync::Arc::new(|_| {}),
+        many: Some(std::sync::Arc::new(on_pick)),
     }));
 }
 
@@ -1265,6 +1342,7 @@ pub fn pick_animation(
         kind: Some(MediaKind::Animation),
         shelf,
         on_pick: std::sync::Arc::new(on_pick),
+        many: None,
     }));
 }
 
@@ -1279,6 +1357,22 @@ pub fn pick_audio(ui: Ui, shelf: Option<Shelf>, on_pick: impl Fn(String) + Send 
         kind: Some(MediaKind::Audio),
         shelf,
         on_pick: std::sync::Arc::new(on_pick),
+        many: None,
+    }));
+}
+
+/// Ouvre le choix d'un média d'un seul type (vidéos pour la source d'une vidéo).
+pub fn pick_kind(ui: Ui, kind: MediaKind, on_pick: impl Fn(String) + Send + Sync + 'static) {
+    let Some(site) = ui.site_path() else {
+        return;
+    };
+    ui.pick_media.set(Some(MediaPick {
+        site,
+        images: kind == MediaKind::Image,
+        kind: Some(kind),
+        shelf: None,
+        on_pick: std::sync::Arc::new(on_pick),
+        many: None,
     }));
 }
 
@@ -1367,10 +1461,34 @@ pub fn MediaPicker() -> impl IntoView {
                     loaded.set(true);
                 });
             });
+            // Choix multiple (galerie) : adresses dans l'ordre des clics.
+            let many = req.with_value(|r| r.many.is_some());
+            let picked = RwSignal::new(Vec::<String>::new());
             let choose = move |url: String| {
+                if many {
+                    picked.update(|p| {
+                        if let Some(i) = p.iter().position(|x| *x == url) {
+                            p.remove(i);
+                        } else {
+                            p.push(url);
+                        }
+                    });
+                    return;
+                }
                 let f = req.with_value(|r| r.on_pick.clone());
                 close();
                 f(url);
+            };
+            let add_picked = move || {
+                let urls = picked.get_untracked();
+                if urls.is_empty() {
+                    return;
+                }
+                let f = req.with_value(|r| r.many.clone());
+                close();
+                if let Some(f) = f {
+                    f(urls);
+                }
             };
             let shown = Memo::new(move |_| {
                 let ql = q.get().trim().to_lowercase();
@@ -1415,7 +1533,10 @@ pub fn MediaPicker() -> impl IntoView {
                         return;
                     }
                     ui.media_rev.update(|n| *n += 1);
-                    if urls.len() == 1 && ui.pick_media.with_untracked(Option::is_some) {
+                    if many {
+                        // Médias importés : ajoutés au choix en cours.
+                        picked.update(|p| p.extend(urls.into_iter().filter(|u| !p.contains(u)).collect::<Vec<_>>()));
+                    } else if urls.len() == 1 && ui.pick_media.with_untracked(Option::is_some) {
                         choose(urls.remove(0));
                     }
                 });
@@ -1435,9 +1556,14 @@ pub fn MediaPicker() -> impl IntoView {
                     move || base.get().map(|b| thumb_src(&b, &u))
                 };
                 let kind = f.kind;
+                let me = StoredValue::new(f.url.clone());
+                let order = move || me.with_value(|u| picked.with(|p| p.iter().position(|x| x == u))).map(|i| i + 1);
                 view! {
                     <button type="button" class="asset picker-tile" title=format!("{}\n{}", f.url, human_size(ui, f.size))
+                        class:is-picked=move || order().is_some()
+                        aria-pressed=move || many.then(|| order().is_some().to_string())
                         data-url=f.url.clone() on:click=move |_| choose(url.clone())>
+                        {move || order().map(|n| view! { <span class="picker-order">{n}</span> })}
                         <div class="asset-thumb" class:is-file=kind != MediaKind::Image>
                             {if kind == MediaKind::Image {
                                 view! { <img src=src alt="" loading="lazy" decoding="async" draggable="false"/> }.into_any()
@@ -1501,6 +1627,11 @@ pub fn MediaPicker() -> impl IntoView {
                             <span class="toolbar-spacer"></span>
                             <button type="button" class="btn btn--small" on:click=move |_| crate::files::pick(accept, true, import)>
                                 {icons::upload()}{ui.t("assets-import")}</button>
+                            {many.then(|| view! {
+                                <button type="button" class="btn btn--small btn--primary picker-add" disabled=move || picked.with(Vec::is_empty)
+                                    on:click=move |_| add_picked()>
+                                    {move || ui.tx("picker-add-many", &[("count", picked.with(Vec::len).to_string())])}</button>
+                            })}
                         </footer>
                     </div>
                 </div>

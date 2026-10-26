@@ -1,0 +1,6 @@
+.testimonial { display: grid; gap: 28px; margin: 0; padding: clamp(28px, 3vw, 40px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.testimonial__quote { margin: 0; font-family: var(--font-display); font-size: clamp(19px, 1.7vw, 23px); line-height: 1.45; }
+.testimonial__author { display: flex; align-items: center; gap: 14px; }
+.testimonial__avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--line); }
+.testimonial__who { display: grid; }
+.testimonial__role { font-size: 14px; color: var(--muted); }

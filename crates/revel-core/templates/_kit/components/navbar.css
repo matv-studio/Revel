@@ -1,0 +1,13 @@
+.navbar { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+.navbar__inner { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: var(--max); min-height: 72px; margin: 0 auto; padding: 0 var(--pad); }
+.navbar__brand { font-family: var(--font-display); font-size: 21px; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; }
+.navbar__menu { display: flex; align-items: center; gap: 28px; }
+.navbar__link { font-size: 15px; font-weight: 500; text-decoration: none; opacity: 0.78; transition: opacity 0.2s ease; }
+.navbar__link:hover, .navbar__link[aria-current="page"] { opacity: 1; }
+.navbar__toggle { display: none; padding: 8px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: none; color: inherit; font: 600 14px/1 var(--font-body); cursor: pointer; }
+.navbar.is-over { position: absolute; left: 0; right: 0; background: transparent; border-bottom-color: transparent; backdrop-filter: none; color: #ffffff; }
+@media (max-width: 991px) {
+  .navbar__toggle { display: block; }
+  .navbar__menu { display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: flex-start; gap: 18px; padding: 20px var(--pad) 28px; background: var(--bg); color: var(--text); border-bottom: 1px solid var(--line); }
+  .navbar__inner.is-open .navbar__menu { display: flex; }
+}

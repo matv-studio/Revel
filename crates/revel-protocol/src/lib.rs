@@ -16,7 +16,65 @@ pub struct RecentSite {
     pub opened_at: String,
 }
 
-/// Modèle d'un nouveau site.
+/// Site Revel d'un dépôt GitHub du compte connecté (dépôt avec `site.revel.json` à la racine),
+/// avec sa copie sur cet ordinateur s'il y en a une (D-127).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GithubSite {
+    /// `proprietaire/nom`.
+    pub repo: String,
+    pub name: String,
+    pub private: bool,
+    pub clone_url: String,
+    pub html_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Dernier envoi sur GitHub (RFC 3339).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pushed_at: Option<String>,
+    /// Taille du dépôt en Kio (indication avant le téléchargement).
+    #[serde(default)]
+    pub size_kb: u64,
+    /// Dossier du site sur cet ordinateur ; `None` : pas encore téléchargé.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+/// Mise à jour des sites GitHub présents sur cet ordinateur (D-127).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GithubSyncReport {
+    /// Sites qui ont reçu des versions.
+    pub updated: Vec<String>,
+    /// Sites dont les versions enregistrées ont été envoyées.
+    pub sent: Vec<String>,
+    /// Sites laissés de côté : versions faites des deux côtés avec des changements en cours, ou
+    /// même endroit modifié des deux côtés (à vérifier en ouvrant le site).
+    pub waiting: Vec<String>,
+    /// Sites en échec (nom, message).
+    pub failed: Vec<(String, String)>,
+}
+
+/// Modèle proposé à la création d'un site (D-128) : site prêt à adapter, inclus dans Revel.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TemplateInfo {
+    pub id: String,
+    pub name: String,
+    /// Catégorie de la galerie (`business`, `creative`, `commerce`…).
+    pub category: String,
+    pub description: String,
+    /// Photo de la vignette (adresse en ligne) ; aucune : couleurs seules.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+    /// Couleurs principales (fond, texte, accent…).
+    #[serde(default)]
+    pub palette: Vec<String>,
+    /// Outils de Revel montrés par le modèle (identifiants : `cms`, `shop`, `form`…).
+    #[serde(default)]
+    pub features: Vec<String>,
+    /// Nombre de pages.
+    pub pages: usize,
+}
+
+/// Modèle d'un nouveau site (ancienne forme, gardée pour l'import WordPress).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SiteTemplate {
@@ -860,20 +918,20 @@ pub struct AppSettings {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub ui_colors: std::collections::BTreeMap<String, String>,
     /// Liens entre variantes du canevas des composants (D-125) : `curve` (courbe, comme Blender),
-    /// `square` (en équerre), `straight` (droits).
+    /// `square` (en équerre, par défaut depuis D-126), `straight` (droits).
     #[serde(default = "default_links")]
     pub variant_links: String,
-    /// Bout des liens entre variantes : `arrow` (flèche) ou `dot` (rond, comme Blender).
+    /// Bout des liens entre variantes : `arrow` (flèche) ou `dot` (rond, comme Blender ; par défaut).
     #[serde(default = "default_link_end")]
     pub variant_link_end: String,
 }
 
 fn default_links() -> String {
-    "curve".into()
+    "square".into()
 }
 
 fn default_link_end() -> String {
-    "arrow".into()
+    "dot".into()
 }
 
 fn default_theme() -> String {

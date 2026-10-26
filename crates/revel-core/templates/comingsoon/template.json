@@ -1,0 +1,15 @@
+{
+  "name": "[[Bientôt en ligne||Coming soon]]",
+  "category": "personal",
+  "order": 200,
+  "description": "[[Page d'attente d'un lancement : grande image, message, inscription pour être prévenu.||Launch waiting page: full-screen image, message, sign-up to be notified.]]",
+  "preview": "bg",
+  "palette": ["#0a0a0a", "#ffffff", "#9ee6ff"],
+  "features": ["form", "dark"],
+  "fonts": [ { "family": "Syne", "variants": ["600", "800"] } ],
+  "settings": {},
+  "site": { "description": "[[Quelque chose de nouveau arrive au printemps.||Something new is coming this spring.]]", "email": "[[bonjour@exemple.fr||hello@example.com]]", "phone": "", "address": "", "menus": { "main": [], "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" } ] } },
+  "kit": [],
+  "layouts": [ { "id": "base" } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

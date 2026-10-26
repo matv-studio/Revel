@@ -1,0 +1,45 @@
+{
+  "name": "[[Boutique||Shop]]",
+  "category": "commerce",
+  "order": 30,
+  "description": "[[Boutique d'objets : fiches produits dans le CMS, galerie, panier et commande par e-mail, paiement Stripe ou PayPal par lien.||Goods shop: product pages in the CMS, gallery, cart and order by email, Stripe or PayPal payment links.]]",
+  "preview": "hero",
+  "palette": ["#f3eee6", "#2b2420", "#9a5b34"],
+  "features": ["cms", "cart", "stripe", "paypal", "filters", "dark"],
+  "fonts": [ { "family": "Cormorant Garamond", "variants": ["500", "600"] }, { "family": "DM Sans", "variants": ["400", "500", "700"] } ],
+  "settings": { "smooth_scroll": true },
+  "site": {
+    "description": "[[Céramiques et objets du quotidien, faits à la main dans notre atelier.||Ceramics and everyday objects, handmade in our workshop.]]",
+    "email": "[[commandes@exemple.fr||orders@example.com]]",
+    "phone": "[[04 78 00 00 00||+1 555 010 4455]]",
+    "address": "[[3 place du Marché, 26000 Valence||3 Market Square, Hudson, NY]]",
+    "menus": {
+      "main": [
+        { "label": "[[Boutique||Shop]]", "url": "[[/boutique/||/shop/]]" },
+        { "label": "[[L'atelier||Workshop]]", "url": "[[/atelier/||/workshop/]]" },
+        { "label": "[[Panier||Cart]]", "url": "[[/panier/||/cart/]]" }
+      ],
+      "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" }, { "label": "Pinterest", "url": "https://www.pinterest.com/" } ]
+    }
+  },
+  "kit": ["navbar", "footer", "section-head", "feature", "faq"],
+  "components": [
+    { "id": "product-card", "name": "[[Carte produit||Product card]]",
+      "props": [
+        { "name": "image", "label": "Image", "type": "image", "default": "" },
+        { "name": "title", "label": "[[Produit||Product]]", "type": "text", "default": "[[Produit||Product]]" },
+        { "name": "price", "label": "[[Prix||Price]]", "type": "text", "default": "0" },
+        { "name": "link", "label": "[[Lien||Link]]", "type": "link", "default": "#" }
+      ] }
+  ],
+  "layouts": [ { "id": "base" }, { "id": "product", "parent": "base" } ],
+  "collections": [
+    { "id": "products", "folder": "content/products", "path": "[[/boutique/{{ slug }}/||/shop/{{ slug }}/]]", "layout": "product", "sort": { "field": "order", "descending": false } }
+  ],
+  "pages": [
+    { "id": "index", "path": "/", "name": "[[Accueil||Home]]" },
+    { "id": "shop", "path": "[[/boutique/||/shop/]]", "name": "[[Boutique||Shop]]", "title": "[[Boutique||Shop]]" },
+    { "id": "workshop", "path": "[[/atelier/||/workshop/]]", "name": "[[L'atelier||Workshop]]", "title": "[[L'atelier||Workshop]]" },
+    { "id": "cart", "path": "[[/panier/||/cart/]]", "name": "[[Panier||Cart]]", "title": "[[Panier||Cart]]" }
+  ]
+}

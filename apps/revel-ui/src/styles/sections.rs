@@ -410,6 +410,64 @@ pub fn font_label(sheet: &revel_model::Stylesheet, value: &str) -> String {
 
 /// Polices proposées : piles de polices du site (par première famille), polices déclarées par
 /// `@font-face`, polices du système.
+/// Graisses proposées : celles déclarées par la police en vigueur (`@font-face`) d'abord, les
+/// autres ensuite, marquées « non chargée » (le navigateur les imiterait).
+fn weight_options(sx: Sx) -> Signal<Vec<Item>> {
+    let ui = sx.ui;
+    let family = Memo::new(move |_| first_family(&sx.get("font-family").computed));
+    Signal::derive(move || {
+        let fam = family.get().to_lowercase();
+        let mut loaded: Vec<(u32, u32)> = Vec::new();
+        sx.ed.doc.with(|d| {
+            let Some(sheet) = d.as_ref().and_then(|d| d.stylesheet.as_ref()) else { return };
+            for item in &sheet.items {
+                let StyleItem::Raw { css } = item else { continue };
+                let c = css.trim_start();
+                if !c.starts_with("@font-face") {
+                    continue;
+                }
+                let get = |prop: &str| {
+                    c.find(prop).map(|i| {
+                        c[i + prop.len()..]
+                            .trim_start_matches([' ', ':'])
+                            .split([';', '}'])
+                            .next()
+                            .unwrap_or_default()
+                            .trim()
+                            .to_string()
+                    })
+                };
+                let Some(f) = get("font-family") else { continue };
+                if first_family(&f).to_lowercase() != fam {
+                    continue;
+                }
+                let w = get("font-weight").unwrap_or_else(|| "400".into());
+                let nums: Vec<u32> = w
+                    .split_whitespace()
+                    .filter_map(|t| match t {
+                        "normal" => Some(400),
+                        "bold" => Some(700),
+                        t => t.parse().ok(),
+                    })
+                    .collect();
+                match nums.as_slice() {
+                    [a] => loaded.push((*a, *a)),
+                    [a, b, ..] => loaded.push((*a.min(b), *a.max(b))),
+                    _ => {}
+                }
+            }
+        });
+        let all: Vec<Item> = WEIGHTS.iter().map(|o| (o.v.to_string(), ui.tx(o.key, &[]), o.also)).collect();
+        if loaded.is_empty() {
+            return all;
+        }
+        let has = |v: &str| v.parse::<u32>().is_ok_and(|n| loaded.iter().any(|(a, b)| n >= *a && n <= *b));
+        let (mut on, off): (Vec<Item>, Vec<Item>) = all.into_iter().partition(|(v, _, _)| has(v));
+        on.extend(off.into_iter().map(|(v, l, a)| (v, ui.now("weight-not-loaded", &[("name", l)]), a)));
+        on
+    })
+}
+
 fn font_options(sx: Sx) -> Signal<Vec<Item>> {
     let ui = sx.ui;
     Signal::derive(move || {
@@ -505,7 +563,7 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
                 <Choice sx prop="font-family" options=font_options(sx)/>
             </Row>
             <Row sx props=&["font-weight"] key="styles-font-weight">
-                <Choice sx prop="font-weight" options=opts(sx, WEIGHTS)/>
+                <Choice sx prop="font-weight" options=weight_options(sx)/>
             </Row>
             <Row sx props=&["font-size"] key="styles-font-size" scrub=Some(LabelScrub { prop: "font-size", unit: "px", step: 1.0, zero: "16px" })>
                 <PropNum sx prop="font-size" units=FONT_UNITS zero="16px" label="styles-font-size"/>
@@ -582,7 +640,7 @@ fn BgPosition(sx: Sx) -> impl IntoView {
         <div class="align-box align-box--small" role="group">
             {(0..3).flat_map(|r| (0..3).map(move |c| (c, r))).map(|(c, r)| view! {
                 <button class="align-cell" class:is-on=move || at() == (Some(c), Some(r))
-                    title=format!("{} {}", X[c], Y[r])
+                    title=pos_name(sx.ui, c, r)
                     on:click=move |_| sx.set("background-position", Some(format!("{} {}", X[c], Y[r]))) ><i></i></button>
             }).collect_view()}
         </div>
@@ -906,6 +964,16 @@ fn Shadows(sx: Sx, #[prop(default = "box-shadow")] prop: &'static str) -> impl I
     }
 }
 
+/// Nom d'une case de la grille 3 × 3 (colonne, ligne) dans la langue de l'interface.
+fn pos_name(ui: crate::Ui, c: usize, r: usize) -> String {
+    const KEYS: [[&str; 3]; 3] = [
+        ["pos-top-left", "pos-top", "pos-top-right"],
+        ["pos-left", "pos-center", "pos-right"],
+        ["pos-bottom-left", "pos-bottom", "pos-bottom-right"],
+    ];
+    ui.now(KEYS[r.min(2)][c.min(2)], &[])
+}
+
 /// Point d'appui des transformations (`transform-origin`) : grille 3 × 3, ou valeur écrite
 /// (`25% 50%`).
 #[component]
@@ -915,6 +983,10 @@ fn TransformOrigin(sx: Sx) -> impl IntoView {
     const X: [&str; 3] = ["left", "center", "right"];
     const Y: [&str; 3] = ["top", "center", "bottom"];
     let at = move || {
+        // Rien de réglé : le centre (valeur par défaut, lue en pixels par le navigateur).
+        if pv.with(|p| p.here.is_none()) {
+            return (Some(1), Some(1));
+        }
         let v = pv.get().current();
         let t = split_top(&v, ' ');
         let pos = |s: &str, axis: [&str; 3]| -> Option<usize> {
@@ -936,7 +1008,7 @@ fn TransformOrigin(sx: Sx) -> impl IntoView {
             <div class="align-box align-box--small" role="group" aria-label=ui.t("styles-transform-origin")>
                 {(0..3).flat_map(|r| (0..3).map(move |c| (c, r))).map(|(c, r)| view! {
                     <button class="align-cell" class:is-on=move || at() == (Some(c), Some(r))
-                        title=format!("{} {}", X[c], Y[r])
+                        title=pos_name(ui, c, r)
                         on:click=move |_| {
                             let v = if (c, r) == (1, 1) { "center".to_string() } else { format!("{} {}", X[c], Y[r]) };
                             sx.set("transform-origin", Some(v))
@@ -944,7 +1016,7 @@ fn TransformOrigin(sx: Sx) -> impl IntoView {
                 }).collect_view()}
             </div>
             <input class="input input--mono" aria-label=ui.t("styles-transform-origin")
-                placeholder=move || pv.get().hint()
+                placeholder=ui.t("pos-center")
                 prop:value=move || pv.get().here.unwrap_or_default()
                 on:change=move |e| { let v = event_target_value(&e); sx.set("transform-origin", (!v.trim().is_empty()).then(|| v.trim().to_string())); }/>
         </div>

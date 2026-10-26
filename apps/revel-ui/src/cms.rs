@@ -5,7 +5,7 @@
 //! `CreateEntry`, `WriteEntry`) appliquée par le cœur, annulable (Ctrl+Z) ; le fichier Markdown
 //! reste lisible par Pages CMS.
 
-use crate::cmsfields::{self, Cols, field_row, label_of};
+use crate::cmsfields::{self, Cols, label_of};
 use crate::cmsschema::{FieldSettings, NewField, SchemaList};
 use crate::dialog::Ask;
 use crate::site::capitalize;
@@ -270,6 +270,11 @@ fn new_entry_data(c: &CmsCollection, primary: &str, title: &str) -> (String, Val
     (file, data)
 }
 
+/// Largeur du volet de la fiche : par défaut, minimale, maximale (px).
+const ITEM_W: f64 = 420.0;
+const ITEM_MIN: f64 = 320.0;
+const ITEM_MAX: f64 = 1100.0;
+
 #[component]
 pub fn CmsView(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -524,13 +529,178 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
             open.set(Some(file));
         }
     });
+    // Colonnes choisies d'une collection sans schéma (gardées sur cet ordinateur ; avec un
+    // schéma, elles sont écrites dans `.pages.yml`, `view.fields`, comme Pages CMS).
+    let local_cols = RwSignal::new(None::<Vec<String>>);
+    // Largeurs des colonnes réglées à la poignée (px, par champ ; `""` : titre), sur cet ordinateur.
+    let widths = RwSignal::new(std::collections::BTreeMap::<String, f64>::new());
+    Effect::new(move |_| {
+        let id = current.get().unwrap_or_default();
+        local_cols.set(
+            crate::pref_get(&format!("cms.cols.{id}"))
+                .and_then(|v| serde_json::from_str::<Vec<String>>(&v).ok()),
+        );
+        widths.set(
+            crate::pref_get(&format!("cms.colw.{id}"))
+                .and_then(|v| serde_json::from_str(&v).ok())
+                .unwrap_or_default(),
+        );
+    });
     // Champ titre et colonnes affichées.
     let layout = Memo::new(move |_| {
         let c = col.get()?;
         let title = primary_of(&c);
-        let columns = columns_of(&c, title.as_ref());
+        let columns = match local_cols.get().filter(|_| c.schema.is_none()) {
+            Some(names) => names
+                .iter()
+                .filter(|n| Some(*n) != title.as_ref())
+                .filter_map(|n| c.fields.iter().find(|f| &f.name == n).cloned())
+                .collect(),
+            None => columns_of(&c, title.as_ref()),
+        };
         Some((title, columns))
     });
+    // Colonnes montrées : écrites dans le schéma (ou gardées ici sans schéma) ; aucune colonne :
+    // le seul champ principal (sinon Pages CMS et Revel reprendraient les colonnes par défaut).
+    let set_columns = move |names: Vec<String>| {
+        let Some(c) = col.get_untracked() else {
+            return;
+        };
+        if c.schema.is_none() {
+            crate::pref_set(&format!("cms.cols.{}", c.id), &serde_json::to_string(&names).unwrap_or_default());
+            local_cols.set(Some(names));
+            return;
+        }
+        let mut list = names;
+        if list.is_empty()
+            && let Some(p) = primary_of(&c)
+        {
+            list.push(p);
+        }
+        apply.run(Command::SetCmsCollection {
+            folder: c.folder.clone(),
+            patch: serde_json::json!({ "view": { "fields": list } }),
+        });
+    };
+    let shown_columns = move || {
+        layout.with(|l| {
+            l.as_ref()
+                .map(|(_, c)| c.iter().map(|f| f.name.clone()).collect::<Vec<_>>())
+                .unwrap_or_default()
+        })
+    };
+    let toggle_column = move |name: String| {
+        let mut v = layout.with_untracked(|l| {
+            l.as_ref()
+                .map(|(_, c)| c.iter().map(|f| f.name.clone()).collect::<Vec<_>>())
+                .unwrap_or_default()
+        });
+        if let Some(i) = v.iter().position(|x| *x == name) {
+            v.remove(i);
+        } else {
+            v.push(name);
+        }
+        set_columns(v);
+    };
+    provide_context(cmsfields::ColumnPins {
+        shown: Signal::derive(shown_columns),
+        toggle: Callback::new(toggle_column),
+    });
+    // Menu des colonnes : chaque champ montré (coché) ou non ; `hide` : colonne cliquée.
+    let columns_menu = move |e: &ev::MouseEvent, hide: Option<String>| {
+        use crate::ctxmenu::{CtxItem, open as open_menu};
+        let Some(c) = col.get_untracked() else {
+            return;
+        };
+        let primary = primary_of(&c);
+        let on = shown_columns();
+        let mut items = Vec::new();
+        if let Some(h) = hide {
+            let label = c.fields.iter().find(|f| f.name == h).map(label_of).unwrap_or_else(|| h.clone());
+            items.push(
+                CtxItem::new(ui.now("cms-column-hide", &[("name", label)]), move || toggle_column(h.clone()))
+                    .icon(icons::eye_off),
+            );
+        }
+        for (i, f) in c.fields.iter().filter(|f| !f.hidden && Some(&f.name) != primary.as_ref()).enumerate() {
+            let n = f.name.clone();
+            let mut item = CtxItem::new(label_of(f), move || toggle_column(n.clone()));
+            if on.contains(&f.name) {
+                item = item.icon(icons::check);
+            }
+            if i == 0 && !items.is_empty() {
+                item = item.sep();
+            }
+            items.push(item);
+        }
+        if widths.with_untracked(|w| !w.is_empty()) {
+            items.push(
+                CtxItem::new(ui.now("cms-column-widths-reset", &[]), move || {
+                    widths.set(Default::default());
+                    let id = current.get_untracked().unwrap_or_default();
+                    crate::pref_set(&format!("cms.colw.{id}"), "{}");
+                })
+                .icon(icons::reset)
+                .sep(),
+            );
+        }
+        open_menu(ui, e, items);
+    };
+    // Poignée de largeur d'une colonne (bord droit de l'en-tête) ; double-clic : largeur automatique.
+    let resizing_col = StoredValue::new(None::<(String, f64, f64)>);
+    let col_handle = move |key: String| {
+        let (k1, k2) = (key.clone(), key);
+        view! {
+            <span class="th-resize" role="separator" aria-orientation="vertical" title=ui.t("cms-column-resize")
+                on:click=|e: ev::MouseEvent| e.stop_propagation()
+                on:pointerdown=move |e: ev::PointerEvent| {
+                    e.stop_propagation();
+                    crate::dock::capture(&e);
+                    let th = e.target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok())
+                        .and_then(|el| el.closest("th").ok().flatten());
+                    let w0 = th.map(|t| t.get_bounding_client_rect().width()).unwrap_or(160.0);
+                    // Colonnes sans largeur : figées à leur largeur affichée, pour que seule celle-ci change.
+                    if widths.with_untracked(|w| w.is_empty())
+                        && let Some(table) = document().query_selector(".cms-table").ok().flatten()
+                    {
+                        let ths = table.query_selector_all("thead th[data-col]").ok();
+                        let mut m = std::collections::BTreeMap::new();
+                        if let Some(list) = ths {
+                            for i in 0..list.length() {
+                                if let Some(el) = list.item(i).and_then(|n| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(n).ok()) {
+                                    m.insert(el.get_attribute("data-col").unwrap_or_default(), el.get_bounding_client_rect().width().round());
+                                }
+                            }
+                        }
+                        widths.set(m);
+                    }
+                    resizing_col.set_value(Some((k1.clone(), f64::from(e.client_x()), w0)));
+                    crate::dock::dragging_cursor(Some("col-resize"));
+                }
+                on:pointermove=move |e: ev::PointerEvent| {
+                    let Some((k, x0, w0)) = resizing_col.get_value() else { return };
+                    let w = (w0 + f64::from(e.client_x()) - x0).clamp(60.0, 900.0).round();
+                    widths.update(|m| { m.insert(k, w); });
+                }
+                on:pointerup=move |_| {
+                    if resizing_col.get_value().is_some() {
+                        resizing_col.set_value(None);
+                        crate::dock::dragging_cursor(None);
+                        let id = current.get_untracked().unwrap_or_default();
+                        crate::pref_set(&format!("cms.colw.{id}"), &serde_json::to_string(&widths.get_untracked()).unwrap_or_default());
+                    }
+                }
+                on:dblclick=move |e: ev::MouseEvent| {
+                    e.stop_propagation();
+                    widths.update(|m| { m.remove(&k2); });
+                    let id = current.get_untracked().unwrap_or_default();
+                    crate::pref_set(&format!("cms.colw.{id}"), &serde_json::to_string(&widths.get_untracked()).unwrap_or_default());
+                }></span>
+        }
+    };
+    let width_style = move |key: &str| {
+        widths.with(|m| m.get(key).map(|w| format!("width:{w}px;min-width:{w}px;max-width:{w}px")))
+    };
     let sorting = Memo::new(move |_| {
         sort.get().unwrap_or_else(|| {
             col.with(|c| {
@@ -794,10 +964,94 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         );
         open_menu(ui, e, items);
     };
+    // Modèle des pages de la collection (gabarit commun, D-28) : ouvert dans l'éditeur sur un
+    // contenu qui le suit (pas de design propre) ; créé au besoin, avec un premier contenu
+    // d'exemple quand la collection est vide. Les modifications s'appliquent à toutes ses pages,
+    // sauf celles qui ont un design propre.
+    let busy_template = RwSignal::new(false);
+    let edit_template = move |id: String| {
+        let Some(p) = path.try_get_value() else {
+            return;
+        };
+        if busy_template.get_untracked() {
+            return;
+        }
+        busy_template.set(true);
+        spawn_local(async move {
+            let follows = |e: &CmsEntry| {
+                e.url.is_some() && e.data.get("layout").is_none_or(|l| l.is_null() || l.as_str() == Some(""))
+            };
+            let run = async {
+                let o = api::edit_open(&p).await?;
+                let d = o.site;
+                let Some(model) = d.collections.iter().find(|x| x.id == id).cloned() else {
+                    return Ok(None);
+                };
+                let mut last = None;
+                if model.layout.is_none() || model.path.is_none() {
+                    let layout = revel_edit::make::collection_template(&d, &id, "title");
+                    let lid = layout.id.clone();
+                    let base = model.folder.rsplit('/').next().unwrap_or(&id).to_string();
+                    let cmd = Command::Batch {
+                        commands: vec![
+                            Command::AddLayout { layout, index: None },
+                            Command::SetCollectionPages {
+                                id: id.clone(),
+                                path: model.path.clone().or_else(|| Some(format!("/{base}/{{{{ slug }}}}/"))),
+                                layout: Some(model.layout.clone().unwrap_or(lid)),
+                            },
+                        ],
+                    };
+                    last = Some(api::edit_apply(&p, &cmd, false).await?);
+                }
+                let find = |cs: &[CmsCollection]| {
+                    cs.iter().find(|c| c.id == id).and_then(|c| c.entries.iter().find(|e| follows(e)).and_then(|e| e.url.clone()))
+                };
+                let mut cs = api::cms_collections(&p).await?;
+                if find(&cs).is_none()
+                    && let Some(c) = cs.iter().find(|c| c.id == id)
+                    && c.entries.is_empty()
+                {
+                    let primary = c.view.as_ref().and_then(|v| v.primary.clone()).unwrap_or_else(|| "title".into());
+                    let (file, data) = new_entry_data(c, &primary, &ui.now("cms-template-sample", &[]));
+                    let cmd = Command::CreateEntry { folder: c.folder.clone(), file, data, body: String::new() };
+                    last = Some(api::edit_apply(&p, &cmd, false).await?);
+                    cs = api::cms_collections(&p).await?;
+                }
+                if let Some(st) = last
+                    && !state.is_disposed()
+                {
+                    state.set(Some(st));
+                }
+                Ok::<_, revel_protocol::Failure>(find(&cs))
+            };
+            let r = run.await;
+            if busy_template.is_disposed() {
+                return;
+            }
+            busy_template.set(false);
+            reload();
+            match r {
+                Ok(Some(url)) => goto(url),
+                Ok(None) => ui.ask.set(Some(Ask::confirm(
+                    ui.now("cms-template", &[]),
+                    Some(ui.now("cms-template-none", &[])),
+                    ui.now("action-close", &[]),
+                    || {},
+                ))),
+                Err(e) => ui.fail(e),
+            }
+        });
+    };
     let col_menu = move |e: &ev::MouseEvent, id: String| {
         use crate::ctxmenu::{CtxItem, open as open_menu};
-        let (a, b) = (id.clone(), id);
+        let (a, b, t) = (id.clone(), id.clone(), id);
         let items = vec![
+            CtxItem::new(ui.now("cms-template-edit", &[]), move || {
+                current.set(Some(t.clone()));
+                edit_template(t.clone());
+            })
+            .icon(icons::template),
             CtxItem::new(ui.now("cms-entry-new", &[]), move || {
                 current.set(Some(a.clone()));
                 fields_mode.set(false);
@@ -817,9 +1071,54 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         ];
         open_menu(ui, e, items);
     };
+    // Largeur du volet de la fiche (ou du champ), réglée à la poignée, gardée d'une session à
+    // l'autre ; double-clic : largeur par défaut.
+    let item_w = RwSignal::new(
+        crate::pref_get("cms.item_w")
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(ITEM_W)
+            .clamp(ITEM_MIN, ITEM_MAX),
+    );
+    let set_item_w = move |w: f64| {
+        let w = w.clamp(ITEM_MIN, ITEM_MAX).round();
+        item_w.set(w);
+        crate::pref_set("cms.item_w", &w.to_string());
+    };
+    let resizing = StoredValue::new(None::<(f64, f64)>);
     view! {
         <div class="cms" class:has-item=move || if fields_mode.get() { sel_field.get().is_some() } else { open.get().is_some() }
-            class:is-fields=move || fields_mode.get()>
+            class:is-fields=move || fields_mode.get()
+            style:--cms-item-w=move || format!("{}px", item_w.get())>
+            <div class="cms-resize" role="separator" aria-orientation="vertical" tabindex="0"
+                aria-label=ui.t("cms-panel-resize") title=ui.t("cms-panel-resize")
+                aria-valuemin=ITEM_MIN aria-valuemax=ITEM_MAX aria-valuenow=move || item_w.get()
+                on:pointerdown=move |e: ev::PointerEvent| {
+                    crate::dock::capture(&e);
+                    resizing.set_value(Some((f64::from(e.client_x()), item_w.get_untracked())));
+                    crate::dock::dragging_cursor(Some("col-resize"));
+                }
+                on:pointermove=move |e: ev::PointerEvent| {
+                    let Some((x0, w0)) = resizing.get_value() else { return };
+                    // Pas plus que ce qui laisse la liste lisible.
+                    let room = window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1600.0) - 220.0 - 360.0;
+                    item_w.set((w0 - (f64::from(e.client_x()) - x0)).clamp(ITEM_MIN, ITEM_MAX.min(room.max(ITEM_MIN))));
+                }
+                on:pointerup=move |_| {
+                    if resizing.get_value().is_some() {
+                        resizing.set_value(None);
+                        crate::dock::dragging_cursor(None);
+                        set_item_w(item_w.get_untracked());
+                    }
+                }
+                on:dblclick=move |_| set_item_w(ITEM_W)
+                on:keydown=move |e: ev::KeyboardEvent| {
+                    let step = if e.shift_key() { 64.0 } else { 16.0 };
+                    match e.key().as_str() {
+                        "ArrowLeft" => { e.prevent_default(); set_item_w(item_w.get_untracked() + step) }
+                        "ArrowRight" => { e.prevent_default(); set_item_w(item_w.get_untracked() - step) }
+                        _ => {}
+                    }
+                }></div>
             <aside class="cms-cols">
                 <p class="cms-cols-title">{ui.t("cms-collections")}</p>
                 <div class="cms-cols-list">
@@ -888,16 +1187,21 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                             title=move || ui.tx(if lang.get().is_some() { "cms-locale-shared" } else { "cms-fields-help" }, &[])
                             prop:disabled=move || lang.get().is_some()
                             on:click=move |_| fields_mode.update(|m| *m = !*m)>
-                            {icons::database()}{ui.t("cms-fields-edit")}
+                            {icons::database()}<span class="btn-label">{ui.t("cms-fields-edit")}</span>
+                        </button>
+                        <button class="btn cms-template-btn" title=ui.t("cms-template-help")
+                            prop:disabled=move || busy_template.get()
+                            on:click=move |_| if let Some(id) = current.get_untracked() { edit_template(id) }>
+                            {icons::template()}<span class="btn-label">{ui.t("cms-template")}</span>
                         </button>
                         {move || if fields_mode.get() {
                             view! { <NewField col=col cols=Signal::derive(move || cols.get()) apply=apply selected=sel_field/> }.into_any()
                         } else {
                             view! {
-                                <button class="btn btn--primary cms-new" on:click=new_entry
+                                <button class="btn btn--primary cms-new" on:click=new_entry aria-label=ui.t("cms-entry-new")
                                     prop:disabled=move || lang.get().is_some()
-                                    title=move || lang.get().map(|_| ui.tx("cms-locale-shared", &[]))>
-                                    {icons::plus()}{ui.t("cms-entry-new")}
+                                    title=move || lang.get().map(|_| ui.tx("cms-locale-shared", &[])).unwrap_or_else(|| ui.now("cms-entry-new", &[]))>
+                                    {icons::plus()}<span class="btn-label">{ui.t("cms-entry-new")}</span>
                                 </button>
                             }.into_any()
                         }}
@@ -914,23 +1218,31 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                             let tkey = title.clone().unwrap_or_default();
                             let tkey2 = tkey.clone();
                             view! {
-                                <table class="table cms-table">
-                                    <thead><tr>
-                                        <th class="cms-th-title">
+                                <table class="table cms-table" class:is-sized=move || widths.with(|w| !w.is_empty())>
+                                    <thead><tr on:contextmenu=move |e: ev::MouseEvent| columns_menu(&e, None)>
+                                        <th class="cms-th-title" data-col="" style=move || width_style("")>
                                             <button class="th-sort" on:click=move |_| sort_by(tkey.clone())>
                                                 {title.as_ref().and_then(|t| col.get().and_then(|c| c.fields.into_iter().find(|f| &f.name == t))).map(|f| label_of(&f)).unwrap_or_else(|| ui.tx("cms-file", &[]))}
                                                 <span class="th-mark">{move || sort_mark(&tkey2)}</span>
                                             </button>
+                                            {col_handle(String::new())}
                                         </th>
                                         {columns.iter().map(|f| {
-                                            let (n1, n2) = (f.name.clone(), f.name.clone());
+                                            let (n1, n2, n3, n4, n5) = (f.name.clone(), f.name.clone(), f.name.clone(), f.name.clone(), f.name.clone());
                                             view! {
-                                                <th><button class="th-sort" on:click=move |_| sort_by(n1.clone())>
-                                                    {label_of(f)}<span class="th-mark">{move || sort_mark(&n2)}</span>
-                                                </button></th>
+                                                <th data-col=n3 style=move || width_style(&n4)
+                                                    on:contextmenu=move |e: ev::MouseEvent| columns_menu(&e, Some(n5.clone()))>
+                                                    <button class="th-sort" on:click=move |_| sort_by(n1.clone())>
+                                                        {label_of(f)}<span class="th-mark">{move || sort_mark(&n2)}</span>
+                                                    </button>
+                                                    {col_handle(f.name.clone())}
+                                                </th>
                                             }
                                         }).collect_view()}
-                                        <th class="col-actions"></th>
+                                        <th class="col-actions">
+                                            <button class="icon-btn icon-btn--small cms-cols-btn" title=ui.t("cms-columns") aria-label=ui.t("cms-columns")
+                                                on:click=move |e: ev::MouseEvent| columns_menu(&e, None)>{icons::columns()}</button>
+                                        </th>
                                     </tr></thead>
                                     <tbody>
                                         {move || {
@@ -943,7 +1255,14 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                             let list = rows.get();
                                             if list.is_empty() {
                                                 return view! {
-                                                    <tr><td class="muted cms-empty" colspan=(columns.len() + 2).to_string()>{ui.t("cms-no-entries")}</td></tr>
+                                                    <tr><td class="muted cms-empty" colspan=(columns.len() + 2).to_string()>
+                                                        <p>{ui.t("cms-no-entries")}</p>
+                                                        <p class="cms-empty-actions">
+                                                            <button class="btn btn--small" on:click=move |_| if let Some(id) = current.get_untracked() { edit_template(id) }>
+                                                                {icons::template()}{ui.t("cms-template-edit")}</button>
+                                                        </p>
+                                                        <p class="cms-empty-help">{ui.t("cms-template-help")}</p>
+                                                    </td></tr>
                                                 }.into_any();
                                             }
                                             list.into_iter().map(|e| {
@@ -959,7 +1278,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                             move |ev: ev::MouseEvent| row_menu(&ev, file.clone(), url.clone(), label.clone())
                                                         }
                                                         on:click=move |_| open.set(Some(file.clone()))>
-                                                        <td class="strong cms-td-title"><div class="cms-title-cell">
+                                                        <td class="strong cms-td-title" style=move || width_style("")><div class="cms-title-cell">
                                                             <span class="cms-cell">{entry_title(&e, &title)}</span>
                                                             {draft.then(|| view! { <span class="chip chip--draft">{ui.t("cms-draft")}</span> })}
                                                             {
@@ -977,8 +1296,11 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                                 })
                                                             }
                                                         </div></td>
-                                                        {columns.iter().zip(&labels).map(|(f, l)| view! {
-                                                            <td class="muted"><span class="cms-cell">{cell(ui, f, e.data.get(&f.name), l.as_ref())}</span></td>
+                                                        {columns.iter().zip(&labels).map(|(f, l)| {
+                                                            let k = f.name.clone();
+                                                            view! {
+                                                                <td class="muted" style=move || width_style(&k)><span class="cms-cell">{cell(ui, f, e.data.get(&f.name), l.as_ref())}</span></td>
+                                                            }
                                                         }).collect_view()}
                                                         <td class="col-actions">
                                                             {url.map(|u| view! {
@@ -1085,11 +1407,38 @@ fn EntryForm(
         if old == value {
             return;
         }
-        apply.run(Command::SetEntryField {
+        let set_field = Command::SetEntryField {
             folder: folder(),
             file: file.get_value(),
-            key,
-            value,
+            key: key.clone(),
+            value: value.clone(),
+        };
+        // Adresse de la page changée (slug) d'un contenu publié : l'ancienne adresse redirige
+        // vers la nouvelle (liens et partages gardés), dans la même étape d'annulation.
+        let old_url = entry.with_untracked(|e| e.as_ref().and_then(|e| e.url.clone()));
+        let (Some(old_slug), Some(new_slug), Some(old_url), Some(p)) = (
+            old.as_ref().and_then(Value::as_str).map(str::to_string),
+            value.as_ref().and_then(Value::as_str).map(str::to_string),
+            old_url,
+            ui.site_path(),
+        ) else {
+            apply.run(set_field);
+            return;
+        };
+        let new_url = old_url.replacen(&format!("/{old_slug}/"), &format!("/{new_slug}/"), 1);
+        if key != "slug" || new_slug.trim().is_empty() || new_url == old_url {
+            apply.run(set_field);
+            return;
+        }
+        spawn_local(async move {
+            let mut redirects = api::edit_open(&p).await.map(|o| o.site.redirects).unwrap_or_default();
+            redirects.retain(|r| r.from != old_url);
+            // Une redirection vers l'ancienne adresse suit la nouvelle.
+            for r in redirects.iter_mut().filter(|r| r.to == old_url) {
+                r.to = new_url.clone();
+            }
+            redirects.push(revel_model::Redirect { from: old_url, to: new_url });
+            apply.run(Command::Batch { commands: vec![set_field, Command::SetRedirects { redirects }] });
         });
     };
     let row = move |f: CmsField| {
@@ -1129,12 +1478,15 @@ fn EntryForm(
             }
             .into_any()
         });
-        field_row(
+        // Épingle des colonnes : champs du schéma montrés dans la fiche (pas les valeurs hors schéma).
+        let pins = (!undeclared).then(use_context::<cmsfields::ColumnPins>).flatten();
+        cmsfields::field_row_pinned(
             f,
             value,
             Callback::new(move |v| set(key.get_value(), v)),
             cols,
             aside,
+            pins,
         )
     };
     let heading = move || {

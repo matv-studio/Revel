@@ -1,0 +1,22 @@
+{
+  "name": "[[Formation en ligne||Online course]]",
+  "category": "education",
+  "order": 130,
+  "description": "[[Vente d'une formation : programme en accordéon, formateur, témoignages, tarifs avec lien de paiement, questions.||Course sales page: curriculum accordion, instructor, testimonials, pricing with payment link, questions.]]",
+  "preview": "hero",
+  "palette": ["#fffaf0", "#1e1b4b", "#f97316"],
+  "features": ["components", "faq", "stripe", "dark"],
+  "fonts": [ { "family": "Lexend", "variants": ["400", "500", "700"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[S'inscrire||Enrol]]", "cta_link": "#[[tarifs||pricing]]" },
+  "site": {
+    "description": "[[Apprenez la photographie culinaire en 6 semaines, à votre rythme.||Learn food photography in 6 weeks, at your own pace.]]",
+    "email": "[[cours@exemple.fr||course@example.com]]",
+    "phone": "",
+    "address": "",
+    "checkout": "https://buy.stripe.com/",
+    "menus": { "main": [ { "label": "[[Programme||Curriculum]]", "url": "#[[programme||curriculum]]" }, { "label": "[[Formatrice||Instructor]]", "url": "#[[formatrice||instructor]]" }, { "label": "[[Tarifs||Pricing]]", "url": "#[[tarifs||pricing]]" } ], "social": [ { "label": "YouTube", "url": "https://www.youtube.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "feature", "faq", "testimonial", "price", "stat"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

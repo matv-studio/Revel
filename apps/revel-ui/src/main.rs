@@ -147,6 +147,9 @@ pub struct Ui {
     pub ask: RwSignal<Option<Ask>>,
     /// Compte GitHub connecté (identifiant).
     pub github: RwSignal<Option<String>>,
+    /// Sites Revel des dépôts du compte GitHub (D-127), lus une fois par session ; `None` : pas
+    /// encore lus.
+    pub gh_sites: RwSignal<Option<Vec<revel_protocol::GithubSite>>>,
     /// Page à afficher dans l'éditeur (demandée par une autre vue, la vue CMS par exemple).
     pub goto_page: RwSignal<Option<String>>,
     /// Élément à sélectionner dans la page demandée (plan du site : « Montrer dans l'éditeur »).
@@ -155,6 +158,11 @@ pub struct Ui {
     pub clipboard: RwSignal<Vec<revel_model::Node>>,
     /// Page affichée dans l'éditeur (l'aperçu s'ouvre sur elle).
     pub current_page: RwSignal<Option<String>>,
+    /// Annulation ou rétablissement fait depuis la barre du haut (Paramètres, Localisation, Plan
+    /// du site) : les vues relisent le document.
+    pub undo_rev: RwSignal<u32>,
+    /// Modification faite dans ces vues (état d'annulation relu).
+    pub doc_rev: RwSignal<u32>,
     /// Menu contextuel ouvert (clic droit).
     pub context: RwSignal<Option<ctxmenu::CtxMenu>>,
     /// Aperçu affiché dans l'espace de travail : adresse de base, page.
@@ -429,10 +437,13 @@ fn App() -> impl IntoView {
         environment: RwSignal::new(None),
         ask: RwSignal::new(None),
         github: RwSignal::new(None),
+        gh_sites: RwSignal::new(None),
         goto_page: RwSignal::new(None),
         goto_node: RwSignal::new(None),
         clipboard: RwSignal::new(Vec::new()),
         current_page: RwSignal::new(None),
+        undo_rev: RwSignal::new(0),
+        doc_rev: RwSignal::new(0),
         context: RwSignal::new(None),
         preview: RwSignal::new(None),
         canvas_base: RwSignal::new(None),
@@ -679,6 +690,11 @@ fn TopBar() -> impl IntoView {
                         {icons::download()}{ui.tx(if u.prerelease { "update-pill-pre" } else { "update-pill" }, &[("version", u.version.clone())])}
                     </button>
                 })}
+                // Annuler, rétablir dans les vues sans barre d'outils propre (Paramètres,
+                // Localisation, Plan du site) ; l'éditeur et le CMS ont les leurs.
+                <Show when=move || matches!(tab(), Some(Tab::Settings(_) | Tab::Locales | Tab::Map))>
+                    <UndoButtons/>
+                </Show>
                 <Show when=site_open>
                     <div class="split-btn preview-split" class:is-on=move || ui.preview.with(Option::is_some)>
                         <button class="btn split-main" title=ui.t("preview-help")
@@ -798,4 +814,73 @@ pub async fn sleep_ms(ms: i32) {
         let _ = window().set_timeout_with_callback_and_timeout_and_arguments_0(&res, ms);
     });
     let _ = wasm_bindgen_futures::JsFuture::from(p).await;
+}
+
+/// Annuler et rétablir la dernière modification du site (même historique que l'éditeur) ;
+/// Ctrl+Z / Ctrl+Maj+Z hors des champs de saisie.
+#[component]
+fn UndoButtons() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let state = RwSignal::new(None::<revel_edit::EditState>);
+    let refresh = move || {
+        if let Some(p) = ui.site_path() {
+            spawn_local(async move {
+                if let Ok(o) = api::edit_open(&p).await
+                    && !state.is_disposed()
+                {
+                    state.set(Some(o.state));
+                }
+            });
+        }
+    };
+    refresh();
+    // État relu après chaque modification faite dans ces vues.
+    Effect::new(move |_| {
+        ui.undo_rev.track();
+        ui.doc_rev.track();
+        refresh();
+    });
+    let run = move |redo: bool| {
+        let Some(p) = ui.site_path() else { return };
+        spawn_local(async move {
+            let r = if redo { api::edit_redo(&p).await } else { api::edit_undo(&p).await };
+            match r {
+                Ok(st) => {
+                    if !state.is_disposed() {
+                        state.set(Some(st));
+                    }
+                    ui.undo_rev.update(|n| *n += 1);
+                }
+                Err(e) => ui.fail(e),
+            }
+        });
+    };
+    let on_key = window_event_listener(leptos::ev::keydown, move |e: web_sys::KeyboardEvent| {
+        if !(e.ctrl_key() || e.meta_key()) {
+            return;
+        }
+        let in_field = document().active_element().is_some_and(|el| {
+            matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT") || el.has_attribute("contenteditable")
+        });
+        if in_field {
+            return;
+        }
+        match (e.key().to_lowercase().as_str(), e.shift_key()) {
+            ("z", false) => run(false),
+            ("z", true) | ("y", _) => run(true),
+            _ => return,
+        }
+        e.prevent_default();
+    });
+    on_cleanup(move || on_key.remove());
+    view! {
+        <div class="topbar-undo" role="group">
+            <button class="icon-btn" title=ui.t("editor-undo") aria-label=ui.t("editor-undo")
+                prop:disabled=move || !state.with(|s| s.as_ref().is_some_and(|s| s.can_undo))
+                on:click=move |_| run(false)>{icons::undo()}</button>
+            <button class="icon-btn" title=ui.t("editor-redo") aria-label=ui.t("editor-redo")
+                prop:disabled=move || !state.with(|s| s.as_ref().is_some_and(|s| s.can_redo))
+                on:click=move |_| run(true)>{icons::redo()}</button>
+        </div>
+    }
 }

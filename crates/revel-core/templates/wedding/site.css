@@ -1,0 +1,18 @@
+:root { color-scheme: light; --bg: #fbf7f2; --surface: #ffffff; --text: #3b2f2a; --muted: #85766e; --line: rgba(59, 47, 42, 0.12); --line-strong: rgba(59, 47, 42, 0.26); --accent: #9e6b75; --accent-ink: #ffffff; --font-display: "Italiana", "Didot", Georgia, serif; --font-body: "Jost", "Segoe UI", system-ui, sans-serif; --display-weight: 400; --display-tracking: 0.01em; --radius: 2px; --radius-lg: 999px; --radius-btn: 999px; --max: 1080px; --pad: clamp(20px, 4vw, 40px); --section: clamp(80px, 10vw, 136px); }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; --bg: #1b1614; --surface: #241d1a; --text: #f3ebe4; --muted: #b8a89f; --line: rgba(243, 235, 228, 0.12); --line-strong: rgba(243, 235, 228, 0.26); --accent: #d8a7b1; --accent-ink: #1b1614; }
+}
+body { font-weight: 300; }
+.wed-hero { padding: clamp(56px, 8vw, 104px) 0; text-align: center; }
+.wed-hero h1 { font-size: clamp(60px, 10vw, 150px); line-height: 1; }
+.wed-hero__date { margin-top: 18px; font-size: 20px; letter-spacing: 0.3em; text-transform: uppercase; }
+.wed-hero__photo { width: min(520px, 100%); aspect-ratio: 3 / 4; margin: 48px auto 0; object-fit: cover; border-radius: 999px 999px 4px 4px; }
+.timeline { display: grid; gap: 0; max-width: 640px; margin: 0 auto; }
+.moment { display: grid; grid-template-columns: 100px 1fr; gap: 28px; padding: 26px 0; border-bottom: 1px solid var(--line); }
+.moment__time { font-family: var(--font-display); font-size: 28px; color: var(--accent); }
+.moment h3 { font-family: var(--font-body); font-size: 19px; font-weight: 500; }
+.moment p { color: var(--muted); }
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.duo img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
+.center { text-align: center; }
+.wed-form { margin: 0 auto; }

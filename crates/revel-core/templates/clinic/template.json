@@ -1,0 +1,22 @@
+{
+  "name": "[[Cabinet de santé||Health practice]]",
+  "category": "services",
+  "order": 140,
+  "description": "[[Cabinet médical, kinésithérapie ou bien-être : soins, équipe, horaires, prise de rendez-vous par formulaire.||Medical, physiotherapy or wellness practice: treatments, team, hours, appointment request form.]]",
+  "preview": "hero",
+  "palette": ["#f3f8f8", "#103b40", "#1f9a8a"],
+  "features": ["components", "faq", "form", "dark"],
+  "fonts": [ { "family": "Outfit", "variants": ["400", "500", "700"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Prendre rendez-vous||Book an appointment]]", "cta_link": "#[[rendez-vous||appointment]]" },
+  "site": {
+    "description": "[[Cabinet de kinésithérapie et de rééducation du sport, au centre-ville.||Physiotherapy and sports rehabilitation practice, downtown.]]",
+    "email": "[[cabinet@exemple.fr||clinic@example.com]]",
+    "phone": "[[03 88 00 00 00||+1 555 010 4400]]",
+    "address": "[[4 rue de la Santé, 67000 Strasbourg||4 Health Street, Boulder, CO]]",
+    "hours": "[[Lundi au vendredi, 8 h - 19 h ; samedi matin||Monday to Friday, 8 am - 7 pm; Saturday morning]]",
+    "menus": { "main": [ { "label": "[[Soins||Treatments]]", "url": "#[[soins||treatments]]" }, { "label": "[[Équipe||Team]]", "url": "#[[equipe||team]]" }, { "label": "[[Infos pratiques||Practical info]]", "url": "#infos" } ], "social": [] }
+  },
+  "kit": ["navbar", "footer", "section-head", "feature", "member", "faq"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

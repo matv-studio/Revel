@@ -1,0 +1,24 @@
+{
+  "name": "[[Agence immobilière||Real estate]]",
+  "category": "business",
+  "order": 90,
+  "description": "[[Annonces dans le CMS (prix, surface, pièces, galerie), filtres par type, page d'annonce commune, demande de visite et d'estimation.||Listings in the CMS (price, area, rooms, gallery), type filters, shared listing page, viewing and valuation requests.]]",
+  "preview": "home5",
+  "palette": ["#f7f5f2", "#1f2a2e", "#b08d57"],
+  "features": ["cms", "filters", "more", "form", "dark"],
+  "fonts": [ { "family": "Marcellus", "variants": ["400"] }, { "family": "Manrope", "variants": ["400", "500", "700"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Faire estimer||Get a valuation]]", "cta_link": "[[/estimation/||/valuation/]]" },
+  "site": {
+    "description": "[[Maisons et appartements de caractère, à la vente et à la location.||Homes and apartments with character, for sale and to let.]]",
+    "email": "[[agence@exemple.fr||agency@example.com]]",
+    "phone": "[[05 56 00 00 00||+1 555 010 6677]]",
+    "address": "[[15 cours de l'Intendance, 33000 Bordeaux||15 Main Street, Santa Barbara, CA]]",
+    "menus": { "main": [ { "label": "[[Biens||Listings]]", "url": "/" }, { "label": "[[Estimation||Valuation]]", "url": "[[/estimation/||/valuation/]]" } ], "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "feature"],
+  "components": [ { "id": "listing-card", "name": "[[Carte annonce||Listing card]]", "props": [ { "name": "image", "label": "Image", "type": "image", "default": "" }, { "name": "title", "label": "[[Titre||Title]]", "type": "text", "default": "" }, { "name": "price", "label": "[[Prix||Price]]", "type": "text", "default": "" }, { "name": "place", "label": "[[Lieu||Location]]", "type": "text", "default": "" }, { "name": "area", "label": "[[Surface||Area]]", "type": "text", "default": "" }, { "name": "rooms", "label": "[[Pièces||Rooms]]", "type": "text", "default": "" }, { "name": "link", "label": "[[Lien||Link]]", "type": "link", "default": "#" } ] } ],
+  "layouts": [ { "id": "base" }, { "id": "listing", "parent": "base" } ],
+  "collections": [ { "id": "listings", "folder": "content/listings", "path": "[[/biens/{{ slug }}/||/listings/{{ slug }}/]]", "layout": "listing", "sort": { "field": "order", "descending": false } } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Biens||Listings]]" }, { "id": "valuation", "path": "[[/estimation/||/valuation/]]", "name": "[[Estimation||Valuation]]", "title": "[[Estimation gratuite||Free valuation]]" } ]
+}

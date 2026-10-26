@@ -304,6 +304,17 @@ jobs:
           # Les essais annulent tout : copie identique au cobaye (document, données, contenus).
           cmp cobaye/site.revel.json cobaye-essai/site.revel.json
           diff -r cobaye/src cobaye-essai/src
+      # Site neuf d'après un modèle (D-128 à D-131) : galerie du CMS, volet de la fiche, modèle des
+      # pages, images en ligne copiées dans le site.
+      - name: Site d'après un modèle, de bout en bout
+        shell: bash
+        run: |
+          target/release/revel new modele-essai --name Boutique --template shop
+          target/release/revel canvas-serve modele-essai --port 8166 --bridge > pont-modele.log 2>&1 &
+          sleep 2
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          echo "## Site d'après un modèle" >> "$GITHUB_STEP_SUMMARY"
+          node tools/templates-e2e.mjs http://127.0.0.1:8170 http://127.0.0.1:8166 modele-essai captures-ecarts/modele | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Captures en écart
         if: failure()
         uses: actions/upload-artifact@v7

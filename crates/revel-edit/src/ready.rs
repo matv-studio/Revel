@@ -17,6 +17,9 @@ pub enum Block {
     Contact,
     /// Formulaire de contact reçu par l'hébergement (5.8).
     Form,
+    /// Panier et bon de commande (D-129) : lignes ajoutées par les boutons « Ajouter au
+    /// panier » du site, commande envoyée par un formulaire du site, sans service de paiement.
+    Cart,
 }
 
 type Rules = Vec<(&'static str, Vec<(&'static str, &'static str)>)>;
@@ -83,7 +86,7 @@ fn common() -> Rules {
 }
 
 impl Block {
-    pub const ALL: [Block; 8] = [
+    pub const ALL: [Block; 9] = [
         Block::Hero,
         Block::Features,
         Block::TextImage,
@@ -92,6 +95,7 @@ impl Block {
         Block::Faq,
         Block::Contact,
         Block::Form,
+        Block::Cart,
     ];
 
     /// Contenu en balisage (langue du site : français, sinon anglais). `<i data-icone="…">` :
@@ -142,6 +146,12 @@ impl Block {
             }
             (Block::Form, false) => {
                 r##"<section class="bloc bloc-formulaire"><div class="bloc__inner"><h2 class="bloc-sous-titre">Write to us</h2><form class="formulaire" data-revel-form="contact"><div class="formulaire__ligne"><label class="champ"><span class="champ__libelle">Name</span><input class="champ__saisie" type="text" name="name" autocomplete="name" required></label><label class="champ"><span class="champ__libelle">Email</span><input class="champ__saisie" type="email" name="email" autocomplete="email" required></label></div><label class="champ"><span class="champ__libelle">Message</span><textarea class="champ__saisie" name="message" rows="5" required></textarea></label><button class="bloc-bouton" type="submit">Send</button><p class="formulaire__etat" data-revel-form-status role="status" aria-live="polite"></p></form></div></section>"##
+            }
+            (Block::Cart, true) => {
+                r##"<section class="bloc bloc-panier"><div class="bloc__inner"><h2 class="bloc-sous-titre">Votre panier</h2><div class="panier" data-revel-cart="EUR"><ul class="panier__lignes"><li class="panier__ligne" data-revel-cart-item><span class="panier__nom" data-revel-cart-name>Produit</span><span class="panier__quantite"><button class="panier__moins" type="button" aria-label="Retirer un" data-revel-cart-minus>−</button><span data-revel-cart-qty>1</span><button class="panier__plus" type="button" aria-label="Ajouter un" data-revel-cart-plus>+</button></span><span class="panier__prix" data-revel-cart-price>0,00 €</span><button class="panier__retirer" type="button" aria-label="Retirer du panier" data-revel-cart-remove>×</button></li></ul><p class="panier__vide" data-revel-cart-empty>Votre panier est vide.</p><p class="panier__total">Total : <strong data-revel-cart-total>0,00 €</strong></p><form class="formulaire panier__commande" data-revel-form="commande"><input type="hidden" name="commande" data-revel-cart-field><div class="formulaire__ligne"><label class="champ"><span class="champ__libelle">Nom</span><input class="champ__saisie" type="text" name="nom" autocomplete="name" required></label><label class="champ"><span class="champ__libelle">E-mail</span><input class="champ__saisie" type="email" name="email" autocomplete="email" required></label></div><label class="champ"><span class="champ__libelle">Adresse de livraison</span><textarea class="champ__saisie" name="adresse" rows="3" required></textarea></label><button class="bloc-bouton" type="submit">Envoyer la commande</button><p class="formulaire__etat" data-revel-form-status role="status" aria-live="polite"></p></form></div></div></section>"##
+            }
+            (Block::Cart, false) => {
+                r##"<section class="bloc bloc-panier"><div class="bloc__inner"><h2 class="bloc-sous-titre">Your cart</h2><div class="panier" data-revel-cart="USD"><ul class="panier__lignes"><li class="panier__ligne" data-revel-cart-item><span class="panier__nom" data-revel-cart-name>Product</span><span class="panier__quantite"><button class="panier__moins" type="button" aria-label="Remove one" data-revel-cart-minus>−</button><span data-revel-cart-qty>1</span><button class="panier__plus" type="button" aria-label="Add one" data-revel-cart-plus>+</button></span><span class="panier__prix" data-revel-cart-price>$0.00</span><button class="panier__retirer" type="button" aria-label="Remove from cart" data-revel-cart-remove>×</button></li></ul><p class="panier__vide" data-revel-cart-empty>Your cart is empty.</p><p class="panier__total">Total: <strong data-revel-cart-total>$0.00</strong></p><form class="formulaire panier__commande" data-revel-form="order"><input type="hidden" name="order" data-revel-cart-field><div class="formulaire__ligne"><label class="champ"><span class="champ__libelle">Name</span><input class="champ__saisie" type="text" name="name" autocomplete="name" required></label><label class="champ"><span class="champ__libelle">Email</span><input class="champ__saisie" type="email" name="email" autocomplete="email" required></label></div><label class="champ"><span class="champ__libelle">Shipping address</span><textarea class="champ__saisie" name="address" rows="3" required></textarea></label><button class="bloc-bouton" type="submit">Send the order</button><p class="formulaire__etat" data-revel-form-status role="status" aria-live="polite"></p></form></div></div></section>"##
             }
             (Block::Contact, false) => {
                 r##"<section class="bloc bloc-contact"><div class="bloc__inner"><h2 class="bloc-sous-titre">Contact us</h2><p class="bloc-texte">Write or call us, we answer within 48 hours.</p><ul class="bloc-contact__liste"><li><i data-icone="courriel"></i><a href="mailto:hello@example.com">hello@example.com</a></li><li><i data-icone="telephone"></i><a href="tel:+15550000000">+1 555 000 0000</a></li><li><i data-icone="lieu"></i><span>1 Example Street, City</span></li></ul></div></section>"##
@@ -267,6 +277,40 @@ impl Block {
                     vec![("margin", "12px 0 0"), ("opacity", "0.8")],
                 ),
             ],
+            Block::Cart => {
+                let mut r = Block::Form.rules();
+                r.extend(vec![
+                    (".panier__lignes", vec![("margin", "24px 0 0"), ("padding", "0"), ("list-style", "none")]),
+                    (
+                        ".panier__ligne",
+                        vec![
+                            ("display", "grid"),
+                            ("grid-template-columns", "1fr auto auto auto"),
+                            ("gap", "16px"),
+                            ("align-items", "center"),
+                            ("padding", "14px 0"),
+                            ("border-bottom", "1px solid rgba(127, 127, 127, 0.3)"),
+                        ],
+                    ),
+                    (".panier__quantite", vec![("display", "inline-flex"), ("align-items", "center"), ("gap", "10px")]),
+                    (
+                        ".panier__moins, .panier__plus, .panier__retirer",
+                        vec![
+                            ("width", "30px"),
+                            ("height", "30px"),
+                            ("border", "1px solid rgba(127, 127, 127, 0.4)"),
+                            ("border-radius", "50%"),
+                            ("background", "none"),
+                            ("color", "inherit"),
+                            ("font", "inherit"),
+                            ("cursor", "pointer"),
+                        ],
+                    ),
+                    (".panier__total", vec![("margin", "20px 0 0"), ("font-size", "20px"), ("text-align", "right")]),
+                    (".panier.is-empty .panier__total, .panier.is-empty .panier__commande", vec![("display", "none")]),
+                ]);
+                return r;
+            }
             Block::Form => vec![
                 (
                     ".formulaire",

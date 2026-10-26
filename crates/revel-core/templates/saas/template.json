@@ -1,0 +1,24 @@
+{
+  "name": "[[Logiciel / application||Software / app]]",
+  "category": "business",
+  "order": 25,
+  "description": "[[Page de lancement d'un produit : capture d'écran, avantages, tarifs mensuels ou annuels en onglets, questions, inscription.||Product launch page: screenshot, features, monthly or yearly pricing in tabs, questions, sign-up.]]",
+  "preview": "screen",
+  "palette": ["#ffffff", "#0b1020", "#5b5bf7"],
+  "features": ["components", "tabs", "faq", "form", "dark"],
+  "fonts": [ { "family": "Plus Jakarta Sans", "variants": ["400", "500", "700", "800"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Essai gratuit||Free trial]]", "cta_link": "#[[essai||trial]]" },
+  "site": {
+    "description": "[[Planifiez, suivez et facturez vos projets au même endroit.||Plan, track and bill your projects in one place.]]",
+    "email": "[[support@exemple.fr||support@example.com]]",
+    "phone": "",
+    "address": "",
+    "menus": {
+      "main": [ { "label": "[[Fonctions||Features]]", "url": "#[[fonctions||features]]" }, { "label": "[[Tarifs||Pricing]]", "url": "#[[tarifs||pricing]]" }, { "label": "FAQ", "url": "#faq" } ],
+      "social": [ { "label": "X", "url": "https://x.com/" }, { "label": "GitHub", "url": "https://github.com/" } ]
+    }
+  },
+  "kit": ["navbar", "footer", "section-head", "feature", "price", "testimonial", "faq", "cta-band"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

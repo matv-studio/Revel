@@ -1735,14 +1735,41 @@
   // Composant seul, variante de geste : feuille des règles recopiées (voir plus bas).
   const forceCss = (css) => (stageState ? css.split(":" + stageState).join(".rv-force-" + stageState) : css);
   let forcedSheet = null;
+  // Canevas des composants : chaque cadre montre une seule variante. Les règles `:hover` et
+  // `:active` du site y sont mises hors d'usage (sélecteur renommé `.rv-live-…`), sinon le
+  // survol de la variante principale montrerait la variante « Au survol ».
+  const LIVE = /\.rv-live-(hover|active)/g;
+  const liveOff = () => {
+    const walk = (rules) => {
+      for (const r of rules) {
+        if (r.selectorText !== undefined && r.style) {
+          if (/:(hover|active)\b/.test(r.selectorText)) {
+            try { r.selectorText = r.selectorText.replace(/:(hover|active)\b/g, ".rv-live-$1"); } catch (_) { /* sélecteur refusé */ }
+          }
+        } else if (r.cssRules) {
+          walk(r.cssRules);
+        }
+      }
+    };
+    for (const sh of document.styleSheets) {
+      let rules = null;
+      try { rules = sh.cssRules; } catch (_) { rules = null; }
+      if (rules) walk(rules);
+    }
+  };
   const buildForced = () => {
-    if (!stageState || !("adoptedStyleSheets" in document) || typeof CSSStyleSheet !== "function") return;
+    if (!STAGE) return;
+    if (!stageState || !("adoptedStyleSheets" in document) || typeof CSSStyleSheet !== "function") {
+      liveOff();
+      return;
+    }
     const pseudo = ":" + stageState;
     const out = [];
     const walk = (rules, wrap) => {
       for (const r of rules) {
         if (r.selectorText !== undefined && r.style) {
-          if (r.selectorText.includes(pseudo)) out.push(wrap(forceCss(r.selectorText) + "{" + r.style.cssText + "}"));
+          const sel = r.selectorText.replace(LIVE, ":$1");
+          if (sel.includes(pseudo)) out.push(wrap(forceCss(sel) + "{" + r.style.cssText + "}"));
         } else if (r.media && r.cssRules) {
           walk(r.cssRules, (t) => wrap("@media " + r.media.mediaText + "{" + t + "}"));
         } else if (r.cssRules) {
@@ -1760,6 +1787,7 @@
       document.adoptedStyleSheets = [...document.adoptedStyleSheets, forcedSheet];
     }
     try { forcedSheet.replaceSync(out.join("\n")); } catch (_) { /* règle illisible */ }
+    liveOff();
   };
   const setPreview = (css) => {
     css = forceCss(css);

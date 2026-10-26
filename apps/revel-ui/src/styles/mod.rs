@@ -770,7 +770,10 @@ pub fn Styles() -> impl IntoView {
                     <SpacingSection sx/>
                     <SizeSection sx/>
                     <PositionSection sx/>
-                    <TextSection sx/>
+                    // Médias (image, vidéo, cadre) : pas de texte à régler.
+                    <Show when=move || !ed.selected.with(|s| s.as_ref().is_some_and(|s| matches!(s.tag.to_ascii_lowercase().as_str(), "img" | "video" | "audio" | "iframe" | "hr" | "picture" | "canvas")))>
+                        <TextSection sx/>
+                    </Show>
                     <BackgroundSection sx/>
                     <BorderSection sx/>
                     <EffectsSection sx/>

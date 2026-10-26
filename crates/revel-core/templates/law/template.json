@@ -1,0 +1,21 @@
+{
+  "name": "[[Cabinet de conseil / avocats||Law / consulting firm]]",
+  "category": "services",
+  "order": 150,
+  "description": "[[Cabinet d'avocats ou de conseil : domaines d'expertise, associés, chiffres, publications et prise de contact.||Law or consulting firm: practice areas, partners, figures, insights and contact.]]",
+  "preview": "meeting",
+  "palette": ["#f6f4ef", "#0f1c2e", "#9a7b4f"],
+  "features": ["components", "tabs", "form", "dark"],
+  "fonts": [ { "family": "Libre Caslon Text", "variants": ["400", "700"] }, { "family": "Inter", "variants": ["400", "500", "600"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Nous consulter||Contact us]]", "cta_link": "/contact/" },
+  "site": {
+    "description": "[[Droit des affaires et du travail, pour les entreprises et leurs dirigeants.||Business and employment law for companies and their leaders.]]",
+    "email": "[[cabinet@exemple.fr||office@example.com]]",
+    "phone": "[[01 40 00 00 00||+1 555 010 2200]]",
+    "address": "[[18 avenue Hoche, 75008 Paris||18 Park Avenue, New York, NY]]",
+    "menus": { "main": [ { "label": "[[Expertises||Practice areas]]", "url": "/#[[expertises||practice]]" }, { "label": "[[Associés||Partners]]", "url": "/#[[associes||partners]]" }, { "label": "Contact", "url": "/contact/" } ], "social": [ { "label": "LinkedIn", "url": "https://www.linkedin.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "member", "stat", "cta-band"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" }, { "id": "contact", "path": "/contact/", "name": "Contact", "title": "Contact" } ]
+}

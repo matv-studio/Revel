@@ -169,16 +169,36 @@ pub fn SiteInfo(s: DocSession, path: String) -> impl IntoView {
                                 let p = StoredValue::new(v.path.clone());
                                 let (name, uses) = s.doc.with_untracked(|d| (label(ui, d.as_ref(), &v.path), d.as_ref().map(|d| si::uses(d, &v.path)).unwrap_or(0)));
                                 let key = v.path.join(".");
+                                let kind = value_kind(&key, &v.value);
+                                let renaming = RwSignal::new(false);
+                                let name2 = name.clone();
+                                let commit = move |t: String| write(s, p.get_value(), Some(Value::String(t.trim().to_string())));
                                 view! {
-                                    <div class="siteinfo-row" data-info=key.clone()>
-                                        <input class="input siteinfo-label" aria-label=ui.t("siteinfo-label") prop:value=name.clone()
-                                            title=key.clone()
-                                            on:change=move |e| {
-                                                let l = event_target_value(&e);
-                                                s.apply.run(Command::SetSiteLabel { path: p.get_value().join("."), label: Some(l) });
-                                            }/>
-                                        <input class="input siteinfo-value" aria-label=name.clone() prop:value=v.value.clone()
-                                            on:change=move |e| write(s, p.get_value(), Some(Value::String(event_target_value(&e).trim().to_string())))/>
+                                    <div class="siteinfo-row" data-info=key.clone() data-kind=kind.id()>
+                                        // Nom : texte (pas de renommage par mégarde) ; crayon ou double-clic pour le changer.
+                                        {move || if renaming.get() {
+                                            view! {
+                                                <input class="input siteinfo-label" aria-label=ui.t("siteinfo-label") prop:value=name2.clone()
+                                                    autofocus=true
+                                                    on:change=move |e| {
+                                                        let l = event_target_value(&e);
+                                                        renaming.set(false);
+                                                        s.apply.run(Command::SetSiteLabel { path: p.get_value().join("."), label: Some(l) });
+                                                    }
+                                                    on:blur=move |_| renaming.set(false)
+                                                    on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Escape" { renaming.set(false) }/>
+                                            }.into_any()
+                                        } else {
+                                            let n = name2.clone();
+                                            view! {
+                                                <span class="siteinfo-name" title=ui.t("siteinfo-rename-help") on:dblclick=move |_| renaming.set(true)>
+                                                    <span class="siteinfo-name__text">{n}</span>
+                                                    <button type="button" class="icon-btn icon-btn--small siteinfo-rename" title=ui.t("siteinfo-rename") aria-label=ui.t("siteinfo-rename")
+                                                        on:click=move |_| renaming.set(true)>{icons::edit()}</button>
+                                                </span>
+                                            }.into_any()
+                                        }}
+                                        {value_control(ui, kind, name.clone(), v.value.clone(), Callback::new(commit))}
                                         <span class="siteinfo-uses muted small" title=ui.t("siteinfo-uses-help")>
                                             {ui.now("siteinfo-uses", &[("count", uses.to_string())])}
                                         </span>
@@ -203,6 +223,100 @@ pub fn SiteInfo(s: DocSession, path: String) -> impl IntoView {
                 </div>
             </div>
         </section>
+    }
+}
+
+/// Sorte d'une information du site, d'après sa clé et sa valeur (contrôle adapté).
+#[derive(Clone, Copy, PartialEq)]
+enum InfoKind {
+    Text,
+    Long,
+    Image,
+    Email,
+    Phone,
+    Url,
+}
+
+impl InfoKind {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Long => "long",
+            Self::Image => "image",
+            Self::Email => "email",
+            Self::Phone => "phone",
+            Self::Url => "url",
+        }
+    }
+}
+
+fn value_kind(key: &str, value: &str) -> InfoKind {
+    let k = key.to_lowercase();
+    let v = value.trim();
+    let lower = v.to_lowercase();
+    let image_ext = [".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg"]
+        .iter()
+        .any(|e| lower.split(['?', '#']).next().unwrap_or("").ends_with(e));
+    if image_ext || ["image", "logo", "photo", "icon", "picture"].iter().any(|w| k.contains(w)) {
+        InfoKind::Image
+    } else if (k.contains("mail") || (v.contains('@') && !v.contains(' ') && !v.contains('/'))) && !v.starts_with("http") {
+        InfoKind::Email
+    } else if k.contains("tel") || k.contains("phone") || k.contains("fax") {
+        InfoKind::Phone
+    } else if v.starts_with("http://") || v.starts_with("https://") || k.ends_with("url") || k.contains("link") || k.contains("lien") {
+        InfoKind::Url
+    } else if v.contains('\n') || v.chars().count() > 70 {
+        InfoKind::Long
+    } else {
+        InfoKind::Text
+    }
+}
+
+/// Contrôle d'une information : image (vignette et choix), e-mail, téléphone, lien (ouvrir),
+/// texte long (plusieurs lignes) ou texte.
+fn value_control(ui: Ui, kind: InfoKind, name: String, value: String, commit: Callback<String>) -> AnyView {
+    match kind {
+        InfoKind::Image => {
+            let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
+            let v2 = value.clone();
+            let thumb = move || (!v2.trim().is_empty()).then(|| base.get().map(|b| crate::library::thumb_src(&b, v2.trim()))).flatten();
+            view! {
+                <span class="field-line siteinfo-value image-row">
+                    <button type="button" class="image-row__thumb" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
+                        on:click=move |_| crate::library::pick_media(ui, true, None, move |u| commit.run(u))>
+                        {move || match thumb() { Some(src) => view! { <img src=src alt=""/> }.into_any(), None => icons::image() }}
+                    </button>
+                    <input class="input" aria-label=name spellcheck="false" prop:value=value on:change=move |e| commit.run(event_target_value(&e))/>
+                </span>
+            }
+            .into_any()
+        }
+        InfoKind::Long => view! {
+            <textarea class="input siteinfo-value" rows="3" aria-label=name prop:value=value
+                on:change=move |e| commit.run(event_target_value(&e))></textarea>
+        }
+        .into_any(),
+        InfoKind::Url => {
+            let v = RwSignal::new(value.clone());
+            view! {
+                <span class="field-line siteinfo-value">
+                    <input class="input" type="url" aria-label=name spellcheck="false" prop:value=value
+                        on:input=move |e| v.set(event_target_value(&e))
+                        on:change=move |e| commit.run(event_target_value(&e))/>
+                    <button type="button" class="icon-btn icon-btn--small" title=ui.t("siteinfo-open-link") aria-label=ui.t("siteinfo-open-link")
+                        disabled=move || !v.get().starts_with("http")
+                        on:click=move |_| { let u = v.get_untracked(); leptos::task::spawn_local(async move { let _ = api::open_external(&u).await; }); }>
+                        {icons::external()}</button>
+                </span>
+            }
+            .into_any()
+        }
+        k => view! {
+            <input class="input siteinfo-value" aria-label=name spellcheck="false"
+                type=match k { InfoKind::Email => "email", InfoKind::Phone => "tel", _ => "text" }
+                prop:value=value on:change=move |e| commit.run(event_target_value(&e))/>
+        }
+        .into_any(),
     }
 }
 

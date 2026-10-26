@@ -219,6 +219,28 @@ pub fn hide_hidden(html: &str) -> String {
     }
 }
 
+/// Aperçu dans l'espace de travail (cadre) : un lien vers un autre site qui s'ouvre dans un nouvel
+/// onglet est confié à l'interface (navigateur du système) ; les autres liens externes se chargent
+/// dans le cadre. Dans la fenêtre d'aperçu, rien ne change (l'application ouvre les nouveaux
+/// onglets dans le navigateur du système).
+const PREVIEW_LINKS: &str = concat!(
+    "<script data-rv-preview>(function(){if(window.top===window)return;",
+    "document.addEventListener(\"click\",function(e){if(e.defaultPrevented||e.button)return;",
+    "var a=e.target.closest&&e.target.closest(\"a[href]\");if(!a)return;var u;try{u=new URL(a.href,location.href)}catch(_){return}",
+    "if(!/^https?:$/.test(u.protocol)||u.origin===location.origin)return;",
+    "if(a.target===\"_blank\"||e.ctrlKey||e.metaKey||e.shiftKey){e.preventDefault();",
+    "parent.postMessage({revel:1,type:\"open-external\",url:u.href},\"*\")}},true)})()</script>",
+);
+
+/// Page de l'aperçu : repères de l'éditeur retirés, liens externes ouverts (voir [`PREVIEW_LINKS`]).
+fn preview_page(html: &str) -> String {
+    let html = revel_render::strip_editor_marks(html);
+    match html.to_ascii_lowercase().rfind("</body") {
+        Some(i) => format!("{}{PREVIEW_LINKS}{}", &html[..i], &html[i..]),
+        None => format!("{html}{PREVIEW_LINKS}"),
+    }
+}
+
 pub fn inject(html: &str, slots: &[Slot], vars: &[VarValue], rev: Option<u64>) -> String {
     // `</` échappé : la liste ne peut pas fermer l'élément <script>.
     let json = |v: String| v.replace("</", "<\\/");
@@ -587,7 +609,8 @@ impl Core {
             return Ok(std::fs::read(&file).ok().map(|b| CanvasResponse::ok(ct, b)));
         }
         // Composant seul (canevas des composants) : `?component=<id>&variant=<id>&page=<adresse>`.
-        if path == revel_project::COMPONENT_URL && !preview {
+        // Aperçu : le composant seul avec les scripts du site, pour l'essayer avant de le placer.
+        if path == revel_project::COMPONENT_URL {
             let query = uri_path.split_once('?').map(|(_, q)| q).unwrap_or_default();
             let param = |k: &str| {
                 query
@@ -615,16 +638,17 @@ impl Core {
                     &reference,
                     hooks,
                     &environment,
-                    &EditorOptions { scripts: false },
+                    &EditorOptions {
+                        scripts: preview && opts.scripts,
+                    },
                 )?)
             })?;
             return Ok(page.map(|page| {
-                let html = hide_hidden(&html_viewport_units(&inject(
-                    &page.html,
-                    &page.slots,
-                    &page.vars,
-                    rev,
-                )));
+                let html = hide_hidden(&if preview {
+                    preview_page(&page.html)
+                } else {
+                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
+                });
                 CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
             }));
         }
@@ -649,7 +673,7 @@ impl Core {
             })?;
             if let Some(page) = page {
                 let html = hide_hidden(&if preview {
-                    revel_render::strip_editor_marks(&page.html)
+                    preview_page(&page.html)
                 } else {
                     html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
                 });

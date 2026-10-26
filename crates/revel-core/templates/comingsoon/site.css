@@ -1,0 +1,13 @@
+:root { color-scheme: dark; --bg: #0a0a0a; --surface: rgba(255, 255, 255, 0.08); --text: #ffffff; --muted: rgba(255, 255, 255, 0.72); --line: rgba(255, 255, 255, 0.16); --line-strong: rgba(255, 255, 255, 0.32); --accent: #9ee6ff; --accent-ink: #0a0a0a; --font-display: "Syne", "Segoe UI", system-ui, sans-serif; --font-body: "Syne", "Segoe UI", system-ui, sans-serif; --display-weight: 800; --display-tracking: -0.04em; --radius: 999px; --radius-lg: 24px; --radius-btn: 999px; --max: 1100px; --pad: clamp(20px, 5vw, 64px); --section: 80px; }
+.soon { position: relative; display: grid; align-content: space-between; min-height: 100vh; padding: 36px var(--pad); overflow: hidden; }
+.soon__bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.soon::after { content: ""; position: absolute; inset: 0; background: radial-gradient(80% 80% at 30% 70%, rgba(10, 10, 10, 0.25), rgba(10, 10, 10, 0.85)); }
+.soon > * { position: relative; z-index: 1; }
+.soon__brand { font-size: 22px; font-weight: 800; }
+.soon h1 { max-width: 900px; font-size: clamp(54px, 9vw, 140px); line-height: 0.92; }
+.soon .lead { margin-top: 24px; color: var(--muted); }
+.soon form { display: flex; flex-wrap: wrap; gap: 10px; max-width: 520px; margin-top: 32px; }
+.soon .field__input { flex: 1; border-radius: 999px; background: var(--surface); border-color: var(--line-strong); }
+.soon .form__status { flex-basis: 100%; }
+.soon__foot { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; color: var(--muted); }
+.soon__foot a { text-decoration: none; }

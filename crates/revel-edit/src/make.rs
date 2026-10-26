@@ -292,6 +292,10 @@ pub enum Preset {
     /// entier, jusqu'au pointeur (volet) ou autour de lui (halo), comme un croquis qui laisse
     /// voir l'œuvre finie.
     Reveal,
+    /// Panier et bon de commande (D-129), bloc prêt à l'emploi.
+    BlockCart,
+    /// Bouton « Ajouter au panier » (D-129) : produit et prix ajoutés au panier du site.
+    CartAdd,
 }
 
 impl Preset {
@@ -307,11 +311,12 @@ impl Preset {
             Preset::BlockFaq => Block::Faq,
             Preset::BlockContact => Block::Contact,
             Preset::BlockForm => Block::Form,
+            Preset::BlockCart => Block::Cart,
             _ => return None,
         })
     }
 
-    pub const ALL: [Preset; 38] = [
+    pub const ALL: [Preset; 40] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -350,6 +355,8 @@ impl Preset {
         Preset::HoverMedia,
         Preset::ScrollProgress,
         Preset::Reveal,
+        Preset::BlockCart,
+        Preset::CartAdd,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -412,6 +419,24 @@ impl Preset {
                         ("min-height", "80px"),
                     ],
                 ),
+            ],
+            Preset::CartAdd => vec![
+                (
+                    ".bouton-panier",
+                    vec![
+                        ("display", "inline-flex"),
+                        ("align-items", "center"),
+                        ("padding", "12px 22px"),
+                        ("border", "0"),
+                        ("border-radius", "999px"),
+                        ("background-color", "var(--bloc-accent, #2f6fed)"),
+                        ("color", "var(--bloc-accent-texte, #ffffff)"),
+                        ("font", "inherit"),
+                        ("font-weight", "600"),
+                        ("cursor", "pointer"),
+                    ],
+                ),
+                (".bouton-panier.is-added", vec![("opacity", "0.7")]),
             ],
             Preset::Video => vec![(
                 ".video",
@@ -846,7 +871,26 @@ impl Preset {
             | Preset::BlockTestimonial
             | Preset::BlockFaq
             | Preset::BlockContact
-            | Preset::BlockForm => el(id(), "section", vec![], vec![]),
+            | Preset::BlockForm
+            | Preset::BlockCart => el(id(), "section", vec![], vec![]),
+            // Produit et prix : textes écrits, ou reliés aux champs d'un contenu (page d'un
+            // produit, liste de produits).
+            Preset::CartAdd => el(
+                id(),
+                "button",
+                vec![
+                    attr("class", "bouton-panier"),
+                    attr("type", "button"),
+                    Attr {
+                        name: "data-revel-cart-add".into(),
+                        value: None,
+                        when: None,
+                    },
+                    attr("data-revel-product", "Produit"),
+                    attr("data-revel-price", "0"),
+                ],
+                vec![txt(text)],
+            ),
             Preset::Section => el(id(), "section", vec![], vec![]),
             Preset::Container => el(id(), "div", vec![], vec![]),
             Preset::Heading => el(id(), "h2", vec![], vec![txt(text)]),

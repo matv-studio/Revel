@@ -850,7 +850,7 @@ pub fn PageTree(
                 CtxItem::new(ui.now("design-detach", &[]), move || {
                     detach(ui, ed, &c2, &p2)
                 })
-                .icon(icons::layout)
+                .icon(icons::own_design)
                 .sep()
             });
         }
@@ -883,7 +883,7 @@ pub fn PageTree(
                 <span class="list-chevron"></span>
                 <span class="list-icon">{icons::text()}</span>
                 <span class="list-label">{title_of(&p)}</span>
-                {own.then(|| view! { <span class="list-badge" title=ui.t("design-own-help")>{icons::layout()}</span> })}
+                {own.then(|| view! { <span class="list-badge" title=ui.t("design-own-help")>{icons::own_design()}</span> })}
             </button>
         }
         .into_any()
@@ -1251,7 +1251,7 @@ pub fn PageContext() -> impl IntoView {
             view! {
                 <div class="design-chip" class:is-own=own
                     title=if own { ui.now("design-own-help", &[]) } else { ui.now("design-template-help", &[("layout", c.template.clone().unwrap_or_default())]) }>
-                    <span class="design-chip-icon">{if own { icons::layout() } else { icons::database() }}</span>
+                    <span class="design-chip-icon">{if own { icons::own_design() } else { icons::template() }}</span>
                     <span class="design-chip-label">{if own { ui.now("design-own", &[]) } else { ui.now("design-template", &[("collection", label)]) }}</span>
                     {if own {
                         view! {
@@ -1261,7 +1261,7 @@ pub fn PageContext() -> impl IntoView {
                     } else {
                         view! {
                             <button class="icon-btn icon-btn--small" title=ui.t("design-detach-help") aria-label=ui.t("design-detach")
-                                on:click=move |_| detach(ui, ed, &c2, &p2)>{icons::layout()}</button>
+                                on:click=move |_| detach(ui, ed, &c2, &p2)>{icons::own_design()}</button>
                         }.into_any()
                     }}
                 </div>

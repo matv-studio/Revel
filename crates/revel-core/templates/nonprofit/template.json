@@ -1,0 +1,23 @@
+{
+  "name": "[[Association||Nonprofit]]",
+  "category": "community",
+  "order": 80,
+  "description": "[[Association ou ONG : mission, chiffres, actions, dons par lien Stripe ou PayPal, inscription des bénévoles.||Association or NGO: mission, figures, actions, donations through Stripe or PayPal links, volunteer sign-up.]]",
+  "preview": "hero",
+  "palette": ["#f4f7f1", "#14261a", "#2f7d4a"],
+  "features": ["components", "stripe", "paypal", "form", "ticker", "dark"],
+  "fonts": [ { "family": "Nunito Sans", "variants": ["400", "600", "800"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Faire un don||Donate]]", "cta_link": "#[[don||donate]]" },
+  "site": {
+    "description": "[[Nous replantons des haies et protégeons les zones humides avec les habitants.||We replant hedgerows and protect wetlands together with local people.]]",
+    "email": "[[contact@exemple.org||hello@example.org]]",
+    "phone": "[[02 00 00 00 00||+1 555 010 5566]]",
+    "address": "[[Maison des associations, Rennes||Community House, Portland, ME]]",
+    "donate_stripe": "https://donate.stripe.com/",
+    "donate_paypal": "https://www.paypal.com/donate/",
+    "menus": { "main": [ { "label": "[[Mission||Mission]]", "url": "#mission" }, { "label": "[[Actions||Actions]]", "url": "#actions" }, { "label": "[[Agir||Get involved]]", "url": "#[[agir||involved]]" } ], "social": [ { "label": "Facebook", "url": "https://www.facebook.com/" }, { "label": "Instagram", "url": "https://www.instagram.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "stat", "card", "testimonial"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

@@ -260,7 +260,24 @@ pub fn starter_site(name: &str, lang: &str) -> Site {
     starter_from(name, lang, SiteTemplate::Blank, false)
 }
 
-/// Nouveau site d'après un modèle.
+/// Site vide aux couleurs claires, sombres, ou claires et sombres selon l'appareil du visiteur.
+pub fn blank(name: &str, lang: &str, scheme: crate::templates::Scheme) -> Site {
+    use crate::templates::Scheme;
+    let mut s = starter_from(name, lang, SiteTemplate::Blank, scheme == Scheme::Light);
+    if scheme == Scheme::Auto {
+        let dark = DARK.replace(":root", "@media (prefers-color-scheme: dark) { :root")
+            .replace("}\n", "} }\n");
+        s.stylesheet = Some(Stylesheet {
+            url: "/assets/site.css".into(),
+            source: None,
+            items: revel_style::parse(&format!("{LIGHT}{dark}{CSS}")).unwrap_or_default(),
+        });
+    }
+    s
+}
+
+/// Nouveau site d'après un ancien modèle (vide, vitrine, blog) : forme reprise par l'import
+/// WordPress ; les nouveaux sites viennent des modèles de [`crate::templates`].
 pub fn starter_from(name: &str, lang: &str, template: SiteTemplate, light: bool) -> Site {
     let colors = if light { LIGHT } else { DARK };
     if template != SiteTemplate::Blank {

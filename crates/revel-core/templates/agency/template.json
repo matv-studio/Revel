@@ -1,0 +1,26 @@
+{
+  "name": "[[Agence||Agency]]",
+  "category": "business",
+  "order": 15,
+  "description": "[[Agence créative ou numérique : services numérotés, études de cas, méthode, équipe, logos clients qui défilent.||Creative or digital agency: numbered services, case studies, process, team, scrolling client logos.]]",
+  "preview": "hero",
+  "palette": ["#0e0e10", "#f4f4f0", "#c6f432"],
+  "features": ["components", "ticker", "carousel", "form", "dark", "smooth"],
+  "fonts": [ { "family": "Sora", "variants": ["400", "600", "700"] } ],
+  "settings": { "smooth_scroll": true, "page_transition": "fade" },
+  "navbar": { "cta": "[[Parler de votre projet||Start a project]]", "cta_link": "/contact/" },
+  "site": {
+    "description": "[[Studio numérique : stratégie, marque, sites et produits.||Digital studio: strategy, brand, websites and products.]]",
+    "email": "[[projet@exemple.fr||project@example.com]]",
+    "phone": "[[01 84 00 00 00||+1 555 010 9000]]",
+    "address": "[[42 rue de Paradis, 75010 Paris||42 Spring Street, New York, NY]]",
+    "menus": {
+      "main": [ { "label": "[[Services||Services]]", "url": "/#services" }, { "label": "[[Projets||Work]]", "url": "/#[[projets||work]]" }, { "label": "[[Équipe||Team]]", "url": "/#[[equipe||team]]" }, { "label": "Contact", "url": "/contact/" } ],
+      "social": [ { "label": "LinkedIn", "url": "https://www.linkedin.com/" }, { "label": "Dribbble", "url": "https://dribbble.com/" } ]
+    }
+  },
+  "kit": ["navbar", "footer", "section-head", "card", "member", "stat", "testimonial", "cta-band"],
+  "components": [ { "id": "service-row", "name": "[[Service||Service]]", "props": [ { "name": "number", "label": "[[Numéro||Number]]", "type": "text", "default": "01" }, { "name": "title", "label": "[[Service||Service]]", "type": "text", "default": "[[Service||Service]]" }, { "name": "text", "label": "[[Texte||Text]]", "type": "text", "default": "" } ] },
+    { "id": "step", "name": "[[Étape||Step]]", "props": [ { "name": "number", "label": "[[Numéro||Number]]", "type": "text", "default": "1" }, { "name": "title", "label": "[[Titre||Title]]", "type": "text", "default": "[[Étape||Step]]" }, { "name": "text", "label": "[[Texte||Text]]", "type": "text", "default": "" } ] } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" }, { "id": "contact", "path": "/contact/", "name": "Contact", "title": "Contact" } ]
+}

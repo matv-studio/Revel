@@ -20,6 +20,9 @@ pub mod devserver;
 pub mod domain;
 mod edit;
 mod fonts;
+mod ghsites;
+mod localize;
+pub mod templates;
 mod github;
 mod import;
 pub mod links;
@@ -461,6 +464,80 @@ impl Core {
         light: bool,
     ) -> Result<SiteSummary> {
         self.new_site_from(&site_folder(parent, name), name, lang, template, light)
+    }
+
+    /// Modèles proposés à la création d'un site (D-128), textes dans la langue `lang`.
+    pub fn site_templates(&self, lang: &str) -> Vec<revel_protocol::TemplateInfo> {
+        templates::catalogue(lang)
+            .into_iter()
+            .map(|i| revel_protocol::TemplateInfo {
+                id: i.id,
+                name: i.name,
+                category: i.category,
+                description: i.description,
+                preview: i.preview,
+                palette: i.palette,
+                features: i.features,
+                pages: i.pages,
+            })
+            .collect()
+    }
+
+    /// Crée un site d'après un modèle (`blank` : vide) dans un nouveau dossier de `parent` ;
+    /// `scheme` : `light`, `dark` ou `auto` (couleurs selon l'appareil du visiteur).
+    pub fn create_site_template(
+        &self,
+        parent: &Path,
+        name: &str,
+        lang: &str,
+        template: &str,
+        scheme: &str,
+    ) -> Result<SiteSummary> {
+        self.new_site_template(&site_folder(parent, name), name, lang, template, scheme)
+    }
+
+    /// Crée un site d'après un modèle dans le dossier `path` : document, contenus d'exemple,
+    /// dossier des médias ; polices du modèle copiées depuis Google Fonts quand la connexion le
+    /// permet (sinon les polices de repli de la feuille de style).
+    pub fn new_site_template(
+        &self,
+        path: &Path,
+        name: &str,
+        lang: &str,
+        template: &str,
+        scheme: &str,
+    ) -> Result<SiteSummary> {
+        if path.join(revel_project::SITE_FILE).exists() {
+            return Err(CoreError::AlreadyImported);
+        }
+        let scheme = templates::Scheme::parse(scheme);
+        let (site, files, fonts) = if template == "blank" || template.is_empty() {
+            (starter::blank(name, lang, scheme), Vec::new(), Vec::new())
+        } else {
+            let b = templates::build(template, name, lang, scheme).map_err(CoreError::Other)?;
+            (b.site, b.files, b.fonts)
+        };
+        for (rel, text) in files {
+            let f = path.join(&rel);
+            if let Some(dir) = f.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            if !f.exists() {
+                std::fs::write(&f, text)?;
+            }
+        }
+        let p = revel_project::Project::create(path, site)?;
+        let _ = std::fs::create_dir_all(path.join("media"));
+        if !fonts.is_empty() && !cfg!(test) && self.edit_open(path).is_ok() {
+            for f in &fonts {
+                let _ = self.fonts_add_google(path, &f.family, &f.variants);
+            }
+            // Ajouts faits hors de l'historique de l'utilisateur.
+            self.edit_close(path);
+        }
+        let summary = summarize(&revel_project::Project::open(path).unwrap_or(p))?;
+        self.touch_recent(&summary);
+        Ok(summary)
     }
 
     /// Crée un site vide.

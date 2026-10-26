@@ -191,6 +191,11 @@ impl Core {
                 )
                 .map_err(f)?,
             ),
+            "media_online" => json(self.media_online(site).map_err(f)?),
+            "media_localize" => {
+                let (state, count) = self.media_localize(site).map_err(f)?;
+                json(serde_json::json!({ "state": state, "count": count }))
+            }
             "links_check" => json(
                 crate::links::check_site(
                     site,

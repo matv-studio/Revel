@@ -389,6 +389,37 @@ pub fn more() -> AnyView {
     .into_any()
 }
 
+/// Modèle de pages (gabarit, modèle d'une collection) : pages empilées faites d'une même mise en page.
+pub fn template() -> AnyView {
+    svg(
+        r#"<rect x="4.5" y="1.5" width="10" height="10.5" rx="1.5"/><path d="M2 4.5v8.5a1.5 1.5 0 0 0 1.5 1.5h8"/><path d="M4.5 4.5h10M8 4.5V12"/>"#,
+    )
+}
+
+/// Design propre (page qui ne suit plus le modèle) : page et crayon.
+pub fn own_design() -> AnyView {
+    svg(
+        r#"<path d="M8.5 14.5h-4A1.5 1.5 0 0 1 3 13V3a1.5 1.5 0 0 1 1.5-1.5h7A1.5 1.5 0 0 1 13 3v3"/><path d="M5.5 5h5M5.5 8h3"/><path d="M12.2 8.3l2 2-4.2 4.2-2.5.5.5-2.5z"/>"#,
+    )
+}
+
+/// Épingle (champ montré en colonne).
+pub fn pin() -> AnyView {
+    svg(
+        r#"<path d="M6 1.5h4l-.6 4.2 2.6 2.3v1.5H4V8l2.6-2.3z"/><path d="M8 9.5v5"/>"#,
+    )
+}
+
+/// Épingle pleine (champ montré en colonne).
+pub fn pin_filled() -> AnyView {
+    view! {
+        <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M6 1.5h4l-.6 4.2 2.6 2.3v1.5H4V8l2.6-2.3z"/><path d="M8 9.5v5" fill="none"/>
+        </svg>
+    }
+    .into_any()
+}
+
 /// Disposition des panneaux.
 pub fn layout() -> AnyView {
     svg(
@@ -464,7 +495,8 @@ pub fn info() -> AnyView {
 
 /// Sélectionner l'élément parent.
 pub fn parent() -> AnyView {
-    svg(r#"<path d="M5 6.5 8 3.5l3 3M8 3.5v9"/>"#)
+    // Flèche en coude vers le haut et la gauche : remonter d'un niveau (différente de « Monter »).
+    svg(r#"<path d="M13 12.5H8.5a3.5 3.5 0 0 1-3.5-3.5V3"/><path d="M2.5 5.5 5 3l2.5 2.5"/>"#)
 }
 
 /// Tout replier.
@@ -768,5 +800,26 @@ pub fn share() -> AnyView {
 pub fn sync() -> AnyView {
     svg(
         r#"<path d="M13 6.5A5.2 5.2 0 0 0 3.6 5"/><path d="M3.25 2.5v2.75H6"/><path d="M3 9.5A5.2 5.2 0 0 0 12.4 11"/><path d="M12.75 13.5v-2.75H10"/>"#,
+    )
+}
+
+/// Nuage (site en ligne pas encore sur cet ordinateur).
+pub fn cloud() -> AnyView {
+    svg(
+        r#"<path d="M4.5 12.5h7.25a2.75 2.75 0 0 0 .4-5.47 4 4 0 0 0-7.7-.86A3.2 3.2 0 0 0 4.5 12.5Z"/>"#,
+    )
+}
+
+/// Nuage avec flèche vers le bas (télécharger un site).
+pub fn cloud_down() -> AnyView {
+    svg(
+        r#"<path d="M5 12.25H4.5a3.2 3.2 0 0 1-.05-6.33 4 4 0 0 1 7.7.86 2.75 2.75 0 0 1-.4 5.47H11"/><path d="M8 8.25v5.5M6 11.75l2 2 2-2"/>"#,
+    )
+}
+
+/// Panier (boutique, D-129).
+pub fn cart() -> AnyView {
+    svg(
+        r#"<path d="M2.5 3h1.6l1.5 7.2a1 1 0 0 0 1 .8h5.6a1 1 0 0 0 1-.75L14 6H5"/><circle cx="7" cy="13.25" r=".9"/><circle cx="12" cy="13.25" r=".9"/>"#,
     )
 }

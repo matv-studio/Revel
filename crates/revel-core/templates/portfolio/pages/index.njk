@@ -1,0 +1,4 @@
+<main class="page">
+<section class="intro-type"><div class="container"><h1 data-revel-text="up split=words">[[Je dessine des identités qui <em>durent</em>.||I design identities that <em>last</em>.]]</h1><div class="intro-type__meta" data-revel-appear="up delay=0.3"><p>{{ site.description }}</p><p>{{ site.address }}</p></div></div></section>
+<section class="section section--tight"><div class="container"><div class="work">{% for item in collections.projects | sort(attribute="order") %}<a class="work-item" href="{{ item.url }}" data-revel-appear="up"><div class="work-item__media"><img class="work-item__image" src="{{ item.data.image }}" alt="" loading="lazy"></div><div class="work-item__row"><h2 class="work-item__title">{{ item.data.title }}</h2><p class="work-item__meta">{{ item.data.year }}</p></div><p class="work-item__meta">{{ item.data.category }}</p></a>{% endfor %}</div></div></section>
+</main>

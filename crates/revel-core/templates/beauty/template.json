@@ -1,0 +1,24 @@
+{
+  "name": "[[Institut de beauté / spa||Beauty salon / spa]]",
+  "category": "services",
+  "order": 165,
+  "description": "[[Institut, salon ou spa : soins et tarifs en onglets, ambiance, coffrets cadeaux avec lien de paiement, réservation.||Salon or spa: treatments and prices in tabs, atmosphere, gift vouchers with payment link, booking.]]",
+  "preview": "hero",
+  "palette": ["#f7f1ec", "#3d2c2a", "#b07d62"],
+  "features": ["tabs", "components", "stripe", "form", "dark"],
+  "fonts": [ { "family": "Gilda Display", "variants": ["400"] }, { "family": "Mulish", "variants": ["400", "600"] } ],
+  "settings": { "smooth_scroll": true, "page_transition": "fade" },
+  "navbar": { "cta": "[[Réserver un soin||Book a treatment]]", "cta_link": "#[[reserver||book]]" },
+  "site": {
+    "description": "[[Soins du visage, massages et rituels, dans un lieu calme du centre-ville.||Facials, massages and rituals in a calm place downtown.]]",
+    "email": "[[soins@exemple.fr||care@example.com]]",
+    "phone": "[[01 45 00 00 00||+1 555 010 6600]]",
+    "address": "[[9 rue des Lilas, 75011 Paris||9 Lilac Lane, Savannah, GA]]",
+    "hours": "[[Mardi au samedi, 10 h - 19 h||Tuesday to Saturday, 10 am - 7 pm]]",
+    "gift": "https://buy.stripe.com/",
+    "menus": { "main": [ { "label": "[[Soins||Treatments]]", "url": "#[[soins||treatments]]" }, { "label": "[[Coffrets||Gift cards]]", "url": "#[[coffrets||gifts]]" }, { "label": "[[Réserver||Book]]", "url": "#[[reserver||book]]" } ], "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "testimonial"],
+  "components": [ { "id": "treatment", "name": "[[Soin||Treatment]]", "props": [ { "name": "name", "label": "[[Soin||Treatment]]", "type": "text", "default": "" }, { "name": "time", "label": "[[Durée||Duration]]", "type": "text", "default": "" }, { "name": "price", "label": "[[Prix||Price]]", "type": "text", "default": "" } ] } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

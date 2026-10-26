@@ -720,6 +720,7 @@ impl Revel {
                 "apply_commands" => go!(apply_commands),
                 "undo" => go!(undo),
                 "redo" => go!(redo),
+                "copy_online_images" => go!(copy_online_images),
                 "get_data" => go!(get_data),
                 "set_data" => go!(set_data),
                 "list_collections" => go!(list_collections),
@@ -1515,6 +1516,21 @@ impl Revel {
                     }
                     _ => ok("Nothing to undo."),
                 }
+            }
+            Err(e) => fail(e),
+        }
+    }
+
+    #[tool(
+        description = "Download the site's online images (free photos linked by a template, images of another server) into its media folder (`photos/`) and replace their addresses everywhere: elements, images, component values, site information, CMS entries. One undo step; an image that cannot be downloaded keeps its address."
+    )]
+    async fn copy_online_images(&self, Parameters(a): Parameters<SiteArg>) -> CallToolResult {
+        match self.call("media_localize", &a.site, json!({})).await {
+            Ok(v) => {
+                let n = v.get("count").and_then(Value::as_u64).unwrap_or(0);
+                ok(format!(
+                    "{n} image(s) copied into the site's media. Visible in Revel now; undo with the `undo` tool."
+                ))
             }
             Err(e) => fail(e),
         }

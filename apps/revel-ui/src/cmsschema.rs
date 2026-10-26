@@ -693,18 +693,47 @@ fn type_options(
             view! {
                 <div class="cms-item-field" data-setting="values">
                     <span class="label">{ui.t("cms-field-choices")}</span>
-                    <div class="tags-input">
-                        {move || values().into_iter().enumerate().map(|(i, (v, l))| view! {
-                            <span class="chip chip--tag" title=v>{l}
-                                <button type="button" class="chip-x" title=ui.t("action-delete") aria-label=ui.t("action-delete")
-                                    on:click=move |_| {
-                                        let mut list = raw();
-                                        if i < list.len() { list.remove(i); }
-                                        set.run(json!({ "options": { "values": list } }))
-                                    }>{icons::close()}</button>
-                            </span>
-                        }).collect_view()}
-                        <input class="tags-add" type="text" placeholder=ui.t("cms-field-choice-add")
+                    // Une ligne par choix : libellé modifiable (la valeur enregistrée reste), ordre, retrait.
+                    <div class="choice-rows">
+                        {move || {
+                            let all = values();
+                            let n = all.len();
+                            all.into_iter().enumerate().map(|(i, (v, l))| {
+                                let moved = move |to: usize| {
+                                    let mut list = raw();
+                                    if i < list.len() && to < list.len() { list.swap(i, to); set.run(json!({ "options": { "values": list } })) }
+                                };
+                                view! {
+                                    <span class="field-line choice-row">
+                                        <input class="input" type="text" prop:value=l title=v.clone()
+                                            on:change=move |e| {
+                                                let label = event_target_value(&e).trim().to_string();
+                                                if label.is_empty() { return; }
+                                                let mut list = raw();
+                                                let Some(item) = list.get_mut(i) else { return };
+                                                // Choix écrit en texte simple : le texte est la valeur (contenus à revoir) ;
+                                                // choix à valeur et libellé : seul le libellé change.
+                                                match item {
+                                                    Value::Object(o) => { o.insert("label".into(), Value::String(label)); }
+                                                    other => { *other = Value::String(label); }
+                                                }
+                                                set.run(json!({ "options": { "values": list } }))
+                                            }/>
+                                        <button type="button" class="icon-btn icon-btn--small" disabled={i == 0} title=ui.t("action-move-up") aria-label=ui.t("action-move-up")
+                                            on:click=move |_| moved(i.saturating_sub(1))>{icons::arrow_up()}</button>
+                                        <button type="button" class="icon-btn icon-btn--small" disabled={i + 1 >= n} title=ui.t("action-move-down") aria-label=ui.t("action-move-down")
+                                            on:click=move |_| moved(i + 1)>{icons::arrow_down()}</button>
+                                        <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-delete") aria-label=ui.t("action-delete")
+                                            on:click=move |_| {
+                                                let mut list = raw();
+                                                if i < list.len() { list.remove(i); }
+                                                set.run(json!({ "options": { "values": list } }))
+                                            }>{icons::close()}</button>
+                                    </span>
+                                }
+                            }).collect_view()
+                        }}
+                        <input class="input choice-add" type="text" placeholder=ui.t("cms-field-choice-add")
                             on:keydown=move |e: ev::KeyboardEvent| {
                                 if e.key() != "Enter" { return; }
                                 e.prevent_default();
@@ -812,10 +841,29 @@ fn type_options(
         "string" => {
             let error = RwSignal::new(false);
             view! {
-                <label class="cms-item-field" class:is-invalid=move || error.get() data-setting="pattern">
+                <div class="cms-item-field" class:is-invalid=move || error.get() data-setting="pattern">
                     <span class="label cms-label" title=ui.t("cms-field-pattern-help")>
                         <span class="cms-label-text">{ui.t("cms-field-pattern")}</span>{icons::info()}
                     </span>
+                    // Formats courants proposés ; « Personnalisé » : expression écrite à la main.
+                    <div class="select">
+                        <select class="input" aria-label=ui.t("cms-field-pattern") on:change=move |e| {
+                            let v = event_target_value(&e);
+                            if v == "custom" { return; }
+                            error.set(false);
+                            set.run(json!({ "pattern": if v.is_empty() { Value::Null } else { Value::String(v) } }))
+                        }>
+                            {move || {
+                                let cur = field.with(|f| f.as_ref().and_then(|f| f.pattern.clone())).unwrap_or_default();
+                                let known = cur.is_empty() || PATTERNS.iter().any(|(p, _)| *p == cur);
+                                view! {
+                                    <option value="" prop:selected=cur.is_empty()>{ui.t("cms-pattern-none")}</option>
+                                    {PATTERNS.iter().map(|(p, k)| { let on = *p == cur; view! { <option value=*p prop:selected=on>{ui.t(k)}</option> } }).collect_view()}
+                                    <option value="custom" prop:selected=!known>{ui.t("cms-pattern-custom")}</option>
+                                }
+                            }}
+                        </select>
+                    </div>
                     <input class="input input--mono" type="text" spellcheck="false"
                         prop:value=move || field.with(|f| f.as_ref().and_then(|f| f.pattern.clone())).unwrap_or_default()
                         on:change=move |e| {
@@ -828,7 +876,7 @@ fn type_options(
                             set.run(json!({ "pattern": if v.is_empty() { Value::Null } else { Value::String(v) } }))
                         }/>
                     {move || error.get().then(|| view! { <span class="field-error" role="alert">{ui.t("cms-field-pattern-invalid")}</span> })}
-                </label>
+                </div>
             }
             .into_any()
         }
@@ -1199,3 +1247,12 @@ fn SubFields(
         </div>
     }
 }
+
+/// Formats proposés pour un champ texte (expression, libellé).
+const PATTERNS: &[(&str, &str)] = &[
+    ("^[a-z0-9]+(?:-[a-z0-9]+)*$", "cms-pattern-slug"),
+    ("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", "cms-pattern-email"),
+    ("^https?://\\S+$", "cms-pattern-url"),
+    ("^\\+?[0-9 .()-]{6,}$", "cms-pattern-phone"),
+    ("^[0-9]{5}$", "cms-pattern-postcode"),
+];

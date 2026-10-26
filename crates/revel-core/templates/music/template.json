@@ -1,0 +1,22 @@
+{
+  "name": "[[Musicien / groupe||Musician / band]]",
+  "category": "creative",
+  "order": 170,
+  "description": "[[Groupe ou artiste : dernier album, lecteur vidéo, dates de concerts, galerie et contact presse.||Band or artist: latest release, video player, tour dates, gallery and press contact.]]",
+  "preview": "hero",
+  "palette": ["#0d0b10", "#f1ece6", "#ff3d2e"],
+  "features": ["video", "masonry", "components", "dark"],
+  "fonts": [ { "family": "Big Shoulders Display", "variants": ["700", "900"] }, { "family": "Inter", "variants": ["400", "500"] } ],
+  "settings": { "smooth_scroll": true, "page_transition": "fade" },
+  "navbar": { "cta": "[[Billets||Tickets]]", "cta_link": "#[[concerts||shows]]" },
+  "site": {
+    "description": "[[Rock indépendant de Nantes. Nouvel album « Lumière basse » disponible partout.||Indie rock from Nantes. New album « Low Light » out everywhere.]]",
+    "email": "[[presse@exemple.fr||press@example.com]]",
+    "phone": "",
+    "address": "",
+    "menus": { "main": [ { "label": "[[Musique||Music]]", "url": "#[[musique||music]]" }, { "label": "[[Concerts||Shows]]", "url": "#[[concerts||shows]]" }, { "label": "[[Photos||Photos]]", "url": "#photos" } ], "social": [ { "label": "Spotify", "url": "https://open.spotify.com/" }, { "label": "Bandcamp", "url": "https://bandcamp.com/" }, { "label": "Instagram", "url": "https://www.instagram.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head"],
+  "components": [ { "id": "show", "name": "[[Concert||Show]]", "props": [ { "name": "date", "label": "Date", "type": "text", "default": "" }, { "name": "city", "label": "[[Ville||City]]", "type": "text", "default": "" }, { "name": "venue", "label": "[[Salle||Venue]]", "type": "text", "default": "" }, { "name": "link", "label": "[[Billetterie||Tickets]]", "type": "link", "default": "#" } ], "variants": [ { "id": "sold-out", "name": "[[Complet||Sold out]]" } ] } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

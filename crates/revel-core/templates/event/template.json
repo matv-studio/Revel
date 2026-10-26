@@ -1,0 +1,27 @@
+{
+  "name": "[[Événement||Event]]",
+  "category": "events",
+  "order": 60,
+  "description": "[[Conférence ou festival : programme en onglets par jour, intervenants, lieu, billets avec lien de paiement, questions.||Conference or festival: day-by-day programme in tabs, speakers, venue, tickets with payment link, questions.]]",
+  "preview": "hero",
+  "palette": ["#0f0d1a", "#f5f3ff", "#ff5c8a"],
+  "features": ["components", "tabs", "stripe", "faq", "dark"],
+  "fonts": [ { "family": "Bricolage Grotesque", "variants": ["400", "600", "800"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Billets||Tickets]]", "cta_link": "#[[billets||tickets]]" },
+  "site": {
+    "description": "[[Deux jours de conférences sur le design et le numérique responsable.||Two days of talks on design and responsible tech.]]",
+    "email": "[[contact@exemple.fr||hello@example.com]]",
+    "phone": "",
+    "address": "[[La Sucrière, Lyon||Pier 27, San Francisco]]",
+    "date": "[[12 et 13 mars 2027||March 12–13, 2027]]",
+    "tickets": "https://buy.stripe.com/",
+    "menus": {
+      "main": [ { "label": "[[Programme||Programme]]", "url": "#[[programme||programme]]" }, { "label": "[[Intervenants||Speakers]]", "url": "#[[intervenants||speakers]]" }, { "label": "[[Lieu||Venue]]", "url": "#[[lieu||venue]]" }, { "label": "FAQ", "url": "#faq" } ],
+      "social": [ { "label": "LinkedIn", "url": "https://www.linkedin.com/" }, { "label": "YouTube", "url": "https://www.youtube.com/" } ]
+    }
+  },
+  "kit": ["navbar", "footer", "section-head", "member", "price", "faq", "stat"],
+  "components": [ { "id": "session", "name": "[[Intervention||Session]]", "props": [ { "name": "time", "label": "[[Heure||Time]]", "type": "text", "default": "09:00" }, { "name": "title", "label": "[[Titre||Title]]", "type": "text", "default": "[[Titre de l'intervention||Session title]]" }, { "name": "speaker", "label": "[[Intervenant||Speaker]]", "type": "text", "default": "" }, { "name": "room", "label": "[[Salle||Room]]", "type": "text", "default": "" } ], "variants": [ { "id": "break", "name": "[[Pause||Break]]" } ] } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

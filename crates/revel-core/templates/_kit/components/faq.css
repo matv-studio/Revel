@@ -1,0 +1,6 @@
+.faq { border-bottom: 1px solid var(--line); }
+.faq__question { display: flex; justify-content: space-between; gap: 24px; padding: 24px 0; font-size: 19px; font-weight: 600; cursor: pointer; list-style: none; }
+.faq__question::-webkit-details-marker { display: none; }
+.faq__question::after { content: "+"; font-weight: 400; transition: transform 0.25s ease; }
+.faq[open] .faq__question::after { transform: rotate(45deg); }
+.faq__answer { padding: 0 0 26px; color: var(--muted); }

@@ -1001,7 +1001,7 @@ pub fn ImportSite(
         ),
     ];
     view! {
-        <div class="overlay" on:mousedown=move |e| if e.target() == e.current_target() && !busy() { quit() }>
+        <div class="overlay" on:input=move |e| crate::dialog::mark_dirty(&e) on:mousedown=move |e| if crate::dialog::backdrop_click(&e) && !busy() { quit() }>
             <form class="dialog dialog--form import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title"
                 on:submit=move |e| { e.prevent_default(); if can_submit() { submit() } }>
                 <Show when=move || result.with(Option::is_some) fallback=move || view! {

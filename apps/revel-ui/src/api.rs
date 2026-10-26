@@ -5,7 +5,7 @@ use revel_protocol::{
     AppSettings, BuildEvent, DeployEvent, Failure, GithubEvent, HostingProfile, ImportResult,
     RecentSite, SiteSummary,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -172,33 +172,24 @@ pub async fn site_folder(parent: &str, name: &str) -> Res<String> {
     call("site_folder", &A { parent, name }).await
 }
 
-/// Crée un site dans un nouveau dossier de `parent`.
+/// Crée un site d'après un modèle (`blank` : vide) dans un nouveau dossier de `parent`.
 pub async fn create_site(
     parent: &str,
     name: &str,
     lang: &str,
-    template: revel_protocol::SiteTemplate,
-    light: bool,
+    template: &str,
+    scheme: &str,
 ) -> Res<SiteSummary> {
-    #[derive(Serialize)]
-    struct A<'a> {
-        parent: &'a str,
-        name: &'a str,
-        lang: &'a str,
-        template: revel_protocol::SiteTemplate,
-        light: bool,
-    }
     call(
         "create_site",
-        &A {
-            parent,
-            name,
-            lang,
-            template,
-            light,
-        },
+        &serde_json::json!({ "parent": parent, "name": name, "lang": lang, "template": template, "scheme": scheme }),
     )
     .await
+}
+
+/// Modèles proposés à la création d'un site (D-128).
+pub async fn site_templates(lang: &str) -> Res<Vec<revel_protocol::TemplateInfo>> {
+    call("site_templates", &serde_json::json!({ "lang": lang })).await
 }
 
 /// Collections de contenus du site et leurs entrées.
@@ -746,6 +737,16 @@ pub async fn versions_receive(path: &str, merge: &str) -> Res<revel_protocol::Re
     .await
 }
 
+/// Sites Revel des dépôts GitHub du compte connecté (D-127).
+pub async fn github_sites() -> Res<Vec<revel_protocol::GithubSite>> {
+    call("github_sites", &NoArgs {}).await
+}
+
+/// Met à jour toutes les copies de sites GitHub de cet ordinateur (D-127).
+pub async fn github_sync_all(merge: &str) -> Res<revel_protocol::GithubSyncReport> {
+    call("github_sync_all", &serde_json::json!({ "merge": merge })).await
+}
+
 pub async fn versions_resolve(
     path: &str,
     keep_ours: bool,
@@ -1030,6 +1031,23 @@ pub async fn edit_locale_data(path: &str, code: &str) -> Res<Vec<revel_edit::loc
 }
 
 /// Médias du site ouvert dans l'éditeur.
+/// Images en ligne du site (adresses, D-128).
+pub async fn media_online(path: &str) -> Res<Vec<String>> {
+    call("media_online", &PathArg { path }).await
+}
+
+/// Résultat de « Copier les images dans le site » (le nombre d'images copiées n'est pas montré :
+/// le bandeau se retire).
+#[derive(Deserialize)]
+pub struct Localized {
+    pub state: revel_edit::EditState,
+}
+
+/// Copie les images en ligne dans les médias du site (une étape d'annulation).
+pub async fn media_localize(path: &str) -> Res<Localized> {
+    call("media_localize", &PathArg { path }).await
+}
+
 pub async fn edit_media(path: &str) -> Res<Vec<revel_protocol::MediaFile>> {
     call("edit_media", &PathArg { path }).await
 }

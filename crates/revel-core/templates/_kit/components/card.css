@@ -1,0 +1,12 @@
+.card { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.card:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12); }
+.card__link { display: block; height: 100%; text-decoration: none; }
+.card__media { aspect-ratio: 4 / 3; overflow: hidden; background: var(--line); }
+.card__image { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s ease; }
+.card:hover .card__image { transform: scale(1.04); }
+.card__body { display: grid; gap: 10px; padding: 22px 24px 26px; }
+.card__text { color: var(--muted); }
+.card.is-flat { border: 0; background: transparent; }
+.card.is-flat .card__media { border-radius: var(--radius-lg); }
+.card.is-flat .card__body { padding: 18px 0 0; }
+.card.is-flat:hover { box-shadow: none; }

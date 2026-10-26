@@ -196,7 +196,7 @@ fn Domain(id: String) -> impl IntoView {
     };
 
     view! {
-        <div class="overlay" on:mousedown=move |e| { if e.target() == e.current_target() { close() } }>
+        <div class="overlay" on:input=move |e| crate::dialog::mark_dirty(&e) on:mousedown=move |e| { if crate::dialog::backdrop_click(&e) { close() } }>
             <form class="dialog domain" role="dialog" aria-modal="true" aria-labelledby="domain-title"
                 on:submit=move |e| { e.prevent_default(); verify.with_value(|f| f()) }>
                 <div class="setup-head">

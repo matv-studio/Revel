@@ -1,0 +1,4 @@
+.section-head { display: grid; gap: 18px; max-width: 760px; margin-bottom: clamp(40px, 5vw, 64px); }
+.section-head__title { text-wrap: balance; }
+.section-head .eyebrow { margin: 0; }
+.section-head.is-center { margin-left: auto; margin-right: auto; text-align: center; justify-items: center; }

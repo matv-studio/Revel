@@ -1,0 +1,4 @@
+.feature { display: grid; align-content: start; gap: 14px; }
+.feature__icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.feature__icon svg { width: 24px; height: 24px; }
+.feature__text { color: var(--muted); }

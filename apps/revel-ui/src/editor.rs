@@ -2873,7 +2873,19 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     });
 
     // Page affichée, connue de la barre supérieure (l'aperçu s'ouvre sur elle).
-    Effect::new(move |_| ui.current_page.set(Some(ed.localized(&ed.page.get()))));
+    // Page de l'aperçu : la page affichée ; dans un composant ouvert, le composant seul (avec les
+    // scripts du site, pour l'essayer avant de le placer dans une page).
+    Effect::new(move |_| {
+        let page = ed.localized(&ed.page.get());
+        let target = match ed.comp.get() {
+            Some(c) => {
+                let enc = |t: &str| js_sys::encode_uri_component(t).as_string().unwrap_or_default();
+                format!("/__revel/component/?component={}&page={}", enc(&c), enc(&page))
+            }
+            None => page,
+        };
+        ui.current_page.set(Some(target));
+    });
     on_cleanup(move || ui.current_page.set(None));
 
     // Page demandée par une autre vue (vue CMS) : affichée dès que la liste des pages est connue.

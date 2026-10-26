@@ -36,6 +36,9 @@ const ENTRY_H: f64 = 32.0;
 /// Écarts entre colonnes et entre nœuds d'une colonne.
 const COL_GAP: f64 = 110.0;
 const ROW_GAP: f64 = 20.0;
+/// Contenus d'une collection : retrait sous la collection et écart entre eux.
+const ENTRY_INDENT: f64 = 28.0;
+const ENTRY_GAP: f64 = 6.0;
 const ZOOM_MIN: f64 = 0.15;
 const ZOOM_MAX: f64 = 2.5;
 
@@ -140,6 +143,27 @@ fn collapse(mut map: LinkMap, open: &HashSet<String>) -> LinkMap {
     }
     map.links.retain(|l| l.from != l.to);
     map
+}
+
+/// Adresse montrée : valeurs `{{ slug }}` écrites `‹slug›` (chaque contenu y met la sienne).
+fn readable_path(path: &str) -> String {
+    let mut out = String::new();
+    let mut rest = path;
+    while let Some(i) = rest.find("{{") {
+        out.push_str(&rest[..i]);
+        let Some(j) = rest[i..].find("}}") else {
+            out.push_str(&rest[i..]);
+            return out;
+        };
+        let inner = rest[i + 2..i + j].trim();
+        let name = inner.rsplit('.').next().unwrap_or(inner).split('|').next().unwrap_or("").trim();
+        out.push('‹');
+        out.push_str(name);
+        out.push('›');
+        rest = &rest[i + j + 2..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Partie littérale d'une adresse (avant la première valeur `{{ }}`).
@@ -297,19 +321,17 @@ fn arrange(map: &LinkMap) -> HashMap<String, (f64, f64)> {
             return y + h / 2.0;
         }
         if all_entries {
+            // Contenus : en liste serrée sous leur collection, légèrement en retrait.
             let top = *cursor;
-            let ex = x0 + (depth + 1) as f64 * (NODE_W + COL_GAP);
-            *max_x = max_x.max(ex);
+            pos.insert(key.to_string(), (x, top));
+            *cursor = top + h + ENTRY_GAP;
             for k in &kids {
                 seen.insert(k.clone());
-                pos.insert(k.clone(), (ex, *cursor));
-                *cursor += ENTRY_H + 8.0;
+                pos.insert(k.clone(), (x + ENTRY_INDENT, *cursor));
+                *cursor += ENTRY_H + ENTRY_GAP;
             }
-            *cursor += ROW_GAP - 8.0;
-            let y = top;
-            pos.insert(key.to_string(), (x, y));
-            *cursor = cursor.max(top + h + ROW_GAP);
-            return y + h / 2.0;
+            *cursor += ROW_GAP - ENTRY_GAP;
+            return top + h / 2.0;
         }
         let mut centers = Vec::new();
         for k in &kids {
@@ -772,6 +794,28 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
         if let Some((k, v)) = dragging.get() {
             p.insert(k, v);
         }
+        // Contenus sans position choisie : sous leur collection, où qu'elle soit (ils la suivent
+        // quand on la déplace).
+        let placed = |k: &str| {
+            saved.with(|sv| sv.contains_key(k))
+                || pending.with(|pd| pd.contains_key(k))
+                || dragging.with(|d| d.as_ref().is_some_and(|(dk, _)| dk == k))
+        };
+        auto.with(|a| {
+            map.with(|m| {
+                for n in m.nodes.iter().filter(|n| n.kind == NodeKind::Entry) {
+                    let Some(parent) = n.parent.as_deref() else { continue };
+                    if placed(&n.key) || !placed(parent) {
+                        continue;
+                    }
+                    if let (Some(&(ex, ey)), Some(&(cx, cy)), Some(&(px, py))) =
+                        (a.get(&n.key), a.get(parent), p.get(parent))
+                    {
+                        p.insert(n.key.clone(), (px + ex - cx, py + ey - cy));
+                    }
+                }
+            })
+        });
         p
     });
     let rect_of = move |key: &str| -> Option<(f64, f64, f64)> {
@@ -1569,7 +1613,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                     NodeKind::Page => icons::page(),
                     NodeKind::Collection => icons::database(),
                     NodeKind::Entry => icons::file(),
-                    NodeKind::Layout => icons::layout(),
+                    NodeKind::Layout => icons::template(),
                     NodeKind::Component => icons::component(),
                     NodeKind::Menu => icons::menu(),
                     NodeKind::Missing => icons::warning(),
@@ -1618,7 +1662,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                 });
                 let sub = match kind {
                     NodeKind::Page | NodeKind::Missing | NodeKind::Collection => {
-                        n.path.clone().unwrap_or_default()
+                        readable_path(&n.path.clone().unwrap_or_default())
                     }
                     NodeKind::Menu => ui.now("map-menu-links", &[("count", n.count.unwrap_or(0).to_string())]),
                     NodeKind::Component | NodeKind::Layout => ui.now(
@@ -2629,6 +2673,26 @@ mod tests {
                 assert!(w[1] - w[0] >= ENTRY_H, "{ys:?}");
             }
         }
+    }
+
+    #[test]
+    fn contenus_sous_la_collection() {
+        let mut m = LinkMap::default();
+        m.nodes.push(node("page:index", NodeKind::Page, Some("/")));
+        m.nodes
+            .push(node("col:p", NodeKind::Collection, Some("/p/{{ slug }}/")));
+        for f in ["a", "b"] {
+            let mut e = node(&format!("entry:p/{f}"), NodeKind::Entry, Some("/p/x/"));
+            e.parent = Some("col:p".into());
+            m.nodes.push(e);
+        }
+        let p = arrange(&m);
+        let (cx, cy) = p["col:p"];
+        let (ax, ay) = p["entry:p/a"];
+        let (bx, by) = p["entry:p/b"];
+        assert_eq!(ax, cx + ENTRY_INDENT);
+        assert_eq!(bx, ax);
+        assert!(ay >= cy + NODE_H && by >= ay + ENTRY_H, "{cy} {ay} {by}");
     }
 
     #[test]

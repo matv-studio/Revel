@@ -1,0 +1,22 @@
+{
+  "name": "[[CV / page personnelle||Resume / personal page]]",
+  "category": "personal",
+  "order": 70,
+  "description": "[[CV en ligne : sommaire qui suit la lecture, parcours en frise, compétences, projets et contact.||Online resume: table of contents that follows your reading, career timeline, skills, projects and contact.]]",
+  "preview": "portrait",
+  "palette": ["#fafaf7", "#1b1b1b", "#0f766e"],
+  "features": ["spy", "components", "dark"],
+  "fonts": [ { "family": "IBM Plex Sans", "variants": ["400", "500", "600"] }, { "family": "IBM Plex Serif", "variants": ["500"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Me contacter||Contact me]]", "cta_link": "#contact" },
+  "site": {
+    "description": "[[Cheffe de produit, dix ans dans les outils pour les équipes.||Product manager, ten years building tools for teams.]]",
+    "email": "[[camille@exemple.fr||camille@example.com]]",
+    "phone": "[[06 00 00 00 00||+1 555 010 1234]]",
+    "address": "[[Bordeaux, France||Austin, TX]]",
+    "menus": { "main": [ { "label": "[[Parcours||Experience]]", "url": "#[[parcours||experience]]" }, { "label": "[[Compétences||Skills]]", "url": "#[[competences||skills]]" }, { "label": "Contact", "url": "#contact" } ], "social": [ { "label": "LinkedIn", "url": "https://www.linkedin.com/" }, { "label": "GitHub", "url": "https://github.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "card"],
+  "components": [ { "id": "job", "name": "[[Expérience||Job]]", "props": [ { "name": "period", "label": "[[Période||Period]]", "type": "text", "default": "2020 – 2024" }, { "name": "role", "label": "[[Poste||Role]]", "type": "text", "default": "[[Poste||Role]]" }, { "name": "company", "label": "[[Entreprise||Company]]", "type": "text", "default": "" } ] } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

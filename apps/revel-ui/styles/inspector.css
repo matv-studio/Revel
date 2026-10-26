@@ -707,3 +707,9 @@
 .icon-tab.is-on { background: var(--surface-active); color: var(--text); }
 .icon-grid--custom .icon-choice img { width: 20px; height: 20px; object-fit: contain; }
 .icon-import { border-style: dashed; border-color: var(--line-strong); color: var(--text-muted); }
+/* Groupe de réglages avec une action à droite du titre (retirer le rôle). */
+.insp-group-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.insp-group-head .panel-title { margin: 0; }
+/* Champ réglé par un attribut : libellé lisible et bouton relier/délier à droite. */
+.field-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.field-head .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

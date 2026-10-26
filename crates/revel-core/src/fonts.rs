@@ -245,7 +245,7 @@ fn face_css(
     )
 }
 
-fn agent(timeout: u64) -> ureq::Agent {
+pub(crate) fn agent(timeout: u64) -> ureq::Agent {
     ureq::Agent::config_builder()
         .user_agent(BROWSER)
         .timeout_global(Some(Duration::from_secs(timeout)))

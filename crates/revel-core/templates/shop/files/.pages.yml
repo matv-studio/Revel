@@ -1,0 +1,52 @@
+# Configuration de Pages CMS (https://pagescms.org), lue aussi par Revel.
+media:
+  input: media
+  output: /media
+content:
+  - name: products
+    label: "[[Produits||Products]]"
+    type: collection
+    path: content/products
+    filename: "{fields.slug}.md"
+    view:
+      fields: [title, price, category]
+      primary: title
+    fields:
+      - name: title
+        label: "[[Nom du produit||Product name]]"
+        type: string
+        required: true
+      - name: slug
+        label: "[[Adresse de la page||Page address]]"
+        type: string
+        required: true
+      - name: order
+        label: "[[Ordre||Order]]"
+        type: number
+      - name: price
+        label: "[[Prix||Price]]"
+        type: number
+      - name: category
+        label: "[[Catégorie||Category]]"
+        type: select
+        options:
+          values: ["[[Table||Tableware]]", "[[Décoration||Decor]]", "[[Maison||Home]]"]
+      - name: image
+        label: "[[Photo principale||Main photo]]"
+        type: image
+      - name: gallery
+        label: "[[Galerie||Gallery]]"
+        type: image
+        list: true
+      - name: description
+        label: "[[Description courte||Short description]]"
+        type: text
+      - name: stripe
+        label: "[[Lien de paiement Stripe||Stripe payment link]]"
+        type: string
+      - name: paypal
+        label: "[[Lien de paiement PayPal||PayPal payment link]]"
+        type: string
+      - name: body
+        label: "[[Détails||Details]]"
+        type: rich-text

@@ -463,6 +463,13 @@ pub enum Command {
         keys: Vec<String>,
         on: bool,
     },
+    /// Textes des fichiers de données gardés tels quels (clés `data:<chemin>` de
+    /// [`revel_model::Locale::kept`]) posés (`on`) ou retirés.
+    MarkKept {
+        locale: String,
+        keys: Vec<String>,
+        on: bool,
+    },
     /// Mots gardés tels quels par la traduction automatique (réglages du site).
     SetNoTranslate { terms: Vec<String> },
     /// Traduction du texte écrit à un endroit (canevas, inspecteur), remplacée par
@@ -1502,6 +1509,23 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                 .cloned()
                 .collect();
             Ok(Command::MarkMachine {
+                locale: locale.clone(),
+                keys: changed,
+                on: !on,
+            })
+        }
+        Command::MarkKept { locale, keys, on } => {
+            let l = site
+                .locales
+                .iter_mut()
+                .find(|l| l.code == *locale)
+                .ok_or_else(|| EditError::InvalidLocale(locale.clone()))?;
+            let changed: Vec<String> = keys
+                .iter()
+                .filter(|k| if *on { l.kept.insert((*k).clone()) } else { l.kept.remove(*k) })
+                .cloned()
+                .collect();
+            Ok(Command::MarkKept {
                 locale: locale.clone(),
                 keys: changed,
                 on: !on,

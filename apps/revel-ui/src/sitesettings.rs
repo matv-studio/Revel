@@ -2,7 +2,7 @@
 //! ajouté aux pages, polices (Google Fonts téléchargées dans le site, fichiers importés, D-24).
 
 use crate::dialog::Ask;
-use crate::site::{DocSession, doc_session};
+use crate::site::{DocSession, capitalize, doc_session};
 use crate::{Tab, Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -31,7 +31,7 @@ fn info(s: DocSession) -> Option<Info> {
 
 /// Flux RSS : un interrupteur par collection qui a une page par contenu (un flux mène aux
 /// pages), l'adresse du flux et le nombre de contenus.
-fn feeds_section(ui: Ui, s: DocSession) -> AnyView {
+fn feeds_section(ui: Ui, s: DocSession, labels: &std::collections::BTreeMap<String, String>) -> AnyView {
     let Some((cols, feeds)) = s.doc.with(|d| {
         d.as_ref().map(|d| {
             (
@@ -70,7 +70,8 @@ fn feeds_section(ui: Ui, s: DocSession) -> AnyView {
         .into_iter()
         .map(|id| {
             let cur = feeds.with_value(|all| all.iter().find(|f| f.collection == id).cloned());
-            let label = crate::pagetree::label_of(&id);
+            // Nom de la collection dans le CMS (`.pages.yml`), sinon tiré de son identifiant.
+            let label = labels.get(&id).cloned().unwrap_or_else(|| crate::pagetree::label_of(&id));
             let (id1, id2, id3) = (id.clone(), id.clone(), id.clone());
             let default_path = if feeds.with_value(|a| a.is_empty()) {
                 "/feed.xml".to_string()
@@ -142,7 +143,8 @@ fn feeds_section(ui: Ui, s: DocSession) -> AnyView {
     view! { <div class="form-grid">{rows}</div> }.into_any()
 }
 
-/// Paramètres généraux : identité modifiable, structure, environnements.
+/// Paramètres généraux : identité modifiable, flux RSS (structure et environnements : fiche
+/// [`SiteFacts`]).
 #[component]
 pub fn General(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -150,6 +152,18 @@ pub fn General(site: SiteSummary) -> impl IntoView {
     // Résumé relu (structure du site).
     let fresh = RwSignal::new(site.clone());
     let path = StoredValue::new(site.path.clone());
+    // Noms des collections (CMS) pour les flux RSS.
+    let col_labels = RwSignal::new(std::collections::BTreeMap::<String, String>::new());
+    {
+        let p = site.path.clone();
+        spawn_local(async move {
+            if let Ok(cs) = api::cms_collections(&p).await
+                && !col_labels.is_disposed()
+            {
+                col_labels.set(cs.into_iter().filter_map(|c| Some((c.id, c.label?))).collect());
+            }
+        });
+    }
     let refresh = move || {
         // Vue quittée avant la relecture : rien à faire.
         let Some(p) = path.try_get_value() else {
@@ -201,14 +215,6 @@ pub fn General(site: SiteSummary) -> impl IntoView {
                 .filter(|c| *c != cur && !taken.contains(c)),
         );
         list
-    };
-    let n_cols = move || {
-        fresh.with(|s| {
-            s.collections
-                .iter()
-                .filter(|c| !c.folder.is_empty())
-                .count()
-        })
     };
     view! {
         <section class="page settings-page">
@@ -284,25 +290,64 @@ pub fn General(site: SiteSummary) -> impl IntoView {
             </div>
             <div class="section">
                 <h2 title=ui.t("settings-feeds-help")>{ui.t("settings-feeds")}</h2>
-                {move || feeds_section(ui, s)}
-            </div>
-            <div class="section">
-                <h2>{ui.t("overview-structure")}</h2>
-                <dl class="facts">
-                    <div><dt>{ui.t("site-pages")}</dt><dd>{move || fresh.with(|s| s.pages)}</dd></div>
-                    <div><dt>{ui.t("site-layouts")}</dt><dd>{move || fresh.with(|s| s.layouts)}</dd></div>
-                    <div><dt>{ui.t("site-components")}</dt><dd>{move || fresh.with(|s| s.components)}</dd></div>
-                    <div>
-                        <dt>{ui.t("site-collections")}</dt>
-                        <dd><button class="link-btn" title=ui.t("view-cms") on:click=move |_| ui.tab(Tab::Cms)>{n_cols}</button></dd>
-                    </div>
-                </dl>
-            </div>
-            <div class="section">
-                <h2>{ui.t("overview-environments")}</h2>
-                <div class="chips">{move || fresh.with(|s| s.environments.clone()).into_iter().map(|e| view! { <span class="chip">{e}</span> }).collect_view()}</div>
+                {move || col_labels.with(|l| feeds_section(ui, s, l))}
             </div>
         </section>
+    }
+}
+
+/// Fiche du site en haut à droite des paramètres (information, pas réglage) : nombre de pages,
+/// gabarits, composants et collections, environnement de publication principal en pastille
+/// (les autres en info-bulle). Reste visible au défilement.
+#[component]
+pub fn SiteFacts(site: SiteSummary) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let fresh = RwSignal::new(site.clone());
+    let p = site.path.clone();
+    spawn_local(async move {
+        if let Ok(sum) = api::open_site(&p).await
+            && !fresh.is_disposed()
+        {
+            fresh.set(sum);
+        }
+    });
+    let env_name = move |e: &str| match e {
+        "production" => ui.now("env-production", &[]),
+        "staging" => ui.now("env-staging", &[]),
+        other => capitalize(other),
+    };
+    let main_env = move || {
+        fresh.with(|s| {
+            s.environments
+                .iter()
+                .find(|e| *e == "production")
+                .or(s.environments.first())
+                .cloned()
+                .unwrap_or_else(|| "production".into())
+        })
+    };
+    let envs_help = move || {
+        let names: Vec<String> = fresh.with(|s| s.environments.iter().map(|e| env_name(e)).collect());
+        ui.now("site-facts-envs", &[("list", names.join(", "))])
+    };
+    let fact = move |key: &'static str, n: Signal<usize>| {
+        view! { <span class="site-facts__item"><strong>{move || n.get()}</strong>" "<span class="muted">{ui.t(key)}</span></span> }
+    };
+    view! {
+        <div class="site-facts" role="note" aria-label=ui.t("overview-structure")>
+            <div class="site-facts__card">
+                {fact("site-pages", Signal::derive(move || fresh.with(|s| s.pages)))}
+                {fact("site-layouts", Signal::derive(move || fresh.with(|s| s.layouts)))}
+                {fact("site-components", Signal::derive(move || fresh.with(|s| s.components)))}
+                <button class="site-facts__item link-btn" title=ui.t("view-cms") on:click=move |_| ui.tab(Tab::Cms)>
+                    <strong>{move || fresh.with(|s| s.collections.iter().filter(|c| !c.folder.is_empty()).count())}</strong>" "
+                    <span class="muted">{ui.t("site-collections")}</span>
+                </button>
+                <span class="site-facts__env" class:is-prod=move || main_env() == "production" title=envs_help>
+                    <span class="site-facts__dot"></span>{move || env_name(&main_env())}
+                </span>
+            </div>
+        </div>
     }
 }
 
@@ -375,7 +420,6 @@ pub fn Code(site: SiteSummary) -> impl IntoView {
     };
     view! {
         <section class="page settings-page">
-            <header class="page-head"><h1 title=ui.t("code-help")>{ui.t("settings-code")}</h1></header>
             <div class="section">
                 {code_field(ui, "code-head", "code-head-help", move || head.get(), move |v| set(Some(v), None))}
                 {code_field(ui, "code-body", "code-body-help", move || body.get(), move |v| set(None, Some(v)))}

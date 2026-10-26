@@ -105,7 +105,7 @@ pub fn Variables() -> impl IntoView {
     let owner_head = move |o: &Owner| -> (AnyView, String, String) {
         match o {
             Owner::Layout(id) => (
-                icons::layout(),
+                icons::template(),
                 short(id),
                 ui.now("variables-owner-layout", &[("name", id.clone())]),
             ),

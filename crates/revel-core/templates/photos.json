@@ -1,0 +1,1238 @@
+{
+ "agency": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1522071820081-009f0129c71c",
+   "alt_fr": "Équipe qui collabore autour d'ordinateurs portables",
+   "alt_en": "Team collaborating around laptops",
+   "author": "Annie Spratt",
+   "page": "https://unsplash.com/photos/group-of-people-using-laptop-computer-QckxruozjRg"
+  },
+  {
+   "role": "office",
+   "url": "https://images.unsplash.com/photo-1747992021633-762a63985d01",
+   "alt_fr": "Studio moderne avec un mur végétal",
+   "alt_en": "Modern studio with a green plant wall",
+   "author": "Spl Interiors",
+   "page": "https://unsplash.com/photos/a-modern-office-space-with-green-wall-and-desks-Pk9dZzdNdz8"
+  },
+  {
+   "role": "p1",
+   "url": "https://images.unsplash.com/photo-1573867607131-872f83689352",
+   "alt_fr": "Croquis de maquettes d'application mobile",
+   "alt_en": "Mobile app wireframe sketches",
+   "author": "Hal Gatewood",
+   "page": "https://unsplash.com/photos/smartphone-screenshots-illustration-8MBd4rAgJ-c"
+  },
+  {
+   "role": "p2",
+   "url": "https://images.unsplash.com/photo-1704030459012-bfbe0d55fec6",
+   "alt_fr": "Cartes de visite violettes pour une identité de marque",
+   "alt_en": "Purple business cards for a brand identity",
+   "author": "Mockup Free",
+   "page": "https://unsplash.com/photos/a-purple-business-card-with-the-word-problem-on-it-LpV5eURG6e8"
+  },
+  {
+   "role": "p3",
+   "url": "https://images.unsplash.com/photo-1583407723467-9b2d22504831",
+   "alt_fr": "Affiches déchirées superposées sur un mur",
+   "alt_en": "Layered torn posters on a wall",
+   "author": "Jazmin Quaynor",
+   "page": "https://unsplash.com/photos/torn-layered-street-posters-on-wall-CXjp1ycr5Vw"
+  },
+  {
+   "role": "p4",
+   "url": "https://images.unsplash.com/photo-1595246135406-803418233494",
+   "alt_fr": "Boîtes d'emballage en kraft",
+   "alt_en": "Kraft packaging boxes",
+   "author": "Mildlee",
+   "page": "https://unsplash.com/photos/brown-cardboard-box-on-white-table-7KKy7-TeeVs"
+  },
+  {
+   "role": "team1",
+   "url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e",
+   "alt_fr": "Portrait d'un homme souriant",
+   "alt_en": "Portrait of a smiling man",
+   "author": "Jurica Koletić",
+   "page": "https://unsplash.com/photos/man-wearing-henley-top-portrait-7YVZYZeITc8"
+  },
+  {
+   "role": "team2",
+   "url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
+   "alt_fr": "Portrait d'une femme souriante",
+   "alt_en": "Portrait of a smiling woman",
+   "author": "Štefan Štefančík",
+   "page": "https://unsplash.com/photos/smiling-woman-wearing-white-and-black-pinstriped-collared-top-QXevDflbl8A"
+  },
+  {
+   "role": "team3",
+   "url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
+   "alt_fr": "Portrait d'un homme souriant en t-shirt blanc",
+   "alt_en": "Portrait of a smiling man in a white t-shirt",
+   "author": "Joseph Gonzalez",
+   "page": "https://unsplash.com/photos/man-wearing-white-v-neck-shirt-iFgRcqHznqg"
+  }
+ ],
+ "artisan": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1631396326838-de37e5f8bcbc",
+   "alt_fr": "Artisan travaillant une pièce de bois dans son atelier",
+   "alt_en": "Craftsman working a piece of wood in his workshop",
+   "author": "Bailey Alexander",
+   "page": "https://unsplash.com/photos/a-man-working-on-a-piece-of-wood-DfffcjQ106U"
+  },
+  {
+   "role": "work1",
+   "url": "https://images.unsplash.com/photo-1649083048381-520a5b3d91ff",
+   "alt_fr": "Salon rénové avec parquet",
+   "alt_en": "Finished living room with wood floors",
+   "author": "Bailey Alexander",
+   "page": "https://unsplash.com/photos/a-living-room-with-white-furniture-and-wood-floors-Aq8ljLz12gk"
+  },
+  {
+   "role": "work2",
+   "url": "https://images.unsplash.com/photo-1622372738946-62e02505feb3",
+   "alt_fr": "Cuisine moderne aux façades en bois",
+   "alt_en": "Modern kitchen with wooden cabinets",
+   "author": "Kam Idris",
+   "page": "https://unsplash.com/photos/modern-kitchen-with-wood-cabinet-teal-stool-hYb7kbu4x7E"
+  },
+  {
+   "role": "work3",
+   "url": "https://images.unsplash.com/photo-1616046229478-9901c5536a45",
+   "alt_fr": "Table en bois et ses chaises",
+   "alt_en": "Wooden dining table with chairs",
+   "author": "Spacejoy",
+   "page": "https://unsplash.com/photos/brown-wooden-table-with-chairs-YI2YkyaREHk"
+  },
+  {
+   "role": "work4",
+   "url": "https://images.unsplash.com/photo-1618832515490-e181c4794a45",
+   "alt_fr": "Cuisine en cours de rénovation",
+   "alt_en": "Kitchen under renovation",
+   "author": "immo RENOVATION",
+   "page": "https://unsplash.com/photos/kitchen-renovation-with-white-cabinets-UqNEbyRQ660"
+  },
+  {
+   "role": "tools",
+   "url": "https://images.unsplash.com/photo-1497218770144-3fea6dbc33fe",
+   "alt_fr": "Outils à main posés sur un établi",
+   "alt_en": "Hand tools laid out on a workbench",
+   "author": "Dominik Scythe",
+   "page": "https://unsplash.com/photos/hand-tools-on-top-of-table-v8vz-Roj8zo"
+  }
+ ],
+ "beauty": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1761470575018-135c213340eb",
+   "alt_fr": "Hammam moderne et apaisant à la lueur d'une bougie",
+   "alt_en": "Calm modern hammam with candlelight",
+   "author": "Dominik Neuner",
+   "page": "https://unsplash.com/fr/photos/un-hammam-moderne-avec-une-bougie-et-un-eclairage-dambiance-9qYFu1NzpS8"
+  },
+  {
+   "role": "care1",
+   "url": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874",
+   "alt_fr": "Femme se détendant pendant un massage",
+   "alt_en": "Woman relaxing during a massage",
+   "author": "alan caishan",
+   "page": "https://unsplash.com/es/fotos/mujer-acostada-con-posicion-prona-cU53ZFBr3lk"
+  },
+  {
+   "role": "care2",
+   "url": "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881",
+   "alt_fr": "Soin du visage avec masque en institut",
+   "alt_en": "Facial mask treatment at a spa",
+   "author": "Rosa Rafael",
+   "page": "https://unsplash.com/photos/woman-receiving-facial-mask-treatment-at-spa-Pe9IXUuC6QU"
+  },
+  {
+   "role": "care3",
+   "url": "https://images.unsplash.com/photo-1632345031435-8727f6897d53",
+   "alt_fr": "Manucure en institut",
+   "alt_en": "Manicure in a nail salon",
+   "author": "Giorgio Trovato",
+   "page": "https://unsplash.com/fr/photos/une-femme-se-fait-faire-les-ongles-dans-un-salon-de-manucure-gb6gtiTZKB8"
+  },
+  {
+   "role": "products",
+   "url": "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108",
+   "alt_fr": "Flacon compte-gouttes ambré de sérum",
+   "alt_en": "Amber dropper bottle of skincare serum",
+   "author": "Kadarius Seegars",
+   "page": "https://unsplash.com/photos/amber-glass-bottle-on-wooden-pedestal-Mxy5gokl8mE"
+  }
+ ],
+ "blog": [
+  {
+   "role": "cover1",
+   "url": "https://images.unsplash.com/photo-1494783367193-149034c05e8f",
+   "alt_fr": "Route déserte menant vers des montagnes lointaines",
+   "alt_en": "Empty road leading to distant mountains",
+   "author": "Diego Jimenez",
+   "page": "https://unsplash.com/photos/lone-road-going-to-mountains-A-NVHPka9Rk"
+  },
+  {
+   "role": "cover2",
+   "url": "https://images.unsplash.com/photo-1554995207-c18c203602cb",
+   "alt_fr": "Salon lumineux avec un canapé en cuir",
+   "alt_en": "Bright living room with a leather sofa",
+   "author": "Kara Eads",
+   "page": "https://unsplash.com/photos/living-room-L7EwHkq1B2s"
+  },
+  {
+   "role": "cover3",
+   "url": "https://images.unsplash.com/photo-1493770348161-369560ae357d",
+   "alt_fr": "Vue du dessus d'une table de brunch colorée",
+   "alt_en": "Overhead view of a colourful brunch table",
+   "author": "Brooke Lark",
+   "page": "https://unsplash.com/photos/fruit-salad-on-gray-bowls-HlNcigvUi4Q"
+  },
+  {
+   "role": "cover4",
+   "url": "https://images.unsplash.com/photo-1759434237869-5cf45b0ebdff",
+   "alt_fr": "Chaîne de montagnes escarpées sous un ciel bleu",
+   "alt_en": "Jagged mountain range under a blue sky",
+   "author": "Daniel Seßler",
+   "page": "https://unsplash.com/photos/jagged-mountain-range-under-a-clear-blue-sky-Sqw_yGNfLwc"
+  },
+  {
+   "role": "cover5",
+   "url": "https://images.unsplash.com/photo-1515963665762-77ef90e624fa",
+   "alt_fr": "Rue de ville au crépuscule bordée d'immeubles",
+   "alt_en": "City street at dusk lined with buildings",
+   "author": "Chris Dickens",
+   "page": "https://unsplash.com/photos/lighted-roadway-surrounded-with-buildings-b9cRz523N9c"
+  },
+  {
+   "role": "cover6",
+   "url": "https://images.unsplash.com/photo-1614624532983-4ce03382d63d",
+   "alt_fr": "Poste informatique sur un bureau en lumière d'ambiance",
+   "alt_en": "Computer setup on a desk with ambient light",
+   "author": "Linus Mimietz",
+   "page": "https://unsplash.com/photos/black-flat-screen-computer-monitor-on-brown-wooden-desk-gvptKmonylk"
+  },
+  {
+   "role": "author",
+   "url": "https://images.unsplash.com/photo-1695927621677-ec96e048dce2",
+   "alt_fr": "Portrait d'un homme souriant",
+   "alt_en": "Portrait of a smiling man",
+   "author": "Wellington Ferreira",
+   "page": "https://unsplash.com/photos/a-man-with-a-goatee-smiles-at-the-camera-72TE8cWKXRY"
+  }
+ ],
+ "clinic": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1758691462878-6edc3d3da1be",
+   "alt_fr": "Médecin en consultation avec une patiente dans un cabinet lumineux",
+   "alt_en": "Doctor consulting with a patient in a bright medical office",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/doctor-consults-with-patient-in-medical-office-iyeUwItlIPk"
+  },
+  {
+   "role": "doctor1",
+   "url": "https://images.unsplash.com/photo-1758691462651-611d730c5272",
+   "alt_fr": "Médecin souriante avec un stéthoscope à son bureau",
+   "alt_en": "Smiling female doctor with a stethoscope at her desk",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/a-female-doctor-wearing-a-stethoscope-sits-at-her-desk-_zbqco3m7dA"
+  },
+  {
+   "role": "doctor2",
+   "url": "https://images.unsplash.com/photo-1758691463333-c79215e8bc3b",
+   "alt_fr": "Médecin en blouse blanche assis à son bureau",
+   "alt_en": "Male doctor in a white coat seated at his desk",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/doctor-wearing-a-white-coat-sits-at-a-desk-XuB10o8080c"
+  },
+  {
+   "role": "care",
+   "url": "https://images.unsplash.com/photo-1649751361457-01d3a696c7e6",
+   "alt_fr": "Thérapeute examinant la jambe d'un patient",
+   "alt_en": "Therapist examining a patient's leg",
+   "author": "yury kirillov",
+   "page": "https://unsplash.com/photos/a-man-getting-his-leg-examined-by-a-doctor-pbUWW-CBoqY"
+  }
+ ],
+ "comingsoon": [
+  {
+   "role": "bg",
+   "url": "https://images.unsplash.com/photo-1476362555312-ab9e108a0b7e",
+   "alt_fr": "Sapins émergeant de la brume en montagne",
+   "alt_en": "Evergreen trees emerging from mountain fog",
+   "author": "Thomas Griesbeck",
+   "page": "https://unsplash.com/photos/evergreen-trees-in-dense-mountain-fog-BS-Uxe8wU5Y"
+  }
+ ],
+ "course": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1758874573188-5d7380fa647a",
+   "alt_fr": "Homme prenant des notes en suivant un cours sur ordinateur",
+   "alt_en": "Man taking notes while learning on a laptop",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/man-writing-in-notebook-at-desk-with-laptop-Jeg0c4gnpOM"
+  },
+  {
+   "role": "instructor",
+   "url": "https://images.unsplash.com/photo-1765005204058-10418f5123c5",
+   "alt_fr": "Jeune professionnelle souriante",
+   "alt_en": "Smiling young professional woman",
+   "author": "Joecalih",
+   "page": "https://unsplash.com/photos/a-young-professional-woman-smiling-against-a-white-background-1l6UeCc9P9o"
+  },
+  {
+   "role": "class",
+   "url": "https://images.unsplash.com/photo-1758270704262-ecc82b23dc37",
+   "alt_fr": "Formateur s'adressant à un groupe",
+   "alt_en": "Teacher speaking to a class",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/professor-lectures-to-students-in-a-classroom-setting-RDf6Cvns88Q"
+  },
+  {
+   "role": "notes",
+   "url": "https://images.unsplash.com/photo-1501504905252-473c47e087f8",
+   "alt_fr": "Carnet ouvert à côté d'un ordinateur portable",
+   "alt_en": "Open notebook next to a laptop",
+   "author": "Nick Morrison",
+   "page": "https://unsplash.com/photos/macbook-pro-near-white-open-book-FHnnjk1Yj7Y"
+  }
+ ],
+ "docs": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1515879218367-8466d910aaa4",
+   "alt_fr": "Lignes de code sur un écran sombre",
+   "alt_en": "Lines of code on a dark screen",
+   "author": "Chris Ried",
+   "page": "https://unsplash.com/photos/a-computer-screen-with-a-bunch-of-code-on-it-ieic5Tq8YMk"
+  }
+ ],
+ "event": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04",
+   "alt_fr": "Orateur sur scène face à un large public",
+   "alt_en": "Speaker on stage in front of a large audience",
+   "author": "Alexandre Pellaes",
+   "page": "https://unsplash.com/photos/orateur-sur-scene-sadressant-a-un-large-public-6vAjp0pscX0"
+  },
+  {
+   "role": "venue",
+   "url": "https://images.unsplash.com/photo-1686223679777-98c592daec45",
+   "alt_fr": "Salle de conférence vide aux rangées de chaises",
+   "alt_en": "Empty conference hall with rows of chairs",
+   "author": "Declan Sun",
+   "page": "https://unsplash.com/photos/an-empty-auditorium-with-rows-of-empty-chairs-tCFbHdEIUMU"
+  },
+  {
+   "role": "speaker1",
+   "url": "https://images.unsplash.com/photo-1614174756993-80e8a9ca854b",
+   "alt_fr": "Femme souriante à lunettes et tresses",
+   "alt_en": "Smiling woman with glasses and braids",
+   "author": "Baptista Ime James",
+   "page": "https://unsplash.com/photos/woman-in-black-framed-eyeglasses-BIQ96_ntXEo"
+  },
+  {
+   "role": "speaker2",
+   "url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e",
+   "alt_fr": "Portrait d'un homme en pull gris",
+   "alt_en": "Portrait of a man in a grey sweater",
+   "author": "Jurica Koletić",
+   "page": "https://unsplash.com/photos/man-wearing-henley-top-portrait-7YVZYZeITc8"
+  },
+  {
+   "role": "speaker3",
+   "url": "https://images.unsplash.com/photo-1580489944761-15a19d654956",
+   "alt_fr": "Femme souriante en tee-shirt blanc",
+   "alt_en": "Smiling woman in a white T-shirt",
+   "author": "Jake Nackos",
+   "page": "https://unsplash.com/photos/woman-in-white-crew-neck-shirt-smiling-IF9TK5Uy-KI"
+  },
+  {
+   "role": "speaker4",
+   "url": "https://images.unsplash.com/photo-1611403119860-57c4937ef987",
+   "alt_fr": "Homme souriant en chemise blanche",
+   "alt_en": "Smiling man in a white shirt",
+   "author": "Hà Nguyễn",
+   "page": "https://unsplash.com/photos/smiling-man-in-white-shirt-OFSQ6bHjFjs"
+  },
+  {
+   "role": "workshop",
+   "url": "https://images.unsplash.com/photo-1758876203195-69a51e4145f0",
+   "alt_fr": "Deux personnes en atelier devant un mur de post-it",
+   "alt_en": "Two people brainstorming with sticky notes on a wall",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/two-people-brainstorming-with-sticky-notes-on-wall-ynkz9cpyvzI"
+  }
+ ],
+ "fitness": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438",
+   "alt_fr": "Athlète sur le point de soulever une barre en salle",
+   "alt_en": "Athlete about to lift a barbell in a gym",
+   "author": "Victor Freitas",
+   "page": "https://unsplash.com/photos/person-about-to-lift-the-barbel-WvDYdXDzkhs"
+  },
+  {
+   "role": "class1",
+   "url": "https://images.unsplash.com/photo-1518611012118-696072aa579a",
+   "alt_fr": "Cours de yoga en groupe",
+   "alt_en": "Group yoga class",
+   "author": "bruce mars",
+   "page": "https://unsplash.com/photos/group-of-women-doing-yoga-gJtDg6WfMlQ"
+  },
+  {
+   "role": "class2",
+   "url": "https://images.unsplash.com/photo-1495555687398-3f50d6e79e1e",
+   "alt_fr": "Deux boxeurs à l'entraînement en salle",
+   "alt_en": "Two boxers sparring in a gym",
+   "author": "Hermes Rivera",
+   "page": "https://unsplash.com/photos/two-man-playing-boxing-qbf59TU077Q"
+  },
+  {
+   "role": "coach1",
+   "url": "https://images.unsplash.com/photo-1770026136404-4262dcabb7b1",
+   "alt_fr": "Coach sportive en tenue de sport, posture assurée",
+   "alt_en": "Female coach in gym wear posing confidently",
+   "author": "Rodrigo Rodrigues | WOLF Λ R T",
+   "page": "https://unsplash.com/photos/fit-woman-in-gym-wear-posing-confidently-nE1cNBs1PiU"
+  },
+  {
+   "role": "coach2",
+   "url": "https://images.unsplash.com/photo-1704223523303-a5ed14561b1f",
+   "alt_fr": "Coach sportif en débardeur noir, mains sur les hanches",
+   "alt_en": "Male coach in a black tank top, hands on hips",
+   "author": "Samuel Girven",
+   "page": "https://unsplash.com/photos/a-man-in-a-black-tank-top-is-standing-with-his-hands-on-his-hips-yuiCfxuyvi8"
+  }
+ ],
+ "hotel": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1566073771259-6a8506099945",
+   "alt_fr": "Hôtel en bois avec piscine face à la mer",
+   "alt_en": "Wooden hotel with a pool overlooking the sea",
+   "author": "Bilderboken",
+   "page": "https://unsplash.com/photos/person-in-swimming-pool-during-daytime-rlwE8f8anOc"
+  },
+  {
+   "role": "room1",
+   "url": "https://images.unsplash.com/photo-1615529162924-f8605388461d",
+   "alt_fr": "Chambre chaleureuse avec banc en bois au pied du lit",
+   "alt_en": "Cosy bedroom with a wooden bench at the foot of the bed",
+   "author": "Spacejoy",
+   "page": "https://unsplash.com/photos/white-bed-linen-on-brown-wooden-bed-frame-ffFnddUEaL4"
+  },
+  {
+   "role": "room2",
+   "url": "https://images.unsplash.com/photo-1595526051245-4506e0005bd0",
+   "alt_fr": "Chambre moderne et lumineuse avec lit double",
+   "alt_en": "Bright modern room with a double bed",
+   "author": "Lotus Design N Print",
+   "page": "https://unsplash.com/photos/white-bed-linen-on-bed-7jlVQPX8PLE"
+  },
+  {
+   "role": "room3",
+   "url": "https://images.unsplash.com/photo-1629140727571-9b5c6f6267b4",
+   "alt_fr": "Chambre d'hôtel à la lumière douce",
+   "alt_en": "Hotel room with soft lighting",
+   "author": "Linus Mimietz",
+   "page": "https://unsplash.com/photos/white-bed-with-gray-pillow-p3UWyaujtQo"
+  },
+  {
+   "role": "breakfast",
+   "url": "https://images.unsplash.com/photo-1597528662465-55ece5734101",
+   "alt_fr": "Croissants et viennoiseries sur une planche en bois",
+   "alt_en": "Croissants and pastries on a wooden board",
+   "author": "tabitha turner",
+   "page": "https://unsplash.com/photos/pastries-and-baking-tools-for-breakfast-Ns2aJ5OXKds"
+  },
+  {
+   "role": "spa",
+   "url": "https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2",
+   "alt_fr": "Massage aux pierres chaudes au spa",
+   "alt_en": "Hot stone massage at the spa",
+   "author": "engin akyurt",
+   "page": "https://unsplash.com/photos/person-with-hot-stones-at-spa-ZbzYDboN7fg"
+  },
+  {
+   "role": "landscape",
+   "url": "https://images.unsplash.com/photo-1597512432969-dd65354dba02",
+   "alt_fr": "Village perché en pierre en Provence",
+   "alt_en": "Hilltop stone village in Provence",
+   "author": "Sébastien Jermer",
+   "page": "https://unsplash.com/photos/white-and-brown-concrete-building-under-blue-sky-during-daytime-Oo3jbnStg6g"
+  }
+ ],
+ "law": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1773665231158-d80e8a86f44d",
+   "alt_fr": "Tours de bureaux modernes au-dessus de bâtiments anciens à Londres",
+   "alt_en": "Modern office towers rising above historic buildings in London",
+   "author": "Andri Aeschlimann",
+   "page": "https://unsplash.com/photos/modern-skyscrapers-rise-above-historic-buildings-QzmDQ_3-UVs"
+  },
+  {
+   "role": "lawyer1",
+   "url": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e",
+   "alt_fr": "Portrait d'une femme professionnelle souriante",
+   "alt_en": "Portrait of a smiling professional woman",
+   "author": "Christina @ wocintechchat.com",
+   "page": "https://unsplash.com/photos/woman-on-focus-photography-SJvDxw0azqw"
+  },
+  {
+   "role": "lawyer2",
+   "url": "https://images.unsplash.com/photo-1560250097-0b93528c311a",
+   "alt_fr": "Portrait d'un homme souriant en costume",
+   "alt_en": "Portrait of a smiling man in a suit",
+   "author": "LinkedIn Sales Solutions",
+   "page": "https://unsplash.com/photos/man-standing-beside-wall-pAtA8xe_iVM"
+  },
+  {
+   "role": "meeting",
+   "url": "https://images.unsplash.com/photo-1758518729706-b1810dd39cc6",
+   "alt_fr": "Professionnels en réunion autour d'une table",
+   "alt_en": "Professionals in a meeting around a table",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/business-professionals-in-a-meeting-around-a-table-UDzHS34PTQ0"
+  }
+ ],
+ "linkinbio": [
+  {
+   "role": "portrait",
+   "url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
+   "alt_fr": "Portrait d'une jeune femme souriante",
+   "alt_en": "Portrait of a smiling young woman",
+   "author": "Štefan Štefančík",
+   "page": "https://unsplash.com/photos/smiling-woman-wearing-white-and-black-pinstriped-collared-top-QXevDflbl8A"
+  },
+  {
+   "role": "bg",
+   "url": "https://images.unsplash.com/photo-1635776062043-223faf322554",
+   "alt_fr": "Dégradé doux jaune, rose et bleu",
+   "alt_en": "Soft yellow, pink and blue gradient",
+   "author": "MagicPattern",
+   "page": "https://unsplash.com/photos/yellow-pink-and-blue-gradient-oPH_5xuMgQw"
+  }
+ ],
+ "magazine": [
+  {
+   "role": "a1",
+   "url": "https://images.unsplash.com/photo-1543872084-c7bd3822856f",
+   "alt_fr": "Rue de ville bordée d'immeubles",
+   "alt_en": "City street lined with buildings",
+   "author": "Anthony Reungère",
+   "page": "https://unsplash.com/photos/buildings-on-side-streets-s6xt1mwF_iU"
+  },
+  {
+   "role": "a2",
+   "url": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69",
+   "alt_fr": "Scientifique remplissant des tubes à essai au laboratoire",
+   "alt_en": "Scientist filling test tubes in a lab",
+   "author": "Louis Reed",
+   "page": "https://unsplash.com/photos/refill-of-liquid-on-tubes-pwcKF7L4-no"
+  },
+  {
+   "role": "a3",
+   "url": "https://images.unsplash.com/photo-1758592376385-d5296e694beb",
+   "alt_fr": "Visiteurs devant des œuvres dans une galerie de musée",
+   "alt_en": "Visitors viewing art in a museum gallery",
+   "author": "adam roye",
+   "page": "https://unsplash.com/photos/people-viewing-art-in-a-museum-gallery-fB8hHkIpps8"
+  },
+  {
+   "role": "a4",
+   "url": "https://images.unsplash.com/photo-1488459716781-31db52582fe9",
+   "alt_fr": "Fruits variés sur un étal de marché",
+   "alt_en": "Assorted fruit at a market stall",
+   "author": "Jacopo Maiarelli",
+   "page": "https://unsplash.com/photos/assorted-fruits-at-the-market--gOUx23DNks"
+  },
+  {
+   "role": "a5",
+   "url": "https://images.unsplash.com/photo-1452626038306-9aae5e071dd3",
+   "alt_fr": "Coureurs lors d'une course sur route",
+   "alt_en": "Runners on a road race",
+   "author": "Mārtiņš Zemlickis",
+   "page": "https://unsplash.com/photos/people-running-on-road-during-daytime-NPFu4GfFZ7E"
+  },
+  {
+   "role": "a6",
+   "url": "https://images.unsplash.com/photo-1518770660439-4636190af475",
+   "alt_fr": "Circuit électronique en macro",
+   "alt_en": "Macro shot of a circuit board",
+   "author": "Alexandre Debiève",
+   "page": "https://unsplash.com/photos/macro-photography-of-black-circuit-board-FO7JIlwjOtU"
+  },
+  {
+   "role": "a7",
+   "url": "https://images.unsplash.com/photo-1524850011238-e3d235c7d4c9",
+   "alt_fr": "Voyageur montrant un point sur une carte",
+   "alt_en": "Traveller pointing at a map",
+   "author": "Element5 Digital",
+   "page": "https://unsplash.com/photos/person-pointing-map-uE2T1tCFsn8"
+  },
+  {
+   "role": "a8",
+   "url": "https://images.unsplash.com/photo-1448518340475-e3c680e9b4be",
+   "alt_fr": "Lac de montagne calme reflétant des sommets enneigés",
+   "alt_en": "Calm mountain lake reflecting snowy peaks",
+   "author": "Roberto Nickson",
+   "page": "https://unsplash.com/photos/calm-mountain-lake-reflecting-snowy-peaks-vZ1JAXUO3-0"
+  }
+ ],
+ "music": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3",
+   "alt_fr": "Lumières de scène au-dessus du public d'un concert",
+   "alt_en": "Concert stage lights shining over the audience",
+   "author": "Yvette de Wit",
+   "page": "https://unsplash.com/photos/stage-light-front-of-audience-NYrVisodQ2M"
+  },
+  {
+   "role": "band",
+   "url": "https://images.unsplash.com/photo-1575672913784-11a7cd4f25f4",
+   "alt_fr": "Groupe jouant avec ses instruments",
+   "alt_en": "Band performing with their instruments",
+   "author": "Natalie Parham",
+   "page": "https://unsplash.com/photos/people-with-musical-instruments-performing-fPKqpUbTL4Y"
+  },
+  {
+   "role": "guitar",
+   "url": "https://images.unsplash.com/photo-1550291652-6ea9114a47b1",
+   "alt_fr": "Gros plan sur une guitare électrique",
+   "alt_en": "Close-up of an electric guitar",
+   "author": "Giancarlo Duarte",
+   "page": "https://unsplash.com/photos/shallow-focus-photo-of-black-and-brown-electric-guitar-cTj8vbZeX44"
+  },
+  {
+   "role": "vinyl",
+   "url": "https://images.unsplash.com/photo-1603048588665-791ca8aea617",
+   "alt_fr": "Disque vinyle tournant sur une platine",
+   "alt_en": "Vinyl record spinning on a turntable",
+   "author": "Andrea Cipriani",
+   "page": "https://unsplash.com/photos/vinyl-record-spinning-on-turntable-GTIutdltrkA"
+  },
+  {
+   "role": "crowd",
+   "url": "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14",
+   "alt_fr": "Foule face à une scène de concert illuminée",
+   "alt_en": "Crowd facing a lit concert stage",
+   "author": "ActionVance",
+   "page": "https://unsplash.com/photos/crowd-facing-lighted-stage-eXVd7gDPO9A"
+  }
+ ],
+ "nonprofit": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1758599668429-121d54188b9c",
+   "alt_fr": "Bénévoles nettoyant un parc boisé",
+   "alt_en": "Volunteers cleaning up a forest park",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/volunteers-cleaning-a-park-with-blue-trash-bags-U20gjfPjtuI"
+  },
+  {
+   "role": "action1",
+   "url": "https://images.unsplash.com/photo-1710361006404-a13d01802ce9",
+   "alt_fr": "Mains gantées plantant dans le sol de la forêt",
+   "alt_en": "Gloved hands planting in the forest soil",
+   "author": "Phil Desforges",
+   "page": "https://unsplash.com/photos/a-person-wearing-gloves-and-gardening-gloves-digging-in-the-ground-kGmz87qVQBM"
+  },
+  {
+   "role": "action2",
+   "url": "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca",
+   "alt_fr": "Groupe réunissant ses mains",
+   "alt_en": "Group stacking hands together",
+   "author": "Hannah Busing",
+   "page": "https://unsplash.com/photos/group-stacking-hands-in-colorful-sweaters-Zyx1bK9mqmA"
+  },
+  {
+   "role": "action3",
+   "url": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09",
+   "alt_fr": "Mains tenant une jeune pousse",
+   "alt_en": "Hands holding a young seedling",
+   "author": "Noah Buscher",
+   "page": "https://unsplash.com/photos/hands-holding-small-plant-seedling-in-soil-x8ZStukS2PM"
+  },
+  {
+   "role": "nature",
+   "url": "https://images.unsplash.com/photo-1448375240586-882707db888b",
+   "alt_fr": "Forêt brumeuse traversée de rayons de soleil",
+   "alt_en": "Misty forest with sun rays",
+   "author": "Sebastian Unrau",
+   "page": "https://unsplash.com/photos/trees-on-forest-with-sun-rays-sp-p7uuT0tw"
+  }
+ ],
+ "photography": [
+  {
+   "role": "p1",
+   "url": "https://images.unsplash.com/photo-1755918909925-f62b86d93c2a",
+   "alt_fr": "Montagnes enneigées sous un ciel étoilé",
+   "alt_en": "Snowy mountains under a starry sky",
+   "author": "Ahmet Yüksek",
+   "page": "https://unsplash.com/photos/snowy-mountains-under-a-starry-night-sky-1E3gWJFOXms"
+  },
+  {
+   "role": "p2",
+   "url": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d",
+   "alt_fr": "Portrait d'homme sur fond sombre",
+   "alt_en": "Portrait of a man on a dark background",
+   "author": "Albert Dera",
+   "page": "https://unsplash.com/photos/mans-grey-and-black-shirt-ILip77SbmOE"
+  },
+  {
+   "role": "p3",
+   "url": "https://images.unsplash.com/photo-1544038659-12337883d216",
+   "alt_fr": "Scène de rue en noir et blanc aux ombres longues",
+   "alt_en": "Black and white street scene with long shadows",
+   "author": "Sasha Freemind",
+   "page": "https://unsplash.com/photos/greyscale-photo-of-crowd-crossing-road-e_YlUfX0iKY"
+  },
+  {
+   "role": "p4",
+   "url": "https://images.unsplash.com/photo-1788119187970-67350840a592",
+   "alt_fr": "Chemin dans une forêt brumeuse",
+   "alt_en": "Path through a foggy forest",
+   "author": "Daniel Schiefner",
+   "page": "https://unsplash.com/photos/dirt-path-through-foggy-forest-NQd888d8bkI"
+  },
+  {
+   "role": "p5",
+   "url": "https://images.unsplash.com/photo-1462556791646-c201b8241a94",
+   "alt_fr": "Façade de verre vue en contre-plongée",
+   "alt_en": "Glass facade seen from below",
+   "author": "Héctor J. Rivas",
+   "page": "https://unsplash.com/photos/low-angle-photo-of-curtain-wall-building-1FxMET2U5dU"
+  },
+  {
+   "role": "p6",
+   "url": "https://images.unsplash.com/photo-1506863530036-1efeddceb993",
+   "alt_fr": "Portrait de femme en noir et blanc",
+   "alt_en": "Black and white portrait of a woman",
+   "author": "Rachel McDermott",
+   "page": "https://unsplash.com/photos/grayscale-photo-of-woman-wearing-necklace-and-top-0fN7Fxv1eWA"
+  },
+  {
+   "role": "p7",
+   "url": "https://images.unsplash.com/photo-1544011527-a7914f17ef74",
+   "alt_fr": "Vue aérienne de passants sur un passage piéton",
+   "alt_en": "Aerial view of people on a crosswalk",
+   "author": "Ryoji Iwata",
+   "page": "https://unsplash.com/photos/birds-eye-view-photography-of-people-crossing-street-HDbavxACggA"
+  },
+  {
+   "role": "p8",
+   "url": "https://images.unsplash.com/photo-1500239038240-9b3b8bac73c3",
+   "alt_fr": "Dune de sable minimaliste sur ciel blanc",
+   "alt_en": "Minimal sand dune against a white sky",
+   "author": "Kunj Parekh",
+   "page": "https://unsplash.com/photos/landscape-photography-of-sand-dunes-H69EgivmCjE"
+  },
+  {
+   "role": "p9",
+   "url": "https://images.unsplash.com/photo-1568864453925-206c927dab0a",
+   "alt_fr": "Grands arbres dans une forêt moussue",
+   "alt_en": "Tall trees in a mossy forest",
+   "author": "Ayako",
+   "page": "https://unsplash.com/photos/evergreen-trees-in-mossy-forest-GZpKVHIEjy4"
+  },
+  {
+   "role": "p10",
+   "url": "https://images.unsplash.com/photo-1482053450283-3e0b78b09a70",
+   "alt_fr": "Façade incurvée à résille blanche",
+   "alt_en": "Curved facade with white latticework",
+   "author": "Ricardo Gomez Angel",
+   "page": "https://unsplash.com/photos/a-curved-facade-covered-in-white-latticework-5YM26lUicfU"
+  },
+  {
+   "role": "portrait",
+   "url": "https://images.unsplash.com/photo-1541516160071-4bb0c5af65ba",
+   "alt_fr": "Photographe en train de prendre une photo en extérieur",
+   "alt_en": "Photographer taking a picture outdoors",
+   "author": "Marco Xu",
+   "page": "https://unsplash.com/photos/woman-holding-dslr-camera-ToUPBCO62Lw"
+  }
+ ],
+ "podcast": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1559523161-0fc0d8b38a7a",
+   "alt_fr": "Deux animateurs enregistrant un podcast en studio",
+   "alt_en": "Two hosts recording a podcast in a studio",
+   "author": "Austin Distel",
+   "page": "https://unsplash.com/photos/podcast-denregistrement-masculin-en-studio-Hg3BHX6U5jg"
+  },
+  {
+   "role": "host1",
+   "url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
+   "alt_fr": "Homme souriant en tee-shirt blanc",
+   "alt_en": "Smiling man in a white T-shirt",
+   "author": "Joseph Gonzalez",
+   "page": "https://unsplash.com/photos/man-wearing-white-v-neck-shirt-iFgRcqHznqg"
+  },
+  {
+   "role": "host2",
+   "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
+   "alt_fr": "Femme souriante en haut rouge",
+   "alt_en": "Smiling woman in a red top",
+   "author": "Michael Dam",
+   "page": "https://unsplash.com/photos/closeup-photography-of-woman-smiling-mEZ3PoFGs_k"
+  },
+  {
+   "role": "studio",
+   "url": "https://images.unsplash.com/photo-1478737270239-2f02b77fc618",
+   "alt_fr": "Micro de studio dans la pénombre",
+   "alt_en": "Studio condenser microphone in the dark",
+   "author": "Jonathan Velasquez",
+   "page": "https://unsplash.com/photos/macro-photography-of-silver-and-black-studio-microphone-condenser-c1ZN57GfDB0"
+  }
+ ],
+ "portfolio": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1622737133809-d95047b9e673",
+   "alt_fr": "Cubes flottants et sphères lumineuses en 3D",
+   "alt_en": "Floating cubes and glowing spheres in 3D",
+   "author": "Sebastian Svenson",
+   "page": "https://unsplash.com/photos/floating-cubes-and-glowing-yellow-spheres-d2w-_1LJioQ"
+  },
+  {
+   "role": "p1",
+   "url": "https://images.unsplash.com/photo-1533226458520-6f71cffeaa6a",
+   "alt_fr": "Caractères typographiques en bois",
+   "alt_en": "Wooden letterpress type blocks",
+   "author": "Fabio Santaniello Bruun",
+   "page": "https://unsplash.com/photos/black-alphabetical-wall-decor-Y6tGu-OH8lA"
+  },
+  {
+   "role": "p2",
+   "url": "https://images.unsplash.com/photo-1698376621004-70ce754157d1",
+   "alt_fr": "Maquette d'emballage minimaliste",
+   "alt_en": "Minimal packaging box mockup",
+   "author": "Mockup Free",
+   "page": "https://unsplash.com/photos/a-white-box-with-a-black-and-white-label-on-it-To7V7GfDhRM"
+  },
+  {
+   "role": "p3",
+   "url": "https://images.unsplash.com/photo-1623305463957-df17547327cb",
+   "alt_fr": "Maquette de cartes de visite vierges",
+   "alt_en": "Blank business cards mockup",
+   "author": "Mediamodifier",
+   "page": "https://unsplash.com/photos/two-blank-business-cards-sitting-on-top-of-each-other-XdlhXRH_UJw"
+  },
+  {
+   "role": "p4",
+   "url": "https://images.unsplash.com/photo-1581544291234-31340be4b1b8",
+   "alt_fr": "Lettres colorées en mosaïque",
+   "alt_en": "Colourful letter tiles",
+   "author": "Surendran MP",
+   "page": "https://unsplash.com/photos/red-blue-yellow-and-white-letter-m-IhWYiwSxm8g"
+  },
+  {
+   "role": "p5",
+   "url": "https://images.unsplash.com/photo-1604782206219-3b9576575203",
+   "alt_fr": "Composition de formes géométriques",
+   "alt_en": "Arrangement of geometric shapes",
+   "author": "Lea L",
+   "page": "https://unsplash.com/photos/geometric-shapes-on-light-surface-q--99IzY8Lw"
+  },
+  {
+   "role": "p6",
+   "url": "https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0",
+   "alt_fr": "Formes abstraites en 3D aux tons pastel",
+   "alt_en": "Soft abstract 3D shapes in pastel tones",
+   "author": "Sebastian Svenson",
+   "page": "https://unsplash.com/photos/blue-and-white-round-illustration-LpbyDENbQQg"
+  },
+  {
+   "role": "portrait",
+   "url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb",
+   "alt_fr": "Portrait d'une femme en lumière bleutée",
+   "alt_en": "Portrait of a woman in soft blue light",
+   "author": "Aiony Haust",
+   "page": "https://unsplash.com/photos/woman-wearing-black-crew-neck-shirt-3TLl_97HNJo"
+  }
+ ],
+ "realestate": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1568605114967-8130f3a36994",
+   "alt_fr": "Maison contemporaine éclairée au crépuscule",
+   "alt_en": "Contemporary house lit up at dusk",
+   "author": "vu anh",
+   "page": "https://unsplash.com/photos/brown-and-black-wooden-house-TiVPTYCG_3E"
+  },
+  {
+   "role": "home1",
+   "url": "https://images.unsplash.com/photo-1777115470242-9b21d2c67729",
+   "alt_fr": "Maison moderne à étage aux grandes baies",
+   "alt_en": "Modern two-storey house with large windows",
+   "author": "WILLIAN REIS",
+   "page": "https://unsplash.com/photos/modern-two-story-house-with-clean-lines-and-large-windows-WZ3IMJ1DoeQ"
+  },
+  {
+   "role": "home2",
+   "url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2",
+   "alt_fr": "Séjour lumineux d'appartement",
+   "alt_en": "Bright apartment living room",
+   "author": "Francesca Tosolini",
+   "page": "https://unsplash.com/photos/beige-couch-and-armchair-tHkJAMcO3QE"
+  },
+  {
+   "role": "home3",
+   "url": "https://images.unsplash.com/photo-1556912173-3bb406ef7e77",
+   "alt_fr": "Cuisine lumineuse, placards blancs et îlot en marbre",
+   "alt_en": "Bright kitchen with white cabinets and a marble island",
+   "author": "roam in color",
+   "page": "https://unsplash.com/photos/kitchen-with-white-cabinets-and-tiles-z3QZ6gjGRt4"
+  },
+  {
+   "role": "home4",
+   "url": "https://images.unsplash.com/photo-1560185893-a55cbc8c57e8",
+   "alt_fr": "Chambre aux murs gris avec grand lit",
+   "alt_en": "Bedroom with grey walls and a large bed",
+   "author": "Francesca Tosolini",
+   "page": "https://unsplash.com/photos/bedroom-with-dark-grey-walls-hCU4fimRW-c"
+  },
+  {
+   "role": "home5",
+   "url": "https://images.unsplash.com/photo-1613977257363-707ba9348227",
+   "alt_fr": "Villa blanche moderne avec piscine",
+   "alt_en": "Modern white villa with a swimming pool",
+   "author": "John Fornander",
+   "page": "https://unsplash.com/photos/villa-blanche-moderne-avec-piscine-Id7u0EkTjBE"
+  },
+  {
+   "role": "home6",
+   "url": "https://images.unsplash.com/photo-1505873242700-f289a29e1e0f",
+   "alt_fr": "Loft industriel avec mezzanine et briques",
+   "alt_en": "Industrial loft with mezzanine and brick walls",
+   "author": "Aaron Huber",
+   "page": "https://unsplash.com/photos/industrial-loft-with-dining-area-s95oB2n9jng"
+  },
+  {
+   "role": "agent",
+   "url": "https://images.unsplash.com/photo-1780733064206-4f200e41daa8",
+   "alt_fr": "Agente souriante présentant un trousseau de clés",
+   "alt_en": "Smiling agent holding up a set of keys",
+   "author": "Md Ishak Rahman",
+   "page": "https://unsplash.com/photos/professional-woman-smiling-and-presenting-a-set-of-keys-r4sK15Da7LA"
+  }
+ ],
+ "restaurant": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1552960226-639240203497",
+   "alt_fr": "Salle de restaurant à la lumière chaude du soir",
+   "alt_en": "Restaurant dining room in warm evening light",
+   "author": "takahiro taguchi",
+   "page": "https://unsplash.com/photos/lighted-lamps-in-room-8l_RuuZrOyY"
+  },
+  {
+   "role": "dish1",
+   "url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0",
+   "alt_fr": "Assiette servie à table",
+   "alt_en": "Plated dish served at the table",
+   "author": "Jay Wennington",
+   "page": "https://unsplash.com/photos/dish-on-white-ceramic-plate-N_Y88TWmGwA"
+  },
+  {
+   "role": "dish2",
+   "url": "https://images.unsplash.com/photo-1467003909585-2f8a72700288",
+   "alt_fr": "Pavé de saumon aux légumes et vin rouge",
+   "alt_en": "Salmon fillet with vegetables and red wine",
+   "author": "Casey Lee",
+   "page": "https://unsplash.com/photos/salmon-fillet-with-salsa-and-red-wine-awj7sRviVXo"
+  },
+  {
+   "role": "dish3",
+   "url": "https://images.unsplash.com/photo-1588168333986-5078d3ae3976",
+   "alt_fr": "Steak saisi sur salade verte",
+   "alt_en": "Seared steak on green salad",
+   "author": "Justus Menke",
+   "page": "https://unsplash.com/photos/seared-steak-on-green-salad-62XLglIrTJc"
+  },
+  {
+   "role": "dish4",
+   "url": "https://images.unsplash.com/photo-1603073163308-9654c3fb70b5",
+   "alt_fr": "Viande grillée et légumes dans une assiette sombre",
+   "alt_en": "Grilled meat with vegetables on a dark plate",
+   "author": "Hanxiao Xu",
+   "page": "https://unsplash.com/photos/cooked-food-on-white-ceramic-plate-zzxqoEa64_0"
+  },
+  {
+   "role": "chef",
+   "url": "https://images.unsplash.com/photo-1663530761401-15eefb544889",
+   "alt_fr": "Chef nappant de sauce une assiette dressée",
+   "alt_en": "Chef pouring sauce over a plated dish",
+   "author": "Urban Gyllström",
+   "page": "https://unsplash.com/photos/MaWMfm-HCqQ"
+  },
+  {
+   "role": "terrace",
+   "url": "https://images.unsplash.com/photo-1771992457691-27aad49f8869",
+   "alt_fr": "Terrasse dans un jardin avec des parasols blancs",
+   "alt_en": "Garden terrace with white umbrellas",
+   "author": "Iris Yan",
+   "page": "https://unsplash.com/photos/outdoor-seating-area-with-white-umbrellas-and-string-lights-8WmQuuYAxEg"
+  },
+  {
+   "role": "drinks",
+   "url": "https://images.unsplash.com/photo-1570598912132-0ba1dc952b7d",
+   "alt_fr": "Cocktails orangés au romarin et glaçons",
+   "alt_en": "Orange cocktails with rosemary and ice",
+   "author": "Olena Bohovyk",
+   "page": "https://unsplash.com/photos/orange-cocktails-with-rosemary-and-ice-JjGLEN7T8xI"
+  }
+ ],
+ "resume": [
+  {
+   "role": "portrait",
+   "url": "https://images.unsplash.com/photo-1649433658557-54cf58577c68",
+   "alt_fr": "Homme souriant en costume, portrait professionnel",
+   "alt_en": "Smiling man in a suit, professional portrait",
+   "author": "Abhishek Rai",
+   "page": "https://unsplash.com/photos/a-man-with-black-hair-and-a-beard-smiling-eucPfcmTQig"
+  },
+  {
+   "role": "work1",
+   "url": "https://images.unsplash.com/photo-1576595580361-90a855b84b20",
+   "alt_fr": "Mains dessinant des maquettes d'interface sur papier",
+   "alt_en": "Hands sketching interface wireframes on paper",
+   "author": "Amélie Mourichon",
+   "page": "https://unsplash.com/photos/person-writing-on-printing-paper-wusOJ-2uY6w"
+  },
+  {
+   "role": "work2",
+   "url": "https://images.unsplash.com/photo-1600494603989-9650cf6ddd3d",
+   "alt_fr": "Bureau à domicile avec table en bois et murs verts",
+   "alt_en": "Home office with a wooden desk and green walls",
+   "author": "Collov Home Design",
+   "page": "https://unsplash.com/photos/home-office-with-green-walls-UUsQk_9bdR8"
+  }
+ ],
+ "saas": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1758691737124-05c5bffe46f0",
+   "alt_fr": "Équipe travaillant sur un ordinateur dans un bureau lumineux",
+   "alt_en": "Team working on a laptop in a bright office",
+   "author": "Vitaly Gariev",
+   "page": "https://unsplash.com/photos/diverse-team-collaborating-around-a-laptop-in-office-yd_RKGH_RH4"
+  },
+  {
+   "role": "screen",
+   "url": "https://images.unsplash.com/photo-1460925895917-afdab827c52f",
+   "alt_fr": "Ordinateur portable affichant un tableau de bord",
+   "alt_en": "Laptop showing an analytics dashboard",
+   "author": "Carlos Muza",
+   "page": "https://unsplash.com/photos/laptop-computer-on-glass-top-table-hpjSkU2UYSU"
+  },
+  {
+   "role": "avatar1",
+   "url": "https://images.unsplash.com/photo-1580489944761-15a19d654956",
+   "alt_fr": "Portrait d'une femme souriante",
+   "alt_en": "Headshot of a smiling woman",
+   "author": "Jake Nackos",
+   "page": "https://unsplash.com/photos/woman-in-white-crew-neck-shirt-smiling-IF9TK5Uy-KI"
+  },
+  {
+   "role": "avatar2",
+   "url": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde",
+   "alt_fr": "Portrait d'un homme en chemise sombre",
+   "alt_en": "Headshot of a man in a dark shirt",
+   "author": "Alex Suprun",
+   "page": "https://unsplash.com/photos/man-in-black-button-up-shirt-ZHvM3XIOHoE"
+  },
+  {
+   "role": "avatar3",
+   "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
+   "alt_fr": "Portrait d'une femme qui rit",
+   "alt_en": "Headshot of a laughing woman",
+   "author": "Michael Dam",
+   "page": "https://unsplash.com/photos/closeup-photography-of-woman-smiling-mEZ3PoFGs_k"
+  }
+ ],
+ "shop": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1740478949628-ff562c3c3923",
+   "alt_fr": "Collection de céramiques blanches faites main",
+   "alt_en": "Collection of handmade white ceramics",
+   "author": "Raymond Petrik",
+   "page": "https://unsplash.com/photos/a-pile-of-white-dishes-sitting-on-top-of-a-table-525wpkeJSwg"
+  },
+  {
+   "role": "prod1",
+   "url": "https://images.unsplash.com/photo-1610219171722-87b3f4170557",
+   "alt_fr": "Tasses en céramique blanche",
+   "alt_en": "White ceramic mugs",
+   "author": "Mathilde Langevin",
+   "page": "https://unsplash.com/photos/white-ceramic-mugs-on-white-table-Q5xjxSfs1Lk"
+  },
+  {
+   "role": "prod2",
+   "url": "https://images.unsplash.com/photo-1677761640321-b80251be00ca",
+   "alt_fr": "Deux petits vases en céramique",
+   "alt_en": "Two small ceramic vases",
+   "author": "Tamara Harhai",
+   "page": "https://unsplash.com/photos/a-couple-of-vases-sitting-on-top-of-a-table-tSkPbVkiCqY"
+  },
+  {
+   "role": "prod3",
+   "url": "https://images.unsplash.com/photo-1622947344865-a7fcf40e88e7",
+   "alt_fr": "Bol en céramique noire sur fond uni",
+   "alt_en": "Black ceramic bowl on a plain background",
+   "author": "Shigeru Sakuma",
+   "page": "https://unsplash.com/photos/black-ceramic-bowl-on-white-table-N0PLBgnTPIw"
+  },
+  {
+   "role": "prod4",
+   "url": "https://images.unsplash.com/photo-1612058060757-aa8f7f66e687",
+   "alt_fr": "Service d'assiettes et de bols en grès",
+   "alt_en": "Set of stoneware plates and bowls",
+   "author": "Geraldine Lewa",
+   "page": "https://unsplash.com/photos/white-ceramic-round-plates-on-brown-wooden-table-N_Z91Evs_oM"
+  },
+  {
+   "role": "prod5",
+   "url": "https://images.unsplash.com/photo-1607284235728-e0d256e519f9",
+   "alt_fr": "Bougie allumée dans un pot en verre",
+   "alt_en": "Lit candle in a glass jar",
+   "author": "Jessica Mangano",
+   "page": "https://unsplash.com/photos/white-candle-in-clear-glass-jar-tFYfLMuTWok"
+  },
+  {
+   "role": "prod6",
+   "url": "https://images.unsplash.com/photo-1616627502968-858f7b39f574",
+   "alt_fr": "Lin blanc tout en douceur",
+   "alt_en": "Soft white linen fabric",
+   "author": "Susan Wilkinson",
+   "page": "https://unsplash.com/photos/white-textile-on-brown-wooden-table-DCPR_t-IbG0"
+  },
+  {
+   "role": "prod7",
+   "url": "https://images.unsplash.com/photo-1604762525953-2c80447cc4a6",
+   "alt_fr": "Plantes dans des cache-pots en céramique blanche",
+   "alt_en": "Plants in white ceramic planters",
+   "author": "Annie Spratt",
+   "page": "https://unsplash.com/photos/green-plant-in-white-pot-JruJFy08KB8"
+  },
+  {
+   "role": "prod8",
+   "url": "https://images.unsplash.com/photo-1629440400842-9108c0ccf336",
+   "alt_fr": "Théière en terre cuite sur un plateau en bois",
+   "alt_en": "Clay teapot on a wooden tray",
+   "author": "jay huang",
+   "page": "https://unsplash.com/photos/brown-ceramic-teapot-on-brown-wooden-table-7c4lkKgnOko"
+  },
+  {
+   "role": "workshop",
+   "url": "https://images.unsplash.com/photo-1590605095243-072811dbe64c",
+   "alt_fr": "Mains de potier façonnant l'argile sur le tour",
+   "alt_en": "Potter's hands shaping clay on the wheel",
+   "author": "Courtney Cook",
+   "page": "https://unsplash.com/photos/person-holding-white-clay-pot-nXYmYO_-JUk"
+  }
+ ],
+ "showcase": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1497366811353-6870744d04b2",
+   "alt_fr": "Bureau lumineux en open space avec de grandes baies vitrées",
+   "alt_en": "Bright open-plan office with large windows",
+   "author": "Nastuh Abootalebi",
+   "page": "https://unsplash.com/photos/photo-of-dining-table-and-chairs-inside-room-eHD8Y1Znfpk"
+  },
+  {
+   "role": "team",
+   "url": "https://images.unsplash.com/photo-1521737604893-d14cc237f11d",
+   "alt_fr": "Petite équipe travaillant ensemble autour d'une table",
+   "alt_en": "Small team working together around a table",
+   "author": "Annie Spratt",
+   "page": "https://unsplash.com/photos/sittin-people-beside-table-inside-room-hCb3lIB8L8E"
+  },
+  {
+   "role": "office",
+   "url": "https://images.unsplash.com/photo-1775513999069-318837c9b21b",
+   "alt_fr": "Bureau avec des plantes près d'une fenêtre ensoleillée",
+   "alt_en": "Desk with plants by a sunlit window",
+   "author": "Andrii Solok",
+   "page": "https://unsplash.com/photos/desk-with-plants-by-a-sunlit-window-t6vwJ1WBH8g"
+  },
+  {
+   "role": "work1",
+   "url": "https://images.unsplash.com/photo-1762600749688-8dfc960d86c5",
+   "alt_fr": "Architecture blanche incurvée sur un ciel bleu",
+   "alt_en": "Curved white architecture against a blue sky",
+   "author": "Cai Fang",
+   "page": "https://unsplash.com/photos/curved-architectural-structure-against-a-clear-blue-sky-flF4ae8417k"
+  },
+  {
+   "role": "work2",
+   "url": "https://images.unsplash.com/photo-1488972685288-c3fd157d7c7a",
+   "alt_fr": "Façade géométrique d'un immeuble moderne",
+   "alt_en": "Geometric facade of a modern building",
+   "author": "Anders Jildén",
+   "page": "https://unsplash.com/photos/low-angle-photography-of-gray-building-at-daytime-Sc5RKXLBjGg"
+  },
+  {
+   "role": "work3",
+   "url": "https://images.unsplash.com/photo-1758800601206-11fe50fb1da8",
+   "alt_fr": "Escalier en bois incurvé à la lumière chaude",
+   "alt_en": "Curved wooden staircase with warm lighting",
+   "author": "Declan Sun",
+   "page": "https://unsplash.com/photos/modern-wooden-staircase-with-warm-ambient-lighting-J9NFc4iJmrA"
+  }
+ ],
+ "wedding": [
+  {
+   "role": "hero",
+   "url": "https://images.unsplash.com/photo-1532712938310-34cb3982ef74",
+   "alt_fr": "Mariés marchant sur une colline",
+   "alt_en": "Bride and groom walking on a hill",
+   "author": "Foto Pettine",
+   "page": "https://unsplash.com/photos/a-bride-and-groom-walking-on-a-hill-IfjHaIoAoqE"
+  },
+  {
+   "role": "flowers",
+   "url": "https://images.unsplash.com/photo-1524777313293-86d2ab467344",
+   "alt_fr": "Table de mariage fleurie aux chandelles",
+   "alt_en": "Wedding table with flowers and candles",
+   "author": "Brunxs",
+   "page": "https://unsplash.com/photos/assorted-color-flower-decors-on-table-with-candle-holders-ZpNBwBR38fA"
+  },
+  {
+   "role": "venue",
+   "url": "https://images.unsplash.com/photo-1712068534065-f56c36e21759",
+   "alt_fr": "Cérémonie en plein air sous une arche fleurie",
+   "alt_en": "Outdoor ceremony with a floral arch in a park",
+   "author": "Kristina Kutleša",
+   "page": "https://unsplash.com/photos/a-wedding-set-up-in-the-middle-of-a-park-IxKTpb8XKH0"
+  },
+  {
+   "role": "rings",
+   "url": "https://images.unsplash.com/photo-1705058718118-80cadb3e9f4c",
+   "alt_fr": "Deux alliances posées sur un bouquet",
+   "alt_en": "Two wedding rings on a bouquet",
+   "author": "Frames For Your Heart",
+   "page": "https://unsplash.com/photos/two-rings-sitting-on-top-of-a-bouquet-of-flowers-H9vxH4u-2Qg"
+  },
+  {
+   "role": "party",
+   "url": "https://images.unsplash.com/photo-1784202388318-a2caaeffe4b7",
+   "alt_fr": "Invités dansant en plein air à la nuit tombée",
+   "alt_en": "Wedding guests dancing outdoors at night",
+   "author": "Amari Shutters",
+   "page": "https://unsplash.com/photos/people-in-formal-attire-dancing-energetically-outdoors-at-night-pblE1tZi_do"
+  }
+ ]
+}

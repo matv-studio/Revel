@@ -85,13 +85,39 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
             .map(|(base, page)| format!("{base}{}", page.trim_start_matches('/')))
             .unwrap_or_default()
     };
-    let page = move || ui.preview.get().map(|p| p.1).unwrap_or_default();
+    // Adresse montrée : la page, ou « Composant · nom » pour un composant seul.
+    let page = move || {
+        let p = ui.preview.get().map(|p| p.1).unwrap_or_default();
+        match p.strip_prefix("/__revel/component/?component=") {
+            Some(rest) => {
+                let id = rest.split('&').next().unwrap_or_default();
+                let id = js_sys::decode_uri_component(id).ok().and_then(|v| v.as_string()).unwrap_or_default();
+                ui.now("preview-component", &[("name", id)])
+            }
+            None => p,
+        }
+    };
     let on_key = window_event_listener(leptos::ev::keydown, move |e: web_sys::KeyboardEvent| {
         if e.key() == "Escape" && ui.ask.with_untracked(Option::is_none) {
             ui.preview.set(None);
         }
     });
     on_cleanup(move || on_key.remove());
+    // Lien vers un autre site en nouvel onglet (cadre de l'aperçu) : navigateur du système.
+    let on_msg = window_event_listener(leptos::ev::message, move |e: web_sys::MessageEvent| {
+        let d = e.data();
+        let get = |k: &str| js_sys::Reflect::get(&d, &k.into()).ok().and_then(|v| v.as_string());
+        if get("type").as_deref() == Some("open-external")
+            && let Some(url) = get("url").filter(|u| u.starts_with("https://") || u.starts_with("http://"))
+        {
+            leptos::task::spawn_local(async move {
+                if let Err(err) = api::open_external(&url).await {
+                    ui.fail(err);
+                }
+            });
+        }
+    });
+    on_cleanup(move || on_msg.remove());
     let site = StoredValue::new(site);
     let in_window = move |_| {
         let s = site.get_value();
@@ -148,7 +174,6 @@ pub(crate) const SECTIONS: &[(Section, &str, Option<u8>)] = &[
     (Section::General, "settings-general", None),
     (Section::Publish, "settings-publish", None),
     (Section::Menus, "settings-navigation", None),
-    (Section::Code, "settings-code", None),
     (Section::Versions, "settings-versions", None),
 ];
 
@@ -157,7 +182,7 @@ pub(crate) const SECTIONS: &[(Section, &str, Option<u8>)] = &[
 fn group_of(s: Section) -> Section {
     match s {
         Section::Seo | Section::Forms | Section::SiteInfo => Section::General,
-        Section::Export => Section::Publish,
+        Section::Export | Section::Code => Section::Publish,
         Section::Redirects => Section::Menus,
         x => x,
     }
@@ -177,8 +202,8 @@ fn parts_of(group: Section) -> &'static [(&'static str, &'static str, &'static s
         Section::Publish => &[
             ("publish", "settings-publish", "settings-publish-lead"),
             ("export", "export-title", "export-lead"),
+            ("code", "settings-code", "code-help"),
         ],
-        Section::Code => &[("code", "settings-code", "code-help")],
         Section::Versions => &[("versions", "settings-versions", "versions-help")],
         _ => &[
             ("site-menus", "sitemenus-title", "sitemenus-help"),
@@ -359,11 +384,11 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
             {part("forms", view! { <Forms site=site.clone()/> }.into_any())}
         }
         .into_any(),
-        Section::Code => part("code", view! { <crate::sitesettings::Code site=site.clone()/> }.into_any()),
         Section::Versions => part("versions", view! { <crate::versions::Versions site=site.clone()/> }.into_any()),
         Section::Publish => view! {
             {part("publish", view! { <crate::publish::Publish site=site.clone()/> }.into_any())}
             {part("export", view! { <Export site=site.clone()/> }.into_any())}
+            {part("code", view! { <crate::sitesettings::Code site=site.clone()/> }.into_any())}
         }
         .into_any(),
         _ => view! {
@@ -379,6 +404,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         Section::Forms => Some("forms"),
         Section::SiteInfo => Some("site-info"),
         Section::Export => Some("export"),
+        Section::Code => Some("code"),
         Section::Redirects => Some("redirects"),
         _ => None,
     };
@@ -447,7 +473,10 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
                     }
                 }).collect_view()}
             </nav>
-            <div class="settings-content" node_ref=content on:scroll=move |_| spy()>{body}</div>
+            <div class="settings-content" node_ref=content on:scroll=move |_| spy()>
+                <crate::sitesettings::SiteFacts site=site.clone()/>
+                {body}
+            </div>
         </div>
     }
 }
@@ -483,12 +512,21 @@ pub(crate) fn doc_session(ui: Ui, path: String) -> DocSession {
         });
     };
     reload();
+    // Annulé ou rétabli depuis la barre du haut : document relu.
+    Effect::new(move |prev: Option<u32>| {
+        let n = ui.undo_rev.get();
+        if prev.is_some_and(|p| p != n) {
+            reload();
+        }
+        n
+    });
     let apply = Callback::new(move |cmd: revel_edit::Command| {
         let p = path.get_value();
         spawn_local(async move {
             if let Err(e) = api::edit_apply(&p, &cmd, false).await {
                 ui.fail(e);
             }
+            ui.doc_rev.update(|n| *n += 1);
             if !doc.is_disposed() {
                 reload();
             }
@@ -603,6 +641,16 @@ fn Seo(site: SiteSummary) -> impl IntoView {
         f(&mut v);
         s.apply.run(revel_edit::Command::SetSeoSettings { seo: v });
     };
+    let readable_share = move || {
+        s.doc.with(|d| d.as_ref().is_some_and(|d| revel_edit::readable::share_image(d).is_some()))
+    };
+    // Organisation ouverte quand elle est réglée (ou après « + »).
+    let org_open = RwSignal::new(false);
+    Effect::new(move |_| {
+        if seo().organization.is_some() {
+            org_open.set(true);
+        }
+    });
     view! {
         <section class="page settings-page">
             <header class="page-head"><h1 title=ui.t("seo-pages-help")>{ui.t("settings-seo")}</h1></header>
@@ -636,24 +684,42 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                         Callback::new(move |v: String| set(&|x| x.site_title = some(&v))))}
                     {text_row(ui, "seo-description", "seo-description-help", "", Signal::derive(move || seo().description.unwrap_or_default()),
                         Callback::new(move |v: String| set(&|x| x.description = some(&v))))}
-                    {text_row(ui, "seo-share-image", "seo-share-image-help", "/media/partage.jpg", Signal::derive(move || seo().share_image.unwrap_or_default()),
-                        Callback::new(move |v: String| set(&|x| x.share_image = some(&v))))}
-                    {text_row(ui, "seo-theme-color", "seo-theme-color-help", "#16171B", Signal::derive(move || seo().theme_color.unwrap_or_default()),
+                    // Image de partage : réglée ici sauf si le site la lit déjà ailleurs (« Titre et
+                    // partage », sites importés).
+                    {move || (!readable_share()).then(|| image_row(ui, "seo-share-image", "seo-share-image-help", Signal::derive(move || seo().share_image.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.share_image = some(&v)))))}
+                    {color_row(ui, "seo-theme-color", "seo-theme-color-help", Signal::derive(move || seo().theme_color.unwrap_or_default()),
                         Callback::new(move |v: String| set(&|x| x.theme_color = some(&v))))}
-                    {text_row(ui, "seo-favicon", "seo-favicon-help", "/media/favicon.svg", Signal::derive(move || seo().favicon.unwrap_or_default()),
+                    {image_row(ui, "seo-favicon", "seo-favicon-help", Signal::derive(move || seo().favicon.unwrap_or_default()),
                         Callback::new(move |v: String| set(&|x| x.favicon = some(&v))))}
-                    {text_row(ui, "seo-favicon-png", "seo-favicon-png-help", "/media/favicon.png", Signal::derive(move || seo().favicon_png.unwrap_or_default()),
+                    {image_row(ui, "seo-favicon-png", "seo-favicon-png-help", Signal::derive(move || seo().favicon_png.unwrap_or_default()),
                         Callback::new(move |v: String| set(&|x| x.favicon_png = some(&v))))}
-                    {text_row(ui, "seo-touch-icon", "seo-touch-icon-help", "/media/apple-touch-icon.png", Signal::derive(move || seo().touch_icon.unwrap_or_default()),
+                    {image_row(ui, "seo-touch-icon", "seo-touch-icon-help", Signal::derive(move || seo().touch_icon.unwrap_or_default()),
                         Callback::new(move |v: String| set(&|x| x.touch_icon = some(&v))))}
                 </div>
             </div>
-            <div class="section">
-                <h2 title=ui.t("seo-org-help")>{ui.t("seo-org")}</h2>
-                <div class="form-grid">
-                    {org_rows(ui, Signal::derive(move || seo().organization.unwrap_or_default()),
-                        Callback::new(move |o: revel_model::Organization| set(&|x| x.organization = (o != revel_model::Organization::default()).then(|| o.clone()))))}
+            // Organisation : titre et « + » tant que rien n'est réglé ; « Retirer » efface tout.
+            <div class="section section--optional">
+                <div class="section-head">
+                    <h2 title=ui.t("seo-org-help")>{ui.t("seo-org")}</h2>
+                    {move || if org_open.get() {
+                        view! {
+                            <button type="button" class="icon-btn icon-btn--small" title=ui.t("seo-org-remove") aria-label=ui.t("seo-org-remove")
+                                on:click=move |_| { org_open.set(false); set(&|x| x.organization = None) }>{icons::trash()}</button>
+                        }.into_any()
+                    } else {
+                        view! {
+                            <button type="button" class="icon-btn icon-btn--small seo-org-add" title=ui.t("seo-org-add") aria-label=ui.t("seo-org-add")
+                                on:click=move |_| org_open.set(true)>{icons::plus()}</button>
+                        }.into_any()
+                    }}
                 </div>
+                <Show when=move || org_open.get()>
+                    <div class="form-grid">
+                        {org_rows(ui, Signal::derive(move || seo().organization.unwrap_or_default()),
+                            Callback::new(move |o: revel_model::Organization| set(&|x| x.organization = (o != revel_model::Organization::default()).then(|| o.clone()))))}
+                    </div>
+                </Show>
             </div>
             <div class="section">
                 <label class="field">
@@ -696,6 +762,88 @@ fn text_row(
     }
 }
 
+/// Image du site (partage, icônes, logo) : vignette, adresse, choix parmi les médias, retrait.
+fn image_row(
+    ui: Ui,
+    label: &'static str,
+    help: &'static str,
+    value: Signal<String>,
+    on_change: Callback<String>,
+) -> impl IntoView {
+    let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
+    let thumb = move || {
+        let v = value.get();
+        (!v.trim().is_empty())
+            .then(|| base.get().map(|b| crate::library::thumb_src(&b, v.trim())))
+            .flatten()
+    };
+    view! {
+        <span class="label" title=ui.t(help)>{ui.t(label)}</span>
+        <span class="field-line image-row">
+            <button type="button" class="image-row__thumb" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
+                on:click=move |_| crate::library::pick_media(ui, true, None, move |u| on_change.run(u))>
+                {move || match thumb() {
+                    Some(src) => view! { <img src=src alt=""/> }.into_any(),
+                    None => icons::image(),
+                }}
+            </button>
+            <input class="input" spellcheck="false" prop:value=move || value.get()
+                on:change=move |e| on_change.run(event_target_value(&e))/>
+            {move || (!value.get().is_empty()).then(|| view! {
+                <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
+                    on:click=move |_| on_change.run(String::new())>{icons::close()}</button>
+            })}
+        </span>
+    }
+}
+
+/// Couleur (navigateur) : pastille qui ouvre le choix de couleur, valeur écrite à côté.
+fn color_row(
+    ui: Ui,
+    label: &'static str,
+    help: &'static str,
+    value: Signal<String>,
+    on_change: Callback<String>,
+) -> impl IntoView {
+    let hex = move || {
+        let v = value.get();
+        let v = v.trim();
+        if v.len() == 7 && v.starts_with('#') { v.to_lowercase() } else { "#000000".into() }
+    };
+    view! {
+        <span class="label" title=ui.t(help)>{ui.t(label)}</span>
+        <span class="field-line color-row">
+            <label class="color-row__swatch" style=move || format!("--swatch:{}", if value.get().trim().is_empty() { "transparent".to_string() } else { value.get() })
+                title=ui.t("colors-pick")>
+                <input type="color" prop:value=hex on:change=move |e| on_change.run(event_target_value(&e))/>
+            </label>
+            <input class="input input--mono" spellcheck="false" placeholder="#16171b" prop:value=move || value.get()
+                on:change=move |e| on_change.run(event_target_value(&e))/>
+        </span>
+    }
+}
+
+/// Codes de pays proposés (ISO 3166-1) ; noms lus dans la langue de l'interface.
+const COUNTRIES: &[&str] = &[
+    "FR", "BE", "CH", "LU", "MC", "CA", "DE", "ES", "IT", "PT", "NL", "GB", "IE", "US", "AT", "DK",
+    "SE", "NO", "FI", "PL", "CZ", "GR", "MA", "TN", "SN", "CI", "JP", "AU", "BR", "MX",
+];
+
+/// Nom d'un pays dans une langue (`Intl.DisplayNames`), sinon son code.
+fn country_name(lang: &str, code: &str) -> String {
+    (|| {
+        let intl = js_sys::Reflect::get(&js_sys::global(), &"Intl".into()).ok()?;
+        let ctor: js_sys::Function = js_sys::Reflect::get(&intl, &"DisplayNames".into()).ok()?.dyn_into().ok()?;
+        let opts = js_sys::Object::new();
+        js_sys::Reflect::set(&opts, &"type".into(), &"region".into()).ok()?;
+        let args = js_sys::Array::of2(&js_sys::Array::of1(&lang.into()), &opts);
+        let dn = js_sys::Reflect::construct(&ctor, &args).ok()?;
+        let of: js_sys::Function = js_sys::Reflect::get(&dn, &"of".into()).ok()?.dyn_into().ok()?;
+        of.call1(&dn, &code.into()).ok()?.as_string()
+    })()
+    .unwrap_or_else(|| code.to_string())
+}
+
 /// Fiche de l'organisation : nom, autre nom, logo, contact, adresse, réseaux (un lien par ligne).
 fn org_rows(
     ui: Ui,
@@ -704,10 +852,10 @@ fn org_rows(
 ) -> impl IntoView {
     type Get = fn(&revel_model::Organization) -> String;
     type Put = fn(&mut revel_model::Organization, String);
-    let fields: [(&'static str, &'static str, Get, Put); 10] = [
+    let fields: [(&'static str, &'static str, Get, Put); 8] = [
         (
             "seo-org-name",
-            "Atelier Exemple",
+            "",
             |o| o.name.clone(),
             |o, v| o.name = v,
         ),
@@ -718,26 +866,20 @@ fn org_rows(
             |o, v| o.alternate_name = v,
         ),
         (
-            "seo-org-logo",
-            "/media/logo.svg",
-            |o| o.logo.clone(),
-            |o, v| o.logo = v,
-        ),
-        (
             "seo-org-email",
-            "bonjour@exemple.fr",
+            "",
             |o| o.email.clone(),
             |o, v| o.email = v,
         ),
         (
             "seo-org-phone",
-            "+33 1 23 45 67 89",
+            "",
             |o| o.telephone.clone(),
             |o, v| o.telephone = v,
         ),
         (
             "seo-org-founded",
-            "2004",
+            "",
             |o| o.founding_date.clone(),
             |o, v| o.founding_date = v,
         ),
@@ -754,12 +896,6 @@ fn org_rows(
             |o, v| o.postcode = v,
         ),
         ("seo-org-city", "", |o| o.city.clone(), |o, v| o.city = v),
-        (
-            "seo-org-country",
-            "FR",
-            |o| o.country.clone(),
-            |o, v| o.country = v,
-        ),
     ];
     view! {
         {fields.into_iter().map(|(label, ph, get, put)| view! {
@@ -771,14 +907,52 @@ fn org_rows(
                     set.run(o);
                 }/>
         }).collect_view()}
+        {image_row(ui, "seo-org-logo", "seo-org-logo-help", Signal::derive(move || org.get().logo),
+            Callback::new(move |v: String| { let mut o = org.get_untracked(); o.logo = v.trim().to_string(); set.run(o) }))}
+        <span class="label">{ui.t("seo-org-country")}</span>
+        <div class="select">
+            <select class="input" on:change=move |e| { let mut o = org.get_untracked(); o.country = event_target_value(&e); set.run(o) }>
+                <option value="" prop:selected=move || org.get().country.is_empty()>"—"</option>
+                {move || {
+                    let cur = org.get().country.to_uppercase();
+                    let lang = ui.lang();
+                    let mut codes: Vec<String> = COUNTRIES.iter().map(|c| c.to_string()).collect();
+                    if !cur.is_empty() && !codes.contains(&cur) { codes.insert(0, cur.clone()); }
+                    let mut list: Vec<(String, String)> = codes.into_iter().map(|c| { let n = country_name(&lang, &c); (c, n) }).collect();
+                    list.sort_by(|a, b| a.1.cmp(&b.1));
+                    list.into_iter().map(|(c, n)| { let on = c == cur; view! { <option value=c prop:selected=on>{n}</option> } }).collect_view()
+                }}
+            </select>
+        </div>
         <span class="label" title=ui.t("seo-org-social-help")>{ui.t("seo-org-social")}</span>
-        <textarea class="input input--mono" rows="4" spellcheck="false" placeholder="https://www.linkedin.com/company/…"
-            prop:value=move || org.get().same_as.join("\n")
-            on:change=move |e| {
-                let mut o = org.get_untracked();
-                o.same_as = event_target_value(&e).lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
-                set.run(o);
-            }></textarea>
+        <div class="link-list">
+            {move || {
+                let links = org.get().same_as;
+                let n = links.len();
+                links.into_iter().enumerate().map(|(i, l)| view! {
+                    <span class="field-line link-list__row">
+                        <input class="input" type="url" spellcheck="false" prop:value=l
+                            on:change=move |e| { let mut o = org.get_untracked(); let v = event_target_value(&e).trim().to_string();
+                                if i < o.same_as.len() { if v.is_empty() { o.same_as.remove(i); } else { o.same_as[i] = v; } } set.run(o) }/>
+                        <button type="button" class="icon-btn icon-btn--small" disabled=i == 0 title=ui.t("action-move-up") aria-label=ui.t("action-move-up")
+                            on:click=move |_| { let mut o = org.get_untracked(); if i > 0 && i < o.same_as.len() { o.same_as.swap(i, i - 1); set.run(o) } }>{icons::arrow_up()}</button>
+                        <button type="button" class="icon-btn icon-btn--small" disabled={i + 1 >= n} title=ui.t("action-move-down") aria-label=ui.t("action-move-down")
+                            on:click=move |_| { let mut o = org.get_untracked(); if i + 1 < o.same_as.len() { o.same_as.swap(i, i + 1); set.run(o) } }>{icons::arrow_down()}</button>
+                        <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
+                            on:click=move |_| { let mut o = org.get_untracked(); if i < o.same_as.len() { o.same_as.remove(i); set.run(o) } }>{icons::close()}</button>
+                    </span>
+                }).collect_view()
+            }}
+            <input class="input" type="url" spellcheck="false" placeholder=ui.t("seo-org-social-add")
+                on:change=move |e| {
+                    let v = event_target_value(&e).trim().to_string();
+                    if v.is_empty() { return; }
+                    event_target::<web_sys::HtmlInputElement>(&e).set_value("");
+                    let mut o = org.get_untracked();
+                    o.same_as.push(v);
+                    set.run(o);
+                }/>
+        </div>
     }
 }
 

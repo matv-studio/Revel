@@ -1,0 +1,50 @@
+{
+  "name": "Blog",
+  "category": "editorial",
+  "order": 20,
+  "description": "[[Carnet d'articles : catégories filtrables, liste qui se charge au défilement, barre de lecture, articles liés et lettre d'information.||Journal of posts: filterable categories, a list that loads as you scroll, reading bar, related posts and newsletter.]]",
+  "preview": "cover1",
+  "palette": ["#fbf8f3", "#1d1b18", "#c2410c"],
+  "features": ["cms", "filters", "more", "progress", "form", "dark", "smooth"],
+  "fonts": [ { "family": "Fraunces", "variants": ["400", "600"] }, { "family": "Inter", "variants": ["400", "500", "600"] } ],
+  "settings": { "smooth_scroll": true, "feeds": [ { "collection": "articles", "path": "/feed.xml" } ] },
+  "site": {
+    "description": "[[Récits de voyage, design, cuisine et idées pour ralentir.||Travel stories, design, food and ideas to slow down.]]",
+    "email": "[[bonjour@exemple.fr||hello@example.com]]",
+    "phone": "",
+    "address": "",
+    "menus": {
+      "main": [
+        { "label": "Articles", "url": "/" },
+        { "label": "[[À propos||About]]", "url": "[[/a-propos/||/about/]]" }
+      ],
+      "social": [
+        { "label": "Instagram", "url": "https://www.instagram.com/" },
+        { "label": "RSS", "url": "/feed.xml" }
+      ]
+    }
+  },
+  "navbar": {"cta": "[[S'abonner||Subscribe]]", "cta_link": "#newsletter"},
+  "kit": ["navbar", "footer", "card", "section-head"],
+  "components": [
+    { "id": "author", "name": "[[Auteur||Author]]",
+      "props": [
+        { "name": "photo", "label": "[[Photo||Photo]]", "type": "image", "default": "" },
+        { "name": "name", "label": "[[Nom||Name]]", "type": "text", "default": "Jeanne Rivière" },
+        { "name": "bio", "label": "[[Présentation||Bio]]", "type": "text", "default": "" }
+      ] },
+    { "id": "newsletter", "name": "[[Lettre d'information||Newsletter]]",
+      "props": [
+        { "name": "title", "label": "[[Titre||Title]]", "type": "text", "default": "[[Recevoir les nouveaux articles||Get new posts]]" },
+        { "name": "text", "label": "[[Texte||Text]]", "type": "text", "default": "[[Un e-mail par mois, jamais plus.||One email a month, never more.]]" }
+      ] }
+  ],
+  "layouts": [ { "id": "base" }, { "id": "article", "parent": "base" } ],
+  "collections": [
+    { "id": "articles", "folder": "content/articles", "path": "/articles/{{ slug }}/", "layout": "article", "sort": { "field": "date", "descending": true, "kind": "date" } }
+  ],
+  "pages": [
+    { "id": "index", "path": "/", "name": "Articles" },
+    { "id": "about", "path": "[[/a-propos/||/about/]]", "name": "[[À propos||About]]", "title": "[[À propos||About]]" }
+  ]
+}

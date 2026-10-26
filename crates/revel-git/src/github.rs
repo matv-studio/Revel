@@ -6,6 +6,8 @@
 //! - <https://docs.github.com/en/rest/pages/pages>
 //! - <https://docs.github.com/en/rest/repos/repos#create-a-repository-for-the-authenticated-user>
 //! - <https://docs.github.com/en/rest/about-the-rest-api/api-versions>
+//! - <https://docs.github.com/en/rest/repos/repos#list-repositories-for-the-authenticated-user>
+//! - <https://docs.github.com/en/rest/repos/contents#get-repository-content>
 
 use crate::GitError;
 use serde::{Deserialize, Serialize};
@@ -400,6 +402,88 @@ impl Client {
     }
 }
 
+/// Dépôt d'une liste (`GET /user/repos`).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Listed {
+    pub full_name: String,
+    pub name: String,
+    pub private: bool,
+    pub html_url: String,
+    pub clone_url: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub pushed_at: Option<String>,
+    #[serde(default)]
+    pub size: u64,
+}
+
+impl Client {
+    /// Dépôts accessibles au compte (les siens, ceux où il collabore, ceux de ses organisations),
+    /// du plus récemment modifié au plus ancien ; `max` au plus (pages de 100).
+    pub fn list_repos(&self, max: usize) -> Result<Vec<Listed>, GitError> {
+        let mut out = Vec::new();
+        for page in 1.. {
+            let url = format!(
+                "{API}/user/repos?per_page=100&page={page}&sort=pushed\
+                 &affiliation=owner,collaborator,organization_member"
+            );
+            let (s, b) = Self::read(self.req(self.agent.get(url)).call())?;
+            if s != 200 {
+                return Err(api_error(s, &b));
+            }
+            let list: Vec<Listed> = Self::json(s, &b)?;
+            let n = list.len();
+            out.extend(list);
+            if n < 100 || out.len() >= max {
+                break;
+            }
+        }
+        out.truncate(max);
+        Ok(out)
+    }
+
+    /// Noms des fichiers et dossiers à la racine du dépôt ; vide : dépôt vide ou inaccessible.
+    pub fn root_names(&self, full_name: &str) -> Result<Vec<String>, GitError> {
+        #[derive(Deserialize)]
+        struct Entry {
+            name: String,
+        }
+        let (s, b) = Self::read(
+            self.req(self.agent.get(format!("{API}/repos/{full_name}/contents")))
+                .call(),
+        )?;
+        match s {
+            200 => Ok(serde_json::from_str::<Vec<Entry>>(&b)
+                .map(|l| l.into_iter().map(|e| e.name).collect())
+                .unwrap_or_default()),
+            404 | 403 | 409 => Ok(Vec::new()),
+            _ => Err(api_error(s, &b)),
+        }
+    }
+}
+
+/// `proprietaire/nom` d'une adresse de dépôt GitHub (HTTPS ou SSH, avec ou sans `.git`), en
+/// minuscules ; `None` : pas un dépôt github.com.
+pub fn repo_of_url(url: &str) -> Option<String> {
+    let u = url.trim().trim_end_matches('/');
+    let rest = u
+        .strip_prefix("https://github.com/")
+        .or_else(|| u.strip_prefix("http://github.com/"))
+        .or_else(|| u.strip_prefix("git@github.com:"))
+        .or_else(|| u.strip_prefix("ssh://git@github.com/"))
+        .or_else(|| {
+            // Jeton dans l'adresse : `https://x-access-token:…@github.com/…`.
+            u.strip_prefix("https://")
+                .and_then(|r| r.split_once("@github.com/").map(|(_, r)| r))
+        })?;
+    let rest = rest.trim_end_matches(".git");
+    let mut parts = rest.split('/');
+    let (o, r) = (parts.next()?, parts.next()?);
+    (!o.is_empty() && !r.is_empty() && parts.next().is_none())
+        .then(|| format!("{o}/{r}").to_ascii_lowercase())
+}
+
 /// Adresse publique attendue d'un site GitHub Pages (sans domaine personnalisé).
 pub fn default_pages_url(owner: &str, repo: &str) -> String {
     let owner = owner.to_ascii_lowercase();
@@ -413,6 +497,20 @@ pub fn default_pages_url(owner: &str, repo: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn depot_d_une_adresse() {
+        for u in [
+            "https://github.com/Compte/Site.git",
+            "https://github.com/compte/site",
+            "git@github.com:compte/site.git",
+            "https://x-access-token:abc@github.com/compte/site.git",
+        ] {
+            assert_eq!(repo_of_url(u).as_deref(), Some("compte/site"), "{u}");
+        }
+        assert_eq!(repo_of_url("https://gitlab.com/compte/site.git"), None);
+        assert_eq!(repo_of_url(r"\\nas\partage\site.git"), None);
+    }
 
     #[test]
     fn reponses_du_device_flow() {

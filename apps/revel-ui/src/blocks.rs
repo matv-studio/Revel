@@ -101,6 +101,10 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         if lower == "video" {
             parts.push(video_options(ui, ed, at.clone(), attrs.clone()));
         }
+        // Champ de formulaire : type, nom, obligatoire, texte d'exemple, saisie automatique.
+        if crate::inspector::FIELD_TAGS.contains(&lower.as_str()) {
+            parts.push(field_settings(ui, ed, at.clone(), &lower, attrs));
+        }
         // Média au survol : le média qui change, et les éléments qui le changent.
         if let Some(v) = crate::hovermedia::display_settings(ui, ed, &at, &lower, attrs) {
             parts.push(v);
@@ -137,6 +141,10 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         }
         // Formulaire envoyé par le site.
         if let Some(v) = form_settings(ui, ed, &at, &lower, attrs) {
+            parts.push(v);
+        }
+        // Panier (D-129) : monnaie du panier ; produit et prix d'un bouton d'achat ; compteur.
+        if let Some(v) = cart_settings(ui, ed, &at, attrs) {
             parts.push(v);
         }
         // Rôle dans un élément interactif (filtres, consentement, interrupteur, onglets,
@@ -523,12 +531,64 @@ fn video_options(ui: Ui, ed: Ed, at: Target, attrs: Vec<Attr>) -> AnyView {
             </label>
         }
     };
+    // Source (fichier du site ou adresse) : `data-src` quand la vidéo est chargée tard, sinon `src`.
+    let src_attr: &'static str = if has("data-src") { "data-src" } else { "src" };
+    let value_of = |n: &str| attr(&attrs, n).and_then(|a| a.value.clone()).unwrap_or_default();
+    let src = value_of(src_attr);
+    let poster = value_of("poster");
+    let preload = value_of("preload");
+    let set_attr = move |name: &'static str, v: String| {
+        let at = at.get_value();
+        ed.apply(
+            ui,
+            if v.trim().is_empty() {
+                Command::RemoveAttr { at, name: name.into() }
+            } else {
+                Command::SetAttr { at, name: name.into(), value: Some(v.trim().to_string()) }
+            },
+            false,
+        );
+    };
+    let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
+    let poster_thumb = {
+        let p = poster.clone();
+        move || (!p.trim().is_empty()).then(|| base.get().map(|b| crate::library::thumb_src(&b, p.trim()))).flatten()
+    };
     view! {
         <div class="insp-group">
             <p class="panel-title">{ui.t("block-video")}</p>
+            <div class="field">
+                <span class="label" title=ui.t("block-video-src-help")>{ui.t("block-video-src")}</span>
+                <span class="field-line">
+                    <input class="input" type="text" spellcheck="false" prop:value=src placeholder="/media/film.mp4"
+                        on:change=move |e| set_attr(src_attr, event_target_value(&e))/>
+                    <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-video") aria-label=ui.t("picker-choose-video")
+                        on:click=move |_| crate::library::pick_kind(ui, revel_protocol::MediaKind::Video, move |u| set_attr(src_attr, u))>{icons::video()}</button>
+                </span>
+            </div>
+            <div class="field">
+                <span class="label" title=ui.t("block-video-poster-help")>{ui.t("block-video-poster")}</span>
+                <span class="field-line">
+                    {move || poster_thumb().map(|s| view! { <img class="cms-thumb" src=s alt=""/> })}
+                    <input class="input" type="text" spellcheck="false" prop:value=poster
+                        on:change=move |e| set_attr("poster", event_target_value(&e))/>
+                    <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
+                        on:click=move |_| crate::library::pick_media(ui, true, None, move |u| set_attr("poster", u))>{icons::image()}</button>
+                </span>
+            </div>
             {row("block-video-controls", &["controls"], has("controls"))}
             {row("block-video-autoplay", &["autoplay", "muted", "playsinline"], has("autoplay"))}
             {row("block-video-loop", &["loop"], has("loop"))}
+            {row("block-video-muted", &["muted"], has("muted"))}
+            <label class="field">
+                <span class="label" title=ui.t("block-video-preload-help")>{ui.t("block-video-preload")}</span>
+                <div class="select">
+                    <select class="input" on:change=move |e| set_attr("preload", event_target_value(&e))>
+                        {[("", "block-video-preload-default"), ("none", "block-video-preload-none"), ("metadata", "block-video-preload-metadata"), ("auto", "block-video-preload-auto")]
+                            .into_iter().map(|(v, k)| view! { <option value=v prop:selected=preload == v>{ui.t(k)}</option> }).collect_view()}
+                    </select>
+                </div>
+            </label>
         </div>
     }
     .into_any()
@@ -1265,6 +1325,18 @@ const ROLE_ATTRS: &[&str] = &[
     "data-revel-dots",
     "data-revel-play",
     "data-revel-form-status",
+    "data-revel-cart-add",
+    "data-revel-cart-count",
+    "data-revel-cart-item",
+    "data-revel-cart-name",
+    "data-revel-cart-qty",
+    "data-revel-cart-price",
+    "data-revel-cart-plus",
+    "data-revel-cart-minus",
+    "data-revel-cart-remove",
+    "data-revel-cart-total",
+    "data-revel-cart-empty",
+    "data-revel-cart-field",
 ];
 
 /// Rôle proposé : famille (titre), libellé, attribut posé et sa valeur.
@@ -1279,6 +1351,14 @@ type Offer = (
 /// par élément interactif (filtres de liste, consentement, interrupteur, onglets, carrousel,
 /// lecteur vidéo, formulaire).
 fn role_picker(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Option<AnyView> {
+    let (cart, in_cart) = ed.doc.with_untracked(|d| {
+        d.as_ref().map(|d| {
+            (
+                site_has_attr(d, "data-revel-cart"),
+                attr(attrs, "data-revel-cart").is_none() && inside_attr(d, at, "data-revel-cart"),
+            )
+        })
+    })?;
     let (filters, consent, sound, tabs, slider, player, form) = ed.doc.with_untracked(|d| {
         let d = d.as_ref()?;
         let inside = |n: &str| attr(attrs, n).is_none() && inside_attr(d, at, n);
@@ -1313,6 +1393,15 @@ fn role_picker(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Option
     }
     if form {
         offers.extend(FORM_ROLES.iter().map(|(a, k)| ("role-form", *k, *a, None)));
+    }
+    if in_cart {
+        offers.extend(CART_ROLES.iter().map(|(a, k)| ("role-cart", *k, *a, None)));
+    } else if cart {
+        // Site avec un panier : bouton d'achat (fiche produit) et compteur (barre de navigation).
+        if matches!(tag, "a" | "button") {
+            offers.push(("role-cart", "role-cart-add", "data-revel-cart-add", None));
+        }
+        offers.push(("role-cart", "role-cart-count", "data-revel-cart-count", None));
     }
     if filters {
         offers.push((
@@ -1432,6 +1521,19 @@ const SLIDER_ROLES: &[(&str, &str)] = &[
 ];
 const PLAYER_ROLES: &[(&str, &str)] = &[("data-revel-play", "role-player-cover")];
 const FORM_ROLES: &[(&str, &str)] = &[("data-revel-form-status", "role-form-status")];
+/// Parties d'un panier (D-129).
+const CART_ROLES: &[(&str, &str)] = &[
+    ("data-revel-cart-item", "role-cart-item"),
+    ("data-revel-cart-name", "role-cart-name"),
+    ("data-revel-cart-qty", "role-cart-qty"),
+    ("data-revel-cart-price", "role-cart-price"),
+    ("data-revel-cart-plus", "role-cart-plus"),
+    ("data-revel-cart-minus", "role-cart-minus"),
+    ("data-revel-cart-remove", "role-cart-remove"),
+    ("data-revel-cart-total", "role-cart-total"),
+    ("data-revel-cart-empty", "role-cart-empty"),
+    ("data-revel-cart-field", "role-cart-field"),
+];
 
 fn part_roles(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyView> {
     let mut groups: Vec<AnyView> = Vec::new();
@@ -1456,6 +1558,7 @@ fn part_roles(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyView> {
             PLAYER_ROLES,
         ),
         ("data-revel-form", "role-form", "role-form-help", FORM_ROLES),
+        ("data-revel-cart", "role-cart", "role-cart-help", CART_ROLES),
     ] {
         if inside(box_attr) && has(roles) {
             groups.push(role_select(ui, ed, at.clone(), attrs, title, help, roles));
@@ -1509,6 +1612,256 @@ fn form_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Opti
                         </label>
                         <button type="button" class="link-btn" on:click=move |_| ui.tab(crate::Tab::Settings(crate::Section::Forms))>{ui.t("role-form-settings")}</button>
                     })}
+                </div>
+            }
+            .into_any(),
+        );
+    }
+    (!groups.is_empty()).then(|| groups.into_iter().collect_view().into_any())
+}
+
+/// Valeur d'un attribut réglée par un champ lisible : texte (ou nombre) écrit, ou valeur reliée
+/// (champ du contenu, propriété du composant, information du site) avec le même éditeur que
+/// l'inspecteur ; bouton pour relier ou délier.
+#[allow(clippy::too_many_arguments)]
+fn attr_value_field(
+    ui: Ui,
+    ed: Ed,
+    at: &Target,
+    attrs: &[Attr],
+    name: &'static str,
+    label: &'static str,
+    help: &'static str,
+    number: bool,
+) -> AnyView {
+    let value = attr(attrs, name).and_then(|a| a.value.clone()).unwrap_or_default();
+    let bound = crate::boundattr::attr_editor(ui, ed, at.clone(), name.into(), value.clone());
+    let at2 = StoredValue::new(at.clone());
+    let head = |button: Option<AnyView>| {
+        view! {
+            <span class="field-head">
+                <span class="label" title=ui.t(help)>{ui.t(label)}</span>
+                {button}
+            </span>
+        }
+    };
+    match bound {
+        Some(b) => {
+            let unlink = crate::boundattr::unlink_button(ui, ed, at.clone(), name.into(), value);
+            view! { <div class="field field--bound" data-attr=name>{head(unlink)}{b}</div> }.into_any()
+        }
+        None => {
+            let link = crate::boundattr::link_button(ui, ed, at.clone(), name.into(), value.clone());
+            view! {
+                <div class="field" data-attr=name>
+                    {head(Some(link))}
+                    <input class="input" type=if number { "number" } else { "text" } step="any" prop:value=value
+                        on:change=move |e| {
+                            let v = event_target_value(&e).trim().to_string();
+                            ed.apply(ui, Command::SetAttr { at: at2.get_value(), name: name.into(), value: Some(v) }, false);
+                        }/>
+                </div>
+            }
+            .into_any()
+        }
+    }
+}
+
+/// Types d'un champ de saisie proposés (les autres restent affichés tels quels).
+const INPUT_TYPES: &[(&str, &str)] = &[
+    ("text", "field-type-text"),
+    ("email", "field-type-email"),
+    ("tel", "field-type-tel"),
+    ("url", "field-type-url"),
+    ("number", "field-type-number"),
+    ("date", "field-type-date"),
+    ("checkbox", "field-type-checkbox"),
+    ("radio", "field-type-radio"),
+    ("file", "field-type-file"),
+    ("password", "field-type-password"),
+    ("hidden", "field-type-hidden"),
+];
+/// Saisie automatique proposée par le navigateur (valeurs de `autocomplete`).
+const AUTOCOMPLETE: &[(&str, &str)] = &[
+    ("", "field-auto-default"),
+    ("off", "field-auto-off"),
+    ("name", "field-auto-name"),
+    ("given-name", "field-auto-given-name"),
+    ("family-name", "field-auto-family-name"),
+    ("email", "field-auto-email"),
+    ("tel", "field-auto-tel"),
+    ("organization", "field-auto-organization"),
+    ("street-address", "field-auto-street"),
+    ("postal-code", "field-auto-postal-code"),
+    ("address-level2", "field-auto-city"),
+    ("country-name", "field-auto-country"),
+];
+
+/// Champ de formulaire (`input`, `textarea`, `select`) : type, nom envoyé, obligatoire, texte
+/// d'exemple, saisie automatique, lignes d'une zone de texte.
+fn field_settings(ui: Ui, ed: Ed, at: Target, tag: &str, attrs: &[Attr]) -> AnyView {
+    let at = StoredValue::new(at);
+    let value_of = |n: &str| attr(attrs, n).and_then(|a| a.value.clone()).unwrap_or_default();
+    let set = move |name: &'static str, v: Option<String>| {
+        let at = at.get_value();
+        ed.apply(
+            ui,
+            match v {
+                Some(v) => Command::SetAttr { at, name: name.into(), value: Some(v) },
+                None => Command::RemoveAttr { at, name: name.into() },
+            },
+            false,
+        )
+    };
+    let kind = if tag == "input" {
+        let t = value_of("type");
+        if t.is_empty() { "text".to_string() } else { t.to_ascii_lowercase() }
+    } else {
+        String::new()
+    };
+    let required = attr(attrs, "required").is_some();
+    let has_placeholder = !matches!(kind.as_str(), "checkbox" | "radio" | "file" | "hidden" | "date") && tag != "select";
+    let name = value_of("name");
+    let placeholder = value_of("placeholder");
+    let auto = value_of("autocomplete");
+    let rows = value_of("rows");
+    let kind2 = kind.clone();
+    view! {
+        <div class="insp-group" data-role="field">
+            <p class="panel-title" title=ui.t("field-group-help")>{ui.t("field-group")}</p>
+            {(tag == "input").then(|| {
+                let known = INPUT_TYPES.iter().any(|(v, _)| *v == kind2);
+                view! {
+                    <label class="field">
+                        <span class="label">{ui.t("field-type")}</span>
+                        <div class="select">
+                            <select class="input" on:change=move |e| set("type", Some(event_target_value(&e)))>
+                                {(!known).then(|| view! { <option value=kind2.clone() selected=true>{kind2.clone()}</option> })}
+                                {INPUT_TYPES.iter().map(|(v, k)| view! { <option value=*v prop:selected=kind == *v>{ui.t(k)}</option> }).collect_view()}
+                            </select>
+                        </div>
+                    </label>
+                }
+            })}
+            <label class="field">
+                <span class="label" title=ui.t("field-name-help")>{ui.t("field-name")}</span>
+                <input class="input input--mono" prop:value=name spellcheck="false"
+                    on:change=move |e| {
+                        let v = event_target_value(&e).trim().to_string();
+                        set("name", (!v.is_empty()).then_some(v))
+                    }/>
+            </label>
+            <label class="view-line">
+                <span title=ui.t("field-required-help")>{ui.t("field-required")}</span>
+                <span class="switch">
+                    <input type="checkbox" prop:checked=required on:change=move |e| set("required", event_target_checked(&e).then(String::new))/>
+                    <span class="switch-track"></span>
+                </span>
+            </label>
+            {has_placeholder.then(|| view! {
+                <label class="field">
+                    <span class="label" title=ui.t("field-placeholder-help")>{ui.t("field-placeholder")}</span>
+                    <input class="input" prop:value=placeholder
+                        on:change=move |e| { let v = event_target_value(&e); set("placeholder", (!v.trim().is_empty()).then_some(v)) }/>
+                </label>
+            })}
+            {(tag == "textarea").then(|| view! {
+                <label class="field">
+                    <span class="label">{ui.t("field-rows")}</span>
+                    <input class="input" type="number" min="1" max="40" prop:value=rows
+                        on:change=move |e| { let v = event_target_value(&e).trim().to_string(); set("rows", (!v.is_empty()).then_some(v)) }/>
+                </label>
+            })}
+            {(!matches!(kind.as_str(), "checkbox" | "radio" | "file" | "hidden")).then(|| view! {
+                <label class="field">
+                    <span class="label" title=ui.t("field-auto-help")>{ui.t("field-auto")}</span>
+                    <div class="select">
+                        <select class="input" on:change=move |e| { let v = event_target_value(&e); set("autocomplete", (!v.is_empty()).then_some(v)) }>
+                            {(!AUTOCOMPLETE.iter().any(|(v, _)| *v == auto)).then(|| view! { <option value=auto.clone() selected=true>{auto.clone()}</option> })}
+                            {AUTOCOMPLETE.iter().map(|(v, k)| view! { <option value=*v prop:selected=auto == *v>{ui.t(k)}</option> }).collect_view()}
+                        </select>
+                    </div>
+                </label>
+            })}
+        </div>
+    }
+    .into_any()
+}
+
+/// Monnaies proposées pour un panier (codes ISO 4217).
+const CURRENCIES: &[&str] = &["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK", "NOK", "DKK"];
+
+/// Panier (D-129) : monnaie de la boîte du panier ; produit et prix d'un bouton d'achat ;
+/// compteur d'articles ; « Retirer ce rôle » pour le bouton et le compteur.
+fn cart_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyView> {
+    let mut groups: Vec<AnyView> = Vec::new();
+    let atv = StoredValue::new(at.clone());
+    let remove = move |names: &'static [&'static str]| {
+        ed.apply(
+            ui,
+            Command::Batch {
+                commands: names
+                    .iter()
+                    .map(|n| Command::RemoveAttr { at: atv.get_value(), name: (*n).into() })
+                    .collect(),
+            },
+            false,
+        )
+    };
+    let remove_btn = move |names: &'static [&'static str]| {
+        view! {
+            <button type="button" class="icon-btn icon-btn--small" title=ui.t("role-remove") aria-label=ui.t("role-remove")
+                on:click=move |_| remove(names)>{icons::close()}</button>
+        }
+    };
+    if let Some(cur) = attr(attrs, "data-revel-cart").map(|a| a.value.clone().unwrap_or_default()) {
+        let cur = if cur.trim().is_empty() { "EUR".to_string() } else { cur.trim().to_uppercase() };
+        let mut list: Vec<String> = CURRENCIES.iter().map(|c| c.to_string()).collect();
+        if !list.contains(&cur) {
+            list.insert(0, cur.clone());
+        }
+        groups.push(
+            view! {
+                <div class="insp-group" data-role="cart">
+                    <p class="panel-title" title=ui.t("role-cart-help")>{ui.t("role-cart")}</p>
+                    <label class="field">
+                        <span class="label" title=ui.t("role-cart-currency-help")>{ui.t("role-cart-currency")}</span>
+                        <div class="select">
+                            <select class="input" on:change=move |e| ed.apply(ui, Command::SetAttr {
+                                at: atv.get_value(), name: "data-revel-cart".into(), value: Some(event_target_value(&e)),
+                            }, false)>
+                                {list.into_iter().map(|c| { let on = c == cur; view! { <option value=c.clone() prop:selected=on>{c.clone()}</option> } }).collect_view()}
+                            </select>
+                        </div>
+                    </label>
+                </div>
+            }
+            .into_any(),
+        );
+    }
+    if attr(attrs, "data-revel-cart-add").is_some() {
+        groups.push(
+            view! {
+                <div class="insp-group" data-role="cart-add">
+                    <div class="insp-group-head">
+                        <p class="panel-title" title=ui.t("role-cart-add-help")>{ui.t("role-cart-add")}</p>
+                        {remove_btn(&["data-revel-cart-add", "data-revel-product", "data-revel-price"])}
+                    </div>
+                    {attr_value_field(ui, ed, at, attrs, "data-revel-product", "role-cart-product", "role-cart-product-help", false)}
+                    {attr_value_field(ui, ed, at, attrs, "data-revel-price", "role-cart-price-value", "role-cart-price-help", true)}
+                </div>
+            }
+            .into_any(),
+        );
+    }
+    if attr(attrs, "data-revel-cart-count").is_some() {
+        groups.push(
+            view! {
+                <div class="insp-group" data-role="cart-count">
+                    <div class="insp-group-head">
+                        <p class="panel-title" title=ui.t("role-cart-count-help")>{ui.t("role-cart-count")}</p>
+                        {remove_btn(&["data-revel-cart-count"])}
+                    </div>
                 </div>
             }
             .into_any(),
@@ -1987,6 +2340,79 @@ fn fields_of(ui: Ui, c: Option<&CmsCollection>) -> Vec<(String, String)> {
         }
     }
     v
+}
+
+/// Valeurs proposées pour un champ d'une collection (filtre, « contient ») : choix du schéma,
+/// contenus reliés (par titre), oui/non ; `true` : liste fermée (sinon suggestions tirées des
+/// valeurs déjà écrites dans les contenus).
+fn field_values(ui: Ui, cols: &[CmsCollection], c: Option<&CmsCollection>, path: &str) -> (Vec<(String, String)>, bool) {
+    let Some(c) = c else { return (Vec::new(), false) };
+    let name = path.strip_prefix("data.").unwrap_or(path);
+    let f = c.fields.iter().find(|f| f.name == name);
+    match f.and_then(|f| f.kind.as_deref()) {
+        Some("select") => return (crate::cmsfields::choices(f.unwrap()), true),
+        Some("reference") => return (crate::cmsfields::reference_choices(cols, f.unwrap()), true),
+        Some("boolean") => {
+            return (
+                vec![("true".into(), ui.now("block-list-value-yes", &[])), ("false".into(), ui.now("block-list-value-no", &[]))],
+                true,
+            )
+        }
+        _ => {}
+    }
+    let mut seen: Vec<(String, String)> = Vec::new();
+    for e in &c.entries {
+        let vals: Vec<String> = match e.data.get(name) {
+            Some(serde_json::Value::String(s)) => vec![s.clone()],
+            Some(serde_json::Value::Array(a)) => a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
+            Some(serde_json::Value::Number(n)) => vec![n.to_string()],
+            Some(serde_json::Value::Bool(b)) => vec![b.to_string()],
+            _ => Vec::new(),
+        };
+        for v in vals {
+            if !v.is_empty() && v.len() < 80 && !seen.iter().any(|(x, _)| *x == v) {
+                seen.push((v.clone(), v));
+            }
+        }
+        if seen.len() >= 60 {
+            break;
+        }
+    }
+    seen.sort_by_key(|a| a.1.to_lowercase());
+    (seen, false)
+}
+
+/// Valeur cherchée d'un filtre : liste des choix (champ à choix, référence, oui/non), sinon
+/// texte avec les valeurs déjà écrites en suggestions.
+fn value_picker(
+    ui: Ui,
+    options: (Vec<(String, String)>, bool),
+    current: String,
+    placeholder: &'static str,
+    on_set: impl Fn(String) + Clone + 'static,
+) -> AnyView {
+    let (list, closed) = options;
+    if closed {
+        let known = current.is_empty() || list.iter().any(|(v, _)| *v == current);
+        view! {
+            <div class="select">
+                <select class="input" on:change=move |e| on_set(event_target_value(&e))>
+                    <option value="" prop:selected=current.is_empty()>{ui.t(placeholder)}</option>
+                    {(!known).then(|| view! { <option value=current.clone() selected=true>{current.clone()}</option> })}
+                    {list.into_iter().map(|(v, l)| { let on = v == current; view! { <option value=v prop:selected=on>{l}</option> } }).collect_view()}
+                </select>
+            </div>
+        }
+        .into_any()
+    } else {
+        let id = format!("dl-{}", js_sys::Math::random().to_string().replace('.', ""));
+        view! {
+            <input class="input" prop:value=current placeholder=ui.t(placeholder) list=id.clone()
+                on:change=move |e| on_set(event_target_value(&e))/>
+            <datalist id=id>{list.into_iter().map(|(v, _)| view! { <option value=v></option> }).collect_view()}</datalist>
+        }
+        .into_any()
+    }
 }
 
 /// Champs à plusieurs valeurs du contenu qui entoure une liste (liste dans une liste) : nom,
@@ -2523,6 +2949,7 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     // affichée ») : sur la page d'un contenu, la page affichée ; sinon une valeur écrite.
     let contains = q.with_value(|q| q.contains.clone());
     let contains_field = contains.as_ref().map(|c| c.0.clone()).unwrap_or_default();
+    let contains_field2 = contains_field.clone();
     let contains_value = contains.map(|c| c.1).unwrap_or_default();
     view! {
         <div class="insp-group collection-list">
@@ -2671,19 +3098,19 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                 } else {
                     revel_edit::canvas::literal(&contains_value).unwrap_or(contains_value.clone())
                 };
+                let opts = cols.with(|cs| field_values(ui, cs, current().as_ref(), &contains_field2));
                 view! {
-                    <label class="field">
-                        <span class="label">{ui.t("block-list-contains-value")}</span>
-                        <input class="input" prop:value=shown placeholder=ui.t("block-list-contains-current")
-                            on:change=move |e| {
-                                let v = event_target_value(&e).trim().to_string();
-                                write(Box::new(move |q| {
-                                    if let Some(c) = q.contains.as_mut() {
-                                        c.1 = if v.is_empty() { "page.fileSlug".into() } else { revel_edit::canvas::quote(&v) };
-                                    }
-                                }))
-                            }/>
-                    </label>
+                    <div class="field">
+                        <span class="label" title=ui.t("block-list-contains-value-help")>{ui.t("block-list-contains-value")}</span>
+                        {value_picker(ui, opts, shown, "block-list-contains-current", move |v: String| {
+                            let v = v.trim().to_string();
+                            write(Box::new(move |q| {
+                                if let Some(c) = q.contains.as_mut() {
+                                    c.1 = if v.is_empty() { "page.fileSlug".into() } else { revel_edit::canvas::quote(&v) };
+                                }
+                            }))
+                        })}
+                    </div>
                 }
             })}
             <label class="field">
@@ -2701,12 +3128,13 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                     </select>
                 </div>
             </label>
-            {has_filter.then(|| view! {
-                <label class="field">
+            {has_filter.then(|| {
+                let opts = cols.with(|cs| field_values(ui, cs, current().as_ref(), &filter_field));
+                view! {
+                <div class="field">
                     <span class="label">{ui.t("block-list-filter-value")}</span>
-                    <input class="input" prop:value=filter_value.clone() placeholder=ui.t("block-list-filter-any")
-                        on:change=move |e| {
-                            let v = event_target_value(&e).trim().to_string();
+                    {value_picker(ui, opts, filter_value.clone(), "block-list-filter-any", move |v: String| {
+                            let v = v.trim().to_string();
                             write(Box::new(move |q| {
                                 if let Some(f) = q.filter.as_mut() {
                                     f.1 = if v.is_empty() {
@@ -2718,8 +3146,9 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                                     };
                                 }
                             }))
-                        }/>
-                </label>
+                        })}
+                </div>
+                }
             })}
             <div class="field-pair">
                 <label class="field">

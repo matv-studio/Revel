@@ -42,13 +42,16 @@ enum Command {
         dir: PathBuf,
         #[arg(long, default_value = "Nouveau site")]
         name: String,
-        /// Modèle : `vide`, `vitrine` ou `blog` (sans modèle : projet sans page).
+        /// Modèle (D-128) : `blank`, `showcase`, `blog`, ou un des modèles listés par
+        /// `revel templates` (sans modèle : projet sans page).
         #[arg(long)]
         template: Option<String>,
-        /// Fond clair (sombre par défaut).
-        #[arg(long)]
-        light: bool,
+        /// Couleurs : `light`, `dark` ou `auto` (selon l'appareil du visiteur).
+        #[arg(long, default_value = "auto")]
+        scheme: String,
     },
+    /// Liste les modèles de site (identifiant, catégorie, nom).
+    Templates,
     /// Importe un projet Eleventy : écrit `site.revel.json` à sa racine.
     ImportEleventy {
         dir: PathBuf,
@@ -282,11 +285,19 @@ fn main() -> Result<()> {
                 p.save_rebuilt(r)?;
             }
         }
+        Command::Templates => {
+            let config = std::env::temp_dir().join(format!("revel-tpl-{}", std::process::id()));
+            let core =
+                revel_core::Core::new(&config, Box::new(revel_core::secrets::Memory::default()));
+            for t in core.site_templates(&cli.lang) {
+                println!("{}\t{}\t{}", t.id, t.category, t.name);
+            }
+        }
         Command::New {
             dir,
             name,
             template,
-            light,
+            scheme,
         } => {
             match template.as_deref() {
                 None => {
@@ -294,10 +305,9 @@ fn main() -> Result<()> {
                 }
                 Some(t) => {
                     let template = match t {
-                        "vitrine" | "showcase" => revel_protocol::SiteTemplate::Showcase,
-                        "blog" => revel_protocol::SiteTemplate::Blog,
-                        "vide" | "blank" => revel_protocol::SiteTemplate::Blank,
-                        other => anyhow::bail!("modèle inconnu : {other} (vide, vitrine, blog)"),
+                        "vitrine" => "showcase",
+                        "vide" => "blank",
+                        other => other,
                     };
                     let config =
                         std::env::temp_dir().join(format!("revel-new-{}", std::process::id()));
@@ -305,7 +315,7 @@ fn main() -> Result<()> {
                         &config,
                         Box::new(revel_core::secrets::Memory::default()),
                     );
-                    core.new_site_from(&dir, &name, &cli.lang, template, light)
+                    core.new_site_template(&dir, &name, &cli.lang, template, &scheme)
                         .map_err(|e| anyhow::anyhow!("{e}"))?;
                 }
             }

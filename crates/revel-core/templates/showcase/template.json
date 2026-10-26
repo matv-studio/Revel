@@ -1,0 +1,36 @@
+{
+  "name": "[[Vitrine||Showcase]]",
+  "category": "business",
+  "order": 10,
+  "description": "[[Site d'une petite entreprise ou d'un studio : services, références, offres, questions et contact.||Site for a small business or studio: services, references, plans, questions and contact.]]",
+  "preview": "hero",
+  "palette": ["#f6f4ef", "#14130f", "#3048d4"],
+  "features": ["components", "ticker", "carousel", "tabs", "faq", "form", "dark", "smooth"],
+  "fonts": [ { "family": "Manrope", "variants": ["600", "700", "800"] }, { "family": "Inter", "variants": ["400", "500", "600"] } ],
+  "settings": { "smooth_scroll": true, "page_transition": "fade" },
+  "site": {
+    "description": "[[Studio de conseil et de design : des projets clairs, menés jusqu'au bout.||Consulting and design studio: clear projects, seen through to the end.]]",
+    "email": "[[bonjour@exemple.fr||hello@example.com]]",
+    "phone": "[[01 23 45 67 89||+1 555 010 2030]]",
+    "address": "[[12 rue des Ateliers, 69002 Lyon||12 Workshop Street, Portland, OR]]",
+    "menus": {
+      "main": [
+        { "label": "[[Accueil||Home]]", "url": "/" },
+        { "label": "Services", "url": "/services/" },
+        { "label": "[[À propos||About]]", "url": "[[/a-propos/||/about/]]" },
+        { "label": "Contact", "url": "/contact/" }
+      ],
+      "social": [
+        { "label": "LinkedIn", "url": "https://www.linkedin.com/" },
+        { "label": "Instagram", "url": "https://www.instagram.com/" }
+      ]
+    }
+  },
+  "kit": ["navbar", "footer", "section-head", "feature", "card", "testimonial", "stat", "price", "member", "faq", "cta-band"],
+  "pages": [
+    { "id": "index", "path": "/", "name": "[[Accueil||Home]]" },
+    { "id": "services", "path": "/services/", "name": "Services", "title": "Services", "description": "[[Conseil, design et accompagnement : nos offres.||Consulting, design and support: our plans.]]" },
+    { "id": "about", "path": "[[/a-propos/||/about/]]", "name": "[[À propos||About]]", "title": "[[À propos||About]]" },
+    { "id": "contact", "path": "/contact/", "name": "Contact", "title": "Contact" }
+  ]
+}

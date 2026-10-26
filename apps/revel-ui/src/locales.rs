@@ -94,12 +94,20 @@ fn session(ui: Ui, path: String) -> LocSession {
         }
         now
     });
+    Effect::new(move |prev: Option<u32>| {
+        let n = ui.undo_rev.get();
+        if prev.is_some_and(|p| p != n) {
+            reload();
+        }
+        n
+    });
     let apply = Callback::new(move |cmd: Command| {
         let p = path.get_value();
         spawn_local(async move {
             if let Err(e) = api::edit_apply(&p, &cmd, false).await {
                 ui.fail(e);
             }
+            ui.doc_rev.update(|n| *n += 1);
             if !doc.is_disposed() {
                 reload();
             }
@@ -115,8 +123,9 @@ fn session(ui: Ui, path: String) -> LocSession {
 }
 
 /// Valeur traduite d'un texte de données : différente du texte d'origine.
-fn data_done(t: &DataText) -> bool {
+fn data_done(t: &DataText, kept: &std::collections::BTreeSet<String>) -> bool {
     t.text.as_ref().is_some_and(|x| x != &t.source)
+        || kept.contains(&revel_edit::locale::data_key(&t.path))
 }
 
 /// Titre d'un contenu (champ titre habituel, sinon nom du fichier).
@@ -144,7 +153,7 @@ fn progress(
     let mut total = texts.len();
     if let Some(d) = data {
         total += d.len();
-        for t in d.iter().filter(|t| data_done(t)) {
+        for t in d.iter().filter(|t| data_done(t, &l.kept)) {
             done += 1;
             auto += usize::from(l.machine.contains(&data_key(&t.path)));
         }
@@ -182,7 +191,7 @@ fn untranslated(
     let data = data
         .into_iter()
         .flatten()
-        .filter(|t| !data_done(t))
+        .filter(|t| !data_done(t, &l.kept))
         .map(|t| Unit::Data {
             path: t.path.clone(),
             text: t.source.clone(),
@@ -588,7 +597,7 @@ pub fn Locales(site: SiteSummary) -> impl IntoView {
                 ];
                 let none = move || { let on = dlg_parts.get(); !(0..3).any(|i| on[i] && counts[i] > 0) };
                 view! {
-                    <div class="overlay" on:mousedown=move |e| if e.target() == e.current_target() { dlg.set(None) }>
+                    <div class="overlay" on:input=move |e| crate::dialog::mark_dirty(&e) on:mousedown=move |e| if crate::dialog::backdrop_click(&e) { dlg.set(None) }>
                         <form class="dialog auto-dialog" role="dialog" aria-modal="true" aria-labelledby="auto-title"
                             on:submit=move |e| { e.prevent_default(); if !none() { start_auto() } }>
                             <h2 id="auto-title">{ui.t("locales-auto-title")}</h2>
@@ -641,28 +650,46 @@ fn close_details(e: &leptos::ev::MouseEvent) {
 }
 
 /// Champ de traduction : une ligne, plusieurs pour un texte long ; écrit à la sortie du champ.
+/// Pas encore traduit : coche à droite du champ pour garder le texte d'origine comme traduction
+/// (noms propres, mots identiques dans les deux langues).
 fn translation_input(
     ui: Ui,
     source: &str,
     value: Option<String>,
     on_set: impl Fn(String) + 'static,
+    on_keep: Option<std::rc::Rc<dyn Fn()>>,
 ) -> AnyView {
     let long = source.len() > 70 || source.contains('\n');
     let placeholder = source.to_string();
+    let todo = value.is_none() && !source.trim().is_empty();
     let value = value.unwrap_or_default();
-    if long {
+    let on_set = std::rc::Rc::new(on_set);
+    let keep = todo.then(|| {
+        let (f, src) = (on_set.clone(), source.to_string());
         view! {
-            <textarea class="input loc-input" rows="3" placeholder=placeholder aria-label=ui.t("locales-translation")
-                prop:value=value on:change=move |e| on_set(event_target_value(&e))></textarea>
+            <button type="button" class="icon-btn icon-btn--small loc-keep" title=ui.t("locales-keep-source")
+                aria-label=ui.t("locales-keep-source")
+                on:click=move |e| {
+                    e.stop_propagation();
+                    match &on_keep { Some(k) => k(), None => f(src.clone()) }
+                }>{icons::check()}</button>
+        }
+    });
+    let set = move |v: String| on_set(v);
+    let field = if long {
+        view! {
+            <textarea class="input loc-input" class:has-keep=todo rows="3" placeholder=placeholder aria-label=ui.t("locales-translation")
+                prop:value=value on:change=move |e| set(event_target_value(&e))></textarea>
         }
         .into_any()
     } else {
         view! {
-            <input class="input loc-input" placeholder=placeholder aria-label=ui.t("locales-translation")
-                prop:value=value on:change=move |e| on_set(event_target_value(&e))/>
+            <input class="input loc-input" class:has-keep=todo placeholder=placeholder aria-label=ui.t("locales-translation")
+                prop:value=value on:change=move |e| set(event_target_value(&e))/>
         }
         .into_any()
-    }
+    };
+    view! { {field}{keep} }.into_any()
 }
 
 /// Textes écrits dans les pages, gabarits et composants.
@@ -755,7 +782,7 @@ fn PageTexts(
                                             text: Some(v),
                                             machine: false,
                                         })
-                                    })}
+                                    }, None)}
                                     {auto.then(|| review_button(ui, move || review_all(vec![key.clone()])))}
                                 </div></td>
                             </tr>
@@ -806,15 +833,25 @@ fn DataTexts(
             on: false,
         })
     };
+    // Textes gardés tels quels dans cette langue (coche « garder le texte d'origine »).
+    let kept = move || {
+        s.doc.with(|d| {
+            d.as_ref()
+                .and_then(|d| d.locales.iter().find(|l| l.code == code.get_value()))
+                .map(|l| l.kept.clone())
+                .unwrap_or_default()
+        })
+    };
     let rows = move || {
         let q = query.get().trim().to_lowercase();
         let machine = machine();
+        let kept = kept();
         s.data.with(|d| {
             d.get(&code.get_value())
                 .cloned()
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|t| !todo_only.get() || !data_done(t))
+                .filter(|t| !todo_only.get() || !data_done(t, &kept))
                 .filter(|t| {
                     !review_only.get() || machine.contains(&revel_edit::locale::data_key(&t.path))
                 })
@@ -842,8 +879,9 @@ fn DataTexts(
                         .map(|t| revel_edit::locale::data_key(&t.path))
                         .filter(|k| machine.contains(k))
                         .collect();
+                    let kept = kept();
                     let rows = list.into_iter().map(|t| {
-                        let done = data_done(&t);
+                        let done = data_done(&t, &kept);
                         let path = t.path.clone();
                         let key = revel_edit::locale::data_key(&t.path);
                         let auto = done && machine.contains(&key);
@@ -854,19 +892,35 @@ fn DataTexts(
                                     <span class="loc-key muted path">{label(&t.path)}</span>
                                     <span>{t.source.clone()}</span>
                                 </td>
-                                <td><div class="loc-field">{translation_input(ui, &t.source, value, move |v| {
-                                    let binding = Binding {
-                                        source: Source::LocaleData { locale: code.get_value() },
-                                        path: path.clone(),
+                                <td><div class="loc-field">{
+                                    // Écriture de la traduction (clé absente du fichier de la langue :
+                                    // créée, chemins sans liste).
+                                    let write = {
+                                        let path = path.clone();
+                                        move |v: String| {
+                                            let binding = Binding {
+                                                source: Source::LocaleData { locale: code.get_value() },
+                                                path: path.clone(),
+                                            };
+                                            let keys_only = path.iter().all(|p| matches!(p, Seg::Key(_)));
+                                            if keys_only {
+                                                Command::SetDataValue { binding, value: Some(serde_json::Value::String(v)) }
+                                            } else {
+                                                Command::SetBound { binding, value: v }
+                                            }
+                                        }
                                     };
-                                    // Clé absente du fichier de la langue : créée (chemins sans liste).
-                                    let keys_only = path.iter().all(|p| matches!(p, Seg::Key(_)));
-                                    s.apply.run(if keys_only {
-                                        Command::SetDataValue { binding, value: Some(serde_json::Value::String(v)) }
-                                    } else {
-                                        Command::SetBound { binding, value: v }
-                                    })
-                                })}
+                                    let write2 = write.clone();
+                                    let (src, k2) = (t.source.clone(), key.clone());
+                                    // Garder le texte d'origine : écrit tel quel et marqué gardé (une étape).
+                                    let keep: std::rc::Rc<dyn Fn()> = std::rc::Rc::new(move || {
+                                        s.apply.run(Command::Batch { commands: vec![
+                                            write2(src.clone()),
+                                            Command::MarkKept { locale: code.get_value(), keys: vec![k2.clone()], on: true },
+                                        ] })
+                                    });
+                                    translation_input(ui, &t.source, value, move |v| s.apply.run(write(v)), Some(keep))
+                                }
                                 {auto.then(|| review_button(ui, move || review_all(vec![key.clone()])))}
                                 </div></td>
                             </tr>

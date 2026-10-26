@@ -1,0 +1,18 @@
+:root { color-scheme: light; --bg: #f4f7f1; --surface: #ffffff; --text: #14261a; --muted: #5b6b5f; --line: rgba(20, 38, 26, 0.1); --line-strong: rgba(20, 38, 26, 0.24); --accent: #2f7d4a; --accent-ink: #ffffff; --font-display: "Nunito Sans", "Segoe UI", system-ui, sans-serif; --font-body: "Nunito Sans", "Segoe UI", system-ui, sans-serif; --display-weight: 800; --display-tracking: -0.03em; --radius: 16px; --radius-lg: 28px; --radius-btn: 999px; --max: 1200px; --pad: clamp(20px, 4vw, 44px); --section: clamp(80px, 10vw, 136px); }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; --bg: #0f1a12; --surface: #16241a; --text: #eaf3ec; --muted: #9fb3a4; --line: rgba(234, 243, 236, 0.1); --line-strong: rgba(234, 243, 236, 0.24); --accent: #6fcf8f; --accent-ink: #0f1a12; }
+}
+.np-hero { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 5vw, 72px); align-items: center; padding: clamp(48px, 7vw, 96px) 0; }
+.np-hero__media { position: relative; }
+.np-hero__media img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 50% 50% var(--radius-lg) var(--radius-lg); }
+.donate { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; padding: clamp(36px, 5vw, 64px); border-radius: var(--radius-lg); background: var(--accent); color: var(--accent-ink); }
+.donate .lead { color: inherit; opacity: 0.85; }
+.donate__amounts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.donate__amount { display: grid; gap: 4px; padding: 20px; border-radius: var(--radius); background: rgba(255, 255, 255, 0.14); text-align: center; }
+.donate__amount strong { font-size: 30px; }
+.donate__buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.donate .btn { background: var(--accent-ink); color: var(--accent); border-color: var(--accent-ink); }
+.donate .btn--ghost { background: transparent; color: var(--accent-ink); }
+.partners .ticker__item { font-weight: 800; font-size: 24px; opacity: 0.45; }
+@media (max-width: 767px) { .np-hero, .donate { grid-template-columns: minmax(0, 1fr); } }
+.partners__label { margin-bottom: 20px; text-align: center; }

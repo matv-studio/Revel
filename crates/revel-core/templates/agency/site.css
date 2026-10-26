@@ -1,0 +1,21 @@
+:root { color-scheme: light; --bg: #f4f4f0; --surface: #ffffff; --text: #0e0e10; --muted: #63636b; --line: rgba(14, 14, 16, 0.1); --line-strong: rgba(14, 14, 16, 0.24); --accent: #0e0e10; --accent-ink: #c6f432; --font-display: "Sora", "Segoe UI", system-ui, sans-serif; --font-body: "Sora", "Segoe UI", system-ui, sans-serif; --display-weight: 700; --display-tracking: -0.05em; --radius: 14px; --radius-lg: 28px; --radius-btn: 999px; --max: 1320px; --pad: clamp(20px, 4vw, 48px); --section: clamp(88px, 11vw, 160px); }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; --bg: #0e0e10; --surface: #17171a; --text: #f4f4f0; --muted: #9b9ba3; --line: rgba(244, 244, 240, 0.1); --line-strong: rgba(244, 244, 240, 0.24); --accent: #c6f432; --accent-ink: #0e0e10; }
+}
+.big-hero { padding: clamp(72px, 11vw, 168px) 0 clamp(56px, 7vw, 96px); }
+.big-hero h1 { max-width: 1100px; font-size: clamp(52px, 9vw, 148px); line-height: 0.92; }
+.big-hero__row { display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: end; margin-top: 56px; }
+.big-hero__image { width: 100%; aspect-ratio: 21 / 9; margin-top: 64px; object-fit: cover; border-radius: var(--radius-lg); }
+.marquee { padding: 36px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.marquee .ticker__item { font-size: clamp(28px, 4vw, 52px); font-weight: 700; letter-spacing: -0.04em; opacity: 0.3; }
+.service-row { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 24px; align-items: baseline; padding: 32px 0; border-top: 1px solid var(--line-strong); transition: padding-left 0.3s ease; }
+.service-row:hover { padding-left: 16px; }
+.service-row__number { color: var(--muted); font-size: 15px; }
+.service-row__title { font-size: clamp(28px, 3.4vw, 46px); }
+.service-row__text { color: var(--muted); }
+.steps { counter-reset: s; }
+.step { display: grid; gap: 14px; padding: 32px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); }
+.step__number { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.step__text { color: var(--muted); }
+@media (max-width: 767px) { .service-row, .big-hero__row { grid-template-columns: minmax(0, 1fr); } }
+.stats { margin-top: 64px; }

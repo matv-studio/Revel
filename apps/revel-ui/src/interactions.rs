@@ -690,16 +690,32 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                                 </label>
                             })}
                             {sounds.map(|a| audio_settings(ui, ed, i, a, edit))}
-                            {class.map(|c| view! {
-                                <label class="field">
+                            {class.map(|c| {
+                                // Classes du site proposées (états `is-…` d'abord) ; nom refusé : dit pourquoi.
+                                let bad = RwSignal::new(false);
+                                let mut names: Vec<String> = ed.doc.with_untracked(|d| {
+                                    d.as_ref().map(|d| revel_edit::classes::inventory(d).into_iter().map(|c| c.name).collect()).unwrap_or_default()
+                                });
+                                names.sort_by_key(|n| (!n.starts_with("is-"), n.clone()));
+                                let list_id = format!("act-classes-{i}");
+                                view! {
+                                <label class="field" class:is-invalid=move || bad.get()>
                                     <span class="label">{ui.t("act-class-name")}</span>
-                                    <input class="input input--mono" prop:value=c spellcheck="false" on:change=move |e| {
+                                    <input class="input input--mono" prop:value=c spellcheck="false" list=list_id.clone()
+                                        on:input=move |_| bad.set(false)
+                                        on:change=move |e| {
                                         let v = event_target_value(&e).trim().trim_start_matches('.').to_string();
                                         if !v.is_empty() && v.chars().all(|x| x.is_alphanumeric() || x == '-' || x == '_') {
+                                            bad.set(false);
                                             edit(i, Box::new(move |r| r.act = Act::Class(v.clone())));
+                                        } else {
+                                            bad.set(true);
                                         }
                                     }/>
+                                    <datalist id=list_id>{names.into_iter().map(|n| view! { <option value=n></option> }).collect_view()}</datalist>
+                                    {move || bad.get().then(|| view! { <span class="field-error" role="alert">{ui.t("act-class-invalid")}</span> })}
                                 </label>
+                                }
                             })}
                             <label class="field">
                                 <span class="label">{ui.t("act-target")}</span>

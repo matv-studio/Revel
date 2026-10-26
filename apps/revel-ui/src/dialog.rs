@@ -135,9 +135,9 @@ pub fn Dialog() -> impl IntoView {
             let has_input = a.input.is_some();
             let label = a.input.as_ref().map(|(l, _)| l.clone()).unwrap_or_default();
             view! {
-                <div class="overlay" on:mousedown=move |e| {
-                    // Clic sur le fond (hors de la boîte) : fermeture.
-                    if e.target() == e.current_target() { close() }
+                <div class="overlay" on:input=move |e| mark_dirty(&e) on:mousedown=move |e| {
+                    // Clic sur le fond (hors de la boîte) : fermeture, sauf après une saisie.
+                    if backdrop_click(&e) { close() }
                 }>
                     <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"
                         on:submit=move |e| { e.prevent_default(); submit() }>
@@ -188,5 +188,40 @@ pub fn Dialog() -> impl IntoView {
                 </div>
             }
         })
+    }
+}
+
+/// Clic sur le fond d'une fenêtre : vrai seulement si rien n'y a été saisi (le fond garde la
+/// marque `data-dirty` posée par [`mark_dirty`]) ; sinon la fenêtre reste ouverte (Échap ou
+/// Annuler la ferment) pour ne pas perdre la saisie.
+pub fn backdrop_click(e: &web_sys::MouseEvent) -> bool {
+    use wasm_bindgen::JsCast;
+    if e.target() != e.current_target() {
+        return false;
+    }
+    let dirty = e
+        .current_target()
+        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        .is_some_and(|el| el.has_attribute("data-dirty"));
+    if dirty {
+        // Signe que la fenêtre reste ouverte : la boîte tremble un instant.
+        if let Some(el) = e
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+            .and_then(|el| el.first_element_child())
+        {
+            let _ = el.class_list().remove_1("is-nudged");
+            let _ = el.get_bounding_client_rect();
+            let _ = el.class_list().add_1("is-nudged");
+        }
+    }
+    !dirty
+}
+
+/// Saisie dans une fenêtre (événement `input` remonté jusqu'au fond) : fond marqué.
+pub fn mark_dirty(e: &web_sys::Event) {
+    use wasm_bindgen::JsCast;
+    if let Some(el) = e.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) {
+        let _ = el.set_attribute("data-dirty", "");
     }
 }

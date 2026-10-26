@@ -209,13 +209,21 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                                     // Date de publication : annoncée au partage d'un article.
                                     let date = p.props.get("date").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                                     let q4 = pid.clone();
+                                    // Choix de date ; une date avec heure gardée telle quelle si on ne la change pas.
+                                    let day = date.get(..10).filter(|d| d.len() == 10 && d.as_bytes().get(4) == Some(&b'-')).map(str::to_string).unwrap_or_default();
+                                    let rest = date.get(10..).unwrap_or_default().to_string();
                                     view! {
-                                        <Field label=ui.t("pages-date") value=Signal::derive(move || date.clone()) mono=true
-                                            placeholder="2026-03-01".to_string()
-                                            on_commit=move |v: String| {
-                                                let v = v.trim().to_string();
-                                                ed.apply(ui, Command::SetPageProp { page: q4.clone(), key: "date".into(), value: (!v.is_empty()).then(|| json!(v)) }, false)
-                                            }/>
+                                        <label class="field">
+                                            <span class="label">{ui.t("pages-date")}</span>
+                                            <span class="field-line">
+                                                <input class="input" type="date" prop:value=day
+                                                    on:change=move |e| {
+                                                        let v = event_target_value(&e);
+                                                        let v = if v.is_empty() { v } else { format!("{v}{rest}") };
+                                                        ed.apply(ui, Command::SetPageProp { page: q4.clone(), key: "date".into(), value: (!v.is_empty()).then(|| json!(v)) }, false)
+                                                    }/>
+                                            </span>
+                                        </label>
                                     }
                                 }
                             }

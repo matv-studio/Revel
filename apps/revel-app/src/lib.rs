@@ -311,8 +311,11 @@ fn open_site(s: State<AppState>, path: String) -> Res<SiteSummary> {
 /// signé, non modifiable).
 #[tauri::command]
 fn default_sites_dir(app: tauri::AppHandle, s: State<AppState>) -> String {
-    if let Some(d) = s
-        .core
+    sites_dir(&app, &s.core)
+}
+
+fn sites_dir(app: &tauri::AppHandle, core: &revel_core::Core) -> String {
+    if let Some(d) = core
         .settings()
         .projects_dir
         .filter(|d| !d.trim().is_empty())
@@ -355,25 +358,37 @@ fn site_folder(parent: String, name: String) -> String {
         .to_string()
 }
 
-/// Crée un site dans un nouveau dossier de `parent` (voir `site_folder`).
+/// Crée un site d'après un modèle (D-128, `blank` : vide) dans un nouveau dossier de `parent`
+/// (voir `site_folder`) ; `scheme` : `light`, `dark` ou `auto`. Polices du modèle téléchargées
+/// au passage : hors du fil de l'interface.
 #[tauri::command]
-fn create_site(
-    s: State<AppState>,
+async fn create_site(
+    s: State<'_, AppState>,
     parent: String,
     name: String,
     lang: String,
-    template: Option<revel_protocol::SiteTemplate>,
-    light: Option<bool>,
+    template: Option<String>,
+    scheme: Option<String>,
 ) -> Res<SiteSummary> {
-    s.core
-        .create_site_from(
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.create_site_template(
             &PathBuf::from(parent),
             &name,
             &lang,
-            template.unwrap_or_default(),
-            light.unwrap_or(false),
+            template.as_deref().unwrap_or("blank"),
+            scheme.as_deref().unwrap_or("auto"),
         )
-        .map_err(err)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Modèles proposés à la création d'un site (D-128).
+#[tauri::command]
+fn site_templates(s: State<AppState>, lang: String) -> Vec<revel_protocol::TemplateInfo> {
+    s.core.site_templates(&lang)
 }
 
 /// Collections de contenus et leurs entrées (vue CMS).
@@ -705,9 +720,19 @@ async fn open_preview(
         } else {
             WebviewUrl::CustomProtocol(parsed)
         };
+        let opener = app.clone();
         WebviewWindowBuilder::new(&app, "preview", target)
             .title("Revel — aperçu")
             .inner_size(1280.0, 860.0)
+            // Lien vers un autre site en nouvel onglet : navigateur du système (les liens ouverts
+            // dans la fenêtre même s'y chargent).
+            .on_new_window(move |url, _| {
+                if matches!(url.scheme(), "http" | "https") {
+                    use tauri_plugin_opener::OpenerExt;
+                    let _ = opener.opener().open_url(url.as_str(), None::<&str>);
+                }
+                tauri::webview::NewWindowResponse::Deny
+            })
             .build()
             .map_err(sys)?;
     }
@@ -1134,6 +1159,40 @@ async fn versions_incoming(s: State<'_, AppState>, path: String) -> Res<bool> {
         .map_err(err)
 }
 
+/// Sites Revel des dépôts GitHub du compte connecté et leur copie sur cet ordinateur (D-127).
+#[tauri::command]
+async fn github_sites(
+    app: tauri::AppHandle,
+    s: State<'_, AppState>,
+) -> Res<Vec<revel_protocol::GithubSite>> {
+    let core = s.core.clone();
+    let dir = sites_dir(&app, &core);
+    tauri::async_runtime::spawn_blocking(move || {
+        let d = PathBuf::from(&dir);
+        core.github_sites((!dir.is_empty()).then_some(d.as_path()))
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Met à jour toutes les copies de sites GitHub de cet ordinateur (D-127).
+#[tauri::command]
+async fn github_sync_all(
+    app: tauri::AppHandle,
+    s: State<'_, AppState>,
+    merge: String,
+) -> Res<revel_protocol::GithubSyncReport> {
+    let core = s.core.clone();
+    let dir = sites_dir(&app, &core);
+    tauri::async_runtime::spawn_blocking(move || {
+        let d = PathBuf::from(&dir);
+        core.github_sync_all((!dir.is_empty()).then_some(d.as_path()), &merge)
+    })
+    .await
+    .map_err(sys)
+}
+
 /// Reçoit les versions du dépôt commun sans en enregistrer (D-108).
 #[tauri::command]
 async fn versions_receive(
@@ -1316,6 +1375,25 @@ fn translate_remove(s: State<AppState>, code: String) -> Res<()> {
 #[tauri::command]
 fn edit_media(s: State<AppState>, path: String) -> Res<Vec<revel_protocol::MediaFile>> {
     s.core.edit_media(std::path::Path::new(&path)).map_err(err)
+}
+
+/// Images en ligne d'un site ouvert (adresses, D-128).
+#[tauri::command]
+fn media_online(s: State<AppState>, path: String) -> Res<Vec<String>> {
+    s.core.media_online(std::path::Path::new(&path)).map_err(err)
+}
+
+/// Copie les images en ligne dans les médias du site (une étape d'annulation).
+#[tauri::command]
+async fn media_localize(s: State<'_, AppState>, path: String) -> Res<serde_json::Value> {
+    let core = s.core.clone();
+    let (state, count) = tauri::async_runtime::spawn_blocking(move || {
+        core.media_localize(std::path::Path::new(&path))
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)?;
+    Ok(serde_json::json!({ "state": state, "count": count }))
 }
 
 /// Importe un média (contenu en base64) dans le dossier des médias du site.
@@ -1595,6 +1673,9 @@ pub fn run() {
             versions_sync,
             versions_incoming,
             versions_receive,
+            github_sites,
+            site_templates,
+            github_sync_all,
             links_check,
             versions_resolve,
             versions_resolve_items,
@@ -1608,6 +1689,8 @@ pub fn run() {
             translate_install_cancel,
             translate_remove,
             edit_import_media,
+            media_online,
+            media_localize,
             edit_replace_media,
             canvas_open,
             startup_site,

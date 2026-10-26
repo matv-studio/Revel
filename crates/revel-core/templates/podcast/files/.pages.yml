@@ -1,0 +1,22 @@
+media:
+  input: media
+  output: /media
+content:
+  - name: episodes
+    label: "[[Épisodes||Episodes]]"
+    type: collection
+    path: content/episodes
+    filename: "{fields.slug}.md"
+    view:
+      fields: [number, title, date]
+      primary: title
+      default: { sort: date, order: desc }
+    fields:
+      - { name: title, label: "[[Titre||Title]]", type: string, required: true }
+      - { name: slug, label: "[[Adresse de la page||Page address]]", type: string, required: true }
+      - { name: number, label: "[[Numéro||Number]]", type: number }
+      - { name: date, label: Date, type: date }
+      - { name: duration, label: "[[Durée||Duration]]", type: string }
+      - { name: audio, label: "[[Fichier audio||Audio file]]", type: file }
+      - { name: description, label: "[[Résumé||Summary]]", type: text }
+      - { name: body, label: "[[Notes de l'épisode||Show notes]]", type: rich-text }

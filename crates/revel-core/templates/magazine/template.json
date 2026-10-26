@@ -1,0 +1,23 @@
+{
+  "name": "[[Magazine / actualités||Magazine / news]]",
+  "category": "editorial",
+  "order": 180,
+  "description": "[[Journal en ligne : une à la une, rubriques filtrables, articles du CMS avec barre de lecture et articles liés.||Online publication: front-page story, filterable sections, CMS articles with reading bar and related stories.]]",
+  "preview": "a3",
+  "palette": ["#ffffff", "#111111", "#d62828"],
+  "features": ["cms", "filters", "more", "progress", "dark"],
+  "fonts": [ { "family": "Newsreader", "variants": ["400", "600", "700"] }, { "family": "Inter", "variants": ["400", "500", "700"] } ],
+  "settings": { "smooth_scroll": true, "feeds": [ { "collection": "stories", "path": "/feed.xml" } ] },
+  "navbar": { "cta": "[[S'abonner||Subscribe]]", "cta_link": "#[[abonnement||subscribe]]" },
+  "site": {
+    "description": "[[Culture, sciences et société : l'essentiel de la semaine, sans bruit.||Culture, science and society: the week's essentials, without the noise.]]",
+    "email": "[[redaction@exemple.fr||newsroom@example.com]]",
+    "phone": "",
+    "address": "",
+    "menus": { "main": [ { "label": "[[À la une||Top stories]]", "url": "/" }, { "label": "[[Rubriques||Sections]]", "url": "/#[[rubriques||sections]]" } ], "social": [ { "label": "Mastodon", "url": "https://joinmastodon.org/" }, { "label": "RSS", "url": "/feed.xml" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head"],
+  "layouts": [ { "id": "base" }, { "id": "story", "parent": "base" } ],
+  "collections": [ { "id": "stories", "folder": "content/stories", "path": "[[/articles/{{ slug }}/||/stories/{{ slug }}/]]", "layout": "story", "sort": { "field": "date", "descending": true, "kind": "date" } } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[À la une||Top stories]]" } ]
+}

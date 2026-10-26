@@ -1,0 +1,21 @@
+{
+  "name": "[[Mariage||Wedding]]",
+  "category": "events",
+  "order": 110,
+  "description": "[[Site de mariage : programme de la journée, lieu, hébergements, liste, réponse des invités par formulaire.||Wedding site: schedule of the day, venue, accommodation, registry, guest RSVP form.]]",
+  "preview": "hero",
+  "palette": ["#fbf7f2", "#3b2f2a", "#b5838d"],
+  "features": ["components", "form", "faq", "dark"],
+  "fonts": [ { "family": "Italiana", "variants": ["400"] }, { "family": "Jost", "variants": ["300", "400", "500"] } ],
+  "settings": { "smooth_scroll": true, "page_transition": "fade" },
+  "navbar": { "cta": "[[Répondre||RSVP]]", "cta_link": "#[[reponse||rsvp]]" },
+  "site": {
+    "description": "[[Alice et Hugo se marient le 19 juin 2027.||Alice and Hugo are getting married on June 19, 2027.]]",
+    "email": "[[alice.hugo@exemple.fr||alice.hugo@example.com]]",
+    "phone": "",
+    "address": "[[Domaine des Tilleuls, Drôme||Linden Estate, Sonoma, CA]]",
+    "menus": { "main": [ { "label": "[[Programme||Schedule]]", "url": "#[[programme||schedule]]" }, { "label": "[[Lieu||Venue]]", "url": "#[[lieu||venue]]" }, { "label": "[[Infos||Info]]", "url": "#infos" } ], "social": [] }
+  },
+  "kit": ["navbar", "footer", "section-head", "faq"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

@@ -249,14 +249,21 @@ pub fn Transitions(sx: Sx) -> impl IntoView {
                      put: fn(&mut Transition, String),
                      key: &'static str,
                      prefix: &'static str| {
+        // Même unité que la durée de la transition (secondes ou millisecondes) : « 0,8 s + 0 s ».
+        let seconds = list.with_untracked(|l| {
+            l.as_ref()
+                .and_then(|l| l.get(i))
+                .is_some_and(|t| t.duration.trim().ends_with('s') && !t.duration.trim().ends_with("ms"))
+        });
+        let zero: &'static str = if seconds { "0s" } else { "0ms" };
         view! {
             <NumBox sx
                 value=Signal::derive(move || list.get().and_then(|l| l.get(i).map(get)))
-                hint=Signal::derive(|| "0ms".to_string())
-                start=Signal::derive(move || list.get().and_then(|l| l.get(i).map(get)).unwrap_or_else(|| "0ms".into()))
+                hint=Signal::derive(move || zero.to_string())
+                start=Signal::derive(move || list.get().and_then(|l| l.get(i).map(get)).unwrap_or_else(|| zero.into()))
                 on_preview=Callback::new(|_: String| {})
-                on_commit=Callback::new(move |(v, _): (Option<String>, bool)| write(edit(i, Box::new(move |t| put(t, v.clone().unwrap_or_else(|| "0ms".into()))))))
-                unit="ms" units=TIME_UNITS step=50.0 prefix=Some(prefix) label=key/>
+                on_commit=Callback::new(move |(v, _): (Option<String>, bool)| write(edit(i, Box::new(move |t| put(t, v.clone().unwrap_or_else(|| zero.into()))))))
+                unit=if seconds { "s" } else { "ms" } units=TIME_UNITS step=if seconds { 0.05 } else { 50.0 } prefix=Some(prefix) label=key/>
         }
     };
     view! {

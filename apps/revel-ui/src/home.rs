@@ -3,7 +3,7 @@
 use crate::{Ui, api, fmt_datetime, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use revel_protocol::ImportResult;
+use revel_protocol::{GithubSite, GithubSyncReport, ImportResult};
 
 #[component]
 pub fn Home() -> impl IntoView {
@@ -186,6 +186,106 @@ pub fn Home() -> impl IntoView {
         on_leave.remove();
         on_drop.remove();
     });
+    // Sites du compte GitHub (D-127) : ceux qui ne sont pas encore sur cet ordinateur sont
+    // montrés à côté des autres, prêts à télécharger ; « Synchroniser » met à jour les copies.
+    let gh_busy = RwSignal::new(false);
+    let gh_note = RwSignal::new(None::<GithubSyncReport>);
+    // Dépôt en cours de téléchargement et avancement (0 à 1).
+    let downloading = RwSignal::new(None::<(String, f32)>);
+    let load_gh = move || {
+        spawn_local(async move {
+            match api::github_sites().await {
+                Ok(l) => ui.gh_sites.set(Some(l)),
+                Err(e) => ui.fail(e),
+            }
+        })
+    };
+    Effect::new(move |_| {
+        if ui.github.get().is_some() && ui.gh_sites.get_untracked().is_none() {
+            load_gh();
+        }
+    });
+    let sync_all = move |_| {
+        if gh_busy.get_untracked() {
+            return;
+        }
+        gh_busy.set(true);
+        gh_note.set(None);
+        spawn_local(async move {
+            let merge = ui.now("versions-merge-message", &[]);
+            match api::github_sync_all(&merge).await {
+                Ok(r) => gh_note.set(Some(r)),
+                Err(e) => ui.fail(e),
+            }
+            if let Ok(l) = api::github_sites().await {
+                ui.gh_sites.set(Some(l));
+            }
+            ui.reload_recents();
+            gh_busy.set(false);
+        });
+    };
+    // Téléchargement d'un site dans le dossier des sites ; ouvert ensuite si `open`.
+    let download = move |site: GithubSite, open: bool| {
+        if downloading.get_untracked().is_some() {
+            return;
+        }
+        downloading.set(Some((site.repo.clone(), 0.0)));
+        spawn_local(async move {
+            let repo = site.repo.clone();
+            let parent = api::default_sites_dir().await.unwrap_or_default();
+            let r = api::git_clone(&site.clone_url, &parent, move |e| {
+                if e.total > 0 {
+                    downloading.set(Some((repo.clone(), e.received as f32 / e.total as f32)));
+                }
+            })
+            .await;
+            match r {
+                Ok(c) => match api::open_site(&c.path).await {
+                    Ok(summary) => {
+                        ui.gh_sites.update(|l| {
+                            if let Some(g) = l
+                                .as_mut()
+                                .and_then(|l| l.iter_mut().find(|g| g.repo == site.repo))
+                            {
+                                g.path = Some(c.path.clone());
+                            }
+                        });
+                        ui.reload_recents();
+                        if open {
+                            ui.open(summary);
+                        }
+                    }
+                    Err(e) => ui.fail(e),
+                },
+                Err(e) => ui.fail(e),
+            }
+            downloading.set(None);
+        });
+    };
+    let remote_menu = move |e: &leptos::ev::MouseEvent, site: GithubSite| {
+        use crate::ctxmenu::{CtxItem, open};
+        let (a, url) = (site.clone(), site.html_url.clone());
+        let items = vec![
+            CtxItem::new(ui.now("gh-site-download", &[]), move || download(a.clone(), false))
+                .icon(icons::cloud_down),
+            CtxItem::new(ui.now("gh-site-github", &[]), move || {
+                let u = url.clone();
+                spawn_local(async move {
+                    let _ = api::open_external(&u).await;
+                });
+            })
+            .icon(icons::external),
+        ];
+        open(ui, e, items);
+    };
+    // Dépôt GitHub d'un site de cet ordinateur (badge de la vignette).
+    let repo_of = move |path: &str| {
+        ui.gh_sites.with(|l| {
+            l.as_ref()
+                .and_then(|l| l.iter().find(|g| g.path.as_deref() == Some(path)))
+                .map(|g| g.repo.clone())
+        })
+    };
     let query = RwSignal::new(String::new());
     // Vue en grille ou en liste (préférence gardée dans ce navigateur).
     let grid = RwSignal::new(
@@ -234,17 +334,77 @@ pub fn Home() -> impl IntoView {
         }
         list
     };
+    let remote = move || {
+        let q = query.get().trim().to_lowercase();
+        let mut list = ui
+            .gh_sites
+            .get()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|g| g.path.is_none())
+            .filter(|g| {
+                q.is_empty()
+                    || g.name.to_lowercase().contains(&q)
+                    || g.repo.to_lowercase().contains(&q)
+            })
+            .collect::<Vec<_>>();
+        if by_name.get() {
+            list.sort_by_key(|g| g.name.to_lowercase());
+        }
+        list
+    };
+    let has_any = move || !ui.recents.get().is_empty() || !remote().is_empty();
+    let note = move || {
+        gh_note.get().map(|r| {
+            let mut parts = Vec::new();
+            if !r.updated.is_empty() {
+                parts.push(ui.now("gh-sync-updated", &[("n", r.updated.len().to_string())]));
+            }
+            if !r.sent.is_empty() {
+                parts.push(ui.now("gh-sync-sent", &[("n", r.sent.len().to_string())]));
+            }
+            if !r.waiting.is_empty() {
+                parts.push(ui.now("gh-sync-waiting", &[("n", r.waiting.len().to_string())]));
+            }
+            if !r.failed.is_empty() {
+                parts.push(ui.now("gh-sync-failed", &[("n", r.failed.len().to_string())]));
+            }
+            if parts.is_empty() {
+                parts.push(ui.now("gh-sync-none", &[]));
+            }
+            let detail = r
+                .updated
+                .iter()
+                .chain(&r.sent)
+                .chain(&r.waiting)
+                .cloned()
+                .chain(r.failed.iter().map(|(n, m)| format!("{n} : {m}")))
+                .collect::<Vec<_>>()
+                .join("\n");
+            (parts.join(" · "), detail, !r.waiting.is_empty() || !r.failed.is_empty())
+        })
+    };
     view! {
         <section class="page page--wide">
             <header class="page-head">
                 <h1>{ui.t("home-title")}</h1>
                 <div class="toolbar">
+                    <Show when=move || ui.github.get().is_some()>
+                        <button class="btn gh-sync" class:is-busy=move || gh_busy.get() disabled=move || gh_busy.get()
+                            title=ui.t("gh-sync-help") on:click=sync_all>{icons::sync()}{ui.t("gh-sync")}</button>
+                    </Show>
                     <button class="btn" title=ui.t("action-open-help") on:click=open>{icons::folder()}{ui.t("action-open")}</button>
                     <button class="btn" title=ui.t("action-import-help") on:click=do_import>{icons::import()}{ui.t("action-import")}</button>
                     <button class="btn btn--primary" on:click=create>{icons::plus()}{ui.t("action-new")}</button>
                 </div>
             </header>
-            <Show when=move || ui.recents.get().is_empty()>
+            {move || note().map(|(text, detail, warn)| view! {
+                <div class="gh-note" class:is-warn=warn role="status" title=detail>
+                    {icons::cloud()}<span>{text}</span>
+                    <button class="icon-btn icon-btn--small" aria-label=ui.t("action-close") on:click=move |_| gh_note.set(None)>{icons::close()}</button>
+                </div>
+            })}
+            <Show when=move || !has_any()>
                 <div class="empty">
                     <p>{ui.t("home-empty")}</p>
                     <div class="toolbar">
@@ -252,7 +412,7 @@ pub fn Home() -> impl IntoView {
                     </div>
                 </div>
             </Show>
-            <Show when=move || !ui.recents.get().is_empty()>
+            <Show when=has_any>
                 <div class="home-tools">
                     <label class="panel-search home-search">
                         {icons::search()}
@@ -309,6 +469,31 @@ pub fn Home() -> impl IntoView {
                                     }
                                 }
                             </For>
+                            <For each=remote key=|g| g.repo.clone() let:g>
+                                {
+                                    let (a, b, m) = (g.clone(), g.clone(), g.clone());
+                                    let repo = g.repo.clone();
+                                    let busy = move || downloading.with(|d| d.as_ref().map(|d| d.0 == repo).unwrap_or(false));
+                                    view! {
+                                        <tr class="row-link site-remote" data-repo=g.repo.clone() title=ui.t("gh-site-download-open")
+                                            on:contextmenu=move |e: leptos::ev::MouseEvent| remote_menu(&e, m.clone())
+                                            on:click=move |_| download(a.clone(), true)>
+                                            <td class="strong">
+                                                <span class="site-dot" style=format!("--hue:{}", hue(&g.name))></span>
+                                                {g.name.clone()}
+                                            </td>
+                                            <td class="muted path">{icons::cloud()}" "{g.repo.clone()}</td>
+                                            <td class="muted col-date">{g.pushed_at.clone().map(|d| fmt_datetime(&ui.lang(), &d)).unwrap_or_default()}</td>
+                                            <td class="col-actions">
+                                                <div class="row-actions">
+                                                    <button class="icon-btn gh-download" class:is-busy=busy title=ui.t("gh-site-download") aria-label=ui.t("gh-site-download")
+                                                        on:click=move |ev| { ev.stop_propagation(); download(b.clone(), false) }>{icons::cloud_down()}</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </For>
                         </tbody>
                     </table>
                 }>
@@ -323,7 +508,9 @@ pub fn Home() -> impl IntoView {
                                         on:click=move |_| open_path(p.clone())
                                         on:contextmenu={ let (p, n) = (r.path.clone(), r.name.clone()); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone(), n.clone()) }
                                         on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { open_path(p4.clone()) }>
-                                        <div class="site-thumb"><span class="site-mono">{mono(&r.name)}</span></div>
+                                        <div class="site-thumb"><span class="site-mono">{mono(&r.name)}</span>
+                                            {let p = r.path.clone(); move || repo_of(&p).map(|repo| view! { <span class="site-badge" title=repo>{icons::cloud()}</span> })}
+                                        </div>
                                         <div class="site-info">
                                             <span class="site-name">{r.name.clone()}</span>
                                             <span class="site-meta">{move || fmt_datetime(&ui.lang(), &opened)}</span>
@@ -335,6 +522,35 @@ pub fn Home() -> impl IntoView {
                                                 on:click=move |ev| { ev.stop_propagation(); forget(p2.clone()) }>{icons::close()}</button>
                                             <button class="icon-btn icon-btn--small site-delete" title=ui.t("site-delete") aria-label=ui.t("site-delete")
                                                 on:click={ let (p, n) = (r.path.clone(), r.name.clone()); move |ev: leptos::ev::MouseEvent| { ev.stop_propagation(); delete(p.clone(), n.clone()) } }>{icons::trash()}</button>
+                                        </div>
+                                    </article>
+                                }
+                            }
+                        </For>
+                        <For each=remote key=|g| g.repo.clone() let:g>
+                            {
+                                let (a, b, c, m) = (g.clone(), g.clone(), g.clone(), g.clone());
+                                let repo = StoredValue::new(g.repo.clone());
+                                let progress = move || repo.with_value(|r| downloading.with(|d| d.as_ref().filter(|d| d.0 == *r).map(|d| d.1)));
+                                let size = if g.size_kb >= 1024 { format!("{:.0} Mo", g.size_kb as f64 / 1024.0) } else { format!("{} Ko", g.size_kb) };
+                                view! {
+                                    <article class="site-card site-card--remote" data-repo=g.repo.clone() title=ui.t("gh-site-download-open")
+                                        tabindex="0" style=format!("--hue:{}", hue(&g.name))
+                                        class:is-busy=move || progress().is_some()
+                                        on:click=move |_| download(a.clone(), true)
+                                        on:contextmenu=move |e: leptos::ev::MouseEvent| remote_menu(&e, m.clone())
+                                        on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { download(c.clone(), true) }>
+                                        <div class="site-thumb"><span class="site-mono">{mono(&g.name)}</span>
+                                            <span class="site-badge site-badge--remote">{icons::cloud()}</span>
+                                            {move || progress().map(|p| view! { <span class="site-progress" style=format!("--p:{:.3}", p)></span> })}
+                                        </div>
+                                        <div class="site-info">
+                                            <span class="site-name">{g.name.clone()}</span>
+                                            <span class="site-meta">{g.repo.clone()}" · "{size}</span>
+                                        </div>
+                                        <div class="site-actions">
+                                            <button class="icon-btn icon-btn--small gh-download" title=ui.t("gh-site-download") aria-label=ui.t("gh-site-download")
+                                                on:click=move |ev| { ev.stop_propagation(); download(b.clone(), false) }>{icons::cloud_down()}</button>
                                         </div>
                                     </article>
                                 }
@@ -381,8 +597,32 @@ fn hue(name: &str) -> u32 {
         % 360
 }
 
-/// Création d'un site : nom, langue et emplacement. Le dossier est proposé (Documents/Revel/nom) ;
-/// la fenêtre du système ne s'ouvre que sur « Changer… » (D-22).
+/// Catégories de la galerie des modèles, dans l'ordre (D-128).
+const TEMPLATE_CATS: [&str; 11] = [
+    "business", "creative", "commerce", "editorial", "food", "events", "travel", "services",
+    "education", "community", "personal",
+];
+
+/// Clé de traduction d'une catégorie de modèles.
+fn cat_key(c: &str) -> &'static str {
+    match c {
+        "business" => "template-cat-business",
+        "creative" => "template-cat-creative",
+        "commerce" => "template-cat-commerce",
+        "editorial" => "template-cat-editorial",
+        "food" => "template-cat-food",
+        "events" => "template-cat-events",
+        "travel" => "template-cat-travel",
+        "services" => "template-cat-services",
+        "education" => "template-cat-education",
+        "community" => "template-cat-community",
+        _ => "template-cat-personal",
+    }
+}
+
+/// Création d'un site : galerie des modèles (catégories, aperçu, couleurs), nom, langue,
+/// couleurs du site et emplacement. Le dossier est proposé (Projects de Revel, sinon
+/// Documents/Revel) ; la fenêtre du système ne s'ouvre que sur « Changer… » (D-22).
 #[component]
 fn NewSite(close: Callback<()>) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -391,14 +631,25 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
     let parent = RwSignal::new(String::new());
     let folder = RwSignal::new(String::new());
     let busy = RwSignal::new(false);
-    let template = RwSignal::new(revel_protocol::SiteTemplate::Blank);
-    // Fond du site : sombre par défaut.
-    let light = RwSignal::new(false);
+    let template = RwSignal::new("blank".to_string());
+    // Couleurs du site : claires et sombres selon l'appareil du visiteur par défaut.
+    let scheme = RwSignal::new("auto".to_string());
+    let cat = RwSignal::new(String::new());
+    let templates = RwSignal::new(Vec::<revel_protocol::TemplateInfo>::new());
     let input = NodeRef::<leptos::html::Input>::new();
     spawn_local(async move {
         if let Ok(d) = api::default_sites_dir().await {
             parent.set(d);
         }
+    });
+    // Modèles dans la langue choisie pour le site.
+    Effect::new(move |_| {
+        let l = lang.get();
+        spawn_local(async move {
+            if let Ok(list) = api::site_templates(&l).await {
+                templates.set(list);
+            }
+        });
     });
     // Dossier qui sera créé (nom du site, suffixe si déjà pris).
     Effect::new(move |_| {
@@ -443,8 +694,8 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                 &p,
                 &n,
                 &lang.get_untracked(),
-                template.get_untracked(),
-                light.get_untracked(),
+                &template.get_untracked(),
+                &scheme.get_untracked(),
             )
             .await
             {
@@ -465,71 +716,137 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
         }
     });
     on_cleanup(move || on_key.remove());
+    let cats = move || {
+        let list = templates.get();
+        TEMPLATE_CATS
+            .iter()
+            .filter(|c| list.iter().any(|t| t.category == **c))
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+    };
+    let shown = move || {
+        let c = cat.get();
+        templates
+            .get()
+            .into_iter()
+            .filter(|t| c.is_empty() || t.category == c)
+            .collect::<Vec<_>>()
+    };
+    let chosen = move || {
+        let id = template.get();
+        templates.with(|l| l.iter().find(|t| t.id == id).cloned())
+    };
     view! {
-        <div class="overlay" on:mousedown=move |e| if e.target() == e.current_target() { close.run(()) }>
-            <form class="dialog dialog--form" role="dialog" aria-modal="true" aria-labelledby="new-site-title"
+        <div class="overlay" on:input=move |e| crate::dialog::mark_dirty(&e) on:mousedown=move |e| if crate::dialog::backdrop_click(&e) { close.run(()) }>
+            <form class="dialog dialog--form new-site" role="dialog" aria-modal="true" aria-labelledby="new-site-title"
                 on:submit=move |e| { e.prevent_default(); submit() }>
-                <h2 id="new-site-title">{ui.t("new-site-title")}</h2>
-                <label class="field">
-                    <span class="label">{ui.t("new-site-name")}</span>
-                    <input class="input" type="text" node_ref=input spellcheck="false" autocomplete="off"
-                        placeholder=ui.t("new-site-placeholder")
-                        prop:value=move || name.get() on:input=move |e| name.set(event_target_value(&e))/>
-                </label>
-                <label class="field">
-                    <span class="label">{ui.t("new-site-lang")}</span>
-                    <div class="select">
-                        <select class="input" on:change=move |e| lang.set(event_target_value(&e))>
-                            <option value="fr" lang="fr" selected=move || lang.get() == "fr">"Français"</option>
-                            <option value="en" lang="en" selected=move || lang.get() == "en">"English"</option>
-                        </select>
+                <div class="new-site__gallery">
+                    <div class="new-site__head">
+                        <h2 id="new-site-title">{ui.t("new-site-title")}</h2>
+                        <div class="new-site__cats" role="radiogroup" aria-label=ui.t("new-site-template")>
+                            <button type="button" role="radio" class="cat-chip" class:is-on=move || cat.get().is_empty()
+                                aria-checked=move || cat.get().is_empty().to_string()
+                                on:click=move |_| cat.set(String::new())>{ui.t("template-cat-all")}</button>
+                            <For each=cats key=|c| c.clone() let:c>
+                                {
+                                    let (c1, c2, c3) = (c.clone(), c.clone(), c.clone());
+                                    view! {
+                                        <button type="button" role="radio" class="cat-chip" data-cat=c.clone()
+                                            class:is-on=move || cat.get() == c1 aria-checked=move || (cat.get() == c2).to_string()
+                                            on:click=move |_| cat.set(c3.clone())>{ui.t(cat_key(&c))}</button>
+                                    }
+                                }
+                            </For>
+                        </div>
                     </div>
-                </label>
-                <div class="field">
-                    <span class="label">{ui.t("new-site-template")}</span>
-                    <div class="template-choices" role="radiogroup" aria-label=ui.t("new-site-template")>
-                        {[
-                            (revel_protocol::SiteTemplate::Blank, "new-site-template-blank", "new-site-template-blank-help", icons::page as fn() -> AnyView),
-                            (revel_protocol::SiteTemplate::Showcase, "new-site-template-showcase", "new-site-template-showcase-help", icons::layout as fn() -> AnyView),
-                            (revel_protocol::SiteTemplate::Blog, "new-site-template-blog", "new-site-template-blog-help", icons::database as fn() -> AnyView),
-                        ].into_iter().map(|(t, key, help, icon)| view! {
-                            <button type="button" class="template-choice" role="radio" data-template=key
-                                aria-checked=move || (template.get() == t).to_string()
-                                class:is-on=move || template.get() == t
-                                title=ui.t(help)
-                                on:click=move |_| template.set(t)>
-                                {icon()}<span>{ui.t(key)}</span>
+                    <div class="template-grid" role="radiogroup" aria-label=ui.t("new-site-template")>
+                        <Show when=move || cat.get().is_empty()>
+                            <button type="button" class="template-card template-card--blank" role="radio" data-template="blank"
+                                class:is-on=move || template.get() == "blank" aria-checked=move || (template.get() == "blank").to_string()
+                                title=ui.t("new-site-template-blank-help")
+                                on:click=move |_| template.set("blank".into())>
+                                <span class="template-card__thumb">{icons::page()}</span>
+                                <span class="template-card__name">{ui.t("new-site-template-blank")}</span>
                             </button>
-                        }).collect_view()}
+                        </Show>
+                        <For each=shown key=|t| t.id.clone() let:t>
+                            {
+                                let (id, id2, id3) = (t.id.clone(), t.id.clone(), t.id.clone());
+                                let swatch = t.palette.iter().map(|c| format!("<i style=\"background:{c}\"></i>")).collect::<String>();
+                                let bg = t.palette.first().cloned().unwrap_or_default();
+                                view! {
+                                    <button type="button" class="template-card" role="radio" data-template=t.id.clone()
+                                        class:is-on=move || template.get() == id aria-checked=move || (template.get() == id2).to_string()
+                                        title=t.description.clone()
+                                        on:click=move |_| template.set(id3.clone())>
+                                        <span class="template-card__thumb" style=format!("background:{bg}")>
+                                            {t.preview.clone().map(|src| view! { <img src=src alt="" loading="lazy" onerror="this.remove()"/> })}
+                                            <span class="template-card__palette" inner_html=swatch></span>
+                                        </span>
+                                        <span class="template-card__name">{t.name.clone()}</span>
+                                    </button>
+                                }
+                            }
+                        </For>
                     </div>
                 </div>
-                <div class="field">
-                    <span class="label">{ui.t("new-site-background")}</span>
-                    <div class="segmented site-bg" role="radiogroup" aria-label=ui.t("new-site-background")>
-                        {[(false, "new-site-dark"), (true, "new-site-light")].into_iter().map(|(v, key)| view! {
-                            <button type="button" role="radio" data-bg=key class:is-on=move || light.get() == v
-                                aria-checked=move || (light.get() == v).to_string()
-                                on:click=move |_| light.set(v)>
-                                <span class="bg-swatch" class:bg-swatch--light=v></span>{ui.t(key)}
-                            </button>
-                        }).collect_view()}
+                <div class="new-site__side">
+                    <div class="new-site__chosen">
+                        {move || match chosen() {
+                            Some(t) => view! {
+                                <p class="new-site__chosen-name">{t.name.clone()}</p>
+                                <p class="new-site__chosen-text">{t.description.clone()}</p>
+                                <p class="muted new-site__chosen-pages">{ui.now("template-pages", &[("n", t.pages.to_string())])}</p>
+                            }.into_any(),
+                            None => view! {
+                                <p class="new-site__chosen-name">{ui.t("new-site-template-blank")}</p>
+                                <p class="new-site__chosen-text">{ui.t("new-site-template-blank-help")}</p>
+                            }.into_any(),
+                        }}
                     </div>
-                </div>
-                <div class="field">
-                    <span class="label">{ui.t("new-site-location")}</span>
-                    <div class="path-field">
-                        <span class="path-value" title=move || folder.get()>
-                            {move || crate::ltr(&if folder.get().is_empty() { parent.get() } else { folder.get() })}
-                        </span>
-                        <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
+                    <label class="field">
+                        <span class="label">{ui.t("new-site-name")}</span>
+                        <input class="input" type="text" node_ref=input spellcheck="false" autocomplete="off"
+                            placeholder=ui.t("new-site-placeholder")
+                            prop:value=move || name.get() on:input=move |e| name.set(event_target_value(&e))/>
+                    </label>
+                    <label class="field">
+                        <span class="label">{ui.t("new-site-lang")}</span>
+                        <div class="select">
+                            <select class="input" on:change=move |e| lang.set(event_target_value(&e))>
+                                <option value="fr" lang="fr" selected=move || lang.get() == "fr">"Français"</option>
+                                <option value="en" lang="en" selected=move || lang.get() == "en">"English"</option>
+                            </select>
+                        </div>
+                    </label>
+                    <div class="field">
+                        <span class="label" title=ui.t("new-site-scheme-help")>{ui.t("new-site-background")}</span>
+                        <div class="segmented site-bg" role="radiogroup" aria-label=ui.t("new-site-background")>
+                            {[("auto", "new-site-auto"), ("light", "new-site-light"), ("dark", "new-site-dark")].into_iter().map(|(v, key)| view! {
+                                <button type="button" role="radio" data-bg=v class:is-on=move || scheme.get() == v
+                                    aria-checked=move || (scheme.get() == v).to_string()
+                                    on:click=move |_| scheme.set(v.to_string())>
+                                    <span class="bg-swatch" class:bg-swatch--light=v == "light" class:bg-swatch--auto=v == "auto"></span>{ui.t(key)}
+                                </button>
+                            }).collect_view()}
+                        </div>
                     </div>
-                </div>
-                <div class="dialog-actions">
-                    <button type="button" class="btn" on:click=move |_| close.run(())>{ui.t("action-cancel")}</button>
-                    <button type="submit" class="btn btn--primary"
-                        disabled=move || busy.get() || name.with(|n| n.trim().is_empty()) || parent.with(String::is_empty)>
-                        {ui.t("new-site-create")}
-                    </button>
+                    <div class="field">
+                        <span class="label">{ui.t("new-site-location")}</span>
+                        <div class="path-field">
+                            <span class="path-value" title=move || folder.get()>
+                                {move || crate::ltr(&if folder.get().is_empty() { parent.get() } else { folder.get() })}
+                            </span>
+                            <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
+                        </div>
+                    </div>
+                    <div class="dialog-actions">
+                        <button type="button" class="btn" on:click=move |_| close.run(())>{ui.t("action-cancel")}</button>
+                        <button type="submit" class="btn btn--primary"
+                            disabled=move || busy.get() || name.with(|n| n.trim().is_empty()) || parent.with(String::is_empty)>
+                            {move || if busy.get() { ui.t("new-site-creating") } else { ui.t("new-site-create") }}
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>

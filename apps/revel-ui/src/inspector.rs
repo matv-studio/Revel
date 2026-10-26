@@ -492,9 +492,20 @@ fn is_media(n: &Node) -> bool {
 #[derive(Clone, Copy, PartialEq)]
 enum LinkKind {
     Page,
+    Section,
+    File,
     Url,
     Email,
     Phone,
+}
+
+/// Fichier du site ou à télécharger (PDF, archive, document…).
+fn is_file_link(href: &str) -> bool {
+    let path = href.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase();
+    path.starts_with("/media/")
+        || [".pdf", ".zip", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".mp4", ".mp3", ".csv", ".txt"]
+            .iter()
+            .any(|e| path.ends_with(e))
 }
 
 fn link_kind(href: &str, pages: &[String]) -> LinkKind {
@@ -502,11 +513,43 @@ fn link_kind(href: &str, pages: &[String]) -> LinkKind {
         LinkKind::Email
     } else if href.starts_with("tel:") {
         LinkKind::Phone
+    } else if href.len() > 1 && href.starts_with('#') {
+        LinkKind::Section
     } else if href.is_empty() || href == "#" || pages.iter().any(|p| p == href) {
         LinkKind::Page
+    } else if !href.contains("://") && is_file_link(href) {
+        LinkKind::File
     } else {
         LinkKind::Url
     }
+}
+
+/// Identifiants des éléments de la page affichée et de ses gabarits (sections où mener un lien).
+fn page_anchors(ed: Ed) -> Vec<String> {
+    let page = ed.page.get_untracked();
+    ed.doc.with_untracked(|d| {
+        let Some(d) = d.as_ref() else { return Vec::new() };
+        let mut ids: Vec<String> = Vec::new();
+        let mut look = |nodes: &[Node]| {
+            revel_model::ids::walk(nodes, &mut |n| {
+                if let Node::Element { attrs, .. } = n
+                    && let Some(v) = attrs.iter().find(|a| a.name == "id").and_then(|a| a.value.as_deref())
+                    && !v.is_empty()
+                    && !v.contains("{{")
+                    && !ids.iter().any(|x| x == v)
+                {
+                    ids.push(v.to_string());
+                }
+            });
+        };
+        if let Some(p) = d.pages.iter().find(|p| p.path == page) {
+            look(&p.body);
+        }
+        for l in &d.layouts {
+            look(&l.body);
+        }
+        ids
+    })
 }
 
 /// Destination d'un lien, comme dans Webflow : une page du site choisie dans la liste, une
@@ -530,13 +573,32 @@ fn LinkTarget(
             .map(|p| (p.url.clone(), crate::pagetree::title_of(p)))
             .collect()
     });
-    let urls: Vec<String> = pages.iter().map(|(u, _)| u.clone()).collect();
+    // Pages des contenus du CMS (une par contenu), par collection.
+    let entries: Vec<(String, Vec<(String, String)>)> = ed.pages.with_untracked(|ps| {
+        let mut out: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        for p in ps.iter().filter(|p| p.collection.is_some() && !p.draft) {
+            let c = p.collection.clone().unwrap_or_default();
+            let item = (p.url.clone(), crate::pagetree::title_of(p));
+            match out.iter_mut().find(|(k, _)| *k == c) {
+                Some((_, v)) => v.push(item),
+                None => out.push((c, vec![item])),
+            }
+        }
+        out
+    });
+    let urls: Vec<String> = pages
+        .iter()
+        .map(|(u, _)| u.clone())
+        .chain(entries.iter().flat_map(|(_, v)| v.iter().map(|(u, _)| u.clone())))
+        .collect();
     let kind = RwSignal::new(link_kind(&href, &urls));
     let href = StoredValue::new(href);
     let commit = StoredValue::new(on_commit);
     let run = move |v: String| commit.with_value(|f| f(v));
     let tabs = [
         (LinkKind::Page, "link-page"),
+        (LinkKind::Section, "link-section"),
+        (LinkKind::File, "link-file"),
         (LinkKind::Url, "link-url"),
         (LinkKind::Email, "link-email"),
         (LinkKind::Phone, "link-phone"),
@@ -559,16 +621,21 @@ fn LinkTarget(
     view! {
         <div class="field link-target">
             <span class="label">{ui.t("inspector-href")}</span>
-            <div class="seg seg--small" role="radiogroup" aria-label=ui.t("inspector-href")>
-                {tabs.into_iter().map(|(k, key)| view! {
-                    <button role="radio" class:is-on=move || kind.get() == k aria-checked=move || (kind.get() == k).to_string()
-                        on:click=move |_| kind.set(k)><span>{ui.t(key)}</span></button>
-                }).collect_view()}
+            // Six destinations : liste plutôt que boutons (place de l'inspecteur).
+            <div class="select link-kind">
+                <select class="input" aria-label=ui.t("link-kind") on:change=move |e| {
+                    let v = event_target_value(&e);
+                    if let Some((k, _)) = tabs.iter().find(|(_, key)| *key == v) { kind.set(*k) }
+                }>
+                    {tabs.into_iter().map(|(k, key)| view! {
+                        <option value=key prop:selected=move || kind.get() == k>{ui.t(key)}</option>
+                    }).collect_view()}
+                </select>
             </div>
             {move || match kind.get() {
                 LinkKind::Page => {
                     let cur = href.get_value();
-                    let known = pages.iter().any(|(u, _)| *u == cur);
+                    let known = urls.contains(&cur);
                     view! {
                         <div class="select">
                             <select class="input" aria-label=ui.t("link-page") on:change=move |e| run(event_target_value(&e))>
@@ -576,8 +643,39 @@ fn LinkTarget(
                                 {pages.iter().map(|(u, name)| view! {
                                     <option value=u.clone() selected=*u == cur>{name.clone()}</option>
                                 }).collect_view()}
+                                {entries.iter().map(|(c, list)| view! {
+                                    <optgroup label=crate::site::capitalize(c)>
+                                        {list.iter().map(|(u, name)| view! { <option value=u.clone() selected=*u == cur>{name.clone()}</option> }).collect_view()}
+                                    </optgroup>
+                                }).collect_view()}
                             </select>
                         </div>
+                    }.into_any()
+                }
+                LinkKind::Section => {
+                    let cur = href.get_value();
+                    let ids = page_anchors(ed);
+                    let known = ids.iter().any(|i| format!("#{i}") == cur);
+                    view! {
+                        <div class="select">
+                            <select class="input" aria-label=ui.t("link-section") title=ui.t("link-section-help")
+                                on:change=move |e| run(event_target_value(&e))>
+                                <option value="" hidden=true selected=!known>{ui.t(if ids.is_empty() { "link-section-none" } else { "link-section-choose" })}</option>
+                                {(!known && cur.starts_with('#') && cur.len() > 1).then(|| view! { <option value=cur.clone() selected=true>{cur.clone()}</option> })}
+                                {ids.iter().map(|i| { let v = format!("#{i}"); let on = v == cur; view! { <option value=v prop:selected=on>{i.clone()}</option> } }).collect_view()}
+                            </select>
+                        </div>
+                    }.into_any()
+                }
+                LinkKind::File => {
+                    let cur = if is_file_link(&href.get_value()) { href.get_value() } else { String::new() };
+                    view! {
+                        <span class="field-line">
+                            <input class="input" type="text" spellcheck="false" prop:value=cur placeholder="/media/document.pdf"
+                                on:change=move |e| run(event_target_value(&e).trim().to_string())/>
+                            <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-media") aria-label=ui.t("picker-choose-media")
+                                on:click=move |_| crate::library::pick_media(ui, false, None, run)>{icons::file()}</button>
+                        </span>
                     }.into_any()
                 }
                 k => {
@@ -640,6 +738,10 @@ fn element_advanced(
         // consentement, interrupteurs, formulaire, média au survol, lien actif, interactions) :
         // montrés là, pas comme attributs bruts.
         .filter(|a| !MANAGED.contains(&a.name.as_str()))
+        // Vidéo et champ de formulaire : réglés par leurs groupes (source, image d'attente,
+        // lecture ; type, nom, obligatoire, exemple, saisie automatique).
+        .filter(|a| !(lower == "video" && VIDEO_ATTRS.contains(&a.name.as_str())))
+        .filter(|a| !(FIELD_TAGS.contains(&lower.as_str()) && FIELD_ATTRS.contains(&a.name.as_str())))
         // Animations : réglées dans le panneau Interactions.
         .filter(|a| {
             !crate::interactions::FAMILIES
@@ -675,7 +777,7 @@ fn element_advanced(
                                 apply(if commands.len() == 1 { commands.remove(0) } else { Command::Batch { commands } });
                             }
                         }>
-                        {(!TAGS.contains(&lower.as_str())).then(|| view! { <option value=lower.clone() selected=true>{format!("<{lower}>")}</option> })}
+                        {(!TAGS.contains(&lower.as_str())).then(|| view! { <option value=lower.clone() selected=true>{crate::names::type_name(ui, &lower)}</option> })}
                         {TAGS.iter().map(|t| view! {
                             <option value=*t selected=*t == lower>{crate::names::type_name(ui, t)}</option>
                         }).collect_view()}
@@ -696,6 +798,7 @@ fn element_advanced(
                 {others.into_iter().map(|a| {
                     let name = a.name.clone();
                     let name_rm = a.name.clone();
+                    let attr_key = a.name.clone();
                     let at_set = at.clone();
                     let at_rm = at.clone();
                     let conditional = a.when.clone();
@@ -744,8 +847,14 @@ fn element_advanced(
                     };
                     let has_bound = bound.is_some();
                     view! {
-                        <div class="attr-row" class:attr-row--bound=has_bound>
-                            <span class="attr-name" title=conditional.clone().map(|w| ui.tx("inspector-attr-when", &[("cond", w)]))>{a.name.clone()}{conditional.is_some().then_some(" ?")}</span>
+                        <div class="attr-row" class:attr-row--bound=has_bound data-attr=attr_key>
+                            <span class="attr-name" title={
+                                let tech = a.name.clone();
+                                match conditional.clone() {
+                                    Some(w) => format!("{tech} · {}", ui.now("inspector-attr-when", &[("cond", w)])),
+                                    None => tech,
+                                }
+                            }>{attr_label(ui, &a.name)}{conditional.is_some().then_some(" ?")}</span>
                             {(!has_bound).then_some(input)}
                             <span class="attr-actions">
                                 {link}
@@ -867,6 +976,52 @@ mod tests {
     }
 }
 
+/// Nom lisible d'un attribut connu (le nom technique en info-bulle), sinon le nom lui-même.
+pub(crate) fn attr_label(ui: Ui, name: &str) -> String {
+    let key = match name {
+        "placeholder" => "attr-placeholder",
+        "aria-label" => "attr-aria-label",
+        "aria-hidden" => "attr-aria-hidden",
+        "aria-describedby" => "attr-aria-describedby",
+        "role" => "attr-role",
+        "title" => "attr-title",
+        "data-src" => "attr-data-src",
+        "src" => "attr-src",
+        "srcset" => "attr-srcset",
+        "loading" => "attr-loading",
+        "rel" => "attr-rel",
+        "download" => "attr-download",
+        "tabindex" => "attr-tabindex",
+        "type" => "attr-type",
+        "name" => "attr-name",
+        "value" => "attr-value",
+        "width" => "attr-width",
+        "height" => "attr-height",
+        "lang" => "attr-lang",
+        "datetime" => "attr-datetime",
+        "for" => "attr-for",
+        "action" => "attr-action",
+        "method" => "attr-method",
+        "allow" => "attr-allow",
+        "frameborder" => "attr-frameborder",
+        "viewBox" => "attr-viewbox",
+        "decoding" => "attr-decoding",
+        "fetchpriority" => "attr-fetchpriority",
+        _ => return name.to_string(),
+    };
+    ui.now(key, &[])
+}
+
+/// Attributs d'une vidéo réglés par son groupe.
+const VIDEO_ATTRS: &[&str] = &[
+    "src", "data-src", "poster", "preload", "controls", "autoplay", "muted", "playsinline", "loop",
+];
+/// Champs de formulaire et leurs attributs réglés par le groupe « Champ ».
+pub(crate) const FIELD_TAGS: &[&str] = &["input", "textarea", "select"];
+const FIELD_ATTRS: &[&str] = &[
+    "type", "name", "required", "placeholder", "autocomplete", "rows",
+];
+
 /// Attributs de Revel réglés par leurs propres contrôles.
 const MANAGED: &[&str] = &[
     "data-revel-tabs",
@@ -904,4 +1059,19 @@ const MANAGED: &[&str] = &[
     "data-revel-on",
     "data-revel-name",
     "data-revel-hidden",
+    "data-revel-cart",
+    "data-revel-cart-add",
+    "data-revel-product",
+    "data-revel-price",
+    "data-revel-cart-count",
+    "data-revel-cart-item",
+    "data-revel-cart-name",
+    "data-revel-cart-qty",
+    "data-revel-cart-price",
+    "data-revel-cart-plus",
+    "data-revel-cart-minus",
+    "data-revel-cart-remove",
+    "data-revel-cart-total",
+    "data-revel-cart-empty",
+    "data-revel-cart-field",
 ];

@@ -1,0 +1,22 @@
+{
+  "name": "[[Hôtel / gîte||Hotel / guest house]]",
+  "category": "travel",
+  "order": 100,
+  "description": "[[Hôtel ou maison d'hôtes : chambres en carrousel, services, avis, demande de réservation avec dates.||Hotel or guest house: rooms in a carousel, amenities, reviews, booking request with dates.]]",
+  "preview": "hero",
+  "palette": ["#f5f1ea", "#23312b", "#a3763d"],
+  "features": ["carousel", "components", "form", "dark", "smooth"],
+  "fonts": [ { "family": "Cormorant", "variants": ["500", "600"] }, { "family": "Karla", "variants": ["400", "500", "700"] } ],
+  "settings": { "smooth_scroll": true, "page_transition": "fade" },
+  "navbar": { "cta": "[[Réserver||Book]]", "cta_link": "#[[reserver||book]]" },
+  "site": {
+    "description": "[[Douze chambres face à la mer, un jardin et un petit spa.||Twelve rooms facing the sea, a garden and a small spa.]]",
+    "email": "[[sejour@exemple.fr||stay@example.com]]",
+    "phone": "[[04 94 00 00 00||+1 555 010 8899]]",
+    "address": "[[Chemin des Pins, 83990 Saint-Tropez||Ocean Road, Carmel-by-the-Sea, CA]]",
+    "menus": { "main": [ { "label": "[[Chambres||Rooms]]", "url": "#[[chambres||rooms]]" }, { "label": "[[La maison||The house]]", "url": "#[[maison||house]]" }, { "label": "[[Réserver||Book]]", "url": "#[[reserver||book]]" } ], "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "feature", "testimonial"],
+  "components": [ { "id": "room", "name": "[[Chambre||Room]]", "props": [ { "name": "image", "label": "Image", "type": "image", "default": "" }, { "name": "name", "label": "[[Nom||Name]]", "type": "text", "default": "" }, { "name": "price", "label": "[[Prix||Price]]", "type": "text", "default": "" }, { "name": "text", "label": "[[Description||Description]]", "type": "text", "default": "" } ] } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

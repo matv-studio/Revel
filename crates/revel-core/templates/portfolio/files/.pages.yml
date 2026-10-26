@@ -1,0 +1,27 @@
+media:
+  input: media
+  output: /media
+content:
+  - name: projects
+    label: "[[Projets||Projects]]"
+    type: collection
+    path: content/projects
+    filename: "{fields.slug}.md"
+    view:
+      fields: [title, client, year]
+      primary: title
+    fields:
+      - { name: title, label: "[[Titre||Title]]", type: string, required: true }
+      - { name: slug, label: "[[Adresse de la page||Page address]]", type: string, required: true }
+      - { name: order, label: "[[Ordre||Order]]", type: number }
+      - { name: client, label: Client, type: string }
+      - { name: year, label: "[[Année||Year]]", type: string }
+      - name: category
+        label: Discipline
+        type: select
+        options:
+          values: ["[[Identité||Identity]]", "[[Édition||Print]]", "[[Emballage||Packaging]]", "[[Direction artistique||Art direction]]"]
+      - { name: image, label: "[[Image de couverture||Cover image]]", type: image }
+      - { name: gallery, label: "[[Galerie||Gallery]]", type: image, list: true }
+      - { name: description, label: "[[Résumé||Summary]]", type: text }
+      - { name: body, label: "[[Texte||Text]]", type: rich-text }

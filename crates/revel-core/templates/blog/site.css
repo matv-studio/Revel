@@ -1,0 +1,49 @@
+:root { color-scheme: light; --bg: #fbf8f3; --surface: #ffffff; --text: #1d1b18; --muted: #6f685f; --line: rgba(29, 27, 24, 0.1); --line-strong: rgba(29, 27, 24, 0.24); --accent: #c2410c; --accent-ink: #ffffff; --font-display: "Fraunces", Georgia, "Times New Roman", serif; --font-body: "Inter", "Segoe UI", system-ui, sans-serif; --display-weight: 600; --display-tracking: -0.02em; --radius: 10px; --radius-lg: 18px; --radius-btn: 999px; --max: 1180px; --pad: clamp(20px, 4vw, 40px); --section: clamp(64px, 8vw, 112px); }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; --bg: #151311; --surface: #1d1a17; --text: #f1ece4; --muted: #a79f94; --line: rgba(241, 236, 228, 0.1); --line-strong: rgba(241, 236, 228, 0.24); --accent: #fb8a4c; --accent-ink: #151311; }
+}
+.intro { padding: clamp(56px, 8vw, 104px) 0 clamp(32px, 4vw, 48px); }
+.intro__title { max-width: 900px; text-wrap: balance; }
+.intro .lead { margin-top: 22px; }
+.featured { padding-bottom: clamp(48px, 6vw, 80px); }
+.featured__link { display: grid; grid-template-columns: 1.3fr 1fr; gap: clamp(28px, 4vw, 56px); align-items: center; text-decoration: none; }
+.featured__image { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: var(--radius-lg); }
+.featured__body { display: grid; gap: 16px; }
+.featured__title { font-size: clamp(30px, 3.6vw, 48px); text-wrap: balance; }
+.featured__meta, .post__meta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 14px; color: var(--muted); }
+.posts-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 32px; padding-top: 40px; border-top: 1px solid var(--line); }
+.posts-head .filters { margin: 0; }
+.posts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(24px, 3vw, 40px); }
+.posts .card__meta { margin-top: 4px; font-size: 13px; color: var(--muted); }
+.empty-note { padding: 40px 0; color: var(--muted); }
+.newsletter { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center; max-width: var(--max); margin: var(--section) auto; padding: clamp(36px, 5vw, 64px); border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); }
+.newsletter__title { font-size: clamp(26px, 3vw, 38px); }
+.newsletter__text { margin-top: 10px; color: var(--muted); }
+.newsletter__form { display: flex; gap: 10px; }
+.newsletter__form .field__input { flex: 1; }
+.article { padding: clamp(48px, 7vw, 96px) 0 0; }
+.article__head { max-width: 820px; margin: 0 auto; padding: 0 var(--pad); text-align: center; }
+.article__category { color: var(--accent); }
+.article__title { margin: 16px 0 20px; font-size: clamp(36px, 5.4vw, 68px); text-wrap: balance; }
+.article__summary { font-size: clamp(18px, 1.8vw, 22px); color: var(--muted); }
+.article__date { margin-top: 18px; font-size: 14px; color: var(--muted); }
+.article__cover { max-width: 1180px; margin: clamp(36px, 5vw, 64px) auto; padding: 0 var(--pad); }
+.article__cover img { width: 100%; aspect-ratio: 21 / 10; object-fit: cover; border-radius: var(--radius-lg); }
+.article__body { max-width: 700px; margin: 0 auto; padding: 0 var(--pad); font-size: 19px; line-height: 1.75; }
+.article__body p { margin: 0 0 1.3em; }
+.article__body h2 { margin: 1.6em 0 0.6em; font-size: 32px; }
+.article__body blockquote { margin: 1.6em 0; padding-left: 24px; border-left: 3px solid var(--accent); font-family: var(--font-display); font-size: 24px; line-height: 1.45; }
+.article__author { max-width: 700px; margin: 56px auto 0; padding: 0 var(--pad); }
+.author { display: flex; gap: 18px; align-items: center; padding: 28px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.author__photo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
+.author__name { font-weight: 600; }
+.author__bio { font-size: 15px; color: var(--muted); }
+.related { padding: var(--section) 0 0; }
+@media (max-width: 991px) {
+  .posts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .featured__link, .newsletter { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .posts { grid-template-columns: minmax(0, 1fr); }
+  .newsletter__form { flex-direction: column; }
+}

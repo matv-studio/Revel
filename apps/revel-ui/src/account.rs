@@ -65,7 +65,10 @@ pub fn GithubAccount() -> impl IntoView {
     let disconnect = move |_| {
         spawn_local(async move {
             match api::github_disconnect().await {
-                Ok(()) => ui.github.set(None),
+                Ok(()) => {
+                    ui.github.set(None);
+                    ui.gh_sites.set(None);
+                }
                 Err(e) => ui.fail(e),
             }
         });

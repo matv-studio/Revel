@@ -1,0 +1,23 @@
+{
+  "name": "Podcast",
+  "category": "editorial",
+  "order": 120,
+  "description": "[[Podcast : épisodes dans le CMS avec lecteur audio, page d'épisode commune, hôtes et abonnement.||Podcast: episodes in the CMS with an audio player, shared episode page, hosts and subscribe links.]]",
+  "preview": "hero",
+  "palette": ["#111014", "#f6f3ee", "#ffb020"],
+  "features": ["cms", "more", "components", "dark"],
+  "fonts": [ { "family": "Archivo", "variants": ["400", "600", "800"] } ],
+  "settings": { "smooth_scroll": true, "feeds": [ { "collection": "episodes", "path": "/feed.xml" } ] },
+  "navbar": { "cta": "[[S'abonner||Subscribe]]", "cta_link": "#[[ecouter||listen]]" },
+  "site": {
+    "description": "[[Chaque semaine, une personne raconte le métier qu'elle a choisi.||Every week, someone tells the story of the work they chose.]]",
+    "email": "[[micro@exemple.fr||mic@example.com]]",
+    "phone": "",
+    "address": "",
+    "menus": { "main": [ { "label": "[[Épisodes||Episodes]]", "url": "/" }, { "label": "[[Écouter||Listen]]", "url": "#[[ecouter||listen]]" } ], "social": [ { "label": "Spotify", "url": "https://open.spotify.com/" }, { "label": "Apple Podcasts", "url": "https://podcasts.apple.com/" }, { "label": "YouTube", "url": "https://www.youtube.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "member"],
+  "layouts": [ { "id": "base" }, { "id": "episode", "parent": "base" } ],
+  "collections": [ { "id": "episodes", "folder": "content/episodes", "path": "[[/episodes/{{ slug }}/||/episodes/{{ slug }}/]]", "layout": "episode", "sort": { "field": "date", "descending": true, "kind": "date" } } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Épisodes||Episodes]]" } ]
+}

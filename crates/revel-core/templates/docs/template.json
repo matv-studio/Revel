@@ -1,0 +1,21 @@
+{
+  "name": "Documentation",
+  "category": "business",
+  "order": 220,
+  "description": "[[Documentation ou centre d'aide : sommaire latéral, pages dans le CMS avec ordre et rubriques, sommaire de page qui suit la lecture.||Docs or help centre: sidebar, pages in the CMS with order and sections, on-page contents that follow your reading.]]",
+  "preview": "hero",
+  "palette": ["#ffffff", "#0f172a", "#2563eb"],
+  "features": ["cms", "spy", "dark"],
+  "fonts": [ { "family": "Inter", "variants": ["400", "500", "600", "700"] }, { "family": "JetBrains Mono", "variants": ["400"] } ],
+  "settings": {},
+  "navbar": { "cta": "GitHub", "cta_link": "https://github.com/" },
+  "site": {
+    "description": "[[Guide d'utilisation et référence de l'API.||User guide and API reference.]]",
+    "email": "[[aide@exemple.fr||help@example.com]]", "phone": "", "address": "",
+    "menus": { "main": [ { "label": "[[Guide||Guide]]", "url": "/" }, { "label": "[[Démarrer||Get started]]", "url": "/docs/[[demarrer||get-started]]/" } ], "social": [ { "label": "GitHub", "url": "https://github.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "card"],
+  "layouts": [ { "id": "base" }, { "id": "doc", "parent": "base" } ],
+  "collections": [ { "id": "docs", "folder": "content/docs", "path": "/docs/{{ slug }}/", "layout": "doc", "sort": { "field": "order", "descending": false } } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Guide||Guide]]" } ]
+}

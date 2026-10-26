@@ -1,0 +1,28 @@
+{
+  "name": "[[Page de liens||Link in bio]]",
+  "category": "personal",
+  "order": 210,
+  "description": "[[Une page pour tous vos liens : photo, présentation, boutons modifiables comme un menu, réseaux.||One page for all your links: photo, short bio, buttons edited like a menu, socials.]]",
+  "preview": "portrait",
+  "palette": ["#fdf2f8", "#3b0a2a", "#db2777"],
+  "features": ["menus", "dark"],
+  "fonts": [ { "family": "Poppins", "variants": ["400", "600"] } ],
+  "settings": {},
+  "site": {
+    "description": "[[Illustratrice et autrice. Nouveau livre en librairie le 3 novembre.||Illustrator and author. New book out November 3.]]",
+    "email": "[[bonjour@exemple.fr||hello@example.com]]", "phone": "", "address": "",
+    "menus": {
+      "main": [],
+      "links": [
+        { "label": "[[Mon nouveau livre||My new book]]", "url": "https://www.example.com/" },
+        { "label": "[[Boutique de tirages||Print shop]]", "url": "https://www.example.com/" },
+        { "label": "[[Ateliers de dessin||Drawing workshops]]", "url": "https://www.example.com/" },
+        { "label": "[[Lettre d'information||Newsletter]]", "url": "https://www.example.com/" }
+      ],
+      "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" }, { "label": "TikTok", "url": "https://www.tiktok.com/" }, { "label": "YouTube", "url": "https://www.youtube.com/" } ]
+    }
+  },
+  "kit": [],
+  "layouts": [ { "id": "base" } ],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

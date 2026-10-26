@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="{{ site.lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<x-use c="navbar" cta="[[Voir la boutique||Browse the shop]]" cta_link="[[/boutique/||/shop/]]"></x-use>
+{{ content | safe }}
+<a class="cart-link" href="[[/panier/||/cart/]]">@@icon:panier@@<span>[[Panier||Cart]]</span><span class="cart-link__count" data-revel-cart-count>0</span></a>
+<x-use c="footer"></x-use>
+</body>
+</html>

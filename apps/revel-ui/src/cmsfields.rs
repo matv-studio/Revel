@@ -9,6 +9,7 @@ use crate::site::capitalize;
 use crate::{Ui, icons};
 use leptos::ev;
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 use revel_protocol::{CmsCollection, CmsField};
 use serde_json::Value;
 use wasm_bindgen::JsCast;
@@ -36,6 +37,11 @@ pub enum Kind {
     Number,
     /// Liste de textes (pastilles).
     List,
+    /// Liste d'images ou de fichiers (galerie) : vignettes, ajout par le choix des médias,
+    /// retrait, ordre au glisser.
+    Gallery {
+        images: bool,
+    },
     Select {
         multiple: bool,
     },
@@ -76,6 +82,9 @@ pub fn kind_of(f: &CmsField, v: Option<&Value>) -> Kind {
         "reference" => Kind::Reference {
             multiple: multiple(f),
         },
+        "image" | "file" if many && all_strings(v) => Kind::Gallery {
+            images: t == "image",
+        },
         "string" | "text" | "image" | "file" | "list" if many || t == "list" => {
             if all_strings(v) {
                 Kind::List
@@ -115,7 +124,14 @@ fn infer(v: Option<&Value>) -> Kind {
     match v {
         Some(Value::Bool(_)) => Kind::Bool,
         Some(Value::Number(_)) => Kind::Number,
+        Some(Value::Array(a))
+            if !a.is_empty() && a.iter().all(|x| x.as_str().is_some_and(is_image)) =>
+        {
+            Kind::Gallery { images: true }
+        }
         Some(Value::Array(a)) if a.iter().all(Value::is_string) => Kind::List,
+        // Liste d'objets sans schéma (crédits d'un site importé…) : cartes, champs déduits.
+        Some(Value::Array(a)) if !a.is_empty() && a.iter().all(Value::is_object) => Kind::ObjectList,
         Some(Value::Array(_) | Value::Object(_)) => Kind::Json,
         Some(Value::String(s)) if is_date(s) => Kind::Date,
         Some(Value::String(s)) if is_image(s) => Kind::Image,
@@ -563,6 +579,32 @@ pub fn problem(ui: Ui, f: &CmsField, v: &Option<Value>) -> Option<String> {
 /// Ligne de la fiche : libellé (aide au survol, marque d'un champ obligatoire), contrôle,
 /// message d'erreur. `set` reçoit la nouvelle valeur (`None` : champ retiré) ; un objet affiche
 /// ses champs dans un cadre.
+/// Colonnes du tableau d'une collection, réglées depuis la fiche : épingle à côté de chaque champ
+/// (montré en colonne ou non).
+#[derive(Clone, Copy)]
+pub struct ColumnPins {
+    /// Champs montrés en colonnes.
+    pub shown: Signal<Vec<String>>,
+    /// Montre ou retire un champ des colonnes.
+    pub toggle: Callback<String>,
+}
+
+/// Épingle d'un champ : montré ou non en colonne du tableau.
+fn pin_button(ui: Ui, pins: ColumnPins, name: String) -> AnyView {
+    let n = StoredValue::new(name);
+    let on = move || pins.shown.with(|s| n.with_value(|n| s.contains(n)));
+    view! {
+        <button type="button" class="icon-btn icon-btn--small cms-pin" class:is-on=on
+            aria-pressed=move || on().to_string()
+            title=move || ui.now(if on() { "cms-pin-off" } else { "cms-pin-on" }, &[])
+            aria-label=move || ui.now(if on() { "cms-pin-off" } else { "cms-pin-on" }, &[])
+            on:click=move |e| { e.prevent_default(); e.stop_propagation(); pins.toggle.run(n.get_value()) }>
+            {move || if on() { icons::pin_filled() } else { icons::pin() }}
+        </button>
+    }
+    .into_any()
+}
+
 pub fn field_row(
     f: CmsField,
     value: Signal<Option<Value>>,
@@ -570,7 +612,24 @@ pub fn field_row(
     cols: Cols,
     aside: Option<AnyView>,
 ) -> AnyView {
+    field_row_pinned(f, value, set, cols, aside, None)
+}
+
+/// Ligne d'un champ, avec l'épingle des colonnes (champs de premier niveau de la fiche).
+pub fn field_row_pinned(
+    f: CmsField,
+    value: Signal<Option<Value>>,
+    set: Callback<Option<Value>>,
+    cols: Cols,
+    aside: Option<AnyView>,
+    pins: Option<ColumnPins>,
+) -> AnyView {
     let ui = expect_context::<Ui>();
+    let pin = pins.map(|p| pin_button(ui, p, f.name.clone()));
+    let aside = match (aside, pin) {
+        (Some(a), Some(p)) => Some(view! { {a}{p} }.into_any()),
+        (a, p) => a.or(p),
+    };
     let kind = kind_of(&f, value.get_untracked().as_ref());
     let label = label_of(&f);
     let help = f.description.clone();
@@ -583,6 +642,20 @@ pub fn field_row(
         </span>
     };
     if matches!(kind, Kind::ObjectList | Kind::Blocks) {
+        let mut f = f;
+        // Sans schéma : champs déduits des clés des éléments (dans l'ordre où ils apparaissent).
+        if kind == Kind::ObjectList
+            && f.fields.is_empty()
+            && let Some(Value::Array(a)) = value.get_untracked()
+        {
+            for o in a.iter().filter_map(Value::as_object) {
+                for k in o.keys() {
+                    if !f.fields.iter().any(|x| &x.name == k) {
+                        f.fields.push(CmsField { name: k.clone(), ..Default::default() });
+                    }
+                }
+            }
+        }
         return repeat_view(ui, f, kind, value, set, cols, head.into_any());
     }
     if kind == Kind::Object {
@@ -631,6 +704,8 @@ pub fn field_row(
             kind,
             Kind::Rich
                 | Kind::List
+                | Kind::Gallery { .. }
+                | Kind::Image
                 | Kind::Select { multiple: true }
                 | Kind::Reference { multiple: true }
         );
@@ -695,8 +770,12 @@ fn control(
             </span>
         }
         .into_any(),
-        Kind::Number => view! {
-            <input class="input" type="number" step="any" prop:value=text
+        Kind::Number => {
+            // Limites et pas du schéma (Pages CMS : `options.min`, `max`, `step`).
+            let opt = |k: &str| f.with_value(|f| f.options.get(k).and_then(Value::as_f64)).map(|n| n.to_string());
+            let (min, max, step) = (opt("min"), opt("max"), opt("step").unwrap_or_else(|| "any".into()));
+            view! {
+            <input class="input" type="number" step=step min=min max=max prop:value=text
                 on:change=move |e| {
                     let v = event_target_value(&e);
                     let n = v.trim().parse::<f64>().ok().and_then(|x| {
@@ -704,8 +783,9 @@ fn control(
                     });
                     commit.run(n.map(Value::Number).or(Some(Value::Null)));
                 }/>
+            }
+            .into_any()
         }
-        .into_any(),
         Kind::Date => {
             let time = f.with_value(time_of);
             let typed = f.with_value(|f| f.kind.is_some());
@@ -771,8 +851,16 @@ fn control(
             <TagsInput items=Signal::derive(strings) set=Callback::new(write_strings)/>
         }
         .into_any(),
+        Kind::Gallery { images } => {
+            let max = f.with_value(|f| f.options.get("max").and_then(Value::as_u64)).map(|m| m as usize);
+            view! {
+                <Gallery items=Signal::derive(strings) set=Callback::new(write_strings) images=images max=max/>
+            }
+            .into_any()
+        }
         Kind::Image => {
-            // Fichier du site : aperçu, adresse, choix parmi les médias.
+            // Fichier du site : vignette (clic : choisir, ✕ : retirer, fichier déposé : importé),
+            // adresse modifiable à côté (adresse d'un autre site possible).
             let images = f.with_value(|f| f.kind.as_deref() != Some("file"));
             let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
             let thumb = move || {
@@ -782,20 +870,64 @@ fn control(
                     .then(|| base.get().map(|b| crate::library::thumb_src(&b, t.trim())))
                     .flatten()
             };
+            let dropping = RwSignal::new(false);
+            let import = move |fs: Vec<web_sys::File>| {
+                let Some(p) = ui.site_path() else { return };
+                let Some(f) = fs.into_iter().next() else { return };
+                spawn_local(async move {
+                    let Ok(bytes) = crate::files::read(&f).await else { return };
+                    match crate::api::edit_import_media(&p, &f.name(), &bytes).await {
+                        Ok(m) => {
+                            ui.media_rev.update(|n| *n += 1);
+                            commit_text(m.url);
+                        }
+                        Err(e) => ui.fail(e),
+                    }
+                });
+            };
             view! {
-                <span class="field-line cms-media">
-                    {move || thumb().map(|src| view! { <img class="cms-thumb" src=src alt=""/> })}
-                    <input class="input" type="text" spellcheck="false" prop:value=text
+                <span class="cms-media" class:is-dropping=move || dropping.get()
+                    on:dragover=move |e: ev::DragEvent| if crate::files::has_files(&e) { e.prevent_default(); dropping.set(true) }
+                    on:dragleave=move |_| dropping.set(false)
+                    on:drop=move |e: ev::DragEvent| {
+                        dropping.set(false);
+                        if crate::files::has_files(&e) {
+                            e.prevent_default();
+                            import(crate::files::list(e.data_transfer().and_then(|dt| dt.files())));
+                        }
+                    }>
+                    <span class="cms-gallery__item cms-media__tile">
+                        <button type="button" class="cms-gallery__thumb"
+                            title=move || { let t = text(); if t.is_empty() { ui.now(if images { "picker-choose-image" } else { "picker-choose-media" }, &[]) } else { format!("{t}\n{}", ui.now("cms-gallery-replace", &[])) } }
+                            on:click=move |_| crate::library::pick_media(ui, images, None, commit_text)>
+                            {move || match thumb() {
+                                Some(src) => view! { <img src=src alt="" draggable="false"/> }.into_any(),
+                                None => view! { <span class="cms-gallery__file">{if images { icons::image() } else { icons::file() }}<span>{move || { let t = text(); t.rsplit('/').next().unwrap_or("").to_string() }}</span></span> }.into_any(),
+                            }}
+                        </button>
+                        {move || (!text().is_empty()).then(|| view! {
+                            <button type="button" class="cms-gallery__remove" title=ui.t("cms-gallery-remove") aria-label=ui.t("cms-gallery-remove")
+                                on:click=move |_| commit.run(None)>{icons::close()}</button>
+                        })}
+                    </span>
+                    <input class="input cms-media__path" type="text" spellcheck="false" prop:value=text
+                        placeholder=ui.t("cms-media-path")
                         on:change=move |e| commit_text(event_target_value(&e))/>
-                    <button type="button" class="icon-btn icon-btn--small"
-                        title=ui.t(if images { "picker-choose-image" } else { "picker-choose-media" })
-                        aria-label=ui.t(if images { "picker-choose-image" } else { "picker-choose-media" })
-                        on:click=move |_| crate::library::pick_media(ui, images, None, commit_text)>
-                        {crate::icons::image()}</button>
                 </span>
             }
             .into_any()
         }
+        // Adresse (lien de paiement, vidéo…) : vérifiée et ouvrable d'un clic.
+        Kind::Text if text().starts_with("http://") || text().starts_with("https://") => view! {
+            <span class="field-line">
+                <input class="input" type="url" spellcheck="false" prop:value=text
+                    on:change=move |e| commit_text(event_target_value(&e))/>
+                <button type="button" class="icon-btn icon-btn--small" title=ui.t("siteinfo-open-link") aria-label=ui.t("siteinfo-open-link")
+                    on:click=move |_| { let u = text(); spawn_local(async move { let _ = crate::api::open_external(&u).await; }); }>
+                    {icons::external()}</button>
+            </span>
+        }
+        .into_any(),
         Kind::Text => view! {
             <input class="input" type="text" spellcheck="true" prop:value=text
                 on:change=move |e| commit_text(event_target_value(&e))/>
@@ -850,10 +982,32 @@ fn control(
             let label = move |v: &str| {
                 options.with(|o| o.iter().find(|(x, _)| x == v).map(|(_, l)| l.clone())).unwrap_or_else(|| v.to_string())
             };
+            let dragging = RwSignal::new(None::<usize>);
+            let move_item = move |from: usize, to: usize| {
+                let mut cur = strings();
+                if from < cur.len() && to < cur.len() && from != to {
+                    let it = cur.remove(from);
+                    cur.insert(to, it);
+                    write_strings(cur);
+                }
+            };
             view! {
                 <div class="tags-input cms-refs">
                     {move || strings().into_iter().enumerate().map(|(i, v)| view! {
-                        <span class="chip chip--tag" title=v.clone()>{label(&v)}
+                        <span class="chip chip--tag" data-value=v.clone() title=format!("{v}\n{}", ui.now("cms-ref-order-help", &[])) draggable="true" tabindex="0"
+                            class:is-dragging=move || dragging.get() == Some(i)
+                            on:dragstart=move |e: ev::DragEvent| { dragging.set(Some(i)); if let Some(dt) = e.data_transfer() { let _ = dt.set_data("text/plain", ""); } }
+                            on:dragend=move |_| dragging.set(None)
+                            on:dragover=move |e: ev::DragEvent| if dragging.get_untracked().is_some() { e.prevent_default() }
+                            on:drop=move |e: ev::DragEvent| if let Some(from) = dragging.get_untracked() { e.prevent_default(); dragging.set(None); move_item(from, i) }
+                            on:keydown=move |e: ev::KeyboardEvent| {
+                                if !e.alt_key() { return; }
+                                match e.key().as_str() {
+                                    "ArrowLeft" | "ArrowUp" if i > 0 => { e.prevent_default(); move_item(i, i - 1) }
+                                    "ArrowRight" | "ArrowDown" => { e.prevent_default(); move_item(i, i + 1) }
+                                    _ => {}
+                                }
+                            }>{label(&v)}
                             <button type="button" class="chip-x" title=ui.t("action-delete") aria-label=ui.t("action-delete")
                                 on:click=move |_| {
                                     let mut cur = strings();
@@ -881,6 +1035,17 @@ fn control(
                             </select>
                         })
                     }}
+                    // Nombre choisi sur le maximum du schéma ; liste pleine : dit pourquoi on ne peut plus ajouter.
+                    {move || max.map(|m| {
+                        let n = strings().len();
+                        let full = n >= m;
+                        let tip = if full { ui.now("cms-ref-full", &[("max", m.to_string())]) } else { String::new() };
+                        view! {
+                            <span class="cms-refs-count muted small" class:is-full=full title=tip>
+                                {format!("{n} / {m}")}
+                            </span>
+                        }
+                    })}
                 </div>
             }
             .into_any()
@@ -922,32 +1087,248 @@ fn SelectOne(
 #[component]
 fn TagsInput(items: Signal<Vec<String>>, set: Callback<Vec<String>>) -> impl IntoView {
     let ui = expect_context::<Ui>();
+    let dragging = RwSignal::new(None::<usize>);
+    let input = NodeRef::<leptos::html::Input>::new();
+    // Texte saisi ajouté (Entrée, virgule, sortie du champ) ; un doublon est signalé, pas perdu.
+    let add_text = move |el: &web_sys::HtmlInputElement| {
+        let t = el.value().trim().trim_end_matches(',').trim().to_string();
+        if t.is_empty() {
+            return;
+        }
+        let mut v = items.get_untracked();
+        if v.contains(&t) {
+            el.set_custom_validity(&ui.now("cms-tag-duplicate", &[]));
+            el.report_validity();
+            return;
+        }
+        el.set_custom_validity("");
+        el.set_value("");
+        v.push(t);
+        set.run(v);
+    };
+    let move_item = move |from: usize, to: usize| {
+        let mut v = items.get_untracked();
+        if from < v.len() && to < v.len() && from != to {
+            let it = v.remove(from);
+            v.insert(to, it);
+            set.run(v);
+        }
+    };
     view! {
         <div class="tags-input">
-            {move || items.get().into_iter().enumerate().map(|(i, t)| view! {
-                <span class="chip chip--tag">{t}
-                    <button type="button" class="chip-x" title=ui.t("action-delete") aria-label=ui.t("action-delete")
-                        on:click=move |e| {
-                            e.prevent_default();
-                            let mut v = items.get_untracked();
-                            if i < v.len() { v.remove(i); }
-                            set.run(v);
-                        }>{icons::close()}</button>
-                </span>
-            }).collect_view()}
-            <input class="tags-add" type="text" placeholder=ui.t("cms-tag-add")
+            {move || {
+                let list = items.get();
+                let n = list.len();
+                list.into_iter().enumerate().map(|(i, t)| {
+                    let t2 = t.clone();
+                    view! {
+                        <span class="chip chip--tag" tabindex="0" draggable="true" title=ui.t("cms-tag-help")
+                            class:is-dragging=move || dragging.get() == Some(i)
+                            on:dragstart=move |e: ev::DragEvent| {
+                                dragging.set(Some(i));
+                                if let Some(dt) = e.data_transfer() { let _ = dt.set_data("text/plain", ""); }
+                            }
+                            on:dragend=move |_| dragging.set(None)
+                            on:dragover=move |e: ev::DragEvent| if dragging.get_untracked().is_some() { e.prevent_default() }
+                            on:drop=move |e: ev::DragEvent| {
+                                if let Some(from) = dragging.get_untracked() { e.prevent_default(); dragging.set(None); move_item(from, i) }
+                            }
+                            // Double-clic : la pastille repasse dans le champ pour être corrigée.
+                            on:dblclick=move |_| {
+                                let mut v = items.get_untracked();
+                                if i < v.len() { v.remove(i); set.run(v); }
+                                if let Some(el) = input.get_untracked() { el.set_value(&t2); let _ = el.focus(); }
+                            }
+                            on:keydown=move |e: ev::KeyboardEvent| {
+                                if !e.alt_key() { return; }
+                                let to = match e.key().as_str() {
+                                    "ArrowLeft" | "ArrowUp" if i > 0 => i - 1,
+                                    "ArrowRight" | "ArrowDown" if i + 1 < n => i + 1,
+                                    _ => return,
+                                };
+                                e.prevent_default();
+                                move_item(i, to);
+                            }>{t}
+                            <button type="button" class="chip-x" title=ui.t("action-delete") aria-label=ui.t("action-delete")
+                                on:click=move |e| {
+                                    e.prevent_default();
+                                    let mut v = items.get_untracked();
+                                    if i < v.len() { v.remove(i); }
+                                    set.run(v);
+                                }>{icons::close()}</button>
+                        </span>
+                    }
+                }).collect_view()
+            }}
+            <input class="tags-add" type="text" placeholder=ui.t("cms-tag-add") node_ref=input
                 on:keydown=move |e: ev::KeyboardEvent| {
-                    if e.key() != "Enter" { return; }
+                    if e.key() != "Enter" && e.key() != "," { return; }
                     e.prevent_default();
-                    let input = event_target::<web_sys::HtmlInputElement>(&e);
-                    let t = input.value().trim().to_string();
-                    if t.is_empty() { return; }
-                    input.set_value("");
-                    let mut v = items.get_untracked();
-                    if !v.contains(&t) { v.push(t); }
-                    set.run(v);
-                }/>
+                    add_text(&event_target::<web_sys::HtmlInputElement>(&e));
+                }
+                on:input=move |e| { event_target::<web_sys::HtmlInputElement>(&e).set_custom_validity(""); }
+                on:blur=move |e| { add_text(&event_target::<web_sys::HtmlInputElement>(&e)); }/>
         </div>
+    }
+}
+
+/// Texte sans balises HTML (résumé d'une carte repliée).
+fn strip_tags(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut inside = false;
+    for c in s.chars() {
+        match c {
+            '<' => inside = true,
+            '>' => inside = false,
+            c if !inside => out.push(c),
+            _ => {}
+        }
+    }
+    out.trim().to_string()
+}
+
+/// Liste d'images (galerie) : vignettes dans l'ordre de la liste ; clic : remplacer ; ✕ : retirer ;
+/// glisser une vignette (ou Alt+flèches) : changer l'ordre ; « Ajouter » : plusieurs médias à la
+/// fois ; fichiers déposés : importés dans les médias puis ajoutés.
+#[component]
+fn Gallery(
+    items: Signal<Vec<String>>,
+    set: Callback<Vec<String>>,
+    images: bool,
+    max: Option<usize>,
+) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
+    let dragging = RwSignal::new(None::<usize>);
+    let over = RwSignal::new(None::<usize>);
+    let dropping = RwSignal::new(false);
+    let full = move || max.is_some_and(|m| items.with(Vec::len) >= m);
+    let move_item = move |from: usize, to: usize| {
+        let mut v = items.get_untracked();
+        if from < v.len() && to < v.len() && from != to {
+            let it = v.remove(from);
+            v.insert(to, it);
+            set.run(v);
+        }
+    };
+    let append = move |urls: Vec<String>| {
+        let mut v = items.get_untracked();
+        for u in urls {
+            if max.is_some_and(|m| v.len() >= m) {
+                break;
+            }
+            if !v.contains(&u) {
+                v.push(u);
+            }
+        }
+        set.run(v);
+    };
+    let import = move |fs: Vec<web_sys::File>| {
+        let Some(p) = ui.site_path() else { return };
+        spawn_local(async move {
+            let mut urls = Vec::new();
+            for f in fs {
+                let Ok(bytes) = crate::files::read(&f).await else { continue };
+                match crate::api::edit_import_media(&p, &f.name(), &bytes).await {
+                    Ok(m) => urls.push(m.url),
+                    Err(e) => ui.fail(e),
+                }
+            }
+            if !urls.is_empty() {
+                ui.media_rev.update(|n| *n += 1);
+                append(urls);
+            }
+        });
+    };
+    view! {
+        <div class="cms-gallery" class:is-dropping=move || dropping.get() role="list"
+            on:dragover=move |e: ev::DragEvent| {
+                if crate::files::has_files(&e) { e.prevent_default(); dropping.set(true); }
+            }
+            on:dragleave=move |_| dropping.set(false)
+            on:drop=move |e: ev::DragEvent| {
+                dropping.set(false);
+                if crate::files::has_files(&e) {
+                    e.prevent_default();
+                    import(crate::files::list(e.data_transfer().and_then(|dt| dt.files())));
+                }
+            }>
+            {move || {
+                let v = items.get();
+                let n = v.len();
+                v.into_iter().enumerate().map(|(i, u)| {
+                    let name = u.rsplit('/').next().unwrap_or(&u).to_string();
+                    let is_img = images || is_image(&u);
+                    let src = {
+                        let u = u.clone();
+                        move || base.get().map(|b| crate::library::thumb_src(&b, u.trim()))
+                    };
+                    view! {
+                        <div class="cms-gallery__item" role="listitem" draggable="true"
+                            class:is-dragging=move || dragging.get() == Some(i)
+                            class:is-over=move || over.get() == Some(i) && dragging.get().is_some_and(|d| d != i)
+                            on:dragstart=move |e: ev::DragEvent| {
+                                dragging.set(Some(i));
+                                if let Some(dt) = e.data_transfer() {
+                                    dt.set_effect_allowed("move");
+                                    let _ = dt.set_data("text/plain", "");
+                                }
+                            }
+                            on:dragend=move |_| { dragging.set(None); over.set(None); }
+                            on:dragover=move |e: ev::DragEvent| {
+                                if dragging.get_untracked().is_some() { e.prevent_default(); over.set(Some(i)); }
+                            }
+                            on:drop=move |e: ev::DragEvent| {
+                                if let Some(from) = dragging.get_untracked() {
+                                    e.prevent_default();
+                                    e.stop_propagation();
+                                    dragging.set(None);
+                                    over.set(None);
+                                    move_item(from, i);
+                                }
+                            }>
+                            <button type="button" class="cms-gallery__thumb" title=format!("{u}\n{}", ui.now("cms-gallery-replace", &[]))
+                                aria-label=ui.tx("cms-gallery-item", &[("n", (i + 1).to_string()), ("name", name.clone())])
+                                on:click=move |_| crate::library::pick_media(ui, images, None, move |url| {
+                                    let mut v = items.get_untracked();
+                                    if i < v.len() { v[i] = url; set.run(v); }
+                                })
+                                on:keydown=move |e: ev::KeyboardEvent| {
+                                    if !e.alt_key() { return; }
+                                    let to = match e.key().as_str() {
+                                        "ArrowLeft" | "ArrowUp" if i > 0 => i - 1,
+                                        "ArrowRight" | "ArrowDown" if i + 1 < n => i + 1,
+                                        _ => return,
+                                    };
+                                    e.prevent_default();
+                                    move_item(i, to);
+                                }>
+                                {if is_img {
+                                    view! { {move || src().map(|s| view! { <img src=s alt="" draggable="false" loading="lazy"/> })} }.into_any()
+                                } else {
+                                    view! { <span class="cms-gallery__file">{icons::file()}<span>{name.clone()}</span></span> }.into_any()
+                                }}
+                            </button>
+                            <span class="cms-gallery__index" aria-hidden="true">{i + 1}</span>
+                            <button type="button" class="cms-gallery__remove" title=ui.t("cms-gallery-remove") aria-label=ui.t("cms-gallery-remove")
+                                on:click=move |_| {
+                                    let mut v = items.get_untracked();
+                                    if i < v.len() { v.remove(i); set.run(v); }
+                                }>{icons::close()}</button>
+                        </div>
+                    }
+                }).collect_view()
+            }}
+            <button type="button" class="cms-gallery__add" disabled=full
+                title=ui.t("cms-gallery-add-help") on:click=move |_| crate::library::pick_media_many(ui, images, None, append)>
+                {icons::plus()}<span>{ui.t("cms-gallery-add")}</span>
+            </button>
+        </div>
+        <p class="cms-gallery__hint muted">{move || {
+            let n = items.with(Vec::len);
+            let count = ui.tx(if images { "cms-gallery-count" } else { "cms-gallery-count-files" }, &[("count", n.to_string())]);
+            if n > 1 { format!("{count} · {}", ui.now("cms-gallery-hint", &[])) } else { count }
+        }}</p>
     }
 }
 
@@ -1038,9 +1419,38 @@ fn repeat_view(
             write(list);
         }
     };
+    // Cartes repliées (résumé sur une ligne) ; carte glissée (ordre).
+    let folded = RwSignal::new(std::collections::BTreeSet::<usize>::new());
+    let dragging = RwSignal::new(None::<usize>);
+    let summary = |item: &Value| -> String {
+        item.as_object()
+            .and_then(|o| {
+                o.iter()
+                    .filter(|(k, _)| !k.starts_with('_'))
+                    .find_map(|(_, v)| v.as_str().filter(|s| !s.trim().is_empty()).map(str::to_string))
+            })
+            .map(|s| {
+                let t: String = s.split_whitespace().collect::<Vec<_>>().join(" ");
+                let t = strip_tags(&t);
+                if t.chars().count() > 60 { format!("{}…", t.chars().take(60).collect::<String>()) } else { t }
+            })
+            .unwrap_or_default()
+    };
     view! {
         <div class="cms-item-field cms-repeat" data-field=name>
-            {head}
+            <div class="cms-field-head">
+                {head}
+                {move || (items().len() > 1).then(|| {
+                    let all = move || folded.with(|f| f.len() >= items().len());
+                    view! {
+                        <button type="button" class="icon-btn icon-btn--small cms-repeat-fold-all"
+                            title=move || ui.now(if all() { "cms-repeat-unfold-all" } else { "cms-repeat-fold-all" }, &[])
+                            aria-label=move || ui.now(if all() { "cms-repeat-unfold-all" } else { "cms-repeat-fold-all" }, &[])
+                            on:click=move |_| if all() { folded.set(Default::default()) } else { folded.set((0..items().len()).collect()) }>
+                            {move || if all() { icons::chevron_down() } else { icons::chevron_up() }}</button>
+                    }
+                })}
+            </div>
             {move || {
                 let list = items();
                 let n = list.len();
@@ -1112,10 +1522,41 @@ fn repeat_view(
                             }.into_any()
                         }
                     };
+                    let short = summary(&item);
+                    let duplicate = move |_| {
+                        let mut list = current();
+                        if let Some(it) = list.get(i).cloned() {
+                            list.insert(i + 1, it);
+                            write(list);
+                        }
+                    };
+                    let is_folded = move || folded.with(|f| f.contains(&i));
                     view! {
-                        <div class="cms-repeat-item" data-index=i>
+                        <div class="cms-repeat-item" data-index=i class:is-folded=is_folded
+                            class:is-dragging=move || dragging.get() == Some(i)
+                            on:dragover=move |e: ev::DragEvent| if dragging.get_untracked().is_some() { e.prevent_default() }
+                            on:drop=move |e: ev::DragEvent| if let Some(from) = dragging.get_untracked() {
+                                e.prevent_default();
+                                dragging.set(None);
+                                let mut list = current();
+                                if from < list.len() && i < list.len() && from != i {
+                                    let it = list.remove(from);
+                                    list.insert(i, it);
+                                    write(list);
+                                }
+                            }>
                             <div class="cms-repeat-head">
-                                <span class="cms-repeat-title">{title}</span>
+                                <span class="cms-repeat-grip" draggable="true" title=ui.t("cms-repeat-drag")
+                                    on:dragstart=move |e: ev::DragEvent| { dragging.set(Some(i)); if let Some(dt) = e.data_transfer() { let _ = dt.set_data("text/plain", ""); } }
+                                    on:dragend=move |_| dragging.set(None)>{icons::grip()}</span>
+                                <button type="button" class="cms-repeat-toggle" aria-expanded=move || (!is_folded()).to_string()
+                                    on:click=move |_| folded.update(|f| { if !f.remove(&i) { f.insert(i); } })>
+                                    {move || if is_folded() { icons::chevron_right() } else { icons::chevron_down() }}
+                                    <span class="cms-repeat-title">{title}</span>
+                                    {move || is_folded().then(|| view! { <span class="cms-repeat-summary muted">{short.clone()}</span> })}
+                                </button>
+                                <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-duplicate") aria-label=ui.t("cms-repeat-duplicate")
+                                    on:click=duplicate>{icons::copy()}</button>
                                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-up") aria-label=ui.t("cms-repeat-up")
                                     disabled={i == 0} on:click=move |_| move_to(i.saturating_sub(1))>{icons::arrow_up()}</button>
                                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-down") aria-label=ui.t("cms-repeat-down")
@@ -1123,7 +1564,7 @@ fn repeat_view(
                                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-remove") aria-label=ui.t("cms-repeat-remove")
                                     on:click=remove>{icons::trash()}</button>
                             </div>
-                            <div class="cms-repeat-body">{body}</div>
+                            <div class="cms-repeat-body" hidden=is_folded>{body}</div>
                         </div>
                     }
                 }).collect_view()

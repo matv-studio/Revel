@@ -34,6 +34,10 @@
   const installedPacks = new Set(), offPacks = new Set();
   let lastPacks = [];
   let github = params.get("github") || null;
+  const ghSites = [
+    { repo: "matv-studio/atelier-lumiere", name: "atelier-lumiere", title: "Atelier Lumière", private: true, clone_url: "https://github.com/matv-studio/atelier-lumiere.git", html_url: "https://github.com/matv-studio/atelier-lumiere", description: null, pushed_at: "2026-10-25T09:12:00Z", size_kb: 18432, path: null },
+    { repo: "matv-studio/alunites-revel-lab", name: "alunites-revel-lab", title: "Alunites", private: false, clone_url: "https://github.com/matv-studio/alunites-revel-lab.git", html_url: "https://github.com/matv-studio/alunites-revel-lab", description: null, pushed_at: "2026-10-21T08:00:00Z", size_kb: 402000, path: null, local: true },
+  ];
   const ghProfile = [{ id: "h2", name: "GitHub Pages", environment: "production", target: { kind: "github_pages", repo: "matv-studio/alunites-revel-lab", branch: "gh-pages", custom_domain: null } }, true];
   const recette = [{ id: "h1", name: "Recette OVH", environment: "staging", target: { kind: "sftp", host: "ftp.cluster000.hosting.ovh.net", port: 22, user: "monsite-deploy", remote_dir: "recette-v4k8/", known_host_key: null } }, true];
   // `hosts2=1` : site public et version de test ; `nosecret=1` : mot de passe du site public absent.
@@ -67,7 +71,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_incoming", "versions_receive", "versions_resolve", "versions_resolve_items", "versions_set_shared", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data"];
+  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_incoming", "versions_receive", "versions_resolve", "versions_resolve_items", "versions_set_shared", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data", "media_online", "media_localize"];
   // Nom de dossier d'un nouveau site (comme revel_core::site_folder, sans les suffixes).
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).
@@ -138,10 +142,43 @@
       case "recent_sites": return state.recents;
       case "forget_site":
       case "delete_site": state.recents = state.recents.filter((r) => r.path !== args.path); return null;
-      case "open_site": return site;
+      case "open_site": {
+        // Site téléchargé depuis GitHub (D-127) : ajouté aux sites connus.
+        const gh = ghSites.find((g) => args.path.endsWith("\\" + g.name));
+        if (gh) {
+          gh.path = args.path;
+          state.recents = [{ path: args.path, name: gh.title, opened_at: new Date().toISOString() }, ...state.recents.filter((r) => r.path !== args.path)];
+          return { ...site, name: gh.title, path: args.path };
+        }
+        return site;
+      }
+      // Sites du compte GitHub (D-127) : un site à télécharger, le cobaye déjà présent.
+      case "github_sites": {
+        if (!github) throw { key: "error-github-signed-out", args: [] };
+        await wait(150);
+        const here = state.recents[0]?.path || null;
+        return ghSites.map((g) => ({ ...g, path: g.local ? here : g.path }));
+      }
+      case "github_sync_all": {
+        await wait(params.get("ghslow") ? 1500 : 200);
+        return { updated: [state.recents[0]?.name || "Alunites"], sent: [], waiting: params.get("ghwaiting") ? ["Atelier"] : [], failed: [] };
+      }
       case "default_sites_dir": return state.settings.projects_dir || "C:\\Program Files\\Revel\\Projects";
       case "site_folder": return args.parent + "\\" + slug(args.name || "");
-      case "create_site": return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
+      // Modèles de site (D-128) : quelques-uns, sans aperçu en ligne.
+      case "site_templates": {
+        const fr = (args.lang || "fr").startsWith("fr");
+        const t = (id, cat, nf, ne, pal, pages) => ({ id, category: cat, name: fr ? nf : ne, description: fr ? `Modèle ${nf}` : `${ne} template`, preview: null, palette: pal, features: [], pages });
+        return [
+          t("showcase", "business", "Vitrine", "Showcase", ["#f6f4ef", "#14130f", "#3048d4"], 4),
+          t("agency", "business", "Agence", "Agency", ["#f4f4f0", "#0e0e10", "#c6f432"], 2),
+          t("blog", "editorial", "Blog", "Blog", ["#fbf8f3", "#1d1b18", "#c2410c"], 2),
+          t("shop", "commerce", "Boutique", "Shop", ["#f3eee6", "#2b2420", "#9a5b34"], 4),
+          t("restaurant", "food", "Restaurant", "Restaurant", ["#14110e", "#f2e9dc", "#d4a056"], 2),
+          t("portfolio", "creative", "Portfolio", "Portfolio", ["#efeeea", "#111111", "#ff4f1f"], 2),
+        ];
+      }
+      case "create_site": window.__revelCreated = args; return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
       case "cms_collections": return cms;
       case "cms_folders": return [];
       case "app_info": return ["0.6.9", 3];
@@ -378,6 +415,9 @@
       case "preview_url": return "data:text/html;charset=utf-8," + encodeURIComponent('<!doctype html><title>Aperçu</title><body style="margin:0;font:16px system-ui;display:grid;place-items:center;height:100vh;background:#f4f1ea;color:#222"><h1>Alunites</h1></body>') + "#";
       case "reveal_path": return null;
       case "edit_media": return [];
+      case "media_online": return [];
+      case "readable_data": return { values: (args.paths || []).map(() => null), labels: (args.paths || []).map(() => null), entries: [] };
+      case "fonts": return [];
       case "edit_locale_data": return [];
       case "export_site": {
         const ch = args.onEvent;

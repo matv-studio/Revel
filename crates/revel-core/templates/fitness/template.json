@@ -1,0 +1,22 @@
+{
+  "name": "[[Salle de sport / coach||Gym / coach]]",
+  "category": "services",
+  "order": 160,
+  "description": "[[Salle de sport ou coach : cours de la semaine en onglets, coachs, abonnements, séance d'essai.||Gym or personal coach: weekly classes in tabs, coaches, memberships, free trial.]]",
+  "preview": "hero",
+  "palette": ["#0c0c0c", "#f4f4f4", "#d7ff3c"],
+  "features": ["tabs", "components", "stripe", "form", "dark"],
+  "fonts": [ { "family": "Anton", "variants": ["400"] }, { "family": "Inter", "variants": ["400", "600"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Séance d'essai||Free trial]]", "cta_link": "#[[essai||trial]]" },
+  "site": {
+    "description": "[[Cours collectifs, préparation physique et coaching individuel, 7 jours sur 7.||Group classes, strength training and personal coaching, 7 days a week.]]",
+    "email": "[[club@exemple.fr||club@example.com]]",
+    "phone": "[[04 72 00 00 00||+1 555 010 3311]]",
+    "address": "[[22 rue Garibaldi, 69003 Lyon||22 Grand Street, Brooklyn, NY]]",
+    "join": "https://buy.stripe.com/",
+    "menus": { "main": [ { "label": "[[Cours||Classes]]", "url": "#[[cours||classes]]" }, { "label": "Coachs", "url": "#coachs" }, { "label": "[[Tarifs||Pricing]]", "url": "#[[tarifs||pricing]]" } ], "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" }, { "label": "TikTok", "url": "https://www.tiktok.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "member", "price"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

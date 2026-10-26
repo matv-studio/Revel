@@ -671,7 +671,7 @@ impl Dock {
     }
 }
 
-fn capture(e: &ev::PointerEvent) {
+pub(crate) fn capture(e: &ev::PointerEvent) {
     if let Some(t) = e
         .current_target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
@@ -680,7 +680,7 @@ fn capture(e: &ev::PointerEvent) {
     }
 }
 
-fn dragging_cursor(cursor: Option<&str>) {
+pub(crate) fn dragging_cursor(cursor: Option<&str>) {
     if let Some(root) = document().document_element() {
         match cursor {
             Some(c) => {

@@ -57,9 +57,19 @@ try {
   await page.keyboard.type('Atelier Lumière');
   await page.waitForFunction(() => /atelier-lumiere$/.test(document.querySelector('.path-value')?.textContent || ''));
   check('nouveau site : dossier proposé d\'après le nom', true, await page.textContent('.path-value'));
-  await page.click('.template-choice[data-template="new-site-template-showcase"]');
-  check('nouveau site : modèles proposés (vide, vitrine, blog)', (await page.$$('.template-choice')).length === 3
-    && (await page.getAttribute('.template-choice[data-template="new-site-template-showcase"]', 'aria-checked')) === 'true');
+  // Galerie des modèles (D-128) : catégories, carte choisie, présentation du modèle.
+  await page.waitForSelector('.template-card[data-template="showcase"]');
+  const allCards = (await page.$$('.template-card')).length;
+  await page.click('.cat-chip[data-cat="commerce"]');
+  await page.waitForFunction(() => document.querySelectorAll('.template-card').length === 1);
+  await page.click('.template-card[data-template="shop"]');
+  const chosenName = (await page.textContent('.new-site__chosen-name')).trim();
+  await page.click('.new-site__cats .cat-chip >> nth=0');
+  await page.click('.template-card[data-template="showcase"]');
+  await page.click('.site-bg button[data-bg="dark"]');
+  check('nouveau site : galerie des modèles, catégorie, modèle et couleurs choisis', allCards === 7 && chosenName === 'Boutique'
+    && (await page.getAttribute('.template-card[data-template="showcase"]', 'aria-checked')) === 'true', `${allCards} · ${chosenName}`);
+  if (shots) await page.screenshot({ path: `${shots}/nouveau-site.png` });
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('.dialog--form'));
   // Accueil : supprimer un site (confirmation, dossier mis à la corbeille ; simulé ici).
@@ -89,6 +99,30 @@ try {
     const msg = (await page.textContent('.notice--error')).trim();
     check('accueil : dépôt de fichiers montré, refusé (dossier attendu)', /dossier de site/.test(msg), msg);
     await page.click('.notice--error .icon-btn');
+  }
+  // Sites du compte GitHub sur un autre ordinateur (D-127) : site absent montré à part,
+  // téléchargé dans le dossier des sites (devient un site connu, badge GitHub), copies mises à
+  // jour par « Synchroniser » (bilan).
+  {
+    const gh = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    gh.on('pageerror', (e) => errors.push(e.message));
+    await gh.addInitScript(mock);
+    await gh.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&github=matv-studio&bridge=${encodeURIComponent(bridge)}`);
+    await gh.waitForSelector('.site-card--remote[data-repo="matv-studio/atelier-lumiere"]');
+    const remoteOnly = (await gh.$$('.site-card--remote')).length === 1;
+    await gh.waitForSelector('.site-card .site-badge:not(.site-badge--remote)');
+    if (shots) await gh.screenshot({ path: `${shots}/github-sites.png` });
+    const card = gh.locator('.site-card--remote[data-repo="matv-studio/atelier-lumiere"]');
+    await card.hover();
+    await card.locator('.gh-download').click();
+    await gh.waitForSelector('.site-card--remote', { state: 'detached' });
+    await gh.waitForFunction(() => [...document.querySelectorAll('.site-card.site-open')].some((c) => /Atelier Lumière/.test(c.textContent) && c.dataset.site.endsWith('atelier-lumiere')));
+    check('GitHub : site absent montré, téléchargé dans le dossier des sites', remoteOnly);
+    await gh.click('.gh-sync');
+    await gh.waitForSelector('.gh-note');
+    const note = (await gh.textContent('.gh-note')).trim();
+    check('GitHub : synchronisation de toutes les copies, bilan', /1 mis à jour/.test(note), note);
+    await gh.close();
   }
   // Import (étape 7), une boîte pour toutes les sources : dossier de pages HTML examiné puis
   // importé (bilan dans la boîte) ; export Webflow et contenus de son CMS (CSV ou API) ; site
@@ -1637,8 +1671,8 @@ try {
       const attrB = async () => (nodeById(await siteB(), secB).attrs || []).find((a) => a.name === 'aria-label')?.value;
       await page.fill('.insp-attrs > input.input--mono', 'aria-label=Écrire à');
       await page.press('.insp-attrs > input.input--mono', 'Enter');
-      await page.waitForSelector('.attr-row:has(.attr-name:text-is("aria-label")) .attr-actions .icon-btn >> nth=0');
-      await page.click('.attr-row:has(.attr-name:text-is("aria-label")) .attr-actions .icon-btn >> nth=0');
+      await page.waitForSelector('.attr-row[data-attr="aria-label"] .attr-actions .icon-btn >> nth=0');
+      await page.click('.attr-row[data-attr="aria-label"] .attr-actions .icon-btn >> nth=0');
       await page.waitForSelector('.bound-attr');
       let v1 = '';
       for (let i = 0; i < 20 && !(v1 || '').includes('{{'); i++) { await page.waitForTimeout(200); v1 = await attrB(); }
@@ -1648,7 +1682,7 @@ try {
       for (let i = 0; i < 20 && !(v2 || '').includes('{% if'); i++) { await page.waitForTimeout(200); v2 = await attrB(); }
       check('attribut relié : seulement si la valeur est remplie', /^\{% if [\w.]+ %\}Écrire à\{\{ [\w.]+ \}\}\{% endif %\}$/.test(v2 || ''), v2);
       if (shots) await page.locator('.insp-attrs').screenshot({ path: `${shots}/editeur-attribut-relie.png` });
-      await page.click('.attr-row:has(.attr-name:text-is("aria-label")) .attr-actions .icon-btn >> nth=0');
+      await page.click('.attr-row[data-attr="aria-label"] .attr-actions .icon-btn >> nth=0');
       let v3 = '';
       for (let i = 0; i < 20 && (v3 || '{').includes('{'); i++) { await page.waitForTimeout(200); v3 = await attrB(); }
       check('attribut relié : délié (texte écrit à la place)', v3 === '', String(v3));
@@ -1945,7 +1979,7 @@ try {
       }
       await page.$eval('.settings-content', (c) => c.scrollTo(0, 0));
       // Rubrique sans parties : le bouton remplit tout l'onglet (fond de l'accent étendu compris).
-      await page.click('.settings-nav-item[data-section="settings-code"]');
+      await page.click('.settings-nav-item[data-section="settings-versions"]');
       await page.waitForSelector('.settings-nav-group.is-on.is-single');
       const single = await page.$eval('.settings-nav-group.is-on.is-single', (g) => {
         const r = g.getBoundingClientRect();
@@ -2647,11 +2681,17 @@ try {
     const types = () => (fs.readFileSync(file, 'utf8').match(/^- type: \w+/gm) || []).map((l) => l.slice(8));
     const types0 = types();
     const cards = await page.$$eval(`${blocksRow} .cms-repeat-title`, (t) => t.map((x) => x.textContent));
-    await page.click(`${blocksRow} .cms-repeat-item[data-index="0"] .cms-repeat-head .icon-btn >> nth=1`);
+    await page.click(`${blocksRow} .cms-repeat-item[data-index="0"] .cms-repeat-head .icon-btn >> nth=2`);
     await until(() => types()[0] === types0[1] && types()[1] === types0[0], 'bloc descendu');
     await page.click(`${blocksRow} .cms-repeat-add`);
     await page.click('.ctx-menu .menu-item:has-text("Texte")');
     await until(() => types().length === types0.length + 1 && types().at(-1) === 'text', 'bloc ajouté');
+    // Carte repliée : une ligne (titre et résumé), champs cachés ; dépliée de nouveau.
+    await page.click(`${blocksRow} .cms-repeat-item[data-index="0"] .cms-repeat-toggle`);
+    const foldedOk = await page.$eval(`${blocksRow} .cms-repeat-item[data-index="0"]`, (c) => c.classList.contains('is-folded')
+      && c.querySelector('.cms-repeat-body').hidden && !!c.querySelector('.cms-repeat-summary'));
+    await page.click(`${blocksRow} .cms-repeat-item[data-index="0"] .cms-repeat-toggle`);
+    check('CMS : bloc replié sur une ligne (résumé), déplié', foldedOk);
     check('CMS : blocs en cartes (type et champs), ordre changé, bloc ajouté',
       cards.length === types0.length && cards[0] === 'Citation', `${cards.length} blocs : ${cards.slice(0, 3).join(', ')}`);
     for (let i = 0; i < 2; i++) {
@@ -2696,7 +2736,7 @@ try {
     check('CMS : date écrite au format du schéma', true);
     // Références : libellés des contenus liés, ajout depuis la liste.
     const refs = await page.$$eval(row('expertises') + ' .chip--tag', (cs) => cs.map((c) => c.textContent.trim()));
-    const refValues = await page.$$eval(row('expertises') + ' .chip--tag', (cs) => cs.map((c) => c.title));
+    const refValues = await page.$$eval(row('expertises') + ' .chip--tag', (cs) => cs.map((c) => c.dataset.value));
     check('CMS : références affichées par leur titre', refs.length > 0 && refs.every((r, i) => r !== refValues[i]), refs.join(', '));
     const option = await page.$eval(row('expertises') + ' .tags-pick option:nth-child(2)', (o) => o.value);
     await page.selectOption(row('expertises') + ' .tags-pick', option);
@@ -2775,8 +2815,8 @@ try {
     await page.press('.dialog input', 'Enter');
     await until(() => cfg().includes('- name: couleur_dominante\n'), 'nouveau champ');
     await page.waitForSelector('.schema-item[data-field="couleur_dominante"]');
-    await page.fill('.schema-item [data-setting="values"] .tags-add', 'Bleu nuit');
-    await page.press('.schema-item [data-setting="values"] .tags-add', 'Enter');
+    await page.fill('.schema-item [data-setting="values"] .choice-add', 'Bleu nuit');
+    await page.press('.schema-item [data-setting="values"] .choice-add', 'Enter');
     await until(() => /options:\n {10}values:\n {12}- name: bleu-nuit\n {14}label: Bleu nuit\n/.test(cfg()), 'choix ajouté');
     check('champs : nouveau champ « Choix » et sa valeur', true);
     await page.click('.schema-item .cms-item-foot .btn--danger-ghost');
@@ -2861,7 +2901,9 @@ try {
       check('réglages du site : nom modifié (barre supérieure), adresse invalide refusée', JSON.parse(docS()).base_url !== 'pas une adresse', refused);
       await page.click('.notice--error .icon-btn');
       // Code personnalisé du site.
-      await page.click('.settings-nav-item[data-section="settings-code"]');
+      // Code personnalisé : partie de Publication.
+      await page.click('.settings-nav-item[data-section="settings-publish"]');
+      await page.click('.settings-nav-part[data-part="code"]');
       await page.waitForSelector('.code-input');
       await page.fill('.code-field >> nth=0 >> textarea', '<meta name="essai-e2e" content="1">');
       await page.locator('.code-field >> nth=0 >> textarea').blur();
@@ -2915,7 +2957,9 @@ try {
       check('versions : activées (dépôt du site, première version)', fs.existsSync(path.join(siteDir, '.git'))
         && fs.readFileSync(path.join(siteDir, '.gitignore'), 'utf8').includes('.revel/'));
       // Changement : code personnalisé ajouté, comparé à la dernière version.
-      await page.click('.settings-nav-item[data-section="settings-code"]');
+      // Code personnalisé : partie de Publication.
+      await page.click('.settings-nav-item[data-section="settings-publish"]');
+      await page.click('.settings-nav-part[data-part="code"]');
       await page.waitForSelector('.code-input');
       await page.fill('.code-field >> nth=0 >> textarea', '<meta name="version-e2e">');
       await page.locator('.code-field >> nth=0 >> textarea').blur();
@@ -3407,6 +3451,13 @@ try {
     await page.press('.loc-table .loc-input', 'Tab');
     await until(() => docL().includes('"Faire rayonner": "Make it shine"'), 'traduction enregistrée');
     check('langues : texte de page traduit (document du site)', true);
+    // Coche « garder le texte d'origine » : la ligne passe traduite, avec le texte d'origine.
+    await page.fill('.locales-texts input[type="search"]', 'Alunites');
+    await page.waitForSelector('.loc-table tbody tr:not(.is-done) .loc-keep');
+    const keepSrc = (await page.textContent('.loc-table tbody tr:not(.is-done) .loc-source')).trim();
+    await page.click('.loc-table tbody tr:not(.is-done) .loc-keep');
+    await until(() => docL().includes(`${JSON.stringify(keepSrc)}: ${JSON.stringify(keepSrc)}`), 'texte d\'origine gardé');
+    check('langues : coche « garder le texte d\'origine »', true, keepSrc);
     // Données : écrites dans le dossier de la langue (copie du fichier).
     await page.fill('.locales-texts input[type="search"]', '');
     await page.click('.locales-texts .segmented button:nth-child(2)');
@@ -3530,14 +3581,16 @@ try {
       await page.click(`${row} .shortcut-actions .icon-btn >> nth=-1`);
       await page.waitForSelector(`${row}:not(.is-custom)`);
       check('raccourcis : combinaison enregistrée, affichée, puis touches par défaut', saved === 'Ctrl+Shift+U' && shown === 'Ctrl+Maj+U', `${saved} · ${shown}`);
-      await page.click('.prefs-links [data-value="square"]');
-      await page.waitForFunction(() => document.querySelector('.prefs-links [data-value="square"]')?.classList.contains('is-on'));
-      const links = await page.evaluate(() => window.__revelSettings?.variant_links);
+      const byDefault = await page.evaluate(() => document.querySelector('.prefs-links [data-value="square"]')?.classList.contains('is-on')
+        && document.querySelector('.prefs-link-end [data-value="dot"]')?.classList.contains('is-on'));
       await page.click('.prefs-links [data-value="curve"]');
+      await page.waitForFunction(() => document.querySelector('.prefs-links [data-value="curve"]')?.classList.contains('is-on'));
+      const links = await page.evaluate(() => window.__revelSettings?.variant_links);
+      await page.click('.prefs-links [data-value="square"]');
       await page.click('.switch[data-group="palette-pages"]');
       const hidden = await page.evaluate(() => window.__revelSettings?.palette_hidden || []);
       await page.click('.switch[data-group="palette-pages"]');
-      check('éditeur : forme des liens de variantes, familles de la recherche rapide', links === 'square' && hidden.includes('palette-pages'), `${links} · ${hidden}`);
+      check('éditeur : liens en équerre à bout rond par défaut, forme changée, familles de la recherche rapide', byDefault && links === 'curve' && hidden.includes('palette-pages'), `${byDefault} · ${links} · ${hidden}`);
       await page.fill('.ui-color-row[data-color="comp"] input[type="color"]', '#ff0000');
       await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--comp').trim() === '#ff0000');
       await page.click('.ui-color-row[data-color="comp"] .icon-btn');

@@ -1,0 +1,40 @@
+{
+  "name": "Restaurant",
+  "category": "food",
+  "order": 40,
+  "description": "[[Restaurant ou café : carte en onglets, galerie en maçonnerie, horaires, réservation par formulaire.||Restaurant or café: tabbed menu, masonry gallery, opening hours, booking form.]]",
+  "preview": "hero",
+  "palette": ["#14110e", "#f2e9dc", "#d4a056"],
+  "features": ["components", "tabs", "masonry", "form", "dark", "smooth"],
+  "fonts": [ { "family": "Playfair Display", "variants": ["400", "600"] }, { "family": "Work Sans", "variants": ["400", "500", "600"] } ],
+  "settings": { "smooth_scroll": true, "page_transition": "fade" },
+  "site": {
+    "description": "[[Cuisine de saison, vins nature et grande terrasse au cœur de la ville.||Seasonal cooking, natural wines and a large terrace in the heart of town.]]",
+    "email": "[[table@exemple.fr||table@example.com]]",
+    "phone": "[[04 91 00 00 00||+1 555 010 7788]]",
+    "address": "[[8 quai du Port, 13002 Marseille||8 Harbor Quay, Charleston, SC]]",
+    "hours": "[[Mardi au samedi, 12 h - 14 h 30 et 19 h - 22 h 30||Tuesday to Saturday, noon - 2:30 pm and 7 - 10:30 pm]]",
+    "menus": {
+      "main": [
+        { "label": "[[La carte||Menu]]", "url": "/#[[carte||menu]]" },
+        { "label": "[[La maison||About]]", "url": "/#[[maison||about]]" }
+      ],
+      "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" } ]
+    }
+  },
+  "navbar": {"cta": "[[Réserver||Book a table]]", "cta_link": "[[/reserver/||/book/]]"},
+  "kit": ["navbar", "footer", "section-head", "testimonial"],
+  "components": [
+    { "id": "dish", "name": "[[Plat||Dish]]",
+      "props": [
+        { "name": "name", "label": "[[Plat||Dish]]", "type": "text", "default": "[[Nom du plat||Dish name]]" },
+        { "name": "text", "label": "[[Description||Description]]", "type": "text", "default": "" },
+        { "name": "price", "label": "[[Prix||Price]]", "type": "text", "default": "18" }
+      ],
+      "variants": [ { "id": "chef", "name": "[[Suggestion du chef||Chef's pick]]" } ] }
+  ],
+  "pages": [
+    { "id": "index", "path": "/", "name": "[[Accueil||Home]]" },
+    { "id": "book", "path": "[[/reserver/||/book/]]", "name": "[[Réserver||Book]]", "title": "[[Réserver une table||Book a table]]" }
+  ]
+}

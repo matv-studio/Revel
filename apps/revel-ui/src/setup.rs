@@ -336,8 +336,8 @@ fn Setup() -> impl IntoView {
     let none = Signal::derive(String::new);
 
     view! {
-        <div class="overlay" on:mousedown=move |e| {
-            if e.target() == e.current_target() && !busy() { close() }
+        <div class="overlay" on:input=move |e| crate::dialog::mark_dirty(&e) on:mousedown=move |e| {
+            if crate::dialog::backdrop_click(&e) && !busy() { close() }
         }>
             <form class="dialog setup" role="dialog" aria-modal="true" aria-labelledby="setup-title"
                 on:submit=move |e| {

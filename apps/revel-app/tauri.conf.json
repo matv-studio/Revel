@@ -29,7 +29,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: revel-canvas: http://revel-canvas.localhost https:; media-src 'self' blob: revel-canvas: http://revel-canvas.localhost; font-src 'self' data: revel-canvas: http://revel-canvas.localhost; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost; frame-src revel-canvas: http://revel-canvas.localhost revel-preview: http://revel-preview.localhost"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: revel-canvas: http://revel-canvas.localhost https:; media-src 'self' blob: revel-canvas: http://revel-canvas.localhost; font-src 'self' data: revel-canvas: http://revel-canvas.localhost; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost; frame-src revel-canvas: http://revel-canvas.localhost revel-preview: http://revel-preview.localhost https: http:"
     }
   },
   "bundle": {

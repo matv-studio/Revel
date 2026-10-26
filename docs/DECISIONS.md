@@ -1233,6 +1233,143 @@ du canevas pas posé sur un décor vide à dessein (barre de progression, élém
 - Mode sombre du site à gauche de la langue affichée. Défilement : un élément ajouté depuis Styles laisse l'outil
   choisi (la liste reste à l'écran).
 
+**D-126 — 26/10/2026 — prise.** **Liens de variantes : en équerre et rond par défaut.** Forme `square` et bout
+`dot` par défaut (Réglages de Revel › Éditeur ; courbes et flèche restent au choix, D-125).
+
+**D-127 — 26/10/2026 — prise.** **Sites du compte GitHub sur un autre ordinateur.** Compte GitHub connecté :
+l'accueil liste ses dépôts (propriétaire, collaborateur, membre d'une organisation ; 300 au plus, les plus
+récemment envoyés d'abord) dont la racine contient `site.revel.json` (8 vérifications à la fois). Une copie locale
+est retrouvée par l'adresse de son dépôt distant (sites connus et sous-dossiers du dossier des sites, sans
+réseau) ; les autres sont des cartes « à télécharger » (clone dans le dossier des sites, puis ouverture).
+« Synchroniser » reçoit les nouveautés de chaque copie (`versions_receive`) et rend compte (à jour, envoyés, en
+attente, échecs). Dossier des sites par défaut : `Projects` à la racine du dossier de Revel.
+
+**D-128 — 26/10/2026 — prise.** **Modèles de site par métier, inclus dans le programme.**
+- Sources dans `crates/revel-core/templates/` (texte : `template.json`, feuille de style, gabarits, composants
+  et pages en Nunjucks de Revel, contenus d'exemple), incluses par `build.rs` : quelques centaines de Kio, rien à
+  télécharger. Un kit commun (`_kit/` : barre de navigation, pied de page, cartes, prix, FAQ, bandeau d'appel…)
+  partagé par les 26 modèles (vitrine, agence, SaaS, blog, magazine, portfolio, photographe, boutique, restaurant,
+  hôtel, immobilier, avocat, cabinet de santé, beauté, sport, musique, podcast, événement, association,
+  formation, CV, documentation, page de liens, artisan, mariage, bientôt en ligne), chacun en français et en anglais (`[[fr||en]]`),
+  clair, sombre ou selon l'appareil.
+- Forme écrite : `<x-use c="carte" titre="…" x-image="expr" variant="v">emplacement</x-use>` pour un composant,
+  `{{ content | safe }}` pour l'emplacement d'un gabarit ; `@@role:largeur@@` pour une photo, `@@icon:nom@@`
+  pour une icône de Revel. Chaque modèle passe l'audit des réglages modifiables (essai sur les 26, deux langues).
+- Photos : liens vers des photos libres d'Unsplash (licence Unsplash : usage libre, pas de compilation en
+  service concurrent ; le lien direct n'est exigé que des utilisateurs de son API). Médias › « Copier dans le
+  site » télécharge les images en ligne dans `media/photos/` et remplace leurs adresses partout (éléments,
+  images, valeurs de composant, informations du site, contenus du CMS), une étape d'annulation ; outil MCP
+  `copy_online_images`. Une image qui ne se télécharge pas garde son adresse.
+
+**D-129 — 26/10/2026 — prise.** **Boutique : panier, commande par e-mail, liens de paiement.** Bouton
+`data-revel-cart-add` (produit, prix), compteur `data-revel-cart-count`, panier `data-revel-cart="EUR"` (ligne
+modèle `data-revel-cart-item`, quantités, total, champ caché rempli pour le formulaire) ; panier gardé dans le
+navigateur du visiteur (`localStorage`), vidé quand la commande est envoyée (formulaire de D-54). Paiement :
+liens Stripe Payment Links et boutons PayPal réglés dans le CMS ou les informations du site (vides par défaut),
+aucune clé ni compte côté Revel. Panneau Ajouter : « Panier » et « Ajouter au panier ».
+
+**D-130 — 26/10/2026 — prise.** **Galerie d'un contenu (CMS) en vignettes.** Un champ liste d'images
+(`type: image` avec `list` ou `multiple`, ou liste de chemins d'images) s'affiche en vignettes : clic : remplacer,
+✕ : retirer, glisser ou Alt+flèche : changer l'ordre, « Ajouter » : choix de plusieurs médias à la fois (ordre
+des clics, numéros sur les vignettes choisies ; fichiers importés ajoutés au choix), fichiers déposés sur la
+galerie : importés puis ajoutés ; maximum du schéma respecté. Remplace les pastilles de chemins.
+
+**D-131 — 26/10/2026 — prise.** **Volet de la fiche réglable ; modèle des pages accessible depuis le CMS.**
+Largeur du volet de la fiche (ou du champ) à la poignée de son bord gauche (320 à 1 100 px, gardée d'une session
+à l'autre, double-clic : 420 px, flèches au clavier). « Modèle des pages » à côté de « Champs », dans le menu
+d'une collection (clic droit) et sur une collection vide : ouvre dans l'éditeur une page de la collection qui
+suit le modèle (les modifications s'appliquent à toutes ses pages sauf celles qui ont un design propre, D-28) ;
+crée le modèle et l'adresse des pages au besoin, et un premier contenu « Exemple » quand la collection est vide.
+
+**D-132 — 26/10/2026 — proposée.** **Modèles partagés en ligne par les utilisateurs.** Trois voies :
+- *Fichier de modèle* (`.revel-template`, archive de la même forme que les modèles inclus) exporté depuis un site
+  (« Enregistrer comme modèle ») et ouvert dans la galerie : sans serveur ni compte ; pas de découverte, pas de
+  modération.
+- *Catalogue sur GitHub* : dépôt public (index `catalog.json`, un dossier par modèle), proposition par demande de
+  fusion relue, lecture par les fichiers bruts (pas de limite de l'API non authentifiée), téléchargement à la
+  demande, version figée par modèle : gratuit, historique et modération par relecture ; proposer demande un compte
+  GitHub (déjà relié dans Revel, D-127) et une relecture humaine.
+- *Service de Revel* (comptes, envois, notes, signalements) : découverte et envoi les plus simples ; serveur,
+  stockage, modération et données personnelles à assumer (coût continu).
+Dans tous les cas : un modèle n'est que des données (aucun script hors des outils de Revel, adresses externes en
+`https` seulement, audit des réglages modifiables réussi, licence et crédits des photos obligatoires), vérifié à
+l'ouverture comme à l'envoi. Ordre possible : fichier de modèle d'abord (outil d'export utile seul), catalogue
+GitHub ensuite ; le service seulement si l'usage le justifie. À trancher par l'utilisateur.
+
+**D-133 — 26/10/2026 — prise.** **Colonnes du tableau du CMS.** Épingle à côté de chaque champ de la fiche
+(montré en colonne ou non) ; bouton « Colonnes » et clic droit sur l'en-tête (cocher, masquer la colonne
+cliquée, largeurs automatiques). Colonnes écrites dans le schéma (`view.fields` de `.pages.yml`, comme Pages
+CMS ; aucune colonne : le seul champ principal) ou, sans schéma, gardées sur cet ordinateur ; largeurs à la
+poignée du bord droit de chaque en-tête (60 à 900 px, double-clic : automatique), gardées sur cet ordinateur
+par collection. En-tête du CMS réduit à ses icônes quand la liste est étroite ; sous 1 050 px, la fiche passe
+au-dessus du tableau.
+
+**D-134 — 26/10/2026 — prise.** **Garder le texte d'origine (Localisation).** Coche à droite du champ d'un texte
+pas encore traduit : le texte d'origine devient sa traduction (noms propres, mots identiques). Textes des
+pages : traduction égale au texte ; fichiers de données : valeur écrite et clé marquée gardée
+(`Locale.kept`, `data:<chemin>`, commande `MarkKept`), comptée comme traduite bien qu'égale au texte
+d'origine. Une étape d'annulation.
+
+**D-135 — 26/10/2026 — prise.** **Plan du site : contenus sous leur collection.** Les pages des contenus d'une
+collection dépliée sont rangées en liste serrée sous le nœud de la collection, en retrait ; sans position
+choisie, elles suivent la collection quand on la déplace ; « Ranger » fait de même.
+
+**D-136 — 26/10/2026 — prise.** **Défilement doux refait (comme Lenis).** Position animée gardée en nombre
+décimal (la fin du mouvement ne rampe plus pixel par pixel), amortissement selon le temps écoulé (même
+vitesse à 60, 120 ou 144 images par seconde, images sautées comprises), limites relues à chaque image ;
+pavé tactile (petits pas décimaux, déjà amortis par le système) laissé au navigateur ; liens vers une
+section de la page glissés de même ; défilement venu d'ailleurs (barre, clavier) : l'animation s'arrête.
+
+**D-137 — 26/10/2026 — prise.** **Paramètres réorganisés (suite de D-104).** Structure (pages, gabarits,
+composants, collections) et environnement de publication principal : information, plus réglage ; fiche
+fixée en haut à droite des paramètres avec la pastille de l'environnement (« Production », les autres en
+info-bulle). Organisation : titre et « + » tant qu'elle n'est pas décrite, « Retirer » efface tout. Code
+personnalisé : partie de Publication. Annuler, rétablir (boutons et Ctrl+Z) dans la barre du haut pour les
+Paramètres, la Localisation et le Plan du site ; les vues relisent le document.
+
+**D-138 — 26/10/2026 — prise.** **Variantes d'un composant, aperçu.** Canevas des composants : les règles
+`:hover` et `:active` du site sont mises hors d'usage dans chaque cadre (sélecteur renommé `.rv-live-…`),
+seule la variante du cadre est montrée (la principale ne réagit plus au survol, la variante « Au survol »
+garde son état). « Aperçu » dans un composant ouvert : le composant seul, avec les scripts du site, pour
+l'essayer avant de le placer ; ailleurs : la page affichée. Liens vers d'autres sites dans l'aperçu : chargés
+dans le cadre de l'espace de travail (`frame-src` élargi) ou dans la fenêtre d'aperçu ; ceux qui s'ouvrent
+dans un nouvel onglet vont au navigateur du système.
+
+**D-139 — 26/10/2026 — prise.** **Revue d'ergonomie, deuxième passage (relecture indépendante, captures et
+code).** Réglages qui demandaient de taper une valeur technique remplacés par des contrôles :
+- Panier : groupe « Panier » (monnaie), « Ajouter au panier » (produit et prix, écrits ou reliés à un champ),
+  compteur, rôles des parties du panier ; plus aucun attribut `data-revel-cart*` brut.
+- Champ de formulaire : type, nom envoyé, obligatoire, texte d'exemple, saisie automatique, lignes visibles.
+- Vidéo : source (choix parmi les vidéos), image d'attente, sans le son, chargement ; attributs gérés retirés
+  des « Autres attributs ».
+- Référencement : images (partage, icônes, logo) en vignettes avec choix et retrait, couleur du navigateur en
+  pastille, pays en liste, réseaux en liste de liens réordonnable, image de partage plus en double.
+- Informations du site : contrôle selon la valeur (image, e-mail, téléphone, lien avec « Ouvrir », texte
+  long) ; nom en texte, renommé au crayon ou au double-clic.
+- Listes de contenus : valeur d'un filtre et de « contient » choisie dans les choix du champ, les contenus
+  reliés ou oui/non, sinon suggestions tirées des contenus ; libellés « Contenus mis en avant », « Seulement
+  si le champ … contient », « Nombre avant « Voir plus » ».
+- CMS : image seule en vignette (même taille que la galerie, ✕, fichier déposé) ; pastilles réordonnables
+  (glisser, Alt+flèches), corrigées au double-clic, ajoutées aussi à la virgule et à la sortie du champ,
+  doublon signalé ; contenus reliés réordonnables avec « n / max » ; blocs repliables (résumé), dupliqués,
+  glissés, tout replier ; listes d'objets sans schéma en cartes ; nombres avec les limites du schéma ;
+  adresses ouvrables ; formats proposés pour un champ texte ; adresse (slug) changée d'un contenu publié :
+  redirection de l'ancienne adresse ajoutée.
+- Couleurs du site : opacité réglable et visible (damier).
+- Inspecteur : noms d'attributs lisibles (nom technique en info-bulle) ; lien vers une section de la page,
+  un fichier ou la page d'un contenu ; classe d'une action proposée parmi celles du site, erreur dite ;
+  point d'appui et position du fond en français, centre par défaut ; section Texte cachée pour les médias ;
+  graisses chargées d'abord (« non chargée » pour les autres) ; délai d'une transition dans l'unité de sa
+  durée ; date de publication d'une page au calendrier.
+- Interface : icône « Parent » distincte de « Monter » ; icônes « Modèle des pages » et « Design propre »
+  distinctes de « Panneaux » ; texte discret plus contrasté ; fenêtre gardée ouverte après une saisie (clic
+  sur le fond) ; médias au clavier (Entrée : détails, Maj+Entrée : insérer) ; adresses des collections du
+  plan écrites `‹slug›` ; bandeau « images en ligne » discret sous la recherche des médias, retiré une fois
+  les images téléchargées.
+Reste à faire (relevé) : panneaux en surimpression aux petites largeurs de l'éditeur, valeurs `clamp()` et
+`var()` en pastille éditable, choix d'un champ « liste » en lignes, listes de nombres ou de dates en lignes,
+classes proposées pour la classe du corps de page, barre du texte riche au clavier.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

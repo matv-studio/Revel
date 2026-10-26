@@ -1,0 +1,22 @@
+{
+  "name": "[[Artisan / rénovation||Craftsman / renovation]]",
+  "category": "services",
+  "order": 190,
+  "description": "[[Artisan ou entreprise du bâtiment : savoir-faire, réalisations avant / après, zone d'intervention, demande de devis.||Craftsman or building company: skills, before / after work, service area, quote request.]]",
+  "preview": "hero",
+  "palette": ["#f4efe7", "#2a2420", "#c2672b"],
+  "features": ["reveal", "components", "form", "dark"],
+  "fonts": [ { "family": "Bitter", "variants": ["600", "700"] }, { "family": "Source Sans 3", "variants": ["400", "600"] } ],
+  "settings": { "smooth_scroll": true },
+  "navbar": { "cta": "[[Demander un devis||Get a quote]]", "cta_link": "#[[devis||quote]]" },
+  "site": {
+    "description": "[[Menuiserie et rénovation intérieure sur mesure, depuis 1998.||Custom joinery and interior renovation since 1998.]]",
+    "email": "[[atelier@exemple.fr||workshop@example.com]]",
+    "phone": "[[06 11 22 33 44||+1 555 010 7711]]",
+    "address": "[[Zone artisanale, 44110 Châteaubriant||Industrial Park, Burlington, VT]]",
+    "area": "[[Loire-Atlantique et Ille-et-Vilaine||Within 50 miles of Burlington]]",
+    "menus": { "main": [ { "label": "[[Savoir-faire||Services]]", "url": "#[[savoir-faire||services]]" }, { "label": "[[Réalisations||Work]]", "url": "#[[realisations||work]]" }, { "label": "[[Devis||Quote]]", "url": "#[[devis||quote]]" } ], "social": [ { "label": "Facebook", "url": "https://www.facebook.com/" } ] }
+  },
+  "kit": ["navbar", "footer", "section-head", "feature", "card", "stat", "testimonial"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

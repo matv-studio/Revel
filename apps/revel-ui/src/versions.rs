@@ -720,7 +720,7 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
             {move || saving.get().map(|_| {
                 let msg = RwSignal::new(String::new());
                 view! {
-                    <div class="overlay" on:mousedown=move |e| if e.target() == e.current_target() { saving.set(None) }>
+                    <div class="overlay" on:input=move |e| crate::dialog::mark_dirty(&e) on:mousedown=move |e| if crate::dialog::backdrop_click(&e) { saving.set(None) }>
                         <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="ver-save-title"
                             on:submit=move |e| { e.prevent_default(); saving.set(None); save(msg.get_untracked()) }>
                             <h2 id="ver-save-title">{ui.t("versions-save")}</h2>

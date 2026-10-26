@@ -18,25 +18,43 @@
 //!
 //! Scripts courts, écrits dans la page ; pas dans le canevas de l'éditeur (barre à 0).
 
-/// Script du défilement doux.
+/// Script du défilement doux (comme Lenis) : position animée gardée en nombre décimal (jamais relue
+/// arrondie, sinon la fin du mouvement rampe pixel par pixel), amortissement selon le temps écoulé
+/// (même vitesse à 60, 120 ou 144 images par seconde, images sautées comprises), limites relues à
+/// chaque image (contenu qui grandit). Liens vers une section de la page : même glissement. Pavé tactile (petits pas décimaux, déjà amortis par le
+/// système) : laissé au navigateur, pour ne pas ajouter une seconde inertie. Un défilement venu
+/// d'ailleurs (barre, clavier, ancre) arrête l'animation.
 const SMOOTH: &str = concat!(
     "<style>html.rv-smooth,html.rv-smooth *{scroll-behavior:auto!important}</style>",
     "<script>(function(w,d){if(w.matchMedia&&matchMedia(\"(prefers-reduced-motion: reduce)\").matches)return;",
-    "d.documentElement.classList.add(\"rv-smooth\");var M=new Map(),run=false;",
-    "function can(e,y){var o=getComputedStyle(e).overflowY;return(o===\"auto\"||o===\"scroll\")&&e.scrollHeight>e.clientHeight+1&&(y>0?e.scrollTop+e.clientHeight<e.scrollHeight-1:e.scrollTop>0)}",
+    "d.documentElement.classList.add(\"rv-smooth\");var M=new Map(),run=false,prev=0,K=7.5;",
+    "function max(e){return e.scrollHeight-e.clientHeight}",
+    "function can(e,y){var o=getComputedStyle(e).overflowY;return(o===\"auto\"||o===\"scroll\")&&max(e)>1&&(y>0?e.scrollTop<max(e)-1:e.scrollTop>0)}",
     "function find(t,y){for(var e=t&&t.nodeType===1?t:t&&t.parentElement;e&&e!==d.body&&e!==d.documentElement;e=e.parentElement){",
     "if(e.hasAttribute(\"data-revel-no-smooth\")||/^(TEXTAREA|SELECT)$/.test(e.tagName))return null;if(can(e,y))return e}",
     "return d.scrollingElement||d.documentElement}",
-    "function step(){M.forEach(function(s,e){var c=e.scrollTop;if(Math.abs(c-s.last)>1){M.delete(e);return}",
-    // Pas d'au moins 1 px : les derniers pixels sont atteints (un pas plus petit est arrondi).
-    "var d=s.t-c,n=Math.abs(d)<=1?s.t:c+(d>0?Math.max(1,d*.12):Math.min(-1,d*.12));e.scrollTop=n;s.last=e.scrollTop;",
-    "if(Math.abs(s.t-s.last)<1||s.last===c)M.delete(e)});",
+    "function step(now){var dt=Math.min(.05,Math.max(.001,(now-prev)/1000));prev=now;var a=1-Math.exp(-K*dt);",
+    "M.forEach(function(s,e){if(Math.abs(e.scrollTop-s.set)>2){M.delete(e);return}",
+    "s.t=Math.max(0,Math.min(max(e),s.t));s.c+=(s.t-s.c)*a;if(Math.abs(s.t-s.c)<.4)s.c=s.t;",
+    "e.scrollTop=s.c;s.set=e.scrollTop;if(s.c===s.t)M.delete(e)});",
     "if(M.size)requestAnimationFrame(step);else run=false}",
     "w.addEventListener(\"wheel\",function(v){if(v.ctrlKey||v.defaultPrevented||Math.abs(v.deltaX)>Math.abs(v.deltaY))return;",
-    "var y=v.deltaY*(v.deltaMode===1?16:v.deltaMode===2?innerHeight:1),e=find(v.target,y);if(!e)return;",
-    "var s=M.get(e);if(!s){s={t:e.scrollTop,last:e.scrollTop};M.set(e,s)}",
-    "s.t=Math.max(0,Math.min(e.scrollHeight-e.clientHeight,s.t+y));v.preventDefault();",
-    "if(!run){run=true;requestAnimationFrame(step)}},{passive:false})})(window,document)</script>",
+    "var y=v.deltaY*(v.deltaMode===1?40:v.deltaMode===2?innerHeight:1);",
+    // Pavé tactile : pas décimaux et petits ; défilement du navigateur, état oublié.
+    "if(v.deltaMode===0&&y%1!==0&&Math.abs(y)<50){M.clear();return}",
+    "var e=find(v.target,y);if(!e)return;",
+    "var s=M.get(e);if(!s){s={t:e.scrollTop,c:e.scrollTop,set:e.scrollTop};M.set(e,s)}",
+    "s.t=Math.max(0,Math.min(max(e),s.t+y));v.preventDefault();",
+    "go()},{passive:false});",
+    "function go(){if(!run){run=true;prev=performance.now();requestAnimationFrame(step)}}",
+    // Liens vers une section de la page : même glissement (sinon le saut serait sec).
+    "d.addEventListener(\"click\",function(v){if(v.defaultPrevented||v.button||v.metaKey||v.ctrlKey||v.shiftKey||v.altKey)return;",
+    "var a=v.target.closest&&v.target.closest(\"a[href*='#']\");if(!a||a.target===\"_blank\")return;var u=new URL(a.href,location.href);",
+    "if(u.origin!==location.origin||u.pathname!==location.pathname||u.search!==location.search||u.hash.length<2)return;",
+    "var t=d.getElementById(decodeURIComponent(u.hash.slice(1)));if(!t)return;var e=d.scrollingElement||d.documentElement;",
+    "var m=parseFloat(getComputedStyle(t).scrollMarginTop)||0,s=M.get(e);if(!s){s={t:e.scrollTop,c:e.scrollTop,set:e.scrollTop};M.set(e,s)}",
+    "s.t=Math.max(0,Math.min(max(e),e.scrollTop+t.getBoundingClientRect().top-m));v.preventDefault();",
+    "if(location.hash!==u.hash)history.pushState(null,\"\",u.hash);go()})})(window,document)</script>",
 );
 
 /// Script des barres de progression.

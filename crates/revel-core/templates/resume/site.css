@@ -1,0 +1,21 @@
+:root { color-scheme: light; --bg: #fafaf7; --surface: #ffffff; --text: #1b1b1b; --muted: #66665f; --line: rgba(27, 27, 27, 0.1); --line-strong: rgba(27, 27, 27, 0.24); --accent: #0f766e; --accent-ink: #ffffff; --font-display: "IBM Plex Serif", Georgia, serif; --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --display-weight: 500; --display-tracking: -0.02em; --radius: 8px; --radius-lg: 14px; --radius-btn: 8px; --max: 1120px; --pad: clamp(20px, 4vw, 40px); --section: clamp(64px, 8vw, 104px); }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; --bg: #121212; --surface: #1a1a1a; --text: #ecece6; --muted: #a3a39b; --line: rgba(236, 236, 230, 0.1); --line-strong: rgba(236, 236, 230, 0.24); --accent: #2dd4bf; --accent-ink: #121212; }
+}
+.cv-hero { display: grid; grid-template-columns: 260px 1fr; gap: clamp(28px, 5vw, 64px); align-items: center; padding: clamp(56px, 8vw, 112px) 0 clamp(40px, 5vw, 72px); }
+.cv-hero__photo { width: 100%; aspect-ratio: 1; border-radius: 50%; object-fit: cover; }
+.cv-hero h1 { font-size: clamp(40px, 5.6vw, 72px); }
+.cv { display: grid; grid-template-columns: 220px 1fr; gap: clamp(32px, 5vw, 72px); align-items: start; }
+.cv-nav { position: sticky; top: 104px; display: grid; gap: 4px; }
+.cv-nav a { padding: 8px 14px; border-radius: 8px; color: var(--muted); text-decoration: none; }
+.cv-nav a.is-active { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
+.cv-section { padding-bottom: var(--section); }
+.cv-section > h2 { margin-bottom: 32px; font-size: clamp(28px, 3vw, 38px); }
+.job { position: relative; display: grid; gap: 6px; padding: 0 0 36px 28px; border-left: 2px solid var(--line-strong); }
+.job::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+.job__period { font-size: 14px; color: var(--muted); }
+.job__role { font-family: var(--font-body); font-size: 20px; font-weight: 600; }
+.job__company { color: var(--accent); }
+.job__text { color: var(--muted); }
+.skills { display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 767px) { .cv-hero, .cv { grid-template-columns: minmax(0, 1fr); } .cv-hero__photo { width: 160px; } .cv-nav { display: none; } }

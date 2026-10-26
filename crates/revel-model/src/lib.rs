@@ -230,6 +230,10 @@ pub struct Locale {
     /// `data:<chemin>` (fichiers de données), `entry:<dossier>/<fichier>` (contenus).
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub machine: BTreeSet<String>,
+    /// Textes des fichiers de données gardés tels quels (noms propres, mots identiques dans les
+    /// deux langues) : `data:<chemin>`, comptés comme traduits bien qu'égaux au texte d'origine.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub kept: BTreeSet<String>,
 }
 
 impl Locale {

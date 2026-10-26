@@ -1,0 +1,24 @@
+{
+  "name": "[[Photographe||Photographer]]",
+  "category": "creative",
+  "order": 55,
+  "description": "[[Galerie en maçonnerie filtrable, image révélée au survol, tarifs des séances et formulaire de demande.||Filterable masonry gallery, hover reveal, session prices and enquiry form.]]",
+  "preview": "p1",
+  "palette": ["#0b0b0c", "#f2f0ec", "#c8b48a"],
+  "features": ["masonry", "filters", "reveal", "form", "dark"],
+  "fonts": [ { "family": "Inter Tight", "variants": ["300", "400", "600"] } ],
+  "settings": { "smooth_scroll": true, "page_transition": "fade" },
+  "navbar": { "cta": "[[Réserver une séance||Book a session]]", "cta_link": "#contact" },
+  "site": {
+    "description": "[[Photographe de paysages et de portraits, basé à Annecy.||Landscape and portrait photographer based in Annecy.]]",
+    "email": "[[studio@exemple.fr||studio@example.com]]",
+    "phone": "[[06 12 34 56 78||+1 555 010 3300]]",
+    "address": "[[Annecy, France||Denver, CO]]",
+    "menus": {
+      "main": [ { "label": "[[Galerie||Gallery]]", "url": "#[[galerie||gallery]]" }, { "label": "[[Séances||Sessions]]", "url": "#[[seances||sessions]]" }, { "label": "Contact", "url": "#contact" } ],
+      "social": [ { "label": "Instagram", "url": "https://www.instagram.com/" }, { "label": "500px", "url": "https://500px.com/" } ]
+    }
+  },
+  "kit": ["navbar", "footer", "section-head", "price"],
+  "pages": [ { "id": "index", "path": "/", "name": "[[Accueil||Home]]" } ]
+}

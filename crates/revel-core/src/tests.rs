@@ -2859,3 +2859,80 @@ fn export_webflow_et_cms() {
     );
     assert!(!out.join("detail_post.html").exists());
 }
+
+/// Copies de sites GitHub sur cet ordinateur (D-127) : site connu et site rangé dans le dossier
+/// des sites, retrouvés par l'adresse de leur dépôt distant (sans réseau).
+#[test]
+fn copies_des_sites_github() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let known = sample_site(d.path(), &c);
+    c.versions_init(&known, "Début").unwrap();
+    c.versions_set_remote(&known, "https://github.com/Compte/Vitrine.git")
+        .unwrap();
+    let projects = d.path().join("Projects");
+    let other = projects.join("blog");
+    c.new_site(&other, "Blog", "fr").unwrap();
+    c.forget_site(&other.display().to_string());
+    c.versions_init(&other, "Début").unwrap();
+    c.versions_set_remote(&other, "git@github.com:compte/blog.git")
+        .unwrap();
+    let elsewhere = d.path().join("ailleurs");
+    c.new_site(&elsewhere, "Ailleurs", "fr").unwrap();
+    let found = c.local_github_copies(Some(&projects));
+    assert_eq!(found.get("compte/vitrine"), Some(&known));
+    assert_eq!(found.get("compte/blog"), Some(&other));
+    assert_eq!(found.len(), 2);
+}
+
+
+/// Images en ligne d'un modèle (D-128) : trouvées dans les pages, composants, informations et
+/// contenus du CMS ; remplacées en une étape d'annulation (sans réseau : adresses déjà copiées).
+#[test]
+fn images_en_ligne_remplacees() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = d.path().join("blog");
+    c.new_site_template(&site, "Carnet", "fr", "blog", "auto")
+        .unwrap();
+    c.edit_open(&site).unwrap();
+    let before = c.media_online(&site).unwrap();
+    assert!(before.len() > 3, "{before:?}");
+    let doc = c.edit_site(&site).unwrap();
+    let entries_text = |s: &std::path::Path| {
+        let mut all = String::new();
+        for e in walkdir_md(&s.join("content")) {
+            all.push_str(&std::fs::read_to_string(e).unwrap());
+        }
+        all
+    };
+    assert!(entries_text(&site).contains("images.unsplash.com"));
+    let map: std::collections::BTreeMap<String, String> = before
+        .iter()
+        .enumerate()
+        .map(|(i, u)| (u.clone(), format!("/media/photos/p{i}.jpg")))
+        .collect();
+    let list = crate::localize::commands(&site, &doc, &map);
+    c.edit_apply(&site, revel_edit::Command::Batch { commands: list }, false)
+        .unwrap();
+    assert!(c.media_online(&site).unwrap().is_empty());
+    assert!(!entries_text(&site).contains("images.unsplash.com"));
+    c.edit_undo(&site).unwrap();
+    assert_eq!(c.media_online(&site).unwrap(), before);
+    assert!(entries_text(&site).contains("images.unsplash.com"));
+}
+
+fn walkdir_md(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                out.extend(walkdir_md(&p));
+            } else if p.extension().is_some_and(|x| x == "md") {
+                out.push(p);
+            }
+        }
+    }
+    out
+}

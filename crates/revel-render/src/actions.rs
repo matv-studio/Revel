@@ -47,6 +47,7 @@ pub fn uses(html: &str) -> bool {
         || html.contains(" data-revel-switch")
         || html.contains(" data-revel-hover-media")
         || html.contains(" data-revel-reveal")
+        || html.contains(" data-revel-cart")
 }
 
 /// Page avec des interactions : script ajouté avant `</head>` (pas dans le canevas). Rend la page

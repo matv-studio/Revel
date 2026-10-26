@@ -1,0 +1,11 @@
+.price { display: flex; flex-direction: column; gap: 22px; padding: 34px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.price__plan { font-weight: 600; }
+.price__amount { display: flex; align-items: baseline; gap: 6px; }
+.price__value { font-family: var(--font-display); font-size: 48px; font-weight: var(--display-weight); line-height: 1; }
+.price__period { color: var(--muted); }
+.price__features { flex: 1; }
+.price__list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.price__list li { position: relative; padding-left: 28px; }
+.price__list li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+.price__cta { align-self: stretch; }
+.price.is-featured { border-color: var(--accent); box-shadow: 0 24px 60px color-mix(in srgb, var(--accent) 22%, transparent); }

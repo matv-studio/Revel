@@ -1,0 +1,270 @@
+[
+ {
+  "id": "navbar",
+  "name": "[[Barre de navigation||Navigation bar]]",
+  "props": [
+   {
+    "name": "cta",
+    "label": "[[Bouton||Button]]",
+    "type": "text",
+    "default": "[[Nous contacter||Contact us]]"
+   },
+   {
+    "name": "cta_link",
+    "label": "[[Lien du bouton||Button link]]",
+    "type": "link",
+    "default": "/contact/"
+   },
+   {
+    "name": "show_cta",
+    "label": "[[Bouton affiché||Button shown]]",
+    "type": "switch",
+    "default": true
+   }
+  ],
+  "variants": [
+   {
+    "id": "over",
+    "name": "[[Sur l'image||Over the image]]"
+   }
+  ]
+ },
+ {
+  "id": "footer",
+  "name": "[[Pied de page||Footer]]"
+ },
+ {
+  "id": "section-head",
+  "name": "[[Titre de section||Section heading]]",
+  "props": [
+   {
+    "name": "eyebrow",
+    "label": "[[Surtitre||Eyebrow]]",
+    "type": "text",
+    "default": "[[Rubrique||Section]]"
+   },
+   {
+    "name": "title",
+    "label": "[[Titre||Title]]",
+    "type": "text",
+    "default": "[[Un titre de section||A section title]]"
+   },
+   {
+    "name": "text",
+    "label": "[[Texte||Text]]",
+    "type": "text",
+    "default": ""
+   }
+  ],
+  "variants": [
+   {
+    "id": "center",
+    "name": "[[Centré||Centered]]"
+   }
+  ]
+ },
+ {
+  "id": "feature",
+  "name": "[[Avantage||Feature]]",
+  "props": [
+   {
+    "name": "title",
+    "label": "[[Titre||Title]]",
+    "type": "text",
+    "default": "[[Avantage||Feature]]"
+   },
+   {
+    "name": "text",
+    "label": "[[Texte||Text]]",
+    "type": "text",
+    "default": "[[Une phrase qui explique l'avantage.||A sentence explaining the benefit.]]"
+   }
+  ]
+ },
+ {
+  "id": "card",
+  "name": "[[Carte||Card]]",
+  "props": [
+   {
+    "name": "image",
+    "label": "Image",
+    "type": "image",
+    "default": ""
+   },
+   {
+    "name": "title",
+    "label": "[[Titre||Title]]",
+    "type": "text",
+    "default": "[[Titre de la carte||Card title]]"
+   },
+   {
+    "name": "link",
+    "label": "[[Lien||Link]]",
+    "type": "link",
+    "default": "#"
+   }
+  ],
+  "variants": [
+   {
+    "id": "flat",
+    "name": "[[Sans cadre||Borderless]]"
+   }
+  ]
+ },
+ {
+  "id": "testimonial",
+  "name": "[[Témoignage||Testimonial]]",
+  "props": [
+   {
+    "name": "quote",
+    "label": "[[Citation||Quote]]",
+    "type": "text",
+    "default": "[[Un avis client, en une ou deux phrases.||A client review, in one or two sentences.]]"
+   },
+   {
+    "name": "name",
+    "label": "[[Nom||Name]]",
+    "type": "text",
+    "default": "Camille Durand"
+   },
+   {
+    "name": "role",
+    "label": "[[Fonction||Role]]",
+    "type": "text",
+    "default": "[[Cliente||Client]]"
+   },
+   {
+    "name": "avatar",
+    "label": "[[Photo||Photo]]",
+    "type": "image",
+    "default": ""
+   }
+  ]
+ },
+ {
+  "id": "stat",
+  "name": "[[Chiffre||Figure]]",
+  "props": [
+   {
+    "name": "value",
+    "label": "[[Valeur||Value]]",
+    "type": "text",
+    "default": "120+"
+   },
+   {
+    "name": "label",
+    "label": "[[Légende||Label]]",
+    "type": "text",
+    "default": "[[projets livrés||projects delivered]]"
+   }
+  ]
+ },
+ {
+  "id": "price",
+  "name": "[[Offre||Plan]]",
+  "props": [
+   {
+    "name": "plan",
+    "label": "[[Nom de l'offre||Plan name]]",
+    "type": "text",
+    "default": "[[Essentiel||Essential]]"
+   },
+   {
+    "name": "price",
+    "label": "[[Prix||Price]]",
+    "type": "text",
+    "default": "29 €"
+   },
+   {
+    "name": "period",
+    "label": "[[Période||Period]]",
+    "type": "text",
+    "default": "[[/mois||/month]]"
+   },
+   {
+    "name": "cta",
+    "label": "[[Bouton||Button]]",
+    "type": "text",
+    "default": "[[Choisir||Choose]]"
+   },
+   {
+    "name": "link",
+    "label": "[[Lien du bouton||Button link]]",
+    "type": "link",
+    "default": "/contact/"
+   }
+  ],
+  "variants": [
+   {
+    "id": "featured",
+    "name": "[[Mise en avant||Featured]]"
+   }
+  ]
+ },
+ {
+  "id": "member",
+  "name": "[[Membre de l'équipe||Team member]]",
+  "props": [
+   {
+    "name": "photo",
+    "label": "[[Photo||Photo]]",
+    "type": "image",
+    "default": ""
+   },
+   {
+    "name": "name",
+    "label": "[[Nom||Name]]",
+    "type": "text",
+    "default": "Prénom Nom"
+   },
+   {
+    "name": "role",
+    "label": "[[Fonction||Role]]",
+    "type": "text",
+    "default": "[[Fonction||Role]]"
+   }
+  ]
+ },
+ {
+  "id": "faq",
+  "name": "[[Question||Question]]",
+  "props": [
+   {
+    "name": "question",
+    "label": "[[Question||Question]]",
+    "type": "text",
+    "default": "[[Une question fréquente ?||A frequent question?]]"
+   }
+  ]
+ },
+ {
+  "id": "cta-band",
+  "name": "[[Appel à l'action||Call to action]]",
+  "props": [
+   {
+    "name": "title",
+    "label": "[[Titre||Title]]",
+    "type": "text",
+    "default": "[[Un projet en tête ?||Have a project in mind?]]"
+   },
+   {
+    "name": "text",
+    "label": "[[Texte||Text]]",
+    "type": "text",
+    "default": "[[Parlons-en, la première rencontre est offerte.||Let's talk, the first meeting is on us.]]"
+   },
+   {
+    "name": "cta",
+    "label": "[[Bouton||Button]]",
+    "type": "text",
+    "default": "[[Prendre contact||Get in touch]]"
+   },
+   {
+    "name": "link",
+    "label": "[[Lien du bouton||Button link]]",
+    "type": "link",
+    "default": "/contact/"
+   }
+  ]
+ }
+]

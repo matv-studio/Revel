@@ -235,11 +235,36 @@ pub fn SiteColors(s: DocSession) -> impl IntoView {
         } else {
             value.clone()
         };
+        // Transparence gardée : la pastille montre la couleur sur un damier, le choix natif ne règle
+        // que la teinte (l'opacité reste celle de la valeur), la glissière règle l'opacité.
+        let cur = Rgba::parse(&shown);
+        let alpha = cur.map(|c| c.a).unwrap_or(1.0);
+        let (v3, m3) = (var.clone(), media.clone());
+        let shown2 = shown.clone();
         view! {
             <span class="color-cell">
-                <input type="color" class="color-swatch-input" prop:value=hex(&shown)
-                    aria-label=label(&var)
-                    on:change=move |e| set(v1.clone(), m1.clone(), Some(event_target_value(&e)))/>
+                <label class="color-cell__swatch" style=format!("--swatch:{}", if shown.is_empty() { "transparent".to_string() } else { shown.clone() })
+                    title=ui.t("colors-pick")>
+                    <input type="color" class="color-swatch-input" prop:value=hex(&shown)
+                        aria-label=label(&var)
+                        on:change=move |e| {
+                            let picked = Rgba::parse(&event_target_value(&e));
+                            let out = match (picked, Rgba::parse(&shown2)) {
+                                (Some(mut p), Some(old)) if old.a < 1.0 => { p.a = old.a; p.to_css() }
+                                _ => event_target_value(&e),
+                            };
+                            set(v1.clone(), m1.clone(), Some(out))
+                        }/>
+                </label>
+                <input type="range" class="range range--plain color-cell__alpha" min="0" max="100" step="1"
+                    title=ui.t("colors-opacity") aria-label=ui.t("colors-opacity")
+                    prop:value=(alpha * 100.0).round().to_string()
+                    on:change=move |e| {
+                        let Ok(a) = event_target_value(&e).parse::<f64>() else { return };
+                        let Some(mut c) = cur else { return };
+                        c.a = (a / 100.0).clamp(0.0, 1.0);
+                        set(v3.clone(), m3.clone(), Some(if c.a >= 1.0 { c.hex6() } else { c.to_css() }))
+                    }/>
                 <input class="input input--mono color-value" prop:value=value spellcheck="false"
                     placeholder=placeholder.unwrap_or_default()
                     on:change=move |e| {

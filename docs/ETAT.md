@@ -10,8 +10,7 @@ Mis à jour le 26/10/2026 (conversation dédiée à Revel ; dernière avancée :
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
 ## Travail du 26/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.6.9
-Commits 933e49c et cd65eca sur `main` (CI de cd65eca : tout réussi sauf « Équivalence », relancée après un 504 de GitHub au
-téléchargement de wasm-bindgen). Décisions D-126 à D-139 (D-132 à trancher : modèles partagés en ligne) ;
+Commits 933e49c, cd65eca et dd29dda sur `main` ; CI entièrement réussie sur dd29dda (flux 40388623717). Décisions D-126 à D-139 (D-132 à trancher : modèles partagés en ligne) ;
 `docs/ETAPE-8.md`, lignes 8.10 et 8.11. À intégrer à la note du projet « Revel » :
 - D-126 liens de variantes carré + point ; D-127 sites du compte GitHub (liste, téléchargement, synchroniser).
 - D-128 26 modèles de site par métier (`crates/revel-core/templates/`, kit `_kit/`, `build.rs`), galerie dans

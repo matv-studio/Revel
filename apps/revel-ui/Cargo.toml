@@ -3,7 +3,7 @@
 # le cœur.
 [package]
 name = "revel-ui"
-version = "0.6.9"
+version = "0.7.0"
 edition = "2024"
 publish = false
 

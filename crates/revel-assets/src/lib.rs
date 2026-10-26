@@ -68,6 +68,17 @@ impl Format {
     }
 }
 
+/// Dimensions d'une image (largeur, hauteur), lues dans son en-tête ; `None` si le format n'est
+/// pas reconnu.
+pub fn dimensions(path: &Path) -> Option<(u32, u32)> {
+    image::ImageReader::open(path)
+        .ok()?
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
+}
+
 /// Qualités d'encodage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Quality {

@@ -52,6 +52,7 @@ mod sitemap;
 mod sitesettings;
 mod styles;
 mod sync;
+mod templates;
 mod textfield;
 mod variables;
 mod versions;

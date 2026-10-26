@@ -1281,20 +1281,29 @@ d'une collection (clic droit) et sur une collection vide : ouvre dans l'éditeur
 suit le modèle (les modifications s'appliquent à toutes ses pages sauf celles qui ont un design propre, D-28) ;
 crée le modèle et l'adresse des pages au besoin, et un premier contenu « Exemple » quand la collection est vide.
 
-**D-132 — 26/10/2026 — proposée.** **Modèles partagés en ligne par les utilisateurs.** Trois voies :
-- *Fichier de modèle* (`.revel-template`, archive de la même forme que les modèles inclus) exporté depuis un site
-  (« Enregistrer comme modèle ») et ouvert dans la galerie : sans serveur ni compte ; pas de découverte, pas de
-  modération.
-- *Catalogue sur GitHub* : dépôt public (index `catalog.json`, un dossier par modèle), proposition par demande de
-  fusion relue, lecture par les fichiers bruts (pas de limite de l'API non authentifiée), téléchargement à la
-  demande, version figée par modèle : gratuit, historique et modération par relecture ; proposer demande un compte
-  GitHub (déjà relié dans Revel, D-127) et une relecture humaine.
-- *Service de Revel* (comptes, envois, notes, signalements) : découverte et envoi les plus simples ; serveur,
-  stockage, modération et données personnelles à assumer (coût continu).
-Dans tous les cas : un modèle n'est que des données (aucun script hors des outils de Revel, adresses externes en
-`https` seulement, audit des réglages modifiables réussi, licence et crédits des photos obligatoires), vérifié à
-l'ouverture comme à l'envoi. Ordre possible : fichier de modèle d'abord (outil d'export utile seul), catalogue
-GitHub ensuite ; le service seulement si l'usage le justifie. À trancher par l'utilisateur.
+**D-132 — 26/10/2026 — prise (fichier et catalogue GitHub ; pas de service).** **Templates partagés.**
+Le mot « template » est gardé en français pour ces sites prêts à adapter (demande de l'utilisateur).
+- *Fichier de template* (`.revel-template`, archive ZIP : `template.json`, `preview.<ext>`, `site/…`) :
+  Paramètres du site › Publication › Template › « Enregistrer… ». Léger : textes, pages, composants, styles,
+  contenus du CMS, icônes (SVG) et polices compris ; images du site remplacées par des images d'attente en ligne
+  aux mêmes proportions (`https://placehold.co/<l>x<h>.webp`, 2 400 px au plus de côté) ; vidéos, sons et
+  documents retirés (adresses vidées) ; code jamais repris (scripts, programmes, `package.json`…). Adresse
+  publique, destinataire des formulaires et code personnalisé retirés du document. Ouvert dans « Nouveau site »
+  › Plus › « Ouvrir un fichier » (description, auteur, licence, taille, nombre d'images à remplacer).
+- *Catalogue GitHub* : dépôt public (`catalog.json` à la racine, un dossier `templates/<id>/` de la même forme
+  que l'archive, tous les fichiers du site compris : images, vidéos, documents ; plus de 100 Mo par fichier :
+  laissé de côté et signalé). Lecture par les fichiers bruts (`raw.githubusercontent.com/<dépôt>/HEAD/…`), sans
+  limite de l'API. Envoi depuis Paramètres › Publication › Template › « Envoyer » avec le compte GitHub relié
+  (D-127) : objets Git (contenus, arbre, version) poussés directement si le compte peut écrire dans le dépôt,
+  sinon copie du dépôt et demande de fusion (relecture humaine). Index lu par l'API au moment de l'envoi (les
+  fichiers bruts restent en cache quelques minutes). Réglages de Revel › Templates : dépôt du catalogue
+  (`matv-studio/revel-templates` par défaut), nombre de templates, « Créer un catalogue sur GitHub » (dépôt public
+  `revel-templates` du compte, `catalog.json` vide et présentation). Galerie : onglet « Catalogue ».
+- À l'ouverture d'un template (fichier ou catalogue) : chemins vérifiés (ni remontée ni racine), taille bornée,
+  fichiers de code laissés de côté, code personnalisé, éléments `<script>`, attributs `on…` et liens
+  `javascript:` retirés du document ; langue et couleurs du template gardées.
+- Outils pour assistants : `save_as_template`, `publish_template` (MCP).
+- Service propre à Revel (comptes, notes, modération) : non retenu tant que l'usage ne le justifie pas.
 
 **D-133 — 26/10/2026 — prise.** **Colonnes du tableau du CMS.** Épingle à côté de chaque champ de la fiche
 (montré en colonne ou non) ; bouton « Colonnes » et clic droit sur l'en-tête (cocher, masquer la colonne
@@ -1366,9 +1375,38 @@ code).** Réglages qui demandaient de taper une valeur technique remplacés par 
   sur le fond) ; médias au clavier (Entrée : détails, Maj+Entrée : insérer) ; adresses des collections du
   plan écrites `‹slug›` ; bandeau « images en ligne » discret sous la recherche des médias, retiré une fois
   les images téléchargées.
-Reste à faire (relevé) : panneaux en surimpression aux petites largeurs de l'éditeur, valeurs `clamp()` et
-`var()` en pastille éditable, choix d'un champ « liste » en lignes, listes de nombres ou de dates en lignes,
-classes proposées pour la classe du corps de page, barre du texte riche au clavier.
+Points restants faits ensuite (26/10/2026, soir) :
+- Fenêtre étroite : colonne de droite au-dessus du canevas sous 1 000 px, celle de gauche aussi sous 760 px ;
+  languette sur le bord de chaque colonne pour la replier ou la rouvrir (repliée : languette visible à toute
+  largeur ; `fold_left`, `fold_right` de la disposition).
+- Valeur fluide (`clamp()`, `min()`, `max()`) en pastille « Fluide 1rem → 3rem » : fenêtre Min., Idéal, Max.,
+  « Valeur fixe » ; variable du site (`var(--step-5)`) en pastille « Step 5 » : liste des variables du site
+  avec leur valeur, « Détacher de la variable » ; le menu des unités reste à côté (convertit en valeur fixe).
+  Variables négatives nommées « Step −1 ».
+- Propriété « Liste » d'un composant écrite à la main (`["a", "b"]`) : une ligne par valeur (réordonner,
+  retirer, ajouter) ; liste reliée à un champ : inchangée.
+- Champs du CMS liste de nombres ou de dates (schéma `number`/`date` avec `list`, ou valeurs sans schéma) : une
+  ligne par valeur (champ nombre ou date), réordonnable.
+- Classes du corps de page (page et modèle) : pastilles retirables, ajout avec les classes du site proposées,
+  nom invalide signalé.
+- Texte riche au clavier : Alt+F10 dans le texte ouvre la barre, flèches gauche/droite, Début/Fin, Entrée ou
+  Espace, Échap revient au texte (`role="toolbar"`, `aria-keyshortcuts`).
+
+**D-140 — 26/10/2026 — prise.** **Création d'un site : fenêtre compacte, galerie à la demande.** La fenêtre
+« Nouveau site » reprend sa forme d'avant D-128 (nom, langue, template, couleurs, emplacement) ; le choix du
+template a trois boutons : « Vide », un template inclus tiré au hasard à chaque ouverture (nom et couleurs), et
+« Plus », qui élargit la fenêtre (animation de la largeur, réduite si l'utilisateur demande moins de mouvement)
+sur la galerie complète : templates inclus par catégorie, catalogue GitHub, fichier de template. Un template
+partagé garde sa langue et ses couleurs (champs masqués).
+
+**D-141 — 26/10/2026 — prise.** **Interface en 15 langues.** Anglais, français, espagnol, allemand, italien,
+portugais, néerlandais, polonais, turc, russe, indonésien, hindi, chinois simplifié, japonais, coréen
+(`crates/revel-i18n/locales/<code>/revel.ftl`), choisies dans Réglages › Général › Langue (liste, noms dans
+leur propre langue) et proposées comme langue du contenu d'un nouveau site. Traductions faites par un modèle
+de langue à partir de l'anglais, vérifiées par un programme (mêmes clés, variables, attributs et sélecteurs
+qu'en anglais ; essai `revel-i18n`) ; relecture par des locuteurs bienvenue. Repli sur l'anglais pour une clé
+absente ; nombres groupés selon la langue. Arabe et hébreu non proposés : l'interface ne s'écrit pas encore de
+droite à gauche. Guide intégré (aide) : français et anglais seulement (les autres langues lisent l'anglais).
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.

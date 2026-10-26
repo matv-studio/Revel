@@ -31,6 +31,7 @@ mod publish;
 mod readable;
 mod rollback;
 pub mod secrets;
+pub mod sharing;
 pub mod starter;
 mod state;
 pub mod templates;
@@ -139,6 +140,9 @@ pub enum CoreError {
     /// Construction d'un site par Revel (D-88).
     #[error("{0}")]
     Build(#[from] revel_build::BuildError),
+    /// Modèle partagé (D-132) : clé de traduction, précision.
+    #[error("{0} : {1}")]
+    Template(&'static str, String),
     #[error("{0}")]
     Other(String),
 }
@@ -253,6 +257,7 @@ impl CoreError {
             Self::FigmaNotFound => Failure::new("error-figma-not-found"),
             Self::Figma(d) => Failure::new("error-figma").arg("detail", d.clone()),
             Self::WebflowToken => Failure::new("error-webflow-token"),
+            Self::Template(key, detail) => Failure::new(*key).arg("detail", detail.clone()),
             Self::Other(detail) => Failure::detail(detail.clone()),
         }
     }
@@ -479,6 +484,7 @@ impl Core {
                 palette: i.palette,
                 features: i.features,
                 pages: i.pages,
+                ..Default::default()
             })
             .collect()
     }
@@ -493,6 +499,12 @@ impl Core {
         template: &str,
         scheme: &str,
     ) -> Result<SiteSummary> {
+        // Modèle partagé (D-132) : fichier ou catalogue ; langue et couleurs du modèle.
+        if template.starts_with("file:") || template.starts_with("catalog:") {
+            return self
+                .create_site_shared(parent, name, template)
+                .map(|(s, _)| s);
+        }
         self.new_site_template(&site_folder(parent, name), name, lang, template, scheme)
     }
 

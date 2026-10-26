@@ -705,6 +705,28 @@ fn prop_value_row(
         }
         .into_any();
     }
+    // Propriété liste écrite à la main (D-139) : une ligne par valeur.
+    if p.kind == PropKind::List
+        && let Some(items) = arg.as_deref().map_or(Some(Vec::new()), list_literal)
+    {
+        let items = Signal::stored(items);
+        return view! {
+            <div class="prop-row prop-row--list" data-prop=p.name.clone()>
+                <div class="prop-list-head">
+                    <span class="prop-label">{kind_icon(p.kind)}{label}</span>
+                    {can_bind.then(|| view! {
+                        <button type="button" class="icon-btn icon-btn--small bind-field" title=ui.t("component-bind-field") aria-label=ui.t("component-bind-field")
+                            on:click=field_menu>{icons::database()}</button>
+                    })}
+                    {reset()}
+                </div>
+                <crate::cmsfields::RowsEditor items=items set=Callback::new(move |v: Vec<String>| {
+                    set(name.get_value(), (!v.is_empty()).then(|| format!("[{}]", v.iter().map(|x| quote(x)).collect::<Vec<_>>().join(", "))))
+                })/>
+            </div>
+        }
+        .into_any();
+    }
     // Valeur calculée (expression) : modifiée telle quelle.
     let expr = p.kind == PropKind::List || arg.as_deref().is_some_and(|a| literal(a).is_none());
     let shown = match &arg {
@@ -1716,5 +1738,54 @@ pub fn TransitionSelect(id: String) -> impl IntoView {
                 }).collect_view()}
             </select>
         </span>
+    }
+}
+
+/// Liste écrite à la main (`["a", 'b']`) : ses textes ; `None` si c'est une expression (champ
+/// relié, filtre…).
+pub(crate) fn list_literal(expr: &str) -> Option<Vec<String>> {
+    let inner = expr.trim().strip_prefix('[')?.strip_suffix(']')?.trim();
+    if inner.is_empty() {
+        return Some(Vec::new());
+    }
+    let mut out = Vec::new();
+    let (mut cur, mut quote_ch, mut esc) = (String::new(), None::<char>, false);
+    for c in inner.chars() {
+        if let Some(q) = quote_ch {
+            cur.push(c);
+            if esc {
+                esc = false;
+            } else if c == '\\' {
+                esc = true;
+            } else if c == q {
+                quote_ch = None;
+            }
+        } else if c == ',' {
+            out.push(literal(cur.trim())?);
+            cur.clear();
+        } else {
+            if c == '"' || c == '\'' {
+                quote_ch = Some(c);
+            }
+            cur.push(c);
+        }
+    }
+    out.push(literal(cur.trim())?);
+    Some(out)
+}
+
+#[cfg(test)]
+mod list_tests {
+    use super::list_literal;
+
+    #[test]
+    fn listes_ecrites() {
+        assert_eq!(
+            list_literal(r#"["a", 'b, c', "d\"e"]"#),
+            Some(vec!["a".into(), "b, c".into(), "d\"e".into()])
+        );
+        assert_eq!(list_literal("[]"), Some(vec![]));
+        assert_eq!(list_literal("item.data.tags"), None);
+        assert_eq!(list_literal("[x, 'y']"), None);
     }
 }

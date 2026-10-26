@@ -196,6 +196,31 @@ impl Core {
                 let (state, count) = self.media_localize(site).map_err(f)?;
                 json(serde_json::json!({ "state": state, "count": count }))
             }
+            // Modèles partagés (D-132).
+            "template_save" => json(
+                self.template_save(
+                    site,
+                    &arg::<revel_protocol::TemplateShare>(args, "share")?,
+                    Path::new(&arg::<String>(args, "dest")?),
+                )
+                .map_err(f)?,
+            ),
+            "template_file_info" => json(
+                self.template_file_info(Path::new(&arg::<String>(args, "file")?))
+                    .map_err(f)?,
+            ),
+            "template_publish" => json(
+                self.template_publish(
+                    site,
+                    &arg::<String>(args, "repo")?,
+                    &arg::<revel_protocol::TemplateShare>(args, "share")?,
+                )
+                .map_err(f)?,
+            ),
+            "template_catalog" => json(
+                self.template_catalog(&arg::<String>(args, "repo")?)
+                    .map_err(f)?,
+            ),
             "links_check" => json(
                 crate::links::check_site(
                     site,

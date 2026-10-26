@@ -2935,3 +2935,296 @@ fn walkdir_md(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     }
     out
 }
+
+/// Modèle partagé (D-132) : fichier léger (images en attente en ligne, icônes et polices
+/// gardées, vidéo retirée, code laissé de côté), puis nouveau site d'après ce fichier.
+#[test]
+fn modele_partage_fichier_leger() {
+    use base64::Engine;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = d.path().join("blog");
+    c.new_site_template(&site, "Carnet", "fr", "blog", "auto")
+        .unwrap();
+    c.edit_open(&site).unwrap();
+    let online = c.media_online(&site).unwrap();
+    let doc = c.edit_site(&site).unwrap();
+    let map: std::collections::BTreeMap<String, String> = online
+        .iter()
+        .enumerate()
+        .map(|(i, u)| (u.clone(), format!("/media/photos/p{i}.png")))
+        .collect();
+    let list = crate::localize::commands(&site, &doc, &map);
+    c.edit_apply(&site, revel_edit::Command::Batch { commands: list }, false)
+        .unwrap();
+    // PNG de 1 × 1 pixel.
+    let png = base64::engine::general_purpose::STANDARD
+        .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+        .unwrap();
+    std::fs::create_dir_all(site.join("media/photos")).unwrap();
+    for i in 0..online.len() {
+        std::fs::write(site.join(format!("media/photos/p{i}.png")), &png).unwrap();
+    }
+    std::fs::create_dir_all(site.join("media/icons")).unwrap();
+    std::fs::write(
+        site.join("media/icons/star.svg"),
+        "<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+    )
+    .unwrap();
+    std::fs::write(site.join("media/clip.mp4"), b"video").unwrap();
+    std::fs::write(site.join("media/tracker.js"), b"alert(1)").unwrap();
+    let pages = c.edit_site(&site).unwrap().pages.len();
+    let share = revel_protocol::TemplateShare {
+        name: "Mon carnet".into(),
+        category: "editorial".into(),
+        author: "Atelier".into(),
+        license: "CC-BY-4.0".into(),
+        preview: Some("media/photos/p0.png".into()),
+        ..Default::default()
+    };
+    let dest = d.path().join("carnet.revel-template");
+    let saved = c.template_save(&site, &share, &dest).unwrap();
+    assert_eq!(saved.placeholders, online.len(), "{saved:?}");
+    assert_eq!((saved.missing, saved.skipped), (1, 1), "{saved:?}");
+    let info = c.template_file_info(&dest).unwrap();
+    assert_eq!((info.name.as_str(), info.pages), ("Mon carnet", pages));
+    assert!(
+        info.preview
+            .as_deref()
+            .is_some_and(|p| p.starts_with("data:image/png;base64,"))
+    );
+    let (s, _) = c
+        .create_site_shared(d.path(), "Nouveau", &format!("file:{}", dest.display()))
+        .unwrap();
+    let new = std::path::PathBuf::from(&s.path);
+    assert_eq!(s.name, "Nouveau");
+    assert!(new.join("media/icons/star.svg").exists());
+    assert!(!new.join("media/photos/p0.png").exists());
+    assert!(!new.join("media/tracker.js").exists() && !new.join("media/clip.mp4").exists());
+    let doc = std::fs::read_to_string(new.join(revel_project::SITE_FILE)).unwrap();
+    let mut entries = String::new();
+    for e in walkdir_md(&new.join("content")) {
+        entries.push_str(&std::fs::read_to_string(e).unwrap());
+    }
+    assert!(format!("{doc}{entries}").contains("https://placehold.co/10x10.webp"));
+    assert!(!doc.contains("/media/photos/p0.png") && !entries.contains("media/photos/p"));
+    assert_eq!(
+        revel_project::Project::open(&new).unwrap().site.pages.len(),
+        pages
+    );
+    // Images d'attente : pas proposées à la copie dans le site.
+    c.edit_open(&new).unwrap();
+    assert!(
+        c.media_online(&new)
+            .unwrap()
+            .iter()
+            .all(|u| !u.contains("placehold.co"))
+    );
+}
+
+/// Serveur local qui imite l'API de GitHub (objets Git d'un dépôt) et ses fichiers bruts, pour
+/// l'envoi d'un modèle dans un catalogue (D-132).
+fn faux_github() -> (
+    String,
+    std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>>,
+) {
+    use base64::Engine;
+    use std::collections::BTreeMap;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::sync::{Arc, Mutex};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let files: Arc<Mutex<BTreeMap<String, Vec<u8>>>> = Arc::default();
+    let shared = files.clone();
+    std::thread::spawn(move || {
+        let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        let mut trees: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+        let mut commits: BTreeMap<String, String> = BTreeMap::new();
+        let mut head = "c0".to_string();
+        commits.insert("c0".into(), "t0".into());
+        trees.insert("t0".into(), Vec::new());
+        let mut n = 0;
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut r = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            if r.read_line(&mut line).is_err() || line.is_empty() {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
+            let (method, path) = (
+                parts.next().unwrap_or("").to_string(),
+                parts.next().unwrap_or("").to_string(),
+            );
+            let mut len = 0usize;
+            loop {
+                let mut h = String::new();
+                r.read_line(&mut h).unwrap();
+                if h == "\r\n" || h.is_empty() {
+                    break;
+                }
+                if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
+                    len = v.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut body = vec![0u8; len];
+            r.read_exact(&mut body).unwrap();
+            let json: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+            n += 1;
+            let repo = "/api/repos/tester/cat";
+            let (status, out): (u16, Vec<u8>) = if path == "/api/user" {
+                (200, br#"{"login":"tester","id":1}"#.to_vec())
+            } else if path == repo {
+                (200, br#"{"full_name":"tester/cat","private":false,"html_url":"x","clone_url":"x","default_branch":"main","permissions":{"push":true}}"#.to_vec())
+            } else if path == format!("{repo}/git/ref/heads/main") {
+                (
+                    200,
+                    serde_json::json!({ "object": { "sha": head } })
+                        .to_string()
+                        .into_bytes(),
+                )
+            } else if let Some(sha) = path.strip_prefix(&format!("{repo}/git/commits/")) {
+                (
+                    200,
+                    serde_json::json!({ "tree": { "sha": commits[sha] } })
+                        .to_string()
+                        .into_bytes(),
+                )
+            } else if path == format!("{repo}/git/blobs") {
+                let b = base64::engine::general_purpose::STANDARD
+                    .decode(json["content"].as_str().unwrap())
+                    .unwrap();
+                let sha = format!("b{n}");
+                blobs.insert(sha.clone(), b);
+                (
+                    201,
+                    serde_json::json!({ "sha": sha }).to_string().into_bytes(),
+                )
+            } else if path == format!("{repo}/git/trees") {
+                let mut entries = trees[json["base_tree"].as_str().unwrap()].clone();
+                for e in json["tree"].as_array().unwrap() {
+                    let p = e["path"].as_str().unwrap().to_string();
+                    entries.retain(|(q, _)| *q != p);
+                    entries.push((p, e["sha"].as_str().unwrap().to_string()));
+                }
+                let sha = format!("t{n}");
+                trees.insert(sha.clone(), entries);
+                (
+                    201,
+                    serde_json::json!({ "sha": sha }).to_string().into_bytes(),
+                )
+            } else if path == format!("{repo}/git/commits") && method == "POST" {
+                assert_eq!(json["parents"][0].as_str(), Some(head.as_str()));
+                let sha = format!("c{n}");
+                commits.insert(sha.clone(), json["tree"].as_str().unwrap().to_string());
+                (
+                    201,
+                    serde_json::json!({ "sha": sha }).to_string().into_bytes(),
+                )
+            } else if path == format!("{repo}/git/refs/heads/main") && method == "PATCH" {
+                head = json["sha"].as_str().unwrap().to_string();
+                let mut f = shared.lock().unwrap();
+                f.clear();
+                for (p, b) in &trees[&commits[&head]] {
+                    f.insert(p.clone(), blobs[b].clone());
+                }
+                (200, b"{}".to_vec())
+            } else if path == format!("{repo}/contents/catalog.json") {
+                match shared.lock().unwrap().get("catalog.json") {
+                    Some(b) => (
+                        200,
+                        serde_json::json!({ "content": base64::engine::general_purpose::STANDARD.encode(b) })
+                            .to_string()
+                            .into_bytes(),
+                    ),
+                    None => (404, b"{}".to_vec()),
+                }
+            } else if let Some(p) = path.strip_prefix("/raw/tester/cat/HEAD/") {
+                let p = p.replace("%20", " ");
+                match shared.lock().unwrap().get(&p) {
+                    Some(b) => (200, b.clone()),
+                    None => (404, b"404".to_vec()),
+                }
+            } else {
+                (
+                    404,
+                    format!("{{\"message\":\"{method} {path}\"}}").into_bytes(),
+                )
+            };
+            let _ = write!(
+                stream,
+                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                out.len()
+            );
+            let _ = stream.write_all(&out);
+        }
+    });
+    (base, files)
+}
+
+/// Catalogue GitHub (D-132) : modèle complet envoyé (images comprises), listé, repris.
+#[test]
+fn modele_partage_catalogue() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let (base, files) = faux_github();
+    revel_git::github::override_api(Some(format!("{base}/api")));
+    crate::sharing::override_raw(Some(format!("{base}/raw")));
+    c.store_github_token(&revel_git::github::Token {
+        access_token: "essai".into(),
+        refresh_token: None,
+        expires_at: None,
+        refresh_expires_at: None,
+        scope: String::new(),
+    })
+    .unwrap();
+    let site = d.path().join("vitrine");
+    c.new_site_template(&site, "Vitrine", "fr", "showcase", "auto")
+        .unwrap();
+    std::fs::create_dir_all(site.join("media/photos")).unwrap();
+    std::fs::write(site.join("media/photos/a b.jpg"), b"jpeg").unwrap();
+    std::fs::write(site.join("media/clip.mp4"), b"video").unwrap();
+    std::fs::write(site.join("build.js"), b"x").unwrap();
+    let share = revel_protocol::TemplateShare {
+        name: "Vitrine claire".into(),
+        category: "business".into(),
+        license: "CC0-1.0".into(),
+        ..Default::default()
+    };
+    let r = c.template_publish(&site, "tester/cat", &share).unwrap();
+    assert!(
+        !r.pull_request && r.url.contains("templates/vitrine-claire"),
+        "{r:?}"
+    );
+    {
+        let f = files.lock().unwrap();
+        assert!(f.contains_key("catalog.json"));
+        assert!(f.contains_key("templates/vitrine-claire/site/media/photos/a b.jpg"));
+        assert!(f.contains_key("templates/vitrine-claire/site/media/clip.mp4"));
+        assert!(!f.keys().any(|k| k.ends_with("build.js")));
+    }
+    let list = c.template_catalog("tester/cat").unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].id, "catalog:tester/cat#vitrine-claire");
+    assert_eq!(list[0].license, "CC0-1.0");
+    let (s, _) = c
+        .create_site_shared(d.path(), "Reprise", &list[0].id)
+        .unwrap();
+    let new = std::path::PathBuf::from(&s.path);
+    assert_eq!(
+        std::fs::read(new.join("media/photos/a b.jpg")).unwrap(),
+        b"jpeg"
+    );
+    assert!(new.join("media/clip.mp4").exists() && !new.join("build.js").exists());
+    // Deuxième envoi du même modèle : remplacé dans l'index, pas en double.
+    c.template_publish(&site, "tester/cat", &share).unwrap();
+    assert_eq!(c.template_catalog("tester/cat").unwrap().len(), 1);
+    let other = revel_protocol::TemplateShare {
+        name: "Vitrine sombre".into(),
+        ..share.clone()
+    };
+    c.template_publish(&site, "tester/cat", &other).unwrap();
+    assert_eq!(c.template_catalog("tester/cat").unwrap().len(), 2);
+    revel_git::github::override_api(None);
+    crate::sharing::override_raw(None);
+}

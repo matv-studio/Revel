@@ -604,7 +604,7 @@ fn hue(name: &str) -> u32 {
 }
 
 /// Catégories de la galerie des modèles, dans l'ordre (D-128).
-const TEMPLATE_CATS: [&str; 11] = [
+pub(crate) const TEMPLATE_CATS: [&str; 11] = [
     "business",
     "creative",
     "commerce",
@@ -619,7 +619,7 @@ const TEMPLATE_CATS: [&str; 11] = [
 ];
 
 /// Clé de traduction d'une catégorie de modèles.
-fn cat_key(c: &str) -> &'static str {
+pub(crate) fn cat_key(c: &str) -> &'static str {
     match c {
         "business" => "template-cat-business",
         "creative" => "template-cat-creative",
@@ -651,6 +651,53 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
     let scheme = RwSignal::new("auto".to_string());
     let cat = RwSignal::new(String::new());
     let templates = RwSignal::new(Vec::<revel_protocol::TemplateInfo>::new());
+    // Modèles partagés (D-132) : catalogue GitHub (lu à la première ouverture de l'onglet),
+    // fichiers de modèle ouverts.
+    let source = RwSignal::new("builtin");
+    let catalog =
+        RwSignal::new(None::<Result<Vec<revel_protocol::TemplateInfo>, revel_protocol::Failure>>);
+    let opened = RwSignal::new(Vec::<revel_protocol::TemplateInfo>::new());
+    let show_catalog = move || {
+        source.set("catalog");
+        cat.set(String::new());
+        if catalog.with_untracked(Option::is_none) {
+            let repo = ui.settings.with_untracked(|s| s.template_catalog.clone());
+            spawn_local(async move {
+                let r = api::template_catalog(&repo).await;
+                let _ = catalog.try_set(Some(r));
+            });
+        }
+    };
+    let open_file = move |_| {
+        spawn_local(async move {
+            let files = match api::pick_files(
+                &ui.tx("template-file-kind", &[]),
+                &["revel-template"],
+                false,
+            )
+            .await
+            {
+                Ok(f) => f,
+                Err(e) => return ui.fail(e),
+            };
+            let Some(f) = files.into_iter().next() else {
+                return;
+            };
+            match api::template_file_info(&f).await {
+                Ok(info) => {
+                    let id = info.id.clone();
+                    opened.update(|l| {
+                        l.retain(|t| t.id != id);
+                        l.insert(0, info);
+                    });
+                    cat.set(String::new());
+                    template.set(id);
+                }
+                Err(e) => ui.fail(e),
+            }
+        });
+    };
+    let shared = move || template.with(|t| t.starts_with("file:") || t.starts_with("catalog:"));
     let input = NodeRef::<leptos::html::Input>::new();
     spawn_local(async move {
         if let Ok(d) = api::default_sites_dir().await {
@@ -731,8 +778,18 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
         }
     });
     on_cleanup(move || on_key.remove());
+    // Modèles de l'onglet : inclus ou catalogue, fichiers ouverts en tête.
+    let listed = move || {
+        let mut list = opened.get();
+        if source.get() == "catalog" {
+            list.extend(catalog.get().and_then(Result::ok).unwrap_or_default());
+        } else {
+            list.extend(templates.get());
+        }
+        list
+    };
     let cats = move || {
-        let list = templates.get();
+        let list = listed();
         TEMPLATE_CATS
             .iter()
             .filter(|c| list.iter().any(|t| t.category == **c))
@@ -741,23 +798,82 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
     };
     let shown = move || {
         let c = cat.get();
-        templates
-            .get()
+        listed()
             .into_iter()
             .filter(|t| c.is_empty() || t.category == c)
             .collect::<Vec<_>>()
     };
     let chosen = move || {
         let id = template.get();
-        templates.with(|l| l.iter().find(|t| t.id == id).cloned())
+        let find = |l: &Vec<revel_protocol::TemplateInfo>| l.iter().find(|t| t.id == id).cloned();
+        templates
+            .with(find)
+            .or_else(|| opened.with(find))
+            .or_else(|| catalog.with(|c| c.as_ref().and_then(|r| r.as_ref().ok()).and_then(find)))
+    };
+    // Fenêtre compacte (création rapide) : « Blank », un template tiré au hasard à chaque
+    // ouverture, « More » qui élargit la fenêtre sur la galerie complète.
+    let expanded = RwSignal::new(false);
+    let random = RwSignal::new(None::<revel_protocol::TemplateInfo>);
+    Effect::new(move |_| {
+        let list = templates.get();
+        if random.with_untracked(Option::is_none) && !list.is_empty() {
+            let i = ((js_sys::Math::random() * list.len() as f64) as usize).min(list.len() - 1);
+            random.set(list.get(i).cloned());
+        }
+    });
+    let lang_field = move || {
+        view! {
+            <label class="field">
+                <span class="label">{ui.t("new-site-lang")}</span>
+                <div class="select">
+                    <select class="input" on:change=move |e| lang.set(event_target_value(&e))>
+                        {crate::settings::SITE_LANGS.iter().map(|(code, label)| {
+                            let code: &'static str = code;
+                            view! { <option value=code lang=code selected=move || lang.get() == code>{*label}</option> }
+                        }).collect_view()}
+                    </select>
+                </div>
+            </label>
+        }
+    };
+    let scheme_field = move || {
+        view! {
+            <div class="field">
+                <span class="label" title=ui.t("new-site-scheme-help")>{ui.t("new-site-background")}</span>
+                <div class="segmented site-bg" role="radiogroup" aria-label=ui.t("new-site-background")>
+                    {[("auto", "new-site-auto"), ("light", "new-site-light"), ("dark", "new-site-dark")].into_iter().map(|(v, key)| view! {
+                        <button type="button" role="radio" data-bg=v class:is-on=move || scheme.get() == v
+                            aria-checked=move || (scheme.get() == v).to_string()
+                            on:click=move |_| scheme.set(v.to_string())>
+                            <span class="bg-swatch" class:bg-swatch--light=v == "light" class:bg-swatch--auto=v == "auto"></span>{ui.t(key)}
+                        </button>
+                    }).collect_view()}
+                </div>
+            </div>
+        }
     };
     view! {
         <div class="overlay" on:input=move |e| crate::dialog::mark_dirty(&e) on:mousedown=move |e| if crate::dialog::backdrop_click(&e) { close.run(()) }>
-            <form class="dialog dialog--form new-site" role="dialog" aria-modal="true" aria-labelledby="new-site-title"
+            <form class="dialog dialog--form new-site" class:is-expanded=move || expanded.get() role="dialog" aria-modal="true" aria-labelledby="new-site-title"
                 on:submit=move |e| { e.prevent_default(); submit() }>
+                <Show when=move || expanded.get()>
                 <div class="new-site__gallery">
                     <div class="new-site__head">
                         <h2 id="new-site-title">{ui.t("new-site-title")}</h2>
+                        <div class="new-site__sources">
+                            <div class="segmented new-site__source" role="radiogroup" aria-label=ui.t("template-source")>
+                                <button type="button" role="radio" data-source="builtin" class:is-on=move || source.get() == "builtin"
+                                    aria-checked=move || (source.get() == "builtin").to_string()
+                                    on:click=move |_| { source.set("builtin"); cat.set(String::new()) }>{ui.t("template-source-builtin")}</button>
+                                <button type="button" role="radio" data-source="catalog" class:is-on=move || source.get() == "catalog"
+                                    aria-checked=move || (source.get() == "catalog").to_string()
+                                    title=move || ui.settings.with(|s| s.template_catalog.clone())
+                                    on:click=move |_| show_catalog()>{icons::cloud()}{ui.t("template-source-catalog")}</button>
+                            </div>
+                            <button type="button" class="btn btn--small new-site__open-file" title=ui.t("template-open-file-help")
+                                on:click=open_file>{icons::folder()}{ui.t("template-open-file")}</button>
+                        </div>
                         <div class="new-site__cats" role="radiogroup" aria-label=ui.t("new-site-template")>
                             <button type="button" role="radio" class="cat-chip" class:is-on=move || cat.get().is_empty()
                                 aria-checked=move || cat.get().is_empty().to_string()
@@ -775,7 +891,19 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                         </div>
                     </div>
                     <div class="template-grid" role="radiogroup" aria-label=ui.t("new-site-template")>
-                        <Show when=move || cat.get().is_empty()>
+                        <Show when=move || source.get() == "catalog" && opened.with(Vec::is_empty)>
+                            {move || match catalog.get() {
+                                None => view! { <p class="template-grid__state muted">{ui.t("template-catalog-loading")}</p> }.into_any(),
+                                Some(Err(_)) => view! {
+                                    <p class="template-grid__state muted" title=ui.t("template-catalog-missing-help")>
+                                        {icons::warning()}{ui.tx("template-catalog-unreachable", &[("repo", ui.settings.with(|s| s.template_catalog.clone()))])}
+                                    </p>
+                                }.into_any(),
+                                Some(Ok(l)) if l.is_empty() => view! { <p class="template-grid__state muted">{ui.t("template-catalog-empty")}</p> }.into_any(),
+                                Some(Ok(_)) => ().into_any(),
+                            }}
+                        </Show>
+                        <Show when=move || cat.get().is_empty() && source.get() == "builtin">
                             <button type="button" class="template-card template-card--blank" role="radio" data-template="blank"
                                 class:is-on=move || template.get() == "blank" aria-checked=move || (template.get() == "blank").to_string()
                                 title=ui.t("new-site-template-blank-help")
@@ -799,19 +927,38 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                                             <span class="template-card__palette" inner_html=swatch></span>
                                         </span>
                                         <span class="template-card__name">{t.name.clone()}</span>
+                                        {t.id.starts_with("file:").then(|| view! {
+                                            <span class="template-card__badge" title=ui.t("template-from-file")>{icons::file()}</span>
+                                        })}
                                     </button>
                                 }
                             }
                         </For>
                     </div>
                 </div>
+                </Show>
                 <div class="new-site__side">
+                    <Show when=move || !expanded.get()>
+                        <h2 id="new-site-title">{ui.t("new-site-title")}</h2>
+                    </Show>
+                    <Show when=move || expanded.get()>
                     <div class="new-site__chosen">
                         {move || match chosen() {
                             Some(t) => view! {
                                 <p class="new-site__chosen-name">{t.name.clone()}</p>
                                 <p class="new-site__chosen-text">{t.description.clone()}</p>
                                 <p class="muted new-site__chosen-pages">{ui.now("template-pages", &[("n", t.pages.to_string())])}</p>
+                                {(!t.author.is_empty() || !t.license.is_empty()).then(|| view! {
+                                    <p class="muted new-site__chosen-meta">
+                                        {[t.author.clone(), t.license.clone(), (t.size > 0).then(|| crate::settings::size(ui, t.size)).unwrap_or_default()]
+                                            .into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(" · ")}
+                                    </p>
+                                })}
+                                {(t.placeholders > 0).then(|| view! {
+                                    <p class="muted new-site__chosen-meta" title=ui.t("template-placeholders-help")>
+                                        {icons::image()}{ui.now("template-placeholders", &[("n", t.placeholders.to_string())])}
+                                    </p>
+                                })}
                             }.into_any(),
                             None => view! {
                                 <p class="new-site__chosen-name">{ui.t("new-site-template-blank")}</p>
@@ -819,33 +966,48 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                             }.into_any(),
                         }}
                     </div>
+                    </Show>
                     <label class="field">
                         <span class="label">{ui.t("new-site-name")}</span>
                         <input class="input" type="text" node_ref=input spellcheck="false" autocomplete="off"
                             placeholder=ui.t("new-site-placeholder")
                             prop:value=move || name.get() on:input=move |e| name.set(event_target_value(&e))/>
                     </label>
-                    <label class="field">
-                        <span class="label">{ui.t("new-site-lang")}</span>
-                        <div class="select">
-                            <select class="input" on:change=move |e| lang.set(event_target_value(&e))>
-                                <option value="fr" lang="fr" selected=move || lang.get() == "fr">"Français"</option>
-                                <option value="en" lang="en" selected=move || lang.get() == "en">"English"</option>
-                            </select>
-                        </div>
-                    </label>
-                    <div class="field">
-                        <span class="label" title=ui.t("new-site-scheme-help")>{ui.t("new-site-background")}</span>
-                        <div class="segmented site-bg" role="radiogroup" aria-label=ui.t("new-site-background")>
-                            {[("auto", "new-site-auto"), ("light", "new-site-light"), ("dark", "new-site-dark")].into_iter().map(|(v, key)| view! {
-                                <button type="button" role="radio" data-bg=v class:is-on=move || scheme.get() == v
-                                    aria-checked=move || (scheme.get() == v).to_string()
-                                    on:click=move |_| scheme.set(v.to_string())>
-                                    <span class="bg-swatch" class:bg-swatch--light=v == "light" class:bg-swatch--auto=v == "auto"></span>{ui.t(key)}
+                    <Show when=move || !shared()>{lang_field()}</Show>
+                    <Show when=move || !expanded.get()>
+                        <div class="field">
+                            <span class="label">{ui.t("new-site-template")}</span>
+                            <div class="template-choices" role="radiogroup" aria-label=ui.t("new-site-template")>
+                                <button type="button" class="template-choice" role="radio" data-template="blank"
+                                    aria-checked=move || (template.get() == "blank").to_string()
+                                    class:is-on=move || template.get() == "blank"
+                                    title=ui.t("new-site-template-blank-help")
+                                    on:click=move |_| template.set("blank".into())>
+                                    {icons::page()}<span>{ui.t("new-site-template-blank")}</span>
                                 </button>
-                            }).collect_view()}
+                                {move || random.get().map(|t| {
+                                    let (id, id2, id3) = (t.id.clone(), t.id.clone(), t.id.clone());
+                                    let swatch = t.palette.iter().take(4).map(|c| format!("<i style=\"background:{c}\"></i>")).collect::<String>();
+                                    view! {
+                                        <button type="button" class="template-choice template-choice--random" role="radio" data-template="random"
+                                            data-id=t.id.clone()
+                                            aria-checked=move || (template.get() == id).to_string()
+                                            class:is-on=move || template.get() == id2
+                                            title=format!("{} · {}", t.name, t.description)
+                                            on:click=move |_| template.set(id3.clone())>
+                                            <span class="template-choice__palette" inner_html=swatch></span><span>{t.name.clone()}</span>
+                                        </button>
+                                    }
+                                })}
+                                <button type="button" class="template-choice" data-template="more"
+                                    title=ui.t("new-site-more-help") aria-expanded="false"
+                                    on:click=move |_| expanded.set(true)>
+                                    {icons::grid()}<span>{ui.t("new-site-more")}</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    </Show>
+                    <Show when=move || !shared()>{scheme_field()}</Show>
                     <div class="field">
                         <span class="label">{ui.t("new-site-location")}</span>
                         <div class="path-field">

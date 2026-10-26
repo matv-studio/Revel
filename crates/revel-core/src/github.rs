@@ -51,7 +51,7 @@ impl Core {
         }
     }
 
-    fn store_github_token(&self, t: &Token) -> Result<()> {
+    pub(crate) fn store_github_token(&self, t: &Token) -> Result<()> {
         let v = serde_json::to_string(t).map_err(|e| CoreError::Other(e.to_string()))?;
         self.secrets.set(TOKEN_KEY, &v).map_err(CoreError::Secret)
     }

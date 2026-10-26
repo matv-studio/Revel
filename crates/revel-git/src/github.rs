@@ -24,6 +24,23 @@ const API: &str = "https://api.github.com";
 const API_VERSION: &str = "2026-03-10";
 const LOGIN: &str = "https://github.com/login";
 
+thread_local! {
+    /// Adresse de l'API remplacée (essais : serveur local) ; `None` : api.github.com.
+    static API_OVERRIDE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Remplace l'adresse de l'API pour le fil d'exécution courant (essais).
+#[doc(hidden)]
+pub fn override_api(base: Option<String>) {
+    API_OVERRIDE.with(|o| *o.borrow_mut() = base);
+}
+
+fn api() -> String {
+    API_OVERRIDE
+        .with(|o| o.borrow().clone())
+        .unwrap_or_else(|| API.to_string())
+}
+
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .http_status_as_error(false)
@@ -309,7 +326,7 @@ impl Client {
     }
 
     pub fn user(&self) -> Result<User, GitError> {
-        let (s, b) = Self::read(self.req(self.agent.get(format!("{API}/user"))).call())?;
+        let (s, b) = Self::read(self.req(self.agent.get(format!("{}/user", api()))).call())?;
         match s {
             200 => Self::json(s, &b),
             _ => Err(api_error(s, &b)),
@@ -319,7 +336,7 @@ impl Client {
     /// Dépôt `proprietaire/nom` ; `None` s'il n'existe pas ou n'est pas accessible.
     pub fn repo(&self, full_name: &str) -> Result<Option<Repo>, GitError> {
         let (s, b) = Self::read(
-            self.req(self.agent.get(format!("{API}/repos/{full_name}")))
+            self.req(self.agent.get(format!("{}/repos/{full_name}", api())))
                 .call(),
         )?;
         match s {
@@ -340,7 +357,7 @@ impl Client {
             "has_wiki": false,
         });
         let (s, b) = Self::read(
-            self.req(self.agent.post(format!("{API}/user/repos")))
+            self.req(self.agent.post(format!("{}/user/repos", api())))
                 .send_json(&body),
         )?;
         match s {
@@ -352,7 +369,7 @@ impl Client {
     /// Site GitHub Pages ; `None` s'il n'est pas activé.
     pub fn pages(&self, full_name: &str) -> Result<Option<Pages>, GitError> {
         let (s, b) = Self::read(
-            self.req(self.agent.get(format!("{API}/repos/{full_name}/pages")))
+            self.req(self.agent.get(format!("{}/repos/{full_name}/pages", api())))
                 .call(),
         )?;
         match s {
@@ -369,8 +386,11 @@ impl Client {
             "source": { "branch": branch, "path": "/" },
         });
         let (s, b) = Self::read(
-            self.req(self.agent.post(format!("{API}/repos/{full_name}/pages")))
-                .send_json(&body),
+            self.req(
+                self.agent
+                    .post(format!("{}/repos/{full_name}/pages", api())),
+            )
+            .send_json(&body),
         )?;
         match s {
             201 => Self::json(s, &b),
@@ -392,12 +412,61 @@ impl Client {
             "source": { "branch": branch, "path": "/" },
         });
         let (s, b) = Self::read(
-            self.req(self.agent.put(format!("{API}/repos/{full_name}/pages")))
+            self.req(self.agent.put(format!("{}/repos/{full_name}/pages", api())))
                 .send_json(&body),
         )?;
         match s {
             204 | 200 => Ok(()),
             _ => Err(api_error(s, &b)),
+        }
+    }
+}
+
+impl Client {
+    /// Appel de l'API REST (`path` après `https://api.github.com`) : statut et corps JSON
+    /// (`Null` si vide). Sert aux modèles partagés (D-132) : dépôt du catalogue, objets Git,
+    /// copie et demande de fusion.
+    pub fn call(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<(u16, serde_json::Value), GitError> {
+        let url = format!("{}{path}", api());
+        let res = match (method, body) {
+            ("GET", _) => self.req(self.agent.get(url)).call(),
+            ("DELETE", _) => self.req(self.agent.delete(url)).call(),
+            ("POST", b) => self
+                .req(self.agent.post(url))
+                .send_json(b.cloned().unwrap_or(serde_json::json!({}))),
+            ("PUT", b) => self
+                .req(self.agent.put(url))
+                .send_json(b.cloned().unwrap_or(serde_json::json!({}))),
+            (_, b) => self
+                .req(self.agent.patch(url))
+                .send_json(b.cloned().unwrap_or(serde_json::json!({}))),
+        };
+        let (s, b) = Self::read(res)?;
+        let v = if b.trim().is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_str(&b).map_err(|e| GitError::Api(s, e.to_string()))?
+        };
+        Ok((s, v))
+    }
+
+    /// Comme [`Client::call`], en erreur si le statut n'est pas un succès (2xx).
+    pub fn call_ok(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<serde_json::Value, GitError> {
+        let (s, v) = self.call(method, path, body)?;
+        if (200..300).contains(&s) {
+            Ok(v)
+        } else {
+            Err(api_error(s, &v.to_string()))
         }
     }
 }
@@ -450,8 +519,11 @@ impl Client {
             name: String,
         }
         let (s, b) = Self::read(
-            self.req(self.agent.get(format!("{API}/repos/{full_name}/contents")))
-                .call(),
+            self.req(
+                self.agent
+                    .get(format!("{}/repos/{full_name}/contents", api())),
+            )
+            .call(),
         )?;
         match s {
             200 => Ok(serde_json::from_str::<Vec<Entry>>(&b)

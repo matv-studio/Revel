@@ -180,11 +180,10 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                             let theme = p.props.get("theme").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                             let (q1, q2) = (pid.clone(), pid.clone());
                             view! {
-                                <Field label=ui.t("pages-body-class") value=Signal::derive(move || body_class.clone()) mono=true
-                                    on_commit=move |v: String| {
-                                        let v = v.split_whitespace().collect::<Vec<_>>().join(" ");
+                                <BodyClasses ed value=Signal::derive(move || body_class.clone())
+                                    on_commit=Callback::new(move |v: String| {
                                         ed.apply(ui, Command::SetPageProp { page: q1.clone(), key: "bodyClass".into(), value: (!v.is_empty()).then(|| json!(v)) }, false)
-                                    }/>
+                                    })/>
                                 <label class="field">
                                     <span class="label" title=ui.t("pages-theme-help")>{ui.t("pages-theme")}</span>
                                     <div class="select">
@@ -438,8 +437,8 @@ pub fn TemplateSettings(layout: String, on_close: Callback<()>) -> impl IntoView
             <div class="page-settings-body">
                 <p class="muted small">{ui.t("template-settings-help")}</p>
                 <h3 class="page-settings-section">{ui.t("pages-look")}</h3>
-                <Field label=ui.t("pages-body-class") value=Signal::derive(move || text("bodyClass")) mono=true
-                    on_commit=move |v: String| set("bodyClass", v)/>
+                <BodyClasses ed value=Signal::derive(move || text("bodyClass"))
+                    on_commit=Callback::new(move |v: String| set("bodyClass", v))/>
                 <label class="field">
                     <span class="label" title=ui.t("pages-theme-help")>{ui.t("pages-theme")}</span>
                     <div class="select">
@@ -638,5 +637,98 @@ fn layout_props(ui: Ui, ed: Ed, page: StoredValue<String>) -> impl IntoView {
             </div>
             <div class="layout-props">{list}</div>
         })
+    }
+}
+
+/// Classes du corps de la page (D-139) : pastilles retirables, ajout dans un champ qui propose les
+/// classes du site (Entrée ou choix dans la liste) ; nom invalide signalé.
+#[component]
+fn BodyClasses(
+    ed: crate::editor::Ed,
+    #[prop(into)] value: Signal<String>,
+    on_commit: Callback<String>,
+) -> impl IntoView {
+    let ui = expect_context::<crate::Ui>();
+    let list = move || {
+        value
+            .get()
+            .split_whitespace()
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    let names: Vec<String> = ed.doc.with_untracked(|d| {
+        let mut n: Vec<String> = d
+            .as_ref()
+            .map(|d| {
+                revel_edit::classes::inventory(d)
+                    .into_iter()
+                    .map(|c| c.name)
+                    .collect()
+            })
+            .unwrap_or_default();
+        n.sort();
+        n.dedup();
+        n
+    });
+    let bad = RwSignal::new(false);
+    let valid = |c: &str| {
+        let mut chars = c.chars();
+        chars
+            .next()
+            .is_some_and(|f| f.is_ascii_alphabetic() || f == '_' || f == '-')
+            && chars.all(|x| x.is_ascii_alphanumeric() || x == '-' || x == '_')
+    };
+    let add = move |el: web_sys::HtmlInputElement| {
+        let t = el.value();
+        let mut cur = list();
+        let mut ok = true;
+        for c in t.split_whitespace() {
+            if !valid(c) {
+                ok = false;
+                continue;
+            }
+            if !cur.iter().any(|x| x == c) {
+                cur.push(c.to_string());
+            }
+        }
+        bad.set(!ok);
+        if ok {
+            el.set_value("");
+        }
+        on_commit.run(cur.join(" "));
+    };
+    let target = |e: &web_sys::Event| {
+        e.target()
+            .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlInputElement>(t).ok())
+    };
+    view! {
+        <div class="field body-classes">
+            <span class="label" title=ui.t("pages-body-class-help")>{ui.t("pages-body-class")}</span>
+            <div class="body-classes__box">
+                {move || list().into_iter().map(|c| {
+                    let c2 = c.clone();
+                    view! {
+                        <span class="chip chip--class">{c.clone()}
+                            <button type="button" class="chip-x" title=ui.t("action-remove") aria-label=ui.t("action-remove")
+                                on:click=move |_| {
+                                    let rest: Vec<String> = list().into_iter().filter(|x| *x != c2).collect();
+                                    on_commit.run(rest.join(" "));
+                                }>{crate::icons::close()}</button>
+                        </span>
+                    }
+                }).collect_view()}
+                <input class="input input--mono body-classes__input" type="text" list="body-class-names" spellcheck="false" autocomplete="off"
+                    placeholder=ui.t("pages-body-class-add") aria-label=ui.t("pages-body-class-add") aria-invalid=move || bad.get().to_string()
+                    on:keydown=move |e: leptos::ev::KeyboardEvent| {
+                        if e.key() == "Enter" {
+                            e.prevent_default();
+                            if let Some(el) = target(&e) { add(el) }
+                        }
+                    }
+                    on:change=move |e| if let Some(el) = target(&e) { add(el) }/>
+            </div>
+            <datalist id="body-class-names">{names.into_iter().map(|n| view! { <option value=n></option> }).collect_view()}</datalist>
+            {move || bad.get().then(|| view! { <span class="field-error" role="alert">{ui.t("act-class-invalid")}</span> })}
+        </div>
     }
 }

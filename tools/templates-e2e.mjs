@@ -4,7 +4,9 @@
 // modèle Boutique (`revel new … --template shop`).
 //   - CMS : galerie d'images (vignettes, retrait, ajout de plusieurs médias, ordre au glisser,
 //     annulation), largeur du volet de la fiche, modèle des pages ouvert dans l'éditeur ;
-//   - Médias : images en ligne du modèle signalées, copiées dans le site (avec le réseau), annulé.
+//   - Médias : images en ligne du modèle signalées, copiées dans le site (avec le réseau), annulé ;
+//   - Modèles partagés (D-132) : site enregistré comme fichier de modèle, fichier ouvert dans la
+//     galerie de « Nouveau site », catalogue (simulé), réglage du catalogue.
 //
 // Usage : node tools/templates-e2e.mjs ADRESSE_INTERFACE ADRESSE_PONT DOSSIER_DU_SITE [DOSSIER_CAPTURES]
 // `REVEL_E2E_OFFLINE=1` : la copie des images (téléchargement) n'est pas essayée.
@@ -44,7 +46,8 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(mock);
-  await page.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=light&bridge=${encodeURIComponent(bridge)}`);
+  // `catalog=1` : catalogue de modèles simulé (D-132).
+  await page.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=light&catalog=1&bridge=${encodeURIComponent(bridge)}`);
   const until = async (pred, what) => {
     for (let i = 0; i < 80; i++) { if (await pred()) return true; await page.waitForTimeout(100); }
     if (shots) await page.screenshot({ path: `${shots}/echec.png` });
@@ -234,6 +237,56 @@ try {
     await until(async () => (await invoke('media_online')).length === online.length, 'annulation de la copie');
     check('médias : copie annulée, adresses en ligne rétablies', fs.readFileSync(entryFile(file), 'utf8') === original);
   }
+  // ---------------------------------------------------------------- Modèles partagés (D-132)
+  const tplFile = path.join(path.dirname(siteDir), 'essai-boutique.revel-template');
+  fs.rmSync(tplFile, { force: true });
+  await page.click('.view-tab[data-view="view-settings"]');
+  await page.click('.settings-nav-item[data-section="settings-publish"]');
+  await page.click('.settings-nav-part[data-part="template"]');
+  await page.waitForSelector('.save-template');
+  await page.fill('#template-name', 'Boutique essai');
+  await page.selectOption('#template-category', 'commerce');
+  await page.fill('#template-description', 'Boutique en ligne, panier et fiches produits');
+  await page.evaluate((f) => { window.__revelSave = f; }, tplFile);
+  if (shots) await page.screenshot({ path: `${shots}/modele-enregistrer.png` });
+  await page.click('.save-template-file');
+  await page.waitForSelector('.save-template__done', { timeout: 60000 });
+  const doneText = (await page.textContent('.save-template__done')).trim();
+  const tplSize = fs.existsSync(tplFile) ? fs.statSync(tplFile).size : 0;
+  check('templates : site enregistré comme fichier de template léger (Paramètres › Publication)', tplSize > 1000 && /Template enregistré/.test(doneText), `${tplSize} octets · ${doneText}`);
+  const sendDisabled = await page.$eval('.save-template-publish', (b) => b.disabled);
+  check('templates : envoi au catalogue demandant un compte GitHub', sendDisabled);
+  // Galerie de « Nouveau site » : fichier ouvert, puis catalogue.
+  await page.click('.site-menu-btn');
+  await page.click('.site-menu-pop .menu-item:has-text("Tous les sites")');
+  await page.click('.page-head .btn--primary');
+  await page.waitForSelector('.new-site');
+  await page.click('.template-choice[data-template="more"]');
+  await page.waitForSelector('.new-site.is-expanded');
+  await page.evaluate((f) => { window.__revelPickFiles = [f]; }, tplFile);
+  await page.click('.new-site__open-file');
+  await page.waitForSelector('.template-card[data-template^="file:"].is-on');
+  const chosen = (await page.textContent('.new-site__chosen-name')).trim();
+  const meta = (await page.textContent('.new-site__chosen')).trim();
+  const langHidden = !(await page.$('.new-site .site-bg'));
+  check('templates : fichier ouvert dans la galerie, choisi, langue et couleurs du modèle', chosen === 'Boutique essai' && langHidden && /attente/.test(meta), meta.replace(/\s+/g, ' ').slice(0, 120));
+  await page.click('.new-site__source [data-source="catalog"]');
+  await page.waitForSelector('.template-card[data-template^="catalog:"]');
+  const catCards = await page.$$eval('.template-card[data-template^="catalog:"]', (c) => c.length);
+  await page.click('.template-card[data-template$="#bistrot"]');
+  const catMeta = (await page.textContent('.new-site__chosen')).trim();
+  check('templates : onglet Catalogue (modèles du dépôt GitHub, auteur, licence)', catCards === 2 && /CC0/.test(catMeta), catMeta.replace(/\s+/g, ' ').slice(0, 120));
+  if (shots) await page.screenshot({ path: `${shots}/modele-galerie-catalogue.png` });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.new-site', { state: 'detached' });
+  // Réglages › Modèles : catalogue lu.
+  await page.click('.view-tab[data-view="nav-settings"]');
+  await page.click('.settings-nav-item[data-section="templates"]');
+  await page.waitForSelector('.catalog-ok');
+  check('templates : réglage du catalogue (dépôt, nombre de modèles)', /2 template/.test(await page.textContent('.catalog-state')));
+  if (shots) await page.screenshot({ path: `${shots}/modele-reglages.png` });
+  fs.rmSync(tplFile, { force: true });
+
   // Fichiers de l'essai retirés, document comparé.
   for (const n of ['essai-galerie-a.png', 'essai-galerie-b.png']) {
     for (const d of ['media', 'media/photos']) fs.rmSync(path.join(siteDir, d, n), { force: true });

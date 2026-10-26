@@ -31,6 +31,10 @@ pub fn is_online_image(url: &str) -> bool {
         return false;
     };
     let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    // Images d'attente d'un modèle partagé (D-132) : à remplacer, pas à copier.
+    if host == "placehold.co" {
+        return false;
+    }
     if IMAGE_HOSTS.contains(&host) {
         return true;
     }

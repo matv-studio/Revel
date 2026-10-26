@@ -175,6 +175,19 @@
   background: none; color: var(--text-muted); font-size: var(--text-xs);
 }
 .nbox-unit:hover { color: var(--text); background: var(--surface-hover); }
+/* Pastille d'une valeur fluide ou d'une variable du site (D-139). */
+.nbox-input.is-hidden, .nbox-unit.is-hidden { display: none; }
+.nbox-chip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; height: 20px; margin: 0 2px; padding: 0 6px; border: 0;
+  border-radius: var(--radius-sm); background: var(--set-bg); color: var(--set-text); font: inherit; font-size: var(--text-xs); cursor: pointer; }
+.nbox-chip.is-var { background: var(--comp-bg); color: var(--comp); }
+.nbox-chip:hover { filter: brightness(1.15); }
+.nbox-chip__fn { font-weight: var(--weight-medium); }
+.nbox-chip__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 10.5px; }
+.nbox-fn { display: grid; gap: 6px; padding: var(--s-2); min-width: 200px; }
+.nbox-fn__row { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: var(--s-2); }
+.nbox-fn__input { font-family: var(--font-mono); }
+.nbox-fn__actions { display: flex; justify-content: flex-end; padding-top: 2px; }
+.nbox-vars .menu-hint { margin-left: auto; padding-left: var(--s-3); color: var(--text-faint); font-size: 10.5px; }
 .nbox-unit.is-faint { color: var(--text-faint); }
 
 /* --- Menus flottants ------------------------------------------------------------ */

@@ -2,6 +2,7 @@
 //! glisser, choix à boutons, listes, interrupteur, menus.
 
 use super::ctx::{Origin, PropValue, Sx, menu_id};
+use crate::icons;
 use leptos::ev;
 use leptos::prelude::*;
 use revel_style::values::{eval, fmt_num, length::parse_num, step};
@@ -540,6 +541,34 @@ pub fn NumBox(
         }
     };
     let drag = Scrub::new();
+    // Pastille (D-139) : valeur fluide (`clamp()`, `min()`, `max()`) ou variable du site,
+    // réglée dans sa fenêtre au lieu d'être tapée.
+    let chip_id = menu_id();
+    let fnv = move || value.get().as_deref().and_then(fn_parts);
+    let var_name = move || {
+        value.get().and_then(|v| {
+            let n = v
+                .trim()
+                .strip_prefix("var(--")?
+                .strip_suffix(')')?
+                .to_string();
+            (!n.contains([',', '(', ' '])).then_some(n)
+        })
+    };
+    let chip = move || fnv().is_some() || var_name().is_some();
+    let set_arg = move |i: usize, t: String| {
+        let Some((name, mut args)) = fnv() else {
+            return;
+        };
+        let t = t.trim().to_string();
+        if t.is_empty() || args.get(i) == Some(&t) {
+            return;
+        }
+        if let Some(a) = args.get_mut(i) {
+            *a = t;
+        }
+        on_commit.run((Some(format!("{name}({})", args.join(", "))), false));
+    };
     let choose = move |o: UnitOpt| {
         sx.menu.set(None);
         if o.kw {
@@ -577,7 +606,81 @@ pub fn NumBox(
                         }
                     }>{p}</span>
             })}
-            <input class="nbox-input" type="text" inputmode="decimal" spellcheck="false"
+            {move || chip().then(|| {
+                let label = match (fnv(), var_name()) {
+                    (Some((name, args)), _) if name == "clamp" => format!("{} → {}", args[0], args[2]),
+                    (Some((name, args)), _) => format!("{name} {}", args.join(" · ")),
+                    (_, Some(n)) => var_human(&n),
+                    _ => String::new(),
+                };
+                view! {
+                    <button type="button" class="nbox-chip pop-trigger" class:is-var=move || var_name().is_some()
+                        title=move || value.get().unwrap_or_default()
+                        on:click=move |_| sx.toggle_menu(chip_id)>
+                        {move || fnv().map(|(n, _)| view! { <span class="nbox-chip__fn">{if n == "clamp" { ui.tx("nbox-fluid", &[]) } else { n }}</span> })}
+                        <span class="nbox-chip__text">{label}</span>
+                    </button>
+                }
+            })}
+            <Pop sx id=chip_id>
+                {move || match (fnv(), var_name()) {
+                    (Some((name, args)), _) => {
+                        let keys: Vec<String> = if name == "clamp" {
+                            vec![ui.tx("nbox-fn-min", &[]), ui.tx("nbox-fn-ideal", &[]), ui.tx("nbox-fn-max", &[])]
+                        } else {
+                            (1..=args.len()).map(|n| ui.tx("nbox-fn-value", &[("n", n.to_string())])).collect()
+                        };
+                        let fixed = args.get(if name == "clamp" { 1 } else { 0 }).cloned().unwrap_or_default();
+                        let fixed_num = args.iter().find(|a| parse_num(a).is_some()).cloned().unwrap_or(fixed);
+                        view! {
+                            <div class="nbox-fn" title=ui.t("nbox-fluid-help")>
+                                {args.into_iter().zip(keys).enumerate().map(|(i, (a, k))| view! {
+                                    <label class="nbox-fn__row">
+                                        <span class="label">{k}</span>
+                                        <input class="input input--small nbox-fn__input" type="text" spellcheck="false" prop:value=a
+                                            on:change=move |e| set_arg(i, event_target_value(&e))
+                                            on:keydown=move |e: ev::KeyboardEvent| if e.key() == "Enter" { set_arg(i, event_target_value(&e)) }/>
+                                    </label>
+                                }).collect_view()}
+                                <div class="nbox-fn__actions">
+                                    <button type="button" class="btn btn--small" title=ui.t("nbox-fixed-help")
+                                        on:click=move |_| { sx.menu.set(None); on_commit.run((Some(fixed_num.clone()), false)) }>{ui.t("nbox-fixed")}</button>
+                                </div>
+                            </div>
+                        }.into_any()
+                    }
+                    (_, Some(cur)) => {
+                        let vars = site_vars(sx);
+                        let own = vars.iter().find(|(n, _)| *n == cur).map(|(_, v)| v.clone());
+                        view! {
+                            <ul class="menu-list nbox-vars" role="menu">
+                                <li class="menu-title">{ui.t("nbox-vars")}</li>
+                                {vars.into_iter().filter(|(_, v)| parse_num(v).is_some() || fn_parts(v).is_some()).map(|(n, v)| {
+                                    let on = n == cur;
+                                    let name = n.clone();
+                                    view! {
+                                        <li><button role="menuitemradio" class="menu-item menu-item--check" class:is-on=on aria-checked=on.to_string()
+                                            on:click=move |_| { sx.menu.set(None); on_commit.run((Some(format!("var(--{name})")), false)) }>
+                                            <span class="menu-check">{on.then(icons::check)}</span>
+                                            <span>{var_human(&n)}</span>
+                                            <span class="menu-hint mono">{v}</span>
+                                        </button></li>
+                                    }
+                                }).collect_view()}
+                                {own.map(|v| view! {
+                                    <li class="menu-sep"></li>
+                                    <li><button class="menu-item" title=ui.t("nbox-detach-help")
+                                        on:click=move |_| { sx.menu.set(None); on_commit.run((Some(v.clone()), false)) }>
+                                        <span class="menu-check">{icons::unlink()}</span><span>{ui.t("nbox-detach")}</span>
+                                    </button></li>
+                                })}
+                            </ul>
+                        }.into_any()
+                    }
+                    _ => ().into_any(),
+                }}
+            </Pop>
+            <input class="nbox-input" type="text" inputmode="decimal" spellcheck="false" class:is-hidden=chip
                 aria-label=move || if label.is_empty() { String::new() } else { ui.now(label, &[]) }
                 prop:value=shown placeholder=placeholder
                 on:change=move |e| commit_text(event_target_value(&e), false)
@@ -875,7 +978,74 @@ pub fn Switch(sx: Sx, prop: &'static str, on: &'static str, off: &'static str) -
 /// Nom lisible d'une valeur faite d'une seule variable du site (`var(--step-3)` -> « Step 3 »).
 pub fn var_label(v: &str) -> Option<String> {
     let name = v.trim().strip_prefix("var(--")?.strip_suffix(')')?;
-    (!name.is_empty() && !name.contains([',', '(', ' '])).then(|| crate::names::humanize(name))
+    (!name.is_empty() && !name.contains([',', '(', ' '])).then(|| var_human(name))
+}
+
+/// Nom lisible d'une variable du site : `step-3` → « Step 3 », `step--1` → « Step −1 ».
+pub fn var_human(name: &str) -> String {
+    match name.split_once("--") {
+        Some((a, b)) if !a.is_empty() && !b.is_empty() => {
+            format!(
+                "{} −{}",
+                crate::names::humanize(a),
+                crate::names::humanize(b)
+            )
+        }
+        _ => crate::names::humanize(name),
+    }
+}
+
+/// Fonction de valeur montrée en pastille : `clamp(a, b, c)`, `min(…)`, `max(…)` (nom, arguments
+/// au premier niveau).
+pub fn fn_parts(v: &str) -> Option<(String, Vec<String>)> {
+    let v = v.trim();
+    let (name, rest) = v.split_once('(')?;
+    let name = name.trim().to_ascii_lowercase();
+    if !matches!(name.as_str(), "clamp" | "min" | "max") {
+        return None;
+    }
+    let inner = rest.strip_suffix(')')?;
+    let mut args = Vec::new();
+    let (mut depth, mut cur) = (0i32, String::new());
+    for c in inner.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                args.push(cur.trim().to_string());
+                cur.clear();
+                continue;
+            }
+            _ => {}
+        }
+        cur.push(c);
+    }
+    args.push(cur.trim().to_string());
+    (depth == 0 && args.iter().all(|a| !a.is_empty()) && (name != "clamp" || args.len() == 3))
+        .then_some((name, args))
+}
+
+/// Variables du site (déclarations de `:root`) : (nom sans `--`, valeur).
+fn site_vars(sx: Sx) -> Vec<(String, String)> {
+    sx.ed.doc.with_untracked(|d| {
+        let Some(d) = d.as_ref() else {
+            return Vec::new();
+        };
+        let mut out: Vec<(String, String)> = Vec::new();
+        for r in d.style_rules() {
+            if !matches!(r.selector.as_str(), ":root" | "html") {
+                continue;
+            }
+            for decl in &r.decls {
+                if let Some(n) = decl.prop.strip_prefix("--")
+                    && !out.iter().any(|(m, _)| m == n)
+                {
+                    out.push((n.to_string(), decl.value.clone()));
+                }
+            }
+        }
+        out
+    })
 }
 
 /// Variable du site dont le nom lisible est `text` (« Step 3 » -> `var(--step-3)`).

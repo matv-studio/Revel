@@ -134,6 +134,11 @@ pub struct Layout {
     /// Tous les panneaux masqués (Ctrl+\).
     #[serde(default)]
     pub hidden: bool,
+    /// Colonne repliée par sa languette (fenêtre étroite : panneaux au-dessus du canevas).
+    #[serde(default)]
+    pub fold_left: bool,
+    #[serde(default)]
+    pub fold_right: bool,
     #[serde(default)]
     pub next: u32,
     /// Révision de la disposition par défaut appliquée (mises à jour des panneaux fermés).
@@ -193,6 +198,8 @@ impl Default for Layout {
             // panneau Pages), variables des gabarits (logique du code importé).
             closed: vec![PanelId::Cms, PanelId::Variables],
             hidden: false,
+            fold_left: false,
+            fold_right: false,
             next: 4,
             revision: REVISION,
         }
@@ -934,11 +941,11 @@ fn Column(dock: Dock, side: Side, panel: fn(PanelId) -> AnyView) -> impl IntoVie
     };
     let width = move || {
         dock.layout.with(|l| {
-            let (w, empty) = match side {
-                Side::Left => (l.left_w, l.left.is_empty()),
-                Side::Right => (l.right_w, l.right.is_empty()),
+            let (w, empty, folded) = match side {
+                Side::Left => (l.left_w, l.left.is_empty(), l.fold_left),
+                Side::Right => (l.right_w, l.right.is_empty(), l.fold_right),
             };
-            if l.hidden || empty { 0.0 } else { w }
+            if l.hidden || empty || folded { 0.0 } else { w }
         })
     };
     let resize = StoredValue::new(None::<(f64, f64)>);
@@ -1168,6 +1175,8 @@ pub fn Workspace(panel: fn(PanelId) -> AnyView, children: Children) -> impl Into
             <Column dock side=Side::Left panel/>
             {children()}
             <Column dock side=Side::Right panel/>
+            <FoldTab dock side=Side::Left/>
+            <FoldTab dock side=Side::Right/>
             <For each=floats key=|(id, tabs)| (*id, tabs.clone()) let:f>
                 <FloatView dock id=f.0 tabs=f.1 panel/>
             </For>
@@ -1183,6 +1192,44 @@ pub fn Workspace(panel: fn(PanelId) -> AnyView, children: Children) -> impl Into
                 }
             })}
         </div>
+    }
+}
+
+/// Languette d'une colonne, sur son bord côté canevas : la replie ou la rouvre. Montrée quand la
+/// fenêtre est étroite (colonnes au-dessus du canevas) ou quand la colonne est repliée.
+#[component]
+fn FoldTab(dock: Dock, side: Side) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let state = move || {
+        dock.layout.with(|l| match side {
+            Side::Left => (l.fold_left, l.left.is_empty() || l.hidden, l.left_w),
+            Side::Right => (l.fold_right, l.right.is_empty() || l.hidden, l.right_w),
+        })
+    };
+    let toggle = move |_| {
+        dock.layout.update(|l| match side {
+            Side::Left => l.fold_left = !l.fold_left,
+            Side::Right => l.fold_right = !l.fold_right,
+        })
+    };
+    let left = side == Side::Left;
+    view! {
+        <Show when=move || !state().1>
+            <button type="button" class="dock-fold" class:dock-fold--left=left class:dock-fold--right=!left
+                class:is-folded=move || state().0
+                style=move || {
+                    let (folded, _, w) = state();
+                    let at = if folded { 0.0 } else { w };
+                    if left { format!("left:{at}px") } else { format!("right:{at}px") }
+                }
+                title=move || ui.tx(if state().0 { "dock-unfold" } else { "dock-fold" }, &[])
+                aria-label=move || ui.tx(if state().0 { "dock-unfold" } else { "dock-fold" }, &[])
+                aria-expanded=move || (!state().0).to_string()
+                on:click=toggle>
+                // Flèche dans le sens où la colonne va bouger.
+                {move || if state().0 == left { icons::chevron_right() } else { icons::chevron_left() }}
+            </button>
+        </Show>
     }
 }
 

@@ -8,6 +8,29 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_protocol::{AppSettings, PackState, TranslateEvent, TranslatePack};
 
+/// Langues de l'interface : (code, nom dans la langue même). Mêmes codes que les traductions de
+/// `revel-i18n`.
+pub(crate) const UI_LANGS: &[(&str, &str)] = &[
+    ("en", "English"),
+    ("fr", "Français"),
+    ("es", "Español"),
+    ("de", "Deutsch"),
+    ("it", "Italiano"),
+    ("pt", "Português"),
+    ("nl", "Nederlands"),
+    ("pl", "Polski"),
+    ("tr", "Türkçe"),
+    ("ru", "Русский"),
+    ("id", "Bahasa Indonesia"),
+    ("hi", "हिन्दी"),
+    ("zh", "中文（简体）"),
+    ("ja", "日本語"),
+    ("ko", "한국어"),
+];
+
+/// Langues proposées pour le contenu d'un nouveau site (celles de l'interface).
+pub(crate) const SITE_LANGS: &[(&str, &str)] = UI_LANGS;
+
 /// Couleurs proposées (une seule est utilisée à la fois).
 const PRESETS: &[&str] = &["#3D7EFF", "#7C5CFF", "#1F9D6B", "#E8890C", "#E5487A"];
 
@@ -19,6 +42,7 @@ const PARTS: &[(&str, &str, &str)] = &[
     ("colors", "prefs-colors", "prefs-colors-help"),
     ("shortcuts", "prefs-shortcuts", "prefs-shortcuts-help"),
     ("translate", "settings-translate", "settings-translate-help"),
+    ("templates", "settings-templates", "settings-templates-help"),
     ("updates", "update-title", "update-help"),
     (
         "build-tools",
@@ -84,6 +108,7 @@ pub fn Settings() -> impl IntoView {
                 {part("colors", view! { <crate::prefs::UiColors/> }.into_any())}
                 {part("shortcuts", view! { <crate::prefs::Shortcuts/> }.into_any())}
                 {part("translate", view! { <TranslatePacks/> }.into_any())}
+                {part("templates", view! { <crate::templates::TemplatesCard/> }.into_any())}
                 {part("updates", view! { <Updates/> }.into_any())}
                 {part("build-tools", view! { <BuildToolsCard/> }.into_any())}
                 {part("assistants", view! {
@@ -205,14 +230,6 @@ pub(crate) fn update(ui: Ui, f: &dyn Fn(&mut AppSettings)) {
 #[component]
 fn General() -> impl IntoView {
     let ui = expect_context::<Ui>();
-    // Noms des langues dans leur propre langue, quelle que soit celle de l'interface.
-    let lang_btn = move |value: &'static str, label: &'static str| {
-        view! {
-            <button role="radio" lang=value class:is-on=move || ui.settings.with(|s| s.lang == value)
-                aria-checked=move || ui.settings.with(|s| (s.lang == value).to_string())
-                on:click=move |_| update(ui, &|s| s.lang = value.to_string())>{label}</button>
-        }
-    };
     let theme_btn = move |value: &'static str, key: &'static str| {
         view! {
             <button role="radio" class:is-on=move || ui.settings.with(|s| s.theme == value)
@@ -256,10 +273,15 @@ fn General() -> impl IntoView {
         <section class="section settings-card" data-section="general">
             <h2>{ui.t("settings-general")}</h2>
             <div class="form-grid">
-                <span class="label">{ui.t("settings-lang")}</span>
-                    <div class="segmented" role="radiogroup">
-                        {lang_btn("fr", "Français")}
-                        {lang_btn("en", "English")}
+                <label class="label" for="settings-lang">{ui.t("settings-lang")}</label>
+                    <div class="select settings-lang">
+                        <select id="settings-lang" class="input"
+                            on:change=move |e| { let v = event_target_value(&e); update(ui, &|s| s.lang = v.clone()) }>
+                            {UI_LANGS.iter().map(|(code, label)| {
+                                let code: &'static str = code;
+                                view! { <option value=code lang=code selected=move || ui.settings.with(|s| s.lang == code)>{*label}</option> }
+                            }).collect_view()}
+                        </select>
                     </div>
                     <span class="label">{ui.t("settings-theme")}</span>
                     <div class="segmented" role="radiogroup">

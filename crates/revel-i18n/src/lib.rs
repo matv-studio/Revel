@@ -1,4 +1,4 @@
-//! `revel-i18n` : traductions de l'interface (anglais, français).
+//! `revel-i18n` : traductions de l'interface (15 langues, D-141).
 //!
 //! Les textes sont au format Fluent (`locales/<langue>/revel.ftl`), intégrés au
 //! binaire. Ajouter une langue = ajouter un dossier et une entrée dans [`LOCALES`].
@@ -86,6 +86,8 @@ fn bundle(code: &str) -> FluentBundle<FluentResource> {
     // Nombres mis en forme selon la langue (Fluent ne groupe pas les milliers).
     bundle.set_formatter(Some(match code {
         "fr" => number_fr,
+        "de" | "es" | "it" | "pt" | "nl" | "tr" | "id" => number_dot,
+        "pl" | "ru" => number_space,
         _ => number_en,
     }));
     let res = FluentResource::try_new(src.to_string()).unwrap_or_else(|(res, _)| res);
@@ -99,6 +101,16 @@ fn number_fr<M>(v: &FluentValue, _: &M) -> Option<String> {
 
 fn number_en<M>(v: &FluentValue, _: &M) -> Option<String> {
     number(v, ",", ".")
+}
+
+/// Point pour les milliers, virgule décimale (allemand, espagnol, italien…).
+fn number_dot<M>(v: &FluentValue, _: &M) -> Option<String> {
+    number(v, ".", ",")
+}
+
+/// Espace insécable pour les milliers, virgule décimale (polonais, russe).
+fn number_space<M>(v: &FluentValue, _: &M) -> Option<String> {
+    number(v, "\u{A0}", ",")
 }
 
 /// Nombre avec séparateur de milliers et marque décimale (règles CLDR : groupes de trois
@@ -153,20 +165,72 @@ mod tests {
         }
     }
 
+    /// Messages d'un fichier : clé → texte (lignes de suite comprises).
+    fn messages(src: &str) -> std::collections::BTreeMap<String, String> {
+        let mut out = std::collections::BTreeMap::new();
+        let mut cur: Option<String> = None;
+        for l in src.lines() {
+            if !l.starts_with([' ', '#', '.', '\t', '[', '*', '}']) && l.contains('=') {
+                let (k, v) = l.split_once('=').unwrap_or_default();
+                cur = Some(k.trim().to_string());
+                out.insert(k.trim().to_string(), v.to_string());
+            } else if let Some(k) = &cur
+                && l.starts_with([' ', '\t', '[', '*', '.', '}'])
+            {
+                if let Some(v) = out.get_mut(k) {
+                    v.push('\n');
+                    v.push_str(l);
+                }
+            } else {
+                cur = None;
+            }
+        }
+        out
+    }
+
+    /// Variables (`{ $x }`) d'un message, triées.
+    fn variables(v: &str) -> Vec<String> {
+        let mut out: Vec<String> = v
+            .split('$')
+            .skip(1)
+            .map(|r| {
+                r.chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+                    .collect()
+            })
+            .filter(|s: &String| !s.is_empty())
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    #[test]
+    fn memes_variables_qu_en_anglais() {
+        let en = messages(LOCALES[0].1);
+        for (code, src) in &LOCALES[1..] {
+            let m = messages(src);
+            for (k, v) in &en {
+                let t = m.get(k).unwrap_or_else(|| panic!("{code} : {k} absent"));
+                assert_eq!(variables(t), variables(v), "{code} : variables de {k}");
+                assert!(!t.trim().is_empty(), "{code} : {k} vide");
+            }
+        }
+    }
+
     #[test]
     fn les_fichiers_fluent_sont_valides() {
         for (code, src) in LOCALES {
-            assert!(
-                FluentResource::try_new(src.to_string()).is_ok(),
-                "{code} invalide"
-            );
+            if let Err((_, errors)) = FluentResource::try_new(src.to_string()) {
+                panic!("{code} invalide : {:?}", &errors[..errors.len().min(5)]);
+            }
         }
     }
 
     #[test]
     fn negociation_et_repli() {
         assert_eq!(negotiate("fr-FR"), "fr");
-        assert_eq!(negotiate("de"), "en");
+        assert_eq!(negotiate("sv"), "en");
         let fr = Localizer::new("fr");
         assert_eq!(fr.t("app-title", &[]), "Revel");
         assert_eq!(fr.t("cle-inexistante", &[]), "cle-inexistante");

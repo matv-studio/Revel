@@ -37,6 +37,10 @@ pub enum Kind {
     Number,
     /// Liste de textes (pastilles).
     List,
+    /// Liste de nombres ou de dates (D-139) : une ligne par valeur, réordonnable.
+    ValueList {
+        date: bool,
+    },
     /// Liste d'images ou de fichiers (galerie) : vignettes, ajout par le choix des médias,
     /// retrait, ordre au glisser.
     Gallery {
@@ -85,6 +89,9 @@ pub fn kind_of(f: &CmsField, v: Option<&Value>) -> Kind {
         "image" | "file" if many && all_strings(v) => Kind::Gallery {
             images: t == "image",
         },
+        "number" | "date" if many && v.is_none_or(|v| v.is_null() || v.is_array()) => {
+            Kind::ValueList { date: t == "date" }
+        }
         "string" | "text" | "image" | "file" | "list" if many || t == "list" => {
             if all_strings(v) {
                 Kind::List
@@ -128,6 +135,14 @@ fn infer(v: Option<&Value>) -> Kind {
             if !a.is_empty() && a.iter().all(|x| x.as_str().is_some_and(is_image)) =>
         {
             Kind::Gallery { images: true }
+        }
+        Some(Value::Array(a)) if !a.is_empty() && a.iter().all(Value::is_number) => {
+            Kind::ValueList { date: false }
+        }
+        Some(Value::Array(a))
+            if !a.is_empty() && a.iter().all(|x| x.as_str().is_some_and(is_date)) =>
+        {
+            Kind::ValueList { date: true }
         }
         Some(Value::Array(a)) if a.iter().all(Value::is_string) => Kind::List,
         // Liste d'objets sans schéma (crédits d'un site importé…) : cartes, champs déduits.
@@ -713,6 +728,7 @@ pub fn field_row_pinned(
                 | Kind::Image
                 | Kind::Select { multiple: true }
                 | Kind::Reference { multiple: true }
+                | Kind::ValueList { .. }
         );
     // Actions à droite du libellé (valeur hors schéma : avertissement, ajout au schéma).
     let head = match aside {
@@ -856,6 +872,38 @@ fn control(
             <TagsInput items=Signal::derive(strings) set=Callback::new(write_strings)/>
         }
         .into_any(),
+        Kind::ValueList { date } => {
+            let items = Signal::derive(move || match value.get() {
+                Some(Value::Array(a)) => a.iter().map(scalar).collect(),
+                _ => Vec::new(),
+            });
+            let write = move |v: Vec<String>| {
+                let list = v
+                    .into_iter()
+                    .filter(|x| !x.trim().is_empty())
+                    .map(|x| {
+                        if date {
+                            Value::String(x)
+                        } else {
+                            x.trim()
+                                .parse::<f64>()
+                                .ok()
+                                .and_then(|n| {
+                                    if n.fract() == 0.0 && n.abs() < 1e15 {
+                                        Some(serde_json::Number::from(n as i64))
+                                    } else {
+                                        serde_json::Number::from_f64(n)
+                                    }
+                                })
+                                .map(Value::Number)
+                                .unwrap_or(Value::String(x))
+                        }
+                    })
+                    .collect();
+                commit.run(Some(Value::Array(list)))
+            };
+            view! { <RowsEditor items=items set=Callback::new(write) input=if date { "date" } else { "number" }/> }.into_any()
+        }
         Kind::Gallery { images } => {
             let max = f.with_value(|f| f.options.get("max").and_then(Value::as_u64)).map(|m| m as usize);
             view! {
@@ -1598,6 +1646,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn listes_en_lignes() {
+        use serde_json::json;
+        assert!(matches!(
+            infer(Some(&json!([3, 1.5]))),
+            Kind::ValueList { date: false }
+        ));
+        assert!(matches!(
+            infer(Some(&json!(["2026-01-02", "2026-03-04"]))),
+            Kind::ValueList { date: true }
+        ));
+        assert!(matches!(infer(Some(&json!(["a", "b"]))), Kind::List));
+        let f: CmsField =
+            serde_json::from_value(json!({ "name": "notes", "kind": "number", "list": true }))
+                .unwrap();
+        assert!(matches!(kind_of(&f, None), Kind::ValueList { date: false }));
+    }
+
+    #[test]
     fn formats_de_date() {
         let p = parse_date("yyyy-MM-dd'T'HH:mm:ss", "2024-05-01T10:30:05").unwrap();
         assert_eq!((p.y, p.mo, p.d, p.h, p.mi, p.s), (2024, 5, 1, 10, 30, 5));
@@ -1630,5 +1696,78 @@ mod tests {
                 ("3".into(), "3".into())
             ]
         );
+    }
+}
+
+/// Valeurs en lignes (D-139) : une ligne par valeur (texte, nombre ou date selon `input`), ordre
+/// changé par les flèches ou Alt+flèches, ligne retirée, valeur ajoutée par le champ du bas
+/// (Entrée).
+#[component]
+pub fn RowsEditor(
+    #[prop(into)] items: Signal<Vec<String>>,
+    set: Callback<Vec<String>>,
+    #[prop(default = "text")] input: &'static str,
+) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let move_row = move |i: usize, d: isize| {
+        let mut v = items.get_untracked();
+        let j = i as isize + d;
+        if j < 0 || j as usize >= v.len() {
+            return;
+        }
+        v.swap(i, j as usize);
+        set.run(v);
+    };
+    let add = move |el: web_sys::HtmlInputElement| {
+        let t = el.value();
+        if t.trim().is_empty() {
+            return;
+        }
+        let mut v = items.get_untracked();
+        v.push(t.trim().to_string());
+        set.run(v);
+        el.set_value("");
+    };
+    view! {
+        <div class="rows-editor" role="list">
+            {move || {
+                let list = items.get();
+                let n = list.len();
+                list.into_iter().enumerate().map(|(i, val)| view! {
+                    <div class="rows-editor__row" role="listitem">
+                        <input class="input" type=input prop:value=val step="any"
+                            aria-label=ui.tx("rows-item", &[("n", (i + 1).to_string())])
+                            on:change=move |e| {
+                                let mut v = items.get_untracked();
+                                if let Some(x) = v.get_mut(i) { *x = event_target_value(&e); }
+                                set.run(v);
+                            }
+                            on:keydown=move |e: leptos::ev::KeyboardEvent| {
+                                if e.alt_key() && matches!(e.key().as_str(), "ArrowUp" | "ArrowDown") {
+                                    e.prevent_default();
+                                    move_row(i, if e.key() == "ArrowUp" { -1 } else { 1 });
+                                }
+                            }/>
+                        <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-move-up") aria-label=ui.t("action-move-up")
+                            disabled={i == 0} on:click=move |_| move_row(i, -1)>{icons::arrow_up()}</button>
+                        <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-move-down") aria-label=ui.t("action-move-down")
+                            disabled={i + 1 >= n} on:click=move |_| move_row(i, 1)>{icons::arrow_down()}</button>
+                        <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
+                            on:click=move |_| { let mut v = items.get_untracked(); if i < v.len() { v.remove(i); } set.run(v); }>{icons::trash()}</button>
+                    </div>
+                }).collect_view()
+            }}
+            <input class="input rows-editor__add" type=input step="any" placeholder=ui.t("rows-add")
+                aria-label=ui.t("rows-add")
+                on:keydown=move |e: leptos::ev::KeyboardEvent| {
+                    if e.key() == "Enter" {
+                        e.prevent_default();
+                        if let Some(el) = e.target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlInputElement>(t).ok()) { add(el) }
+                    }
+                }
+                on:change=move |e| {
+                    if let Some(el) = e.target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlInputElement>(t).ok()) { add(el) }
+                }/>
+        </div>
     }
 }

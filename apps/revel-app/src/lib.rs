@@ -6,7 +6,7 @@ use revel_protocol::{
     AppSettings, BuildEvent, DeployEvent, Failure, GithubEvent, HostingProfile, ImportResult,
     RecentSite, SiteSummary,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::ipc::Channel;
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -1398,6 +1398,76 @@ async fn media_localize(s: State<'_, AppState>, path: String) -> Res<serde_json:
     Ok(serde_json::json!({ "state": state, "count": count }))
 }
 
+/// Enregistre le site comme fichier de modèle léger (D-132).
+#[tauri::command]
+async fn template_save(
+    s: State<'_, AppState>,
+    path: String,
+    share: revel_protocol::TemplateShare,
+    dest: String,
+) -> Res<revel_protocol::TemplateSaved> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.template_save(Path::new(&path), &share, Path::new(&dest))
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Description d'un fichier de modèle (galerie de « Nouveau site »).
+#[tauri::command]
+async fn template_file_info(
+    s: State<'_, AppState>,
+    file: String,
+) -> Res<revel_protocol::TemplateInfo> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.template_file_info(Path::new(&file)))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Modèles d'un catalogue GitHub.
+#[tauri::command]
+async fn template_catalog(
+    s: State<'_, AppState>,
+    repo: String,
+) -> Res<Vec<revel_protocol::TemplateInfo>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.template_catalog(&repo))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Envoie le site comme modèle complet dans un catalogue GitHub.
+#[tauri::command]
+async fn template_publish(
+    s: State<'_, AppState>,
+    path: String,
+    repo: String,
+    share: revel_protocol::TemplateShare,
+) -> Res<revel_protocol::TemplatePublished> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.template_publish(Path::new(&path), &repo, &share)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Crée un catalogue de modèles sur le compte GitHub connecté.
+#[tauri::command]
+async fn template_catalog_create(s: State<'_, AppState>, name: String) -> Res<String> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.template_catalog_create(&name))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
 /// Importe un média (contenu en base64) dans le dossier des médias du site.
 #[tauri::command]
 fn edit_import_media(
@@ -1693,6 +1763,11 @@ pub fn run() {
             edit_import_media,
             media_online,
             media_localize,
+            template_save,
+            template_file_info,
+            template_catalog,
+            template_publish,
+            template_catalog_create,
             edit_replace_media,
             canvas_open,
             startup_site,

@@ -1470,7 +1470,19 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .shortcut-foot { display: flex; justify-content: flex-end; margin-top: var(--s-3); }
 
 /* Nouveau site (D-128) : galerie des modèles à gauche, réglages à droite. */
-.dialog--form.new-site { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 0; width: min(1180px, 100%); max-height: min(820px, calc(100vh - 48px)); padding: 0; overflow: hidden; }
+.dialog--form.new-site { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; width: min(460px, 100%); max-height: min(820px, calc(100vh - 48px)); padding: 0; overflow: hidden;
+  transition: width var(--normal) var(--ease); }
+/* « More » : la fenêtre s'élargit sur la galerie complète des templates. */
+.dialog--form.new-site.is-expanded { grid-template-columns: minmax(0, 1fr) 320px; width: min(1180px, 100%); }
+.new-site.is-expanded .new-site__gallery { animation: new-site-gallery var(--normal) var(--ease) both; }
+@keyframes new-site-gallery { from { opacity: 0; transform: translateX(-12px); } }
+@media (prefers-reduced-motion: reduce) { .dialog--form.new-site { transition: none; } .new-site.is-expanded .new-site__gallery { animation: none; } }
+.new-site__side > h2 { margin: 0; }
+.template-choice--random { position: relative; }
+.template-choice__palette { display: flex; height: 20px; align-items: center; }
+.template-choice__palette i { width: 12px; height: 12px; margin-left: -3px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--surface-raised); }
+.template-choice__palette i:first-child { margin-left: 0; }
+.template-choice span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .new-site__gallery { display: flex; flex-direction: column; min-height: 0; border-right: var(--border) solid var(--line); }
 .new-site__head { display: grid; gap: var(--s-3); padding: var(--s-5) var(--s-5) var(--s-3); }
 .new-site__head h2 { margin: 0; }
@@ -1493,6 +1505,39 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .new-site__chosen-name { margin: 0; font-size: var(--text-lg); font-weight: var(--weight-strong); }
 .new-site__chosen-text { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
 .new-site__chosen-pages { margin: 0; font-size: var(--text-xs); }
+/* Modèles partagés (D-132) : origine (inclus, catalogue), fichier ouvert, état du catalogue. */
+.new-site__sources { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.new-site__source button { display: inline-flex; align-items: center; gap: 6px; }
+.new-site__source svg.icon, .new-site__open-file svg.icon { width: 14px; height: 14px; }
+.new-site__open-file { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.template-card { position: relative; }
+.template-card__badge { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-sm); background: var(--surface); color: var(--text-muted); box-shadow: 0 0 0 1px var(--line); }
+.template-card__badge svg.icon { width: 12px; height: 12px; }
+.template-grid__state { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: var(--s-4) 0; font-size: var(--text-sm); }
+.template-grid__state svg.icon { width: 14px; height: 14px; color: var(--warning-text); }
+.new-site__chosen-meta { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-xs); }
+.new-site__chosen-meta svg.icon { width: 12px; height: 12px; }
+.save-template { max-width: 640px; }
+.save-template__grid { grid-template-columns: 120px minmax(0, 1fr); }
+.save-template__grid textarea { resize: vertical; min-height: 64px; }
+.save-template__targets { display: grid; gap: var(--s-2); margin-top: var(--s-4); }
+.save-template__target { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); padding: var(--s-3); border: var(--border) solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); }
+.save-template__icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--bg); color: var(--text-muted); }
+.save-template__icon svg.icon { width: 16px; height: 16px; }
+.save-template__text { display: grid; gap: 2px; min-width: 0; font-size: var(--text-xs); }
+.save-template__text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.save-template__name { font-size: var(--text-md); font-weight: var(--weight-medium); color: var(--text); }
+.save-template__done { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: var(--s-3) 0 0; font-size: var(--text-sm); color: var(--success-text); }
+.save-template__done svg.icon { width: 14px; height: 14px; }
+.save-template__done .btn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.catalog-field { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.catalog-field .input { flex: 1; min-width: 0; }
+.catalog-state { display: inline-flex; flex-shrink: 0; font-size: var(--text-xs); }
+.catalog-ok, .catalog-missing { display: inline-flex; align-items: center; gap: 4px; }
+.catalog-ok { color: var(--success-text); }
+.catalog-missing { color: var(--warning-text); }
+.catalog-state svg.icon { width: 12px; height: 12px; }
+.catalog-create { display: inline-flex; align-items: center; gap: 6px; }
 .new-site .dialog-actions { margin-top: auto; }
 .bg-swatch--auto { background: linear-gradient(135deg, #ffffff 50%, #0f0f10 50%); box-shadow: inset 0 0 0 1px rgb(127 127 127 / .4); }
 @media (max-width: 860px) {
@@ -1567,3 +1612,21 @@ button.site-facts__item:hover .muted { color: var(--text); text-decoration: unde
 /* Choix d'un champ « liste » (schéma) : une ligne par choix. */
 .choice-rows { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .choice-row .input { flex: 1; min-width: 0; }
+
+/* Valeurs en lignes (D-139) : listes de nombres, de dates, propriété liste d'un composant. */
+.rows-editor { display: grid; gap: 4px; }
+.rows-editor__row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, auto); align-items: center; gap: 2px; }
+.rows-editor__row .icon-btn:disabled { opacity: .35; }
+.rows-editor__add { border-style: dashed; }
+.prop-row--list { display: grid; gap: 6px; }
+.prop-list-head { display: flex; align-items: center; gap: 4px; }
+.prop-list-head .prop-label { flex: 1; min-width: 0; }
+
+/* Classes du corps de page (D-139) : pastilles et ajout avec suggestions. */
+.body-classes__box { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px; min-height: var(--control-md);
+  border: var(--border) solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-raised); }
+.body-classes__box:focus-within { border-color: var(--focus); }
+.chip--class { display: inline-flex; align-items: center; gap: 2px; height: 20px; padding: 0 2px 0 6px; border-radius: var(--radius-sm);
+  background: var(--set-bg); color: var(--set-text); font-family: var(--font-mono); font-size: 11px; }
+.body-classes__input { flex: 1; min-width: 90px; height: 20px; padding: 0 4px; border: 0; background: none; }
+.body-classes__input:focus { outline: none; box-shadow: none; }

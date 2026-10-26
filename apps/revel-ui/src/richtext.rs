@@ -497,11 +497,70 @@ pub fn RichText(
             let _ = sel.add_range(&r);
         }
     };
+    // Au clavier (D-139) : flèches dans la barre, Entrée ou Espace sur un bouton (clic sans
+    // pointeur : `detail` nul), retour dans le texte ensuite.
     let tool = move |key: &'static str, icon: fn() -> AnyView, run: fn()| {
         view! {
             <button type="button" class="rt-btn" title=ui.t(key) aria-label=ui.t(key) tabindex="-1"
-                on:mousedown=move |e: ev::MouseEvent| { e.prevent_default(); run(); track_block(); }>{icon()}</button>
+                on:mousedown=move |e: ev::MouseEvent| { e.prevent_default(); run(); track_block(); }
+                on:click=move |e: ev::MouseEvent| if e.detail() == 0 { restore_range(); run(); track_block(); commit(); }>{icon()}</button>
         }
+    };
+    let bar = NodeRef::<leptos::html::Div>::new();
+    // Contrôles de la barre, dans l'ordre (liste, boutons).
+    let bar_items = move || -> Vec<web_sys::HtmlElement> {
+        let Some(b) = bar.get_untracked() else {
+            return Vec::new();
+        };
+        let Ok(list) = b.query_selector_all("select, button") else {
+            return Vec::new();
+        };
+        (0..list.length())
+            .filter_map(|i| list.item(i))
+            .filter_map(|n| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlElement>(n).ok())
+            .filter(|el| !el.has_attribute("disabled"))
+            .collect()
+    };
+    let focus_bar = move || {
+        save_range();
+        if let Some(first) = bar_items().into_iter().next() {
+            let _ = first.focus();
+        }
+    };
+    let on_bar_key = move |e: ev::KeyboardEvent| {
+        let key = e.key();
+        if !matches!(
+            key.as_str(),
+            "ArrowRight" | "ArrowLeft" | "Home" | "End" | "Escape"
+        ) {
+            return;
+        }
+        e.prevent_default();
+        if key == "Escape" {
+            restore_range();
+            return;
+        }
+        let items = bar_items();
+        if items.is_empty() {
+            return;
+        }
+        let active = document().active_element();
+        let i = items
+            .iter()
+            .position(|el| {
+                active
+                    .as_ref()
+                    .is_some_and(|a| a == el.as_ref() as &web_sys::Element)
+            })
+            .unwrap_or(0);
+        let n = items.len();
+        let j = match key.as_str() {
+            "ArrowRight" => (i + 1) % n,
+            "ArrowLeft" => (i + n - 1) % n,
+            "Home" => 0,
+            _ => n - 1,
+        };
+        let _ = items[j].focus();
     };
     let open_link = move || {
         save_range();
@@ -539,9 +598,11 @@ pub fn RichText(
 
     view! {
         <div class="rt" class:is-focused=move || focused.get() class:is-source=move || source.get()>
-            <div class="rt-bar" role="toolbar" aria-label=ui.t("rt-toolbar")>
+            <div class="rt-bar" role="toolbar" aria-label=ui.t("rt-toolbar") node_ref=bar
+                aria-keyshortcuts="Alt+F10" on:keydown=on_bar_key>
                 <div class="select rt-block" title=ui.t("rt-block")>
-                    <select class="input" tabindex="-1" aria-label=ui.t("rt-block")
+                    <select class="input" tabindex="0" aria-label=ui.t("rt-block")
+                        on:focus=move |_| save_range()
                         prop:disabled=move || source.get()
                         on:mousedown=move |_| save_range()
                         on:change=move |e| {
@@ -559,7 +620,8 @@ pub fn RichText(
                 {tool("rt-bold", icons::bold, || exec("bold", ""))}
                 {tool("rt-italic", icons::italic, || exec("italic", ""))}
                 <button type="button" class="rt-btn" class:is-on=move || link_open.get() title=ui.t("rt-link") aria-label=ui.t("rt-link") tabindex="-1"
-                    on:mousedown=move |e: ev::MouseEvent| { e.prevent_default(); open_link(); }>{icons::link()}</button>
+                    on:mousedown=move |e: ev::MouseEvent| { e.prevent_default(); open_link(); }
+                    on:click=move |e: ev::MouseEvent| if e.detail() == 0 { restore_range(); open_link(); }>{icons::link()}</button>
                 {tool("rt-ul", icons::list, || exec("insertUnorderedList", ""))}
                 {tool("rt-ol", icons::list_ordered, || exec("insertOrderedList", ""))}
                 {tool("rt-clear", icons::reset, || { exec("removeFormat", ""); exec("formatBlock", "p"); })}
@@ -599,6 +661,11 @@ pub fn RichText(
                     if (e.ctrl_key() || e.meta_key()) && e.key().eq_ignore_ascii_case("k") {
                         e.prevent_default();
                         open_link();
+                    }
+                    // Barre de mise en forme au clavier (comme les éditeurs de texte).
+                    if e.alt_key() && e.key() == "F10" {
+                        e.prevent_default();
+                        focus_bar();
                     }
                 }
                 on:paste=move |e: ev::ClipboardEvent| {

@@ -367,6 +367,64 @@ pub async fn import_figma(
     .await
 }
 
+/// Fenêtre « Enregistrer sous » : chemin choisi, `None` si annulé.
+pub async fn pick_save(label: &str, ext: &str, default_name: &str) -> Res<Option<String>> {
+    let v: serde_json::Value = call(
+        "plugin:dialog|save",
+        &serde_json::json!({ "options": {
+            "defaultPath": default_name,
+            "filters": [{ "name": label, "extensions": [ext] }],
+        } }),
+    )
+    .await?;
+    Ok(v.as_str().map(str::to_string))
+}
+
+/// Enregistre le site comme fichier de modèle léger (D-132).
+pub async fn template_save(
+    path: &str,
+    share: &revel_protocol::TemplateShare,
+    dest: &str,
+) -> Res<revel_protocol::TemplateSaved> {
+    call(
+        "template_save",
+        &serde_json::json!({ "path": path, "share": share, "dest": dest }),
+    )
+    .await
+}
+
+/// Description d'un fichier de modèle.
+pub async fn template_file_info(file: &str) -> Res<revel_protocol::TemplateInfo> {
+    call("template_file_info", &serde_json::json!({ "file": file })).await
+}
+
+/// Modèles d'un catalogue GitHub.
+pub async fn template_catalog(repo: &str) -> Res<Vec<revel_protocol::TemplateInfo>> {
+    call("template_catalog", &serde_json::json!({ "repo": repo })).await
+}
+
+/// Envoie le site comme modèle complet dans un catalogue GitHub.
+pub async fn template_publish(
+    path: &str,
+    repo: &str,
+    share: &revel_protocol::TemplateShare,
+) -> Res<revel_protocol::TemplatePublished> {
+    call(
+        "template_publish",
+        &serde_json::json!({ "path": path, "repo": repo, "share": share }),
+    )
+    .await
+}
+
+/// Crée un catalogue de modèles sur le compte GitHub connecté (`propriétaire/nom`).
+pub async fn template_catalog_create(name: &str) -> Res<String> {
+    call(
+        "template_catalog_create",
+        &serde_json::json!({ "name": name }),
+    )
+    .await
+}
+
 /// Choix de fichiers (`exts` : extensions acceptées, sans point).
 pub async fn pick_files(label: &str, exts: &[&str], multiple: bool) -> Res<Vec<String>> {
     let v: serde_json::Value = call(

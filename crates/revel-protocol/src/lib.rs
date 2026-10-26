@@ -54,7 +54,7 @@ pub struct GithubSyncReport {
 }
 
 /// Modèle proposé à la création d'un site (D-128) : site prêt à adapter, inclus dans Revel.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TemplateInfo {
     pub id: String,
     pub name: String,
@@ -72,6 +72,76 @@ pub struct TemplateInfo {
     pub features: Vec<String>,
     /// Nombre de pages.
     pub pages: usize,
+    /// Modèle partagé (D-132) : auteur, licence, langue du contenu, taille (octets) ; vides
+    /// pour les modèles inclus.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub author: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub license: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub lang: String,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub size: u64,
+    /// Images remplacées par des images d'attente en ligne (fichier de modèle léger).
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub placeholders: usize,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
+fn is_zero_usize(n: &usize) -> bool {
+    *n == 0
+}
+
+/// Modèle à partager (D-132) : description donnée à l'enregistrement d'un site comme modèle.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TemplateShare {
+    /// Identifiant (lettres, chiffres, tirets) ; vide : tiré du nom.
+    #[serde(default)]
+    pub id: String,
+    pub name: String,
+    /// Catégorie de la galerie (`business`, `creative`…).
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub author: String,
+    /// Licence du modèle (`CC-BY-4.0`, `CC0-1.0`, `MIT`…).
+    #[serde(default)]
+    pub license: String,
+    /// Image de la vignette : chemin d'une image du site (`media/…`) ; aucune : couleurs seules.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+}
+
+/// Fichier de modèle enregistré (D-132).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TemplateSaved {
+    pub path: String,
+    pub size: u64,
+    /// Images remplacées par une image d'attente en ligne.
+    pub placeholders: usize,
+    /// Vidéos, sons et documents retirés (leurs adresses vidées).
+    pub missing: usize,
+    /// Fichiers de code laissés de côté (scripts, programmes).
+    pub skipped: usize,
+}
+
+/// Modèle envoyé dans un catalogue GitHub (D-132).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TemplatePublished {
+    /// Page du dépôt ou de la demande de fusion.
+    pub url: String,
+    /// `true` : demande de fusion ouverte (catalogue d'un autre compte) ; `false` : ajouté.
+    pub pull_request: bool,
+    pub files: usize,
+    pub size: u64,
+    /// Fichiers trop lourds pour GitHub (plus de 100 Mo), laissés de côté.
+    #[serde(default)]
+    pub too_large: Vec<String>,
 }
 
 /// Modèle d'un nouveau site (ancienne forme, gardée pour l'import WordPress).
@@ -924,6 +994,13 @@ pub struct AppSettings {
     /// Bout des liens entre variantes : `arrow` (flèche) ou `dot` (rond, comme Blender ; par défaut).
     #[serde(default = "default_link_end")]
     pub variant_link_end: String,
+    /// Catalogue de modèles partagés (D-132) : dépôt GitHub public `propriétaire/nom`.
+    #[serde(default = "default_catalog")]
+    pub template_catalog: String,
+}
+
+fn default_catalog() -> String {
+    "matv-studio/revel-templates".into()
 }
 
 fn default_links() -> String {
@@ -959,6 +1036,7 @@ impl Default for AppSettings {
             ui_colors: Default::default(),
             variant_links: default_links(),
             variant_link_end: default_link_end(),
+            template_catalog: default_catalog(),
         }
     }
 }

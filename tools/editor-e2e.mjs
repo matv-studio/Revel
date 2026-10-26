@@ -57,6 +57,17 @@ try {
   await page.keyboard.type('Atelier Lumière');
   await page.waitForFunction(() => /atelier-lumiere$/.test(document.querySelector('.path-value')?.textContent || ''));
   check('nouveau site : dossier proposé d\'après le nom', true, await page.textContent('.path-value'));
+  // Fenêtre compacte : « Vide », un template au hasard, « Plus » qui élargit la fenêtre sur la galerie.
+  await page.waitForSelector('.template-choice[data-template="random"]');
+  const quick = await page.$$eval('.new-site .template-choice', (b) => b.map((x) => x.dataset.template));
+  const randomId = await page.getAttribute('.template-choice[data-template="random"]', 'data-id');
+  const narrowW = await page.$eval('.new-site', (f) => f.getBoundingClientRect().width);
+  await page.click('.template-choice[data-template="more"]');
+  await page.waitForSelector('.new-site.is-expanded .template-card');
+  await page.waitForTimeout(400);
+  const wideW = await page.$eval('.new-site', (f) => f.getBoundingClientRect().width);
+  check('nouveau site : fenêtre compacte (Vide, template au hasard, Plus), galerie ouverte par « Plus »',
+    quick.join(',') === 'blank,random,more' && !!randomId && wideW > narrowW + 300, `${randomId} · ${Math.round(narrowW)} → ${Math.round(wideW)} px`);
   // Galerie des modèles (D-128) : catégories, carte choisie, présentation du modèle.
   await page.waitForSelector('.template-card[data-template="showcase"]');
   const allCards = (await page.$$('.template-card')).length;
@@ -2205,6 +2216,49 @@ try {
     await page.click('.pages .page-row[data-url="/"]');
     f = await waitFrame(() => location.pathname === '/' && !!window.__revelSlot, 'retour à l\'accueil');
 
+    // Revue d'ergonomie (D-139) : variable du site en pastille, classes du corps de page,
+    // colonnes repliables en fenêtre étroite, barre du texte riche au clavier.
+    {
+      await page.click('.dock-tab[data-panel="layers"]');
+      await page.click('.layers .layer[data-tech*="hero__title"]');
+      await page.waitForSelector('.style-row[data-prop="font-size"] .nbox-chip');
+      const chipText = (await page.textContent('.style-row[data-prop="font-size"] .nbox-chip')).trim();
+      await page.click('.style-row[data-prop="font-size"] .nbox-chip');
+      const varItems = await page.$$eval('.nbox-vars .menu-item', (m) => m.map((x) => x.textContent.trim()));
+      await page.keyboard.press('Escape');
+      check('styles : variable du site en pastille, autres variables et « Détacher » proposés', chipText === 'Step 5'
+        && varItems.some((t) => t.startsWith('Step −1')) && varItems.some((t) => /Détacher/.test(t)), `${chipText} · ${varItems.length} choix`);
+      await page.click('.dock-tab[data-panel="pages"]');
+      await page.hover('.pages .page-row[data-url="/"]');
+      await page.click('.pages .page-row[data-url="/"] .row-action');
+      await page.waitForSelector('.page-settings .body-classes');
+      const bodyChips = await page.$$eval('.body-classes .chip--class', (c) => c.map((x) => x.textContent.trim()));
+      const suggested = await page.$$eval('#body-class-names option', (o) => o.length);
+      check('pages : classes du corps en pastilles, classes du site proposées', bodyChips.join(' ') === 'page-home' && suggested > 20, `${bodyChips} · ${suggested}`);
+      await page.click('.page-settings-head .icon-btn');
+      await page.setViewportSize({ width: 900, height: 800 });
+      await page.waitForSelector('.dock-fold--right', { state: 'visible' });
+      await page.click('.dock-fold--right');
+      await page.waitForFunction(() => document.querySelector('.dock-col--right').getBoundingClientRect().width === 0);
+      await page.click('.dock-fold--right');
+      await page.waitForFunction(() => document.querySelector('.dock-col--right').getBoundingClientRect().width > 100);
+      check('éditeur étroit : colonne de droite repliée puis rouverte par sa languette', true);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.click('.view-tab[data-view="view-cms"]');
+      await page.click('.cms-col[data-collection="projets"]');
+      await page.click('.cms-table tbody tr[data-entry] >> nth=0');
+      await page.waitForSelector('.cms-item .rt-body');
+      await page.click('.cms-item .rt-body');
+      await page.keyboard.press('Alt+F10');
+      const first = await page.evaluate(() => document.activeElement?.tagName);
+      await page.keyboard.press('ArrowRight');
+      const second = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') || '');
+      await page.keyboard.press('Escape');
+      const back = await page.evaluate(() => document.activeElement?.classList.contains('rt-body'));
+      check('CMS : barre du texte riche au clavier (Alt+F10, flèches, Échap)', first === 'SELECT' && /Gras/.test(second) && back, `${first} · ${second}`);
+      await page.click('.view-tab[data-view="view-editor"]');
+      await page.waitForSelector('.view-pane--editor:not(.is-hidden)');
+    }
     check('canevas : tout annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === JSON.stringify(base212.site));
   }
 

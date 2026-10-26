@@ -71,7 +71,7 @@
   // Pont vers un vrai cœur de Revel (`revel canvas-serve --bridge`) : paramètre `bridge=adresse`.
   // Les commandes de l'éditeur y sont transmises ; le reste reste simulé.
   const bridge = params.get("bridge");
-  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_incoming", "versions_receive", "versions_resolve", "versions_resolve_items", "versions_set_shared", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data", "media_online", "media_localize"];
+  const bridged = ["readable_data", "versions_status", "versions_init", "versions_list", "versions_save", "versions_changes", "versions_diff", "versions_restore", "versions_sync", "versions_incoming", "versions_receive", "versions_resolve", "versions_resolve_items", "versions_set_shared", "versions_set_remote", "fonts", "fonts_google", "fonts_add_google", "fonts_add_files", "fonts_remove", "translate_can", "translate", "translate_packs", "translate_remove", "edit_open", "edit_apply", "edit_seal", "edit_undo", "edit_redo", "edit_pages", "edit_stamp", "canvas_open", "cms_collections", "cms_folders", "preview_url", "edit_media", "edit_import_media", "edit_replace_media", "edit_locale_data", "media_online", "media_localize", "template_save", "template_file_info"];
   // Nom de dossier d'un nouveau site (comme revel_core::site_folder, sans les suffixes).
   const slug = (n) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
   // Collections de démonstration (sans pont).
@@ -199,6 +199,17 @@
       case "find_dropped": return (args.names || []).filter((n) => n !== "absent").map((n) => "C:\\Projets\\" + n);
       // Import d'un site (étape 7) : nature d'après le nom du dossier (`svelte` : site à
       // construire, `eleventy`, `vide` : rien à importer), copie de dépôt simulée.
+      case "plugin:dialog|save": return window.__revelSave ?? null;
+      // Modèles partagés (D-132) : catalogue simulé (`catalog=1`), envoi et création simulés.
+      case "template_catalog": {
+        if (!params.get("catalog")) throw { key: "error-template-catalog", args: [["detail", "404"]] };
+        return [
+          { id: "catalog:" + args.repo + "#atelier", name: "Atelier", category: "creative", description: "Portfolio d'atelier, galerie et contact", palette: ["#f4efe6", "#1d1b18", "#c8553d"], features: [], pages: 4, author: "matv-studio", license: "CC-BY-4.0", lang: "fr", size: 18400000 },
+          { id: "catalog:" + args.repo + "#bistrot", name: "Bistrot", category: "food", description: "Carte, réservations et horaires", palette: ["#fffaf0", "#2b2118", "#9c2f2f"], features: [], pages: 5, author: "Alunites", license: "CC0-1.0", lang: "fr", size: 9300000 },
+        ];
+      }
+      case "template_publish": return { url: "https://github.com/" + args.repo + "/pull/1", pull_request: true, files: 42, size: 12600000, too_large: [] };
+      case "template_catalog_create": return (state.github || "matv-studio") + "/revel-templates";
       case "plugin:dialog|open": {
         if (args.options && args.options.directory === false) {
           const f = window.__revelPickFiles ?? null;

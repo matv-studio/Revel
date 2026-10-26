@@ -450,3 +450,19 @@
   .dock-col--right:not(.is-empty) { position: absolute; top: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface);
     box-shadow: -12px 0 32px rgb(0 0 0 / .25); }
 }
+/* Très étroite : la colonne de gauche passe aussi au-dessus du canevas. */
+@media (max-width: 760px) {
+  .dock-col--left:not(.is-empty) { position: absolute; top: 0; left: 0; bottom: 0; z-index: 20; background: var(--surface);
+    box-shadow: 12px 0 32px rgb(0 0 0 / .25); }
+}
+/* Languette d'une colonne (repliée, ou fenêtre étroite) : sur son bord côté canevas. */
+.dock-fold { display: none; position: absolute; top: 50%; z-index: 21; width: 16px; height: 48px; margin-top: -24px; padding: 0;
+  place-items: center; border: var(--border) solid var(--line-strong); background: var(--surface); color: var(--text-muted); cursor: pointer; }
+.dock-fold:hover { color: var(--text); background: var(--surface-hover); }
+.dock-fold:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.dock-fold--left { border-left: 0; border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.dock-fold--right { border-right: 0; border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.dock-fold svg.icon { width: 12px; height: 12px; }
+.dock-fold.is-folded { display: grid; }
+@media (max-width: 1000px) { .dock-fold--right { display: grid; } }
+@media (max-width: 760px) { .dock-fold--left { display: grid; } }

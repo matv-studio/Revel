@@ -210,6 +210,7 @@ fn parts_of(group: Section) -> &'static [(&'static str, &'static str, &'static s
         Section::Publish => &[
             ("publish", "settings-publish", "settings-publish-lead"),
             ("export", "export-title", "export-lead"),
+            ("template", "template-save-title", "template-save-lead"),
             ("code", "settings-code", "code-help"),
         ],
         Section::Versions => &[("versions", "settings-versions", "versions-help")],
@@ -396,6 +397,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
         Section::Publish => view! {
             {part("publish", view! { <crate::publish::Publish site=site.clone()/> }.into_any())}
             {part("export", view! { <Export site=site.clone()/> }.into_any())}
+            {part("template", view! { <crate::templates::SaveTemplate site=site.clone()/> }.into_any())}
             {part("code", view! { <crate::sitesettings::Code site=site.clone()/> }.into_any())}
         }
         .into_any(),

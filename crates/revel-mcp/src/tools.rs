@@ -155,6 +155,47 @@ pub struct ReplaceLinkArg {
 
 /// Paramètre commun : site visé.
 #[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
+pub struct TemplateArg {
+    /// Absolute path of the site folder. Omit to use the site open in Revel.
+    #[serde(default)]
+    pub site: Option<String>,
+    /// Template name shown in the gallery.
+    pub name: String,
+    /// Gallery category: business, creative, commerce, editorial, food, events, travel, services, education, community or personal.
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub author: Option<String>,
+    /// License, e.g. "CC-BY-4.0", "CC0-1.0", "MIT".
+    #[serde(default)]
+    pub license: Option<String>,
+    /// Thumbnail: path of an image of the site (`media/...`).
+    #[serde(default)]
+    pub preview: Option<String>,
+    /// `save_as_template`: absolute path of the `.revel-template` file to write.
+    #[serde(default)]
+    pub dest: Option<String>,
+    /// `publish_template`: GitHub catalog repository (`owner/name`).
+    #[serde(default)]
+    pub repo: Option<String>,
+}
+
+impl TemplateArg {
+    fn share(&self) -> Value {
+        json!({
+            "name": self.name,
+            "category": self.category.clone().unwrap_or_default(),
+            "description": self.description.clone().unwrap_or_default(),
+            "author": self.author.clone().unwrap_or_default(),
+            "license": self.license.clone().unwrap_or_default(),
+            "preview": self.preview,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SiteArg {
     /// Absolute path of the site folder. Omit to use the site open in Revel.
     #[serde(default)]
@@ -721,6 +762,8 @@ impl Revel {
                 "undo" => go!(undo),
                 "redo" => go!(redo),
                 "copy_online_images" => go!(copy_online_images),
+                "save_as_template" => go!(save_as_template),
+                "publish_template" => go!(publish_template),
                 "get_data" => go!(get_data),
                 "set_data" => go!(set_data),
                 "list_collections" => go!(list_collections),
@@ -1532,6 +1575,60 @@ impl Revel {
                     "{n} image(s) copied into the site's media. Visible in Revel now; undo with the `undo` tool."
                 ))
             }
+            Err(e) => fail(e),
+        }
+    }
+
+    #[tool(
+        description = "Save the site as a light template file (`.revel-template`) that anyone can open in Revel's New site gallery: texts, pages, components, styles, CMS entries, icons (SVG) and fonts included; the site's own images are replaced by online placeholder images of the same size, videos, sounds and documents are left out, code files are never included."
+    )]
+    async fn save_as_template(&self, Parameters(a): Parameters<TemplateArg>) -> CallToolResult {
+        let Some(dest) = a.dest.clone() else {
+            return fail("`dest` is required");
+        };
+        match self
+            .call(
+                "template_save",
+                &a.site,
+                json!({ "share": a.share(), "dest": dest }),
+            )
+            .await
+        {
+            Ok(v) => ok(format!(
+                "Template saved: {} ({} bytes, {} image(s) replaced by placeholders, {} media file(s) left out).",
+                v["path"].as_str().unwrap_or_default(),
+                v["size"],
+                v["placeholders"],
+                v["missing"]
+            )),
+            Err(e) => fail(e),
+        }
+    }
+
+    #[tool(
+        description = "Send the site as a complete template (all images, videos and files included, code excluded) to a GitHub templates catalog (`owner/name`, listed in its catalog.json). Added directly when the GitHub account connected in Revel can write to the repository, otherwise proposed as a pull request."
+    )]
+    async fn publish_template(&self, Parameters(a): Parameters<TemplateArg>) -> CallToolResult {
+        let Some(repo) = a.repo.clone() else {
+            return fail("`repo` is required");
+        };
+        match self
+            .call(
+                "template_publish",
+                &a.site,
+                json!({ "share": a.share(), "repo": repo }),
+            )
+            .await
+        {
+            Ok(v) => ok(format!(
+                "{} {}",
+                if v["pull_request"].as_bool() == Some(true) {
+                    "Pull request opened:"
+                } else {
+                    "Template added to the catalog:"
+                },
+                v["url"].as_str().unwrap_or_default()
+            )),
             Err(e) => fail(e),
         }
     }

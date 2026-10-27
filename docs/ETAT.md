@@ -32,6 +32,17 @@ Commits 933e49c, cd65eca et dd29dda sur `main` ; CI entièrement réussie sur dd
   `CARGO_PROFILE_DEV_DEBUG=0` (sinon rustc tué) ; jamais en parallèle d'un build release. Un moniteur expire
   après 5 min : attendre par `Bash` en arrière-plan avec une boucle `until`.
 
+## Version 0.7.0 (27/10/2026, depuis l'ancien compte, projet « Sites Webs »)
+Commits f2e1d7a, 2c2c5a4, ecd2fe9 (« Version 0.7.0 », CI entièrement réussie, flux 40419996924). Étiquette
+`v0.7.0` (flux « Étiquette » 40423930294) ; brouillon « Revel v0.7.0 » (préversion, id 424911276, 17 fichiers,
+`latest.json` 0.7.0 à 11 cibles, clé EA5F2855415468CD), **à publier par l'utilisateur**.
+- D-132 prise : fichier de template (`.revel-template`) et catalogue GitHub (`crates/revel-core/src/sharing.rs`,
+  `apps/revel-ui/src/templates.rs`), dans Paramètres du site › Publication › Template ; dépôt du catalogue
+  `matv-studio/revel-templates` encore à créer (Réglages › Templates › « Créer un catalogue sur GitHub »).
+- D-139 terminée, D-140 (« Nouveau site » compact : Vide, template au hasard, Plus), D-141 (interface en
+  15 langues ; ajouter une clé = l'ajouter dans les 15 fichiers `locales/<code>/revel.ftl`).
+- Mot « template » gardé en français pour les sites prêts à adapter.
+
 ## Compte et emplacements actuels (depuis le 24/10/2026 — prime sur les chemins plus bas)
 - Travail repris sur un autre compte Claude, projet claude.ai **« Revel »** (ce chat lui est dédié). Les chats
   et le projet « Sites Webs » de l'ancien compte ne sont pas lisibles d'ici : cette note est le seul relais.

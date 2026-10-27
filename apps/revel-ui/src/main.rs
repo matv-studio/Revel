@@ -51,6 +51,7 @@ mod sitecolors;
 mod siteinfo;
 mod sitemap;
 mod sitesettings;
+mod sitesizes;
 mod sitethumb;
 mod styles;
 mod sync;

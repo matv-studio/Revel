@@ -288,7 +288,11 @@ pub fn SiteColors(s: DocSession) -> impl IntoView {
                 let rm = var.clone();
                 view! {
                     <div class="colors-row" data-var=var.clone() class:has-dark=dark_on>
-                        <span class="colors-label" title=var.clone()>{label(&var)}</span>
+                        <input class="input input--mono colors-label" prop:value=var.trim_start_matches("--").to_string()
+                            spellcheck="false" title=ui.t("sizes-rename") aria-label=label(&var)
+                            on:change={let from = var.trim_start_matches("--").to_string(); move |e| {
+                                if let Some(c) = crate::sitesizes::rename_command(&from, &event_target_value(&e)) { s.apply.run(c) }
+                            }}/>
                         {swatch(var.clone(), None, light.clone(), None)}
                         {dark_on.then(|| swatch(var.clone(), Some(DARK.into()), dark.clone().unwrap_or_default(), Some(light.clone())))}
                         <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")

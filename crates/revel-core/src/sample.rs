@@ -49,7 +49,7 @@ fn any_image(all: &[revel_render::Entry]) -> Option<String> {
 /// Valeur d'exemple d'un champ qu'aucun contenu ne remplit.
 fn synthetic(f: &CmsField, image: Option<&str>, today: &str) -> Value {
     let one = match f.kind.as_deref().unwrap_or("string") {
-        "text" | "rich_text" | "markdown" | "code" => Value::from(LOREM),
+        "text" | "rich_text" | "rich-text" | "markdown" | "code" => Value::from(LOREM),
         "image" | "file" => Value::from(image.unwrap_or_default()),
         "date" | "datetime" => Value::from(today),
         "boolean" => Value::Bool(true),
@@ -94,6 +94,60 @@ fn title_case(name: &str) -> String {
         .unwrap_or_default()
 }
 
+/// Liste de blocs (objets avec un champ de choix, `type` de préférence) : un bloc de chaque sorte,
+/// pris dans les contenus quand l'un l'utilise, sinon d'exemple, pour que le modèle montre (et
+/// fasse régler) chaque sorte de bloc.
+fn typed_list(
+    f: &CmsField,
+    entries: &[CmsEntry],
+    image: Option<&str>,
+    today: &str,
+) -> Option<Value> {
+    if !f.list || !matches!(f.kind.as_deref(), Some("object" | "block")) {
+        return None;
+    }
+    let selects = |x: &&CmsField| x.kind.as_deref() == Some("select");
+    let key = f
+        .fields
+        .iter()
+        .filter(selects)
+        .find(|x| x.name == "type")
+        .or_else(|| f.fields.iter().find(selects))?;
+    let values: Vec<Value> = key
+        .options
+        .get("values")
+        .and_then(Value::as_array)?
+        .iter()
+        .map(|v| v.get("value").cloned().unwrap_or_else(|| v.clone()))
+        .collect();
+    if values.len() < 2 {
+        return None;
+    }
+    let items: Vec<&Value> = entries
+        .iter()
+        .filter_map(|e| e.data.get(&f.name)?.as_array())
+        .flatten()
+        .collect();
+    let list = values
+        .into_iter()
+        .map(|v| {
+            items
+                .iter()
+                .find(|i| i.get(&key.name) == Some(&v))
+                .map(|i| (*i).clone())
+                .unwrap_or_else(|| {
+                    let mut m = Map::new();
+                    for sub in &f.fields {
+                        m.insert(sub.name.clone(), synthetic(sub, image, today));
+                    }
+                    m.insert(key.name.clone(), v);
+                    Value::Object(m)
+                })
+        })
+        .collect();
+    Some(Value::Array(list))
+}
+
 /// En-tête et corps du contenu d'exemple : pour chaque champ (schéma, puis clés des en-têtes),
 /// la première valeur non vide parmi les contenus de la collection, sinon une valeur d'exemple
 /// selon son type ; corps : le premier corps non vide, sinon un texte d'exemple.
@@ -117,7 +171,9 @@ pub(crate) fn template_sample(
         if SKIPPED.contains(&f.name.as_str()) {
             continue;
         }
-        let v = first(&f.name).unwrap_or_else(|| synthetic(f, image.as_deref(), today));
+        let v = typed_list(f, entries, image.as_deref(), today)
+            .or_else(|| first(&f.name))
+            .unwrap_or_else(|| synthetic(f, image.as_deref(), today));
         data.insert(f.name.clone(), v);
     }
     for e in entries {
@@ -208,5 +264,34 @@ mod tests {
         assert_eq!(d["extra"], "x");
         assert!(d.get("layout").is_none(), "le modèle, pas un design propre");
         assert_eq!(body, "Corps.");
+        // Blocs : un de chaque sorte (existant, sinon d'exemple).
+        let blocks = CmsField {
+            name: "blocks".into(),
+            kind: Some("object".into()),
+            list: true,
+            fields: vec![
+                CmsField {
+                    name: "type".into(),
+                    kind: Some("select".into()),
+                    options: json!({ "values": ["text", "quote", "image"] }),
+                    ..Default::default()
+                },
+                field("body", "rich_text"),
+            ],
+            ..Default::default()
+        };
+        let with = vec![entry(
+            json!({"blocks": [{"type": "quote", "body": "Citation"}]}),
+            "",
+        )];
+        let (d, _) = template_sample(&[blocks], &with, &[], "2026-10-27");
+        let types: Vec<&str> = d["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b["type"].as_str().unwrap())
+            .collect();
+        assert_eq!(types, ["text", "quote", "image"]);
+        assert_eq!(d["blocks"][1]["body"], "Citation");
     }
 }

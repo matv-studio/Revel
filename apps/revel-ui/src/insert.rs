@@ -401,6 +401,15 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     true,
                 ),
                 item(
+                    Preset::ThemeSwitch,
+                    "insert-theme-switch",
+                    "insert-help-theme-switch",
+                    "insert-text-theme-switch",
+                    icons::moon,
+                    "button",
+                    true,
+                ),
+                item(
                     Preset::ListFilters,
                     "insert-filters",
                     "insert-help-filters",

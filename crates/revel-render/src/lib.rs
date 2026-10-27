@@ -26,6 +26,7 @@ pub mod more;
 pub mod rebase;
 mod redirects;
 pub mod scroll;
+pub mod theme;
 pub mod transitions;
 mod typography;
 
@@ -568,6 +569,7 @@ fn build_pages(
             );
             let html = scroll::wire(html, input.site.settings.smooth_scroll, scripts);
             let html = more::wire(html, scripts);
+            let html = theme::wire(html, scripts);
             masonry::wire(html)
         } else {
             html
@@ -1650,6 +1652,7 @@ fn editor_page(
     );
     let html = scroll::wire(html, input.site.settings.smooth_scroll, opts.scripts);
     let html = more::wire(html, opts.scripts);
+    let html = theme::wire(html, opts.scripts);
     let html = masonry::wire(html);
     warnings.extend(b.take_warnings());
     let (slots, vars) = b

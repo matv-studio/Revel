@@ -31,6 +31,7 @@ pub mod siteinfo;
 pub mod style;
 pub mod tabs;
 pub mod textfile;
+pub mod variables;
 pub mod visibility;
 
 pub use address::{Branch, Owner, Parent, Target};

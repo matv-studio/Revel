@@ -237,6 +237,7 @@ fn parts_of(group: Section) -> &'static [(&'static str, &'static str, &'static s
             ("site-info", "siteinfo-title", "siteinfo-help"),
             ("fonts", "settings-fonts", "fonts-help"),
             ("colors", "colors-title", "colors-help"),
+            ("sizes", "sizes-title", "sizes-help"),
             ("seo", "settings-seo", "settings-seo-lead"),
             ("forms", "settings-forms", "forms-help"),
         ],
@@ -422,6 +423,7 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
             {part("site-info", view! { <crate::siteinfo::SiteInfo s=doc_session(ui, site.path.clone()) path=site.path.clone()/> }.into_any())}
             {part("fonts", view! { <crate::sitesettings::Fonts site=site.clone()/> }.into_any())}
             {part("colors", view! { <crate::sitecolors::SiteColors s=doc_session(ui, site.path.clone())/> }.into_any())}
+            {part("sizes", view! { <crate::sitesizes::SiteSizes s=doc_session(ui, site.path.clone())/> }.into_any())}
             {part("seo", view! { <Seo site=site.clone()/> }.into_any())}
             {part("forms", view! { <Forms site=site.clone()/> }.into_any())}
         }

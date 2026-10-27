@@ -36,6 +36,9 @@ with `set_attribute`, the same values as the Interactions panel) and the site se
 built; rebuild anything it lists with the forms below. Content that exists in the CMS (titles, dates, clients, \
 covers, videos of projects or articles) is read from it with a collection list and fields, never retyped in the \
 layers; elements that belong together (an item and its media) are linked by a setting, never by their position.\n\
+- Site variables: colors and sizes are CSS variables of `:root` with readable names (`--corail`, `--titre-l`, \
+`--espace-section`; Settings › Colors and Sizes), fluid sizes as `clamp(min, fluid, max)`; classes read them \
+(`font-size: var(--titre-l)`). Rename one everywhere with `apply_commands` `{\"cmd\": \"rename_variable\", \"from\": \"step-3\", \"to\": \"titre-l\"}`.\n\
 - Structure: elements with classes; texts written in the elements (`set_text`); CSS on classes per breakpoint and \
 state (`set_styles`, states :hover :active :focus-visible [aria-current=\"page\"] .is-active [aria-pressed=\"false\"], or \
 inside an active element `.is-active .x`); text-shadow, transform-origin and clip-path are panel controls. Prefer `insert_preset` (Add panel) \
@@ -80,7 +83,10 @@ use sets, and a slot (`data-revel-slot`) for per-use content; variants for alter
 target self|parent|next|body|.<class>|closest:.<class> (enclosing element)|#<id> (e.g. `click class:menu-open body; scroll:40 class:is-solid self`); \
 sound: `hover sound:/media/a.wav~50 self` (several files `a.wav|b.wav`: one at random; `~50` volume %), music on a loop: \
 `click music:/media/x.mp3|/media/y.mp3 self` (spaces as %20); music/sound switches: `<button data-revel-switch=\"music|sounds\">` \
-with a `data-revel-switch-text=\"On|Off\"` child (insert_preset switch). \
+with a `data-revel-switch-text=\"On|Off\"` child (insert_preset switch); light/dark switch of the site: \
+`<button data-revel-switch=\"theme\">` (insert_preset theme_switch, text child `data-revel-switch-text=\"Dark|Light\"`, \
+`aria-pressed=\"true\"` and `.is-active` in dark mode) toggling between the colors of Settings › Colors and their dark \
+values (`@media (prefers-color-scheme: dark)` on `:root`), choice kept by the browser, the device theme otherwise. \
 Scrolling: smooth scrolling `{\"cmd\": \"set_smooth_scroll\", \"on\": true}`; progress bar insert_preset scroll_progress (`data-revel-progress=\"parent|page\"`, fill width `calc(var(--revel-progress, 0) * 100%)`); masonry grid `data-revel-masonry`; navigation following the visible section `data-revel-spy=\"section\"` (its link to the current `#id` gets `is-active`). \
 Tabs: `data-revel-tabs` (options `hover`, `keys` for arrows/WASD anywhere, `sound=<url>`) with `data-revel-tab` \
 triggers and `data-revel-panel` panels (several series of panels each follow the tabs in order; the active tab and \
@@ -313,10 +319,11 @@ pub struct InsertPresetArg {
     /// list, grid, columns, rich_text, video, icon, embed, lottie, tabs, accordion,
     /// collection_list, locale_switch, navbar, ticker, carousel, slideshow, block_hero,
     /// block_features, block_text_image, block_cta, block_testimonial, block_faq, block_contact,
-    /// block_form, video_player, list_filters, consent, switch, scroll_progress.
+    /// block_form, video_player, list_filters, consent, switch, theme_switch, scroll_progress.
     pub preset: String,
     /// Default text of the new element (site's language). navbar: "Brand|Menu|Link 1|Link 2|…";
-    /// carousel/slideshow: "Slide|Previous|Next"; switch: "Label|On|Off"; icon: icon name
+    /// carousel/slideshow: "Slide|Previous|Next"; switch: "Label|On|Off";
+    /// theme_switch: "Theme|Dark|Light"; icon: icon name
     /// (fleche-droite, chevron-droite, plus, croix, coche, menu, etoile, coeur…).
     #[serde(default)]
     pub text: Option<String>,

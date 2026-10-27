@@ -145,6 +145,10 @@ pub enum Command {
     /// Renomme une classe partout : règles de la feuille du site, éléments des pages, gabarits et
     /// composants, cibles des interactions (D-113). Refusé si le nouveau nom est déjà une classe.
     RenameClass { from: String, to: String },
+    /// Renomme une variable du site (`--step-3` -> `--titre-l`) partout : déclarations, valeurs
+    /// qui la lisent, styles écrits sur les éléments. Noms sans `--`. Refusé si le nouveau nom
+    /// est déjà une variable.
+    RenameVariable { from: String, to: String },
     /// Texte d'une valeur liée (D-19) : fichier de données, en-tête d'un contenu, variable de page
     /// ou de gabarit. Appliquée par le cœur, qui écrit le fichier (`apply` la refuse).
     SetBound {
@@ -1082,6 +1086,13 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             Ok(Command::RenameClass {
                 from: to.clone(),
                 to: from.clone(),
+            })
+        }
+        Command::RenameVariable { from, to } => {
+            crate::variables::rename(site, from, to)?;
+            Ok(Command::RenameVariable {
+                from: to.trim_start_matches("--").to_string(),
+                to: from.trim_start_matches("--").to_string(),
             })
         }
         Command::SetBound { .. }

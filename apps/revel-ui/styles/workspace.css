@@ -466,3 +466,16 @@
 .dock-fold.is-folded { display: grid; }
 @media (max-width: 1000px) { .dock-fold--right { display: grid; } }
 @media (max-width: 760px) { .dock-fold--left { display: grid; } }
+
+/* Tailles du site (Paramètres › Général › Tailles). */
+.sizes-head, .sizes-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 1.6fr) 28px 28px; gap: var(--s-2); align-items: center; }
+.sizes-row + .sizes-row { margin-top: var(--s-1); }
+.sizes-name { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.sizes-name-input { flex: 1; min-width: 0; }
+.sizes-sample { flex: none; width: 44px; text-align: center; line-height: 1; overflow: hidden; color: var(--text); font-weight: var(--weight-medium); }
+.sizes-fluid { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.sizes-fluid .input { flex: 1; min-width: 0; }
+.sizes-arrow { display: inline-grid; color: var(--text-muted); }
+.sizes-arrow svg { width: 14px; height: 14px; }
+.sizes-uses { text-align: center; font-size: var(--text-xs); }
+input.colors-label { min-width: 0; }

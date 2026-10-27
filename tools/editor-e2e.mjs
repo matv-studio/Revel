@@ -1912,7 +1912,7 @@ try {
       const raw = await page.$$eval('.siteinfo-row, .navlist-head', (rs) => rs.some((r) => /on\s*:\s*click|move \||=>/.test(r.textContent)));
       const cols = await page.$$eval('.siteinfo-list .siteinfo-uses', (us) => new Set(us.map((u) => Math.round(u.getBoundingClientRect().right))).size);
       check('paramètres : rubrique raccordée à la page (parties), informations du site alignées, sans code affiché',
-        tab.parts === 6 && tab.bg === content.bg && tab.right > content.left && !raw && cols === 1, `${tab.parts} parties, ${cols} colonne(s)`);
+        tab.parts === 7 && tab.bg === content.bg && tab.right > content.left && !raw && cols === 1, `${tab.parts} parties, ${cols} colonne(s)`);
       if (shots) await page.screenshot({ path: `${shots}/parametres-general.png` });
       await page.$eval('.settings-content', (c) => c.scrollTo(0, c.scrollHeight));
       await page.waitForFunction(() => document.querySelector('.settings-nav-part[data-part="forms"]')?.classList.contains('is-on'));
@@ -2184,6 +2184,27 @@ try {
     const slide = await transition('slide');
     await page.click('#site-transition [data-transition=""]');
     check('paramètres : transition entre les pages choisie puis retirée', slide && await transition(''));
+    // Tailles du site (D-148) : variable renommée partout (styles qui la lisent), annulée.
+    {
+      const docT = JSON.stringify((await invoke('edit_open')).site);
+      await page.locator('.site-sizes').scrollIntoViewIfNeeded();
+      const first = await page.$eval('.site-sizes .sizes-row', (r) => r.dataset.var);
+      await page.fill('.site-sizes .sizes-row >> nth=0 >> .sizes-name-input', 'taille essai');
+      await page.press('.site-sizes .sizes-row >> nth=0 >> .sizes-name-input', 'Tab');
+      let renamed = false;
+      for (let i = 0; i < 40 && !renamed; i++) {
+        const css = JSON.stringify((await invoke('edit_open')).site.stylesheet);
+        renamed = css.includes('--taille-essai') && !css.includes(`--${first}"`) && !css.includes(`var(--${first})`);
+        if (!renamed) await page.waitForTimeout(100);
+      }
+      if (shots) await page.locator('.site-sizes').screenshot({ path: `${shots}/parametres-tailles.png` });
+      for (let i = 0; i < 6 && JSON.stringify((await invoke('edit_open')).site) !== docT; i++) {
+        await page.click('.settings-content', { position: { x: 5, y: 5 } }).catch(() => {});
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(300);
+      }
+      check('paramètres : taille du site renommée partout, annulée', renamed && JSON.stringify((await invoke('edit_open')).site) === docT, first);
+    }
     // Défilement doux (D-110) : Paramètres › Général, activé puis coupé.
     const smooth = async (v) => {
       for (let i = 0; i < 40; i++) {

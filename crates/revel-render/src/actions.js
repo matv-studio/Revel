@@ -60,6 +60,8 @@
     var sws = document.querySelectorAll("[data-revel-switch]");
     var paint = function () {
       for (var i = 0; i < sws.length; i++) {
+        // Interrupteur clair / sombre : tenu par le script du thème.
+        if (sws[i].getAttribute("data-revel-switch") === "theme") continue;
         var on = audio[sws[i].getAttribute("data-revel-switch")] !== false;
         sws[i].setAttribute("aria-pressed", String(on));
         sws[i].classList.toggle("is-active", on);

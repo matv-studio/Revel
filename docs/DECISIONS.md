@@ -1450,6 +1450,31 @@ montre une vignette (adresse au survol). Catalogues de templates : plusieurs dé
 Réglages › Templates (liste, état, retrait) ou depuis « Nouveau site » (bouton « + » à côté d'Inclus et
 Catalogue, sans liste pour garder la fenêtre légère) ; un template s'enregistre dans le catalogue choisi.
 
+**D-148 — 27/10/2026 — prise.** **Tailles du site et variables renommées.** Paramètres › Général › Tailles :
+les variables de taille de `:root` (texte, espaces, largeurs, comme les variables de taille de Webflow) listées,
+renommées partout (commande `RenameVariable`, aussi pour les couleurs : leur nom se modifie dans Couleurs),
+réglées (valeur fixe, ou taille fluide : minimum et maximum d'un `clamp`), ajoutées, retirées ; aperçu « Aa »
+pour celles qui servent de taille de texte. Assistants : `rename_variable`. **Règle de construction (demande de
+l'utilisateur)** : une variable qui ne fait que ce que fait une classe n'a pas lieu d'être ; les tailles de texte
+s'écrivent dans les classes, seules restent en variables les valeurs partagées par beaucoup de classes
+différentes (marges, largeur maximale, espace entre sections, arrondi) et les couleurs.
+
+**D-149 — 27/10/2026 — prise.** **Interrupteur clair / sombre du site.** `data-revel-switch="theme"` (Ajouter ›
+« Interrupteur clair / sombre », ou le réglage « Interrupteur » d'un bouton quand le site a des couleurs pour le mode
+sombre) bascule le site entre ses couleurs et leurs valeurs sombres (Paramètres › Couleurs, `@media
+(prefers-color-scheme: dark)`) ; choix gardé par le navigateur, thème de l'appareil sinon. Un script placé à la fin de
+`<head>` réécrit les requêtes `prefers-color-scheme` des feuilles avant le premier affichage (pas de flash) ;
+`html[data-revel-scheme]`, interrupteur `aria-pressed` et `is-active` en sombre, texte `data-revel-switch-text`.
+
+**D-150 — 27/10/2026 — prise.** **Modèle des pages : un bloc de chaque sorte ; composants réglables du dehors.** Le
+contenu d'exemple du modèle des pages (D-144) met dans une liste de blocs (objets avec un champ de choix `type`) un
+bloc de chaque sorte, pris dans les contenus quand l'un l'utilise, pour que chaque sorte de bloc se règle sur le
+modèle. Recréation d'Alunites refaite (direction artistique « Rayonner » : papier clair et encre, corail, panneaux
+arrondis, en-tête flottant, mode sombre et interrupteur), avec ces règles : animations par les interactions de Revel
+(aucun `@keyframes`), blocs des pages de contenu dans le modèle (plus de composant vide), sections de page (chiffres,
+clients) dans les pages pour que leurs valeurs se règlent du dehors, bandeau d'appel à contacter avec des propriétés,
+cartes avec des valeurs d'exemple.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

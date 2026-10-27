@@ -1017,13 +1017,19 @@ fn switch_settings(
 ) -> Option<AnyView> {
     let channel = attr(attrs, "data-revel-switch").map(|a| a.value.clone().unwrap_or_default());
     let text = attr(attrs, "data-revel-switch-text").map(|a| a.value.clone().unwrap_or_default());
-    let (sound, inside) = ed.doc.with_untracked(|d| {
-        d.as_ref().map_or((false, false), |d| {
-            (site_has_sound(d), inside_attr(d, at, "data-revel-switch"))
+    let (sound, inside, dark) = ed.doc.with_untracked(|d| {
+        d.as_ref().map_or((false, false, false), |d| {
+            (
+                site_has_sound(d),
+                inside_attr(d, at, "data-revel-switch"),
+                // Couleurs pour le mode sombre (Paramètres › Couleurs) : interrupteur du thème.
+                revel_edit::style::find_rule(d, ":root", &Some(crate::sitecolors::DARK.into()))
+                    .is_some(),
+            )
         })
     });
     let offer_switch =
-        role_select && (channel.is_some() || (sound && matches!(tag, "button" | "a")));
+        role_select && (channel.is_some() || ((sound || dark) && matches!(tag, "button" | "a")));
     let offer_text = text.is_some() || inside;
     if !offer_switch && !offer_text {
         return None;
@@ -1078,6 +1084,7 @@ fn switch_settings(
                                 <option value="" prop:selected=cur.is_empty()>{ui.t("switch-none")}</option>
                                 <option value="music" prop:selected={cur == "music"}>{ui.t("switch-music")}</option>
                                 <option value="sounds" prop:selected={cur == "sounds"}>{ui.t("switch-sounds")}</option>
+                                <option value="theme" prop:selected={cur == "theme"}>{ui.t("switch-theme")}</option>
                             </select>
                         </div>
                     </label>

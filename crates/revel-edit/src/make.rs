@@ -282,6 +282,9 @@ pub enum Preset {
     Consent,
     /// Interrupteur de la musique ou des sons du site (« On / Off »).
     Switch,
+    /// Interrupteur clair / sombre (D-149) : bascule le site entre ses couleurs claires et
+    /// sombres (Paramètres › Couleurs), choix gardé par le navigateur.
+    ThemeSwitch,
     /// Média au survol : vidéo qui montre le média de l'élément survolé (contenus d'une liste
     /// de collection ou éléments choisis), voir [`crate::hover`].
     HoverMedia,
@@ -316,7 +319,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 40] = [
+    pub const ALL: [Preset; 41] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -352,6 +355,7 @@ impl Preset {
         Preset::ListFilters,
         Preset::Consent,
         Preset::Switch,
+        Preset::ThemeSwitch,
         Preset::HoverMedia,
         Preset::ScrollProgress,
         Preset::Reveal,
@@ -585,7 +589,7 @@ impl Preset {
                     vec![("opacity", "1"), ("font-weight", "600")],
                 ),
             ],
-            Preset::Switch => vec![
+            Preset::Switch | Preset::ThemeSwitch => vec![
                 (
                     ".interrupteur",
                     vec![
@@ -1141,19 +1145,26 @@ impl Preset {
                     html: format!("<p>{}</p>", html_escape(text)),
                 }],
             ),
-            Preset::Switch => {
-                // `text` : « Libellé|On|Off ».
+            Preset::Switch | Preset::ThemeSwitch => {
+                // `text` : « Libellé|On|Off » (thème : « Thème|Sombre|Clair »).
+                let theme = self == Preset::ThemeSwitch;
                 let mut parts = text.split('|');
                 let label = parts.next().unwrap_or(text).to_string();
-                let on = parts.next().unwrap_or("On").to_string();
-                let off = parts.next().unwrap_or("Off").to_string();
+                let on = parts
+                    .next()
+                    .unwrap_or(if theme { "Dark" } else { "On" })
+                    .to_string();
+                let off = parts
+                    .next()
+                    .unwrap_or(if theme { "Light" } else { "Off" })
+                    .to_string();
                 el(
                     id(),
                     "button",
                     vec![
                         attr("type", "button"),
                         attr("class", "interrupteur"),
-                        attr("data-revel-switch", "music"),
+                        attr("data-revel-switch", if theme { "theme" } else { "music" }),
                     ],
                     vec![
                         el(

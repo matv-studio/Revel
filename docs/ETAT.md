@@ -6,8 +6,43 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 26/10/2026 (conversation dédiée à Revel ; dernière avancée : 8.9 et brouillon 0.6.9). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 27/10/2026 (dernière avancée : travail du 27/10 depuis l'ancien compte, e1a6b98). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 27/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.7.0
+Commits 4ce84f4 (CI réussie) et e1a6b98 ; D-142 à D-150 ; ligne 8.13
+de `docs/ETAPE-8.md`.
+- D-142 colonnes du CMS réordonnées au glisser, vignettes d'image (chemin au survol) ; D-143 vignettes des sites
+  (couleur ou capture de l'accueil, `sitethumb.rs`, `thumb_file`) ; galerie des templates qui défile ; contenus
+  sous leur collection dans le plan du site ; transitions de page ajoutées, aperçu lent au survol, icônes
+  distinctes ; boutons d'écran de l'aperçu centrés ; aperçu de composant à l'échelle du canevas, isolé.
+- D-144 catalogues de l'utilisateur (Réglages + « + » dans Nouveau site) ; D-145 « Modèle des pages » devenu
+  une page interne de Revel (`/__revel/template/<id>/`, `TEMPLATE_ENTRY = "__revel-template"`, jamais écrit
+  sur disque) qui réunit tous les champs de la collection (`crates/revel-core/src/sample.rs`) ; une liste de
+  blocs y reçoit un bloc de chaque sorte (D-150).
+- D-146 classes dans les Paramètres avancés (boutons à la charte, retirables, Ctrl+Z) ; D-147 corrections.
+- D-148 Paramètres › Général › Tailles (`apps/revel-ui/src/sitesizes.rs`) : variables de taille du site,
+  renommées partout (commande `RenameVariable`, `revel-edit/src/variables.rs`), valeur fixe ou fluide
+  (min → max). Règle de l'utilisateur : **une variable seulement si elle est partagée ; sinon la classe porte
+  la valeur** (les tailles de texte d'Alunites ont été remises dans les classes).
+- D-149 interrupteur clair / sombre (`crates/revel-render/src/theme.rs`, préréglage `theme_switch`, Ajouter ›
+  Interrupteur de thème, option « theme » du réglage d'interrupteur proposée si le site a des couleurs
+  sombres) : réécrit les requêtes `prefers-color-scheme` des feuilles avant le premier affichage, choix gardé
+  (`localStorage` `rv-theme`), `html[data-revel-scheme]`. **Le site produit par la 0.7.0 n'a pas ce script :
+  il faut la version suivante.**
+- Règle globale de l'utilisateur (27/10) : animations par les outils de Revel, jamais de code ; un assistant
+  (MCP) passe toujours par les outils d'interface qui laissent la main à l'utilisateur, sauf demande contraire.
+- Recréation d'Alunites refaite (PC de l'ancien compte : `recreation-alunites-interface`, `site.revel.json`) : nouvelle direction
+  « Rayonner » (fond papier, panneaux d'encre, en-tête en capsule flottante, accent orange et icônes gardés),
+  variante sombre complète, interrupteur dans l'en-tête ; animations par `data-revel-text`,
+  `data-revel-appear`, rosace `data-revel-loop`. Composants rendus modifiables depuis la page : Chiffres et
+  Clients détachés sur l'accueil et l'agence, CTA à propriétés (titre, accent, aparté, texte, bouton, lien),
+  cartes avec valeurs par défaut, `partials/blocks` détaché dans les gabarits projet et article. `check_site`
+  : tout éditable.
+- Essais : éditeur 348/348, templates 26/26, tests du dépôt, clippy, format.
+- Pièges : `revel build` sur Alunites remplit le disque (variantes d'images) : ne pas le lancer ; wasm-bindgen
+  tué si des ponts tournent : les arrêter avant `trunk build` ; une image paresseuse d'un cadre hors écran ne se
+  charge jamais (cadre dans la vue à opacité 0, images passées en `eager`).
 
 ## Travail du 26/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.6.9
 Commits 933e49c, cd65eca et dd29dda sur `main` ; CI entièrement réussie sur dd29dda (flux 40388623717). Décisions D-126 à D-139 (D-132 à trancher : modèles partagés en ligne) ;

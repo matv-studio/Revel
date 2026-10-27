@@ -68,7 +68,18 @@ fields are read without prefix (`{{ title }}`).\n\
 - Values in other attributes (Inspector › Attributes, bound without braces): one value with written text around \
 (`aria-label=\"Play {{ item.data.title }}\"`, `href=\"/projets/?expertise={{ slug }}\"`), or written only when filled: \
 `aria-label=\"Play the video{% if label %}: {{ label }}{% endif %}\"`; style properties bound to a value: \
-`style=\"--dot:{{ item.data.color }};--count:{{ collections.<id>|length }}\"` (custom properties read by the classes' styles).\n\
+`style=\"background-color:{{ item.data.color }}\"`.\n\
+- Styles stay editable in the Styles panel: one class or combo class per rule (`.card`, `.card.card--dark`), or a tag \
+(`h2`, `p`), with at most a panel state (`:hover`, `:active`, `:focus-visible`, `[aria-current=\"page\"]`, `.is-active`, \
+`[open]`, `[aria-pressed=\"false\"]`) or an ancestor state (`.is-active .x`, `[open] .x`, `[aria-pressed=\"false\"] .x`, \
+`.is-paused .x`, `.is-playing .x`); tags inside a class (`.prose p`, `.title strong`: rich text, emphasized words); \
+a hover effect on children is a component variant (Hover variant of the component whose root has class `card`: \
+`.card:hover .card__title`); media queries are the site breakpoints only; colors and sizes are site variables on \
+`:root` (literal values; dark values in `@media (prefers-color-scheme: dark) { :root {…} }`, never class rules there); \
+no `::before`/`::after` (add an element), no `@keyframes` (Revel animations), no selector lists, no custom property \
+elsewhere, only properties with a panel control. `check_site` lists what breaks these rules (style_* kinds). Text \
+fitted to the screen: `data-revel-fit=\"h=55 min=28\"` (keeps its Styles size while it fits in 55% of the screen \
+height, smaller otherwise, never under 28px).\n\
 - Site information (Settings › Site information: e-mail, phone, address, social links, menus) is shared by every page: \
 `{{ site.<key> }}`, `href=\"mailto:{{ site.email }}\"`, `href=\"tel:{{ site.phone | tel }}\"`, \
 `href=\"https://maps.google.com/?q={{ site.address | map_query }}\"`, menus `{% for lien in site.menus.<name> %}<a \
@@ -80,7 +91,7 @@ href=\"{{ lien.url }}\">{{ lien.label }}</a>{% endfor %}`; set them with `apply_
 use sets, and a slot (`data-revel-slot`) for per-use content; variants for alternate looks.\n\
 - Behaviour without code: `data-revel-on` on the triggering element, `<trigger> <action> <target>` separated by \
 `;`: trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss|random:<ms>|spin:<deg>, \
-target self|parent|next|body|.<class>|closest:.<class> (enclosing element)|#<id> (e.g. `click class:menu-open body; scroll:40 class:is-solid self`); \
+target self|parent|next|body|.<class>|closest:.<class> (enclosing element)|#<id> (e.g. `click class:is-active #menu; scroll:40 class:is-active self`, styled with the Active state); \
 sound: `hover sound:/media/a.wav~50 self` (several files `a.wav|b.wav`: one at random; `~50` volume %), music on a loop: \
 `click music:/media/x.mp3|/media/y.mp3 self` (spaces as %20); music/sound switches: `<button data-revel-switch=\"music|sounds\">` \
 with a `data-revel-switch-text=\"On|Off\"` child (insert_preset switch); light/dark switch of the site: \
@@ -102,7 +113,9 @@ item gets `is-active`, the started video `is-ready`; slider: `data-revel-slider`
 `data-revel-consent-open`; forms: `<form data-revel-form=\"contact\">` (sent by e-mail, Settings › Forms). \
 Animations: `data-revel-appear|text|hover|press|loop|scroll|active` (e.g. `data-revel-appear=\"up dur=0.8\"`, \
 `data-revel-active=\"pop\"` plays when its tab, filter or switch becomes active), \
-`data-revel-loop=\"ticker speed=60 pause\"`). Lottie: `data-lottie=\"/media/x.json\"` with `data-lottie-play`.\n\
+`data-revel-loop=\"ticker speed=60 pause\"`). Draggable element (mouse or finger): `data-revel-drag` with options \
+`axis=x|y`, `bounds` (stays in its container), `momentum` (keeps moving once released), `collide` (draggable \
+elements of the same container push each other). Lottie: `data-lottie=\"/media/x.json\"` with `data-lottie-play`.\n\
 - Page settings (title, description, share image, body class, theme, share type, publication date) and site settings (site name, \
 icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`. Redirections \
 (old address, with or without `?parameters`, to a new one) are a site setting: `apply_commands` with \
@@ -1345,14 +1358,14 @@ impl Revel {
     }
 
     #[tool(
-        description = "List what Revel's interface cannot edit in the site (variables, computed expressions, written conditions and lists, computed attributes…). Everything a user builds in the interface has zero issues: rebuild each listed place with interface structures (literal text, component properties, collection lists, presets, data-revel-* attributes)."
+        description = "List what Revel's interface cannot edit in the site: in layers (variables, computed expressions, written conditions and lists, computed attributes…) and in styles (style_selector: selectors the Styles panel cannot target, such as `.a > .b`, `.a .b`, `::before`, `h1, h2`; style_media: media queries other than the site breakpoints, class rules in prefers-color-scheme; style_code: @keyframes and other CSS blocks; style_variable: custom properties other than site colors and sizes; style_property: properties without a Styles panel control). Everything a user builds in the interface has zero issues: rebuild each listed place with interface structures (literal text, component properties, collection lists, presets, data-revel-* attributes; one class or combo class per rule with a panel state, component variants for hover effects on children, site colors with a dark value for dark mode, Revel animations instead of keyframes)."
     )]
     async fn check_site(&self, Parameters(a): Parameters<SiteArg>) -> CallToolResult {
         let d = match self.doc(&a.site).await {
             Ok(d) => d,
             Err(e) => return fail(e),
         };
-        let issues = revel_edit::editable::audit(&d);
+        let issues = revel_edit::editable::audit_all(&d);
         if issues.is_empty() {
             return ok("Everything in this site is editable in Revel's interface.");
         }

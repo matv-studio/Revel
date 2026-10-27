@@ -6,7 +6,7 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 27/10/2026 (dernière avancée : version 0.7.1, 88de8d4). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 27/10/2026 (dernière avancée : D-151 à D-155, après la 0.7.1). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
 ## Travail du 27/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.7.0
@@ -47,6 +47,25 @@ de `docs/ETAPE-8.md`.
   étiquette `v0.7.1` (flux « Étiquette » 40522665705) ; brouillon « Revel v0.7.1 » (préversion, id 425599865,
   17 fichiers, `latest.json` 0.7.1 à 11 cibles, clé EA5F2855415468CD), **à publier par l'utilisateur**. Contient
   l'interrupteur clair / sombre du site produit (D-149).
+- **Suite du 27/10/2026 (après la 0.7.1), en cours** : D-151 à D-155, ligne 8.14 de `docs/ETAPE-8.md`.
+  - D-151 relevé des styles (`crates/revel-edit/src/styleaudit.rs`, `editable::audit_all`, `check_site` et
+    `revel audit`) : seules les formes du panneau Styles sont admises ; balises dans une classe (pastille
+    « Tous les … dans .classe », liste « Contenu… »), puces (`list-style-type`), état « Dans une vidéo lancée » ;
+    styles propres aux outils écrits par Revel (`crates/revel-render/src/toolcss.rs`, `:where(...)`) ;
+    `<picture style="display:contents">` ; lecteur vidéo qui remplit sa couverture. Recréation d'Alunites
+    refaite à zéro point (`dossier de travail du chat, `alu-v3.py`` + `alu-v3.css` ; composants « Ligne d'expertise »,
+    « Membre de l'équipe » ; variantes Survol des cartes et logos ; variante « Annuel » du chiffre) et remise
+    sur le PC (`recreation-alunites-interface/site.revel.json`, exige la version suivante de Revel).
+  - D-152 plan du site : parties communes masquées à l'ouverture ; double-clic sur une adresse → contenu du CMS.
+  - D-153 texte ajusté à l'écran (`crates/revel-render/src/fit.rs`, `data-revel-fit`, réglage dans le panneau).
+  - D-154 élément à glisser (`actions.js` `drag`, Interactions › Glisser) ; import Framer (`Modules::drag`).
+  - D-155 imports sans code (première partie, `crates/revel-import/src/framer_clean.rs`) ; reste à faire :
+    styles calculés de chaque élément dans un cadre caché, pour tous les imports ; outils manquants relevés sur
+    le site Framer d'essai (horloge, toile à dessiner) ; templates de Revel encore relevés (sélecteurs écrits).
+  - Pièges : le pont garde le document en mémoire (relancer le pont après une réécriture de `site.revel.json`) ;
+    les images de l'aperçu `/__preview/` sont servies par le canevas (ouvrir le canevas d'abord, `canvas_open`) ;
+    dans le canevas, `canvas.js` intercepte le pointeur (essayer le glisser dans l'aperçu) ; `SetAttr` sans valeur
+    laisse un attribut booléen (retirer par `RemoveAttr`) ; disque : supprimer `target/debug/incremental`.
 
 
 ## Travail du 26/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.6.9

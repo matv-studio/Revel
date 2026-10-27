@@ -251,7 +251,7 @@ fn main() -> Result<()> {
         }
         Command::Audit { dir, json } => {
             let p = Project::open(&dir)?;
-            let issues = revel_edit::editable::audit(&p.site);
+            let issues = revel_edit::editable::audit_all(&p.site);
             if json {
                 println!("{}", serde_json::to_string_pretty(&issues)?);
             } else {

@@ -54,6 +54,17 @@ pub fn apply_page(head: &mut [Node], body: &mut [Node], m: &Modules, css: &mut S
         if tag == "video" && attr(attrs, "autoplay").is_some() && attr(attrs, "muted").is_none() {
             set_attr(attrs, "muted", String::new());
         }
+        // Élément à glisser (D-154) : outil de Revel, pas le script de Framer.
+        let drag = classes(attrs).find_map(|c| m.drag.get(c)).cloned();
+        if attr(attrs, "data-revel-drag").is_none()
+            && let Some(d) = drag
+        {
+            set_attr(attrs, "data-revel-drag", d);
+            for a in ["draggable", "tabindex"] {
+                attrs.retain(|x| x.name != a);
+            }
+            count += 1;
+        }
         // Apparition au défilement (sauf si une autre animation est déjà reprise).
         let found = classes(attrs).find_map(|c| m.appear.get(c)).cloned();
         if attr(attrs, "data-revel-appear").is_none()

@@ -2019,8 +2019,14 @@ try {
       await page.click('.view-tab[data-view="view-map"]');
       await page.waitForSelector('.map-node[data-node="page:index"]');
       await page.waitForTimeout(400);
+      // Parties communes masquées à l'ouverture (D-152), montrées par leur bouton.
+      const hidden = await page.$$eval('.map-node', (n) => n.every((x) => !x.dataset.node.startsWith('comp:')));
+      await page.click('.map-groups button[data-group="shared"], button[data-group="shared"]');
+      await page.waitForSelector('.map-node[data-node^="comp:"]');
+      await page.waitForTimeout(300);
       const keys = await page.$$eval('.map-node', (n) => n.map((x) => x.dataset.node));
       const nEdges = await page.$$eval('.map-edge', (e) => e.length);
+      check('plan du site : parties communes masquées à l\'ouverture', hidden);
       check('plan du site : pages, collections, parties communes et liens',
         keys.includes('page:index') && keys.some((k) => k.startsWith('col:')) && keys.some((k) => k.startsWith('comp:')) && nEdges > 5,
         `${keys.length} nœuds, ${nEdges} traits`);
@@ -2157,8 +2163,13 @@ try {
         await page.keyboard.press('Control+z');
         await untilM(() => fs.readFileSync(entryFile, 'utf8') === entry0, 'remplacement annulé');
         check('plan du site : remplacement annulé (Ctrl+Z)', true);
-        await page.keyboard.press('Escape');
-        await page.click('.map-filters button:nth-child(3)');
+        // Double-clic sur une adresse (D-152) : le contenu du CMS où elle sert, ouvert.
+        await page.dblclick(`.map-panel .map-url[data-url="${yt}"] .map-url-uses`);
+        const opened = await page.waitForSelector('.cms-item[data-entry^="gen-z-et-produits-bancaires"]', { timeout: 15000 }).then(() => true).catch(() => false);
+        check('plan du site : double-clic sur une adresse, contenu du CMS ouvert', opened);
+        await page.click('.view-tab[data-view="view-map"]');
+        await page.waitForSelector('.map-node[data-node="page:contact"]');
+        await page.waitForTimeout(300);
       }
       // Double-clic : page ouverte dans l'éditeur.
       await page.dblclick('.map-node[data-node="page:contact"]', { position: { x: 20, y: 10 } });
@@ -2300,6 +2311,54 @@ try {
   await page.click('.dock-tab[data-panel="styles"]');
   await page.waitForFunction(() => document.querySelector('.styles .sel-chip.is-on')?.textContent.trim() === 'hero__title');
   check('styles : sélecteur de la classe de l\'élément', true);
+  // Balises dans une classe (D-151) : « Contenu… » d'un élément à classe, puis retour.
+  {
+    await page.selectOption('.styles .sel-nested', 'strong');
+    await page.waitForSelector('.styles .sel-chip.is-nested.is-on');
+    const nested = (await page.textContent('.styles .sel-chip.is-nested.is-on')).trim();
+    await page.click('.styles .sel-chip.is-nested.is-on .sel-chip-x');
+    await page.waitForFunction(() => document.querySelector('.styles .sel-chip.is-on')?.textContent.trim() === 'hero__title');
+    check('styles : balises dans une classe (« Contenu… »), puis retour à la classe', /hero__title/.test(nested), nested);
+  }
+  // Texte ajusté à l'écran (D-153) et élément à glisser (D-154) : réglages écrits, puis retirés.
+  {
+    const docF = JSON.stringify((await invoke('edit_open')).site);
+    const attrOf = async (name) => {
+      const m = JSON.stringify((await invoke('edit_open')).site).match(new RegExp(`"name":"${name}","value":"([^"]*)"`));
+      return m ? m[1] : null;
+    };
+    const until = async (name, pred, what) => {
+      for (let i = 0; i < 60; i++) { const v = await attrOf(name); if (pred(v)) return v; await page.waitForTimeout(100); }
+      throw new Error(what);
+    };
+    await page.waitForSelector('.fit-settings input[data-fit="on"]');
+    await page.click('.fit-settings label.view-line');
+    const fit = await until('data-revel-fit', (v) => !!v, 'texte ajusté : attribut écrit');
+    await page.fill('.fit-settings input[data-fit="h"]', '40');
+    await page.press('.fit-settings input[data-fit="h"]', 'Enter');
+    const fit2 = await until('data-revel-fit', (v) => /h=40/.test(v || ''), 'texte ajusté : hauteur');
+    await page.click('.fit-settings label.view-line');
+    await until('data-revel-fit', (v) => !v, 'texte ajusté : retiré');
+    check('réglages : texte ajusté à la hauteur de l\'écran (écrit, réglé, retiré)', /^h=60 min=24$/.test(fit) && /min=24/.test(fit2), `${fit} → ${fit2}`);
+    await page.click('.dock-tab[data-panel="interactions"]');
+    await page.click('.anim-family[data-family="drag"] .anim-add');
+    const d1 = await until('data-revel-drag', (v) => v === 'momentum', 'glisser : ajouté');
+    await page.click('.drag-section label.view-line:has(input[data-drag="collide"])');
+    await until('data-revel-drag', (v) => v === 'momentum collide', 'glisser : collisions');
+    await page.click('.drag-section .drag-axis button[data-axis="x"]');
+    const d3 = await until('data-revel-drag', (v) => v === 'axis=x momentum collide', 'glisser : sens');
+    await page.click('.anim-family[data-family="drag"] .anim-remove');
+    await until('data-revel-drag', (v) => !v, 'glisser : retiré');
+    check('interactions : élément à glisser (sens, élan, collisions), retiré', d1 === 'momentum' && !!d3, d3);
+    {
+      const now = JSON.stringify((await invoke('edit_open')).site);
+      let at = 0;
+      while (at < now.length && now[at] === docF[at]) at++;
+      check('réglages : document identique après retrait', now === docF, `${docF.slice(Math.max(0, at - 80), at + 80)} ≠ ${now.slice(Math.max(0, at - 80), at + 80)}`);
+    }
+    await page.click('.dock-tab[data-panel="styles"]');
+    await page.waitForFunction(() => document.querySelector('.styles .sel-chip.is-on')?.textContent.trim() === 'hero__title');
+  }
   const styleInput = (prop) => page.locator(`.style-row[data-prop="${prop}"]`).locator('input, select').first();
   f = frameOf();
   await f.evaluate(() => { window.__mark2 = 1; });
@@ -3488,6 +3547,9 @@ try {
         if (!j.result || j.result.isError) throw new Error(`MCP ${name} : ${JSON.stringify(j).slice(0, 300)}`);
         return j.result.content[0].text;
       };
+      // Relevé des styles (D-151) : ce que le panneau Styles ne règle pas, signalé à l'assistant.
+      const audit = await mcp('check_site', {});
+      check('assistants (MCP) : relevé des styles (sélecteurs écrits, variables locales)', /style_selector/.test(audit) && /style_variable/.test(audit), audit.slice(0, 80).replace(/\s+/g, ' '));
       await page.click('.view-tab[data-view="view-editor"]');
       await page.click('.pages .page-row[data-url="/"]');
       await waitFrame(() => location.pathname === '/' && document.body.textContent.includes('Faire rayonner'), 'accueil');

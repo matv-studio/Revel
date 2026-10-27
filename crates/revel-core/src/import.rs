@@ -317,6 +317,7 @@ impl Core {
             let names = revel_import::framer::Modules::load(&dest).component_names;
             revel_import::framer_components::make_components(&mut site, &names, &mut report);
             revel_import::framer_names::readable_classes(&mut site, &mut report);
+            revel_import::framer_clean::clean(&mut site, &mut report);
         }
         if report.tool.is_none() {
             report.tool = crawled.tool.clone();

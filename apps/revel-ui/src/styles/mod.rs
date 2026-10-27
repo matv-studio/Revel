@@ -52,6 +52,8 @@ const STATES: &[(&str, &str)] = &[
     // Élément arrêté par « Lire ou mettre en pause » (en-tête dont la vidéo est en pause) : ce
     // qu'il contient (texte « Lire la vidéo » du bouton).
     ("^.is-paused", "styles-state-in-paused"),
+    // Lecteur vidéo lancé : ce qu'il contient (image de couverture cachée…).
+    ("^.is-playing", "styles-state-in-playing"),
 ];
 
 /// Champ « Ajouter une classe » des pastilles : propose les classes du site d'après la place de
@@ -483,6 +485,34 @@ pub(crate) fn tag_selector(n: &Node) -> Option<(&'static str, &'static str)> {
     TAGS.iter().find(|(t, _)| *t == tag).copied()
 }
 
+/// Balise réglable dans une classe ([`revel_edit::styleaudit::NESTED_TAGS`]).
+pub(crate) fn nested_tag(n: &Node) -> Option<&'static str> {
+    let tag = match n {
+        Node::Element { tag, .. } => tag.to_ascii_lowercase(),
+        Node::Image(_) => "img".into(),
+        _ => return None,
+    };
+    revel_edit::styleaudit::NESTED_TAGS
+        .iter()
+        .find(|t| **t == tag)
+        .copied()
+}
+
+/// `.classe balise` -> (classe, balise).
+pub(crate) fn nested_of(sel: &str) -> Option<(&str, &str)> {
+    let (cls, tag) = sel.split_once(' ')?;
+    let cls = cls.strip_prefix('.')?;
+    (!cls.contains('.') && revel_edit::styleaudit::NESTED_TAGS.contains(&tag)).then_some((cls, tag))
+}
+
+/// Libellé d'une balise (« Tous les paragraphes »).
+pub(crate) fn tag_label_key(tag: &str) -> &'static str {
+    TAGS.iter()
+        .find(|(t, _)| *t == tag)
+        .map(|(_, k)| *k)
+        .unwrap_or("styles-tag-small")
+}
+
 /// Sélecteurs proposés : chaque classe, puis la combinaison de toutes (classe combinée).
 pub(crate) fn candidates(classes: &[String]) -> Vec<String> {
     let mut v: Vec<String> = classes.iter().map(|c| format!(".{c}")).collect();
@@ -520,13 +550,38 @@ pub fn Styles() -> impl IntoView {
             .filter(|n| classes_of(n).is_empty())
             .and_then(|n| tag_selector(&n))
     });
+    // Élément sans classe dans un élément qui en a une : « Tous les … dans .classe » (balises
+    // dans une classe, D-151 : mots mis en valeur d'un titre, texte riche).
+    let nested_sel = Memo::new(move |_| {
+        let n = node.get()?;
+        if !classes_of(&n).is_empty() {
+            return None;
+        }
+        let tag = nested_tag(&n)?;
+        let at = ed.selected_target()?;
+        let cls = ed
+            .doc
+            .with(|d| revel_edit::address::class_ancestor(d.as_ref()?, &at))?;
+        Some((format!(".{cls} {tag}"), cls, tag))
+    });
     // Classe par défaut : la combinaison (gardée tant qu'elle reste proposée). Sans classe : le
     // corps de page se règle pour toutes les pages ; un autre élément reçoit une classe à la
     // première valeur réglée (comme Webflow), sauf choix « toutes les balises ».
     Effect::new(move |_| {
         let c = candidates(&classes.get());
         let tag = tag_sel.get();
+        let nested = nested_sel.get();
         let cur = selector.get_untracked();
+        // Balises dans une classe : celle de l'élément, ou choisie dans « Contenu » d'un
+        // élément à classe.
+        if nested.as_ref().is_some_and(|(s, _, _)| *s == cur)
+            || classes
+                .get_untracked()
+                .iter()
+                .any(|cl| nested_of(&cur).is_some_and(|(p, _)| p == cl))
+        {
+            return;
+        }
         if c.contains(&cur) || (cur.is_empty() && c.is_empty()) {
             if cur.is_empty() && tag.is_some_and(|(t, _)| t == "body") {
                 selector.set("body".into());
@@ -747,6 +802,44 @@ pub fn Styles() -> impl IntoView {
                                     }>{icons::tag()}{ui.t(key)}</button>
                                 </span>
                             })}
+                            // Balises dans la classe d'un ancêtre (élément sans classe).
+                            {move || nested_sel.get().map(|(sel, cls, tag)| {
+                                let (s2, s3) = (sel.clone(), sel.clone());
+                                view! {
+                                    <span class="sel-chip is-tag is-nested" class:is-on=move || selector.get() == s2
+                                        role="option" aria-selected=move || (selector.get() == s3).to_string()
+                                        title=ui.t("styles-nested-help")>
+                                        <button class="sel-chip-name" on:click=move |_| {
+                                            let on = selector.get_untracked() == sel;
+                                            selector.set(if on { String::new() } else { sel.clone() });
+                                        }>{icons::tag()}{ui.tx("styles-nested", &[("tag", ui.now(tag_label_key(tag), &[])), ("parent", format!(".{cls}"))])}</button>
+                                    </span>
+                                }
+                            })}
+                            // Élément à classe : balises qu'il contient (texte riche, mots mis en
+                            // valeur), réglées dans sa classe.
+                            {move || {
+                                let list = classes.get();
+                                let first = list.first().cloned()?;
+                                let cur = selector.get();
+                                let on = nested_of(&cur).filter(|(p, _)| list.iter().any(|c| c == p)).map(|(p, t)| (p.to_string(), t.to_string()));
+                                Some(match on {
+                                    Some((p, t)) => view! {
+                                        <span class="sel-chip is-tag is-nested is-on" title=ui.t("styles-nested-help")>
+                                            <span class="sel-chip-name">{icons::tag()}{ui.tx("styles-nested", &[("tag", ui.now(tag_label_key(&t), &[])), ("parent", format!(".{p}"))])}</span>
+                                            <button class="sel-chip-x" title=ui.t("styles-nested-leave") aria-label=ui.t("styles-nested-leave")
+                                                on:click=move |_| selector.set(format!(".{p}"))>{icons::close()}</button>
+                                        </span>
+                                    }.into_any(),
+                                    None => view! {
+                                        <select class="sel-nested" title=ui.t("styles-nested-pick-help") aria-label=ui.t("styles-nested-pick")
+                                            on:change=move |e| { let t = event_target_value(&e); if !t.is_empty() { selector.set(format!(".{first} {t}")); } }>
+                                            <option value="" selected=true>{ui.t("styles-nested-pick")}</option>
+                                            {revel_edit::styleaudit::NESTED_TAGS.iter().map(|t| view! { <option value=*t>{ui.t(tag_label_key(t))}</option> }).collect_view()}
+                                        </select>
+                                    }.into_any(),
+                                })
+                            }}
                             <ClassAdd add=Callback::new(add_class) has_classes=Signal::derive(move || !classes.get().is_empty())/>
                         </div>
                         <div class="target-meta">
@@ -788,6 +881,20 @@ pub fn Styles() -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Balises et états du panneau : ceux que le relevé des styles reconnaît (D-151).
+    #[test]
+    fn panneau_et_releve_des_styles() {
+        let tags: Vec<&str> = TAGS.iter().map(|(t, _)| *t).collect();
+        assert_eq!(tags, revel_edit::styleaudit::TAG_SELECTORS);
+        for (st, _) in STATES.iter().filter(|(s, _)| !s.is_empty()) {
+            let ok = match st.strip_prefix('^') {
+                Some(outer) => revel_edit::styleaudit::OUTER_STATES.contains(&outer),
+                None => st.starts_with('.') || revel_edit::styleaudit::STATE_SUFFIXES.contains(st),
+            };
+            assert!(ok, "{st}");
+        }
+    }
 
     #[test]
     fn classe_d_une_image_ecrite_en_expression() {

@@ -101,6 +101,15 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         if lower == "video" {
             parts.push(video_options(ui, ed, at.clone(), attrs.clone()));
         }
+        // Titres et paragraphes : taille du texte ajustée à la hauteur de l'écran (D-153).
+        if matches!(
+            lower.as_str(),
+            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "blockquote"
+        ) || attr(attrs, "data-revel-fit").is_some()
+        {
+            let v = attr(attrs, "data-revel-fit").map(|a| a.value.clone().unwrap_or_default());
+            parts.push(fit_settings(ui, ed, at.clone(), v));
+        }
         // Champ de formulaire : type, nom, obligatoire, texte d'exemple, saisie automatique.
         if crate::inspector::FIELD_TAGS.contains(&lower.as_str()) {
             parts.push(field_settings(ui, ed, at.clone(), &lower, attrs));
@@ -2069,6 +2078,89 @@ fn reveal_settings(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
                 </div>
             })}
             <crate::items::ItemsList at=at.get_value() fixed=true/>
+        </div>
+    }
+    .into_any()
+}
+
+/// Texte ajusté à l'écran (D-153) : la taille réglée dans Styles est gardée tant que le texte
+/// tient dans la hauteur choisie (pourcentage de la hauteur de l'écran), sinon elle diminue
+/// jusqu'à la taille minimale.
+fn fit_settings(ui: Ui, ed: Ed, at: Target, value: Option<String>) -> AnyView {
+    let at = StoredValue::new(at);
+    let on = value.is_some();
+    let v = value.unwrap_or_default();
+    let opt = |k: &str, d: &str| {
+        v.split_whitespace()
+            .find_map(|o| o.strip_prefix(&format!("{k}=")).map(str::to_string))
+            .unwrap_or_else(|| d.to_string())
+    };
+    let (h, min) = (opt("h", "60"), opt("min", "24"));
+    let write = move |v: Option<String>| {
+        let at = at.get_value();
+        let cmd = match v {
+            Some(v) => Command::SetAttr {
+                at,
+                name: "data-revel-fit".into(),
+                value: Some(v),
+            },
+            None => Command::RemoveAttr {
+                at,
+                name: "data-revel-fit".into(),
+            },
+        };
+        ed.apply(ui, cmd, false);
+    };
+    let num = |n: String, max: f64| {
+        n.trim()
+            .trim_end_matches(['%', 'p', 'x'])
+            .trim()
+            .replace(',', ".")
+            .parse::<f64>()
+            .ok()
+            .filter(|v| *v > 0.0)
+            .map(|v| {
+                let v = v.min(max);
+                if v.fract() == 0.0 {
+                    format!("{v:.0}")
+                } else {
+                    format!("{v}")
+                }
+            })
+    };
+    let (h1, m1, h2, m2) = (h.clone(), min.clone(), h.clone(), min.clone());
+    view! {
+        <div class="insp-group fit-settings">
+            <label class="view-line" title=ui.t("fit-help")>
+                <span>{ui.t("fit-title")}</span>
+                <span class="switch">
+                    <input type="checkbox" data-fit="on" prop:checked=on
+                        on:change=move |e| write(event_target_checked(&e).then(|| format!("h={h1} min={m1}")))/>
+                    <span class="switch-track"></span>
+                </span>
+            </label>
+            {on.then(|| view! {
+                <div class="style-row" title=ui.t("fit-height-help")>
+                    <span class="style-label"><span class="style-label-text">{ui.t("fit-height")}</span></span>
+                    <div class="style-control">
+                        <div class="nbox has-units">
+                            <input class="nbox-input" type="text" inputmode="decimal" data-fit="h" prop:value=h.clone()
+                                on:change=move |e| if let Some(v) = num(event_target_value(&e), 100.0) { write(Some(format!("h={v} min={m2}"))) }/>
+                            <span class="nbox-suffix" aria-hidden="true">"%"</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="style-row" title=ui.t("fit-min-help")>
+                    <span class="style-label"><span class="style-label-text">{ui.t("fit-min")}</span></span>
+                    <div class="style-control">
+                        <div class="nbox has-units">
+                            <input class="nbox-input" type="text" inputmode="decimal" data-fit="min" prop:value=min.clone()
+                                on:change=move |e| if let Some(v) = num(event_target_value(&e), 400.0) { write(Some(format!("h={h2} min={v}"))) }/>
+                            <span class="nbox-suffix" aria-hidden="true">"px"</span>
+                        </div>
+                    </div>
+                </div>
+            })}
         </div>
     }
     .into_any()

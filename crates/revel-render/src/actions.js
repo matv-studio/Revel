@@ -467,6 +467,8 @@
       el.playsInline = true;
     }
     el.className = "rv-video";
+    // Le lecteur remplit la place de la couverture (boîte positionnée : par-dessus).
+    el.style.cssText = "display:block;width:100%;height:100%;border:0";
     return el;
   }
   function video(box) {
@@ -475,6 +477,7 @@
     if (!btn || !url) return;
     btn.addEventListener("click", function () {
       var el = player(url, btn.getAttribute("aria-label") || "Video");
+      if (getComputedStyle(box).position !== "static") el.style.cssText += ";position:absolute;inset:0";
       btn.parentNode.replaceChild(el, btn);
       box.classList.add("is-playing");
       if (el.focus) el.focus();
@@ -705,7 +708,107 @@
     // Autre onglet du site : panier relu.
     window.addEventListener("storage", function (e) { if (e.key === CART) cartRender(); });
   }
+  // Élément à glisser (`data-revel-drag`, D-154) : déplacé au pointeur (souris, doigt, stylet).
+  // Réglages : `axis=x|y` (un seul sens), `bounds` (reste dans son conteneur), `momentum` (élan au
+  // lâcher, freiné), `collide` (les éléments à glisser d'un même conteneur se poussent au lieu de
+  // se chevaucher). Le déplacement passe par la propriété `translate`, qui s'ajoute à la
+  // transformation réglée dans Styles.
+  var dragged = [];
+  function dragOpts(el) {
+    var o = {};
+    String(el.getAttribute("data-revel-drag") || "").split(/\s+/).forEach(function (p) {
+      if (!p) return;
+      var i = p.indexOf("=");
+      o[i < 0 ? p : p.slice(0, i)] = i < 0 ? true : p.slice(i + 1);
+    });
+    return o;
+  }
+  function dragSet(st, x, y) {
+    if (st.o.bounds) {
+      var box = st.el.parentElement;
+      if (box) {
+        var r = st.el.getBoundingClientRect(), b = box.getBoundingClientRect();
+        var bx = r.left - st.x, by = r.top - st.y;
+        x = Math.max(b.left - bx, Math.min(b.right - r.width - bx, x));
+        y = Math.max(b.top - by, Math.min(b.bottom - r.height - by, y));
+      }
+    }
+    if (st.o.axis === "x") y = st.y;
+    if (st.o.axis === "y") x = st.x;
+    st.x = x; st.y = y;
+    st.el.style.translate = x + "px " + y + "px";
+  }
+  function dragCollide(st) {
+    for (var pass = 0; pass < 3; pass++) {
+      var moved = false;
+      dragged.forEach(function (a) {
+        if (!a.o.collide || a.el.parentElement !== st.el.parentElement) return;
+        dragged.forEach(function (b) {
+          if (a === b || !b.o.collide || b.el.parentElement !== a.el.parentElement || b.active) return;
+          var ra = a.el.getBoundingClientRect(), rb = b.el.getBoundingClientRect();
+          var ox = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+          var oy = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+          if (ox <= 0 || oy <= 0) return;
+          var cx = (rb.left + rb.right - ra.left - ra.right) / 2, cy = (rb.top + rb.bottom - ra.top - ra.bottom) / 2;
+          if (ox < oy) dragSet(b, b.x + (cx < 0 ? -ox : ox), b.y);
+          else dragSet(b, b.x, b.y + (cy < 0 ? -oy : oy));
+          moved = true;
+        });
+      });
+      if (!moved) break;
+    }
+  }
+  function drag(el) {
+    var st = { el: el, o: dragOpts(el), x: 0, y: 0, active: false, raf: 0 };
+    var still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    dragged.push(st);
+    el.style.touchAction = st.o.axis === "x" ? "pan-y" : st.o.axis === "y" ? "pan-x" : "none";
+    el.style.userSelect = "none";
+    if (!el.style.cursor) el.style.cursor = "grab";
+    el.setAttribute("draggable", "false");
+    var px = 0, py = 0, sx = 0, sy = 0, trail = [];
+    el.addEventListener("dragstart", function (e) { e.preventDefault(); });
+    el.addEventListener("pointerdown", function (e) {
+      if (e.button) return;
+      e.preventDefault();
+      if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
+      cancelAnimationFrame(st.raf);
+      st.active = true; px = e.clientX; py = e.clientY; sx = st.x; sy = st.y;
+      trail = [[e.clientX, e.clientY, Date.now()]];
+      el.style.cursor = "grabbing";
+      el.classList.add("is-active");
+    });
+    el.addEventListener("pointermove", function (e) {
+      if (!st.active) return;
+      dragSet(st, sx + e.clientX - px, sy + e.clientY - py);
+      trail.push([e.clientX, e.clientY, Date.now()]);
+      if (trail.length > 6) trail.shift();
+      if (st.o.collide) dragCollide(st);
+    });
+    var end = function () {
+      if (!st.active) return;
+      st.active = false;
+      el.style.cursor = "grab";
+      el.classList.remove("is-active");
+      if (!st.o.momentum || still || trail.length < 2) return;
+      var a = trail[0], b = trail[trail.length - 1], dt = Math.max(16, b[2] - a[2]);
+      var vx = (b[0] - a[0]) / dt, vy = (b[1] - a[1]) / dt, t = Date.now();
+      var step = function () {
+        var now = Date.now(), d = Math.min(32, now - t);
+        t = now;
+        vx *= Math.pow(0.995, d); vy *= Math.pow(0.995, d);
+        dragSet(st, st.x + vx * d, st.y + vy * d);
+        if (st.o.collide) dragCollide(st);
+        if (Math.abs(vx) + Math.abs(vy) > 0.02) st.raf = requestAnimationFrame(step);
+      };
+      st.raf = requestAnimationFrame(step);
+    };
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+  }
   function all() {
+    var dr = document.querySelectorAll("[data-revel-drag]");
+    for (var g = 0; g < dr.length; g++) drag(dr[g]);
     var els = document.querySelectorAll("[data-revel-on]");
     for (var i = 0; i < els.length; i++) {
       var rules = els[i].getAttribute("data-revel-on").split(";");

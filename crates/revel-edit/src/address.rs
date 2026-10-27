@@ -197,6 +197,31 @@ pub(crate) fn node_mut<'a>(site: &'a mut Site, at: &Target) -> Result<&'a mut No
     find_mut(body_mut(site, &at.owner)?, &at.node).ok_or(EditError::NotFound(what))
 }
 
+/// Première classe écrite de l'élément ancêtre le plus proche qui en porte une (règles « balises
+/// dans une classe » du panneau Styles, D-151).
+pub fn class_ancestor(site: &Site, at: &Target) -> Option<String> {
+    let mut cur = at.clone();
+    for _ in 0..64 {
+        let (parent, _) = locate(site, &cur).ok()?;
+        let id = parent.node?;
+        cur = Target {
+            owner: cur.owner.clone(),
+            node: id,
+        };
+        if let Ok(Node::Element { attrs, .. }) = node(site, &cur)
+            && let Some(c) = attrs
+                .iter()
+                .find(|a| a.name == "class" && a.when.is_none())
+                .and_then(|a| a.value.as_deref())
+                .filter(|v| !v.contains("{{") && !v.contains("{%"))
+                .and_then(|v| v.split_whitespace().next())
+        {
+            return Some(c.to_string());
+        }
+    }
+    None
+}
+
 /// Liste d'enfants désignée par `parent`.
 pub fn list<'a>(site: &'a Site, parent: &Parent) -> Result<&'a Vec<Node>, EditError> {
     let b = body(site, &parent.owner)?;

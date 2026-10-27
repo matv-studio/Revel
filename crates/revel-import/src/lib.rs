@@ -20,6 +20,7 @@ pub mod crawl;
 pub mod eleventy;
 pub mod figma;
 pub mod framer;
+pub mod framer_clean;
 pub mod framer_click;
 pub mod framer_components;
 pub mod framer_jsx;

@@ -370,6 +370,7 @@ fn Families(at: Target) -> impl IntoView {
     let at = StoredValue::new(at);
     view! {
         {FAMILIES.into_iter().map(|f| view! { <FamilySection f=f at=at/> }).collect_view()}
+        <DragSection at=at/>
         <ActionsSection at=at/>
     }
 }
@@ -761,6 +762,132 @@ fn audio_settings(
 
 /// Réglages de l'élément « Défilement » (animation en boucle `ticker`), en tête de l'onglet
 /// Styles : vitesse, sens, arrêt au survol, bords estompés.
+/// Glisser à la souris ou au doigt (D-154) : `data-revel-drag` et ses réglages (sens, rester dans
+/// le conteneur, élan, collisions entre les éléments à glisser d'un même conteneur).
+#[component]
+fn DragSection(at: StoredValue<Target>) -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let value = Memo::new(move |_| {
+        let at = at.get_value();
+        ed.doc.with(
+            |d| match revel_edit::address::node(d.as_ref()?, &at).ok()? {
+                Node::Element { attrs, .. } => attrs
+                    .iter()
+                    .find(|a| a.name == "data-revel-drag")
+                    .map(|a| a.value.clone().unwrap_or_default()),
+                _ => None,
+            },
+        )
+    });
+    let has = move |k: &str| {
+        value.with(|v| {
+            v.as_deref().is_some_and(|v| {
+                v.split_whitespace()
+                    .any(|o| o == k || o.starts_with(&format!("{k}=")))
+            })
+        })
+    };
+    let axis = move || {
+        value.with(|v| {
+            v.as_deref()
+                .and_then(|v| v.split_whitespace().find_map(|o| o.strip_prefix("axis=")))
+                .unwrap_or("")
+                .to_string()
+        })
+    };
+    let write = move |v: Option<String>| {
+        let at = at.get_value();
+        let cmd = match v {
+            Some(v) => Command::SetAttr {
+                at,
+                name: "data-revel-drag".into(),
+                value: Some(v),
+            },
+            None => Command::RemoveAttr {
+                at,
+                name: "data-revel-drag".into(),
+            },
+        };
+        ed.apply(ui, cmd, false);
+    };
+    // Réglages réécrits dans un ordre fixe.
+    let set = move |axis_v: Option<String>, flag: Option<(&'static str, bool)>| {
+        let cur = value.get_untracked().unwrap_or_default();
+        let mut flags: Vec<&str> = ["bounds", "momentum", "collide"]
+            .into_iter()
+            .filter(|k| cur.split_whitespace().any(|o| o == *k))
+            .collect();
+        if let Some((k, on)) = flag {
+            flags.retain(|x| *x != k);
+            if on {
+                flags.push(k);
+            }
+        }
+        let ax = axis_v.unwrap_or_else(|| {
+            cur.split_whitespace()
+                .find_map(|o| o.strip_prefix("axis="))
+                .unwrap_or("")
+                .to_string()
+        });
+        let mut parts: Vec<String> = Vec::new();
+        if !ax.is_empty() {
+            parts.push(format!("axis={ax}"));
+        }
+        for k in ["bounds", "momentum", "collide"] {
+            if flags.contains(&k) {
+                parts.push(k.into());
+            }
+        }
+        write(Some(parts.join(" ")));
+    };
+    let toggle_row = move |k: &'static str, label: &'static str, help: &'static str| {
+        view! {
+            <label class="view-line" title=ui.t(help)>
+                <span>{ui.t(label)}</span>
+                <span class="switch">
+                    <input type="checkbox" data-drag=k prop:checked=move || has(k)
+                        on:change=move |e| set(None, Some((k, event_target_checked(&e))))/>
+                    <span class="switch-track"></span>
+                </span>
+            </label>
+        }
+    };
+    view! {
+        <section class="anim-family drag-section" class:is-on=move || value.with(Option::is_some) data-family="drag">
+            <header class="anim-head">
+                <span class="anim-title" title=ui.t("drag-help")>{ui.t("drag-title")}</span>
+                {move || match value.get() {
+                    None => view! {
+                        <button class="icon-btn icon-btn--small anim-add" data-drag="add"
+                            title=move || ui.tx("anim-add", &[("name", ui.tx("drag-title", &[]))])
+                            aria-label=move || ui.tx("anim-add", &[("name", ui.tx("drag-title", &[]))])
+                            on:click=move |_| write(Some("momentum".into()))>{icons::plus()}</button>
+                    }.into_any(),
+                    Some(_) => view! {
+                        <button class="icon-btn icon-btn--small anim-remove" title=ui.t("anim-remove") aria-label=ui.t("anim-remove")
+                            on:click=move |_| write(None)>{icons::trash()}</button>
+                    }.into_any(),
+                }}
+            </header>
+            <Show when=move || value.with(Option::is_some)>
+                <div class="seg drag-axis" role="radiogroup" aria-label=ui.t("drag-axis")>
+                    {[("", "drag-axis-free"), ("x", "drag-axis-x"), ("y", "drag-axis-y")].into_iter().map(|(v, k)| {
+                        let on = move || axis() == v;
+                        view! {
+                            <button role="radio" data-axis=v class:is-on=on aria-checked=move || on().to_string()
+                                on:click=move |_| set(Some(v.to_string()), None)>{ui.t(k)}</button>
+                        }
+                    }).collect_view()}
+                </div>
+                {toggle_row("bounds", "drag-bounds", "drag-bounds-help")}
+                {toggle_row("momentum", "drag-momentum", "drag-momentum-help")}
+                {toggle_row("collide", "drag-collide", "drag-collide-help")}
+            </Show>
+        </section>
+    }
+}
+
 #[component]
 pub fn TickerSettings(at: Target) -> impl IntoView {
     let ui = expect_context::<Ui>();

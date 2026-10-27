@@ -48,6 +48,16 @@ pub enum Kind {
     Filter,
     /// Données de page autres que le référencement (variables de page).
     PageData,
+    /// Sélecteur que le panneau Styles ne règle pas (`.a > .b`, `::before`, `h1, h2`) (D-151).
+    StyleSelector,
+    /// Requête média écrite (ni point de rupture du site, ni couleurs du mode sombre).
+    StyleMedia,
+    /// Bloc de code CSS (`@keyframes`, `@supports`…).
+    StyleCode,
+    /// Variable locale (`--x` hors des couleurs et tailles du site) ou valeur qui en lit une.
+    StyleVariable,
+    /// Propriété sans réglage dans le panneau Styles.
+    StyleProperty,
 }
 
 /// Point relevé : où, quoi, forme écrite.
@@ -767,6 +777,13 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         a.nodes(&c.body, &ctx);
     }
     a.out
+}
+
+/// Relevé complet : calques ([`audit`]) puis styles ([`crate::styleaudit::audit`]).
+pub fn audit_all(site: &Site) -> Vec<Issue> {
+    let mut out = audit(site);
+    out.extend(crate::styleaudit::audit(site));
+    out
 }
 
 /// Nombre de points par nature.

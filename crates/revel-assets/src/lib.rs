@@ -610,7 +610,9 @@ impl AssetHooks for Pipeline {
         if formats.len() == 1 {
             return Some(img);
         }
-        let mut html = String::from("<picture>");
+        // Enveloppe sans boîte (D-151) : l'image se règle par rapport à son conteneur, comme
+        // dans le canevas (largeur et hauteur à 100 %, recadrage) sans style pour `picture`.
+        let mut html = String::from("<picture style=\"display:contents\">");
         for f in formats.iter().filter(|f| **f != auto) {
             html.push_str(&format!(
                 "<source type=\"{}\" srcset=\"{}\" sizes=\"{}\">",

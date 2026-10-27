@@ -38,7 +38,7 @@ fn picture_largeurs_sans_agrandissement() {
         })
         .unwrap();
     assert!(
-        html.starts_with("<picture><source type=\"image/avif\""),
+        html.starts_with("<picture style=\"display:contents\"><source type=\"image/avif\""),
         "{html}"
     );
     // 480 et 800 ; 1200 et plus sont écartées (pas d'agrandissement).

@@ -574,7 +574,8 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
     }
     // Collections dépliées (contenus montrés).
     let open = RwSignal::new(HashSet::<String>::new());
-    let show_shared = RwSignal::new(true);
+    // Parties communes masquées à l'ouverture : les pages d'abord (D-152).
+    let show_shared = RwSignal::new(false);
     let show_external = RwSignal::new(false);
     let show_media = RwSignal::new(false);
     let query = RwSignal::new(String::new());
@@ -1801,7 +1802,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                         on:keydown=move |e: leptos::ev::KeyboardEvent| search_enter(e)/>
                 </label>
                 <div class="segmented map-filters" role="group">
-                    <button class:is-on=move || show_shared.get() aria-pressed=move || show_shared.get().to_string()
+                    <button class:is-on=move || show_shared.get() aria-pressed=move || show_shared.get().to_string() data-group="shared"
                         title=ui.t("map-shared-help") on:click=move |_| show_shared.update(|v| *v = !*v)>{icons::component()}{ui.t("map-shared")}</button>
                     <button class:is-on=move || show_external.get() aria-pressed=move || show_external.get().to_string()
                         title=ui.t("map-external-help") on:click=move |_| show_group(show_external)>{icons::globe()}{ui.t("map-external")}</button>
@@ -2149,6 +2150,21 @@ fn panel(
     open_in_editor: impl Fn(String, Option<String>) + Copy + Send + Sync + 'static,
     ext: ExtTools,
 ) -> AnyView {
+    // Contenu du CMS (dossier de la collection, fichier) ouvert dans l'onglet CMS.
+    let open_entry = move |folder: String, file: String| {
+        let site_id = s.doc.with_untracked(|d| {
+            d.as_ref()?
+                .collections
+                .iter()
+                .find(|c| c.folder.trim_matches('/') == folder.trim_matches('/') || c.id == folder)
+                .map(|c| c.id.clone())
+        });
+        let cid = site_id.and_then(|id| cms_id.with_untracked(|m| m.get(&id).cloned()));
+        if let Some(cid) = cid {
+            ui.goto_entry.set(Some((cid, file)));
+        }
+        ui.tab(Tab::Cms);
+    };
     let name_of = move |k: &str| {
         map.with_untracked(|m| m.node(k).map(|n| n.label.clone()))
             .unwrap_or_else(|| k.to_string())
@@ -2416,7 +2432,7 @@ fn panel(
                 }
                 NodeKind::External | NodeKind::Media => {
                     let site = (n.kind == NodeKind::External).then(|| n.label.clone());
-                    Some(addresses(ui, s, full, key.clone(), site, ext, open_in_editor).into_any())
+                    Some(addresses(ui, s, full, key.clone(), site, ext, open_in_editor, open_entry).into_any())
                 }
             };
             // Autre site, plateforme : les adresses tiennent lieu de liens entrants.
@@ -2491,6 +2507,7 @@ fn shown_at(s: DocSession, via: &LinkVia) -> Option<(String, String)> {
 
 /// Adresses d'un autre site ou d'une plateforme (D-107) : état vérifié, endroits où chacune
 /// sert, ouvrir, remplacer partout où elle sert.
+#[allow(clippy::too_many_arguments)]
 fn addresses(
     ui: Ui,
     s: DocSession,
@@ -2499,7 +2516,24 @@ fn addresses(
     site: Option<String>,
     ext: ExtTools,
     open_in_editor: impl Fn(String, Option<String>) + Copy + Send + Sync + 'static,
+    open_entry: impl Fn(String, String) + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
+    // Endroit ouvert : contenu du CMS (onglet CMS), sinon élément de la page (éditeur).
+    let open_place = move |via: &LinkVia| -> bool {
+        match via {
+            LinkVia::Field { folder, file, .. } | LinkVia::Body { folder, file } => {
+                open_entry(folder.clone(), file.clone());
+                true
+            }
+            other => match shown_at(s, other) {
+                Some((page, node)) => {
+                    open_in_editor(page, Some(node));
+                    true
+                }
+                None => false,
+            },
+        }
+    };
     // Liens par adresse, dans l'ordre du plan.
     let groups: Vec<(String, Vec<MapLink>)> = full.with_untracked(|m| {
         let mut g: Vec<(String, Vec<MapLink>)> = Vec::new();
@@ -2569,21 +2603,34 @@ fn addresses(
                     let name = place(l);
                     let via = via_label(ui, &l.via);
                     let show = shown_at(s, &l.via);
+                    let entry = match &l.via {
+                        LinkVia::Field { folder, file, .. } | LinkVia::Body { folder, file } => {
+                            Some((folder.clone(), file.clone()))
+                        }
+                        _ => None,
+                    };
+                    let v2 = l.via.clone();
                     view! {
-                        <li>
+                        <li on:dblclick=move |e| { e.stop_propagation(); open_place(&v2); }>
                             <span class="map-url-place" title=name.clone()>{name.clone()}</span>
                             {(!via.is_empty()).then(|| view! { <span class="map-url-via muted">{via}</span> })}
                             {show.map(|(page, node)| view! {
                                 <button class="icon-btn icon-btn--small" title=ui.t("map-show-in-editor") aria-label=ui.t("map-show-in-editor")
                                     on:click=move |_| open_in_editor(page.clone(), Some(node.clone()))>{icons::edit()}</button>
                             })}
+                            {entry.map(|(folder, file)| view! {
+                                <button class="icon-btn icon-btn--small map-url-entry" title=ui.t("map-open-entry") aria-label=ui.t("map-open-entry")
+                                    on:click=move |_| open_entry(folder.clone(), file.clone())>{icons::database()}</button>
+                            })}
                         </li>
                     }
                 })
                 .collect_view();
             let uses = links.len();
+            let vias: Vec<LinkVia> = links.iter().map(|l| l.via.clone()).collect();
             view! {
-                <li class="map-url" data-url=url.clone()>
+                <li class="map-url" data-url=url.clone() title=ui.t("map-url-dblclick")
+                    on:dblclick=move |_| { for v in &vias { if open_place(v) { break; } } }>
                     <div class="map-url-head">
                         {chip}
                         <span class="map-url-text" title=url.clone()>{crate::ltr(&short_url(&url))}</span>

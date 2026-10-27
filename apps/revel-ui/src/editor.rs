@@ -3346,7 +3346,10 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             let Ok(now) = api::edit_stamp(&path).await else {
                 return;
             };
-            let before = stamp.get_value();
+            // Éditeur quitté pendant la demande : plus rien à relire.
+            let Some(before) = stamp.try_get_value() else {
+                return;
+            };
             stamp.set_value(Some(now.clone()));
             let Some(before) = before else {
                 return;

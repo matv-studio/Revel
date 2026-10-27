@@ -1475,6 +1475,49 @@ arrondis, en-tête flottant, mode sombre et interrupteur), avec ces règles : an
 clients) dans les pages pour que leurs valeurs se règlent du dehors, bandeau d'appel à contacter avec des propriétés,
 cartes avec des valeurs d'exemple.
 
+**D-151 — 27/10/2026 — prise.** **Relevé des styles ; aucun code CSS pour l'utilisateur.** Demande : « ALWAYS use
+Revel's built-in tools » (effet de survol des expertises d'Alunites écrit en CSS, introuvable pour un non-technicien).
+Le relevé « tout éditable » (D-90) couvre aussi la feuille du site (`revel_edit::styleaudit`, outil MCP
+`check_site`, `revel audit`) : sélecteur que le panneau Styles ne règle pas (`style_selector` : `.a > .b`, `.a .b`,
+`::before`, listes), requête média autre qu'un point de rupture du site ou règle de classe dans le mode sombre
+(`style_media`), bloc de code (`style_code` : `@keyframes`), variable locale ou valeur qui n'est ni une couleur ni
+une taille du site (`style_variable`), propriété sans réglage dans le panneau (`style_property`). Formes admises :
+classe ou combinaison, balise proposée, un état du panneau (`:hover`, `[aria-current="page"]`, `[open]`…), élément
+dans un élément actif, ouvert, éteint, en pause ou dans une vidéo lancée (nouvel état « Dans une vidéo lancée »),
+variante de composant (`.carte:hover .titre`), balise dans une classe (`.prose p`, `.titre strong` : nouveau choix
+du panneau, pastille « Tous les … dans .classe » et liste « Contenu… »), couleurs et tailles du site, `@font-face`,
+et la seule fondation `*, *::before, *::after { box-sizing: border-box }`. Ajoutés au panneau : puces d'une liste
+(`list-style-type`). Outils qui portent leurs propres styles (piste d'un carrousel : défilement de côté, accroche,
+barre masquée ; image responsive : `<picture>` sans boîte ; lecteur vidéo qui remplit sa couverture) écrits par
+Revel avec une priorité nulle, jamais par l'utilisateur. Recréation d'Alunites réécrite à zéro point : survols
+d'enfants en variantes de composant (« Ligne d'expertise », cartes, « Membre de l'équipe », logos clients), points
+et voiles en éléments, menu et interrupteur par l'état « Actif », couleurs d'expertise en classes selon un champ,
+mode sombre seulement par les couleurs du site.
+
+**D-152 — 27/10/2026 — prise.** **Plan du site : ouverture sur les pages ; double-clic sur une adresse.** Les
+parties communes sont masquées à l'ouverture du plan (bouton « Parties communes »). Dans « Médias et réseaux », un
+double-clic sur une adresse (ou sur un de ses endroits) ouvre le contenu du CMS où elle sert, sinon l'élément de la
+page dans l'éditeur ; bouton « Modifier le contenu » sur chaque endroit d'un contenu.
+
+**D-153 — 27/10/2026 — prise.** **Texte ajusté à l'écran.** `data-revel-fit="h=55 min=28"` (réglages d'un titre ou
+d'un paragraphe : « Ajuster à la hauteur de l'écran », hauteur max en % de l'écran, taille min) : la taille réglée
+dans Styles est gardée tant que le texte tient, réduite sinon, jamais sous le minimum ; recalculée quand la fenêtre,
+les polices ou le texte changent ; actif dans le canevas pour que le réglage se voie. Accroche des projets
+d'Alunites : lignes en phrase, la première en gras, ajustée à 42 % de l'écran ; point final ajouté retiré.
+
+**D-154 — 27/10/2026 — prise.** **Élément à glisser.** Interactions › Glisser : `data-revel-drag` (sens libre,
+horizontal ou vertical, rester dans son conteneur, élan, collisions entre les éléments à glisser d'un même
+conteneur), par la propriété `translate` (s'ajoute à la transformation réglée dans Styles). L'import de Framer
+reprend les éléments `drag` (élan par défaut comme Framer, limites si `dragConstraints`) : Framer n'a pas de
+collisions, l'option se coche dans le panneau.
+
+**D-155 — 27/10/2026 — en cours.** **Imports sans code ni variables.** Première partie, sans changer le rendu :
+couleurs de Framer (`--token-…`) en couleurs du site, variables de Framer jamais déclarées remplacées par leur
+valeur de repli, propriétés sans effet retirées, remplissage des images de fond en classes. Reste : les styles de
+fonctionnement de Framer (texte, composants, styles écrits sur les éléments, portée de page) ne se traduisent
+fidèlement qu'à partir des styles calculés de chaque élément à chaque point de rupture ; outil à construire
+(« styles calculés » dans un cadre caché, comme les vignettes D-146) pour tous les imports.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

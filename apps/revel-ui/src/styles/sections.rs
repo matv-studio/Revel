@@ -341,6 +341,15 @@ const CASE: &[Opt] = &[
     oi("capitalize", "case-capitalize", g_cap),
 ];
 
+/// Puces d'une liste (D-151) : aucune, rond, cercle, carré, numéros.
+const LIST_STYLE: &[Opt] = &[
+    o("none", "list-none"),
+    o("disc", "list-disc"),
+    o("circle", "list-circle"),
+    o("square", "list-square"),
+    o("decimal", "list-decimal"),
+];
+
 /// Retour à la ligne : automatique, jamais (une ligne), retours écrits gardés.
 const WHITE_SPACE: &[Opt] = &[
     o("normal", "ws-normal"),
@@ -572,7 +581,7 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
         <Section sx key="styles-typography" open=true props=&[
             "font-family", "font-weight", "font-size", "line-height", "letter-spacing", "color",
             "text-align", "font-style", "text-decoration-line", "text-transform", "white-space", "text-wrap",
-            "text-overflow", "text-shadow",
+            "text-overflow", "text-shadow", "list-style-type",
         ]>
             <Row sx props=&["font-family"] key="styles-font-family">
                 <Choice sx prop="font-family" options=font_options(sx)/>
@@ -615,6 +624,15 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
                 <Truncate sx/>
             </Row>
             <Row sx props=&["text-shadow"] key="styles-text-shadow" stack=true><Shadows sx prop="text-shadow"/></Row>
+            // Listes : puces (ou numéros) des éléments.
+            <Show when=move || {
+                matches!(sx.tag.get().as_str(), "ul" | "ol" | "li")
+                    || [" ul", " ol", " li"].iter().any(|t| sx.selector.get().ends_with(t))
+            }>
+                <Row sx props=&["list-style-type"] key="styles-list-style">
+                    <Choice sx prop="list-style-type" options=opts(sx, LIST_STYLE)/>
+                </Row>
+            </Show>
         </Section>
     }
 }

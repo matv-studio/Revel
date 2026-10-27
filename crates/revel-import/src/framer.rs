@@ -24,6 +24,59 @@ use serde_json::{Map, Value, json};
 
 /// Fin (exclue) du littéral qui commence à `start` (`{`, `[`, `(`, chaîne) : chaînes et
 /// imbrications suivies.
+/// Objet littéral `{…}` le plus proche qui contient la position `at`.
+fn enclosing_object(js: &str, at: usize) -> Option<&str> {
+    let mut end = at;
+    for _ in 0..200 {
+        let q = js[..end].rfind('{')?;
+        if let Some(e) = literal_end(js, q)
+            && e > at
+        {
+            return Some(&js[q..e]);
+        }
+        end = q;
+    }
+    None
+}
+
+/// Entrées de premier niveau d'un objet littéral (`{a:1,b:{c:2}}` -> `a`, `b`), clés sans
+/// guillemets.
+fn top_entries(obj: &str) -> Vec<(String, String)> {
+    let b = obj.as_bytes();
+    let mut out = Vec::new();
+    let (mut depth, mut start, mut i) = (0i32, 1usize, 1usize);
+    let end = b.len().saturating_sub(1);
+    let push = |from: usize, to: usize, out: &mut Vec<(String, String)>| {
+        let part = &obj[from..to];
+        if let Some((k, v)) = part.split_once(':') {
+            out.push((
+                k.trim().trim_matches(['"', '\'', '`']).to_string(),
+                v.trim().to_string(),
+            ));
+        }
+    };
+    while i < end {
+        match b[i] {
+            b'"' | b'\'' | b'`' => {
+                i = string_end(b, i).unwrap_or(end);
+                continue;
+            }
+            b'{' | b'[' | b'(' => depth += 1,
+            b'}' | b']' | b')' => depth -= 1,
+            b',' if depth == 0 => {
+                push(start, i, &mut out);
+                start = i + 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    if start < end {
+        push(start, end, &mut out);
+    }
+    out
+}
+
 pub(crate) fn literal_end(s: &str, start: usize) -> Option<usize> {
     let b = s.as_bytes();
     let first = *b.get(start)?;
@@ -254,6 +307,8 @@ pub struct Modules {
     pub spy: Vec<Spy>,
     /// Classe d'un composant (`framer-fznOQ`) → son nom dans Framer (`displayName`).
     pub component_names: HashMap<String, String>,
+    /// Classe d'un élément à glisser (`drag` de Framer) → réglages de `data-revel-drag` (D-154).
+    pub drag: HashMap<String, String>,
     /// Lu module par module, rassemblé dans `spy` à la fin du chargement.
     spy_targets: Vec<Vec<String>>,
     variant_class: HashMap<String, String>,
@@ -382,6 +437,7 @@ impl Modules {
         let vars = object_vars(js);
         self.read_appear(js, &vars);
         self.read_hover(js, &vars);
+        self.read_drag(js);
         self.read_cms(js);
         let loc = regex::Regex::new(r"\{code:`([^`]*)`,id:`([^`]*)`,name:`([^`]*)`,slug:`([^`]*)`")
             .expect("regex");
@@ -495,6 +551,47 @@ impl Modules {
         // Barre de progression liée au défilement de son conteneur (composant de code).
         if js.contains("overflowY") && js.contains("scrollHeight") && js.contains("clientHeight") {
             self.scroll_progress = true;
+        }
+    }
+
+    /// Éléments à glisser : objet de propriétés qui porte `drag:!0` (ou `drag:`x``) et la classe
+    /// de l'élément ; élan (`dragMomentum`, actif par défaut dans Framer), limites
+    /// (`dragConstraints`).
+    fn read_drag(&mut self, js: &str) {
+        let re = regex::Regex::new(r"[,{]drag:(!0|`x`|`y`)").expect("regex");
+        for m in re.captures_iter(js) {
+            let at = m.get(0).expect("m").start();
+            let Some(obj) = enclosing_object(js, at) else {
+                continue;
+            };
+            let entries = top_entries(obj);
+            let get = |k: &str| {
+                entries
+                    .iter()
+                    .find(|(x, _)| x == k)
+                    .map(|(_, v)| v.as_str())
+            };
+            let Some(class) = get("className").and_then(|v| {
+                v.trim_matches('`')
+                    .split_whitespace()
+                    .find(|c| c.starts_with("framer-"))
+                    .map(str::to_string)
+            }) else {
+                continue;
+            };
+            let mut opts: Vec<&str> = Vec::new();
+            match &m[1] {
+                "`x`" => opts.push("axis=x"),
+                "`y`" => opts.push("axis=y"),
+                _ => {}
+            }
+            if get("dragConstraints").is_some() {
+                opts.push("bounds");
+            }
+            if get("dragMomentum") != Some("!1") {
+                opts.push("momentum");
+            }
+            self.drag.entry(class).or_insert_with(|| opts.join(" "));
         }
     }
 

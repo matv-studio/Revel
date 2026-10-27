@@ -29,6 +29,7 @@ pub mod readable;
 pub mod ready;
 pub mod siteinfo;
 pub mod style;
+pub mod styleaudit;
 pub mod tabs;
 pub mod textfile;
 pub mod variables;

@@ -1409,6 +1409,32 @@ fn variantes_et_attributs_d_une_utilisation() {
 }
 
 #[test]
+fn couleurs_des_blocs_dans_les_couleurs_du_site() {
+    let mut s = sample();
+    let before = json(&s);
+    let parent = Parent::of(&at(&s, "main"), Branch::Children);
+    let inv = apply(
+        &mut s,
+        &Command::InsertPreset {
+            parent,
+            index: 0,
+            preset: make::Preset::BlockCta,
+            text: String::new(),
+        },
+    )
+    .unwrap();
+    let vars = crate::styleaudit::site_variables(&s);
+    assert!(
+        vars.contains("bloc-accent") && vars.contains("bloc-accent-texte"),
+        "{}",
+        css(&s)
+    );
+    assert!(css(&s).contains("--bloc-accent: #2f6fed"), "{}", css(&s));
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+}
+
+#[test]
 fn elements_avec_leurs_styles() {
     let mut s = sample();
     let before = json(&s);

@@ -341,6 +341,63 @@ const CASE: &[Opt] = &[
     oi("capitalize", "case-capitalize", g_cap),
 ];
 
+/// Taille du texte : unités CSS, et l'unité « écran » (D-153) qui écrit `--revel-fit` (part de la
+/// hauteur de l'écran occupée par le texte) en gardant la taille écrite pour un navigateur sans
+/// script.
+#[component]
+fn FontSize(sx: Sx) -> impl IntoView {
+    const FIT: &str = "--revel-fit";
+    let size = Memo::new(move |_| sx.get("font-size"));
+    let fit = Memo::new(move |_| sx.get(FIT));
+    let fit_here = move || fit.with(|f| f.here.clone());
+    view! {
+        <NumBox sx
+            value=Signal::derive(move || match fit_here() {
+                Some(h) => Some(format!("{}{}", h.trim(), FIT_UNIT)),
+                None => size.get().here,
+            })
+            hint=Signal::derive(move || {
+                let f = fit.get().hint();
+                if !f.is_empty() && f.trim().parse::<f64>().is_ok_and(|v| v > 0.0) {
+                    format!("{}{}", f.trim(), FIT_UNIT)
+                } else {
+                    size.get().hint()
+                }
+            })
+            // Départ : la taille écrite ici (hors de l'unité « Écran », la taille calculée à
+            // l'écran serait celle du script).
+            start=Signal::derive(move || {
+                let pv = size.get();
+                pv.here.clone().filter(|v| parse_num(v).is_some()).unwrap_or_else(|| start_value(&pv, "px", "16px"))
+            })
+            on_preview=Callback::new(move |v: String| match v.trim().strip_suffix(FIT_UNIT) {
+                Some(n) => sx.preview(&[(FIT.to_string(), n.trim().to_string())]),
+                None => sx.preview(&[("font-size".to_string(), v)]),
+            })
+            on_commit=Callback::new(move |(v, co): (Option<String>, bool)| {
+                let fit_v = v.as_deref().and_then(|v| v.trim().strip_suffix(FIT_UNIT)).map(|n| n.trim().to_string());
+                match fit_v {
+                    Some(n) => sx.set_many(vec![(FIT.to_string(), Some(n))], co),
+                    // Sortie de l'unité « Écran » : une taille écrite en variable du site ou en
+                    // taille fluide est gardée telle quelle.
+                    None if fit_here().is_some()
+                        && size.get_untracked().here.as_deref().is_some_and(|w| parse_num(w).is_none()) =>
+                    {
+                        sx.set_many(vec![(FIT.to_string(), None)], co)
+                    }
+                    None => {
+                        let mut changes = vec![("font-size".to_string(), v)];
+                        if fit_here().is_some() {
+                            changes.push((FIT.to_string(), None));
+                        }
+                        sx.set_many(changes, co)
+                    }
+                }
+            })
+            units=FONT_UNITS label="styles-font-size"/>
+    }
+}
+
 /// Puces d'une liste (D-151) : aucune, rond, cercle, carré, numéros.
 const LIST_STYLE: &[Opt] = &[
     o("none", "list-none"),
@@ -579,7 +636,7 @@ fn LineToggle(
 pub fn TextSection(sx: Sx) -> impl IntoView {
     view! {
         <Section sx key="styles-typography" open=true props=&[
-            "font-family", "font-weight", "font-size", "line-height", "letter-spacing", "color",
+            "font-family", "font-weight", "font-size", "--revel-fit", "line-height", "letter-spacing", "color",
             "text-align", "font-style", "text-decoration-line", "text-transform", "white-space", "text-wrap",
             "text-overflow", "text-shadow", "list-style-type",
         ]>
@@ -589,8 +646,8 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
             <Row sx props=&["font-weight"] key="styles-font-weight">
                 <Choice sx prop="font-weight" options=weight_options(sx)/>
             </Row>
-            <Row sx props=&["font-size"] key="styles-font-size" scrub=Some(LabelScrub { prop: "font-size", unit: "px", step: 1.0, zero: "16px" })>
-                <PropNum sx prop="font-size" units=FONT_UNITS zero="16px" label="styles-font-size"/>
+            <Row sx props=&["font-size", "--revel-fit"] key="styles-font-size" scrub=Some(LabelScrub { prop: "font-size", unit: "px", step: 1.0, zero: "16px" })>
+                <FontSize sx/>
             </Row>
             <Row sx props=&["line-height"] key="styles-line-height" scrub=Some(LabelScrub { prop: "line-height", unit: "", step: 0.1, zero: "1.2" })>
                 <PropNum sx prop="line-height" unit="" units=LINE_UNITS step=0.1 zero="1.2" label="styles-line-height"/>

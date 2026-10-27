@@ -111,9 +111,7 @@ pub fn apply_page(head: &mut [Node], body: &mut [Node], m: &Modules, css: &mut S
                 .split(';')
                 .filter(|d| !d.trim().is_empty() && !d.trim_start().starts_with("width"))
                 .map(str::to_string)
-                .chain(std::iter::once(
-                    "width:calc(var(--revel-progress, 0) * 100%)".to_string(),
-                ))
+                .chain(std::iter::once("width:0%".to_string()))
                 .collect();
             set_attr(fill, "style", st.join(";"));
         }
@@ -2104,11 +2102,7 @@ mod tests {
         let Node::Element { attrs: fill, .. } = &children[0] else {
             panic!()
         };
-        assert!(
-            attr(fill, "style")
-                .unwrap()
-                .contains("width:calc(var(--revel-progress, 0) * 100%)")
-        );
+        assert!(attr(fill, "style").unwrap().contains("width:0%"));
     }
 
     #[test]

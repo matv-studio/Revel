@@ -489,7 +489,7 @@ impl Preset {
                 (
                     ".barre-progression__remplissage",
                     vec![
-                        ("width", "calc(var(--revel-progress, 0) * 100%)"),
+                        ("width", "0%"),
                         ("height", "100%"),
                         ("border-radius", "inherit"),
                         ("background-color", "currentColor"),
@@ -1015,7 +1015,7 @@ impl Preset {
                     }),
                 ],
             ),
-            // Piste (suit le défilement de son conteneur) et remplissage (variable CSS).
+            // Piste (suit le défilement de son conteneur) et remplissage (largeur écrite par le script).
             Preset::ScrollProgress => el(
                 id(),
                 "div",

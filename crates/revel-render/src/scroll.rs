@@ -5,10 +5,10 @@
 //!   vers elle image après image. Clavier, barre de défilement et toucher gardent leur
 //!   comportement ; un élément `data-revel-no-smooth` (carte, liste à défilement propre) est
 //!   laissé au navigateur ; coupé pour les visiteurs qui demandent moins de mouvement.
-//! - **Barre de progression** (`data-revel-progress`) : la variable CSS `--revel-progress` de
-//!   l'élément suit, de 0 à 1, le défilement de la page (`page`) ou du premier conteneur qui
-//!   défile autour de lui (`parent`, par défaut ; la page s'il n'y en a pas). Le remplissage
-//!   s'en sert dans son style (`width: calc(var(--revel-progress, 0) * 100%)`).
+//! - **Barre de progression** (`data-revel-progress`) : la largeur de ses enfants (le
+//!   remplissage) suit, de 0 à 100 %, le défilement de la page (`page`) ou du premier conteneur
+//!   qui défile autour de lui (`parent`, par défaut ; la page s'il n'y en a pas). Aucune variable
+//!   CSS : couleur, hauteur, arrondi et transition du remplissage se règlent dans Styles.
 //!
 //! - **Section affichée** (`data-revel-spy`, D-111) : dans l'élément (navigation), le lien vers
 //!   la section de la page en cours de lecture reçoit la classe `is-active` (état « Actif » des
@@ -65,7 +65,7 @@ const PROGRESS: &str = concat!(
     "function init(){[].forEach.call(d.querySelectorAll(\"[data-revel-progress]\"),function(el){",
     "var c=box(el),p=-1,q=false;function u(){q=false;var r=d.documentElement,",
     "top=c?c.scrollTop:w.scrollY,max=c?c.scrollHeight-c.clientHeight:r.scrollHeight-w.innerHeight,",
-    "v=max>0?Math.min(1,Math.max(0,top/max)):0;if(v!==p){p=v;el.style.setProperty(\"--revel-progress\",v.toFixed(4))}}",
+    "v=max>0?Math.min(1,Math.max(0,top/max)):0;if(v!==p){p=v;for(var k=el.children,i=0;i<k.length;i++)k[i].style.width=(v*100).toFixed(2)+\"%\"}}",
     "function o(){if(!q){q=true;requestAnimationFrame(u)}}(c||w).addEventListener(\"scroll\",o,{passive:true});",
     "w.addEventListener(\"resize\",o);u()})}",
     "if(d.readyState===\"loading\")d.addEventListener(\"DOMContentLoaded\",init);else init()})(window,document)</script>",
@@ -132,7 +132,7 @@ mod tests {
         let bar = "<html><head></head><body><div data-revel-progress=\"parent\"><div></div></div></body></html>"
             .to_string();
         let out = wire(bar.clone(), false, true);
-        assert!(out.contains("--revel-progress") && !out.contains("\"wheel\""));
+        assert!(out.contains("style.width") && !out.contains("\"wheel\""));
         assert!(out.find("<script>").unwrap() < out.find("</head>").unwrap());
         assert_eq!(wire(bar.clone(), true, false), bar);
         let nav = "<html><head></head><body><nav data-revel-spy=\"section\"><a href=\"#a\">A</a></nav><section id=\"a\"></section></body></html>"

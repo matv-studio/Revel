@@ -574,6 +574,38 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
             } else {
                 Vec::new()
             };
+            // Couleurs des blocs (`var(--bloc-accent, #2f6fed)`) : variables du site que le site
+            // n'a pas encore, déclarées dans `:root` avec leur valeur de secours, pour qu'elles se
+            // règlent dans Paramètres › Couleurs et dans le sélecteur de couleur.
+            let declared = crate::styleaudit::site_variables(site);
+            let mut missing: Vec<(String, String)> = Vec::new();
+            if site.stylesheet.is_some() {
+                for (_, decls) in preset.rules().into_iter().chain(preset.narrow_rules()) {
+                    for (_, v) in decls {
+                        for (name, value) in crate::styleaudit::var_fallbacks(v) {
+                            if !declared.contains(&name) && !missing.iter().any(|(n, _)| *n == name)
+                            {
+                                missing.push((name, value));
+                            }
+                        }
+                    }
+                }
+            }
+            let mut rules = rules;
+            if !missing.is_empty() {
+                rules.push(Command::AddRule {
+                    selector: ":root".into(),
+                    media: None,
+                    decls: missing
+                        .into_iter()
+                        .map(|(n, v)| Decl {
+                            prop: format!("--{n}"),
+                            value: v,
+                            important: false,
+                        })
+                        .collect(),
+                });
+            }
             if rules.is_empty() {
                 insert
             } else {

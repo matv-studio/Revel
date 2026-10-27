@@ -2320,7 +2320,7 @@ try {
     await page.waitForFunction(() => document.querySelector('.styles .sel-chip.is-on')?.textContent.trim() === 'hero__title');
     check('styles : balises dans une classe (« Contenu… »), puis retour à la classe', /hero__title/.test(nested), nested);
   }
-  // Texte ajusté à l'écran (D-153) et élément à glisser (D-154) : réglages écrits, puis retirés.
+  // Élément à glisser (D-154) : réglages écrits, puis retirés.
   {
     const docF = JSON.stringify((await invoke('edit_open')).site);
     const attrOf = async (name) => {
@@ -2331,15 +2331,6 @@ try {
       for (let i = 0; i < 60; i++) { const v = await attrOf(name); if (pred(v)) return v; await page.waitForTimeout(100); }
       throw new Error(what);
     };
-    await page.waitForSelector('.fit-settings input[data-fit="on"]');
-    await page.click('.fit-settings label.view-line');
-    const fit = await until('data-revel-fit', (v) => !!v, 'texte ajusté : attribut écrit');
-    await page.fill('.fit-settings input[data-fit="h"]', '40');
-    await page.press('.fit-settings input[data-fit="h"]', 'Enter');
-    const fit2 = await until('data-revel-fit', (v) => /h=40/.test(v || ''), 'texte ajusté : hauteur');
-    await page.click('.fit-settings label.view-line');
-    await until('data-revel-fit', (v) => !v, 'texte ajusté : retiré');
-    check('réglages : texte ajusté à la hauteur de l\'écran (écrit, réglé, retiré)', /^h=60 min=24$/.test(fit) && /min=24/.test(fit2), `${fit} → ${fit2}`);
     await page.click('.dock-tab[data-panel="interactions"]');
     await page.click('.anim-family[data-family="drag"] .anim-add');
     const d1 = await until('data-revel-drag', (v) => v === 'momentum', 'glisser : ajouté');
@@ -2489,6 +2480,31 @@ try {
     check('styles : alignement du texte par bouton', decl(await titleRule(), 'text-align') === 'center' && (await cs('text-align')) === 'center');
     for (let i = 0; i < 2; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(500); }
     check('styles : unité et alignement annulés', JSON.stringify(await titleRule()) === JSON.stringify(before));
+    // Unité « Écran » (D-153) : `--revel-fit` dans la règle, taille écrite gardée ; le canevas
+    // calcule la taille ; une autre unité la retire.
+    const fs0 = decl(await titleRule(), 'font-size');
+    await page.locator('.style-row[data-prop="font-size"] .nbox-unit').click();
+    await page.locator('.pop .menu-item:text-is("Écran")').click();
+    await page.waitForTimeout(600);
+    const fitV = decl(await titleRule(), '--revel-fit');
+    const shown = (await page.locator('.style-row[data-prop="font-size"] .nbox-unit').textContent()).trim();
+    const fitPx = await waitFrame(() => {
+      const h = document.querySelector('h1.hero__title');
+      return !!h && h.style.fontSize !== '' && h.offsetHeight <= innerHeight * 0.4 + 1;
+    }, 'taille ajustée à l\'écran').then(() => cs('font-size')).catch(() => 'non ajustée');
+    await styleInput('font-size').fill('30');
+    await styleInput('font-size').press('Enter');
+    await page.waitForTimeout(600);
+    const fitV2 = decl(await titleRule(), '--revel-fit');
+    await page.locator('.style-row[data-prop="font-size"] .nbox-unit').click();
+    await page.locator('.pop .menu-item:text-is("px")').click();
+    await page.waitForTimeout(600);
+    const off = await titleRule();
+    check('styles : unité « Écran » de la taille du texte (réglée, calculée, retirée)',
+      fitV === '40' && shown === 'Écran' && fitV2 === '30' && decl(off, 'font-size') === fs0 && decl(off, '--revel-fit') === undefined && /px$/.test(fitPx),
+      `${fitV} ${shown} ${fitPx} ${fitV2} → ${decl(off, 'font-size')} ${decl(off, '--revel-fit')}`);
+    for (let i = 0; i < 3; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(500); }
+    check('styles : unité « Écran » annulée', JSON.stringify(await titleRule()) === JSON.stringify(before));
   }
 
   // Point de rupture 600 : nouvelle règle placée dans la cascade.

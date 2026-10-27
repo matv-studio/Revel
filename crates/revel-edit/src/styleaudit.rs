@@ -89,6 +89,10 @@ pub const OUTER_STATES: &[&str] = &[
     ".is-playing",
 ];
 
+/// Propriétés propres aux outils de Revel, réglées par le panneau (unité « écran » de la taille
+/// du texte, D-153).
+pub const REVEL_PROPS: &[&str] = &["--revel-fit"];
+
 /// Requête du mode sombre (Paramètres › Couleurs).
 pub const DARK: &str = "(prefers-color-scheme: dark)";
 
@@ -342,6 +346,44 @@ fn var_refs(v: &str) -> Vec<&str> {
         .collect()
 }
 
+/// Variables appelées avec une valeur de secours (`var(--bloc-accent, #2f6fed)`) : nom et valeur.
+pub fn var_fallbacks(v: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for (i, _) in v.match_indices("var(--") {
+        let rest = &v[i + 6..];
+        let Some(comma) = rest.find(',') else {
+            continue;
+        };
+        let name = &rest[..comma];
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            continue;
+        }
+        // Valeur jusqu'à la parenthèse fermante du `var(` (parenthèses de `rgba()` comprises).
+        let mut depth = 0usize;
+        let after = &rest[comma + 1..];
+        let end = after.char_indices().find_map(|(j, c)| match c {
+            '(' => {
+                depth += 1;
+                None
+            }
+            ')' if depth == 0 => Some(j),
+            ')' => {
+                depth -= 1;
+                None
+            }
+            _ => None,
+        });
+        if let Some(end) = end {
+            out.push((name.to_string(), after[..end].trim().to_string()));
+        }
+    }
+    out
+}
+
 /// Relevé des styles du site.
 pub fn audit(site: &Site) -> Vec<Issue> {
     let mut out = Vec::new();
@@ -422,6 +464,10 @@ pub fn audit(site: &Site) -> Vec<Issue> {
                 .into_iter()
                 .filter(|v| !vars.contains(*v))
                 .collect();
+            // Propriétés des outils de Revel (taille ajustée à l'écran : unité « écran »).
+            if REVEL_PROPS.contains(&d.prop.as_str()) {
+                continue;
+            }
             if d.prop.starts_with("--") || !unknown.is_empty() {
                 push(
                     &mut out,
@@ -445,6 +491,20 @@ pub fn audit(site: &Site) -> Vec<Issue> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn valeurs_de_secours() {
+        assert_eq!(
+            var_fallbacks("var(--bloc-fond, rgba(127, 127, 127, 0.12)) var(--a) var(--b,1px)"),
+            vec![
+                (
+                    "bloc-fond".to_string(),
+                    "rgba(127, 127, 127, 0.12)".to_string()
+                ),
+                ("b".to_string(), "1px".to_string())
+            ]
+        );
+    }
 
     #[test]
     fn selecteurs_du_panneau() {

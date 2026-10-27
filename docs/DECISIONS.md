@@ -1499,11 +1499,14 @@ parties communes sont masquées à l'ouverture du plan (bouton « Parties commun
 double-clic sur une adresse (ou sur un de ses endroits) ouvre le contenu du CMS où elle sert, sinon l'élément de la
 page dans l'éditeur ; bouton « Modifier le contenu » sur chaque endroit d'un contenu.
 
-**D-153 — 27/10/2026 — prise.** **Texte ajusté à l'écran.** `data-revel-fit="h=55 min=28"` (réglages d'un titre ou
-d'un paragraphe : « Ajuster à la hauteur de l'écran », hauteur max en % de l'écran, taille min) : la taille réglée
-dans Styles est gardée tant que le texte tient, réduite sinon, jamais sous le minimum ; recalculée quand la fenêtre,
-les polices ou le texte changent ; actif dans le canevas pour que le réglage se voie. Accroche des projets
-d'Alunites : lignes en phrase, la première en gras, ajustée à 42 % de l'écran ; point final ajouté retiré.
+**D-153 — 27/10/2026 — prise, revue le même jour.** **Texte ajusté à l'écran : une unité de la taille du texte.**
+Styles › Texte › Taille propose, après px, rem, em, %, vw et vh (ajoutée), l'unité « Écran » : `--revel-fit: 42` dans
+la règle, la part de la hauteur de l'écran que le texte occupe, sans déborder en largeur (entre 12 et 600 px). La
+taille écrite (`font-size`) reste celle d'un navigateur sans script ; choisir une autre unité retire `--revel-fit`.
+Le script lit les règles de la page (points de rupture compris), recalcule quand la fenêtre, les polices ou le texte
+changent, et tourne dans le canevas. Première version (réglage séparé « Ajuster à la hauteur de l'écran »,
+`data-revel-fit`) retirée sur la remarque de Stéphane : une demande proche d'un réglage existant s'y intègre.
+Accroche des projets d'Alunites : lignes en phrase, la première en gras, 42 % de l'écran ; point final retiré.
 
 **D-154 — 27/10/2026 — prise.** **Élément à glisser.** Interactions › Glisser : `data-revel-drag` (sens libre,
 horizontal ou vertical, rester dans son conteneur, élan, collisions entre les éléments à glisser d'un même
@@ -1517,6 +1520,22 @@ valeur de repli, propriétés sans effet retirées, remplissage des images de fo
 fonctionnement de Framer (texte, composants, styles écrits sur les éléments, portée de page) ne se traduisent
 fidèlement qu'à partir des styles calculés de chaque élément à chaque point de rupture ; outil à construire
 (« styles calculés » dans un cadre caché, comme les vignettes D-146) pour tous les imports.
+
+**D-156 — 27/10/2026 — prise (demande de l'utilisateur).** **Réglages en double ou en code, revue.** Après D-153,
+revue des outils déjà faits : un réglage proche d'un réglage existant s'y intègre, un outil ne laisse ni code ni
+variable que le panneau ne sait pas régler.
+- Barre de progression (D-110) : plus de variable `--revel-progress` ni de `calc()` ; le script écrit la largeur du
+  remplissage (enfants de la barre), dont la règle garde `width: 0%` (sans script), la couleur, la hauteur,
+  l'arrondi et la transition, réglables dans Styles. Anciennes barres : la largeur écrite par le script l'emporte.
+- Couleurs des blocs prêts à l'emploi et du bouton « Ajouter au panier » (`var(--bloc-accent, #2f6fed)`) : à
+  l'insertion, les variables que le site n'a pas sont déclarées dans `:root` avec leur valeur de secours ; elles
+  se règlent dans Paramètres › Couleurs et dans le sélecteur de couleur. Site vide et blog : `--bloc-accent`
+  déclarée d'emblée.
+- Vérifiés sans changement : « Afficher d'abord » (à côté de « Nombre de contenus » de la liste), maçonnerie (bouton
+  de la grille), interrupteur clair / sombre (réglage « Interrupteur » d'un bouton), puces (Styles › Texte),
+  tailles et couleurs du site (Paramètres, choisies dans les champs de Styles), défilement doux (Paramètres ›
+  Général). L'image révélée et le média des éléments survolés n'ont pas d'équivalent dans Interactions › Survol
+  (volet, halo, média d'une liste) : outils gardés.
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.

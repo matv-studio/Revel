@@ -572,7 +572,7 @@ fn build_pages(
             let html = scroll::wire(html, input.site.settings.smooth_scroll, scripts);
             let html = more::wire(html, scripts);
             let html = theme::wire(html, scripts);
-            let html = fit::wire(html);
+            let html = fit::wire(html, fit::site_uses(input.site));
             let html = toolcss::wire(html);
             masonry::wire(html)
         } else {
@@ -1657,7 +1657,7 @@ fn editor_page(
     let html = scroll::wire(html, input.site.settings.smooth_scroll, opts.scripts);
     let html = more::wire(html, opts.scripts);
     let html = theme::wire(html, opts.scripts);
-    let html = fit::wire(html);
+    let html = fit::wire_editor(html, fit::site_uses(input.site));
     let html = toolcss::wire(html);
     let html = masonry::wire(html);
     warnings.extend(b.take_warnings());
@@ -1797,7 +1797,7 @@ fn page_seo(p: &revel_model::Page, data: &BTreeMap<String, Value>) -> PageSeo {
 /// identique à la page générée quand les scripts du site sont gardés (vérification).
 pub fn strip_editor_marks(html: &str) -> String {
     let re = regex::Regex::new(
-        r#"<!--/?rv:\d+-->| data-rv="[0-9a-z]+"| data-rv-slot-filled| data-revel-slot(="[^"]*")?"#,
+        r#"(?s)<!--/?rv:\d+-->| data-rv="[0-9a-z]+"| data-rv-slot-filled| data-revel-slot(="[^"]*")?|<script data-rv-tool>.*?</script>\n"#,
     )
     .expect("regex");
     re.replace_all(html, "").into_owned()

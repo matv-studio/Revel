@@ -40,10 +40,8 @@ const HOME: &str = r#"<main class="page">
 </main>"#;
 
 /// Couleurs du site (fond sombre par défaut, ou clair), réglables dans le panneau de styles.
-const DARK: &str =
-    ":root { color-scheme: dark; --fond: #0f0f10; --texte: #f2f2f2; --texte-doux: #a3a3a3; }\n";
-const LIGHT: &str =
-    ":root { color-scheme: light; --fond: #ffffff; --texte: #1b1b1b; --texte-doux: #555555; }\n";
+const DARK: &str = ":root { color-scheme: dark; --fond: #0f0f10; --texte: #f2f2f2; --texte-doux: #a3a3a3; --bloc-accent: #2f6fed; }\n";
+const LIGHT: &str = ":root { color-scheme: light; --fond: #ffffff; --texte: #1b1b1b; --texte-doux: #555555; --bloc-accent: #2f6fed; }\n";
 
 const CSS: &str = r#"*, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; font-family: system-ui, sans-serif; line-height: 1.5; color: var(--texte); background: var(--fond); }

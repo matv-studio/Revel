@@ -393,7 +393,12 @@ pub const FONT_UNITS: &[UnitOpt] = &[
     u("em", "unit-em"),
     u("%", "unit-percent"),
     u("vw", "unit-vw"),
+    u("vh", "unit-vh"),
+    // Taille calculée pour que le texte occupe cette part de la hauteur de l'écran (D-153).
+    u(FIT_UNIT, "unit-fit-screen"),
 ];
+/// Unité « écran » de la taille du texte : `--revel-fit` dans la règle (D-153).
+pub const FIT_UNIT: &str = "fit";
 pub const LINE_UNITS: &[UnitOpt] = &[
     u("", "unit-times"),
     u("px", "unit-px"),
@@ -577,8 +582,9 @@ pub fn NumBox(
         }
         // Valeur de départ : réglée ici, sinon de départ, sinon effective (valeur fluide ou
         // variable : sa taille à l'écran), convertie entre px et rem/em (16 px).
+        // L'unité « écran » n'est pas une taille : on repart de la taille écrite.
         let base = [
-            value.get_untracked(),
+            value.get_untracked().filter(|v| !v.trim().ends_with(FIT_UNIT)),
             Some(start.get_untracked()),
             Some(hint.get_untracked()),
         ]
@@ -589,6 +595,8 @@ pub fn NumBox(
             .map(|n| match (n.unit.as_str(), o.v) {
                 ("px", "rem" | "em") => (n.value / 16.0 * 1000.0).round() / 1000.0,
                 ("rem" | "em", "px") => (n.value * 16.0).round(),
+                // Vers l'unité « écran » : part de la hauteur proposée (40 %).
+                (u, FIT_UNIT) if u != FIT_UNIT => 40.0,
                 _ => n.value,
             })
             .unwrap_or(if matches!(o.v, "%" | "vw" | "vh") {
@@ -734,6 +742,9 @@ pub fn NumBox(
                     on:click=move |_| sx.toggle_menu(id)>
                     {move || {
                         let (u, _) = shown_unit();
+                        if u == FIT_UNIT {
+                            return ui.tx("unit-fit-screen-s", &[]);
+                        }
                         // Sans unité : « × » (fois la taille du texte) quand c'est une unité proposée.
                         if !u.is_empty() { u } else if units.iter().any(|o| o.v.is_empty()) { "×".into() } else { "–".into() }
                     }}
@@ -744,7 +755,7 @@ pub fn NumBox(
                             let o = *o;
                             view! {
                                 <li><button role="menuitem" class="menu-item" title=ui.t(o.key) on:click=move |_| choose(o)>
-                                    {if o.v.is_empty() { "×".to_string() } else if o.kw { ui.tx(&format!("{}-s", o.key), &[]) } else { o.v.to_string() }}
+                                    {if o.v.is_empty() { "×".to_string() } else if o.kw || o.v == FIT_UNIT { ui.tx(&format!("{}-s", o.key), &[]) } else { o.v.to_string() }}
                                 </button></li>
                             }
                         }).collect_view()}

@@ -78,8 +78,8 @@ a hover effect on children is a component variant (Hover variant of the componen
 `:root` (literal values; dark values in `@media (prefers-color-scheme: dark) { :root {…} }`, never class rules there); \
 no `::before`/`::after` (add an element), no `@keyframes` (Revel animations), no selector lists, no custom property \
 elsewhere, only properties with a panel control. `check_site` lists what breaks these rules (style_* kinds). Text \
-fitted to the screen: `data-revel-fit=\"h=55 min=28\"` (keeps its Styles size while it fits in 55% of the screen \
-height, smaller otherwise, never under 28px).\n\
+fitted to the screen is the « Screen » unit of Styles › Text › Size: `--revel-fit: 55` in the rule (the text takes \
+55% of the screen height without overflowing its width; keep a `font-size` as the size without script).\n\
 - Site information (Settings › Site information: e-mail, phone, address, social links, menus) is shared by every page: \
 `{{ site.<key> }}`, `href=\"mailto:{{ site.email }}\"`, `href=\"tel:{{ site.phone | tel }}\"`, \
 `href=\"https://maps.google.com/?q={{ site.address | map_query }}\"`, menus `{% for lien in site.menus.<name> %}<a \
@@ -98,7 +98,7 @@ with a `data-revel-switch-text=\"On|Off\"` child (insert_preset switch); light/d
 `<button data-revel-switch=\"theme\">` (insert_preset theme_switch, text child `data-revel-switch-text=\"Dark|Light\"`, \
 `aria-pressed=\"true\"` and `.is-active` in dark mode) toggling between the colors of Settings › Colors and their dark \
 values (`@media (prefers-color-scheme: dark)` on `:root`), choice kept by the browser, the device theme otherwise. \
-Scrolling: smooth scrolling `{\"cmd\": \"set_smooth_scroll\", \"on\": true}`; progress bar insert_preset scroll_progress (`data-revel-progress=\"parent|page\"`, fill width `calc(var(--revel-progress, 0) * 100%)`); masonry grid `data-revel-masonry`; navigation following the visible section `data-revel-spy=\"section\"` (its link to the current `#id` gets `is-active`). \
+Scrolling: smooth scrolling `{\"cmd\": \"set_smooth_scroll\", \"on\": true}`; progress bar insert_preset scroll_progress (`data-revel-progress=\"parent|page\"`, the script sets the width of its children, the fill); masonry grid `data-revel-masonry`; navigation following the visible section `data-revel-spy=\"section\"` (its link to the current `#id` gets `is-active`). \
 Tabs: `data-revel-tabs` (options `hover`, `keys` for arrows/WASD anywhere, `sound=<url>`) with `data-revel-tab` \
 triggers and `data-revel-panel` panels (several series of panels each follow the tabs in order; the active tab and \
 filter get the class `is-active`); media on hover (a background video showing the hovered item's video, e.g. a \

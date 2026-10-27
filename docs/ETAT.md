@@ -47,7 +47,7 @@ de `docs/ETAPE-8.md`.
   étiquette `v0.7.1` (flux « Étiquette » 40522665705) ; brouillon « Revel v0.7.1 » (préversion, id 425599865,
   17 fichiers, `latest.json` 0.7.1 à 11 cibles, clé EA5F2855415468CD), **à publier par l'utilisateur**. Contient
   l'interrupteur clair / sombre du site produit (D-149).
-- **Suite du 27/10/2026 (après la 0.7.1), en cours** : D-151 à D-155, ligne 8.14 de `docs/ETAPE-8.md`.
+- **Suite du 27/10/2026 (après la 0.7.1), commit 2769a9d** : D-151 à D-155, ligne 8.14 de `docs/ETAPE-8.md` (en cours : D-155). Essais : éditeur 355/355, templates 26/26, animations 17/17, tests du dépôt, clippy, format.
   - D-151 relevé des styles (`crates/revel-edit/src/styleaudit.rs`, `editable::audit_all`, `check_site` et
     `revel audit`) : seules les formes du panneau Styles sont admises ; balises dans une classe (pastille
     « Tous les … dans .classe », liste « Contenu… »), puces (`list-style-type`), état « Dans une vidéo lancée » ;

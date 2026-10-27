@@ -6,7 +6,7 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 27/10/2026 (dernière avancée : travail du 27/10 depuis l'ancien compte, e1a6b98). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 27/10/2026 (dernière avancée : version 0.7.1, 88de8d4). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
 ## Travail du 27/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.7.0
@@ -43,6 +43,11 @@ de `docs/ETAPE-8.md`.
 - Pièges : `revel build` sur Alunites remplit le disque (variantes d'images) : ne pas le lancer ; wasm-bindgen
   tué si des ponts tournent : les arrêter avant `trunk build` ; une image paresseuse d'un cadre hors écran ne se
   charge jamais (cadre dans la vue à opacité 0, images passées en `eager`).
+- **Version 0.7.1** (27/10/2026) : commit 88de8d4 « Version 0.7.1 », CI entièrement réussie (flux 40516107297) ;
+  étiquette `v0.7.1` (flux « Étiquette » 40522665705) ; brouillon « Revel v0.7.1 » (préversion, id 425599865,
+  17 fichiers, `latest.json` 0.7.1 à 11 cibles, clé EA5F2855415468CD), **à publier par l'utilisateur**. Contient
+  l'interrupteur clair / sombre du site produit (D-149).
+
 
 ## Travail du 26/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.6.9
 Commits 933e49c, cd65eca et dd29dda sur `main` ; CI entièrement réussie sur dd29dda (flux 40388623717). Décisions D-126 à D-139 (D-132 à trancher : modèles partagés en ligne) ;

@@ -47,6 +47,15 @@ de `docs/ETAPE-8.md`.
   étiquette `v0.7.1` (flux « Étiquette » 40522665705) ; brouillon « Revel v0.7.1 » (préversion, id 425599865,
   17 fichiers, `latest.json` 0.7.1 à 11 cibles, clé EA5F2855415468CD), **à publier par l'utilisateur**. Contient
   l'interrupteur clair / sombre du site produit (D-149).
+- **Suite du 27/10/2026 au soir, commit de17d53** : D-153 revu (unité « Écran »), D-156 (revue des réglages en
+  double ou en code, demandée par l'utilisateur : barre de progression sans variable CSS, couleurs des blocs
+  déclarées dans les couleurs du site). Essais : éditeur 356/356, templates 26/26, tests du dépôt, clippy, format.
+  Alunites remise sur le PC (accroche en unité « Écran », 42 %).
+  - Règle de l'utilisateur : une demande proche d'un réglage existant ou d'une façon native de faire s'intègre à
+    ce réglage, et le lui dire (le reprendre si besoin) au lieu d'ajouter un réglage à part.
+  - Pièges : disque à ~3 Go libres (supprimer les binaires d'essai anciens de `target/debug/deps` et
+    `target/debug/incremental`, essais crate par crate) ; « attribut relié » de l'essai éditeur instable
+    (passe à la relance).
 - **Suite du 27/10/2026 (après la 0.7.1), commit 2769a9d** : D-151 à D-155, ligne 8.14 de `docs/ETAPE-8.md` (en cours : D-155). Essais : éditeur 355/355, templates 26/26, animations 17/17, tests du dépôt, clippy, format.
   - D-151 relevé des styles (`crates/revel-edit/src/styleaudit.rs`, `editable::audit_all`, `check_site` et
     `revel audit`) : seules les formes du panneau Styles sont admises ; balises dans une classe (pastille
@@ -57,7 +66,9 @@ de `docs/ETAPE-8.md`.
     « Membre de l'équipe » ; variantes Survol des cartes et logos ; variante « Annuel » du chiffre) et remise
     sur le PC (`recreation-alunites-interface/site.revel.json`, exige la version suivante de Revel).
   - D-152 plan du site : parties communes masquées à l'ouverture ; double-clic sur une adresse → contenu du CMS.
-  - D-153 texte ajusté à l'écran (`crates/revel-render/src/fit.rs`, `data-revel-fit`, réglage dans le panneau).
+  - D-153 texte ajusté à l'écran, **revu** : unité « Écran » de Styles › Texte › Taille (`--revel-fit` dans la
+    règle, taille écrite gardée sans script ; `vh` ajoutée aux unités ; `crates/revel-render/src/fit.rs`,
+    `FontSize` dans `apps/revel-ui/src/styles/sections.rs`). Le réglage séparé `data-revel-fit` est retiré.
   - D-154 élément à glisser (`actions.js` `drag`, Interactions › Glisser) ; import Framer (`Modules::drag`).
   - D-155 imports sans code (première partie, `crates/revel-import/src/framer_clean.rs`) ; reste à faire :
     styles calculés de chaque élément dans un cadre caché, pour tous les imports ; outils manquants relevés sur

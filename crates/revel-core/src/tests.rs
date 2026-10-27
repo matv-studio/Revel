@@ -326,6 +326,125 @@ fn canevas_d_un_composant_seul() {
             .status,
         404
     );
+    // Aperçu du composant seul (D-143) : sans repères de l'éditeur, isolé (liens sans effet),
+    // hauteur envoyée à l'interface.
+    c.preview_open(&site, "production").unwrap();
+    let prev = c.preview_respond("/__revel/component/?component=carte&page=%2F");
+    assert_eq!(prev.status, 200);
+    let html = String::from_utf8(prev.body).unwrap();
+    assert!(
+        html.contains("revel-preview-stage") && html.contains("class=\"carte\""),
+        "{html}"
+    );
+    assert!(
+        !html.contains("data-rv=") && !html.contains("canvas.js"),
+        "{html}"
+    );
+}
+
+#[test]
+fn modele_des_pages_d_une_collection() {
+    use revel_edit::Command;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    std::fs::create_dir_all(site.join("contenus/annonces")).unwrap();
+    std::fs::write(
+        site.join("contenus/annonces/a.md"),
+        "---\ntitle: Alpha\nslug: alpha\n---\n",
+    )
+    .unwrap();
+    std::fs::write(
+        site.join("contenus/annonces/b.md"),
+        "---\ntitle: Beta\nslug: beta\nchapo: Le chapô de Beta\n---\nTexte de Beta.\n",
+    )
+    .unwrap();
+    let opened = c.edit_open(&site).unwrap().site;
+    let mut layout = revel_edit::make::collection_template(&opened, "annonces", "title");
+    // Partie qui dépend d'un champ rempli dans un seul contenu.
+    layout.body.push(revel_model::Node::If {
+        id: None,
+        cond: "chapo".into(),
+        then: vec![revel_model::build::el(
+            "p",
+            &[("class", "chapo")],
+            vec![revel_model::build::out("chapo")],
+        )],
+        otherwise: vec![],
+    });
+    let lid = layout.id.clone();
+    c.edit_apply(
+        &site,
+        Command::Batch {
+            commands: vec![
+                Command::CreateCmsCollection {
+                    id: "annonces".into(),
+                    label: "Annonces".into(),
+                    folder: "contenus/annonces".into(),
+                    fields: serde_json::json!([
+                        { "name": "title", "label": "Titre", "type": "string" },
+                        { "name": "slug", "label": "Adresse", "type": "string" },
+                        { "name": "chapo", "label": "Chapô", "type": "text" }
+                    ]),
+                },
+                Command::AddLayout {
+                    layout,
+                    index: None,
+                },
+                Command::SetCollectionPages {
+                    id: "annonces".into(),
+                    path: Some("/annonces/{{ slug }}/".into()),
+                    layout: Some(lid),
+                },
+            ],
+        },
+        false,
+    )
+    .unwrap();
+    c.canvas_open(&site, canvas::CanvasOptions::default())
+        .unwrap();
+    let page = c.canvas_respond(&revel_model::template_page("annonces"));
+    assert_eq!(page.status, 200);
+    let html = String::from_utf8(page.body).unwrap();
+    // Tous les champs réunis : le titre du premier contenu, le chapô du second, son texte.
+    assert!(html.contains("Alpha"), "{html}");
+    assert!(html.contains("Le chapô de Beta"), "{html}");
+    assert!(html.contains("Texte de Beta."), "{html}");
+    assert!(html.contains("data-rv="), "{html}");
+    // Page interne : pas dans la liste des pages ; contenu d'exemple jamais écrit.
+    assert!(
+        c.edit_pages(&site)
+            .unwrap()
+            .iter()
+            .all(|p| !p.url.starts_with("/__revel/"))
+    );
+    assert_eq!(c.canvas_respond("/annonces/alpha/").status, 200);
+    assert_eq!(
+        c.canvas_respond(&revel_model::template_page("absente"))
+            .status,
+        404
+    );
+    assert!(
+        c.edit_apply(
+            &site,
+            Command::CreateEntry {
+                folder: "contenus/annonces".into(),
+                file: revel_model::TEMPLATE_ENTRY.into(),
+                data: serde_json::json!({ "title": "x" }),
+                body: String::new(),
+            },
+            false,
+        )
+        .is_err()
+    );
+    assert!(
+        !site
+            .join(format!(
+                "contenus/annonces/{}.md",
+                revel_model::TEMPLATE_ENTRY
+            ))
+            .exists()
+    );
 }
 
 #[test]
@@ -2858,6 +2977,70 @@ fn export_webflow_et_cms() {
         "gabarit du site : {entry}"
     );
     assert!(!out.join("detail_post.html").exists());
+}
+
+/// Vignette d'un site dans l'accueil : couleur vérifiée, image de la page d'accueil gardée par
+/// l'application, jointe à la liste, à reprendre quand le site a changé ; choix gardé à la
+/// réouverture.
+#[test]
+fn vignettes_des_sites() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    let path = site.display().to_string();
+    assert!(
+        c.set_site_thumb(&path, Some("rouge".into()), false)
+            .is_err()
+    );
+    c.set_site_thumb(&path, Some("#ff5c35".into()), false)
+        .unwrap();
+    let r = c
+        .recent_sites()
+        .into_iter()
+        .find(|r| r.path == path)
+        .unwrap();
+    assert_eq!(r.color.as_deref(), Some("#ff5c35"));
+    assert!(r.image.is_none() && !r.image_stale);
+    c.set_site_thumb(&path, None, true).unwrap();
+    let r = c
+        .recent_sites()
+        .into_iter()
+        .find(|r| r.path == path)
+        .unwrap();
+    assert!(r.homepage && r.image.is_none() && r.image_stale);
+    assert!(
+        c.save_site_thumb(&path, "data:image/png;base64,iVBORw0KGgo=")
+            .is_err()
+    );
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    c.save_site_thumb(&path, "data:image/jpeg;base64,/9j/4AAQSkZJRg==")
+        .unwrap();
+    let r = c
+        .recent_sites()
+        .into_iter()
+        .find(|r| r.path == path)
+        .unwrap();
+    assert_eq!(
+        r.image.as_deref(),
+        Some("data:image/jpeg;base64,/9j/4AAQSkZJRg==")
+    );
+    assert!(!r.image_stale);
+    // Site modifié depuis : image à reprendre. Réouvert : choix gardé ; jamais l'image dans l'état.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let p = revel_project::Project::open(&site).unwrap();
+    p.save().unwrap();
+    c.open_site(&site).unwrap();
+    let r = c
+        .recent_sites()
+        .into_iter()
+        .find(|r| r.path == path)
+        .unwrap();
+    assert!(r.homepage && r.image_stale && r.image.is_some());
+    let state = std::fs::read_to_string(d.path().join("config/revel-state.json")).unwrap();
+    assert!(
+        state.contains("\"homepage\": true") && !state.contains("base64"),
+        "{state}"
+    );
 }
 
 /// Copies de sites GitHub sur cet ordinateur (D-127) : site connu et site rangé dans le dossier

@@ -368,6 +368,13 @@ impl crate::Project {
         if !valid_stem(file) {
             return Err(format!("nom de fichier refusé : {file}"));
         }
+        // Contenu d'exemple du modèle des pages : il n'existe que dans l'éditeur.
+        if file == revel_model::TEMPLATE_ENTRY {
+            return Err(
+                "contenu d'exemple du modèle des pages : ses valeurs se changent dans le CMS"
+                    .into(),
+            );
+        }
         let base = self.dir.join(folder);
         Ok(["md", "markdown"]
             .iter()

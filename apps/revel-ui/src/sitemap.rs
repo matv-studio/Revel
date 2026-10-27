@@ -33,11 +33,13 @@ use wasm_bindgen::JsCast;
 const NODE_W: f64 = 220.0;
 const NODE_H: f64 = 60.0;
 const ENTRY_H: f64 = 32.0;
+/// Hauteur d'une collection (nom, adresse, ligne « n contenus »).
+const COLLECTION_H: f64 = 84.0;
 /// Écarts entre colonnes et entre nœuds d'une colonne.
 const COL_GAP: f64 = 110.0;
 const ROW_GAP: f64 = 20.0;
-/// Contenus d'une collection : retrait sous la collection et écart entre eux.
-const ENTRY_INDENT: f64 = 28.0;
+/// Contenus d'une collection : alignés sous la collection (même largeur, centrés), écart
+/// entre eux.
 const ENTRY_GAP: f64 = 6.0;
 const ZOOM_MIN: f64 = 0.15;
 const ZOOM_MAX: f64 = 2.5;
@@ -45,6 +47,7 @@ const ZOOM_MAX: f64 = 2.5;
 fn node_h(kind: NodeKind) -> f64 {
     match kind {
         NodeKind::Entry | NodeKind::External => ENTRY_H,
+        NodeKind::Collection => COLLECTION_H,
         _ => NODE_H,
     }
 }
@@ -334,7 +337,7 @@ fn arrange(map: &LinkMap) -> HashMap<String, (f64, f64)> {
             *cursor = top + h + ENTRY_GAP;
             for k in &kids {
                 seen.insert(k.clone());
-                pos.insert(k.clone(), (x + ENTRY_INDENT, *cursor));
+                pos.insert(k.clone(), (x, *cursor));
                 *cursor += ENTRY_H + ENTRY_GAP;
             }
             *cursor += ROW_GAP - ENTRY_GAP;
@@ -2717,7 +2720,8 @@ mod tests {
         let (cx, cy) = p["col:p"];
         let (ax, ay) = p["entry:p/a"];
         let (bx, by) = p["entry:p/b"];
-        assert_eq!(ax, cx + ENTRY_INDENT);
+        assert_eq!(ax, cx);
+        assert!(ay >= cy + COLLECTION_H, "{ay} sous {cy}");
         assert_eq!(bx, ax);
         assert!(ay >= cy + NODE_H && by >= ay + ENTRY_H, "{cy} {ay} {by}");
     }

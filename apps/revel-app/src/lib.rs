@@ -282,6 +282,23 @@ fn forget_site(s: State<AppState>, path: String) {
     s.core.forget_site(&path);
 }
 
+/// Vignette d'un site dans l'accueil : couleur ou image de sa page d'accueil.
+#[tauri::command]
+fn set_site_thumb(
+    s: State<AppState>,
+    path: String,
+    color: Option<String>,
+    homepage: bool,
+) -> Res<()> {
+    s.core.set_site_thumb(&path, color, homepage).map_err(err)
+}
+
+/// Image de la page d'accueil d'un site (JPEG prise dans le canevas).
+#[tauri::command]
+fn save_site_thumb(s: State<AppState>, path: String, data: String) -> Res<()> {
+    s.core.save_site_thumb(&path, &data).map_err(err)
+}
+
 /// Site supprimé depuis l'accueil : dossier mis à la corbeille du système.
 #[tauri::command]
 fn delete_site(s: State<AppState>, path: String) -> Res<()> {
@@ -1670,6 +1687,8 @@ pub fn run() {
             set_settings,
             recent_sites,
             forget_site,
+            set_site_thumb,
+            save_site_thumb,
             delete_site,
             has_site,
             open_site,

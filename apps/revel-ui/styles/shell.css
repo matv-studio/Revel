@@ -371,3 +371,7 @@
 .drop-veil-card svg.icon { width: 28px; height: 28px; color: var(--text-muted); }
 /* Annuler, rétablir dans la barre du haut (Paramètres, Localisation, Plan du site). */
 .topbar-undo { display: flex; align-items: center; gap: 2px; margin-right: 4px; }
+/* Aperçu d'un composant (D-143) : comme sur son canevas, centré, à la même échelle. */
+.preview-stage.is-comp { align-items: center; overflow: auto; padding: var(--s-6); }
+.preview-comp { position: relative; flex: none; margin: auto; border-radius: 6px; box-shadow: var(--shadow-dialog); overflow: hidden; }
+.preview-frame--comp { position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: none; }

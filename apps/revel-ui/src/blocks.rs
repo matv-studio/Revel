@@ -2610,6 +2610,17 @@ fn list_source(ui: Ui, ed: Ed, each_at: Target, expr: String) -> Option<AnyView>
     )
 }
 
+/// Classes d'un élément selon le contenu (paramètres avancés) : classe ajoutée quand un champ est
+/// rempli (`person__photo--swap` si « Photo au survol »), ou tirée de la valeur d'un champ. Dans
+/// une liste de contenus, le modèle des pages d'une collection ou un composant seulement.
+pub(crate) fn content_classes(ui: Ui, ed: Ed, at: Target, node: &Node) -> Option<AnyView> {
+    let fields = condition_fields(ed, &at)?;
+    if fields.with_untracked(Vec::is_empty) {
+        return None;
+    }
+    class_editors(ui, ed, StoredValue::new(at), node, fields)
+}
+
 /// Classes d'un élément relié : selon des conditions, ou tirée de la valeur d'un champ.
 fn class_editors(
     ui: Ui,
@@ -2660,20 +2671,28 @@ fn value_class_editor(
         } else {
             revel_edit::style::value_class_expr(&b, &p, &fi, d.as_deref())
         };
-        ed.apply(
-            ui,
+        let cmd = if value.trim().is_empty() {
+            Command::RemoveAttr {
+                at: at.get_value(),
+                name: "class".into(),
+            }
+        } else {
             Command::SetAttr {
                 at: at.get_value(),
                 name: "class".into(),
-                value: Some(value),
-            },
-            false,
-        );
+                value: Some(value.trim().to_string()),
+            }
+        };
+        ed.apply(ui, cmd, false);
     };
     let cur = field.clone();
     view! {
         <div class="field" data-bound="block-bound-value-class">
-            <span class="label" title=ui.t("block-bound-value-class-help")>{ui.t("block-bound-value-class")}</span>
+            <div class="field-line">
+                <span class="label" title=ui.t("block-bound-value-class-help")>{ui.t("block-bound-value-class")}</span>
+                <button type="button" class="icon-btn icon-btn--small" title=ui.t("cond-class-remove") aria-label=ui.t("cond-class-remove")
+                    on:click=move |_| write(Box::new(|s| s.2 = String::new()))>{icons::close()}</button>
+            </div>
             <div class="select">
                 <select class="input" on:change=move |e| {
                     let v = event_target_value(&e);
@@ -2783,14 +2802,15 @@ fn cond_classes_editor(
                     </div>
                 }
             }).collect_view()}
-            <button type="button" class="link-btn cond-add" on:click=move |_| {
+            <div class="cond-class-adds">
+            <button type="button" class="btn btn--small cond-add" on:click=move |_| {
                 let Some(f) = fields.with_untracked(|fs| fs.first().map(|(e, _)| e.clone())) else { return };
                 let mut list = rows.get_value();
                 list.push((f, format!("{}--option", first_class.clone())));
                 write(list);
-            }>{ui.t("cond-class-add")}</button>
+            }>{icons::plus()}<span>{ui.t("cond-class-add")}</span></button>
             {no_rows.then(|| view! {
-                <button type="button" class="link-btn cond-add" on:click=move |_| {
+                <button type="button" class="btn btn--small cond-add" on:click=move |_| {
                     let Some(f) = fields.with_untracked(|fs| fs.first().map(|(e, _)| e.clone())) else { return };
                     let b = base.get_value();
                     let first = b.split_whitespace().next().unwrap_or("classe").to_string();
@@ -2799,8 +2819,9 @@ fn cond_classes_editor(
                         name: "class".into(),
                         value: Some(revel_edit::style::value_class_expr(&b, &format!("{first}--"), &f, None)),
                     }, false);
-                }>{ui.t("block-bound-value-class-add")}</button>
+                }>{icons::plus()}<span>{ui.t("block-bound-value-class-add")}</span></button>
             })}
+            </div>
         </div>
     }
     .into_any()
@@ -3641,14 +3662,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     }
     if let Some(var) = ed.doc.with_untracked(|d| enclosing_values(d.as_ref()?, at)) {
         let main = value_binding(ui, ed, at, node, var);
-        let fields = condition_fields(ed, at).unwrap_or_else(|| Signal::derive(Vec::new));
-        let classes = class_editors(ui, ed, StoredValue::new(at.clone()), node, fields);
-        return match (main, classes) {
-            (None, None) => None,
-            (m, c) => Some(
-                view! { {m} {c.map(|c| view! { <div class="insp-group">{c}</div> })} }.into_any(),
-            ),
-        };
+        return main;
     }
     let (collection_id, prefix, url_expr) = ed
         .doc
@@ -4007,9 +4021,6 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let text_extra = text
         .with_value(|t| t.clone())
         .filter(|t| !t.field.is_empty() && t.raw.is_none());
-    // Classe ajoutée quand un champ est rempli (`person__photo--swap` si « Photo au survol »),
-    // ou tirée de la valeur d'un champ.
-    let cond_class_view = class_editors(ui, ed, at, node, cond_fields);
     Some(
         view! {
             <div class="insp-group">
@@ -4194,7 +4205,6 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                         </div>
                     }
                 })}
-                {cond_class_view}
                 <div class="field" data-bound="block-bound-visibility">
                     <span class="label">{ui.t("block-bound-visibility")}</span>
                     {crate::visibility::condition_editor(ui, cond_fields, vis_cond, true, set_vis)}

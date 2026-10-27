@@ -332,9 +332,7 @@ fn items(ui: Ui, ed: Ed) -> Vec<Item> {
     }
     // Calques de la page affichée (éléments).
     let url = ed.page.get_untracked();
-    let page = ed
-        .pages
-        .with_untracked(|ps| ps.iter().find(|p| p.url == url).cloned());
+    let page = ed.page_ref_untracked(&url);
     if let Some(page) = page {
         let rows = ed.doc.with_untracked(|d| {
             d.as_ref()

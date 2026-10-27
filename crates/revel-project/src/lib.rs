@@ -735,6 +735,53 @@ impl Project {
         Ok(revel_render::render_editor(&input, COMPONENT_URL, opts)?)
     }
 
+    /// Modèle des pages d'une collection pour l'éditeur ([`revel_model::TEMPLATE_PAGE`]) : la
+    /// page d'un contenu d'exemple (`data`, `body`) ajouté aux contenus du site, rendue avec le
+    /// gabarit de la collection. `None` : collection inconnue ou sans pages.
+    pub fn render_template_editor(
+        &self,
+        collection: &str,
+        data: serde_json::Value,
+        body: String,
+        hooks: Arc<dyn AssetHooks>,
+        environment: &str,
+        opts: &EditorOptions,
+    ) -> Result<Option<EditorPage>, ProjectError> {
+        let site = self.site_with_data()?;
+        let Some(col) = site
+            .collections
+            .iter()
+            .find(|c| c.id == collection && !c.folder.is_empty())
+        else {
+            return Ok(None);
+        };
+        if col.layout.is_none() || col.path.is_none() {
+            return Ok(None);
+        }
+        let mut entries = self.load_entries()?;
+        entries.push(revel_render::Entry {
+            folder: col.folder.clone(),
+            file_stem: revel_model::TEMPLATE_ENTRY.into(),
+            data,
+            body,
+        });
+        let input = BuildInput {
+            site: &site,
+            entries,
+            locales: self.load_locales()?,
+            environment: environment.to_string(),
+            version: self.version_tag(&site),
+            hooks,
+            now: chrono::Utc::now(),
+        };
+        Ok(revel_render::render_entry_editor(
+            &input,
+            collection,
+            revel_model::TEMPLATE_ENTRY,
+            opts,
+        )?)
+    }
+
     /// Pages HTML du site (pages fixes et contenus de collection), pour l'éditeur.
     pub fn list_pages(&self) -> Result<Vec<revel_render::PageRef>, ProjectError> {
         let site = self.site_with_data()?;

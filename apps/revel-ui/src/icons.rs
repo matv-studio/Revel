@@ -805,6 +805,13 @@ pub fn sync() -> AnyView {
     )
 }
 
+/// Palette de peintre (couleur d'une vignette).
+pub fn palette() -> AnyView {
+    svg(
+        r#"<path d="M8 2.5a5.5 5.5 0 0 0 0 11c.9 0 1.3-.6 1.1-1.3-.3-.9.3-1.7 1.2-1.7h1.4a2 2 0 0 0 2-2A5.8 5.8 0 0 0 8 2.5Z"/><circle cx="5.2" cy="7.2" r=".7"/><circle cx="7.3" cy="5" r=".7"/><circle cx="10.2" cy="5.6" r=".7"/>"#,
+    )
+}
+
 /// Nuage (site en ligne pas encore sur cet ordinateur).
 pub fn cloud() -> AnyView {
     svg(

@@ -65,11 +65,10 @@ pub fn insertion_point(ed: Ed) -> Option<(Parent, usize)> {
                     return Some((Parent::root(Owner::Page(id)), body));
                 }
                 let url = ed.page.get_untracked();
-                let layout = ed.pages.with_untracked(|ps| {
-                    ps.iter()
-                        .find(|p| p.url == url && p.collection.is_some())
-                        .and_then(|p| p.layout.clone())
-                })?;
+                let layout = ed
+                    .page_ref_untracked(&url)
+                    .filter(|p| p.collection.is_some())
+                    .and_then(|p| p.layout)?;
                 let body = d.layout(&layout)?.body.len();
                 Some((Parent::root(Owner::Layout(layout)), body))
             }

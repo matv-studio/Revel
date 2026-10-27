@@ -26,9 +26,13 @@ const INSTRUCTIONS: &str = "Revel is a desktop visual website builder. These too
 currently open in Revel (or the one named by the optional `site` argument, an absolute folder path). Every edit \
 is applied with Revel's own commands: it shows up immediately in Revel's editor and the user can undo it \
 (`undo`, or Ctrl+Z). Start with `get_site`, then `get_page` (every element with its id #id).\n\n\
-BUILD ONLY WHAT THE USER CAN EDIT IN REVEL'S INTERFACE. The user must be able to change everything you make from \
-the panels (Layers, Styles, Add, CMS), without code: never write `{% set %}`, computed expressions, filters other \
-than those listed here, or site scripts. After your changes call `check_site`: it must list no issue for what you \
+BUILD ONLY WHAT THE USER CAN EDIT IN REVEL'S INTERFACE, unless the user explicitly asks otherwise. Always use the \
+interface's tools so the user keeps control: the user must be able to change everything you make from the panels \
+(Layers, Styles, Interactions, Add, CMS), without code: never write `{% set %}`, computed expressions, filters other \
+than those listed here, site scripts, custom code or hand-written CSS animations. Animations, hover effects, \
+scroll effects, page transitions and actions use Revel's ready-made interactions (`data-revel-*` attributes set \
+with `set_attribute`, the same values as the Interactions panel) and the site settings, never `<script>`, \
+`@keyframes` or `transition` rules written by hand. After your changes call `check_site`: it must list no issue for what you \
 built; rebuild anything it lists with the forms below. Content that exists in the CMS (titles, dates, clients, \
 covers, videos of projects or articles) is read from it with a collection list and fields, never retyped in the \
 layers; elements that belong together (an item and its media) are linked by a setting, never by their position.\n\

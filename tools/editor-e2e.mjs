@@ -1466,12 +1466,21 @@ try {
     await page.click('.dock-tab[data-panel="pages"]');
     await page.waitForSelector('.pages .collection-row[data-collection="projets"]');
     const entriesListed = await page.$$eval('.pages .entry-row', (r) => r.length);
+    // Clic sur la collection : son modèle des pages (page interne, tous les champs).
     await page.click('.pages .collection-row[data-collection="projets"]');
     await page.waitForSelector('.pages .collection-row[data-collection="projets"].is-current');
+    await page.waitForSelector('.pages .template-row.is-on');
+    await waitFrame(() => document.readyState === 'complete' && location.pathname === '/__revel/template/projets/' && !!document.querySelector('[data-rv]'), 'modèle des pages');
+    const tplRows = await page.$$eval('.pages .entry-row', (r) => r.length);
+    check('pages : clic sur une collection, son modèle des pages (page interne)', tplRows === 1);
+    // Un contenu : collection dépliée, premier contenu, collection repliée.
+    await page.click('.pages .collection-row[data-collection="projets"] .list-chevron');
+    await page.click('.pages .entry-row:not(.template-row) >> nth=0');
+    await page.click('.pages .collection-row[data-collection="projets"] .list-chevron');
     const entryUrl0 = await page.$eval('.pages .entry-row.is-on', (r) => r.dataset.url);
     const shownRows = await page.$$eval('.pages .entry-row', (r) => r.length);
     check('pages : collections (modèles) sans leurs contenus ; contenu affiché sous sa collection repliée', entriesListed === 0 && shownRows === 1 && !(await page.$('.page-pick')), entryUrl0);
-    await waitFrame(() => document.readyState === 'complete' && !!document.querySelector('[data-rv]'), 'contenu');
+    await waitFrame(() => document.readyState === 'complete' && location.pathname !== '/__revel/template/projets/' && !!document.querySelector('[data-rv]'), 'contenu');
     const pinfo = (await invoke('edit_pages')).find((p) => p.url === entryUrl0);
     const colFolder = (await invoke('edit_open')).site.collections.find((c) => c.id === pinfo.collection).folder;
     const entryFile = path.join(siteDir, colFolder, pinfo.file + '.md');
@@ -1674,7 +1683,7 @@ try {
       // Titre du modèle des projets : champs du contenu proposés.
       await page.click('.dock-tab[data-panel="pages"]');
       await page.click('.pages .collection-row[data-collection="projets"]');
-      await waitFrame(() => location.pathname.startsWith('/project/') && !!document.querySelector('.related .section-title'), 'modèle des projets');
+      await waitFrame(() => location.pathname === '/__revel/template/projets/' && !!document.querySelector('.related .section-title'), 'modèle des projets');
       await page.frameLocator('iframe.canvas-frame').locator('.related .section-title').first().click();
       await page.click('.dock-tab[data-panel="styles"]');
       if (!(await page.$('.advanced-settings[open]'))) await page.click('.advanced-settings > summary');
@@ -2171,9 +2180,9 @@ try {
       }
       return false;
     };
-    await page.selectOption('#site-transition', 'slide');
+    await page.click('#site-transition [data-transition="slide"]');
     const slide = await transition('slide');
-    await page.selectOption('#site-transition', '');
+    await page.click('#site-transition [data-transition=""]');
     check('paramètres : transition entre les pages choisie puis retirée', slide && await transition(''));
     // Défilement doux (D-110) : Paramètres › Général, activé puis coupé.
     const smooth = async (v) => {

@@ -395,6 +395,31 @@ impl Default for Guides {
     }
 }
 
+/// Modèle des pages de la collection `id` vu comme une page de contenu (gabarit de la
+/// collection, contenu d'exemple), quand la collection a des pages.
+pub fn template_ref(d: &Site, id: &str) -> Option<EditorPageInfo> {
+    let c = d
+        .collections
+        .iter()
+        .find(|c| c.id == id && !c.folder.is_empty())?;
+    c.path.as_ref()?;
+    let name = crate::pagetree::label_of(id);
+    let title = use_context::<Ui>()
+        .map(|ui| ui.now("cms-template-page", &[("name", name.clone())]))
+        .unwrap_or(name);
+    Some(EditorPageInfo {
+        url: revel_model::template_page(id),
+        title: title.clone(),
+        page: None,
+        collection: Some(id.to_string()),
+        layout: Some(c.layout.clone()?),
+        file: Some(revel_model::TEMPLATE_ENTRY.into()),
+        draft: false,
+        name: Some(title),
+        seo: None,
+    })
+}
+
 /// État de l'éditeur, partagé par ses panneaux.
 #[derive(Clone, Copy)]
 pub struct Ed {
@@ -762,6 +787,29 @@ impl Ed {
         }
     }
 
+    /// Page `url` (liste des pages, ou modèle des pages d'une collection, page interne de
+    /// Revel qui n'est pas dans la liste). Suivi des changements.
+    pub fn page_ref(self, url: &str) -> Option<EditorPageInfo> {
+        if let Some(p) = self
+            .pages
+            .with(|ps| ps.iter().find(|p| p.url == url).cloned())
+        {
+            return Some(p);
+        }
+        let id = revel_model::template_of(url)?;
+        self.doc.with(|d| template_ref(d.as_ref()?, id))
+    }
+
+    /// [`Ed::page_ref`] sans suivi.
+    pub fn page_ref_untracked(self, url: &str) -> Option<EditorPageInfo> {
+        untrack(|| self.page_ref(url))
+    }
+
+    /// Page affichée : modèle des pages de cette collection.
+    pub fn template(self) -> Option<String> {
+        revel_model::template_of(&self.page.get()).map(str::to_string)
+    }
+
     /// Adresse du canevas pour la page affichée.
     pub fn src(self) -> Option<String> {
         let base = self.base.get()?;
@@ -996,16 +1044,25 @@ impl Ed {
             if let Ok(p) = api::edit_pages(&path).await {
                 // Page demandée (nouvelle page, adresse changée), sinon la page affichée si elle
                 // existe encore, sinon l'accueil.
+                // Modèle des pages d'une collection : page interne, hors de la liste.
+                let template = |u: &str| {
+                    revel_model::template_of(u).is_some_and(|id| {
+                        self.doc
+                            .with_untracked(|d| d.as_ref().and_then(|d| template_ref(d, id)))
+                            .is_some()
+                    })
+                };
                 let want = ui
                     .goto_page
                     .get_untracked()
-                    .filter(|u| p.iter().any(|x| &x.url == u));
+                    .filter(|u| p.iter().any(|x| &x.url == u) || template(u));
                 if let Some(u) = want {
                     ui.goto_page.set(None);
                     self.page.set(u);
                     self.scroll.set((0.0, 0.0));
                     self.selected.set(None);
                 } else if !p.iter().any(|x| x.url == self.page.get_untracked())
+                    && !template(&self.page.get_untracked())
                     && let Some(first) = p.iter().find(|x| x.url == "/").or(p.first())
                 {
                     self.page.set(first.url.clone());
@@ -1557,9 +1614,7 @@ impl Ed {
         let cmd = self.doc.with_untracked(|d| {
             let d = d.as_ref()?;
             let url = self.page.get_untracked();
-            let page = self
-                .pages
-                .with_untracked(|ps| ps.iter().find(|p| p.url == url).cloned())?;
+            let page = self.page_ref_untracked(&url)?;
             let rows = crate::layers::rows(d, &page);
             let row = rows
                 .iter()
@@ -2895,6 +2950,22 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         ui.current_page.set(Some(target));
     });
     on_cleanup(move || ui.current_page.set(None));
+    // Format du canevas d'un composant, pour son aperçu (D-143).
+    Effect::new(move |_| {
+        let on = ed.comp.with(Option::is_some);
+        let _ = (
+            ed.zoom.get(),
+            ed.area.get(),
+            ed.frame_w.get(),
+            ed.breakpoint.get(),
+        );
+        ui.comp_view.set(on.then(|| {
+            // Largeur du cadre telle que le canevas la montre (barre d'état).
+            let w = untrack(|| ed.geo().w);
+            (w, ed.scale())
+        }));
+    });
+    on_cleanup(move || ui.comp_view.set(None));
 
     // Page demandée par une autre vue (vue CMS) : affichée dès que la liste des pages est connue.
     Effect::new(move |_| {
@@ -2913,7 +2984,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             }
             url = rest;
         }
-        if ed.pages.with(|p| p.iter().any(|x| x.url == url)) {
+        if ed.page_ref(&url).is_some() {
             ui.goto_page.set(None);
             if ed.page.get_untracked() != url {
                 ed.page.set(url);
@@ -3213,7 +3284,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 .is_some_and(|el| is_field(&el));
         // Un menu ouvert (panneau de styles) se ferme d'abord avec Échap.
         let menu_open = document().query_selector(".pop").ok().flatten().is_some();
-        if in_field || (menu_open && e.key() == "Escape") {
+        if (in_field && !crate::keys::undo_on_control(&e)) || (menu_open && e.key() == "Escape") {
             return;
         }
         // Espace maintenue : déplacement de la vue.

@@ -8,12 +8,25 @@ pub mod hosting;
 use serde::{Deserialize, Serialize};
 
 /// Site connu de l'application.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecentSite {
     pub path: String,
     pub name: String,
     /// Date d'ouverture (RFC 3339).
     pub opened_at: String,
+    /// Vignette du site dans l'accueil : couleur choisie (`#rrggbb`) ; `None` : teinte tirée de
+    /// son nom.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// Vignette : image de la page d'accueil (prise dans le canevas, gardée par l'application).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub homepage: bool,
+    /// Image de la page d'accueil (adresse `data:`), jointe à la lecture de la liste.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    /// Image absente ou antérieure à la dernière modification du site : à reprendre.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub image_stale: bool,
 }
 
 /// Site Revel d'un dépôt GitHub du compte connecté (dépôt avec `site.revel.json` à la racine),
@@ -994,13 +1007,15 @@ pub struct AppSettings {
     /// Bout des liens entre variantes : `arrow` (flèche) ou `dot` (rond, comme Blender ; par défaut).
     #[serde(default = "default_link_end")]
     pub variant_link_end: String,
-    /// Catalogue de modèles partagés (D-132) : dépôt GitHub public `propriétaire/nom`.
-    #[serde(default = "default_catalog")]
-    pub template_catalog: String,
+    /// Catalogues de templates partagés (D-132) : dépôts GitHub publics `propriétaire/nom`,
+    /// réunis dans l'onglet « Catalogue » de « Nouveau site » ; le premier reçoit les envois par
+    /// défaut.
+    #[serde(default = "default_catalogs")]
+    pub template_catalogs: Vec<String>,
 }
 
-fn default_catalog() -> String {
-    "matv-studio/revel-templates".into()
+fn default_catalogs() -> Vec<String> {
+    vec!["matv-studio/revel-templates".into()]
 }
 
 fn default_links() -> String {
@@ -1036,7 +1051,7 @@ impl Default for AppSettings {
             ui_colors: Default::default(),
             variant_links: default_links(),
             variant_link_end: default_link_end(),
-            template_catalog: default_catalog(),
+            template_catalogs: default_catalogs(),
         }
     }
 }

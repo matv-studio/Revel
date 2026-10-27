@@ -120,6 +120,37 @@ pub async fn forget_site(path: &str) -> Res<()> {
     call("forget_site", &PathArg { path }).await
 }
 
+#[derive(Serialize)]
+struct ThumbArgs<'a> {
+    path: &'a str,
+    color: Option<&'a str>,
+    homepage: bool,
+}
+
+/// Vignette d'un site dans l'accueil : couleur (`None` : tirée du nom) ou page d'accueil.
+pub async fn set_site_thumb(path: &str, color: Option<&str>, homepage: bool) -> Res<()> {
+    call(
+        "set_site_thumb",
+        &ThumbArgs {
+            path,
+            color,
+            homepage,
+        },
+    )
+    .await
+}
+
+#[derive(Serialize)]
+struct ThumbData<'a> {
+    path: &'a str,
+    data: &'a str,
+}
+
+/// Image de la page d'accueil d'un site (JPEG, adresse `data:`).
+pub async fn save_site_thumb(path: &str, data: &str) -> Res<()> {
+    call("save_site_thumb", &ThumbData { path, data }).await
+}
+
 /// Site mis à la corbeille du système et retiré de la liste.
 pub async fn delete_site(path: &str) -> Res<()> {
     call("delete_site", &PathArg { path }).await

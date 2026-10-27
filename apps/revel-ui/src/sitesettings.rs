@@ -270,20 +270,26 @@ pub fn General(site: SiteSummary) -> impl IntoView {
                             on:change=move |e| { let on = event_target_checked(&e); set(&|i| i.typography = on.then(|| "fr".to_string())) }/>
                         <span class="switch-track"></span>
                     </span>
-                    <label class="label" for="site-transition" title=ui.t("settings-transition-help")>{ui.t("settings-transition")}</label>
-                    <div class="select">
-                        <select id="site-transition" class="input" on:change=move |e| {
-                            let v = event_target_value(&e);
-                            s.apply.run(Command::SetPageTransition { transition: (!v.is_empty()).then_some(v) });
-                        }>
-                            {move || {
-                                let cur = s.doc.with(|d| d.as_ref().and_then(|d| d.settings.page_transition.clone())).unwrap_or_default();
-                                [("", "transition-none"), ("fade", "transition-fade"), ("slide", "transition-slide")]
-                                    .into_iter()
-                                    .map(|(v, k)| view! { <option value=v selected=v == cur>{ui.t(k)}</option> })
-                                    .collect_view()
-                            }}
-                        </select>
+                    <span class="label" title=ui.t("settings-transition-help")>{ui.t("settings-transition")}</span>
+                    // Transitions en vignettes (D-142) : dessin joué lentement au survol.
+                    <div class="tr-tiles" role="radiogroup" aria-label=ui.t("settings-transition") id="site-transition">
+                        {[("", "transition-none"), ("fade", "transition-fade"), ("slide", "transition-slide"),
+                          ("slide-up", "transition-slide-up"), ("push", "transition-push"), ("zoom", "transition-zoom"),
+                          ("blur", "transition-blur"), ("wipe", "transition-wipe"), ("curtain", "transition-curtain"),
+                          ("flip", "transition-flip")]
+                            .into_iter()
+                            .map(|(v, k)| {
+                                let on = move || s.doc.with(|d| d.as_ref().and_then(|d| d.settings.page_transition.clone())).unwrap_or_default() == v;
+                                view! {
+                                    <button type="button" class="anim-tile tr-tile" role="radio" data-transition=v
+                                        class:is-on=on aria-checked=move || on().to_string() title=ui.t(k)
+                                        on:click=move |_| s.apply.run(Command::SetPageTransition { transition: (!v.is_empty()).then(|| v.to_string()) })>
+                                        <span class="anim-stage" inner_html=crate::animicons::transition(v)></span>
+                                        <span class="anim-tile-name">{ui.t(k)}</span>
+                                    </button>
+                                }
+                            })
+                            .collect_view()}
                     </div>
                     <span class="label" title=ui.t("settings-smooth-scroll-help")>{ui.t("settings-smooth-scroll")}</span>
                     <span class="switch">

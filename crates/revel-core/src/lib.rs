@@ -30,6 +30,7 @@ pub mod preview;
 mod publish;
 mod readable;
 mod rollback;
+mod sample;
 pub mod secrets;
 pub mod sharing;
 pub mod starter;
@@ -394,11 +395,77 @@ impl Core {
     }
 
     pub fn recent_sites(&self) -> Vec<RecentSite> {
-        self.with_state(|s| {
+        let (mut list, dir) = self.with_state(|s| {
             s.recents
                 .retain(|r| Path::new(&r.path).join(revel_project::SITE_FILE).is_file());
-            s.recents.clone()
-        })
+            (s.recents.clone(), s.dir().map(Path::to_path_buf))
+        });
+        // Vignette « page d'accueil » : image jointe, reprise si le site a changé depuis.
+        for r in list.iter_mut().filter(|r| r.homepage) {
+            let file = dir.as_deref().map(|d| thumb_file(d, &r.path));
+            let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+            let shot = file.as_deref().and_then(modified);
+            let site = modified(&Path::new(&r.path).join(revel_project::SITE_FILE));
+            r.image = file
+                .as_deref()
+                .and_then(|f| std::fs::read(f).ok())
+                .map(|b| {
+                    use base64::Engine;
+                    format!(
+                        "data:image/jpeg;base64,{}",
+                        base64::engine::general_purpose::STANDARD.encode(b)
+                    )
+                });
+            r.image_stale = match (shot, site) {
+                (Some(a), Some(b)) => b > a,
+                _ => true,
+            };
+        }
+        list
+    }
+
+    /// Vignette d'un site dans l'accueil : couleur (`#rrggbb`, `None` : tirée du nom) ou image
+    /// de sa page d'accueil.
+    pub fn set_site_thumb(&self, path: &str, color: Option<String>, homepage: bool) -> Result<()> {
+        let color = color.filter(|c| !c.is_empty());
+        if let Some(c) = &color
+            && !(c.len() == 7
+                && c.starts_with('#')
+                && c[1..].chars().all(|x| x.is_ascii_hexdigit()))
+        {
+            return Err(CoreError::Media(format!("couleur refusée : {c}")));
+        }
+        self.with_state(|s| {
+            if let Some(r) = s.recents.iter_mut().find(|r| r.path == path) {
+                r.color = color;
+                r.homepage = homepage;
+            }
+        });
+        Ok(())
+    }
+
+    /// Image de la page d'accueil d'un site (JPEG, adresse `data:` ou base64), prise dans le
+    /// canevas par l'interface, gardée à côté de l'état de l'application.
+    pub fn save_site_thumb(&self, path: &str, data: &str) -> Result<()> {
+        use base64::Engine;
+        let b64 = data.split_once(";base64,").map_or(data, |(_, b)| b);
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64.trim())
+            .map_err(|e| CoreError::Media(e.to_string()))?;
+        if !bytes.starts_with(&[0xFF, 0xD8, 0xFF]) || bytes.len() > 4 << 20 {
+            return Err(CoreError::Media(
+                "vignette : image JPEG de 4 Mo au plus".into(),
+            ));
+        }
+        let Some(dir) = self.with_state(|s| s.dir().map(Path::to_path_buf)) else {
+            return Ok(());
+        };
+        let file = thumb_file(&dir, path);
+        if let Some(d) = file.parent() {
+            std::fs::create_dir_all(d)?;
+        }
+        std::fs::write(file, bytes)?;
+        Ok(())
     }
 
     pub fn forget_site(&self, path: &str) {
@@ -432,6 +499,8 @@ impl Core {
 
     fn touch_recent(&self, summary: &SiteSummary) {
         self.with_state(|s| {
+            // Vignette choisie gardée.
+            let before = s.recents.iter().find(|r| r.path == summary.path).cloned();
             s.recents.retain(|r| r.path != summary.path);
             s.recents.insert(
                 0,
@@ -439,6 +508,9 @@ impl Core {
                     path: summary.path.clone(),
                     name: summary.name.clone(),
                     opened_at: now(),
+                    color: before.as_ref().and_then(|b| b.color.clone()),
+                    homepage: before.as_ref().is_some_and(|b| b.homepage),
+                    ..Default::default()
                 },
             );
             s.recents.truncate(20);
@@ -1154,44 +1226,10 @@ impl Core {
                         url: urls.get(&(c.id.clone(), e.file_stem.clone())).cloned(),
                     })
                     .collect();
-                // Schéma : `.pages.yml` (Pages CMS), sinon celui du document, sinon les clés
-                // trouvées dans les en-têtes, dans l'ordre d'apparition.
                 let pages = pages_cms
                     .iter()
                     .find(|x| x.path == pagescms::norm_path(&c.folder));
-                let fields = if let Some(pc) = pages {
-                    pc.fields.clone()
-                } else if c.fields.is_empty() {
-                    let mut names: Vec<String> = Vec::new();
-                    for e in &list {
-                        if let serde_json::Value::Object(m) = &e.data {
-                            for k in m.keys() {
-                                if !names.contains(k) {
-                                    names.push(k.clone());
-                                }
-                            }
-                        }
-                    }
-                    names
-                        .into_iter()
-                        .map(|name| revel_protocol::CmsField {
-                            name,
-                            ..Default::default()
-                        })
-                        .collect()
-                } else {
-                    c.fields
-                        .iter()
-                        .map(|f| revel_protocol::CmsField {
-                            name: f.name.clone(),
-                            label: f.label.clone(),
-                            kind: serde_json::to_value(&f.kind).ok().and_then(|v| {
-                                v.get("type").and_then(|t| t.as_str()).map(str::to_string)
-                            }),
-                            ..Default::default()
-                        })
-                        .collect()
-                };
+                let fields = collection_fields(c, &config, &list);
                 revel_protocol::CmsCollection {
                     id: c.id.clone(),
                     label: pages.and_then(|x| x.label.clone()),
@@ -1225,6 +1263,58 @@ impl Core {
                 }
             })
             .collect())
+    }
+}
+
+/// Fichier de l'image de la page d'accueil d'un site (vignette de l'accueil).
+fn thumb_file(state_dir: &Path, site: &str) -> PathBuf {
+    let h = blake3::hash(site.as_bytes()).to_hex();
+    state_dir.join("thumbs").join(format!("{}.jpg", &h[..16]))
+}
+
+/// Champs d'une collection : schéma de `.pages.yml` (Pages CMS), sinon celui du document, sinon
+/// les clés trouvées dans les en-têtes des contenus, dans l'ordre d'apparition.
+pub(crate) fn collection_fields(
+    c: &revel_model::Collection,
+    config: &pagescms::PagesConfig,
+    list: &[revel_protocol::CmsEntry],
+) -> Vec<revel_protocol::CmsField> {
+    let pages = config
+        .collections
+        .iter()
+        .find(|x| x.path == pagescms::norm_path(&c.folder));
+    if let Some(pc) = pages {
+        pc.fields.clone()
+    } else if c.fields.is_empty() {
+        let mut names: Vec<String> = Vec::new();
+        for e in list {
+            if let serde_json::Value::Object(m) = &e.data {
+                for k in m.keys() {
+                    if !names.contains(k) {
+                        names.push(k.clone());
+                    }
+                }
+            }
+        }
+        names
+            .into_iter()
+            .map(|name| revel_protocol::CmsField {
+                name,
+                ..Default::default()
+            })
+            .collect()
+    } else {
+        c.fields
+            .iter()
+            .map(|f| revel_protocol::CmsField {
+                name: f.name.clone(),
+                label: f.label.clone(),
+                kind: serde_json::to_value(&f.kind)
+                    .ok()
+                    .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(str::to_string)),
+                ..Default::default()
+            })
+            .collect()
     }
 }
 

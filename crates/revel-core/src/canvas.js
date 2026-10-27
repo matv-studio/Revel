@@ -2283,6 +2283,31 @@
         }
         break;
       }
+      case "shot": {
+        // Image de la page (vignette du site dans l'accueil) : haut de la page, sans le calque
+        // de l'éditeur, réduite à `m.width` pixels de large (JPEG).
+        // Images différées chargées tout de suite (cadre hors de la vue).
+        document.querySelectorAll("img[loading=lazy]").forEach((i) => { i.loading = "eager"; });
+        const run = () => {
+          const w = document.documentElement.clientWidth || window.innerWidth;
+          const h = Math.round(w * (m.ratio || 0.625));
+          window.scrollTo(0, 0);
+          window.modernScreenshot.domToJpeg(document.documentElement, {
+            width: w, height: h, scale: (m.width || 640) / w, quality: 0.82, timeout: 8000,
+            backgroundColor: getComputedStyle(document.body).backgroundColor || "#ffffff",
+            filter: (n) => !(n.tagName && n.tagName.toLowerCase() === "revel-overlay"),
+          }).then((data) => post({ type: "shot", data }), () => post({ type: "shot", data: null }));
+        };
+        if (window.modernScreenshot) run();
+        else {
+          const sc = document.createElement("script");
+          sc.src = "/__revel/shot.js";
+          sc.onload = run;
+          sc.onerror = () => post({ type: "shot", data: null });
+          document.head.appendChild(sc);
+        }
+        break;
+      }
       case "measure": {
         // Position de la sélection (zoom sur la sélection), après l'avoir montrée.
         const el = findId(m.id).el || selected;

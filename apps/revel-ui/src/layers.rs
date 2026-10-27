@@ -989,12 +989,7 @@ pub fn Layers() -> impl IntoView {
             if let Some(c) = comp {
                 return component_rows(d, &c);
             }
-            ed.pages.with(|ps| {
-                ps.iter()
-                    .find(|p| p.url == url)
-                    .map(|p| rows(d, p))
-                    .unwrap_or_default()
-            })
+            ed.page_ref(&url).map(|p| rows(d, &p)).unwrap_or_default()
         })
     });
     // Ouverture par défaut : toute la structure visible, sauf l'en-tête du document (`head`), les

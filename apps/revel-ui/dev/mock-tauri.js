@@ -140,6 +140,8 @@
       case "get_settings": return state.settings;
       case "set_settings": state.settings = args.settings; window.__revelSettings = args.settings; return null;
       case "recent_sites": return state.recents;
+      case "set_site_thumb": state.recents = state.recents.map((r) => r.path === args.path ? { ...r, color: args.color || undefined, homepage: !!args.homepage, image_stale: !!args.homepage && !r.image } : r); return null;
+      case "save_site_thumb": state.recents = state.recents.map((r) => r.path === args.path ? { ...r, image: args.data, image_stale: false } : r); window.__revelThumb = args.data; return null;
       case "forget_site":
       case "delete_site": state.recents = state.recents.filter((r) => r.path !== args.path); return null;
       case "open_site": {

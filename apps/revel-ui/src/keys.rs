@@ -184,6 +184,33 @@ fn key_name(k: &str) -> String {
 }
 
 /// Touches d'une action : celles choisies, sinon celles par défaut.
+/// Élément où l'on écrit (texte, nombre, zone de texte, contenu modifiable) : il garde ses
+/// raccourcis (annuler la saisie, copier…). Une liste de choix, une case ou un bouton ne les
+/// garde pas : annuler y annule la dernière modification du site.
+pub fn is_typing(el: &web_sys::Element) -> bool {
+    match el.tag_name().as_str() {
+        "TEXTAREA" => true,
+        "INPUT" => !matches!(
+            el.get_attribute("type")
+                .unwrap_or_default()
+                .to_ascii_lowercase()
+                .as_str(),
+            "checkbox" | "radio" | "range" | "color" | "button" | "submit" | "reset" | "file"
+        ),
+        _ => el.has_attribute("contenteditable"),
+    }
+}
+
+/// Annuler ou rétablir (Ctrl+Z, Ctrl+Maj+Z, Ctrl+Y) pendant que le focus est sur une liste de
+/// choix ou une case : le raccourci vaut pour le site.
+pub fn undo_on_control(e: &web_sys::KeyboardEvent) -> bool {
+    (e.ctrl_key() || e.meta_key())
+        && matches!(e.key().to_lowercase().as_str(), "z" | "y")
+        && document()
+            .active_element()
+            .is_some_and(|el| !is_typing(&el))
+}
+
 pub fn bindings(ui: Ui, id: &str) -> Vec<String> {
     let custom = ui.settings.with_untracked(|s| s.shortcuts.get(id).cloned());
     match custom {

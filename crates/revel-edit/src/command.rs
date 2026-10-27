@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+/// Transitions entre les pages acceptées (mêmes noms que `revel_render::transitions::KINDS`).
+pub const PAGE_TRANSITIONS: &[&str] = &[
+    "fade", "slide", "slide-up", "push", "zoom", "blur", "wipe", "curtain", "flip",
+];
+
 use crate::EditError;
 use crate::address::{self, Parent, Target};
 
@@ -1260,7 +1265,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         Command::SetPageTransition { transition } => {
             if transition
                 .as_deref()
-                .is_some_and(|t| !matches!(t, "fade" | "slide"))
+                .is_some_and(|t| !PAGE_TRANSITIONS.contains(&t))
             {
                 return Err(EditError::WrongKind(transition.clone().unwrap_or_default()));
             }

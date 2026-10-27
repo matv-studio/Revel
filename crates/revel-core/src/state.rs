@@ -41,6 +41,11 @@ pub struct PublishRecord {
 }
 
 impl State {
+    /// Dossier de l'état (vignettes des sites à côté).
+    pub fn dir(&self) -> Option<&Path> {
+        self.path.parent().filter(|d| !d.as_os_str().is_empty())
+    }
+
     pub fn load(dir: &Path) -> Self {
         let path = dir.join(FILE);
         let mut s: State = std::fs::read_to_string(&path)

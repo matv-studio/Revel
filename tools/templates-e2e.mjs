@@ -136,11 +136,23 @@ try {
   await page.click('.ctx-menu [role="menuitem"]:has-text("Prix")');
   await until(async () => !(await heads()).includes('price'), 'colonne masquée par le menu');
   check('CMS : menu des colonnes (montrer, masquer)', menuItems.length >= 4, menuItems.join(' | '));
+  // Colonnes déplacées : clic droit « Déplacer à gauche », puis en glissant l'en-tête.
+  const hm = await heads();
+  const di = hm.indexOf('description');
   await page.click('.cms-table thead th[data-col="description"]', { button: 'right' });
-  await page.click('.ctx-menu [role="menuitem"] >> nth=0');
+  await page.click('.ctx-menu [role="menuitem"]:has-text("Déplacer à gauche")');
+  await until(async () => (await heads()).indexOf('description') === di - 1, 'colonne déplacée à gauche');
+  // Colonnes déplaçables (pas celle du titre, `data-col=""`).
+  const movable = async () => (await heads()).filter((x) => x);
+  const h1 = await movable();
+  await page.dragAndDrop(`.cms-table thead th[data-col="${h1[1]}"]`, `.cms-table thead th[data-col="${h1[0]}"]`);
+  await until(async () => (await movable())[0] === h1[1] && (await movable())[1] === h1[0], 'colonne glissée');
+  check('CMS : colonnes déplacées (menu, glisser l\'en-tête)', true, `${hm.join(',')} → ${(await heads()).join(',')}`);
+  await page.click('.cms-table thead th[data-col="description"]', { button: 'right' });
+  await page.click('.ctx-menu [role="menuitem"]:has-text("Masquer")');
   await until(async () => !(await heads()).includes('description'), 'colonne masquée par le clic droit');
   check('CMS : clic droit sur une colonne, « Masquer la colonne »', true);
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.click('.cms-head .icon-btn[title^="Annuler"]');
     await page.waitForTimeout(250);
   }
@@ -185,12 +197,16 @@ try {
 
   // ---------------------------------------------------------------- CMS : modèle des pages
   await page.click('.cms-item-head .icon-btn');
+  const filesBefore = fs.readdirSync(products).length;
   await page.click('.cms-template-btn');
   await page.waitForFunction(() => !!document.querySelector('iframe.canvas-frame') && !document.querySelector('.cms'));
   const shown = await page.waitForFunction(() => document.querySelector('.editor-page-chip, .toolbar-page, .page-menu-btn')?.textContent || location.hash, null, { timeout: 5000 }).then((h) => h.jsonValue()).catch(() => '');
   const frame = () => page.frames().find((f) => f.url().includes('rv='));
-  await until(async () => { const f = frame(); return !!f && /\/(produits|products|boutique|shop)\/[^/]+\//.test(f.url()); }, 'page d\'un produit dans l\'éditeur');
-  check('CMS : « Modèle des pages » ouvre une page de la collection dans l\'éditeur', true, frame().url().replace(/^.*?\/\/[^/]+/, '').slice(0, 60));
+  await until(async () => { const f = frame(); return !!f && /\/__revel\/template\/products\//.test(f.url()); }, 'modèle des pages des produits dans l\'éditeur');
+  const pick = await page.textContent('.template-row.is-on .list-label').catch(() => '');
+  check('CMS : « Modèle des pages » ouvre la page interne du modèle (aucun contenu créé)',
+    /Modèle des pages/.test(pick || '') && fs.readdirSync(products).length === filesBefore,
+    `${frame().url().replace(/^.*?\/\/[^/]+/, '').slice(0, 60)} | ${pick} | ${filesBefore} → ${fs.readdirSync(products).length}`);
   if (shots) await page.screenshot({ path: `${shots}/modele-editeur.png` });
   // Bouton « Ajouter au panier » : réglages Produit et Prix (reliés aux champs du produit), pas
   // d'attributs bruts.

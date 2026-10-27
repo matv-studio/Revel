@@ -50,7 +50,12 @@ pub fn SaveTemplate(site: SiteSummary) -> impl IntoView {
         license: license.get_untracked(),
         preview: preview.get_untracked(),
     };
-    let catalog = move || ui.settings.with(|s| s.template_catalog.clone());
+    // Catalogue qui reçoit l'envoi : le premier des réglages, ou celui choisi.
+    let target = RwSignal::new(
+        ui.settings
+            .with_untracked(|s| s.template_catalogs.first().cloned().unwrap_or_default()),
+    );
+    let catalog = move || target.get();
     let save_file = move |_| {
         let sh = share();
         let file = format!("{}.revel-template", slug(&sh.name));
@@ -191,11 +196,28 @@ pub fn SaveTemplate(site: SiteSummary) -> impl IntoView {
                         <span class="save-template__icon">{icons::cloud()}</span>
                         <span class="save-template__text">
                             <span class="save-template__name">{ui.t("template-target-catalog")}</span>
-                            <span class="muted mono" title=ui.t("template-catalog-help")>{catalog}</span>
+                            {move || {
+                                let list = ui.settings.with(|s| s.template_catalogs.clone());
+                                if list.len() > 1 {
+                                    view! {
+                                        <span class="select select--small save-template__repo" title=ui.t("template-catalog-help")>
+                                            <select class="input" aria-label=ui.t("template-target-catalog")
+                                                on:change=move |e| target.set(event_target_value(&e))>
+                                                {list.into_iter().map(|r| {
+                                                    let (r1, r2) = (r.clone(), r.clone());
+                                                    view! { <option value=r1 selected=move || target.get() == r2>{r}</option> }
+                                                }).collect_view()}
+                                            </select>
+                                        </span>
+                                    }.into_any()
+                                } else {
+                                    view! { <span class="muted mono" title=ui.t("template-catalog-help")>{catalog}</span> }.into_any()
+                                }
+                            }}
                         </span>
                         <button type="button" class="btn save-template-publish"
                             title=move || if ui.github.with(Option::is_none) { ui.t("template-needs-github") } else { ui.t("template-target-catalog-help") }
-                            disabled=move || invalid() || busy.get().is_some() || ui.github.with(Option::is_none)
+                            disabled=move || invalid() || busy.get().is_some() || ui.github.with(Option::is_none) || target.with(String::is_empty)
                             on:click=publish>
                             {move || if busy.get() == Some("catalog") { ui.t("template-sending") } else { ui.t("template-send") }}
                         </button>
@@ -239,39 +261,108 @@ fn slug(name: &str) -> String {
     if s.is_empty() { "modele".into() } else { s }
 }
 
-/// Réglages de Revel › Modèles : catalogue GitHub lu par la galerie (dépôt `propriétaire/nom`),
-/// nombre de modèles qu'il propose, création d'un catalogue sur le compte connecté.
+/// `propriétaire/nom` d'un catalogue saisi (adresse GitHub ou nom court) ; `None` si invalide.
+pub(crate) fn catalog_repo(text: &str) -> Option<String> {
+    let t = text.trim().trim_end_matches('/').trim_end_matches(".git");
+    let t = t
+        .strip_prefix("https://github.com/")
+        .or_else(|| t.strip_prefix("http://github.com/"))
+        .or_else(|| t.strip_prefix("github.com/"))
+        .unwrap_or(t);
+    let mut parts = t.split('/');
+    let (o, n) = (parts.next()?, parts.next()?);
+    let ok = |s: &str| {
+        !s.is_empty()
+            && !s.starts_with('.')
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+    };
+    (ok(o) && ok(n)).then(|| format!("{o}/{n}"))
+}
+
+/// Ajoute un catalogue aux réglages (sans doublon) ; `false` si l'adresse est invalide.
+pub(crate) fn add_catalog(ui: Ui, text: &str) -> bool {
+    let Some(repo) = catalog_repo(text) else {
+        return false;
+    };
+    crate::settings::update(ui, &|s| {
+        if !s
+            .template_catalogs
+            .iter()
+            .any(|c| c.eq_ignore_ascii_case(&repo))
+        {
+            s.template_catalogs.push(repo.clone());
+        }
+    });
+    true
+}
+
+/// Templates de tous les catalogues, réunis ; échec seulement si aucun catalogue ne répond.
+pub(crate) async fn load_catalogs(
+    repos: Vec<String>,
+) -> Result<Vec<revel_protocol::TemplateInfo>, revel_protocol::Failure> {
+    let mut out = Vec::new();
+    let mut last_err = None;
+    let mut ok = false;
+    for r in &repos {
+        match api::template_catalog(r).await {
+            Ok(l) => {
+                ok = true;
+                out.extend(l);
+            }
+            Err(e) => last_err = Some(e),
+        }
+    }
+    match (ok || repos.is_empty(), last_err) {
+        (false, Some(e)) => Err(e),
+        _ => Ok(out),
+    }
+}
+
+/// Réglages de Revel › Templates : catalogues GitHub lus par la galerie (ajoutés, retirés,
+/// nombre de templates de chacun), création d'un catalogue sur le compte connecté.
 #[component]
 pub fn TemplatesCard() -> impl IntoView {
     let ui = expect_context::<Ui>();
-    let repo = RwSignal::new(ui.settings.with_untracked(|s| s.template_catalog.clone()));
-    // Nombre de modèles du catalogue ; `Err` : catalogue introuvable.
-    let state = RwSignal::new(None::<Result<usize, revel_protocol::Failure>>);
-    let check = move || {
-        let r = repo.get_untracked();
-        state.set(None);
+    let catalogs = move || ui.settings.with(|s| s.template_catalogs.clone());
+    // Nombre de templates de chaque catalogue ; `Err` : introuvable.
+    let states = RwSignal::new(std::collections::HashMap::<String, Result<usize, ()>>::new());
+    let check = move |r: String| {
         spawn_local(async move {
-            let v = api::template_catalog(&r).await.map(|l| l.len());
-            if !state.is_disposed() && repo.get_untracked() == r {
-                state.set(Some(v));
-            }
+            let v = api::template_catalog(&r)
+                .await
+                .map(|l| l.len())
+                .map_err(|_| ());
+            let _ = states.try_update(|m| {
+                m.insert(r, v);
+            });
         });
     };
-    check();
-    let creating = RwSignal::new(false);
-    let commit = move || {
-        let v = repo.get_untracked().trim().to_string();
-        crate::settings::update(ui, &|s| s.template_catalog = v.clone());
-        check();
+    for r in catalogs() {
+        check(r);
+    }
+    let draft = RwSignal::new(String::new());
+    let bad = RwSignal::new(false);
+    let add = move || {
+        let t = draft.get_untracked();
+        if add_catalog(ui, &t) {
+            bad.set(false);
+            draft.set(String::new());
+            if let Some(r) = catalog_repo(&t) {
+                check(r);
+            }
+        } else {
+            bad.set(true);
+        }
     };
+    let creating = RwSignal::new(false);
     let create = move |_| {
         creating.set(true);
         spawn_local(async move {
             match api::template_catalog_create("revel-templates").await {
                 Ok(full) => {
-                    repo.set(full.clone());
-                    crate::settings::update(ui, &|s| s.template_catalog = full.clone());
-                    check();
+                    add_catalog(ui, &full);
+                    check(full);
                 }
                 Err(e) => ui.fail(e),
             }
@@ -282,30 +373,55 @@ pub fn TemplatesCard() -> impl IntoView {
         <section class="section settings-card" data-section="templates">
             <h2>{ui.t("settings-templates")}</h2>
             <div class="form-grid">
-                <label class="label" for="template-catalog" title=ui.t("template-catalog-help")>{ui.t("template-catalog")}</label>
-                <div class="catalog-field">
-                    <input id="template-catalog" class="input mono" type="text" spellcheck="false" autocomplete="off"
-                        placeholder="propriétaire/nom"
-                        prop:value=move || repo.get() on:input=move |e| repo.set(event_target_value(&e))
-                        on:change=move |_| commit()
-                        on:keydown=move |e| if e.key() == "Enter" { commit() }/>
-                    <span class="catalog-state" role="status">
-                        {move || match state.get() {
-                            None => view! { <span class="muted">"…"</span> }.into_any(),
-                            Some(Ok(n)) => view! {
-                                <span class="catalog-ok">{icons::check()}{ui.tx("template-catalog-count", &[("n", n.to_string())])}</span>
-                            }.into_any(),
-                            Some(Err(_)) => view! {
-                                <span class="catalog-missing" title=ui.t("template-catalog-missing-help")>{icons::warning()}{ui.t("template-catalog-missing")}</span>
-                            }.into_any(),
-                        }}
-                    </span>
-                    <button type="button" class="icon-btn icon-btn--small" title=ui.t("template-catalog-open")
-                        aria-label=ui.t("template-catalog-open")
-                        on:click=move |_| {
-                            let u = format!("https://github.com/{}", repo.get_untracked().trim());
-                            spawn_local(async move { let _ = api::open_external(&u).await; });
-                        }>{icons::external()}</button>
+                <span class="label" title=ui.t("template-catalogs-help")>{ui.t("template-catalogs")}</span>
+                <div class="catalog-list">
+                    <For each=catalogs key=|r| r.clone() let:r>
+                        {
+                            let (r1, r2, r3) = (r.clone(), r.clone(), r.clone());
+                            view! {
+                                <div class="catalog-row" data-repo=r.clone()>
+                                    {icons::cloud()}
+                                    <span class="catalog-row__name mono" title=r.clone()>{r.clone()}</span>
+                                    <span class="catalog-state" role="status">
+                                        {move || match states.with(|m| m.get(&r1).cloned()) {
+                                            None => view! { <span class="muted">"…"</span> }.into_any(),
+                                            Some(Ok(n)) => view! {
+                                                <span class="catalog-ok">{icons::check()}{ui.tx("template-catalog-count", &[("n", n.to_string())])}</span>
+                                            }.into_any(),
+                                            Some(Err(())) => view! {
+                                                <span class="catalog-missing" title=ui.t("template-catalog-missing-help")>{icons::warning()}{ui.t("template-catalog-missing")}</span>
+                                            }.into_any(),
+                                        }}
+                                    </span>
+                                    <button type="button" class="icon-btn icon-btn--small" title=ui.t("template-catalog-open")
+                                        aria-label=ui.t("template-catalog-open")
+                                        on:click=move |_| {
+                                            let u = format!("https://github.com/{r2}");
+                                            spawn_local(async move { let _ = api::open_external(&u).await; });
+                                        }>{icons::external()}</button>
+                                    <button type="button" class="icon-btn icon-btn--small catalog-remove" title=ui.t("template-catalog-remove")
+                                        aria-label=ui.t("template-catalog-remove")
+                                        on:click=move |_| {
+                                            let r = r3.clone();
+                                            crate::settings::update(ui, &|s| s.template_catalogs.retain(|c| *c != r));
+                                        }>{icons::trash()}</button>
+                                </div>
+                            }
+                        }
+                    </For>
+                    <Show when=move || catalogs().is_empty()>
+                        <p class="muted small">{ui.t("template-catalogs-none")}</p>
+                    </Show>
+                    <div class="catalog-add">
+                        <input class="input mono" type="text" spellcheck="false" autocomplete="off"
+                            placeholder=ui.t("template-catalog-add-placeholder") aria-label=ui.t("template-catalog-add")
+                            aria-invalid=move || bad.get().to_string()
+                            prop:value=move || draft.get() on:input=move |e| { draft.set(event_target_value(&e)); bad.set(false) }
+                            on:keydown=move |e| if e.key() == "Enter" { add() }/>
+                        <button type="button" class="btn btn--small" on:click=move |_| add()
+                            disabled=move || draft.with(|d| d.trim().is_empty())>{icons::plus()}{ui.t("template-catalog-add")}</button>
+                    </div>
+                    {move || bad.get().then(|| view! { <span class="field-error" role="alert">{ui.t("template-catalog-invalid")}</span> })}
                 </div>
                 <span class="label" title=ui.t("template-catalog-create-help")>{ui.t("template-catalog-own")}</span>
                 <div>
@@ -318,5 +434,25 @@ pub fn TemplatesCard() -> impl IntoView {
                 </div>
             </div>
         </section>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::catalog_repo;
+
+    #[test]
+    fn adresses_de_catalogue() {
+        assert_eq!(
+            catalog_repo("matv-studio/revel-templates").as_deref(),
+            Some("matv-studio/revel-templates")
+        );
+        assert_eq!(
+            catalog_repo("https://github.com/a/b.git").as_deref(),
+            Some("a/b")
+        );
+        assert_eq!(catalog_repo("github.com/a/b/").as_deref(), Some("a/b"));
+        assert_eq!(catalog_repo("../x"), None);
+        assert_eq!(catalog_repo("seul"), None);
     }
 }

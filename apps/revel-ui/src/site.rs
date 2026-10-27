@@ -79,6 +79,15 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
     // Largeur : `None` toute la place, sinon tablette ou mobile.
     let width = RwSignal::new(None::<u32>);
     let reload = RwSignal::new(0u32);
+    // Composant seul (D-143) : comme sur son canevas (largeur du cadre, zoom), centré ; hauteur
+    // envoyée par la page de l'aperçu.
+    let comp = move || {
+        ui.preview.with(|p| {
+            p.as_ref()
+                .is_some_and(|p| p.1.starts_with("/__revel/component/"))
+        })
+    };
+    let comp_h = RwSignal::new(240.0f64);
     let url = move || {
         ui.preview
             .get()
@@ -114,6 +123,14 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
                 .ok()
                 .and_then(|v| v.as_string())
         };
+        if get("type").as_deref() == Some("stage")
+            && let Some(h) = js_sys::Reflect::get(&d, &"h".into())
+                .ok()
+                .and_then(|v| v.as_f64())
+        {
+            comp_h.set(h.max(40.0));
+            return;
+        }
         if get("type").as_deref() == Some("open-external")
             && let Some(url) =
                 get("url").filter(|u| u.starts_with("https://") || u.starts_with("http://"))
@@ -146,7 +163,13 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
     view! {
         <div class="preview-pane" role="region" aria-label=ui.t("preview-open")>
             <div class="preview-bar">
-                <span class="preview-title">{icons::play()}<span>{ui.t("preview-open")}</span><span class="muted path">{page}</span></span>
+                <span class="preview-title">{icons::play()}<span>{ui.t("preview-open")}</span><span class="muted path">{move || {
+                    let p = page();
+                    match revel_model::template_of(&p) {
+                        Some(id) => ui.now("cms-template-page", &[("name", crate::pagetree::label_of(id))]),
+                        None => p,
+                    }
+                }}</span></span>
                 <div class="segmented" role="group">
                     {sizes.into_iter().map(|(w, key, icon)| view! {
                         <button class:is-on=move || width.get() == w title=move || match w {
@@ -163,13 +186,23 @@ fn PreviewPane(site: SiteSummary) -> impl IntoView {
                     aria-label=ui.t("preview-window") on:click=in_window>{icons::external()}</button>
                 <button class="btn" title=ui.t("preview-close-help") on:click=move |_| ui.preview.set(None)>{icons::close()}{ui.t("preview-close")}</button>
             </div>
-            <div class="preview-stage" class:is-device=move || width.get().is_some()>
+            <div class="preview-stage" class:is-device=move || width.get().is_some() && !comp() class:is-comp=comp>
                 {move || {
                     let _ = reload.get();
+                    if comp() {
+                        let (w0, k) = ui.comp_view.get_untracked().unwrap_or((1280.0, 0.75));
+                        let w = width.get().map(f64::from).unwrap_or(w0);
+                        return view! {
+                            <div class="preview-comp" style=move || format!("width:{:.0}px;height:{:.0}px", w * k, comp_h.get() * k)>
+                                <iframe class="preview-frame preview-frame--comp" title=ui.t("preview-open") src=url()
+                                    style=move || format!("width:{w:.0}px;height:{:.0}px;transform:scale({k})", comp_h.get())></iframe>
+                            </div>
+                        }.into_any();
+                    }
                     view! {
                         <iframe class="preview-frame" title=ui.t("preview-open") src=url()
                             style=move || width.get().map(|w| format!("width:{w}px")).unwrap_or_default()></iframe>
-                    }
+                    }.into_any()
                 }}
             </div>
         </div>

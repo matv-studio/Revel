@@ -204,14 +204,23 @@ pub fn AdvancedSettings() -> impl IntoView {
     let current = current(ed);
     let apply = move |cmd: Command| ed.apply(ui, cmd, false);
     view! {
-        {move || current.get().and_then(|(at, node)| match node {
-            Node::Element { tag, attrs, .. } => Some(view! {
-                <details class="style-section advanced-settings">
-                    <summary><span>{ui.t("inspector-advanced")}</span></summary>
-                    <div class="style-section-body">{element_advanced(ui, ed, apply, at, tag, attrs)}</div>
-                </details>
-            }),
-            _ => None,
+        {move || current.get().and_then(|(at, node)| {
+            // Classes selon le contenu (champ rempli, valeur d'un champ) : réglage avancé.
+            let classes = crate::blocks::content_classes(ui, ed, at.clone(), &node).map(|c| view! {
+                <div class="insp-group content-classes">
+                    <p class="panel-title" title=ui.t("inspector-content-classes-help")>{ui.t("inspector-content-classes")}</p>
+                    {c}
+                </div>
+            });
+            match node {
+                Node::Element { tag, attrs, .. } => Some(view! {
+                    <details class="style-section advanced-settings">
+                        <summary><span>{ui.t("inspector-advanced")}</span></summary>
+                        <div class="style-section-body">{element_advanced(ui, ed, apply, at, tag, attrs)}{classes}</div>
+                    </details>
+                }),
+                _ => None,
+            }
         })}
     }
 }

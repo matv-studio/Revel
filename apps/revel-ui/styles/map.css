@@ -95,7 +95,8 @@
 .map-node--menu, .map-node--component, .map-node--layout { background: color-mix(in srgb, var(--map-node) 80%, var(--bg)); }
 .map-node--missing { border-color: color-mix(in srgb, var(--danger-text) 60%, transparent); border-style: dashed; background: color-mix(in srgb, var(--danger-text) 8%, var(--map-node)); }
 .map-node--missing .map-node-icon { background: color-mix(in srgb, var(--danger-text) 18%, transparent); color: var(--danger-text); }
-.map-node--entry, .map-node--external { min-height: 32px; padding: 4px 10px; border-radius: 8px; }
+.map-node--collection { height: 84px; }
+.map-node--entry, .map-node--external { min-height: 32px; height: 32px; padding: 4px 10px; border-radius: 8px; }
 .map-node--entry .map-node-icon, .map-node--external .map-node-icon { width: 16px; height: 16px; background: none; }
 .map-node--entry .map-node-name, .map-node--external .map-node-name { font-weight: var(--weight-regular); font-size: var(--text-sm); }
 .map-expand {

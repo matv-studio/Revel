@@ -730,12 +730,8 @@ fn ComponentBar(id: String) -> impl IntoView {
     };
     let page = move || {
         let url = ed.page.get();
-        ed.pages
-            .with(|ps| {
-                ps.iter()
-                    .find(|p| p.url == url)
-                    .map(crate::pagetree::title_of)
-            })
+        ed.page_ref(&url)
+            .map(|p| crate::pagetree::title_of(&p))
             .unwrap_or(url)
     };
     view! {

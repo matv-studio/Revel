@@ -75,12 +75,9 @@ pub fn Variables() -> impl IntoView {
         let url = ed.page.get();
         ed.doc.with(|d| {
             let Some(d) = d else { return Vec::new() };
-            ed.pages.with(|ps| {
-                ps.iter()
-                    .find(|p| p.url == url)
-                    .map(|p| layers::variables(d, p))
-                    .unwrap_or_default()
-            })
+            ed.page_ref(&url)
+                .map(|p| layers::variables(d, &p))
+                .unwrap_or_default()
         })
     });
     let groups = Memo::new(move |_| {

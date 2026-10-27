@@ -1,6 +1,7 @@
 //! Interface de Revel (Leptos) : coque (barre supérieure, barre latérale) et navigation.
 
 mod account;
+mod animicons;
 mod api;
 mod assistants;
 mod autotr;
@@ -50,6 +51,7 @@ mod sitecolors;
 mod siteinfo;
 mod sitemap;
 mod sitesettings;
+mod sitethumb;
 mod styles;
 mod sync;
 mod templates;
@@ -159,6 +161,8 @@ pub struct Ui {
     pub clipboard: RwSignal<Vec<revel_model::Node>>,
     /// Page affichée dans l'éditeur (l'aperçu s'ouvre sur elle).
     pub current_page: RwSignal<Option<String>>,
+    /// Canevas d'un composant ouvert : largeur du cadre et zoom (aperçu au même format, D-143).
+    pub comp_view: RwSignal<Option<(f64, f64)>>,
     /// Annulation ou rétablissement fait depuis la barre du haut (Paramètres, Localisation, Plan
     /// du site) : les vues relisent le document.
     pub undo_rev: RwSignal<u32>,
@@ -443,6 +447,7 @@ fn App() -> impl IntoView {
         goto_node: RwSignal::new(None),
         clipboard: RwSignal::new(Vec::new()),
         current_page: RwSignal::new(None),
+        comp_view: RwSignal::new(None),
         undo_rev: RwSignal::new(0),
         doc_rev: RwSignal::new(0),
         context: RwSignal::new(None),
@@ -865,10 +870,9 @@ fn UndoButtons() -> impl IntoView {
         if !(e.ctrl_key() || e.meta_key()) || e.default_prevented() {
             return;
         }
-        let in_field = document().active_element().is_some_and(|el| {
-            matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
-                || el.has_attribute("contenteditable")
-        });
+        let in_field = document()
+            .active_element()
+            .is_some_and(|el| crate::keys::is_typing(&el));
         if in_field {
             return;
         }

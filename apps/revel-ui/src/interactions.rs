@@ -10,7 +10,6 @@ use crate::{Ui, icons};
 use leptos::prelude::*;
 use revel_edit::{Command, Target};
 use revel_model::Node;
-use wasm_bindgen::JsCast;
 
 /// Moment d'animation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -329,72 +328,12 @@ pub fn preset_key(f: Family, preset: &str) -> String {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Vignettes animées : script du site chargé dans l'interface, sans rien lancer.
-
-fn runtime() -> Option<js_sys::Object> {
-    let w = web_sys::window()?;
-    js_sys::Reflect::get(&w, &"RevelAnimations".into())
-        .ok()
-        .filter(|v| v.is_object())
-        .map(|v| v.unchecked_into())
-}
-
-fn load_runtime() {
-    let Some(w) = web_sys::window() else { return };
-    if runtime().is_some()
-        || js_sys::Reflect::get(&w, &"__revelAnimLoading".into()).is_ok_and(|v| v.is_truthy())
-    {
-        return;
-    }
-    let _ = js_sys::Reflect::set(&w, &"RevelAnimationsManual".into(), &true.into());
-    let _ = js_sys::Reflect::set(&w, &"__revelAnimLoading".into(), &true.into());
-    if let Some(doc) = w.document()
-        && let Ok(s) = doc.create_element("script")
-    {
-        let _ = s.set_attribute("src", "animations.js");
-        if let Some(h) = doc.head() {
-            let _ = h.append_child(&s);
-        }
-    }
-}
-
-/// Joue une animation sur une vignette (durées raccourcies pour les boucles).
-fn play_thumb(el: &web_sys::Element, f: Family, preset: &str) {
-    let Some(rt) = runtime() else { return };
-    let Ok(preview) = js_sys::Reflect::get(&rt, &"preview".into()) else {
-        return;
-    };
-    let Ok(preview) = preview.dyn_into::<js_sys::Function>() else {
-        return;
-    };
-    let value = match (f, preset) {
-        (Family::Loop, "ticker") => "ticker dur=3".to_string(),
-        (Family::Loop, _) => format!("{preset} dur=0.8"),
-        (Family::Appear, _) => format!("{preset} dist=10"),
-        _ => preset.to_string(),
-    };
-    let args = js_sys::Array::of3(el, &f.id().into(), &value.into());
-    let _ = preview.apply(&rt, &args);
-}
-
-/// Contenu d'une vignette : carré, texte ou rangée de points (bandeau).
-fn thumb_html(f: Family, preset: &str) -> &'static str {
-    match (f, preset) {
-        (Family::Text, _) => "Abc",
-        (Family::Hover, "underline") => "Lien",
-        (Family::Loop, "ticker") => "<i></i><i></i><i></i><i></i>",
-        _ => "",
-    }
-}
-
-// ------------------------------------------------------------------------------------------------
 
 /// Panneau « Interactions ».
 #[component]
 pub fn Interactions() -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
-    load_runtime();
     // Élément sélectionné : recréé seulement quand la sélection change.
     let target = Memo::new(move |_| ed.selected_target());
     let kind = Memo::new(move |_| {
@@ -950,11 +889,9 @@ fn FamilySection(f: Family, at: StoredValue<Target>) -> impl IntoView {
                     {f.presets().iter().map(|p| {
                         let p: &'static str = p;
                         let on = move || anim.with(|a| a.as_ref().is_some_and(|a| a.preset == p));
-                        let thumb = NodeRef::<leptos::html::Span>::new();
                         view! {
                             <button class="anim-tile" role="radio" class:is-on=on aria-checked=move || on().to_string()
                                 data-preset=p title=move || ui.tx(&format!("anim-d-{}-{p}", f.id()), &[])
-                                on:mouseenter=move |_| { if let Some(t) = thumb.get() { play_thumb(&t, f, p) } }
                                 on:click=move |_| {
                                     let a = anim.get_untracked().unwrap_or_default();
                                     if a.preset != p {
@@ -963,10 +900,8 @@ fn FamilySection(f: Family, at: StoredValue<Target>) -> impl IntoView {
                                         preview();
                                     }
                                 }>
-                                <span class="anim-stage">
-                                    <span class="anim-thumb" class:is-text=matches!(f, Family::Text) || p == "underline"
-                                        class:is-ticker=p == "ticker" node_ref=thumb inner_html=thumb_html(f, p)></span>
-                                </span>
+                                // Dessin du mouvement, joué lentement au survol.
+                                <span class="anim-stage" inner_html=crate::animicons::icon(f.id(), p)></span>
                                 <span class="anim-tile-name">{move || ui.tx(&preset_key(f, p), &[])}</span>
                             </button>
                         }

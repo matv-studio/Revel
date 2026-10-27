@@ -1408,6 +1408,48 @@ qu'en anglais ; essai `revel-i18n`) ; relecture par des locuteurs bienvenue. Rep
 absente ; nombres groupés selon la langue. Arabe et hébreu non proposés : l'interface ne s'écrit pas encore de
 droite à gauche. Guide intégré (aide) : français et anglais seulement (les autres langues lisent l'anglais).
 
+**D-142 — 27/10/2026 — prise.** **Animations et transitions lisibles, règle des outils de l'interface.**
+Chaque animation prête à l'emploi a son dessin (repères fixes et sujet qui joue le mouvement lentement, en
+boucle, au survol de sa tuile ; ralenti encore si l'utilisateur demande moins de mouvement), au lieu de carrés
+identiques. Transitions entre les pages : neuf effets (fondu, glissement, glisser vers le haut, pousser, zoom,
+flou, volet, rideau, bascule), choisis dans des tuiles dont le dessin au repos montre l'instant du milieu de
+la transition. **Règle des assistants (MCP) et du travail de Claude sur les sites** : construire seulement ce
+que l'utilisateur peut régler dans l'interface de Revel, sauf demande contraire ; animations, survols,
+défilement, transitions et actions passent par les interactions de Revel (attributs `data-revel-*`) et les
+réglages du site, jamais par des scripts, du code ou des `@keyframes` écrits à la main.
+
+**D-143 — 27/10/2026 — prise.** **Aperçu d'un composant comme son canevas.** L'aperçu d'un composant ouvert
+n'est plus une page : le composant seul, à la largeur et au zoom de son canevas, centré, avec ses variantes et
+interactions jouables ; ses liens et formulaires ne mènent nulle part (on reste dans le composant).
+
+**D-144 — 27/10/2026 — prise.** **Modèle des pages : page interne de Revel.** « Modèle des pages » (CMS,
+clic sur une collection dans Pages, ligne « Modèle des pages » sous la collection) ouvre une page qui n'existe
+que dans Revel (`/__revel/template/<collection>/`) : le gabarit de la collection rendu sur un contenu d'exemple
+qui réunit tous ses champs, remplis ou non (pour chaque champ la première valeur trouvée dans les contenus,
+sinon une valeur d'exemple selon son type ; case cochée si un contenu l'a cochée, pour montrer les parties
+conditionnelles). Aucun contenu n'est créé ; le contenu d'exemple refuse d'être écrit (ses valeurs se changent
+dans le CMS). Ce qui y est modifié s'applique à toutes les pages de la collection, sauf celles qui ont un
+design propre.
+
+**D-145 — 27/10/2026 — prise.** **Classes selon le contenu en paramètres avancés.** Comme Webflow (classe de
+base et classes combinées, retirées depuis le champ des classes) et Framer (classes ajoutées par du code, pas
+dans l'interface), une classe ajoutée selon un champ (champ rempli, valeur d'un champ) est un réglage avancé :
+« Classes selon le contenu » quitte le réglage du contenu relié pour Paramètres avancés, avec des boutons à la
+charte (plus de liens soulignés) et un bouton qui la retire. Annuler (Ctrl+Z) agit aussi quand le focus est
+sur une liste de choix ou une case (seuls les champs où l'on écrit gardent leur propre annulation).
+
+**D-146 — 27/10/2026 — prise.** **Vignette des sites dans l'accueil.** Chaque site a sa vignette : couleur tirée
+de son nom, couleur choisie (dix proposées ou une autre), ou image de sa page d'accueil. L'image est prise dans
+le canevas (cadre caché, modern-screenshot 4.7.0, licence MIT, `crates/revel-core/vendor/`), gardée par
+l'application à côté de son état (jamais dans le dossier du site), et reprise d'elle-même à l'accueil quand le
+site a changé depuis.
+
+**D-147 — 27/10/2026 — prise.** **Colonnes du CMS déplaçables, catalogues de l'utilisateur.** Colonnes du tableau
+réordonnées en glissant leur en-tête ou par leur menu (« Déplacer à gauche / à droite ») ; une colonne d'image
+montre une vignette (adresse au survol). Catalogues de templates : plusieurs dépôts GitHub, ajoutés depuis
+Réglages › Templates (liste, état, retrait) ou depuis « Nouveau site » (bouton « + » à côté d'Inclus et
+Catalogue, sans liste pour garder la fenêtre légère) ; un template s'enregistre dans le catalogue choisi.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

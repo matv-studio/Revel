@@ -23,6 +23,10 @@ use std::sync::Arc;
 pub const CANVAS_JS: &str = include_str!("canvas.js");
 /// Adresse du script dans le canevas (préfixe réservé à Revel).
 pub const CANVAS_JS_URL: &str = "/__revel/canvas.js";
+/// Image d'une page du canevas (vignette de la page d'accueil dans l'accueil de Revel) :
+/// modern-screenshot 4.7.0 (licence MIT, `vendor/modern-screenshot/`), chargé à la demande.
+pub const SHOT_JS: &str = include_str!("../vendor/modern-screenshot/modern-screenshot.js");
+pub const SHOT_JS_URL: &str = "/__revel/shot.js";
 
 /// Réponse du protocole.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,6 +235,30 @@ const PREVIEW_LINKS: &str = concat!(
     "if(a.target===\"_blank\"||e.ctrlKey||e.metaKey||e.shiftKey){e.preventDefault();",
     "parent.postMessage({revel:1,type:\"open-external\",url:u.href},\"*\")}},true)})()</script>",
 );
+
+/// Aperçu d'un composant seul (D-143) : comme sur son canevas (marge de 32 px, hauteur envoyée à
+/// l'interface pour le cadre), interactions actives, liens et formulaires sans effet (le composant
+/// reste isolé).
+const PREVIEW_STAGE: &str = concat!(
+    "<script id=\"revel-preview-stage\">(function(){",
+    "var st=document.createElement(\"style\");",
+    "st.textContent=\"body{margin:0!important;padding:32px!important;min-height:0!important}\";",
+    "document.head.appendChild(st);",
+    "document.addEventListener(\"click\",function(e){var a=e.target.closest&&e.target.closest(\"a[href]\");if(a)e.preventDefault()},true);",
+    "document.addEventListener(\"submit\",function(e){e.preventDefault()},true);",
+    "function h(){var b=document.body;if(!b)return;var m=0;for(var i=0;i<b.children.length;i++){var r=b.children[i].getBoundingClientRect();if(r.height>0)m=Math.max(m,r.bottom+window.scrollY)}",
+    "parent.postMessage({revel:1,type:\"stage\",h:Math.ceil((m||b.scrollHeight)+32)},\"*\")}",
+    "h();if(typeof ResizeObserver===\"function\")new ResizeObserver(h).observe(document.body);window.addEventListener(\"load\",h)",
+    "})()</script>",
+);
+
+fn preview_component(html: &str) -> String {
+    let html = revel_render::strip_editor_marks(html);
+    match html.to_ascii_lowercase().rfind("</body") {
+        Some(i) => format!("{}{PREVIEW_STAGE}{}", &html[..i], &html[i..]),
+        None => format!("{html}{PREVIEW_STAGE}"),
+    }
+}
 
 /// Page de l'aperçu : repères de l'éditeur retirés, liens externes ouverts (voir [`PREVIEW_LINKS`]).
 fn preview_page(html: &str) -> String {
@@ -553,6 +581,12 @@ impl Core {
                 CANVAS_JS.as_bytes().to_vec(),
             )));
         }
+        if path == SHOT_JS_URL && !preview {
+            return Ok(Some(CanvasResponse::ok(
+                "text/javascript; charset=utf-8",
+                SHOT_JS.as_bytes().to_vec(),
+            )));
+        }
         // Script des animations (6.1) : site animé (aperçu, canevas avec scripts) et aperçu d'une
         // animation dans le canevas.
         if path == revel_render::animations::URL {
@@ -645,6 +679,38 @@ impl Core {
             })?;
             return Ok(page.map(|page| {
                 let html = hide_hidden(&if preview {
+                    preview_component(&page.html)
+                } else {
+                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
+                });
+                CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
+            }));
+        }
+        // Modèle des pages d'une collection (page interne de Revel) : `/__revel/template/<id>/`.
+        if let Some(collection) = revel_model::template_of(path) {
+            let rev = self.session_revision(&site);
+            let page = self.with_project(&site, |p| {
+                let Some((data, body)) = template_data(p, collection)? else {
+                    return Ok(None);
+                };
+                let hooks: Arc<dyn revel_render::AssetHooks> = if opts.responsive_images {
+                    pipeline.clone()
+                } else {
+                    Arc::new(revel_project::ProjectAssets::new(p))
+                };
+                Ok(p.render_template_editor(
+                    collection,
+                    data,
+                    body,
+                    hooks,
+                    &environment,
+                    &EditorOptions {
+                        scripts: opts.scripts,
+                    },
+                )?)
+            })?;
+            return Ok(page.map(|page| {
+                let html = hide_hidden(&if preview {
                     preview_page(&page.html)
                 } else {
                     html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
@@ -697,6 +763,38 @@ impl Core {
             Some(CanvasResponse::ok(content_type(path), b))
         }))
     }
+}
+
+/// En-tête et corps du contenu d'exemple du modèle des pages de `collection` (tous ses champs).
+fn template_data(
+    p: &revel_project::Project,
+    collection: &str,
+) -> Result<Option<(serde_json::Value, String)>> {
+    let Some(col) = p
+        .site
+        .collections
+        .iter()
+        .find(|c| c.id == collection && !c.folder.is_empty())
+    else {
+        return Ok(None);
+    };
+    let all = p.load_entries()?;
+    let list: Vec<revel_protocol::CmsEntry> = all
+        .iter()
+        .filter(|e| e.folder == col.folder)
+        .map(|e| revel_protocol::CmsEntry {
+            file: e.file_stem.clone(),
+            data: e.data.clone(),
+            body: e.body.clone(),
+            url: None,
+        })
+        .collect();
+    let config = crate::pagescms::load(&p.dir);
+    let fields = crate::collection_fields(col, &config, &list);
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    Ok(Some(crate::sample::template_sample(
+        &fields, &list, &all, &today,
+    )))
 }
 
 /// Caractère d'identifiant CSS (nom de classe, unité…).

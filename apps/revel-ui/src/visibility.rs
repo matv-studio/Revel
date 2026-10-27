@@ -160,12 +160,12 @@ pub fn condition_editor(
                     list.into_iter().enumerate().map(|(i, c)| row(i, c)).collect_view().into_any()
                 }
             }}
-            <button type="button" class="link-btn cond-add" on:click=move |_| {
+            <button type="button" class="btn btn--small cond-add" on:click=move |_| {
                 let Some(f) = fields.with_untracked(|fs| fs.first().map(|(e, _)| e.clone())) else { return };
                 let mut list = clauses.get_untracked();
                 list.push(Clause { field: f, test: Test::Set });
                 commit(list);
-            }>{ui.t("cond-add")}</button>
+            }>{crate::icons::plus()}<span>{ui.t("cond-add")}</span></button>
         </div>
     }
     .into_any()

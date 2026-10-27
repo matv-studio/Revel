@@ -138,6 +138,18 @@ fn value_labels(cols: &[CmsCollection], f: &CmsField) -> Option<HashMap<String, 
     }
 }
 
+/// Image à montrer en vignette dans une cellule : champ image (ou valeur qui est une image),
+/// première image d'une liste.
+fn image_of(f: &CmsField, v: Option<&Value>) -> Option<String> {
+    let first = match v? {
+        Value::String(s) => s.clone(),
+        Value::Array(a) => a.iter().find_map(|x| x.as_str())?.to_string(),
+        _ => return None,
+    };
+    let typed = matches!(f.kind.as_deref(), Some("image"));
+    (!first.trim().is_empty() && (typed || cmsfields::is_image(&first))).then_some(first)
+}
+
 /// Valeur d'un champ en texte court (cellule du tableau).
 fn cell(
     ui: Ui,
@@ -422,10 +434,9 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         if !matches!(ui.route.get_untracked(), Route::Site { tab: Tab::Cms, .. }) {
             return;
         }
-        let in_field = document().active_element().is_some_and(|el| {
-            matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
-                || el.has_attribute("contenteditable")
-        });
+        let in_field = document()
+            .active_element()
+            .is_some_and(|el| crate::keys::is_typing(&el));
         if in_field || !(e.ctrl_key() || e.meta_key()) {
             return;
         }
@@ -605,6 +616,38 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         }
         set_columns(v);
     };
+    // Ordre des colonnes : colonne `name` placée avant `before` (`None` : à la fin).
+    let move_column = move |name: String, before: Option<String>| {
+        let mut v = shown_columns();
+        let Some(i) = v.iter().position(|x| *x == name) else {
+            return;
+        };
+        let item = v.remove(i);
+        let j = before
+            .and_then(|b| v.iter().position(|x| *x == b))
+            .unwrap_or(v.len());
+        v.insert(j, item);
+        if v != shown_columns() {
+            set_columns(v);
+        }
+    };
+    // Décalage d'une colonne d'un cran (menu, clavier).
+    let shift_column = move |name: String, d: isize| {
+        let v = shown_columns();
+        let Some(i) = v.iter().position(|x| *x == name) else {
+            return;
+        };
+        let j = i as isize + d;
+        if j < 0 || j as usize >= v.len() {
+            return;
+        }
+        let mut v2 = v.clone();
+        v2.swap(i, j as usize);
+        set_columns(v2);
+    };
+    let thumbs_base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
+    let dragged_col = RwSignal::new(None::<String>);
+    let drop_col = RwSignal::new(None::<String>);
     provide_context(cmsfields::ColumnPins {
         shown: Signal::derive(shown_columns),
         toggle: Callback::new(toggle_column),
@@ -625,6 +668,24 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 .find(|f| f.name == h)
                 .map(label_of)
                 .unwrap_or_else(|| h.clone());
+            let pos = on.iter().position(|x| *x == h);
+            let (hl, hr) = (h.clone(), h.clone());
+            if pos.is_some_and(|i| i > 0) {
+                items.push(
+                    CtxItem::new(ui.now("cms-column-left", &[]), move || {
+                        shift_column(hl.clone(), -1)
+                    })
+                    .icon(icons::arrow_left),
+                );
+            }
+            if pos.is_some_and(|i| i + 1 < on.len()) {
+                items.push(
+                    CtxItem::new(ui.now("cms-column-right", &[]), move || {
+                        shift_column(hr.clone(), 1)
+                    })
+                    .icon(icons::arrow_right),
+                );
+            }
             items.push(
                 CtxItem::new(ui.now("cms-column-hide", &[("name", label)]), move || {
                     toggle_column(h.clone())
@@ -982,10 +1043,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         );
         open_menu(ui, e, items);
     };
-    // Modèle des pages de la collection (gabarit commun, D-28) : ouvert dans l'éditeur sur un
-    // contenu qui le suit (pas de design propre) ; créé au besoin, avec un premier contenu
-    // d'exemple quand la collection est vide. Les modifications s'appliquent à toutes ses pages,
-    // sauf celles qui ont un design propre.
+    // Modèle des pages de la collection (gabarit commun, D-28) : page interne de Revel, ouverte
+    // dans l'éditeur sur un contenu d'exemple qui réunit tous les champs de la collection
+    // (remplis ou non dans ses contenus). Créé au besoin. Les modifications s'appliquent à toutes
+    // ses pages, sauf celles qui ont un design propre.
     let busy_template = RwSignal::new(false);
     let edit_template = move |id: String| {
         let Some(p) = path.try_get_value() else {
@@ -996,19 +1057,12 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         }
         busy_template.set(true);
         spawn_local(async move {
-            let follows = |e: &CmsEntry| {
-                e.url.is_some()
-                    && e.data
-                        .get("layout")
-                        .is_none_or(|l| l.is_null() || l.as_str() == Some(""))
-            };
             let run = async {
                 let o = api::edit_open(&p).await?;
                 let d = o.site;
                 let Some(model) = d.collections.iter().find(|x| x.id == id).cloned() else {
-                    return Ok(None);
+                    return Ok(false);
                 };
-                let mut last = None;
                 if model.layout.is_none() || model.path.is_none() {
                     let layout = revel_edit::make::collection_template(&d, &id, "title");
                     let lid = layout.id.clone();
@@ -1029,58 +1083,21 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                             },
                         ],
                     };
-                    last = Some(api::edit_apply(&p, &cmd, false).await?);
+                    let st = api::edit_apply(&p, &cmd, false).await?;
+                    if !state.is_disposed() {
+                        state.set(Some(st));
+                    }
                 }
-                let find = |cs: &[CmsCollection]| {
-                    cs.iter().find(|c| c.id == id).and_then(|c| {
-                        c.entries
-                            .iter()
-                            .find(|e| follows(e))
-                            .and_then(|e| e.url.clone())
-                    })
-                };
-                let mut cs = api::cms_collections(&p).await?;
-                if find(&cs).is_none()
-                    && let Some(c) = cs.iter().find(|c| c.id == id)
-                    && c.entries.is_empty()
-                {
-                    let primary = c
-                        .view
-                        .as_ref()
-                        .and_then(|v| v.primary.clone())
-                        .unwrap_or_else(|| "title".into());
-                    let (file, data) =
-                        new_entry_data(c, &primary, &ui.now("cms-template-sample", &[]));
-                    let cmd = Command::CreateEntry {
-                        folder: c.folder.clone(),
-                        file,
-                        data,
-                        body: String::new(),
-                    };
-                    last = Some(api::edit_apply(&p, &cmd, false).await?);
-                    cs = api::cms_collections(&p).await?;
-                }
-                if let Some(st) = last
-                    && !state.is_disposed()
-                {
-                    state.set(Some(st));
-                }
-                Ok::<_, revel_protocol::Failure>(find(&cs))
+                Ok::<_, revel_protocol::Failure>(true)
             };
             let r = run.await;
             if busy_template.is_disposed() {
                 return;
             }
             busy_template.set(false);
-            reload();
             match r {
-                Ok(Some(url)) => goto(url),
-                Ok(None) => ui.ask.set(Some(Ask::confirm(
-                    ui.now("cms-template", &[]),
-                    Some(ui.now("cms-template-none", &[])),
-                    ui.now("action-close", &[]),
-                    || {},
-                ))),
+                Ok(true) => goto(revel_model::template_page(&id)),
+                Ok(false) => {}
                 Err(e) => ui.fail(e),
             }
         });
@@ -1283,7 +1300,35 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                         {columns.iter().map(|f| {
                                             let (n1, n2, n3, n4, n5) = (f.name.clone(), f.name.clone(), f.name.clone(), f.name.clone(), f.name.clone());
                                             view! {
-                                                <th data-col=n3 style=move || width_style(&n4)
+                                                <th data-col=n3.clone() style=move || width_style(&n4) draggable="true"
+                                                    title=ui.t("cms-column-drag")
+                                                    class:is-dragged={let n = n3.clone(); move || dragged_col.with(|d| d.as_deref() == Some(n.as_str()))}
+                                                    class:is-drop-before={let n = n3.clone(); move || drop_col.with(|d| d.as_deref() == Some(n.as_str())) && dragged_col.with(|d| d.as_deref() != Some(n.as_str()))}
+                                                    on:dragstart={let n = n3.clone(); move |e: ev::DragEvent| {
+                                                        // Largeur changée à la poignée : pas un déplacement.
+                                                        if resizing_col.with_value(Option::is_some) {
+                                                            e.prevent_default();
+                                                            return;
+                                                        }
+                                                        if let Some(dt) = e.data_transfer() {
+                                                            dt.set_effect_allowed("move");
+                                                            let _ = dt.set_data("text/plain", &n);
+                                                        }
+                                                        dragged_col.set(Some(n.clone()));
+                                                    }}
+                                                    on:dragover={let n = n3.clone(); move |e: ev::DragEvent| {
+                                                        if dragged_col.with_untracked(Option::is_some) {
+                                                            e.prevent_default();
+                                                            drop_col.set(Some(n.clone()));
+                                                        }
+                                                    }}
+                                                    on:drop={let n = n3.clone(); move |e: ev::DragEvent| {
+                                                        e.prevent_default();
+                                                        if let Some(d) = dragged_col.get_untracked() { move_column(d, Some(n.clone())) }
+                                                        dragged_col.set(None);
+                                                        drop_col.set(None);
+                                                    }}
+                                                    on:dragend=move |_| { dragged_col.set(None); drop_col.set(None); }
                                                     on:contextmenu=move |e: ev::MouseEvent| columns_menu(&e, Some(n5.clone()))>
                                                     <button class="th-sort" on:click=move |_| sort_by(n1.clone())>
                                                         {label_of(f)}<span class="th-mark">{move || sort_mark(&n2)}</span>
@@ -1292,7 +1337,14 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                 </th>
                                             }
                                         }).collect_view()}
-                                        <th class="col-actions">
+                                        <th class="col-actions" class:is-drop-before=move || drop_col.with(|d| d.as_deref() == Some(""))
+                                            on:dragover=move |e: ev::DragEvent| if dragged_col.with_untracked(Option::is_some) { e.prevent_default(); drop_col.set(Some(String::new())); }
+                                            on:drop=move |e: ev::DragEvent| {
+                                                e.prevent_default();
+                                                if let Some(d) = dragged_col.get_untracked() { move_column(d, None) }
+                                                dragged_col.set(None);
+                                                drop_col.set(None);
+                                            }>
                                             <button class="icon-btn icon-btn--small cms-cols-btn" title=ui.t("cms-columns") aria-label=ui.t("cms-columns")
                                                 on:click=move |e: ev::MouseEvent| columns_menu(&e, None)>{icons::columns()}</button>
                                         </th>
@@ -1351,8 +1403,24 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                         </div></td>
                                                         {columns.iter().zip(&labels).map(|(f, l)| {
                                                             let k = f.name.clone();
-                                                            view! {
-                                                                <td class="muted" style=move || width_style(&k)><span class="cms-cell">{cell(ui, f, e.data.get(&f.name), l.as_ref())}</span></td>
+                                                            // Image : vignette, adresse au survol.
+                                                            let img = image_of(f, e.data.get(&f.name));
+                                                            match img {
+                                                                Some(path) => view! {
+                                                                    <td class="muted cms-td-image" style=move || width_style(&k)>
+                                                                        <span class="cms-thumb" title=path.clone() data-path=path.clone()>
+                                                                            {
+                                                                                let p2 = path.clone();
+                                                                                move || thumbs_base.get().map(|b| view! {
+                                                                                    <img src=crate::library::thumb_src(&b, &p2) alt="" loading="lazy" onerror="this.style.visibility='hidden'"/>
+                                                                                })
+                                                                            }
+                                                                        </span>
+                                                                    </td>
+                                                                }.into_any(),
+                                                                None => view! {
+                                                                    <td class="muted" style=move || width_style(&k)><span class="cms-cell">{cell(ui, f, e.data.get(&f.name), l.as_ref())}</span></td>
+                                                                }.into_any(),
                                                             }
                                                         }).collect_view()}
                                                         <td class="col-actions">

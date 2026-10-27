@@ -169,7 +169,7 @@ pub fn is_date(s: &str) -> bool {
         && b[8..10].iter().all(u8::is_ascii_digit)
 }
 
-fn is_image(s: &str) -> bool {
+pub(crate) fn is_image(s: &str) -> bool {
     let l = s.to_lowercase();
     [".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg"]
         .iter()

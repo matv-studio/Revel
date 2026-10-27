@@ -1572,7 +1572,12 @@ pub fn render_editor(
             all,
             primary_data,
         };
-        return editor_page(b, &linput, &wanted, opts);
+        return editor_page(
+            b,
+            &linput,
+            |j| normalize_url(&j.url) == wanted && DocKind::of_path(&j.url) == DocKind::Html,
+            opts,
+        );
     }
     let mut b = eval::Builder::new(input);
     b.lang = eval::Lang {
@@ -1580,21 +1585,48 @@ pub fn render_editor(
         all,
         ..Default::default()
     };
-    editor_page(b, input, &wanted, opts)
+    editor_page(
+        b,
+        input,
+        |j| normalize_url(&j.url) == wanted && DocKind::of_path(&j.url) == DocKind::Html,
+        opts,
+    )
+}
+
+/// Page d'un contenu pour l'éditeur, trouvée par sa collection et son fichier plutôt que par son
+/// adresse (modèle des pages : contenu d'exemple dont l'adresse peut être celle d'un autre).
+pub fn render_entry_editor(
+    input: &BuildInput,
+    collection: &str,
+    file: &str,
+    opts: &EditorOptions,
+) -> Result<Option<EditorPage>, RenderError> {
+    let mut b = eval::Builder::new(input);
+    b.lang = eval::Lang {
+        current: None,
+        all: languages(input.site, true),
+        ..Default::default()
+    };
+    editor_page(
+        b,
+        input,
+        |j| {
+            j.collection.as_deref() == Some(collection)
+                && j.file_slug == file
+                && DocKind::of_path(&j.url) == DocKind::Html
+        },
+        opts,
+    )
 }
 
 fn editor_page(
     mut b: eval::Builder,
     input: &BuildInput,
-    wanted: &str,
+    wanted: impl Fn(&Job) -> bool,
     opts: &EditorOptions,
 ) -> Result<Option<EditorPage>, RenderError> {
     let prepared = prepare(&b, input, true)?;
-    let Some(job) = prepared
-        .jobs
-        .iter()
-        .find(|j| normalize_url(&j.url) == wanted && DocKind::of_path(&j.url) == DocKind::Html)
-    else {
+    let Some(job) = prepared.jobs.iter().find(|j| wanted(j)) else {
         return Ok(None);
     };
     b.editor = Some(eval::Editor {

@@ -139,6 +139,7 @@ pub fn current_entry(ed: Ed) -> Option<(CollectionInfo, EditorPageInfo)> {
     let p = ed
         .pages
         .with(|ps| ps.iter().find(|p| p.url == url).cloned())?;
+    // Modèle des pages : pas un contenu (il n'est pas dans la liste des pages).
     p.collection.as_ref()?;
     let c = collections(ed)
         .into_iter()
@@ -1058,8 +1059,16 @@ fn collection_view(
             let searching = !ql.trim().is_empty();
             let is_open = Memo::new(move |_| searching || open.with(|o| o.contains(&k1)));
             let id = c.id.clone();
-            let has_current =
-                Memo::new(move |_| current_entry(ed).is_some_and(|(cc, _)| cc.id == id));
+            let id2 = id.clone();
+            let has_current = Memo::new(move |_| {
+                current_entry(ed).is_some_and(|(cc, _)| cc.id == id)
+                    || ed.template().as_deref() == Some(id2.as_str())
+            });
+            // Modèle des pages (page interne de Revel, tous les champs de la collection).
+            let template_url = c
+                .template
+                .is_some()
+                .then(|| revel_model::template_page(&c.id));
             let n = c.entries.len();
             let c2 = c.clone();
             let first = c
@@ -1082,10 +1091,10 @@ fn collection_view(
                         on:dragover=move |e| tc.drag_over(&par2, &d2, &e)
                         on:drop=move |e| siblings.with_value(|s| tc.drop_on(&d3, s, &e))
                         on:dragend=move |_| tc.drag_end()
-                        on:click=move |_| {
-                            // Le modèle s'ouvre sur le contenu affiché, sinon le premier qui l'utilise.
-                            if !has_current.get_untracked() && let Some(u) = first.clone() { go(u) }
-                        }>
+                        on:click={let t = template_url.clone(); move |_| {
+                            // Le modèle des pages, sinon (pas de modèle) le premier contenu.
+                            if let Some(u) = t.clone().or_else(|| first.clone()) { go(u) }
+                        }}>
                         <button class="list-chevron" tabindex="-1" aria-label=ui.t("pages-toggle")
                             on:click=move |e| { e.stop_propagation(); toggle(key.clone()) }>
                             {move || if is_open.get() { icons::chevron_down() } else { icons::chevron_right() }}
@@ -1111,7 +1120,20 @@ fn collection_view(
                             entries.iter().filter(|p| p.url == u).cloned().collect()
                         };
                         let c3 = c2.clone();
+                        let t = template_url.clone().filter(|u| is_open.get() || ed.page.get() == *u);
                         view! {
+                            {t.map(|u| {
+                                let (u1, u2) = (u.clone(), u.clone());
+                                view! {
+                                    <button class="list-row page-row entry-row template-row" style="--depth:1"
+                                        class:is-on=move || ed.page.get() == u1 data-url=u.clone()
+                                        title=ui.t("cms-template-help") on:click=move |_| go(u2.clone())>
+                                        <span class="list-chevron"></span>
+                                        <span class="list-icon">{icons::template()}</span>
+                                        <span class="list-label">{ui.t("cms-template")}</span>
+                                    </button>
+                                }
+                            })}
                             {shown.into_iter().map(|p| entry_row(c3.clone(), p)).collect_view()}
                             {is_open.get().then(|| c3.orphans.iter().map(|o| {
                                 let o2 = o.clone();
@@ -1213,9 +1235,7 @@ pub fn PageContext() -> impl IntoView {
     });
     let current = move || {
         let u = ed.page.get();
-        ed.pages
-            .with(|ps| ps.iter().find(|p| p.url == u).map(title_of))
-            .unwrap_or(u)
+        ed.page_ref(&u).map(|p| title_of(&p)).unwrap_or(u)
     };
     let entry = Memo::new(move |_| current_entry(ed));
     // Libellés des collections (`.pages.yml`, « Projets »), par dossier.
@@ -1234,7 +1254,7 @@ pub fn PageContext() -> impl IntoView {
         <Show when=move || !panel_shown()>
             <details class="bp-menu page-pick" node_ref=menu>
                 <summary class="page-pick-btn" title=ui.t("editor-page") aria-label=ui.t("editor-page")>
-                    <span class="list-icon">{move || if entry.get().is_some() { icons::text() } else { icons::page() }}</span>
+                    <span class="list-icon">{move || if ed.template().is_some() { icons::template() } else if entry.get().is_some() { icons::text() } else { icons::page() }}</span>
                     <span class="page-pick-label">{current}</span>
                     {icons::chevron_down()}
                 </summary>

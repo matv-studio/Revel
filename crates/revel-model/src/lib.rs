@@ -253,11 +253,34 @@ impl Locale {
     }
 }
 
+/// Modèle des pages d'une collection (gabarit commun) : page interne de Revel, ouverte dans le
+/// canevas à l'adresse `/__revel/template/<collection>/`, sur un contenu d'exemple qui réunit
+/// tous les champs de la collection. Elle n'existe pas dans le site.
+pub const TEMPLATE_PAGE: &str = "/__revel/template/";
+/// Nom réservé du contenu d'exemple du modèle des pages (jamais écrit sur le disque).
+pub const TEMPLATE_ENTRY: &str = "__revel-template";
+
+/// Adresse du modèle des pages d'une collection.
+pub fn template_page(collection: &str) -> String {
+    format!("{TEMPLATE_PAGE}{collection}/")
+}
+
+/// Collection dont `url` est le modèle des pages.
+pub fn template_of(url: &str) -> Option<&str> {
+    let id = url
+        .strip_prefix(TEMPLATE_PAGE)?
+        .split(['?', '#'])
+        .next()?
+        .trim_end_matches('/');
+    (!id.is_empty() && !id.contains('/')).then_some(id)
+}
+
 /// Page qui existe dans chaque langue du site : page HTML (`/agence/`, `/a.html`), sauf la page
 /// d'erreur 404 (plan du site, flux, `robots.txt` : langue principale seulement).
 pub fn localizable_path(path: &str) -> bool {
     let last = path.rsplit('/').next().unwrap_or("");
     (path.ends_with('/') || last.ends_with(".html") || last.ends_with(".htm"))
+        && !path.starts_with("/__revel/")
         && !path.ends_with("404.html")
         && !path.ends_with("/404/")
 }

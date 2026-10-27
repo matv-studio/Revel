@@ -54,16 +54,36 @@ pub fn Home() -> impl IntoView {
             .danger(),
         ));
     };
+    // Vignette d'un site (couleur, page d'accueil) : boîte ouverte ; images dépassées reprises.
+    let thumb_for = RwSignal::new(None::<revel_protocol::RecentSite>);
+    Effect::new(move |_| {
+        ui.recents.track();
+        crate::sitethumb::refresh_stale(ui);
+    });
     // Menu contextuel d'un site : ouvrir, paramètres, afficher le dossier, retirer de la liste,
     // supprimer.
     let site_menu = move |e: &leptos::ev::MouseEvent, path: String, name: String| {
         use crate::ctxmenu::{CtxItem, open};
-        let (a, b, c, d, f) = (path.clone(), path.clone(), path.clone(), path.clone(), path);
+        let (a, b, c, d, f, t) = (
+            path.clone(),
+            path.clone(),
+            path.clone(),
+            path.clone(),
+            path.clone(),
+            path,
+        );
         let items = vec![
             CtxItem::new(ui.now("action-edit-site", &[]), move || {
                 open_path(a.clone())
             })
             .icon(icons::edit),
+            CtxItem::new(ui.now("site-thumb", &[]), move || {
+                let r = ui
+                    .recents
+                    .with_untracked(|rs| rs.iter().find(|r| r.path == t).cloned());
+                thumb_for.set(r);
+            })
+            .icon(icons::palette),
             CtxItem::new(ui.now("site-settings", &[]), move || {
                 open_settings(b.clone())
             })
@@ -456,7 +476,7 @@ pub fn Home() -> impl IntoView {
                                             on:contextmenu={ let (p, n) = (r.path.clone(), r.name.clone()); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone(), n.clone()) }
                                             on:click=move |_| open_path(p.clone())>
                                             <td class="strong">
-                                                <span class="site-dot" style=format!("--hue:{}", hue(&r.name))></span>
+                                                <span class="site-dot" style=crate::sitethumb::style(&r)></span>
                                                 {r.name.clone()}
                                             </td>
                                             <td class="muted path">{r.path.clone()}</td>
@@ -485,7 +505,7 @@ pub fn Home() -> impl IntoView {
                                             on:contextmenu=move |e: leptos::ev::MouseEvent| remote_menu(&e, m.clone())
                                             on:click=move |_| download(a.clone(), true)>
                                             <td class="strong">
-                                                <span class="site-dot" style=format!("--hue:{}", hue(&g.name))></span>
+                                                <span class="site-dot" style=format!("--hue:{}", crate::sitethumb::hue_of_name(&g.name))></span>
                                                 {g.name.clone()}
                                             </td>
                                             <td class="muted path">{icons::cloud()}" "{g.repo.clone()}</td>
@@ -504,17 +524,24 @@ pub fn Home() -> impl IntoView {
                     </table>
                 }>
                     <div class="site-grid">
-                        <For each=sites key=|r| r.path.clone() let:r>
+                        <For each=sites key=crate::sitethumb::key let:r>
                             {
                                 let (p, p2, p3, p4) = (r.path.clone(), r.path.clone(), r.path.clone(), r.path.clone());
+                                let shot = r.homepage.then(|| r.image.clone()).flatten();
+                                let has_shot = shot.is_some();
+                                let for_thumb = r.clone();
                                 let opened = r.opened_at.clone();
                                 view! {
                                     <article class="site-card site-open" data-site=r.path.clone() title=r.path.clone()
-                                        tabindex="0" style=format!("--hue:{}", hue(&r.name))
+                                        tabindex="0" style=crate::sitethumb::style(&r)
                                         on:click=move |_| open_path(p.clone())
                                         on:contextmenu={ let (p, n) = (r.path.clone(), r.name.clone()); move |e: leptos::ev::MouseEvent| site_menu(&e, p.clone(), n.clone()) }
                                         on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { open_path(p4.clone()) }>
-                                        <div class="site-thumb"><span class="site-mono">{mono(&r.name)}</span>
+                                        <div class="site-thumb" class:has-shot=has_shot>
+                                            {match shot {
+                                                Some(src) => view! { <img class="site-shot" src=src alt="" loading="lazy"/> }.into_any(),
+                                                None => view! { <span class="site-mono">{mono(&r.name)}</span> }.into_any(),
+                                            }}
                                             {let p = r.path.clone(); move || repo_of(&p).map(|repo| view! { <span class="site-badge" title=repo>{icons::cloud()}</span> })}
                                         </div>
                                         <div class="site-info">
@@ -522,6 +549,8 @@ pub fn Home() -> impl IntoView {
                                             <span class="site-meta">{move || fmt_datetime(&ui.lang(), &opened)}</span>
                                         </div>
                                         <div class="site-actions">
+                                            <button class="icon-btn icon-btn--small site-thumb-btn" title=ui.t("site-thumb") aria-label=ui.t("site-thumb")
+                                                on:click=move |ev| { ev.stop_propagation(); thumb_for.set(Some(for_thumb.clone())) }>{icons::palette()}</button>
                                             <button class="icon-btn icon-btn--small" title=ui.t("site-settings") aria-label=ui.t("site-settings")
                                                 on:click=move |ev| { ev.stop_propagation(); open_settings(p3.clone()) }>{icons::settings()}</button>
                                             <button class="icon-btn icon-btn--small" title=ui.t("action-forget") aria-label=ui.t("action-forget")
@@ -541,7 +570,7 @@ pub fn Home() -> impl IntoView {
                                 let size = if g.size_kb >= 1024 { format!("{:.0} Mo", g.size_kb as f64 / 1024.0) } else { format!("{} Ko", g.size_kb) };
                                 view! {
                                     <article class="site-card site-card--remote" data-repo=g.repo.clone() title=ui.t("gh-site-download-open")
-                                        tabindex="0" style=format!("--hue:{}", hue(&g.name))
+                                        tabindex="0" style=format!("--hue:{}", crate::sitethumb::hue_of_name(&g.name))
                                         class:is-busy=move || progress().is_some()
                                         on:click=move |_| download(a.clone(), true)
                                         on:contextmenu=move |e: leptos::ev::MouseEvent| remote_menu(&e, m.clone())
@@ -568,6 +597,9 @@ pub fn Home() -> impl IntoView {
             <Show when=move || creating.get()>
                 <NewSite close=Callback::new(move |()| creating.set(false))/>
             </Show>
+            {move || thumb_for.get().map(|r| view! {
+                <crate::sitethumb::ThumbDialog site=r close=Callback::new(move |()| thumb_for.set(None))/>
+            })}
             <Show when=move || importing.get()>
                 <crate::importer::ImportSite close=Callback::new(move |()| { importing.set(false); import_from.set(None); })
                     done=Callback::new(move |_: ImportResult| {}) start=import_from.get_untracked().unwrap_or_default()/>
@@ -582,7 +614,7 @@ pub fn Home() -> impl IntoView {
 }
 
 /// Monogramme d'un site : initiales des deux premiers mots.
-fn mono(name: &str) -> String {
+pub(crate) fn mono(name: &str) -> String {
     let w: Vec<&str> = name.split_whitespace().collect();
     match w.as_slice() {
         [] => "?".into(),
@@ -594,13 +626,6 @@ fn mono(name: &str) -> String {
         ),
     }
     .to_uppercase()
-}
-
-/// Teinte stable dérivée du nom (couleur de la vignette).
-fn hue(name: &str) -> u32 {
-    name.bytes()
-        .fold(7u32, |h, b| h.wrapping_mul(31).wrapping_add(u32::from(b)))
-        % 360
 }
 
 /// Catégories de la galerie des modèles, dans l'ordre (D-128).
@@ -661,11 +686,26 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
         source.set("catalog");
         cat.set(String::new());
         if catalog.with_untracked(Option::is_none) {
-            let repo = ui.settings.with_untracked(|s| s.template_catalog.clone());
+            let repos = ui.settings.with_untracked(|s| s.template_catalogs.clone());
             spawn_local(async move {
-                let r = api::template_catalog(&repo).await;
+                let r = crate::templates::load_catalogs(repos).await;
                 let _ = catalog.try_set(Some(r));
             });
+        }
+    };
+    // « + » : ajouter un catalogue (gardé dans les réglages de Revel, listé là-bas).
+    let adding = RwSignal::new(false);
+    let draft = RwSignal::new(String::new());
+    let bad = RwSignal::new(false);
+    let add_catalog = move || {
+        if crate::templates::add_catalog(ui, &draft.get_untracked()) {
+            adding.set(false);
+            draft.set(String::new());
+            bad.set(false);
+            catalog.set(None);
+            show_catalog();
+        } else {
+            bad.set(true);
         }
     };
     let open_file = move |_| {
@@ -868,9 +908,28 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                                     on:click=move |_| { source.set("builtin"); cat.set(String::new()) }>{ui.t("template-source-builtin")}</button>
                                 <button type="button" role="radio" data-source="catalog" class:is-on=move || source.get() == "catalog"
                                     aria-checked=move || (source.get() == "catalog").to_string()
-                                    title=move || ui.settings.with(|s| s.template_catalog.clone())
+                                    title=move || ui.settings.with(|s| s.template_catalogs.join(" · "))
                                     on:click=move |_| show_catalog()>{icons::cloud()}{ui.t("template-source-catalog")}</button>
                             </div>
+                            <button type="button" class="icon-btn new-site__add-catalog" class:is-on=move || adding.get()
+                                title=ui.t("template-catalog-add-help") aria-label=ui.t("template-catalog-add")
+                                aria-expanded=move || adding.get().to_string()
+                                on:click=move |_| adding.update(|a| *a = !*a)>{icons::plus()}</button>
+                            <Show when=move || adding.get()>
+                                <span class="new-site__catalog-input">
+                                    <input class="input input--small mono" type="text" spellcheck="false" autocomplete="off"
+                                        placeholder=ui.t("template-catalog-add-placeholder") aria-label=ui.t("template-catalog-add")
+                                        aria-invalid=move || bad.get().to_string()
+                                        prop:value=move || draft.get() on:input=move |e| { draft.set(event_target_value(&e)); bad.set(false) }
+                                        on:keydown=move |e: leptos::ev::KeyboardEvent| match e.key().as_str() {
+                                            "Enter" => { e.prevent_default(); add_catalog() }
+                                            "Escape" => { e.prevent_default(); e.stop_propagation(); adding.set(false) }
+                                            _ => {}
+                                        }/>
+                                    <button type="button" class="btn btn--small" disabled=move || draft.with(|d| d.trim().is_empty())
+                                        on:click=move |_| add_catalog()>{ui.t("template-catalog-add")}</button>
+                                </span>
+                            </Show>
                             <button type="button" class="btn btn--small new-site__open-file" title=ui.t("template-open-file-help")
                                 on:click=open_file>{icons::folder()}{ui.t("template-open-file")}</button>
                         </div>
@@ -896,7 +955,7 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                                 None => view! { <p class="template-grid__state muted">{ui.t("template-catalog-loading")}</p> }.into_any(),
                                 Some(Err(_)) => view! {
                                     <p class="template-grid__state muted" title=ui.t("template-catalog-missing-help")>
-                                        {icons::warning()}{ui.tx("template-catalog-unreachable", &[("repo", ui.settings.with(|s| s.template_catalog.clone()))])}
+                                        {icons::warning()}{ui.tx("template-catalog-unreachable", &[("repo", ui.settings.with(|s| s.template_catalogs.join(", ")))])}
                                     </p>
                                 }.into_any(),
                                 Some(Ok(l)) if l.is_empty() => view! { <p class="template-grid__state muted">{ui.t("template-catalog-empty")}</p> }.into_any(),

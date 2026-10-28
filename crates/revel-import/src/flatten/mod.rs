@@ -1284,7 +1284,10 @@ pub fn flatten_with(
         }
         if n.image {
             if let Some(mut img) = n.image_node.clone() {
-                img.class = Some(v);
+                img.class = Some(with_image_classes(
+                    img.class.as_deref().unwrap_or_default(),
+                    add,
+                ));
                 commands.push(Command::SetImage {
                     at: target,
                     image: img,
@@ -1425,8 +1428,43 @@ pub fn flatten_with(
     }
     clean_variables(&mut final_items, &site_vars, &markup_refs);
     final_items.retain(|i| !matches!(i, StyleItem::Rule(r) if r.decls.is_empty()));
+    // Règle d'une utilisation de composant selon l'endroit (`.intro .bouton`) : classe ajoutée à
+    // ces utilisations (posée sur la racine du composant), règle sur la classe combinée.
+    let mut resolved: HashSet<usize> = HashSet::new();
     for (ri, r) in rules.iter().enumerate() {
-        if r.problem && !r.root && !flat.contains(&ri) && !dead.contains(&ri) {
+        if r.problem
+            && !r.root
+            && !flat.contains(&ri)
+            && !dead.contains(&ri)
+            && r.inline.is_none()
+            && r.shape.as_ref().is_some_and(|s| {
+                s.state.is_none() && s.pseudo.is_none() && s.outer.is_none() && s.extra.is_empty()
+            })
+            && let Some((sel, adds)) = instance_class(site, &r.sel, &mut used_names)
+        {
+            let mut done = false;
+            for it in final_items.iter_mut() {
+                if let StyleItem::Rule(fr) = it
+                    && fr.selector == r.sel
+                    && fr.media == r.media
+                {
+                    fr.selector = sel.clone();
+                    done = true;
+                }
+            }
+            if done {
+                commands.extend(adds);
+                resolved.insert(ri);
+            }
+        }
+    }
+    for (ri, r) in rules.iter().enumerate() {
+        if r.problem
+            && !r.root
+            && !flat.contains(&ri)
+            && !dead.contains(&ri)
+            && !resolved.contains(&ri)
+        {
             let label = match &r.media {
                 Some(m) => format!("@media {m} {{ {} }}", r.sel),
                 None => r.sel.clone(),
@@ -1826,7 +1864,8 @@ fn node_index(site: &Site) -> HashMap<String, NodeInfo> {
                 );
             }
             Node::Image(img) if img.id.is_some() => {
-                let class_text = img.class.clone().unwrap_or_default();
+                // Classe d'une image : expression (`"a b"`, `"a " ~ champ`) ; ses classes écrites.
+                let class_text = image_classes(img.class.as_deref().unwrap_or_default());
                 out.insert(
                     img.id.clone().unwrap_or_default(),
                     NodeInfo {
@@ -1853,6 +1892,182 @@ fn node_index(site: &Site) -> HashMap<String, NodeInfo> {
 }
 
 /// Classes écrites telles quelles (hors expressions `{{ }}` et `{% %}`).
+/// `.ctx .racine` (classes seules, descendants) où `.racine` est la classe racine d'un composant :
+/// utilisations du composant placées sous ces ancêtres (dans la même page, le même gabarit ou le
+/// même composant). Rend le sélecteur combiné et les commandes qui ajoutent la classe à ces
+/// utilisations ; `None` si la forme ne convient pas ou si un autre élément porte la classe.
+fn instance_class(
+    site: &Site,
+    sel: &str,
+    used: &mut HashSet<String>,
+) -> Option<(String, Vec<Command>)> {
+    let c = selector::parse(sel)?;
+    if c.parts.len() < 2 {
+        return None;
+    }
+    let mut classes: Vec<String> = Vec::new();
+    for (comb, part) in &c.parts {
+        if !matches!(comb, selector::Comb::None | selector::Comb::Desc)
+            || part.len() != 1
+            || !part[0].starts_with('.')
+        {
+            return None;
+        }
+        classes.push(part[0][1..].to_string());
+    }
+    let root = classes.pop()?;
+    let comp = site
+        .components
+        .iter()
+        .find(|k| k.root_class().as_deref() == Some(root.as_str()))?;
+    // Autre élément que la racine du composant qui porte la classe : forme gardée.
+    let root_id = match comp.root() {
+        Some(Node::Element { id, .. }) => id.clone(),
+        _ => None,
+    };
+    let mut other = false;
+    for (_, _, body) in site.owners() {
+        revel_model::ids::walk(body, &mut |n| {
+            if let Node::Element { id, attrs, .. } = n
+                && id != &root_id
+                && attrs.iter().any(|a| {
+                    a.name == "class"
+                        && static_classes(a.value.as_deref().unwrap_or_default()).contains(&root)
+                })
+            {
+                other = true;
+            }
+        });
+    }
+    if other {
+        return None;
+    }
+    // Utilisations sous les ancêtres demandés (dans l'ordre) : identifiant, classes des
+    // ancêtres, attributs.
+    type Found = (String, Vec<Vec<String>>, Vec<revel_model::Attr>);
+    fn walk_uses(nodes: &[Node], stack: &mut Vec<Vec<String>>, comp: &str, out: &mut Vec<Found>) {
+        for n in nodes {
+            match n {
+                Node::Element {
+                    attrs, children, ..
+                } => {
+                    let cls = attrs
+                        .iter()
+                        .find(|a| a.name == "class")
+                        .map(|a| static_classes(a.value.as_deref().unwrap_or_default()))
+                        .unwrap_or_default();
+                    stack.push(cls);
+                    walk_uses(children, stack, comp, out);
+                    stack.pop();
+                }
+                Node::Use {
+                    id,
+                    component,
+                    attrs,
+                    children,
+                    ..
+                } => {
+                    if component == comp
+                        && let Some(id) = id
+                    {
+                        out.push((id.clone(), stack.clone(), attrs.clone()));
+                    }
+                    walk_uses(children, stack, comp, out);
+                }
+                Node::If {
+                    then, otherwise, ..
+                } => {
+                    walk_uses(then, stack, comp, out);
+                    walk_uses(otherwise, stack, comp, out);
+                }
+                Node::Each { children, .. } => walk_uses(children, stack, comp, out),
+                _ => {}
+            }
+        }
+    }
+    let under = |stack: &[Vec<String>]| {
+        let mut k = 0;
+        for level in stack {
+            if k < classes.len() && level.contains(&classes[k]) {
+                k += 1;
+            }
+        }
+        k == classes.len()
+    };
+    let name = unique_name(&format!("{root}--{}", classes.last()?), used);
+    let mut commands = Vec::new();
+    let mut matched = 0;
+    for (kind, owner_id, body) in site.owners() {
+        let owner = match kind {
+            revel_model::ids::OwnerKind::Page => Owner::Page(owner_id.to_string()),
+            revel_model::ids::OwnerKind::Layout => Owner::Layout(owner_id.to_string()),
+            revel_model::ids::OwnerKind::Component => Owner::Component(owner_id.to_string()),
+        };
+        let mut uses = Vec::new();
+        walk_uses(body, &mut Vec::new(), &comp.id, &mut uses);
+        for (id, stack, attrs) in uses {
+            if !under(&stack) {
+                continue;
+            }
+            // Utilisation dans un composant : ses ancêtres hors du composant ne sont pas connus.
+            if matches!(owner, Owner::Component(_)) {
+                return None;
+            }
+            matched += 1;
+            let cur = attrs
+                .iter()
+                .find(|a| a.name == "class")
+                .and_then(|a| a.value.clone())
+                .unwrap_or_default();
+            let v = format!("{} {name}", cur.trim()).trim().to_string();
+            commands.push(Command::SetAttr {
+                at: Target {
+                    owner: owner.clone(),
+                    node: id,
+                },
+                name: "class".into(),
+                value: Some(v),
+            });
+        }
+    }
+    if matched == 0 {
+        return None;
+    }
+    used.insert(name.clone());
+    Some((format!(".{root}.{name}"), commands))
+}
+
+/// Classes écrites d'une expression de classe d'image : texte entre guillemets (`"a b"`), parties
+/// littérales d'une concaténation (`"a " ~ champ`).
+fn image_classes(expr: &str) -> String {
+    let mut out = Vec::new();
+    let mut rest = expr;
+    while let Some(i) = rest.find('"') {
+        let after = &rest[i + 1..];
+        let Some(j) = after.find('"') else { break };
+        out.push(after[..j].trim().to_string());
+        rest = &after[j + 1..];
+    }
+    out.retain(|c| !c.is_empty());
+    out.join(" ")
+}
+
+/// Expression de classe d'image avec des classes ajoutées.
+fn with_image_classes(expr: &str, add: &[String]) -> String {
+    let e = expr.trim();
+    let extra = add.join(" ");
+    if e.is_empty() {
+        return format!("\"{extra}\"");
+    }
+    // Texte seul entre guillemets : classes ajoutées dedans.
+    if let Some(inner) = e.strip_prefix('"').and_then(|x| x.strip_suffix('"'))
+        && !inner.contains('"')
+    {
+        return format!("\"{} {extra}\"", inner.trim());
+    }
+    format!("{e} ~ \" {extra}\"")
+}
+
 fn static_classes(v: &str) -> Vec<String> {
     let mut s = v.to_string();
     for (a, b) in [("{{", "}}"), ("{%", "%}")] {

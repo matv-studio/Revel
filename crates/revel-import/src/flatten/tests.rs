@@ -224,3 +224,52 @@ fn survol_d_un_ancetre_garde() {
     assert!(out.contains("opacity: 0"), "{out}");
     assert!(out.contains(":hover"), "{out}");
 }
+
+#[test]
+fn classe_d_une_image() {
+    let (s, _, out) = run(
+        "<details class=\"set\" open><summary>a</summary><img class=\"chev\" src=\"a.svg\" alt=\"\"></details>",
+        ".chev { width: 10px; }\n.set[open] .chev { rotate: 180deg; }",
+    );
+    assert!(!out.contains("\\\"") && !out.contains(".\""), "{out}");
+    let json = serde_json::to_string(&s.pages[0].body).unwrap();
+    assert!(!json.contains("\\\"chev\\\" "), "{json}");
+}
+
+#[test]
+fn utilisation_de_composant_selon_l_endroit() {
+    let mut s = site(
+        "<header class=\"intro\"><x-use-placeholder></x-use-placeholder></header><footer></footer>",
+        ".bouton { padding: 4px; }\n.intro .bouton { margin-top: 40px; }",
+    );
+    let comp: revel_model::Component = serde_json::from_value(serde_json::json!({
+        "id": "bouton", "name": "Bouton",
+        "body": [{"node": "element", "id": "racine1", "tag": "a", "attrs": [{"name": "class", "value": "bouton"}], "children": [{"node": "text", "text": "Go"}]}]
+    }))
+    .unwrap();
+    s.components.push(comp);
+    let use_ = |id: &str| revel_model::Node::Use {
+        id: Some(id.into()),
+        component: "bouton".into(),
+        args: Default::default(),
+        variant: None,
+        attrs: vec![],
+        children: vec![],
+    };
+    // Une utilisation dans l'en-tête « intro », une dans le pied de page.
+    if let revel_model::Node::Element { children, .. } = &mut s.pages[0].body[0] {
+        *children = vec![use_("u1")];
+    }
+    if let revel_model::Node::Element { children, .. } = &mut s.pages[0].body[1] {
+        *children = vec![use_("u2")];
+    }
+    let (cmds, _) = flatten(&s, &render(&s), &[]);
+    revel_edit::apply(&mut s, &Command::Batch { commands: cmds }).unwrap();
+    let out = revel_style::generate(&s.stylesheet.as_ref().unwrap().items);
+    assert!(
+        out.contains(".bouton.bouton--intro { margin-top: 40px; }"),
+        "{out}"
+    );
+    let html = page_html(&s);
+    assert_eq!(html.matches("bouton bouton--intro").count(), 1, "{html}");
+}

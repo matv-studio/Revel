@@ -1558,6 +1558,14 @@ Vérifié : modèles 1 472 → 0 réglages en code, 162 pages identiques au pixe
 (restent variantes de bordure de Framer, survol d'un lien dans un texte riche, deux sélecteurs de structure),
 aucun écart de style calculé à 1440, 1000, 600 et 390 px ; site cobaye Alunites reconstruit 273 → 0, importé
 comme site HTML 282 → 166, aucun écart de style calculé ni de capture (11 et 9 pages, 1280 et 375 px).
+Complément (28/10, site matv) : panneau complété par la barre de défilement (`scrollbar-width`, affichée quand le
+débordement défile), le soulignement (couleur, épaisseur, écart, affichés quand le texte est souligné) et le masque
+(`mask-image`, mêmes calques que le fond). Une classe d'image écrite par une expression (`"a" ~ …`) reçoit le
+report dans l'expression. Une règle `.contexte .racine` qui vise la racine d'un composant selon l'endroit où il est
+utilisé devient une classe de l'utilisation (`racine--contexte`, posée sur chaque utilisation sous le contexte) ;
+règle gardée si le composant est utilisé dans un autre composant. Vérifié : site matv recréé, réglages en code à 0,
+132 combinaisons pages × largeurs comparées au rendu d'avant, 23 écarts tous expliqués (puce d'un `summary` sans
+marque, minutage des apparitions).
 
 **D-158 — 28/10/2026 — prise.** **Horloge et toile de pixels.** Outils relevés sur le site Framer d'essai
 (composants de code « Time & Date » et « Pixel Trail »), sans équivalent dans Revel.

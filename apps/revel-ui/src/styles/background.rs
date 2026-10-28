@@ -262,9 +262,18 @@ fn file_name(u: &str) -> String {
 
 /// Calques du fond réglés dans le panneau de styles.
 #[component]
-pub fn BgLayers(sx: Sx) -> impl IntoView {
+pub fn BgLayers(
+    sx: Sx,
+    /// Propriété réglée : calques du fond (`background-image`) ou masque (`mask-image`, mêmes
+    /// images et dégradés : l'opacité des couleurs fait la transparence).
+    #[prop(default = "background-image")]
+    prop: &'static str,
+    /// Clé du texte affiché sans calque.
+    #[prop(default = "bg-none")]
+    none: &'static str,
+) -> impl IntoView {
     let ui = sx.ui;
-    let pv = Memo::new(move |_| sx.get("background-image"));
+    let pv = Memo::new(move |_| sx.get(prop));
     let layers = Memo::new(move |_| parse_layers(&pv.get().current()));
     let is_here = move || pv.with(|p| p.here.is_some());
     // Calque ouvert, arrêt choisi dans son dégradé.
@@ -276,10 +285,10 @@ pub fn BgLayers(sx: Sx) -> impl IntoView {
             .map(|r| r.to_css())
             .unwrap_or_else(|| c.to_string())
     };
-    let commit = move |ls: Vec<Layer>| sx.set("background-image", layers_css(&ls));
+    let commit = move |ls: Vec<Layer>| sx.set(prop, layers_css(&ls));
     let preview = move |ls: Vec<Layer>| {
         sx.preview(&[(
-            "background-image".into(),
+            prop.into(),
             ls.iter().map(layer_css).collect::<Vec<_>>().join(", "),
         )])
     };
@@ -358,7 +367,7 @@ pub fn BgLayers(sx: Sx) -> impl IntoView {
             </div>
             {move || {
                 let ls = layers.get();
-                (ls.is_empty()).then(|| view! { <p class="bg-empty muted">{ui.t("bg-none")}</p> })
+                (ls.is_empty()).then(|| view! { <p class="bg-empty muted">{ui.t(none)}</p> })
             }}
             <ul class="bg-list">
                 {move || layers.get().into_iter().enumerate().map(|(i, l)| {

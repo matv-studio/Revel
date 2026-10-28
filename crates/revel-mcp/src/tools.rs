@@ -42,7 +42,7 @@ layers; elements that belong together (an item and its media) are linked by a se
 - Structure: elements with classes; texts written in the elements (`set_text`); CSS on classes per breakpoint and \
 state (`set_styles`, states :hover :active :focus-visible :focus :disabled [aria-current=\"page\"] .is-active [aria-pressed=\"false\"], or \
 inside an active element `.is-active .x`); text-shadow, transform-origin, clip-path, outline (width, style, color, offset), \
-pointer-events, overflow-wrap, word-break, object-position (images, videos) and fill (SVG drawings) are panel controls. Prefer `insert_preset` (Add panel) \
+pointer-events, overflow-wrap, word-break, object-position (images, videos), fill (SVG drawings), scrollbar-width, mask-image (gradients or images, like background layers) and underline color, thickness and offset (text-decoration-color, text-decoration-thickness, text-underline-offset) are panel controls. Prefer `insert_preset` (Add panel) \
 for sections, grids, buttons, images, video, video player (YouTube/Vimeo/file with cover), icons, navbar, ticker \
 (endless scroll of logos/team), carousel, slideshow, tabs, accordion, list filters, collection list, blocks.\n\
 - CMS collections are for content that has its own pages (projects, articles, products: each entry is a page \

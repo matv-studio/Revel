@@ -178,6 +178,12 @@ const OVERFLOW: &[Opt] = &[
     o("scroll", "overflow-scroll"),
     o("auto", "overflow-auto"),
 ];
+/// Barre de défilement d'un élément qui défile (`scrollbar-width`).
+const SCROLLBAR: &[Opt] = &[
+    o("auto", "scrollbar-auto"),
+    o("thin", "scrollbar-thin"),
+    o("none", "scrollbar-none"),
+];
 const FIT: &[Opt] = &[
     o("cover", "fit-cover"),
     o("contain", "fit-contain"),
@@ -204,7 +210,7 @@ pub fn SizeSection(sx: Sx) -> impl IntoView {
         )
     };
     view! {
-        <Section sx key="styles-size" props=&["width", "height", "min-width", "min-height", "max-width", "max-height", "overflow", "object-fit", "object-position", "aspect-ratio"]>
+        <Section sx key="styles-size" props=&["width", "height", "min-width", "min-height", "max-width", "max-height", "overflow", "scrollbar-width", "object-fit", "object-position", "aspect-ratio"]>
             <div class="style-grid">
                 <Cell sx props=&["width"] key="styles-width" units=SIZE_UNITS/>
                 <Cell sx props=&["height"] key="styles-height" units=SIZE_UNITS/>
@@ -216,6 +222,15 @@ pub fn SizeSection(sx: Sx) -> impl IntoView {
             <Row sx props=&["overflow"] key="styles-overflow" stack=true>
                 <Seg sx prop="overflow" options=OVERFLOW/>
             </Row>
+            // Barre de défilement : proposée quand l'élément défile, ou réglée.
+            <Show when=move || {
+                let o = sx.get("overflow").current();
+                o.contains("auto") || o.contains("scroll") || sx.get("scrollbar-width").here.is_some()
+            }>
+                <Row sx props=&["scrollbar-width"] key="styles-scrollbar" stack=true>
+                    <Seg sx prop="scrollbar-width" options=SCROLLBAR/>
+                </Row>
+            </Show>
             <Row sx props=&["aspect-ratio"] key="styles-ratio">
                 <Choice sx prop="aspect-ratio" options=opts(sx, RATIOS)/>
             </Row>
@@ -649,7 +664,8 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
     view! {
         <Section sx key="styles-typography" open=true props=&[
             "font-family", "font-weight", "font-size", "--revel-fit", "line-height", "letter-spacing", "color",
-            "text-align", "font-style", "text-decoration-line", "text-transform", "white-space", "text-wrap",
+            "text-align", "font-style", "text-decoration-line", "text-decoration-color", "text-decoration-thickness",
+            "text-underline-offset", "text-transform", "white-space", "text-wrap",
             "text-overflow", "text-shadow", "list-style-type", "overflow-wrap", "word-break", "fill",
         ]>
             <Row sx props=&["font-family"] key="styles-font-family">
@@ -687,6 +703,23 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
                     <LineToggle sx line="line-through" key="text-strike" icon=icons::strike/>
                 </div>
             </Row>
+            // Soulignement : couleur, épaisseur et écart, quand le texte est souligné ou s'ils sont réglés.
+            <Show when=move || {
+                sx.get("text-decoration-line").current().contains("underline")
+                    || ["text-decoration-color", "text-decoration-thickness", "text-underline-offset"]
+                        .iter()
+                        .any(|p| sx.get(p).here.is_some())
+            }>
+                <Row sx props=&["text-decoration-color"] key="styles-underline-color">
+                    <ColorField sx prop="text-decoration-color"/>
+                </Row>
+                <Row sx props=&["text-decoration-thickness"] key="styles-underline-thickness" scrub=Some(LabelScrub { prop: "text-decoration-thickness", unit: "px", step: 1.0, zero: "1px" })>
+                    <PropNum sx prop="text-decoration-thickness" units=GAP_UNITS label="styles-underline-thickness"/>
+                </Row>
+                <Row sx props=&["text-underline-offset"] key="styles-underline-offset" scrub=Some(LabelScrub { prop: "text-underline-offset", unit: "px", step: 1.0, zero: "0px" })>
+                    <PropNum sx prop="text-underline-offset" units=GAP_UNITS label="styles-underline-offset"/>
+                </Row>
+            </Show>
             <Row sx props=&["text-transform"] key="styles-text-transform">
                 <Seg sx prop="text-transform" options=CASE/>
             </Row>
@@ -1295,7 +1328,7 @@ fn ClipPath(sx: Sx) -> impl IntoView {
 #[component]
 pub fn EffectsSection(sx: Sx) -> impl IntoView {
     view! {
-        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "pointer-events", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transform-origin", "clip-path", "transition"]>
+        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "pointer-events", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transform-origin", "clip-path", "mask-image", "transition"]>
             <Row sx props=&["mix-blend-mode"] key="styles-blend"><Choice sx prop="mix-blend-mode" options=opts(sx, BLEND)/></Row>
             <Row sx props=&["opacity"] key="styles-opacity"><Opacity sx/></Row>
             <Row sx props=&["box-shadow"] key="styles-box-shadow" stack=true><Shadows sx/></Row>
@@ -1304,6 +1337,10 @@ pub fn EffectsSection(sx: Sx) -> impl IntoView {
             </Row>
             <Row sx props=&["transform-origin"] key="styles-transform-origin"><TransformOrigin sx/></Row>
             <Row sx props=&["clip-path"] key="styles-clip-path" stack=true><ClipPath sx/></Row>
+            // Masque : images ou dégradés dont l'opacité fait la transparence (fondu d'un bord).
+            <Row sx props=&["mask-image"] key="styles-mask" stack=true>
+                <super::background::BgLayers sx prop="mask-image" none="mask-none"/>
+            </Row>
             <Row sx props=&["transition"] key="styles-transition" stack=true><Transitions sx/></Row>
             <Row sx props=&["filter"] key="styles-filter" stack=true>
                 <FuncList sx prop="filter" defs=FILTERS add_key="fx-filter-add" none_key="fx-filter-none"/>

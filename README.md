@@ -1,7 +1,7 @@
 # Revel
 
 **Créez votre site web sans écrire de code, puis mettez-le en ligne chez l'hébergeur de votre choix.**
-Revel est une application gratuite pour Windows, macOS et Linux, en français et en anglais. Tout se fait sur votre
+Revel est une application gratuite pour Windows, macOS et Linux, dans 15 langues. Tout se fait sur votre
 ordinateur : pas de compte à créer, pas d'abonnement, et votre site reste à vous.
 
 > Version actuelle : **0.7.2**, en **préversion**. Revel est en cours de développement : l'essentiel fonctionne,
@@ -14,17 +14,27 @@ ordinateur : pas de compte à créer, pas d'abonnement, et votre site reste à v
 Revel s'adresse à celles et ceux qui veulent un site soigné sans passer par un développeur ni par un service en
 ligne payant au mois. Si vous connaissez Webflow, Framer ou Figma, vous retrouverez la même façon de travailler.
 
+- **Partir d'un modèle.** 26 modèles de site par métier (agence, restaurant, boutique, cabinet, événement,
+  portfolio…), prêts à personnaliser ; vous pouvez partager les vôtres sous forme de fichier ou de catalogue
+  GitHub.
 - **Construire les pages à l'écran.** Vous placez des éléments (titres, textes, images, boutons, blocs), vous
   les déplacez, vous écrivez directement dans la page. Les réglages (couleurs, polices, espacements,
-  disposition) se font dans des panneaux, avec des contrôles visuels plutôt que du code.
-- **Adapter le site à chaque écran.** Ordinateur, tablette, téléphone : chaque taille d'écran se règle à part.
+  disposition) se font dans des panneaux, avec des contrôles visuels plutôt que du code. Tout reste modifiable
+  depuis l'interface, y compris un site importé.
+- **Adapter le site à chaque écran.** Ordinateur, tablette, téléphone : chaque taille d'écran se règle à part ;
+  un titre peut s'ajuster à la taille de l'écran. Couleurs claires et sombres, avec un interrupteur pour vos
+  visiteurs.
+- **Voir le site d'un coup d'œil.** Le plan du site montre les pages, les collections et les menus reliés par
+  leurs liens ; on y crée, renomme ou redirige une page, et les liens cassés y sont signalés.
 - **Gérer des contenus.** Articles, projets, membres d'une équipe… sont rangés dans le CMS (gestion des
   contenus), chacun avec ses champs ; leurs pages se créent toutes seules à partir d'un modèle.
 - **Réutiliser.** Composants (un en-tête, une carte, un pied de page) modifiés une fois pour toutes les pages,
   médias rangés en dossiers, images allégées automatiquement pour un site rapide.
 - **Animer.** Une quarantaine d'animations prêtes à l'emploi (apparitions, effets de texte, survol, défilement),
-  animations Lottie exportées d'After Effects, menus qui s'ouvrent, onglets, accordéons, transitions entre les
-  pages.
+  animations Lottie exportées d'After Effects, menus qui s'ouvrent, onglets, accordéons, carrousels, éléments
+  à glisser, horloge, toile de pixels à dessiner, transitions entre les pages.
+- **Vendre.** Un panier et un bouton « Ajouter au panier », commande reçue par courriel, paiement par vos liens
+  Stripe ou PayPal.
 - **Traduire.** Un site en plusieurs langues ; la traduction automatique se fait sur votre ordinateur, sans
   envoyer vos textes à un service extérieur.
 - **Mettre en ligne en un clic.** La première fois, Revel vous guide pas à pas chez votre hébergeur (OVHcloud,
@@ -34,7 +44,8 @@ ligne payant au mois. Si vous connaissez Webflow, Framer ou Figma, vous retrouve
 - **Reprendre un site existant.** Un dossier de pages HTML, un site en ligne à partir de son adresse (y compris
   un site Framer), un export Webflow et les contenus de son CMS, un fichier Figma, un export WordPress, un dépôt
   Git ou un projet Eleventy. Un site à construire (SvelteKit, Next.js, Astro, Hugo, Jekyll…) peut être construit
-  par Revel, qui télécharge alors lui-même les outils nécessaires.
+  par Revel, qui télécharge alors lui-même les outils nécessaires. Le site repris est remis dans la forme de
+  l'éditeur : calques, classes et réglages des panneaux, sans code à reprendre à la main.
 - **Travailler avec un assistant IA.** Claude, ChatGPT, LM Studio, Open WebUI… peuvent modifier votre site à
   votre demande, par la conversation, depuis votre ordinateur.
 - **Garder l'historique.** Enregistrez des versions de votre site, comparez-les, revenez en arrière.
@@ -85,8 +96,9 @@ prévient donc la première fois :
 
 ![La fenêtre « Importer un site » : Dossier, Lien, Dépôt Git, Figma, WordPress](docs/captures/importer.png)
 
-1. **Créez ou reprenez un site.** Sur l'écran d'accueil, « Nouveau site » propose trois modèles (vide, vitrine,
-   blog) ; « Importer » reprend un site existant ; « Ouvrir un site » rouvre un site Revel.
+1. **Créez ou reprenez un site.** Sur l'écran d'accueil, « Nouveau site » part d'une page vide ou d'un des
+   modèles (« Plus » ouvre la galerie, les catalogues et les fichiers de modèle) ; « Importer » reprend un site
+   existant ; « Ouvrir un site » rouvre un site Revel.
 2. **Modifiez-le.** À gauche, les pages, les composants, les médias et la structure de la page (les calques) ;
    au centre, la page telle qu'elle s'affichera ; à droite, les styles et les interactions de l'élément choisi.
    Double-cliquez sur un texte pour l'écrire. L'onglet « Ajouter » propose les éléments à placer.
@@ -119,9 +131,10 @@ de votre système, jamais dans un fichier.
 ## Où en est le projet
 
 Revel avance par étapes ; les sept premières sont terminées : socle, ouverture et publication d'un site, éditeur
-visuel, contenus et site complet, assistants IA, mise en ligne directe, import depuis d'autres outils. L'étape en
-cours fait la finition (animations, mises à jour, aide, installateurs). La signature de l'application, qui
-supprimera les avertissements du premier lancement, est prévue en option. Le détail est dans
+visuel, contenus et site complet, assistants IA, mise en ligne directe, finition (animations, mises à jour, aide,
+installateurs), import depuis d'autres outils. L'étape en cours ajoute des outils au fil des besoins (plan du
+site, modèles, panier, langues de l'interface, imports entièrement modifiables…). La signature de l'application,
+qui supprimera les avertissements du premier lancement, est prévue en option. Le détail est dans
 [docs/PLAN.md](docs/PLAN.md), et les choix faits en chemin dans [docs/DECISIONS.md](docs/DECISIONS.md).
 
 Un problème, une idée ? Ouvrez un ticket dans l'onglet [Issues](https://github.com/matv-studio/Revel/issues).
@@ -130,10 +143,12 @@ Un problème, une idée ? Ouvrez un ticket dans l'onglet [Issues](https://github
 
 Revel is a free desktop app (Windows, macOS, Linux) to build a website visually, without code, and publish it to
 the host of your choice. It works offline on your computer, with no account or subscription; the result is plain
-HTML, CSS and images that you own. The interface is available in English and French (Settings › General). It
-includes a visual editor, a CMS, components, animations, multilingual sites with on-device machine translation,
+HTML, CSS and images that you own. The interface is available in 15 languages (Settings › General). It
+includes 26 site templates, a visual editor, a CMS, components, animations, a site map, a cart with Stripe or
+PayPal payment links, multilingual sites with on-device machine translation,
 one-click publishing (SFTP hosts or GitHub Pages), imports from Webflow, Framer, Figma, WordPress, static HTML,
-Eleventy and Git repositories (sites that need building are built by Revel on request), team work through a shared
+Eleventy and Git repositories (sites that need building are built by Revel on request; imported sites become fully
+editable in the panels, without code), team work through a shared
 network folder or an online repository, and a local connector for AI assistants. Download the installer for your system from the
 [releases page](https://github.com/matv-studio/Revel/releases). Revel is a pre-release (0.7.2): expect rough
 edges, and keep a copy of important sites.
@@ -155,16 +170,16 @@ Revel est écrit en Rust : une application de bureau [Tauri 2](https://tauri.app
 | `crates/revel-project` | Projet sur disque : document de site, contenus, données, génération |
 | `crates/revel-cms` | Contenus Markdown/YAML compatibles Pages CMS |
 | `crates/revel-assets` | Images (AVIF, WebP, JPEG, PNG), images de partage |
-| `crates/revel-import` | Import : Eleventy, HTML statique, site en ligne, Webflow, Figma, WordPress |
+| `crates/revel-import` | Import : Eleventy, HTML statique, site en ligne, Webflow, Figma, WordPress ; mise à plat des styles |
 | `crates/revel-deploy` | Publication : hébergeurs, capacités, avertissements |
 | `crates/revel-dns` | Noms de domaine |
 | `crates/revel-git` | Git et GitHub : versions, travail à plusieurs, publication sur une branche, connexion, GitHub Pages |
 | `crates/revel-build` | Construction des sites à construire (Node.js, Hugo, Jekyll) avant leur import |
 | `crates/revel-translate` | Traduction automatique hors ligne (modèles OPUS-MT) |
 | `crates/revel-mcp` | Serveur MCP pour les assistants IA |
-| `crates/revel-i18n` | Textes de l'interface en français et en anglais (Fluent) |
+| `crates/revel-i18n` | Textes de l'interface en 15 langues (Fluent) |
 | `crates/revel-protocol` | Messages entre l'interface et le cœur |
-| `crates/revel-core` | Services communs à l'application, à la ligne de commande et au serveur MCP |
+| `crates/revel-core` | Services communs à l'application, à la ligne de commande et au serveur MCP ; modèles de site |
 | `apps/revel-app` | Application de bureau (Tauri 2) |
 | `apps/revel-ui` | Interface (Leptos, WebAssembly) ; système de design : [docs/DESIGN.md](docs/DESIGN.md) |
 | `apps/revel-cli` | Ligne de commande `revel` (import, génération, diagnostic) |

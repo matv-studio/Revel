@@ -9,6 +9,23 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 28/10/2026 au soir, après la 0.7.2
+Commit 36360fa : panneau Styles complété (barre de défilement, soulignement : couleur, épaisseur, écart ; masque
+`mask-image` avec les calques du fond) ; mise à plat (D-157, complément) : classe d'image écrite par une
+expression, classe d'utilisation pour une règle `.contexte .racine` sur la racine d'un composant. Essais :
+tests du dépôt (405), clippy (espace de travail et interface wasm), format, éditeur 356/356, modèles 26/26,
+relevé des modèles 0 et 162 pages identiques. Nouveaux réglages vérifiés dans les deux thèmes.
+- Site matv recréé (`Sites/matv-revel`) mis à plat : réglages en code à 0 ; rendu comparé avant et après
+  (132 combinaisons pages × largeurs 1440, 810, 390, 23 écarts tous expliqués : puce d'un `summary` sans
+  marque, minutage des apparitions). Original gardé sur le PC dans `site.revel.avant-d157.json`.
+- `matv-studio/Portfolio-matv` (public) : projet Revel du site matv poussé en 4 commits (3cd9ab4, ad3e09c,
+  1511115, 2366d6e ; un envoi unique de 160 Mo coupait le tunnel du proxy après 183 s).
+- `matv-studio/alunites-revel-lab` : `main` remplacé par le site Alunites recréé dans Revel (4be5c7c ; 2582e8d
+  remet `maintenance.yml`). Le cobaye des essais et de la CI reste l'ancien site au commit 0dd004c
+  (`COBAYE_REF`) : après clonage, `git checkout 0dd004c`.
+- Piège : `pkill -f motif` lancé dans une commande qui contient le motif se tue lui-même ; arrêter les ponts
+  par `ps aux | awk '/revel canvas-serve/ && !/awk/{print $2}' | xargs -r kill`.
+
 ## Version 0.7.2 (28/10/2026)
 Commit « Version 0.7.2 » (747f490), README en sections repliables avec captures refaites (f457c89, 1998981),
 essais mis à jour (cb3174a ; préversion simulée `0.7.2-beta.1` à changer aussi dans `tools/editor-e2e.mjs` à

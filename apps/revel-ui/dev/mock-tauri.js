@@ -183,13 +183,13 @@
       case "create_site": window.__revelCreated = args; return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
       case "cms_collections": return cms;
       case "cms_folders": return [];
-      case "app_info": return ["0.7.1", 3];
+      case "app_info": return ["0.7.2", 3];
       // `window.__revelUpdates` : mises à jour actives sans version plus récente ; préversions
       // demandées (D-86) : une préversion plus récente est proposée.
       case "update_check": {
         const u = state.update || (window.__revelUpdates ? { enabled: true } : null);
         if (!u) return { enabled: false };
-        if (state.settings.prereleases) return { enabled: true, available: { version: "0.7.1-beta.1", notes: "Préversion de la simulation.", prerelease: true } };
+        if (state.settings.prereleases) return { enabled: true, available: { version: "0.7.2-beta.1", notes: "Préversion de la simulation.", prerelease: true } };
         return u;
       }
       case "update_install": return null;

@@ -13,7 +13,6 @@
 .service-row__number { color: var(--muted); font-size: 15px; }
 .service-row__title { font-size: clamp(28px, 3.4vw, 46px); }
 .service-row__text { color: var(--muted); }
-.steps { counter-reset: s; }
 .step { display: grid; gap: 14px; padding: 32px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); }
 .step__number { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .step__text { color: var(--muted); }

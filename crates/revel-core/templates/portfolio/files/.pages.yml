@@ -23,5 +23,6 @@ content:
           values: ["[[Identité||Identity]]", "[[Édition||Print]]", "[[Emballage||Packaging]]", "[[Direction artistique||Art direction]]"]
       - { name: image, label: "[[Image de couverture||Cover image]]", type: image }
       - { name: gallery, label: "[[Galerie||Gallery]]", type: image, list: true }
+      - { name: offset, label: "[[Décalé dans la grille||Shifted in the grid]]", type: boolean }
       - { name: description, label: "[[Résumé||Summary]]", type: text }
       - { name: body, label: "[[Texte||Text]]", type: rich-text }

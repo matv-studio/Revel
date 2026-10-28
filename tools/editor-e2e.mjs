@@ -1955,7 +1955,8 @@ try {
         await page.click('.colors-foot .switch');
         await page.waitForSelector('.colors-row.has-dark[data-var="--accent-e2e"]');
         const dark = '(prefers-color-scheme: dark)';
-        const copied = (await rootOf(dark)).length === before + 1;
+        // Variables reprises (plus `color-scheme: dark`, écrit avec le mode sombre).
+        const copied = (await rootOf(dark)).filter((d) => d.prop.startsWith('--')).length === before + 1;
         const darkInput = page.locator('.colors-row[data-var="--accent-e2e"] .color-value').nth(1);
         await darkInput.fill('#112233');
         await darkInput.press('Enter');

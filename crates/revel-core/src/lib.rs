@@ -19,6 +19,7 @@ mod checks;
 pub mod devserver;
 pub mod domain;
 mod edit;
+pub mod flatten;
 mod fonts;
 mod ghsites;
 mod github;
@@ -610,7 +611,12 @@ impl Core {
                 std::fs::write(&f, text)?;
             }
         }
-        let p = revel_project::Project::create(path, site)?;
+        let mut p = revel_project::Project::create(path, site)?;
+        // Styles du modèle ramenés aux réglages du panneau (D-157). `REVEL_NO_FLATTEN` : modèle
+        // tel qu'écrit (comparaison du rendu dans les essais).
+        if std::env::var_os("REVEL_NO_FLATTEN").is_none() {
+            let _ = flatten::flatten_project(&mut p);
+        }
         let _ = std::fs::create_dir_all(path.join("media"));
         if !fonts.is_empty() && !cfg!(test) && self.edit_open(path).is_ok() {
             for f in &fonts {
@@ -1362,6 +1368,24 @@ fn summarize(p: &revel_project::Project) -> Result<SiteSummary> {
 /// Rend une ligne du bilan (points restants), ou l'erreur si la reconstruction échoue (site
 /// importé gardé tel quel).
 pub fn rebuild_for_ui(p: &mut revel_project::Project) -> Option<String> {
+    let markup = rebuild_markup(p);
+    // Styles mis à plat après la structure (classes des éléments rebâtis, D-157) ;
+    // `REVEL_NO_FLATTEN` : styles tels qu'importés (comparaison du rendu dans les essais).
+    let styles = if std::env::var_os("REVEL_NO_FLATTEN").is_some() {
+        None
+    } else {
+        match flatten::flatten_project(p) {
+            Ok(r) => flatten::summary(&r),
+            Err(e) => Some(format!("mise à plat des styles impossible : {e}")),
+        }
+    };
+    match (markup, styles) {
+        (Some(a), Some(b)) => Some(format!("{a} ; {b}")),
+        (a, b) => a.or(b),
+    }
+}
+
+fn rebuild_markup(p: &mut revel_project::Project) -> Option<String> {
     let before = revel_edit::editable::audit(&p.site).len();
     if before == 0 {
         return None;

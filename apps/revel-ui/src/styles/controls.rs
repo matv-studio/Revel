@@ -584,7 +584,9 @@ pub fn NumBox(
         // variable : sa taille à l'écran), convertie entre px et rem/em (16 px).
         // L'unité « écran » n'est pas une taille : on repart de la taille écrite.
         let base = [
-            value.get_untracked().filter(|v| !v.trim().ends_with(FIT_UNIT)),
+            value
+                .get_untracked()
+                .filter(|v| !v.trim().ends_with(FIT_UNIT)),
             Some(start.get_untracked()),
             Some(hint.get_untracked()),
         ]

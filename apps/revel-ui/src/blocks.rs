@@ -189,6 +189,13 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
                 parts.push(v);
             }
         }
+        // Horloge et toile de pixels (D-158).
+        if let Some(v) = crate::livetools::clock_settings(ui, ed, &at, attrs) {
+            parts.push(v);
+        }
+        if let Some(v) = crate::livetools::pixels_settings(ui, ed, &at, attrs) {
+            parts.push(v);
+        }
         // Image révélée au survol (D-125) : manière, halo, les deux images.
         if let Some(v) = attr(attrs, "data-revel-reveal") {
             parts.push(reveal_settings(

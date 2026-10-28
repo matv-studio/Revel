@@ -960,6 +960,12 @@ fn edit_seal(s: State<AppState>, path: String) -> Res<()> {
     s.core.edit_seal(&PathBuf::from(path)).map_err(err)
 }
 
+/// Mise à plat des styles du site ouvert (D-157), à appliquer comme une commande.
+#[tauri::command]
+fn edit_flatten_plan(s: State<AppState>, path: String) -> Res<revel_edit::styleaudit::FlattenPlan> {
+    s.core.edit_flatten_plan(&PathBuf::from(path)).map_err(err)
+}
+
 #[tauri::command]
 fn edit_undo(s: State<AppState>, path: String) -> Res<revel_edit::EditState> {
     s.core.edit_undo(&PathBuf::from(path)).map_err(err)
@@ -1739,6 +1745,7 @@ pub fn run() {
             edit_open,
             edit_apply,
             edit_seal,
+            edit_flatten_plan,
             edit_undo,
             edit_redo,
             edit_pages,

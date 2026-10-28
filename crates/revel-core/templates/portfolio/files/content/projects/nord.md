@@ -9,6 +9,7 @@ image: "@@p2:1800@@"
 gallery:
   - "@@p3:1200@@"
   - "@@p6:1200@@"
+offset: true
 description: "nord1"
 ---
 <p>nord2</p>

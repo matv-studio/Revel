@@ -697,13 +697,22 @@ impl Component {
         let Some(Node::Element { attrs, .. }) = self.root() else {
             return None;
         };
-        attrs
+        let v = attrs
             .iter()
             .find(|a| a.name == "class" && a.when.is_none())
-            .and_then(|a| a.value.as_deref())
-            .filter(|v| !v.contains("{{") && !v.contains("{%"))
-            .and_then(|v| v.split_whitespace().next())
-            .map(str::to_string)
+            .and_then(|a| a.value.as_deref())?;
+        // Partie écrite telle quelle avant la première expression : `carte{% if x %} is-x{% endif %}`
+        // garde `carte` ; une valeur collée (`carte-{{ x }}`) n'est pas une classe connue.
+        let cut = [v.find("{{"), v.find("{%")].into_iter().flatten().min();
+        let fixed = match cut {
+            Some(i) if v[i..].starts_with("{{") && !v[..i].ends_with(char::is_whitespace) => {
+                let head = &v[..i];
+                head.rsplit_once(char::is_whitespace).map_or("", |(a, _)| a)
+            }
+            Some(i) => &v[..i],
+            None => v,
+        };
+        fixed.split_whitespace().next().map(str::to_string)
     }
 
     pub fn variant(&self, id: &str) -> Option<&Variant> {

@@ -15,12 +15,13 @@ mod fx;
 mod layout;
 mod sections;
 
+pub(crate) use color::ColorInput;
 pub use ctx::watched;
 pub(crate) use ctx::{bp_name, find_rule, style_command};
 
 use crate::editor::Ed;
 use crate::{Ui, icons};
-use ctx::Sx;
+pub(crate) use ctx::Sx;
 use layout::{ChildSection, LayoutSection};
 use leptos::ev;
 use leptos::prelude::*;
@@ -35,6 +36,10 @@ const STATES: &[(&str, &str)] = &[
     (":hover", "styles-state-hover"),
     (":active", "styles-state-active"),
     (":focus-visible", "styles-state-focus"),
+    // Champ ou bouton sélectionné, à la souris comme au clavier.
+    (":focus", "styles-state-focus-any"),
+    // Bouton ou champ désactivé (flèche d'un carrousel arrivé au bout).
+    (":disabled", "styles-state-disabled"),
     // Lien vers la page affichée (marqué à la génération).
     ("[aria-current=\"page\"]", "styles-state-current"),
     // Onglet, filtre, élément pris au hasard : classe posée par le script du site.
@@ -54,6 +59,10 @@ const STATES: &[(&str, &str)] = &[
     ("^.is-paused", "styles-state-in-paused"),
     // Lecteur vidéo lancé : ce qu'il contient (image de couverture cachée…).
     ("^.is-playing", "styles-state-in-playing"),
+    // Menu ouvert (barre de navigation sur téléphone) : ce qu'il contient.
+    ("^.is-open", "styles-state-in-open-menu"),
+    // Panier vide (outil Panier) : ce qu'il contient (total, bouton de commande).
+    ("^.is-empty", "styles-state-in-empty-cart"),
 ];
 
 /// Champ « Ajouter une classe » des pastilles : propose les classes du site d'après la place de
@@ -473,6 +482,9 @@ const TAGS: &[(&str, &str)] = &[
     ("section", "styles-tag-section"),
     ("button", "styles-tag-button"),
     ("video", "styles-tag-video"),
+    ("svg", "styles-tag-svg"),
+    ("pre", "styles-tag-pre"),
+    ("code", "styles-tag-code"),
 ];
 
 /// Sélecteur de balise proposé pour l'élément (`p`, `body`…) et la clé de son libellé.

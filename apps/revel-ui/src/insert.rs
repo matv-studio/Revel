@@ -40,8 +40,14 @@ pub fn insertion_point(ed: Ed) -> Option<(Parent, usize)> {
             Some(t) => {
                 let node = revel_edit::address::node(d, &t).ok()?;
                 let (p, i) = match node {
+                    // Paragraphe ou titre : ne contient que du texte (un bloc dedans serait
+                    // sorti par le navigateur) ; l'ajout vient après.
                     Node::Element { tag, children, .. }
-                        if !VOID.contains(&tag.to_ascii_lowercase().as_str()) =>
+                        if !VOID.contains(&tag.to_ascii_lowercase().as_str())
+                            && !matches!(
+                                tag.to_ascii_lowercase().as_str(),
+                                "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+                            ) =>
                     {
                         (Parent::of(&t, Branch::Children), children.len())
                     }
@@ -442,6 +448,24 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     "insert-help-progress",
                     "",
                     icons::progress,
+                    "div",
+                    false,
+                ),
+                item(
+                    Preset::Clock,
+                    "insert-clock",
+                    "insert-help-clock",
+                    "",
+                    icons::clock,
+                    "p",
+                    false,
+                ),
+                item(
+                    Preset::Pixels,
+                    "insert-pixels",
+                    "insert-help-pixels",
+                    "",
+                    icons::pixels,
                     "div",
                     false,
                 ),

@@ -11,7 +11,7 @@
 .event-hero__facts span { padding: 10px 18px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); backdrop-filter: blur(8px); font-weight: 600; }
 .event-hero .btn { background: #ffffff; color: #15122b; border-color: #ffffff; }
 .session { display: grid; grid-template-columns: 110px 1fr auto; gap: 24px; align-items: baseline; padding: 24px 28px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
-.session + .session { margin-top: 12px; }
+.sessions { display: grid; gap: 12px; }
 .session__time { font-weight: 800; color: var(--accent); }
 .session__title { font-size: 21px; }
 .session__speaker { color: var(--muted); }

@@ -6,8 +6,31 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 27/10/2026 (dernière avancée : D-151 à D-155, après la 0.7.1). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 28/10/2026 (dernière avancée : D-155 à D-158, après la 0.7.1). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 28/10/2026 (projet « Sites Webs »), après la 0.7.1
+D-155 terminée, D-157 et D-158 ; ligne 8.14 de `docs/ETAPE-8.md` faite.
+- D-157 mise à plat des styles (`crates/revel-import/src/flatten/`, `revel flatten`, bouton clé de Classes, outil
+  MCP `make_styles_editable`) : faite à chaque import et à la création d'un site depuis un modèle. Modèles :
+  1 472 → 0 réglages en code, 162 pages identiques au pixel près (`REVEL_NO_FLATTEN=1` : modèle ou import tel
+  qu'écrit, pour comparer). Site Framer d'essai : 833 → 56 points, aucun écart de style calculé à 1440, 1000, 600
+  et 390 px sur les trois pages. Blocs `@supports` toujours vrais repris sans condition, replis des navigateurs
+  anciens (`display-p3`, `overflow: clip`) retirés, `box-sizing` en double retiré. Panneau : contour, clics, mots
+  longs, coupure des mots, cadrage d'une image (`object-position`), remplissage d'un dessin (`fill`), états
+  `:focus`, `:disabled`, `.is-open`, `.is-empty`, balises `svg`, `pre`, `code`.
+- D-158 horloge (`data-revel-clock`, `crates/revel-render/src/clock.rs`) et toile de pixels
+  (`data-revel-pixels`, `pixels.rs`) : Ajouter, réglages dans Styles (`apps/revel-ui/src/livetools.rs`), MCP ;
+  import de Framer (« Time & Date », « Pixel Trail ») par `Modules::widgets`.
+- Un ajout avec un paragraphe ou un titre sélectionné vient après lui (plus dedans).
+- Textes traduits liés à la seule langue (`Ui::ui_lang`, mémo) : changer un autre réglage (synchronisation
+  automatique) figeait l'interface ~30 s (chaque texte se réabonnait au signal des réglages, retrait des
+  abonnés en temps quadratique ; trouvé par un profil CDP pendant l'essai de l'éditeur).
+- Reste sur le site Framer d'essai : survol d'un lien dans un texte riche (`a:hover span`), variantes de bordure
+  `[data-border=true]:after` à variables, `h2:not(:first-child)`, `li > ul:nth-child(2)`.
+- Pièges : `pgrep -f motif` ou `pkill -f motif` dans une commande se trouvent eux-mêmes (boucle sans fin ou
+  shell tué) : attendre un fichier ou un numéro de processus ; supprimer les anciennes versions des
+  bibliothèques dans `target/debug/deps` libère ~9 Go (recompilées au besoin).
 
 ## Travail du 27/10/2026 depuis l'ancien compte (projet « Sites Webs »), après la 0.7.0
 Commits 4ce84f4 (CI réussie) et e1a6b98 ; D-142 à D-150 ; ligne 8.13

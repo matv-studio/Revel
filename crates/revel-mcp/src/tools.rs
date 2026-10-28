@@ -40,8 +40,9 @@ layers; elements that belong together (an item and its media) are linked by a se
 `--espace-section`; Settings › Colors and Sizes), fluid sizes as `clamp(min, fluid, max)`; classes read them \
 (`font-size: var(--titre-l)`). Rename one everywhere with `apply_commands` `{\"cmd\": \"rename_variable\", \"from\": \"step-3\", \"to\": \"titre-l\"}`.\n\
 - Structure: elements with classes; texts written in the elements (`set_text`); CSS on classes per breakpoint and \
-state (`set_styles`, states :hover :active :focus-visible [aria-current=\"page\"] .is-active [aria-pressed=\"false\"], or \
-inside an active element `.is-active .x`); text-shadow, transform-origin and clip-path are panel controls. Prefer `insert_preset` (Add panel) \
+state (`set_styles`, states :hover :active :focus-visible :focus :disabled [aria-current=\"page\"] .is-active [aria-pressed=\"false\"], or \
+inside an active element `.is-active .x`); text-shadow, transform-origin, clip-path, outline (width, style, color, offset), \
+pointer-events, overflow-wrap, word-break, object-position (images, videos) and fill (SVG drawings) are panel controls. Prefer `insert_preset` (Add panel) \
 for sections, grids, buttons, images, video, video player (YouTube/Vimeo/file with cover), icons, navbar, ticker \
 (endless scroll of logos/team), carousel, slideshow, tabs, accordion, list filters, collection list, blocks.\n\
 - CMS collections are for content that has its own pages (projects, articles, products: each entry is a page \
@@ -70,14 +71,15 @@ fields are read without prefix (`{{ title }}`).\n\
 `aria-label=\"Play the video{% if label %}: {{ label }}{% endif %}\"`; style properties bound to a value: \
 `style=\"background-color:{{ item.data.color }}\"`.\n\
 - Styles stay editable in the Styles panel: one class or combo class per rule (`.card`, `.card.card--dark`), or a tag \
-(`h2`, `p`), with at most a panel state (`:hover`, `:active`, `:focus-visible`, `[aria-current=\"page\"]`, `.is-active`, \
-`[open]`, `[aria-pressed=\"false\"]`) or an ancestor state (`.is-active .x`, `[open] .x`, `[aria-pressed=\"false\"] .x`, \
-`.is-paused .x`, `.is-playing .x`); tags inside a class (`.prose p`, `.title strong`: rich text, emphasized words); \
+(`h2`, `p`, `svg`, `pre`, `code`), with at most a panel state (`:hover`, `:active`, `:focus-visible`, `:focus`, `:disabled`, \
+`[aria-current=\"page\"]`, `.is-active`, `[open]`, `[aria-pressed=\"false\"]`) or an ancestor state (`.is-active .x`, \
+`[open] .x`, `[aria-pressed=\"false\"] .x`, `.is-paused .x`, `.is-playing .x`, `.is-open .x` menu open, `.is-empty .x` cart empty); tags inside a class (`.prose p`, `.title strong`: rich text, emphasized words); \
 a hover effect on children is a component variant (Hover variant of the component whose root has class `card`: \
 `.card:hover .card__title`); media queries are the site breakpoints only; colors and sizes are site variables on \
 `:root` (literal values; dark values in `@media (prefers-color-scheme: dark) { :root {…} }`, never class rules there); \
 no `::before`/`::after` (add an element), no `@keyframes` (Revel animations), no selector lists, no custom property \
-elsewhere, only properties with a panel control. `check_site` lists what breaks these rules (style_* kinds). Text \
+elsewhere, only properties with a panel control. `check_site` lists what breaks these rules (style_* kinds); \
+`make_styles_editable` fixes them with the same rendering. Text \
 fitted to the screen is the « Screen » unit of Styles › Text › Size: `--revel-fit: 55` in the rule (the text takes \
 55% of the screen height without overflowing its width; keep a `font-size` as the size without script).\n\
 - Site information (Settings › Site information: e-mail, phone, address, social links, menus) is shared by every page: \
@@ -99,6 +101,7 @@ with a `data-revel-switch-text=\"On|Off\"` child (insert_preset switch); light/d
 `aria-pressed=\"true\"` and `.is-active` in dark mode) toggling between the colors of Settings › Colors and their dark \
 values (`@media (prefers-color-scheme: dark)` on `:root`), choice kept by the browser, the device theme otherwise. \
 Scrolling: smooth scrolling `{\"cmd\": \"set_smooth_scroll\", \"on\": true}`; progress bar insert_preset scroll_progress (`data-revel-progress=\"parent|page\"`, the script sets the width of its children, the fill); masonry grid `data-revel-masonry`; navigation following the visible section `data-revel-spy=\"section\"` (its link to the current `#id` gets `is-active`). \
+Live tools (D-158): clock insert_preset clock (`<p data-revel-clock=\"time seconds\">`, its text replaced every second by the visitor's time or date in the page's language; words: `time` (default), `date` or `both`, `seconds`, `12h`, `nominutes`, `weekday`, `year`, `month=long|short|numeric|none`); pixel canvas insert_preset pixels (`data-revel-pixels=\"trail size=20\"` on a block: pixels drawn under the pointer, `trail` fades after `fade=<s>` (1 s), `draw` stays; `size=<px>`, `color=<css color or var(--site-color)>`, `click`: only while pressing). Framer's Time & Date and Pixel Trail components import as these. \
 Tabs: `data-revel-tabs` (options `hover`, `keys` for arrows/WASD anywhere, `sound=<url>`) with `data-revel-tab` \
 triggers and `data-revel-panel` panels (several series of panels each follow the tabs in order; the active tab and \
 filter get the class `is-active`); media on hover (a background video showing the hovered item's video, e.g. a \
@@ -775,6 +778,7 @@ impl Revel {
                 "insert_preset" => go!(insert_preset),
                 "set_layer" => go!(set_layer),
                 "check_site" => go!(check_site),
+                "make_styles_editable" => go!(make_styles_editable),
                 "get_site_map" => go!(get_site_map),
                 "check_links" => go!(check_links),
                 "replace_link" => go!(replace_link),
@@ -1377,6 +1381,42 @@ impl Revel {
             "issues": issues,
         }))
         .unwrap_or_default())
+    }
+
+    #[tool(
+        description = "Make every style editable in the Styles panel (Classes panel › Make editable): rules the panel cannot target (`.a .b`, `h1, h2`, `::after`, local variables, media queries other than the site breakpoints, Framer attribute selectors…) are moved onto the elements' classes with the same rendering, computed from the rendered pages (cascade, breakpoints, states, variables); a combo class is added when a class is shared, a pseudo-element with content becomes an element. One undo step. Returns the report and the rules kept as they are with the reason (rich text from the CMS, element repeated with different values, state in an ancestor outside a component). Imports and new sites from templates already do this."
+    )]
+    async fn make_styles_editable(&self, Parameters(a): Parameters<SiteArg>) -> CallToolResult {
+        let v = match self.call("edit_flatten_plan", &a.site, json!({})).await {
+            Ok(v) => v,
+            Err(e) => return fail(e),
+        };
+        let plan: revel_edit::styleaudit::FlattenPlan = match serde_json::from_value(v) {
+            Ok(p) => p,
+            Err(e) => return fail(e.to_string()),
+        };
+        let r = &plan.report;
+        let kept: Vec<String> = r
+            .kept
+            .iter()
+            .map(|(s, why)| format!("- {s}: {why}"))
+            .collect();
+        let what = format!(
+            "Styles made editable: {} rules moved onto classes ({} classes added, {} pseudo-elements became elements), {} unused rules removed, {} declarations translated, {} dropped, {} rules kept{}{}",
+            r.flattened,
+            r.classes,
+            r.pseudo,
+            r.dead,
+            r.translated,
+            r.dropped,
+            r.kept.len(),
+            if kept.is_empty() { "" } else { ":\n" },
+            kept.join("\n")
+        );
+        if matches!(&plan.command, Command::Batch { commands } if commands.is_empty()) {
+            return ok(format!("Nothing to change. {what}"));
+        }
+        self.apply(&a.site, plan.command, &what).await
     }
 
     #[tool(

@@ -204,7 +204,7 @@ pub fn SizeSection(sx: Sx) -> impl IntoView {
         )
     };
     view! {
-        <Section sx key="styles-size" props=&["width", "height", "min-width", "min-height", "max-width", "max-height", "overflow", "object-fit", "aspect-ratio"]>
+        <Section sx key="styles-size" props=&["width", "height", "min-width", "min-height", "max-width", "max-height", "overflow", "object-fit", "object-position", "aspect-ratio"]>
             <div class="style-grid">
                 <Cell sx props=&["width"] key="styles-width" units=SIZE_UNITS/>
                 <Cell sx props=&["height"] key="styles-height" units=SIZE_UNITS/>
@@ -222,6 +222,9 @@ pub fn SizeSection(sx: Sx) -> impl IntoView {
             <Show when=media>
                 <Row sx props=&["object-fit"] key="styles-fit">
                     <Choice sx prop="object-fit" options=opts(sx, FIT)/>
+                </Row>
+                <Row sx props=&["object-position"] key="styles-object-position">
+                    <PointGrid sx prop="object-position" key="styles-object-position"/>
                 </Row>
             </Show>
         </Section>
@@ -413,6 +416,15 @@ const WHITE_SPACE: &[Opt] = &[
     o("nowrap", "ws-nowrap"),
     o("pre-line", "ws-pre-line"),
     o("pre-wrap", "ws-pre-wrap"),
+];
+const OVERFLOW_WRAP: &[Opt] = &[
+    o("normal", "ow-normal"),
+    oa("anywhere", "ow-anywhere", &["break-word"]),
+];
+const WORD_BREAK: &[Opt] = &[
+    o("normal", "wb-normal"),
+    o("break-all", "wb-break-all"),
+    o("keep-all", "wb-keep-all"),
 ];
 /// Coupure des lignes : lignes équilibrées (titres), sans mot seul en fin (paragraphes).
 const TEXT_WRAP: &[Opt] = &[
@@ -638,7 +650,7 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
         <Section sx key="styles-typography" open=true props=&[
             "font-family", "font-weight", "font-size", "--revel-fit", "line-height", "letter-spacing", "color",
             "text-align", "font-style", "text-decoration-line", "text-transform", "white-space", "text-wrap",
-            "text-overflow", "text-shadow", "list-style-type",
+            "text-overflow", "text-shadow", "list-style-type", "overflow-wrap", "word-break", "fill",
         ]>
             <Row sx props=&["font-family"] key="styles-font-family">
                 <Choice sx prop="font-family" options=font_options(sx)/>
@@ -658,6 +670,13 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
             <Row sx props=&["color"] key="styles-color">
                 <ColorField sx prop="color" with_contrast=true/>
             </Row>
+            // Remplissage d'un dessin (SVG) : proposé sur les dessins et là où il est réglé.
+            <Show when=move || matches!(sx.tag.get().as_str(), "svg" | "path" | "use" | "circle" | "rect" | "polygon" | "g")
+                || sx.get("fill").here.is_some()>
+                <Row sx props=&["fill"] key="styles-fill">
+                    <ColorField sx prop="fill"/>
+                </Row>
+            </Show>
             <Row sx props=&["text-align"] key="styles-text-align">
                 <Seg sx prop="text-align" options=TEXT_ALIGN/>
             </Row>
@@ -676,6 +695,13 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
             </Row>
             <Row sx props=&["text-wrap"] key="styles-text-wrap">
                 <Choice sx prop="text-wrap" options=opts(sx, TEXT_WRAP)/>
+            </Row>
+            // Mots trop longs pour la ligne : coupés ou non ; coupure des mots en fin de ligne.
+            <Row sx props=&["overflow-wrap"] key="styles-overflow-wrap">
+                <Choice sx prop="overflow-wrap" options=opts(sx, OVERFLOW_WRAP)/>
+            </Row>
+            <Row sx props=&["word-break"] key="styles-word-break">
+                <Choice sx prop="word-break" options=opts(sx, WORD_BREAK)/>
             </Row>
             <Row sx props=&["text-overflow", "overflow", "white-space"] key="styles-truncate">
                 <Truncate sx/>
@@ -833,7 +859,8 @@ pub fn BorderSection(sx: Sx) -> impl IntoView {
     let corners = RwSignal::new(false);
     view! {
         <Section sx key="styles-borders" props=&["border-radius", "border-width", "border-style", "border-color",
-            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width"]>
+            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+            "outline-width", "outline-style", "outline-color", "outline-offset"]>
             <Row sx props=&["border-radius"] key="styles-border-radius" scrub=Some(LabelScrub { prop: "border-radius", unit: "px", step: 1.0, zero: "0px" })>
                 <div class="ctl-line">
                     <PropNum sx prop="border-radius" units=GAP_UNITS label="styles-border-radius"/>
@@ -872,6 +899,20 @@ pub fn BorderSection(sx: Sx) -> impl IntoView {
                     </Row>
                 }
             }}
+            // Contour : trait dessiné autour de la bordure (champ ou bouton sélectionné), sans
+            // changer la taille de l'élément.
+            <Row sx props=&["outline-width"] key="styles-outline" scrub=Some(LabelScrub { prop: "outline-width", unit: "px", step: 1.0, zero: "0px" })>
+                <PropNum sx prop="outline-width" units=GAP_UNITS label="styles-outline"/>
+            </Row>
+            <Row sx props=&["outline-style"] key="styles-outline-style" stack=true>
+                <Seg sx prop="outline-style" options=BORDER_STYLE/>
+            </Row>
+            <Row sx props=&["outline-color"] key="styles-outline-color">
+                <ColorField sx prop="outline-color"/>
+            </Row>
+            <Row sx props=&["outline-offset"] key="styles-outline-offset" scrub=Some(LabelScrub { prop: "outline-offset", unit: "px", step: 1.0, zero: "0px" })>
+                <PropNum sx prop="outline-offset" units=GAP_UNITS label="styles-outline-offset"/>
+            </Row>
         </Section>
     }
 }
@@ -889,6 +930,11 @@ const CURSORS: &[Opt] = &[
     o("not-allowed", "cursor-not-allowed"),
     o("help", "cursor-help"),
     o("none", "cursor-none"),
+];
+
+const POINTER: &[Opt] = &[
+    o("auto", "pointer-events-auto"),
+    o("none", "pointer-events-none"),
 ];
 
 /// Mélange avec ce qui est dessous (comme les modes de fusion d'un logiciel de dessin).
@@ -1068,8 +1114,15 @@ fn pos_name(ui: crate::Ui, c: usize, r: usize) -> String {
 /// (`25% 50%`).
 #[component]
 fn TransformOrigin(sx: Sx) -> impl IntoView {
+    view! { <PointGrid sx prop="transform-origin" key="styles-transform-origin"/> }
+}
+
+/// Point sur une grille 3 × 3, ou valeur écrite : appui des transformations (`transform-origin`),
+/// cadrage d'une image ou d'une vidéo dans sa boîte (`object-position`).
+#[component]
+fn PointGrid(sx: Sx, prop: &'static str, key: &'static str) -> impl IntoView {
     let ui = sx.ui;
-    let pv = Memo::new(move |_| sx.get("transform-origin"));
+    let pv = Memo::new(move |_| sx.get(prop));
     const X: [&str; 3] = ["left", "center", "right"];
     const Y: [&str; 3] = ["top", "center", "bottom"];
     let at = move || {
@@ -1095,20 +1148,20 @@ fn TransformOrigin(sx: Sx) -> impl IntoView {
     };
     view! {
         <div class="ctl-line">
-            <div class="align-box align-box--small" role="group" aria-label=ui.t("styles-transform-origin")>
+            <div class="align-box align-box--small" role="group" aria-label=ui.t(key)>
                 {(0..3).flat_map(|r| (0..3).map(move |c| (c, r))).map(|(c, r)| view! {
                     <button class="align-cell" class:is-on=move || at() == (Some(c), Some(r))
                         title=pos_name(ui, c, r)
                         on:click=move |_| {
                             let v = if (c, r) == (1, 1) { "center".to_string() } else { format!("{} {}", X[c], Y[r]) };
-                            sx.set("transform-origin", Some(v))
+                            sx.set(prop, Some(v))
                         }><i></i></button>
                 }).collect_view()}
             </div>
-            <input class="input input--mono" aria-label=ui.t("styles-transform-origin")
+            <input class="input input--mono" aria-label=ui.t(key)
                 placeholder=ui.t("pos-center")
                 prop:value=move || pv.get().here.unwrap_or_default()
-                on:change=move |e| { let v = event_target_value(&e); sx.set("transform-origin", (!v.trim().is_empty()).then(|| v.trim().to_string())); }/>
+                on:change=move |e| { let v = event_target_value(&e); sx.set(prop, (!v.trim().is_empty()).then(|| v.trim().to_string())); }/>
         </div>
     }
 }
@@ -1242,7 +1295,7 @@ fn ClipPath(sx: Sx) -> impl IntoView {
 #[component]
 pub fn EffectsSection(sx: Sx) -> impl IntoView {
     view! {
-        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transform-origin", "clip-path", "transition"]>
+        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "pointer-events", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transform-origin", "clip-path", "transition"]>
             <Row sx props=&["mix-blend-mode"] key="styles-blend"><Choice sx prop="mix-blend-mode" options=opts(sx, BLEND)/></Row>
             <Row sx props=&["opacity"] key="styles-opacity"><Opacity sx/></Row>
             <Row sx props=&["box-shadow"] key="styles-box-shadow" stack=true><Shadows sx/></Row>
@@ -1259,6 +1312,9 @@ pub fn EffectsSection(sx: Sx) -> impl IntoView {
                 <FuncList sx prop="backdrop-filter" defs=FILTERS add_key="fx-backdrop-add" none_key="fx-filter-none"/>
             </Row>
             <Row sx props=&["cursor"] key="styles-cursor"><Choice sx prop="cursor" options=opts(sx, CURSORS)/></Row>
+            // Clics : ignorés par l'élément (texte posé sur une image, bouton indisponible), ils
+            // passent à ce qui est dessous.
+            <Row sx props=&["pointer-events"] key="styles-pointer-events" stack=true><Seg sx prop="pointer-events" options=POINTER/></Row>
         </Section>
     }
 }

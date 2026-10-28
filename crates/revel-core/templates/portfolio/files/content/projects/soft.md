@@ -9,6 +9,7 @@ image: "@@p6:1800@@"
 gallery:
   - "@@p5:1200@@"
   - "@@p2:1200@@"
+offset: true
 description: "soft1"
 ---
 <p>soft2</p>

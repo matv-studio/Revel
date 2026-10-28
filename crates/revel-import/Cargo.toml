@@ -10,6 +10,7 @@ publish.workspace = true
 revel-model.workspace = true
 revel-markup.workspace = true
 revel-render.workspace = true
+revel-edit.workspace = true
 revel-style.workspace = true
 revel-project.workspace = true
 # Outil qui construit un site (SvelteKit, Hugo…) : reconnu comme pour sa construction.

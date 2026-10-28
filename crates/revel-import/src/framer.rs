@@ -309,6 +309,10 @@ pub struct Modules {
     pub component_names: HashMap<String, String>,
     /// Classe d'un élément à glisser (`drag` de Framer) → réglages de `data-revel-drag` (D-154).
     pub drag: HashMap<String, String>,
+    /// Classe du conteneur d'un composant de code repris par un outil de Revel (D-158) →
+    /// (attribut, valeur) : horloge « Time & Date » (`data-revel-clock`), « Pixel Trail »
+    /// (`data-revel-pixels`).
+    pub widgets: HashMap<String, (String, String)>,
     /// Lu module par module, rassemblé dans `spy` à la fin du chargement.
     spy_targets: Vec<Vec<String>>,
     variant_class: HashMap<String, String>,
@@ -438,6 +442,7 @@ impl Modules {
         self.read_appear(js, &vars);
         self.read_hover(js, &vars);
         self.read_drag(js);
+        self.read_widgets(js);
         self.read_cms(js);
         let loc = regex::Regex::new(r"\{code:`([^`]*)`,id:`([^`]*)`,name:`([^`]*)`,slug:`([^`]*)`")
             .expect("regex");
@@ -592,6 +597,96 @@ impl Modules {
                 opts.push("momentum");
             }
             self.drag.entry(class).or_insert_with(|| opts.join(" "));
+        }
+    }
+
+    /// Composants de code devenus des outils de Revel (D-158) : propriétés de l'instance
+    /// (`outputType:` de « Time & Date », `tileSize:` de « Pixel Trail ») et classe du conteneur
+    /// qui l'enveloppe (`className:`…-container``, juste avant).
+    fn read_widgets(&mut self, js: &str) {
+        let re = regex::Regex::new(r"[,{](outputType|tileSize):").expect("regex");
+        for m in re.captures_iter(js) {
+            let at = m.get(0).expect("m").start() + 1;
+            let Some(obj) = enclosing_object(js, at) else {
+                continue;
+            };
+            let start = obj.as_ptr() as usize - js.as_ptr() as usize;
+            let before = &js[start.saturating_sub(600)..start];
+            let Some(class) = before.rfind("className:`").and_then(|i| {
+                before[i + 11..]
+                    .split('`')
+                    .next()?
+                    .split_whitespace()
+                    .find(|c| c.ends_with("-container"))
+                    .map(str::to_string)
+            }) else {
+                continue;
+            };
+            let entries = top_entries(obj);
+            let get = |k: &str| {
+                entries
+                    .iter()
+                    .find(|(x, _)| x == k)
+                    .map(|(_, v)| v.trim_matches('`').to_string())
+            };
+            let off = |k: &str| get(k).as_deref() == Some("!1");
+            let mut o: Vec<String> = Vec::new();
+            let value = if &m[1] == "outputType" {
+                if get("outputType").as_deref() == Some("date") {
+                    o.push("date".into());
+                    if !off("showWeekday") {
+                        o.push("weekday".into());
+                    }
+                    if !off("showYear") {
+                        o.push("year".into());
+                    }
+                    if off("showMonth") {
+                        o.push("month=none".into());
+                    } else if let Some(f) = get("monthFormat").filter(|f| f != "long") {
+                        o.push(format!("month={f}"));
+                    }
+                } else {
+                    o.push("time".into());
+                    if off("showMinutes") {
+                        o.push("nominutes".into());
+                    } else if !off("showSeconds") {
+                        o.push("seconds".into());
+                    }
+                    if get("timeFormat").as_deref() == Some("12h") {
+                        o.push("12h".into());
+                    }
+                }
+                ("data-revel-clock", o.join(" "))
+            } else {
+                let draw = get("mode").as_deref() == Some("drawing");
+                o.push(if draw { "draw" } else { "trail" }.into());
+                o.push(format!(
+                    "size={}",
+                    get("tileSize").unwrap_or_else(|| "50".into())
+                ));
+                let color: String = get("trailColor")
+                    .unwrap_or_else(|| "#FFF".into())
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect();
+                o.push(format!("color={color}"));
+                if get("trigger").as_deref() == Some("click") {
+                    o.push("click".into());
+                }
+                if !draw
+                    && let Some(t) = get("transition")
+                    && let Some(d) = top_entries(&t)
+                        .into_iter()
+                        .find(|(k, _)| k == "duration")
+                        .and_then(|(_, v)| v.parse::<f64>().ok())
+                {
+                    o.push(format!("fade={d}"));
+                }
+                ("data-revel-pixels", o.join(" "))
+            };
+            self.widgets
+                .entry(class)
+                .or_insert_with(|| (value.0.to_string(), value.1));
         }
     }
 
@@ -1163,6 +1258,28 @@ mod tests {
         let fields = cms_fields(schema);
         let titles: Vec<&str> = fields.iter().map(|f| f.1.as_str()).collect();
         assert_eq!(titles, vec!["Project title", "Gallery"]);
+    }
+
+    #[test]
+    fn horloge_et_toile_de_pixels() {
+        let js = "m(B,{className:`framer-3afrbj-container`,nodeId:`z`,children:m(K,{color:`rgb(153, 153, 153)`,monthFormat:`long`,outputType:`time`,showMinutes:!0,showSeconds:!0,timeFormat:`24h`,width:`100%`})}),\
+m(B,{className:`framer-1vdujbv-container`,isAuthoredByUser:!0,children:m(Ee,{delay:1,mode:`drawing`,tileSize:7,trailColor:`rgb(0, 0, 0)`,transition:{bounce:0,delay:0,duration:.5,type:`spring`},trigger:`click`})}),\
+m(B,{className:`framer-d-container`,children:m(K,{outputType:`date`,showYear:!1,monthFormat:`short`})})";
+        let mut m = Modules::default();
+        m.read(js, "a.mjs");
+        let w = |c: &str| m.widgets.get(c).map(|(a, v)| format!("{a}={v}"));
+        assert_eq!(
+            w("framer-3afrbj-container").as_deref(),
+            Some("data-revel-clock=time seconds")
+        );
+        assert_eq!(
+            w("framer-1vdujbv-container").as_deref(),
+            Some("data-revel-pixels=draw size=7 color=rgb(0,0,0) click")
+        );
+        assert_eq!(
+            w("framer-d-container").as_deref(),
+            Some("data-revel-clock=date weekday month=short")
+        );
     }
 
     #[test]

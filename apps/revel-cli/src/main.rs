@@ -30,6 +30,13 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Met à plat les styles (D-157) : règles que le panneau Styles ne sait pas régler reportées
+    /// sur les classes des éléments ; `--dry-run` : bilan sans enregistrer.
+    Flatten {
+        dir: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Reconstruit un site dans la forme de l'interface (données et calculs écrits, listes de
     /// collection et propriétés de composants gardées) ; `--dry-run` : relevé avant et après.
     Rebuild {
@@ -268,6 +275,26 @@ fn main() -> Result<()> {
                     );
                 }
             }
+        }
+        Command::Flatten { dir, dry_run } => {
+            let mut p = Project::open(&dir)?;
+            let before = revel_edit::styleaudit::audit(&p.site).len();
+            let report = if dry_run {
+                let (cmd, report) =
+                    revel_core::flatten::plan(&p).map_err(|e| anyhow::anyhow!("{e}"))?;
+                revel_edit::apply(&mut p.site, &cmd)?;
+                report
+            } else {
+                revel_core::flatten::flatten_project(&mut p).map_err(|e| anyhow::anyhow!("{e}"))?
+            };
+            let after = revel_edit::styleaudit::audit(&p.site).len();
+            if let Some(s) = revel_core::flatten::summary(&report) {
+                println!("{s}");
+            }
+            for (sel, why) in &report.kept {
+                println!("gardée : {sel} — {why}");
+            }
+            println!("relevé des styles : {before} -> {after}");
         }
         Command::Rebuild { dir, dry_run } => {
             let mut p = Project::open(&dir)?;

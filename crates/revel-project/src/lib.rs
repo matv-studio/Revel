@@ -657,6 +657,71 @@ impl Project {
         Ok(revel_render::render_editor(&input, url, opts)?)
     }
 
+    /// HTML des contenus (corps et champs qui contiennent du balisage) : texte riche que les
+    /// styles peuvent toucher hors des pages rendues (mise à plat des styles).
+    pub fn content_html(&self) -> Result<Vec<String>, ProjectError> {
+        fn strings(v: &Value, out: &mut Vec<String>) {
+            match v {
+                Value::String(s) if s.contains('<') => out.push(s.clone()),
+                Value::Array(a) => a.iter().for_each(|x| strings(x, out)),
+                Value::Object(o) => o.values().for_each(|x| strings(x, out)),
+                _ => {}
+            }
+        }
+        let mut out = Vec::new();
+        for e in self.load_entries()? {
+            if e.body.contains('<') {
+                out.push(e.body.clone());
+            }
+            strings(&e.data, &mut out);
+        }
+        Ok(out)
+    }
+
+    /// Pages du site rendues pour l'éditeur (repères `data-rv`), pour la mise à plat des styles :
+    /// toutes les pages générées, au plus `per_section` par premier dossier de l'adresse (contenus
+    /// d'une collection), sans traitement des images.
+    pub fn editor_pages(&self, per_section: usize) -> Result<Vec<String>, ProjectError> {
+        let site = self.site_with_data()?;
+        let input = BuildInput {
+            site: &site,
+            entries: self.load_entries()?,
+            locales: self.load_locales()?,
+            environment: "production".to_string(),
+            version: self.version_tag(&site),
+            hooks: Arc::new(revel_render::PlainAssets),
+            now: chrono::Utc::now(),
+        };
+        let built = revel_render::build(&input)?;
+        let mut urls: Vec<String> = built
+            .files
+            .iter()
+            .filter_map(|f| page_url(&f.path))
+            .collect();
+        urls.sort_by_key(|u| (u.matches('/').count(), u.clone()));
+        let mut seen: BTreeMap<String, usize> = BTreeMap::new();
+        let mut out = Vec::new();
+        for u in urls {
+            let section = u
+                .trim_start_matches('/')
+                .split('/')
+                .next()
+                .unwrap_or("")
+                .to_string();
+            let n = seen.entry(section).or_default();
+            if *n >= per_section && u.matches('/').count() > 2 {
+                continue;
+            }
+            *n += 1;
+            if let Some(page) =
+                revel_render::render_editor(&input, &u, &EditorOptions { scripts: false })?
+            {
+                out.push(page.html);
+            }
+        }
+        Ok(out)
+    }
+
     /// Composant seul pour l'éditeur (canevas des composants, comme Framer) : en-tête du site
     /// (feuilles de style, polices) et attributs de `body` du gabarit extérieur de la page
     /// `reference` (variables de la page reprises), le composant au milieu de la page, dans la

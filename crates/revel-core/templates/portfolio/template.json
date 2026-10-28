@@ -1,29 +1,151 @@
 {
-  "name": "Portfolio",
-  "category": "creative",
-  "order": 50,
-  "description": "[[Portfolio de designer : projets dans le CMS avec galerie, page de projet commune, survols animés.||Designer portfolio: projects in the CMS with gallery, shared project page, animated hovers.]]",
-  "preview": "p5",
-  "palette": ["#efeeea", "#111111", "#ff4f1f"],
-  "features": ["cms", "masonry", "hover", "dark", "smooth"],
-  "fonts": [ { "family": "Space Grotesk", "variants": ["400", "500", "700"] } ],
-  "settings": { "smooth_scroll": true, "page_transition": "fade" },
-  "navbar": { "cta": "[[Me contacter||Get in touch]]", "cta_link": "mailto:hello@lena.design" },
-  "site": {
-    "description": "[[Designer graphique indépendante : identités, éditions et emballages.||Independent graphic designer: identities, print and packaging.]]",
-    "email": "hello@lena.design",
-    "phone": "",
-    "address": "[[Nantes, France||Lisbon, Portugal]]",
-    "menus": {
-      "main": [ { "label": "[[Projets||Work]]", "url": "/" }, { "label": "[[À propos||About]]", "url": "[[/a-propos/||/about/]]" } ],
-      "social": [ { "label": "Behance", "url": "https://www.behance.net/" }, { "label": "Instagram", "url": "https://www.instagram.com/" }, { "label": "LinkedIn", "url": "https://www.linkedin.com/" } ]
+ "name": "Portfolio",
+ "category": "creative",
+ "order": 50,
+ "description": "[[Portfolio de designer : projets dans le CMS avec galerie, page de projet commune, survols animés.||Designer portfolio: projects in the CMS with gallery, shared project page, animated hovers.]]",
+ "preview": "p5",
+ "palette": [
+  "#efeeea",
+  "#111111",
+  "#ff4f1f"
+ ],
+ "features": [
+  "cms",
+  "masonry",
+  "hover",
+  "dark",
+  "smooth"
+ ],
+ "fonts": [
+  {
+   "family": "Space Grotesk",
+   "variants": [
+    "400",
+    "500",
+    "700"
+   ]
+  }
+ ],
+ "settings": {
+  "smooth_scroll": true,
+  "page_transition": "fade"
+ },
+ "navbar": {
+  "cta": "[[Me contacter||Get in touch]]",
+  "cta_link": "mailto:hello@lena.design"
+ },
+ "site": {
+  "description": "[[Designer graphique indépendante : identités, éditions et emballages.||Independent graphic designer: identities, print and packaging.]]",
+  "email": "hello@lena.design",
+  "phone": "",
+  "address": "[[Nantes, France||Lisbon, Portugal]]",
+  "menus": {
+   "main": [
+    {
+     "label": "[[Projets||Work]]",
+     "url": "/"
+    },
+    {
+     "label": "[[À propos||About]]",
+     "url": "[[/a-propos/||/about/]]"
     }
+   ],
+   "social": [
+    {
+     "label": "Behance",
+     "url": "https://www.behance.net/"
+    },
+    {
+     "label": "Instagram",
+     "url": "https://www.instagram.com/"
+    },
+    {
+     "label": "LinkedIn",
+     "url": "https://www.linkedin.com/"
+    }
+   ]
+  }
+ },
+ "kit": [
+  "navbar",
+  "footer"
+ ],
+ "components": [
+  {
+   "id": "work-item",
+   "name": "[[Projet de la grille||Grid project]]",
+   "props": [
+    {
+     "name": "image",
+     "label": "Image",
+     "type": "image",
+     "default": ""
+    },
+    {
+     "name": "title",
+     "label": "[[Titre||Title]]",
+     "type": "text",
+     "default": "[[Projet||Project]]"
+    },
+    {
+     "name": "year",
+     "label": "[[Année||Year]]",
+     "type": "text",
+     "default": ""
+    },
+    {
+     "name": "category",
+     "label": "[[Catégorie||Category]]",
+     "type": "text",
+     "default": ""
+    },
+    {
+     "name": "link",
+     "label": "[[Lien||Link]]",
+     "type": "link",
+     "default": "#"
+    },
+    {
+     "name": "offset",
+     "label": "[[Décalé vers le bas||Shifted down]]",
+     "type": "switch",
+     "default": false
+    }
+   ]
+  }
+ ],
+ "layouts": [
+  {
+   "id": "base"
   },
-  "kit": ["navbar", "footer"],
-  "layouts": [ { "id": "base" }, { "id": "project", "parent": "base" } ],
-  "collections": [ { "id": "projects", "folder": "content/projects", "path": "[[/projets/{{ slug }}/||/work/{{ slug }}/]]", "layout": "project", "sort": { "field": "order", "descending": false } } ],
-  "pages": [
-    { "id": "index", "path": "/", "name": "[[Projets||Work]]" },
-    { "id": "about", "path": "[[/a-propos/||/about/]]", "name": "[[À propos||About]]", "title": "[[À propos||About]]" }
-  ]
+  {
+   "id": "project",
+   "parent": "base"
+  }
+ ],
+ "collections": [
+  {
+   "id": "projects",
+   "folder": "content/projects",
+   "path": "[[/projets/{{ slug }}/||/work/{{ slug }}/]]",
+   "layout": "project",
+   "sort": {
+    "field": "order",
+    "descending": false
+   }
+  }
+ ],
+ "pages": [
+  {
+   "id": "index",
+   "path": "/",
+   "name": "[[Projets||Work]]"
+  },
+  {
+   "id": "about",
+   "path": "[[/a-propos/||/about/]]",
+   "name": "[[À propos||About]]",
+   "title": "[[À propos||About]]"
+  }
+ ]
 }

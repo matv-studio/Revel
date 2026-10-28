@@ -63,6 +63,50 @@ pub fn apply_page(head: &mut [Node], body: &mut [Node], m: &Modules, css: &mut S
             for a in ["draggable", "tabindex"] {
                 attrs.retain(|x| x.name != a);
             }
+            // Écrits par le script de Revel (D-154), comme par celui de Framer.
+            for prop in [
+                "-webkit-touch-callout",
+                "-webkit-user-select",
+                "user-select",
+                "touch-action",
+            ] {
+                set_style(attrs, prop, None);
+            }
+            count += 1;
+        }
+        // Dessins de Framer (`data-framer-component-type="SVG"`) : `image-rendering` sans effet
+        // sur un dessin vectoriel ; réserve des symboles (`#svg-templates`, vide et sans taille) :
+        // `contain` sans effet.
+        if attr(attrs, "data-framer-component-type") == Some("SVG") {
+            set_style(attrs, "image-rendering", None);
+        }
+        if attr(attrs, "id") == Some("svg-templates") {
+            set_style(attrs, "contain", None);
+        }
+        // Horloge et toile de pixels (D-158) : outils de Revel à la place des composants de code.
+        let widget = classes(attrs).find_map(|c| m.widgets.get(c)).cloned();
+        if let Some((name, value)) = widget
+            && attr(attrs, &name).is_none()
+        {
+            if name == "data-revel-clock" {
+                // Texte rendu par Framer (`<p>` caché jusqu'au script) : il devient l'horloge.
+                let p = children.iter_mut().find_map(|c| match c {
+                    Node::Element { tag, attrs, .. } if tag == "p" => Some(attrs),
+                    _ => None,
+                });
+                let target = match p {
+                    Some(p) => p,
+                    None => attrs,
+                };
+                for prop in ["visibility", "font-variant-numeric", "white-space"] {
+                    set_style(target, prop, None);
+                }
+                set_attr(target, &name, value);
+            } else {
+                // Toile dessinée par le script de Revel : les calques de Framer retirés.
+                children.clear();
+                set_attr(attrs, &name, value);
+            }
             count += 1;
         }
         // Apparition au défilement (sauf si une autre animation est déjà reprise).

@@ -186,6 +186,56 @@ fn remove_unused(ui: Ui, ed: Ed, names: Vec<String>) {
     ));
 }
 
+/// Rendre réglable (D-157) : les règles que le panneau Styles ne sait pas régler sont reportées
+/// sur les classes des éléments (calcul du cœur sur les pages rendues), après confirmation ;
+/// une seule étape d'annulation.
+fn flatten(ui: Ui, ed: Ed) {
+    let path = ed.path.get_value();
+    leptos::task::spawn_local(async move {
+        let Ok(plan) = crate::api::edit_flatten_plan(&path).await else {
+            return;
+        };
+        let r = plan.report;
+        let changed = r.flattened + r.dead + r.translated + r.dropped;
+        let body = ui.now(
+            "classes-flatten-body",
+            &[
+                ("moved", r.flattened.to_string()),
+                ("classes", r.classes.to_string()),
+                ("pseudo", r.pseudo.to_string()),
+                ("dead", r.dead.to_string()),
+                ("kept", r.kept.len().to_string()),
+            ],
+        );
+        let kept: Vec<String> = r
+            .kept
+            .iter()
+            .map(|(s, why)| format!("{s} — {why}"))
+            .collect();
+        let body = if kept.is_empty() {
+            body
+        } else {
+            format!("{body}\n{}", kept.join("\n"))
+        };
+        if changed == 0 {
+            ui.ask.set(Some(crate::dialog::Ask::confirm(
+                ui.now("classes-flatten-none", &[]),
+                Some(body),
+                ui.now("action-close", &[]),
+                || {},
+            )));
+            return;
+        }
+        let command = plan.command;
+        ui.ask.set(Some(crate::dialog::Ask::confirm(
+            ui.now("classes-flatten-title", &[]),
+            Some(body),
+            ui.now("classes-flatten-apply", &[]),
+            move || ed.apply(ui, command.clone(), false),
+        )));
+    });
+}
+
 /// Panneau Classes.
 #[component]
 pub fn Classes() -> impl IntoView {
@@ -193,6 +243,12 @@ pub fn Classes() -> impl IntoView {
     let ed = expect_context::<Ed>();
     let q = RwSignal::new(String::new());
     let unused_only = RwSignal::new(false);
+    // Règles écrites en code (relevé des styles, D-151) : ce que « Rendre réglable » reprend.
+    let written = Memo::new(move |_| {
+        ed.doc
+            .with(|d| d.as_ref().map(|d| revel_edit::styleaudit::audit(d).len()))
+            .unwrap_or(0)
+    });
     let open = RwSignal::new(None::<String>);
     let all = Memo::new(move |_| {
         ed.doc
@@ -329,6 +385,10 @@ pub fn Classes() -> impl IntoView {
                     class:is-on=move || unused_only.get() aria-pressed=move || unused_only.get().to_string()
                     title=ui.t("classes-unused-filter") aria-label=ui.t("classes-unused-filter")
                     on:click=move |_| unused_only.update(|v| *v = !*v)>{icons::filter()}</button>
+                <button class="icon-btn icon-btn--small" data-action="flatten"
+                    title=move || ui.tx("classes-flatten", &[("count", written.get().to_string())])
+                    aria-label=move || ui.tx("classes-flatten", &[("count", written.get().to_string())])
+                    on:click=move |_| flatten(ui, ed)>{icons::wrench()}</button>
                 <button class="icon-btn icon-btn--small" data-action="clean"
                     title=move || ui.tx("classes-clean", &[("count", unused.with(Vec::len).to_string())])
                     aria-label=move || ui.tx("classes-clean", &[("count", unused.with(Vec::len).to_string())])

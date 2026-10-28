@@ -763,7 +763,7 @@
     var still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     dragged.push(st);
     el.style.touchAction = st.o.axis === "x" ? "pan-y" : st.o.axis === "y" ? "pan-x" : "none";
-    el.style.userSelect = "none";
+    el.style.userSelect = el.style.webkitUserSelect = el.style.webkitTouchCallout = "none";
     if (!el.style.cursor) el.style.cursor = "grab";
     el.setAttribute("draggable", "false");
     var px = 0, py = 0, sx = 0, sy = 0, trail = [];

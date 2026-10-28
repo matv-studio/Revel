@@ -5573,6 +5573,7 @@ dependencies = [
  "percent-encoding",
  "regex",
  "revel-build",
+ "revel-edit",
  "revel-markup",
  "revel-model",
  "revel-project",

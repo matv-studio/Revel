@@ -242,14 +242,44 @@ pub fn clean(site: &mut Site, report: &mut Report) -> Cleaned {
             }
         });
     }
+    // Thème de Framer : jetons écrits sur `body` (ou `:root`), valeur sombre dans
+    // `prefers-color-scheme: dark` ; ils deviennent des couleurs du site.
+    let mut theme: BTreeMap<String, String> = BTreeMap::new();
+    let mut theme_dark: BTreeMap<String, String> = BTreeMap::new();
+    if let Some(sh) = &site.stylesheet {
+        for item in &sh.items {
+            if let StyleItem::Rule(r) = item
+                && matches!(r.selector.trim(), "body" | ":root" | "html")
+            {
+                let dark = r.media.as_deref().is_some_and(|m| {
+                    m.contains("prefers-color-scheme: dark")
+                        || m.contains("prefers-color-scheme:dark")
+                });
+                if r.media.is_some() && !dark {
+                    continue;
+                }
+                for d in &r.decls {
+                    if let Some(id) = d.prop.strip_prefix("--token-") {
+                        let target = if dark { &mut theme_dark } else { &mut theme };
+                        target.insert(id.to_string(), d.value.trim().to_string());
+                        tokens
+                            .entry(id.to_string())
+                            .or_insert_with(|| d.value.trim().to_string());
+                    }
+                }
+            }
+        }
+    }
     let declared = declared_vars(site);
     let mut names: HashMap<String, String> = HashMap::new();
     let mut root_decls: Vec<Decl> = Vec::new();
+    let mut dark_decls: Vec<Decl> = Vec::new();
     for (id, fb) in &tokens {
-        // Jeton déclaré ailleurs (thème de Framer) : laissé tel quel.
-        if declared.contains(&format!("token-{id}")) {
+        // Jeton déclaré ailleurs que dans le thème (réglé par un élément) : laissé tel quel.
+        if declared.contains(&format!("token-{id}")) && !theme.contains_key(id) {
             continue;
         }
+        let fb = theme.get(id).unwrap_or(fb);
         let fb = resolve(fb, &|_| false, &|_| None);
         if revel_style::values::color::Rgba::parse(&fb).is_none() {
             continue;
@@ -261,6 +291,16 @@ pub fn clean(site: &mut Site, report: &mut Report) -> Cleaned {
             value: fb,
             important: false,
         });
+        if let Some(dv) = theme_dark.get(id) {
+            let dv = resolve(dv, &|_| false, &|_| None);
+            if revel_style::values::color::Rgba::parse(&dv).is_some() {
+                dark_decls.push(Decl {
+                    prop: format!("--{name}"),
+                    value: dv,
+                    important: false,
+                });
+            }
+        }
     }
     done.colors = root_decls.len();
     // Valeur réécrite : jetons → couleurs du site ; variables jamais déclarées → repli ; les
@@ -271,7 +311,14 @@ pub fn clean(site: &mut Site, report: &mut Report) -> Cleaned {
         }
         resolve(
             v,
-            &|n| declared.contains(n) || names.values().any(|x| x == n),
+            // Jeton devenu couleur du site : remplacé même s'il était déclaré (thème).
+            &|n| {
+                (declared.contains(n)
+                    && !n
+                        .strip_prefix("token-")
+                        .is_some_and(|id| names.contains_key(id)))
+                    || names.values().any(|x| x == n)
+            },
             &|n| {
                 n.strip_prefix("token-")
                     .and_then(|id| names.get(id))
@@ -292,6 +339,12 @@ pub fn clean(site: &mut Site, report: &mut Report) -> Cleaned {
             .decls
             .iter()
             .filter(|d| !DROPPED.contains(&d.prop.as_str()))
+            // Jeton du thème devenu une couleur du site.
+            .filter(|d| {
+                !d.prop
+                    .strip_prefix("--token-")
+                    .is_some_and(|id| names.contains_key(id))
+            })
             .map(|d| Decl {
                 value: fix(&d.value),
                 ..d.clone()
@@ -323,6 +376,25 @@ pub fn clean(site: &mut Site, report: &mut Report) -> Cleaned {
                     decls: root_decls,
                 }),
             ),
+        }
+    }
+    if !dark_decls.is_empty() {
+        let dark_media = "(prefers-color-scheme: dark)".to_string();
+        let at = out.iter().position(|i| {
+            matches!(i, StyleItem::Rule(r) if r.selector == ":root" && r.media.as_deref() == Some(dark_media.as_str()))
+        });
+        match at {
+            Some(i) => {
+                if let StyleItem::Rule(r) = &mut out[i] {
+                    r.decls.extend(dark_decls);
+                }
+            }
+            None => out.push(StyleItem::Rule(StyleRule {
+                id: None,
+                selector: ":root".into(),
+                media: Some(dark_media),
+                decls: dark_decls,
+            })),
         }
     }
     sheet.items = out;
@@ -361,6 +433,11 @@ pub fn clean(site: &mut Site, report: &mut Report) -> Cleaned {
                     let decls: Vec<(String, String)> = style
                         .into_iter()
                         .filter(|(k, _)| !DROPPED.contains(&k.as_str()))
+                        // Valeur par défaut (milieu de l'image) : rien à écrire.
+                        .filter(|(k, v)| {
+                            !(k == "object-position"
+                                && matches!(v.trim(), "center" | "center center" | "50% 50%"))
+                        })
                         .map(|(k, v)| (k, fix(&v)))
                         .collect();
                     if decls.iter().any(|(k, _)| k.starts_with("--")) {

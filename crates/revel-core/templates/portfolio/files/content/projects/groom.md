@@ -9,6 +9,7 @@ image: "@@p3:1800@@"
 gallery:
   - "@@p2:1200@@"
   - "@@p1:1200@@"
+offset: true
 description: "groom1"
 ---
 <p>groom2</p>

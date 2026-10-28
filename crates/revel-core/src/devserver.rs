@@ -108,6 +108,7 @@ impl Core {
                 .map_err(f)?,
             ),
             "edit_seal" => json(self.edit_seal(site).map_err(f)?),
+            "edit_flatten_plan" => json(self.edit_flatten_plan(site).map_err(f)?),
             "edit_pages" => json(self.edit_pages(site).map_err(f)?),
             "edit_media" => json(self.edit_media(site).map_err(f)?),
             "edit_locale_data" => json(

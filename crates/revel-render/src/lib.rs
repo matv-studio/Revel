@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 pub mod actions;
 pub mod animations;
+pub mod clock;
 mod eval;
 pub mod fit;
 pub mod flatten;
@@ -24,6 +25,7 @@ mod html;
 pub mod lottie;
 pub mod masonry;
 pub mod more;
+pub mod pixels;
 pub mod rebase;
 mod redirects;
 pub mod scroll;
@@ -573,6 +575,8 @@ fn build_pages(
             let html = more::wire(html, scripts);
             let html = theme::wire(html, scripts);
             let html = fit::wire(html, fit::site_uses(input.site));
+            let html = clock::wire(html);
+            let html = pixels::wire(html);
             let html = toolcss::wire(html);
             masonry::wire(html)
         } else {
@@ -1658,6 +1662,8 @@ fn editor_page(
     let html = more::wire(html, opts.scripts);
     let html = theme::wire(html, opts.scripts);
     let html = fit::wire_editor(html, fit::site_uses(input.site));
+    let html = clock::wire(html);
+    let html = pixels::wire(html);
     let html = toolcss::wire(html);
     let html = masonry::wire(html);
     warnings.extend(b.take_warnings());

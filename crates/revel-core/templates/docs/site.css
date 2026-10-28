@@ -11,7 +11,7 @@ pre { overflow-x: auto; padding: 18px 20px; border-radius: var(--radius); backgr
 .docs__group { margin: 16px 0 6px 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
 .docs__main h1 { font-size: clamp(32px, 4vw, 46px); }
 .docs__main .lead { margin: 14px 0 32px; }
-.docs__main .prose h2 { padding-top: 12px; font-size: 26px; }
+.prose--docs h2 { padding-top: 12px; font-size: 26px; }
 .docs__toc { position: sticky; top: 96px; align-self: start; display: grid; gap: 4px; font-size: 14px; }
 .docs__toc p { font-weight: 600; margin-bottom: 6px; }
 .docs__toc a { color: var(--muted); text-decoration: none; }
@@ -19,5 +19,5 @@ pre { overflow-x: auto; padding: 18px 20px; border-radius: var(--radius); backgr
 .docs-home { max-width: 1080px; margin: 0 auto; padding: 72px var(--pad); }
 .docs-home__hero { display: grid; gap: 18px; margin-bottom: 48px; }
 .docs-home__search { max-width: 520px; }
-@media (max-width: 1100px) { .docs { grid-template-columns: 220px minmax(0, 1fr); } .docs__toc { display: none; } }
+@media (max-width: 991px) { .docs { grid-template-columns: 220px minmax(0, 1fr); } .docs__toc { display: none; } }
 @media (max-width: 767px) { .docs { grid-template-columns: minmax(0, 1fr); } .docs__side { position: static; } }

@@ -1014,6 +1014,11 @@ pub async fn edit_seal(path: &str) -> Res<()> {
     call("edit_seal", &PathArg { path }).await
 }
 
+/// Mise à plat des styles (D-157) : commande à appliquer et bilan.
+pub async fn edit_flatten_plan(path: &str) -> Res<revel_edit::styleaudit::FlattenPlan> {
+    call("edit_flatten_plan", &PathArg { path }).await
+}
+
 pub async fn edit_undo(path: &str) -> Res<revel_edit::EditState> {
     call("edit_undo", &PathArg { path }).await
 }

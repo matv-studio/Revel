@@ -4,12 +4,19 @@
 //! passent toujours devant. L'utilisateur n'a jamais à les écrire.
 
 /// (attribut qui signale l'outil, règles).
-const TOOLS: &[(&str, &str)] = &[(
-    " data-revel-track",
-    ":where([data-revel-track]){overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}\
+const TOOLS: &[(&str, &str)] = &[
+    // Horloge : chiffres de même largeur (l'heure ne bouge pas à chaque seconde), sur une ligne.
+    (
+        " data-revel-clock",
+        ":where([data-revel-clock]){font-variant-numeric:tabular-nums;white-space:nowrap}",
+    ),
+    (
+        " data-revel-track",
+        ":where([data-revel-track]){overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}\
 :where([data-revel-track])::-webkit-scrollbar{display:none}\
 :where([data-revel-track]>*){scroll-snap-align:start}",
-)];
+    ),
+];
 
 /// Règles des outils employés par la page.
 fn css(html: &str) -> String {

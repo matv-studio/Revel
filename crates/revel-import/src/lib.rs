@@ -19,6 +19,7 @@ pub mod adapt;
 pub mod crawl;
 pub mod eleventy;
 pub mod figma;
+pub mod flatten;
 pub mod framer;
 pub mod framer_clean;
 pub mod framer_click;

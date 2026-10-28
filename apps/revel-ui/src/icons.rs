@@ -756,6 +756,18 @@ pub fn progress() -> AnyView {
     )
 }
 
+/// Horloge : cadran et aiguilles.
+pub fn clock() -> AnyView {
+    svg(r#"<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>"#)
+}
+
+/// Toile de pixels : trait fait de carrés.
+pub fn pixels() -> AnyView {
+    svg(
+        r#"<rect x="2" y="10" width="3" height="3"/><rect x="5" y="7" width="3" height="3"/><rect x="8" y="7" width="3" height="3"/><rect x="11" y="4" width="3" height="3"/>"#,
+    )
+}
+
 /// Carrousel : diapositive entière et voisines coupées.
 pub fn carousel() -> AnyView {
     svg(

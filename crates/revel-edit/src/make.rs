@@ -299,6 +299,12 @@ pub enum Preset {
     BlockCart,
     /// Bouton « Ajouter au panier » (D-129) : produit et prix ajoutés au panier du site.
     CartAdd,
+    /// Horloge (D-158) : heure ou date du visiteur, dans la langue de la page, comme le
+    /// composant « Time & Date » de Framer.
+    Clock,
+    /// Toile de pixels (D-158) : dessin ou traînée de pixels sous le pointeur, comme le
+    /// composant « Pixel Trail » de Framer.
+    Pixels,
 }
 
 impl Preset {
@@ -319,7 +325,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 41] = [
+    pub const ALL: [Preset; 43] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -361,6 +367,8 @@ impl Preset {
         Preset::Reveal,
         Preset::BlockCart,
         Preset::CartAdd,
+        Preset::Clock,
+        Preset::Pixels,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -424,6 +432,15 @@ impl Preset {
                     ],
                 ),
             ],
+            Preset::Pixels => vec![(
+                ".toile-pixels",
+                vec![
+                    ("position", "relative"),
+                    ("width", "100%"),
+                    ("min-height", "320px"),
+                    ("overflow", "hidden"),
+                ],
+            )],
             Preset::CartAdd => vec![
                 (
                     ".bouton-panier",
@@ -894,6 +911,22 @@ impl Preset {
                     attr("data-revel-price", "0"),
                 ],
                 vec![txt(text)],
+            ),
+            // Texte remplacé par l'heure du visiteur ; celui écrit ici sert sans script.
+            Preset::Clock => el(
+                id(),
+                "p",
+                vec![attr("data-revel-clock", "time")],
+                vec![txt("12:00")],
+            ),
+            Preset::Pixels => el(
+                id(),
+                "div",
+                vec![
+                    attr("class", "toile-pixels"),
+                    attr("data-revel-pixels", "trail size=20"),
+                ],
+                vec![],
             ),
             Preset::Section => el(id(), "section", vec![], vec![]),
             Preset::Container => el(id(), "div", vec![], vec![]),

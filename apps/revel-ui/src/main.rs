@@ -31,6 +31,7 @@ mod items;
 mod keys;
 mod layers;
 mod library;
+mod livetools;
 mod locales;
 mod names;
 mod pageops;
@@ -140,6 +141,9 @@ pub fn fmt_datetime(lang: &str, rfc3339: &str) -> String {
 #[derive(Clone, Copy)]
 pub struct Ui {
     pub settings: RwSignal<AppSettings>,
+    /// Langue de l'interface, tirée des réglages : les textes traduits ne suivent qu'elle (un
+    /// autre réglage changé ne les recalcule pas tous).
+    pub ui_lang: Memo<String>,
     pub route: RwSignal<Route>,
     pub error: RwSignal<Option<Failure>>,
     pub recents: RwSignal<Vec<RecentSite>>,
@@ -210,8 +214,8 @@ pub struct Ui {
 impl Ui {
     /// Texte traduit, suivi réactivement de la langue.
     pub fn t(self, key: &'static str) -> impl Fn() -> String + Send + Sync + 'static {
-        let s = self.settings;
-        move || tr(&s.with(|s| s.lang.clone()), key, &[])
+        let l = self.ui_lang;
+        move || l.with(|l| tr(l, key, &[]))
     }
     /// Texte traduit maintenant (dans un gestionnaire d'événement).
     pub fn now(self, key: &str, args: &[(&str, String)]) -> String {
@@ -219,10 +223,10 @@ impl Ui {
     }
     /// Texte traduit, réactif, avec paramètres.
     pub fn tx(self, key: &str, args: &[(&str, String)]) -> String {
-        tr(&self.settings.with(|s| s.lang.clone()), key, args)
+        self.ui_lang.with(|l| tr(l, key, args))
     }
     pub fn lang(self) -> String {
-        self.settings.with(|s| s.lang.clone())
+        self.ui_lang.get()
     }
     /// Texte d'un échec (réactif).
     pub fn failure(self, f: &Failure) -> String {
@@ -434,8 +438,10 @@ fn accent_ink(hex: &str) -> &'static str {
 
 #[component]
 fn App() -> impl IntoView {
+    let settings = RwSignal::new(AppSettings::default());
     let ui = Ui {
-        settings: RwSignal::new(AppSettings::default()),
+        settings,
+        ui_lang: Memo::new(move |_| settings.with(|s| s.lang.clone())),
         route: RwSignal::new(Route::Home),
         error: RwSignal::new(None),
         recents: RwSignal::new(Vec::new()),

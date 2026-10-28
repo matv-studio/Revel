@@ -123,9 +123,10 @@ pub fn SiteColors(s: DocSession) -> impl IntoView {
     let toggle_dark = move |on: bool| {
         if on {
             // Mode sombre : chaque couleur part de sa valeur claire.
+            // Contrôles du navigateur (champs, barres de défilement) sombres aussi.
             let decls: Vec<(String, Option<String>)> = list.with_untracked(|l| {
-                l.iter()
-                    .map(|(v, c, _)| (v.clone(), Some(c.clone())))
+                std::iter::once(("color-scheme".to_string(), Some("dark".to_string())))
+                    .chain(l.iter().map(|(v, c, _)| (v.clone(), Some(c.clone()))))
                     .collect()
             });
             let cmd = s.doc.with_untracked(|d| {

@@ -43,6 +43,9 @@ pub const TAG_SELECTORS: &[&str] = &[
     "section",
     "button",
     "video",
+    "svg",
+    "pre",
+    "code",
 ];
 
 /// Balises réglables à l'intérieur d'une classe (« Tous les paragraphes dans .prose ») : texte
@@ -67,6 +70,9 @@ pub const NESTED_TAGS: &[&str] = &[
     "figure",
     "button",
     "video",
+    "svg",
+    "pre",
+    "code",
 ];
 
 /// États du panneau ajoutés au sélecteur (les états qui sont des classes, `.is-active`, sont des
@@ -75,6 +81,8 @@ pub const STATE_SUFFIXES: &[&str] = &[
     ":hover",
     ":active",
     ":focus-visible",
+    ":focus",
+    ":disabled",
     "[aria-current=\"page\"]",
     "[open]",
     "[aria-pressed=\"false\"]",
@@ -87,6 +95,8 @@ pub const OUTER_STATES: &[&str] = &[
     "[aria-pressed=\"false\"]",
     ".is-paused",
     ".is-playing",
+    ".is-open",
+    ".is-empty",
 ];
 
 /// Propriétés propres aux outils de Revel, réglées par le panneau (unité « écran » de la taille
@@ -135,6 +145,8 @@ pub const PANEL_PROPS: &[&str] = &[
     "max-height",
     "overflow",
     "object-fit",
+    "object-position",
+    "fill",
     "aspect-ratio",
     "position",
     "inset",
@@ -159,6 +171,8 @@ pub const PANEL_PROPS: &[&str] = &[
     "text-wrap",
     "white-space",
     "list-style-type",
+    "overflow-wrap",
+    "word-break",
     "background",
     "background-color",
     "background-image",
@@ -190,8 +204,13 @@ pub const PANEL_PROPS: &[&str] = &[
     "border-top-right-radius",
     "border-bottom-right-radius",
     "border-bottom-left-radius",
+    "outline-width",
+    "outline-style",
+    "outline-color",
+    "outline-offset",
     "box-shadow",
     "opacity",
+    "pointer-events",
     "cursor",
     "mix-blend-mode",
     "filter",
@@ -213,7 +232,7 @@ pub fn site_variables(site: &Site) -> HashSet<String> {
 }
 
 /// Valeur d'une variable du site : couleur ou taille.
-fn site_value(v: &str) -> bool {
+pub fn site_value(v: &str) -> bool {
     revel_style::values::color::Rgba::parse(v.trim()).is_some() || is_size(v)
 }
 
@@ -269,7 +288,7 @@ fn compound(s: &str) -> Option<(Vec<&str>, Option<&'static str>)> {
 }
 
 /// Racines de composant et suffixes de leurs variantes.
-fn variant_roots(site: &Site) -> Vec<(String, Vec<String>)> {
+pub fn variant_roots(site: &Site) -> Vec<(String, Vec<String>)> {
     site.components
         .iter()
         .filter(|c| !c.variants.is_empty())
@@ -323,7 +342,7 @@ pub fn panel_selector(sel: &str, roots: &[(String, Vec<String>)]) -> bool {
 }
 
 /// `*, *::before, *::after { box-sizing: border-box }` : fondation admise.
-fn is_foundation(r: &StyleRule) -> bool {
+pub fn is_foundation(r: &StyleRule) -> bool {
     let sel: String = r.selector.split_whitespace().collect();
     matches!(sel.as_str(), "*,*::before,*::after" | "*")
         && r.media.is_none()
@@ -334,7 +353,7 @@ fn is_foundation(r: &StyleRule) -> bool {
 }
 
 /// `var(--nom` lus dans une valeur.
-fn var_refs(v: &str) -> Vec<&str> {
+pub fn var_refs(v: &str) -> Vec<&str> {
     v.match_indices("var(--")
         .map(|(i, _)| {
             let rest = &v[i + 6..];
@@ -382,6 +401,34 @@ pub fn var_fallbacks(v: &str) -> Vec<(String, String)> {
         }
     }
     out
+}
+
+/// Bilan de la mise à plat des styles (D-157).
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FlattenReport {
+    /// Règles retirées après report de leurs valeurs.
+    pub flattened: usize,
+    /// Règles écrites (classes des éléments, états, points de rupture).
+    pub written: usize,
+    /// Classes ajoutées à des éléments.
+    pub classes: usize,
+    /// Pseudo-éléments devenus des éléments.
+    pub pseudo: usize,
+    /// Règles qui ne touchent aucun élément du site (classes absentes) : retirées.
+    pub dead: usize,
+    /// Déclarations traduites en réglages du panneau (`flex-flow`, `font`…).
+    pub translated: usize,
+    /// Déclarations sans effet visible retirées (doublons préfixés, réglages du navigateur).
+    pub dropped: usize,
+    /// Règles gardées telles quelles (sélecteur, raison).
+    pub kept: Vec<(String, String)>,
+}
+
+/// Mise à plat prête à appliquer : une commande (une étape d'annulation) et son bilan.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FlattenPlan {
+    pub command: crate::Command,
+    pub report: FlattenReport,
 }
 
 /// Relevé des styles du site.
@@ -433,6 +480,10 @@ pub fn audit(site: &Site) -> Vec<Issue> {
                 push(&mut out, Some(r), Kind::StyleMedia, label(r));
             }
             for d in &r.decls {
+                // Thème des contrôles du navigateur (Paramètres › Couleurs › Mode sombre).
+                if d.prop == "color-scheme" {
+                    continue;
+                }
                 let ok = d.prop.starts_with("--")
                     && if dark {
                         vars.contains(d.prop.trim_start_matches("--"))

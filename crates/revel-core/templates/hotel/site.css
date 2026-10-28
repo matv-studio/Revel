@@ -17,7 +17,7 @@ h1, h2 { font-weight: 500; }
 .rooms .carousel__slide { flex-basis: min(80%, 420px); }
 .house { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .house img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; }
-.house img:nth-child(2) { margin-top: 48px; }
+.house__middle { margin-top: 48px; }
 .booking { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: clamp(32px, 6vw, 96px); }
-@media (max-width: 767px) { .booking { grid-template-columns: minmax(0, 1fr); } .house img:nth-child(2) { margin-top: 0; } }
+@media (max-width: 767px) { .booking { grid-template-columns: minmax(0, 1fr); } .house__middle { margin-top: 0; } }
 .house__features { margin-top: 56px; }

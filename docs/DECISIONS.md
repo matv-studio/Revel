@@ -1514,7 +1514,7 @@ conteneur), par la propriété `translate` (s'ajoute à la transformation régl�
 reprend les éléments `drag` (élan par défaut comme Framer, limites si `dragConstraints`) : Framer n'a pas de
 collisions, l'option se coche dans le panneau.
 
-**D-155 — 27/10/2026 — en cours.** **Imports sans code ni variables.** Première partie, sans changer le rendu :
+**D-155 — 27/10/2026 — prise le 28/10 (suite : D-157, D-158).** **Imports sans code ni variables.** Première partie, sans changer le rendu :
 couleurs de Framer (`--token-…`) en couleurs du site, variables de Framer jamais déclarées remplacées par leur
 valeur de repli, propriétés sans effet retirées, remplissage des images de fond en classes. Reste : les styles de
 fonctionnement de Framer (texte, composants, styles écrits sur les éléments, portée de page) ne se traduisent
@@ -1536,6 +1536,32 @@ variable que le panneau ne sait pas régler.
   tailles et couleurs du site (Paramètres, choisies dans les champs de Styles), défilement doux (Paramètres ›
   Général). L'image révélée et le média des éléments survolés n'ont pas d'équivalent dans Interactions › Survol
   (volet, halo, média d'une liste) : outils gardés.
+
+**D-157 — 28/10/2026 — prise.** **Mise à plat des styles (suite de D-155).** Les règles que le panneau Styles ne
+sait pas régler (sélecteurs descendants, listes, pseudo-éléments, raccourcis à variables, styles écrits sur les
+éléments, variables locales) sont reportées sur les classes des éléments : pour chaque élément et chaque point de
+rupture, cascade calculée (spécificité, ordre, `!important`, héritage des variables) avant et après, la différence
+écrite sur une classe combinée ou sur la classe propre de l'élément quand tous ceux qui la portent la partagent ;
+pseudo-éléments avec contenu changés en éléments (`<span class="X__after" aria-hidden="true">`) ; règles mortes
+retirées ; points de rupture déduits quand le site n'en a pas. Une seule commande (annulable). Faite à chaque import
+et à la création d'un site depuis un modèle ; bouton clé dans Classes, outil MCP `make_styles_editable`, commande
+`revel flatten`. Panneau complété pour ce qui restait en code : contour (`outline`), clics (`pointer-events`), mots
+longs et coupure des mots, états `:focus`, `:disabled`, `.is-open`, `.is-empty`, balises `svg`, `pre`, `code`.
+Vérifié : modèles 1 472 → 0 réglages en code, 162 pages identiques au pixel près ; site Framer d'essai 2 325 → 79
+(restent `@supports`, variantes de bordure de Framer, survol d'un lien dans un texte riche, deux sélecteurs de
+structure), aucun écart de style calculé à 1440, 1000, 600 et 390 px.
+
+**D-158 — 28/10/2026 — prise.** **Horloge et toile de pixels.** Outils relevés sur le site Framer d'essai
+(composants de code « Time & Date » et « Pixel Trail »), sans équivalent dans Revel.
+- Horloge : `data-revel-clock` sur un texte (Ajouter › Horloge) ; heure, date ou les deux, secondes, 12 heures,
+  jour de la semaine, année, mois (en toutes lettres, abrégé, chiffre, masqué), réglés dans l'inspecteur ; texte
+  remplacé chaque seconde par `Intl.DateTimeFormat` dans la langue de la page ; chiffres de même largeur
+  (`:where`, réglables dans Styles).
+- Toile de pixels : `data-revel-pixels` sur un bloc (Ajouter › Toile de pixels) ; traînée qui s'efface ou dessin qui
+  reste, taille d'un pixel, couleur (une couleur du site suit le thème), seulement en appuyant, durée de la
+  traînée ; un `canvas` ajouté par le script, pixels tracés sans trou entre deux positions du pointeur.
+- Import de Framer : propriétés lues dans le code de l'instance, conteneur reconnu par sa classe ; le texte caché
+  rendu par Framer devient l'horloge, les calques de la toile sont retirés.
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.

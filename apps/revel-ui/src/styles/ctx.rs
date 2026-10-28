@@ -44,6 +44,7 @@ const WATCHED: &[&str] = &[
     "max-height",
     "overflow",
     "object-fit",
+    "object-position",
     "aspect-ratio",
     "position",
     "top",

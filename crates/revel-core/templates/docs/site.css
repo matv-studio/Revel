@@ -3,7 +3,7 @@
   :root { color-scheme: dark; --bg: #0b1120; --surface: #111a2e; --text: #e2e8f0; --muted: #94a3b8; --line: rgba(226, 232, 240, 0.09); --line-strong: rgba(226, 232, 240, 0.2); --accent: #60a5fa; --accent-ink: #0b1120; }
 }
 code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.92em; }
-pre { overflow-x: auto; padding: 18px 20px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+pre { overflow: auto; padding: 18px 20px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
 .docs { display: grid; grid-template-columns: 240px minmax(0, 1fr) 200px; gap: 48px; max-width: var(--max); margin: 0 auto; padding: 40px var(--pad) 96px; }
 .docs__side { position: sticky; top: 96px; align-self: start; display: grid; gap: 2px; }
 .docs__side a { padding: 7px 12px; border-radius: 8px; color: var(--muted); font-size: 15px; text-decoration: none; }

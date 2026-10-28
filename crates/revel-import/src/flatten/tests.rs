@@ -213,3 +213,14 @@ fn replis_de_navigateurs_retires() {
     // Variable déclarée sous une condition toujours vraie : lue comme sans condition.
     assert!(out.contains("order: 1"), "{out}");
 }
+
+#[test]
+fn survol_d_un_ancetre_garde() {
+    let (_, _, out) = run(
+        "<div class=\"person\"><span class=\"swap\"><img class=\"a\" src=\"a.jpg\" alt=\"\"><img class=\"b\" src=\"b.jpg\" alt=\"\"></span></div>",
+        ".swap > :last-child { position: absolute; opacity: 0; }\n\
+         .person:hover .swap > :last-child { opacity: 1; }",
+    );
+    assert!(out.contains("opacity: 0"), "{out}");
+    assert!(out.contains(":hover"), "{out}");
+}

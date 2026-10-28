@@ -30,7 +30,7 @@ h1 { font-size: clamp(48px, 7vw, 104px); }
 .product__info { position: sticky; top: 100px; display: grid; gap: 22px; }
 .product__price { font-size: 24px; }
 .product__buy { display: grid; gap: 10px; }
-.product__buy .btn { width: 100%; }
+.product__cta { width: 100%; }
 .product__body { color: var(--muted); }
 .product__note { font-size: 14px; color: var(--muted); }
 .cart { max-width: 860px; margin: 0 auto; }

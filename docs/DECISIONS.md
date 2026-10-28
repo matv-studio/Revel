@@ -1547,9 +1547,17 @@ retirées ; points de rupture déduits quand le site n'en a pas. Une seule comma
 et à la création d'un site depuis un modèle ; bouton clé dans Classes, outil MCP `make_styles_editable`, commande
 `revel flatten`. Panneau complété pour ce qui restait en code : contour (`outline`), clics (`pointer-events`), mots
 longs et coupure des mots, états `:focus`, `:disabled`, `.is-open`, `.is-empty`, balises `svg`, `pre`, `code`.
-Vérifié : modèles 1 472 → 0 réglages en code, 162 pages identiques au pixel près ; site Framer d'essai 2 325 → 79
-(restent `@supports`, variantes de bordure de Framer, survol d'un lien dans un texte riche, deux sélecteurs de
-structure), aucun écart de style calculé à 1440, 1000, 600 et 390 px.
+Une règle reste telle quelle quand le report changerait le rendu dans un cas que les pages rendues ne montrent
+pas : élément du site non rendu qui pourrait la porter (branche d'une condition ; chaque page écrite une à une est
+rendue, les contenus d'une collection sont échantillonnés, les composants sont rendus seuls pour le contenu par
+défaut de leurs emplacements), attribut `hidden` posé par un script, variable lue par une animation
+(`@keyframes`), règle sous une condition non calculée (survol d'un ancêtre, mouvement réduit) que le report
+écraserait ; une règle d'état simple (`.filtre.is-active`) est reportée après la base. Les classes d'état
+(`is-*`) ne reçoivent jamais de report.
+Vérifié : modèles 1 472 → 0 réglages en code, 162 pages identiques au pixel près ; site Framer d'essai 833 → 56
+(restent variantes de bordure de Framer, survol d'un lien dans un texte riche, deux sélecteurs de structure),
+aucun écart de style calculé à 1440, 1000, 600 et 390 px ; site cobaye Alunites reconstruit 273 → 0, importé
+comme site HTML 282 → 166, aucun écart de style calculé ni de capture (11 et 9 pages, 1280 et 375 px).
 
 **D-158 — 28/10/2026 — prise.** **Horloge et toile de pixels.** Outils relevés sur le site Framer d'essai
 (composants de code « Time & Date » et « Pixel Trail »), sans équivalent dans Revel.

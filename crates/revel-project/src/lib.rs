@@ -699,9 +699,25 @@ impl Project {
             .filter_map(|f| page_url(&f.path))
             .collect();
         urls.sort_by_key(|u| (u.matches('/').count(), u.clone()));
+        // Pages écrites une à une (contenu propre à chacune) : toutes rendues ; seules les pages
+        // tirées d'un même modèle (contenus d'une collection) sont échantillonnées.
+        let fixed: std::collections::HashSet<&str> = site
+            .pages
+            .iter()
+            .filter(|p| !p.path.contains('{') && !p.path.contains(':'))
+            .map(|p| p.path.as_str())
+            .collect();
         let mut seen: BTreeMap<String, usize> = BTreeMap::new();
         let mut out = Vec::new();
         for u in urls {
+            if fixed.contains(u.as_str()) {
+                if let Some(page) =
+                    revel_render::render_editor(&input, &u, &EditorOptions { scripts: false })?
+                {
+                    out.push(page.html);
+                }
+                continue;
+            }
             let section = u
                 .trim_start_matches('/')
                 .split('/')
@@ -716,6 +732,26 @@ impl Project {
             if let Some(page) =
                 revel_render::render_editor(&input, &u, &EditorOptions { scripts: false })?
             {
+                out.push(page.html);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Composants seuls pour l'éditeur (contenu par défaut de leurs emplacements, que les pages
+    /// remplissent parfois toutes) : chaque élément d'un composant rendu au moins une fois.
+    pub fn editor_component_pages(&self) -> Result<Vec<String>, ProjectError> {
+        let site = self.site_with_data()?;
+        let mut out = Vec::new();
+        for c in &site.components {
+            if let Some(page) = self.render_component_editor(
+                &c.id,
+                None,
+                "/",
+                Arc::new(revel_render::PlainAssets),
+                "production",
+                &EditorOptions { scripts: false },
+            )? {
                 out.push(page.html);
             }
         }

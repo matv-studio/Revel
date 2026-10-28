@@ -11,8 +11,10 @@ const PER_SECTION: usize = 3;
 /// Commandes de la mise à plat (une suite) et bilan.
 pub fn plan(p: &Project) -> Result<(Command, Report), String> {
     let pages = p.editor_pages(PER_SECTION).map_err(|e| e.to_string())?;
+    let components = p.editor_component_pages().map_err(|e| e.to_string())?;
     let content = p.content_html().map_err(|e| e.to_string())?;
-    let (commands, report) = revel_import::flatten::flatten(&p.site, &pages, &content);
+    let (commands, report) =
+        revel_import::flatten::flatten_with(&p.site, &pages, &components, &content);
     Ok((Command::Batch { commands }, report))
 }
 

@@ -26,6 +26,10 @@ D-155 terminée, D-157 et D-158 ; ligne 8.14 de `docs/ETAPE-8.md` faite.
 - Textes traduits liés à la seule langue (`Ui::ui_lang`, mémo) : changer un autre réglage (synchronisation
   automatique) figeait l'interface ~30 s (chaque texte se réabonnait au signal des réglages, retrait des
   abonnés en temps quadratique ; trouvé par un profil CDP pendant l'essai de l'éditeur).
+- Fidélité (après la CI du 28/10 : l'import HTML statique du cobaye perdait des styles) : toutes les pages écrites
+  une à une rendues, composants rendus seuls, règles gardées quand un élément non rendu, `hidden`, une animation
+  ou une condition non calculée en dépend (D-157). `tools/compare-styles.mjs` : `--ignore-vars`, `--ignore`.
+  Cobaye reconstruit 273 → 0 sans écart ; importé en HTML 282 → 166 sans écart.
 - Reste sur le site Framer d'essai : survol d'un lien dans un texte riche (`a:hover span`), variantes de bordure
   `[data-border=true]:after` à variables, `h2:not(:first-child)`, `li > ul:nth-child(2)`.
 - Pièges : `pgrep -f motif` ou `pkill -f motif` dans une commande se trouvent eux-mêmes (boucle sans fin ou

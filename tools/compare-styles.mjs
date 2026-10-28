@@ -21,6 +21,10 @@
 //
 // Usage : node tools/compare-styles.mjs DOSSIER_A DOSSIER_B [--pages /,/agence/] [--widths 1280,375]
 //         [--jobs 4] [--shots] [--tolerance 48] [--max-pixels 50] [--save DOSSIER]
+//         [--ignore-vars] [--ignore prop1,prop2]
+// --ignore-vars : variables (`--x`) non comparées (la mise à plat des styles, D-157, les remplace
+// par leur valeur) ; --ignore : propriétés non comparées (indications au navigateur retirées par
+// la mise à plat, comme `text-size-adjust`).
 // --save : captures des paires en écart enregistrées dans DOSSIER (a-… et b-…).
 // DOSSIER_B peut être une adresse (http://…) : pages déjà servies, par exemple le canevas de
 // l'éditeur (`revel canvas-serve`) ; les éléments propres au canevas (calque de sélection, script,
@@ -47,6 +51,10 @@ const maxPixels = Number(opt('--max-pixels', '50'));
 const saveDir = opt('--save', null);
 const shots = args.includes('--shots');
 if (shots) args.splice(args.indexOf('--shots'), 1);
+const ignored = opt('--ignore', '').split(',').filter(Boolean);
+const ignoreVars = args.includes('--ignore-vars');
+if (ignoreVars) args.splice(args.indexOf('--ignore-vars'), 1);
+const skip = { vars: ignoreVars, props: ignored };
 let pages = opt('--pages', null)?.split(',');
 const [dirA, dirB] = args;
 if (!dirA || !dirB) {
@@ -179,7 +187,7 @@ async function pixelDiff(cmp, a, b) {
  * par élément (propriétés triées : l'ordre des propriétés personnalisées varie d'une ouverture à
  * l'autre) ; `detail` : propriétés complètes de l'élément n° `detail` (en cas d'écart).
  */
-function computedStyles(detail) {
+function computedStyles({ detail, skip }) {
   const out = [];
   let n = 0;
   // Éléments propres au canevas de l'éditeur : ignorés. En-tête du document (`<head>`) aussi :
@@ -198,7 +206,10 @@ function computedStyles(detail) {
       if (detail !== undefined && k !== detail) continue;
       const cs = getComputedStyle(el, ps);
       const v = [];
-      for (let i = 0; i < cs.length; i++) v.push(`${cs[i]}: ${cs.getPropertyValue(cs[i])}`);
+      for (let i = 0; i < cs.length; i++) {
+        if ((skip.vars && cs[i].startsWith('--')) || skip.props.includes(cs[i])) continue;
+        v.push(`${cs[i]}: ${cs.getPropertyValue(cs[i])}`);
+      }
       v.sort();
       if (detail !== undefined) {
         const cls = typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).join('.') : '';
@@ -243,7 +254,7 @@ async function open(base, { motion, w, p }) {
   const page = await ctx.newPage();
   await page.goto(base + p, { waitUntil: 'load' });
   await settle(page);
-  const hashes = await page.evaluate(computedStyles);
+  const hashes = await page.evaluate(computedStyles, { detail: undefined, skip });
   const shot = shots && motion === 'no-preference'
     ? await page.screenshot({ fullPage: true, animations: 'disabled' })
     : null;
@@ -296,8 +307,8 @@ async function worker() {
         // (conséquence d'un écart plus bas dans la page, comme la hauteur de <html>).
         let shown = null;
         for (const i of bad.slice(0, 60)) {
-          const [name, va] = await A.page.evaluate(computedStyles, i);
-          const [, vb] = await B.page.evaluate(computedStyles, i);
+          const [name, va] = await A.page.evaluate(computedStyles, { detail: i, skip });
+          const [, vb] = await B.page.evaluate(computedStyles, { detail: i, skip });
           const [sa, sb] = [new Set(va), new Set(vb)];
           const da = va.filter((x) => !sb.has(x));
           const db = vb.filter((x) => !sa.has(x));

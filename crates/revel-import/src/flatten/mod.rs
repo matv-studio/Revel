@@ -119,6 +119,21 @@ type Rank = (bool, (u32, u32, u32), usize);
 /// Met à plat les styles du site. `pages` : pages rendues pour l'éditeur (`data-rv`).
 /// Renvoie les commandes (une seule suite à appliquer) et le bilan.
 pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Command>, Report) {
+    flatten_with(site, pages, &[], content)
+}
+
+/// Comme [`flatten`], avec les composants rendus seuls (`components`) : leurs éléments comptent
+/// seulement s'ils ne sont rendus dans aucune page (contenu par défaut d'un emplacement), sans
+/// les ancêtres d'une page.
+pub fn flatten_with(
+    site: &Site,
+    pages: &[String],
+    components: &[String],
+    content: &[String],
+) -> (Vec<Command>, Report) {
+    let n_pages = pages.len();
+    let all: Vec<String> = pages.iter().chain(components).cloned().collect();
+    let pages = &all[..];
     let mut report = Report::default();
     let Some(sheet) = &site.stylesheet else {
         return (Vec::new(), report);
@@ -285,6 +300,13 @@ pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Comman
             }
         });
     }
+    // Variables lues par un bloc écrit en code (`@keyframes` : `translateX(var(--gap))`) : leur
+    // valeur dépend de l'élément animé, leurs déclarations restent.
+    for it in &items {
+        if let StyleItem::Raw { css } = it {
+            markup_refs.extend(styleaudit::var_refs(css).into_iter().map(str::to_string));
+        }
+    }
     // 3. Pages.
     let docs: Vec<Document> = pages.iter().map(|h| Document::from(h.as_str())).collect();
     // Textes riches des contenus : une règle qui n'y touche rien et rien dans les pages est morte.
@@ -312,8 +334,19 @@ pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Comman
         .collect();
     let mut occs_of: HashMap<String, Vec<Occ>> = HashMap::new();
     for (p, pd) in pdocs.iter().enumerate() {
+        let from_pages: HashSet<String> = if p >= n_pages {
+            occs_of
+                .iter()
+                .filter(|(_, o)| o.iter().any(|&(q, _)| q < n_pages))
+                .map(|(k, _)| k.clone())
+                .collect()
+        } else {
+            HashSet::new()
+        };
         for (e, el) in pd.elems.iter().enumerate() {
-            if let Some(rv) = &el.rv {
+            if let Some(rv) = &el.rv
+                && !from_pages.contains(rv)
+            {
                 occs_of.entry(rv.clone()).or_default().push((p, e));
             }
         }
@@ -473,6 +506,15 @@ pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Comman
         for (p, d) in docs.iter().enumerate() {
             for n in d.select_matcher(&m).nodes() {
                 if let Some(&e) = idx_of[p].get(&n.id) {
+                    // Composant seul : seulement ses éléments que les pages ne rendent pas.
+                    if p >= n_pages
+                        && pdocs[p].elems[e]
+                            .rv
+                            .as_ref()
+                            .is_some_and(|rv| !occs_of[rv].contains(&(p, e)))
+                    {
+                        continue;
+                    }
                     r.matches.push((p, e));
                     occ_rules[p][e].push(ri);
                 }
@@ -508,6 +550,12 @@ pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Comman
             r.keep = Some("état dans un ancêtre ou pseudo-élément non reporté".into());
             continue;
         }
+        // `hidden` : attribut posé ou retiré par un script (bandeau de consentement, menu) ; le
+        // report figerait l'élément dans l'état de la page rendue.
+        if r.sel.contains("[hidden") {
+            r.keep = Some("attribut hidden, posé par un script".into());
+            continue;
+        }
         if let Some(m) = &r.media
             && levels
                 .iter()
@@ -527,7 +575,7 @@ pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Comman
                 .strip_prefix("--")
                 .is_some_and(|n| markup_refs.contains(n))
         }) {
-            r.keep = Some("variable lue dans un attribut d'un élément".into());
+            r.keep = Some("variable lue dans un attribut ou une animation".into());
             continue;
         }
         // Triangle des accordéons de Safari : `list-style-type: none` du résumé le retire
@@ -557,6 +605,26 @@ pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Comman
             } else {
                 r.keep = Some("texte riche des contenus".into());
             }
+            continue;
+        }
+        // Élément du site qui peut porter la règle sans avoir été rendu (branche d'une condition,
+        // page non échantillonnée) : il garderait sa classe sans le report, la règle reste.
+        // Ancêtres du sélecteur cherchés parmi les éléments du même propriétaire (page, gabarit,
+        // composant).
+        if let Some(c) = selector::parse(&shape.static_sel)
+            && let Some((_, subject)) = c.parts.last()
+            && nodes.iter().any(|(id, n)| {
+                n.element
+                    && !occs_of.contains_key(id)
+                    && subject_fits(subject, n)
+                    && c.parts[..c.parts.len() - 1].iter().all(|(_, part)| {
+                        nodes
+                            .values()
+                            .any(|m| m.owner == n.owner && subject_fits(part, m))
+                    })
+            })
+        {
+            r.keep = Some("élément non rendu".into());
             continue;
         }
         if r.matches
@@ -922,6 +990,78 @@ pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Comman
                 plans.insert(rv.clone(), pl);
             }
         }
+        // Règle gardée qui touche un élément sous une condition que les niveaux ne calculent pas
+        // (état posé par un script, `.x:hover`, mouvement réduit…) : le report de base, écrit
+        // après elle avec une spécificité au moins égale, l'emporterait. Une règle d'état simple
+        // est reportée elle aussi (après la base, sur la même classe) ; sinon, les règles de
+        // l'élément restent telles quelles.
+        let mut promote: BTreeSet<usize> = BTreeSet::new();
+        let mut blocked: HashSet<String> = HashSet::new();
+        for (rv, pl) in &plans {
+            let base_props: HashSet<String> =
+                pl.t.iter()
+                    .filter(|((_, c), _)| *c == Channel::default())
+                    .flat_map(|(_, d)| {
+                        d.iter()
+                            .flat_map(|(k, v)| values::longhands(k, v).into_iter().map(|(p, _)| p))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
+            if base_props.is_empty() {
+                continue;
+            }
+            let ncls = nodes.get(rv).map_or(0, |n| {
+                n.classes.iter().filter(|c| !c.starts_with("is-")).count() as u32
+            });
+            for &(p, e) in &occs_of[rv] {
+                for &ri in &occ_rules[p][e] {
+                    let r = &rules[ri];
+                    if r.root || flat.contains(&ri) {
+                        continue;
+                    }
+                    let unknown_media = r.media.as_ref().is_some_and(|m| {
+                        levels
+                            .iter()
+                            .any(|l| media::eval(m, l.width) == media::Eval::Unknown)
+                    });
+                    let ch = r.shape.as_ref().map(channel_of).unwrap_or_default();
+                    if (ch == Channel::default() && !unknown_media)
+                        || r.spec > (0, ncls + 1, 0)
+                        || !r.decls.iter().any(|d| base_props.contains(&d.prop))
+                    {
+                        continue;
+                    }
+                    let promotable = !r.problem
+                        && r.keep.is_none()
+                        && !unknown_media
+                        && ch.pseudo.is_none()
+                        && r.shape.as_ref().is_some_and(|s| !s.unsupported);
+                    if promotable {
+                        promote.insert(ri);
+                    } else {
+                        blocked.insert(rv.clone());
+                    }
+                }
+            }
+        }
+        if !promote.is_empty() || !blocked.is_empty() {
+            for ri in promote {
+                rules[ri].problem = true;
+            }
+            for r in rules.iter_mut() {
+                if flat_candidate(r)
+                    && r.matches.iter().any(|&(p, e)| {
+                        pdocs[p].elems[e]
+                            .rv
+                            .as_ref()
+                            .is_some_and(|rv| blocked.contains(rv))
+                    })
+                {
+                    r.keep = Some("règle sous condition (état, mouvement réduit) gardée".into());
+                }
+            }
+            continue;
+        }
         if inconsistent.is_empty() {
             break;
         }
@@ -962,7 +1102,17 @@ pub fn flatten(site: &Site, pages: &[String], content: &[String]) -> (Vec<Comman
         if base.is_empty() {
             continue;
         }
-        let classes = nodes.get(rv).map(|n| n.classes.clone()).unwrap_or_default();
+        // Classes d'état (`is-active`), posées et retirées par un script : jamais cible d'un report.
+        let classes: Vec<String> = nodes
+            .get(rv)
+            .map(|n| {
+                n.classes
+                    .iter()
+                    .filter(|c| !c.starts_with("is-"))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
         let key = format!("{base:?}");
         groups.entry((classes, key)).or_default().push(rv.clone());
     }
@@ -1438,7 +1588,13 @@ fn channel_of(s: &Shape) -> Channel {
     Channel {
         outer: s.outer.clone(),
         extra: s.extra.clone(),
-        state: s.state.clone(),
+        // Forme non reportable (survol d'un ancêtre…) : sous une condition que les niveaux ne
+        // calculent pas, jamais dans l'état de base.
+        state: if s.unsupported && s.state.is_none() {
+            Some(":?".into())
+        } else {
+            s.state.clone()
+        },
         pseudo: s.pseudo.clone(),
     }
 }
@@ -1790,8 +1946,13 @@ fn translate_decls(decls: &[Decl], report: &mut Report) -> Vec<Decl> {
             report.dropped += 1;
             continue;
         }
-        // Débordement d'un seul côté : `overflow` à deux valeurs (horizontal, vertical).
-        if d.prop == "overflow-x" || d.prop == "overflow-y" {
+        // Débordement des deux côtés écrit séparément : `overflow` à deux valeurs (horizontal,
+        // vertical). Un côté seul reste tel quel : l'autre garde la valeur d'une autre règle (un
+        // report le réécrit avec elle).
+        if (d.prop == "overflow-x" || d.prop == "overflow-y")
+            && decls.iter().any(|o| o.prop == "overflow-x")
+            && decls.iter().any(|o| o.prop == "overflow-y")
+        {
             if d.prop == "overflow-y" && decls.iter().any(|o| o.prop == "overflow-x") {
                 continue;
             }

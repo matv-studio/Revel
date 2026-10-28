@@ -231,14 +231,20 @@ jobs:
         run: |
           REVEL=target/release/revel
           cp -r revel-production import-html
-          $REVEL import import-html --lang fr | tee -a "$GITHUB_STEP_SUMMARY"
+          # Structure comparée avant la mise à plat des styles (D-157), qui ajoute des classes ;
+          # styles calculés et captures comparés après.
+          REVEL_NO_FLATTEN=1 $REVEL import import-html --lang fr | tee -a "$GITHUB_STEP_SUMMARY"
           echo "## Import HTML statique" >> "$GITHUB_STEP_SUMMARY"
           $REVEL import-check import-html | tee import-check.log
           tail -1 import-check.log >> "$GITHUB_STEP_SUMMARY"
           if grep -q "^✗" import-check.log; then exit 1; fi
+          $REVEL flatten import-html | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
           $REVEL build import-html --out import-html-out --no-images
           export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          # Variables remplacées par leur valeur et indications au navigateur retirées par la
+          # mise à plat : non comparées.
           node tools/compare-styles.mjs import-html import-html-out --jobs 4 --shots --widths 1280,375 \
+            --ignore-vars --ignore text-size-adjust,-webkit-text-size-adjust,-webkit-font-smoothing,-moz-osx-font-smoothing,-webkit-tap-highlight-color,will-change,font-synthesis,font-synthesis-weight,font-synthesis-style,font-synthesis-small-caps,font-synthesis-position \
             --save captures-ecarts \
             --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/project/wattr/ \
             | tee -a "$GITHUB_STEP_SUMMARY"

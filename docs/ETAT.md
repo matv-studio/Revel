@@ -6,8 +6,14 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 28/10/2026 (dernière avancée : D-155 à D-158, après la 0.7.1). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Version 0.7.2 (28/10/2026)
+Commit « Version 0.7.2 » (747f490), README en sections repliables avec captures refaites (f457c89, 1998981),
+essais mis à jour (cb3174a ; préversion simulée `0.7.2-beta.1` à changer aussi dans `tools/editor-e2e.mjs` à
+chaque version). CI réussie sur cb3174a (flux 40738827029), étiquette `v0.7.2`, brouillon « Revel v0.7.2 »
+(id 427064643, 17 fichiers, `latest.json` à 11 cibles, clé EA5F2855415468CD) à publier par l'utilisateur.
 
 ## Travail du 28/10/2026 (projet « Sites Webs »), après la 0.7.1
 D-155 terminée, D-157 et D-158 ; ligne 8.14 de `docs/ETAPE-8.md` faite.

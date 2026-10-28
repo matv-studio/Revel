@@ -3877,7 +3877,7 @@ try {
     await status('à jour');
     const help = await page.getAttribute(`${card} .label:has-text("Recevoir les préversions")`, 'title');
     await page.click(`${card} .switch`);
-    await status('^Préversion 0\\.7\\.1-beta\\.1 disponible$');
+    await status('^Préversion 0\\.7\\.2-beta\\.1 disponible$');
     await page.waitForSelector('.update-pill');
     const pill = (await page.textContent('.update-pill')).trim();
     const saved = await page.evaluate(() => window.__revelSettings?.prereleases === true);
@@ -3888,7 +3888,7 @@ try {
     const off = await page.evaluate(() => window.__revelSettings?.prereleases === false);
     await page.evaluate(() => { window.__revelUpdates = false; });
     check('réglages : préversions demandées puis retirées (enregistrées, recherche relancée, « Préversion » dans la barre)',
-      !!help && pill === 'Préversion 0.7.1-beta.1' && saved && pillGone && off, pill);
+      !!help && pill === 'Préversion 0.7.2-beta.1' && saved && pillGone && off, pill);
   }
 
   // Réglages › Assistants IA (4.2, serveur simulé) : activation, port, clé, configurations.

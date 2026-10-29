@@ -1208,7 +1208,10 @@ pub fn open_canvas_menu(ui: Ui, ed: Ed, x: f64, y: f64) {
             })
             .icon(icons::unlink),
         );
-    } else if at.get_value().is_some_and(|t| crate::widgets::is_widget_at(ed, &t)) {
+    } else if at
+        .get_value()
+        .is_some_and(|t| crate::widgets::is_widget_at(ed, &t))
+    {
         items.push(
             CtxItem::new(ui.now("widget-decompose", &[]), move || {
                 if let Some(t) = at.get_value() {

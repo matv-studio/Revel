@@ -2672,7 +2672,10 @@ fn node_tag_class(n: &revel_model::Node) -> (String, String) {
                 .and_then(|a| a.value.as_deref())
                 .filter(|c| !c.contains("{{") && !c.contains("{%"))
                 .unwrap_or_default();
-            (tag.clone(), crate::names::with_base(class.to_string(), attrs))
+            (
+                tag.clone(),
+                crate::names::with_base(class.to_string(), attrs),
+            )
         }
         revel_model::Node::Image(_) => ("img".into(), String::new()),
         _ => (String::new(), String::new()),

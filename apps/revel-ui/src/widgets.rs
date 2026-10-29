@@ -244,7 +244,10 @@ pub fn images_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) ->
 /// éléments filtrés), ajouter, retirer. Le premier bouton sans valeur montre tout.
 pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -> Option<AnyView> {
     use revel_model::{Attr, Node};
-    let Node::Element { attrs, children, .. } = node else {
+    let Node::Element {
+        attrs, children, ..
+    } = node
+    else {
         return None;
     };
     let param = attrs
@@ -271,7 +274,11 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
                         _ => None,
                     })
                     .collect::<String>();
-                Some((id.clone(), text.trim().to_string(), v.value.clone().unwrap_or_default()))
+                Some((
+                    id.clone(),
+                    text.trim().to_string(),
+                    v.value.clone().unwrap_or_default(),
+                ))
             }
             _ => None,
         })
@@ -279,7 +286,9 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
     let owner = at.owner.clone();
     let root = StoredValue::new(at.clone());
     let template = StoredValue::new(children.iter().rev().find_map(|c| match c {
-        Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == "data-revel-filter") => Some(c.clone()),
+        Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == "data-revel-filter") => {
+            Some(c.clone())
+        }
         _ => None,
     }));
     let count = children.len();
@@ -287,7 +296,10 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
         ed.apply(
             ui,
             Command::SetAttr {
-                at: Target { owner: root.get_value().owner, node: id },
+                at: Target {
+                    owner: root.get_value().owner,
+                    node: id,
+                },
                 name: "data-revel-filter".into(),
                 value: Some(v.trim().to_string()),
             },
@@ -295,7 +307,10 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
         );
     };
     let set_text = move |id: String, v: String| {
-        let at = Target { owner: root.get_value().owner, node: id };
+        let at = Target {
+            owner: root.get_value().owner,
+            node: id,
+        };
         ed.apply(
             ui,
             Command::Replace {
@@ -310,28 +325,48 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
         ed.apply(
             ui,
             Command::Remove {
-                at: Target { owner: root.get_value().owner, node: id },
+                at: Target {
+                    owner: root.get_value().owner,
+                    node: id,
+                },
             },
             false,
         );
     };
     let add = move || {
-        let Some(mut n) = template.get_value() else { return };
+        let Some(mut n) = template.get_value() else {
+            return;
+        };
         let n_btn = buttons_len(ed, &root.get_value());
         let label = format!("{} {}", ui.now("filters-option", &[]), n_btn);
-        if let Node::Element { id, attrs, children, .. } = &mut n {
+        if let Node::Element {
+            id,
+            attrs,
+            children,
+            ..
+        } = &mut n
+        {
             *id = None;
             for a in attrs.iter_mut() {
                 if a.name == "data-revel-filter" {
-                    *a = Attr { name: a.name.clone(), value: Some(format!("option-{n_btn}")), when: None };
+                    *a = Attr {
+                        name: a.name.clone(),
+                        value: Some(format!("option-{n_btn}")),
+                        when: None,
+                    };
                 }
             }
             *children = vec![Node::Text { text: label }];
         }
         let at = root.get_value();
-        let index = ed.doc.with_untracked(|d| match d.as_ref().and_then(|d| revel_edit::address::node(d, &at).ok()) {
-            Some(Node::Element { children, .. }) => children.len(),
-            _ => count,
+        let index = ed.doc.with_untracked(|d| {
+            match d
+                .as_ref()
+                .and_then(|d| revel_edit::address::node(d, &at).ok())
+            {
+                Some(Node::Element { children, .. }) => children.len(),
+                _ => count,
+            }
         });
         ed.apply(
             ui,

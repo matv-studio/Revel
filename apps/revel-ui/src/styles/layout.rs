@@ -9,6 +9,7 @@ use super::controls::*;
 use super::ctx::{Sx, menu_id};
 use super::fx::GridTracks;
 use crate::icons;
+use leptos::ev;
 use leptos::prelude::*;
 use revel_style::values::{Tracks, format_tracks, parse_tracks, split_top};
 
@@ -102,6 +103,40 @@ fn axis_pos(v: &str) -> Option<usize> {
     }
 }
 
+/// Clic modifié dans la matrice d'alignement, comme la boîte d'alignement de Webflow.
+#[derive(Clone, Copy, PartialEq)]
+enum Mod {
+    None,
+    /// Alt+clic : éléments étirés (`align-items: stretch`).
+    Stretch,
+    /// Double-clic ou Ctrl+clic : répartis (`justify-content: space-between`), étirés pour une
+    /// grille (`justify-items: stretch`).
+    Justify,
+}
+
+/// Valeurs écrites par un clic sur la case (`c`, `r`) de la matrice.
+fn matrix_values(
+    x: &'static str,
+    y: &'static str,
+    values: [&'static str; 3],
+    c: usize,
+    r: usize,
+    mode: Mod,
+) -> Vec<(String, Option<String>)> {
+    [(x, values[c]), (y, values[r])]
+        .into_iter()
+        .map(|(prop, v)| {
+            let v = match mode {
+                Mod::Stretch if prop == "align-items" => "stretch",
+                Mod::Justify if prop == "justify-content" => "space-between",
+                Mod::Justify if prop == "justify-items" => "stretch",
+                _ => v,
+            };
+            (prop.to_string(), Some(v.to_string()))
+        })
+        .collect()
+}
+
 /// Matrice d'alignement : `x` et `y` sont les propriétés réglées par colonne et par ligne de la
 /// matrice (selon la direction d'un flex), `values` les valeurs écrites (début, centre, fin).
 #[component]
@@ -135,11 +170,12 @@ fn AlignMatrix(
         <div class="align-box" class:spread-x=spread_x class:spread-y=spread_y role="group" aria-label=ui.t("styles-align")>
             {(0..3).flat_map(|r| (0..3).map(move |c| (c, r))).map(|(c, r)| view! {
                 <button class="align-cell" class:is-on=move || on(c, r)
-                    title=move || ui.tx("align-cell", &[("col", (c + 1).to_string()), ("row", (r + 1).to_string())])
-                    on:click=move |_| sx.set_many(vec![
-                        (x.get_untracked().into(), Some(values[c].into())),
-                        (y.get_untracked().into(), Some(values[r].into())),
-                    ], false)>
+                    title=move || format!("{} · {}", ui.tx("align-cell", &[("col", (c + 1).to_string()), ("row", (r + 1).to_string())]), ui.tx("align-cell-keys", &[]))
+                    on:click=move |e: ev::MouseEvent| {
+                        let mode = if e.alt_key() { Mod::Stretch } else if e.ctrl_key() || e.meta_key() { Mod::Justify } else { Mod::None };
+                        sx.set_many(matrix_values(x.get_untracked(), y.get_untracked(), values, c, r, mode), false)
+                    }
+                    on:dblclick=move |_| sx.set_many(matrix_values(x.get_untracked(), y.get_untracked(), values, c, r, Mod::Justify), false)>
                     <i></i>
                 </button>
             }).collect_view()}

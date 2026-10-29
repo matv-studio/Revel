@@ -213,12 +213,15 @@ pub fn AdvancedSettings() -> impl IntoView {
                 </div>
             });
             match node {
-                Node::Element { tag, attrs, .. } => Some(view! {
-                    <details class="style-section advanced-settings">
-                        <summary><span>{ui.t("inspector-advanced")}</span></summary>
-                        <div class="style-section-body">{element_advanced(ui, ed, apply, at, tag, attrs)}{classes}</div>
-                    </details>
-                }),
+                Node::Element { tag, attrs, .. } => {
+                    let roles = crate::blocks::role_settings(ui, ed, &at, &tag, &attrs);
+                    Some(view! {
+                        <details class="style-section advanced-settings">
+                            <summary><span>{ui.t("inspector-advanced")}</span></summary>
+                            <div class="style-section-body">{element_advanced(ui, ed, apply, at, tag, attrs)}{roles}{classes}</div>
+                        </details>
+                    })
+                }
                 _ => None,
             }
         })}
@@ -909,7 +912,7 @@ fn element_advanced(
     }
 }
 
-fn image(
+pub(crate) fn image(
     ui: Ui,
     ed: Ed,
     apply: impl Fn(Command) + Copy + Send + Sync + 'static,

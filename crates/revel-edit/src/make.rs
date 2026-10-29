@@ -153,69 +153,6 @@ pub fn wrap(site: &Site, at: &Target, tag: &str) -> Result<(Command, String), Ed
 
 type Rules = Vec<(&'static str, Vec<(&'static str, &'static str)>)>;
 
-/// Règles d'un carrousel (`carousel`) ou d'un diaporama : boîte, piste, diapositive, commandes,
-/// flèche, flèche inactive.
-fn slider_rules(sel: [&'static str; 6], carousel: bool) -> Rules {
-    let [b, track, slide, bar, btn, off] = sel;
-    vec![
-        (b, vec![("position", "relative")]),
-        (
-            track,
-            vec![
-                ("display", "flex"),
-                ("gap", if carousel { "16px" } else { "0" }),
-                ("overflow-x", "auto"),
-                ("scroll-snap-type", "x mandatory"),
-                ("scrollbar-width", "none"),
-            ],
-        ),
-        (
-            slide,
-            vec![
-                (
-                    "flex",
-                    if carousel {
-                        "0 0 min(80%, 420px)"
-                    } else {
-                        "0 0 100%"
-                    },
-                ),
-                ("scroll-snap-align", "start"),
-                ("min-height", "240px"),
-                ("padding", "24px"),
-                ("background-color", "rgba(127, 127, 127, 0.12)"),
-            ],
-        ),
-        (
-            bar,
-            vec![
-                ("display", "flex"),
-                ("align-items", "center"),
-                (
-                    "justify-content",
-                    if carousel { "flex-start" } else { "center" },
-                ),
-                ("gap", "12px"),
-                ("margin-top", "12px"),
-            ],
-        ),
-        (
-            btn,
-            vec![
-                ("width", "40px"),
-                ("height", "40px"),
-                ("border", "1px solid currentColor"),
-                ("border-radius", "50%"),
-                ("background", "none"),
-                ("color", "inherit"),
-                ("font", "inherit"),
-                ("cursor", "pointer"),
-            ],
-        ),
-        (off, vec![("opacity", "0.35"), ("cursor", "default")]),
-    ]
-}
-
 /// Éléments proposés par le panneau « Ajouter ».
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -372,489 +309,18 @@ impl Preset {
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
-    /// (sélecteur, déclarations).
+    /// (sélecteur, déclarations). Les éléments ajoutés n'en écrivent plus (D-159).
     pub fn narrow_rules(self) -> Rules {
-        match self {
-            Preset::Navbar => vec![
-                (".barre-nav__bouton", vec![("display", "block")]),
-                (
-                    ".barre-nav__menu",
-                    vec![
-                        ("display", "none"),
-                        ("position", "absolute"),
-                        ("top", "100%"),
-                        ("left", "0"),
-                        ("right", "0"),
-                        ("flex-direction", "column"),
-                        ("align-items", "flex-start"),
-                        ("gap", "16px"),
-                        ("padding", "16px 24px 24px"),
-                        ("background-color", "inherit"),
-                    ],
-                ),
-                (
-                    ".barre-nav.is-open .barre-nav__menu",
-                    vec![("display", "flex")],
-                ),
-            ],
-            _ => Vec::new(),
-        }
+        Vec::new()
     }
 
-    /// Règles de style dont l'élément a besoin (ajoutées si le site ne les a pas).
+    /// Règles de style dont l'élément a besoin (ajoutées si le site ne les a pas) : celles des
+    /// blocs prêts à l'emploi. Les autres éléments ont l'allure propre de Revel
+    /// (`data-revel-base`, D-159) et aucune classe.
     pub fn rules(self) -> Rules {
-        if let Some(b) = self.block() {
-            return b.rules();
-        }
-        match self {
-            Preset::Grid => vec![
-                (
-                    ".grille",
-                    vec![
-                        ("display", "grid"),
-                        ("grid-template-columns", "repeat(2, minmax(0, 1fr))"),
-                        ("gap", "24px"),
-                    ],
-                ),
-                (".grille__cellule", vec![("min-height", "80px")]),
-            ],
-            Preset::Columns => vec![
-                (
-                    ".colonnes",
-                    vec![("display", "flex"), ("flex-wrap", "wrap"), ("gap", "24px")],
-                ),
-                (
-                    ".colonne",
-                    vec![
-                        ("flex", "1 1 240px"),
-                        ("min-width", "0"),
-                        ("min-height", "80px"),
-                    ],
-                ),
-            ],
-            Preset::Pixels => vec![(
-                ".toile-pixels",
-                vec![
-                    ("position", "relative"),
-                    ("width", "100%"),
-                    ("min-height", "320px"),
-                    ("overflow", "hidden"),
-                ],
-            )],
-            Preset::CartAdd => vec![
-                (
-                    ".bouton-panier",
-                    vec![
-                        ("display", "inline-flex"),
-                        ("align-items", "center"),
-                        ("padding", "12px 22px"),
-                        ("border", "0"),
-                        ("border-radius", "999px"),
-                        ("background-color", "var(--bloc-accent, #2f6fed)"),
-                        ("color", "var(--bloc-accent-texte, #ffffff)"),
-                        ("font", "inherit"),
-                        ("font-weight", "600"),
-                        ("cursor", "pointer"),
-                    ],
-                ),
-                (".bouton-panier.is-added", vec![("opacity", "0.7")]),
-            ],
-            Preset::Video => vec![(
-                ".video",
-                vec![("display", "block"), ("width", "100%"), ("height", "auto")],
-            )],
-            Preset::Reveal => vec![
-                (
-                    ".revele",
-                    vec![
-                        ("position", "relative"),
-                        ("overflow", "hidden"),
-                        ("display", "block"),
-                    ],
-                ),
-                (
-                    ".revele__avant",
-                    vec![("display", "block"), ("width", "100%"), ("height", "auto")],
-                ),
-                (
-                    ".revele__apres",
-                    vec![
-                        ("position", "absolute"),
-                        ("inset", "0"),
-                        ("width", "100%"),
-                        ("height", "100%"),
-                        ("object-fit", "cover"),
-                        ("opacity", "0"),
-                        ("transition", "opacity 0.35s ease"),
-                    ],
-                ),
-                // Sans script (canevas) : montrée en entier au survol.
-                (".revele:hover .revele__apres", vec![("opacity", "1")]),
-            ],
-            Preset::ScrollProgress => vec![
-                (
-                    ".barre-progression",
-                    vec![
-                        ("position", "relative"),
-                        ("width", "100%"),
-                        ("height", "4px"),
-                        ("overflow", "hidden"),
-                        ("border-radius", "2px"),
-                        ("background-color", "rgba(127, 127, 127, 0.25)"),
-                    ],
-                ),
-                (
-                    ".barre-progression__remplissage",
-                    vec![
-                        ("width", "0%"),
-                        ("height", "100%"),
-                        ("border-radius", "inherit"),
-                        ("background-color", "currentColor"),
-                        ("transition", "width 0.45s cubic-bezier(0.33, 1, 0.68, 1)"),
-                    ],
-                ),
-            ],
-            Preset::HoverMedia => vec![(
-                ".media-survol",
-                vec![
-                    ("display", "block"),
-                    ("width", "100%"),
-                    ("aspect-ratio", "16 / 9"),
-                    ("object-fit", "cover"),
-                ],
-            )],
-            Preset::Tabs => vec![
-                (
-                    ".onglets__liste",
-                    vec![
-                        ("display", "flex"),
-                        ("flex-wrap", "wrap"),
-                        ("gap", "4px"),
-                        ("border-bottom", "1px solid rgba(127, 127, 127, 0.35)"),
-                    ],
-                ),
-                (
-                    ".onglet",
-                    vec![
-                        ("padding", "10px 16px"),
-                        ("border", "0"),
-                        ("border-bottom", "2px solid transparent"),
-                        ("margin-bottom", "-1px"),
-                        ("background", "none"),
-                        ("color", "inherit"),
-                        ("font", "inherit"),
-                        ("cursor", "pointer"),
-                    ],
-                ),
-                (
-                    ".onglet.is-active",
-                    vec![("border-bottom-color", "currentColor")],
-                ),
-                (".onglets__panneau", vec![("padding", "16px 0")]),
-            ],
-            Preset::Accordion => vec![
-                (
-                    ".accordeon",
-                    vec![("border-bottom", "1px solid rgba(127, 127, 127, 0.35)")],
-                ),
-                (
-                    ".accordeon__titre",
-                    vec![
-                        ("padding", "14px 0"),
-                        ("font-weight", "600"),
-                        ("cursor", "pointer"),
-                    ],
-                ),
-                (".accordeon__contenu", vec![("padding-bottom", "14px")]),
-            ],
-            Preset::Lottie => vec![(
-                ".lottie",
-                vec![
-                    ("display", "block"),
-                    ("width", "100%"),
-                    ("max-width", "480px"),
-                ],
-            )],
-            Preset::Icon => vec![(
-                ".icone",
-                vec![
-                    ("display", "inline-block"),
-                    ("width", "24px"),
-                    ("height", "24px"),
-                    ("vertical-align", "middle"),
-                ],
-            )],
-            Preset::LocaleSwitch => vec![
-                (
-                    ".langues",
-                    vec![
-                        ("display", "flex"),
-                        ("align-items", "center"),
-                        ("gap", "12px"),
-                    ],
-                ),
-                (
-                    ".langue",
-                    vec![
-                        ("color", "inherit"),
-                        ("text-decoration", "none"),
-                        ("opacity", "0.6"),
-                    ],
-                ),
-                (
-                    ".langue[aria-current=\"page\"]",
-                    vec![("opacity", "1"), ("font-weight", "600")],
-                ),
-            ],
-            Preset::Switch | Preset::ThemeSwitch => vec![
-                (
-                    ".interrupteur",
-                    vec![
-                        ("display", "inline-flex"),
-                        ("align-items", "center"),
-                        ("gap", "12px"),
-                        ("padding", "8px 8px 8px 16px"),
-                        ("border", "0"),
-                        ("border-radius", "999px"),
-                        ("background-color", "#f1f1f1"),
-                        ("color", "inherit"),
-                        ("font", "inherit"),
-                        ("cursor", "pointer"),
-                    ],
-                ),
-                (
-                    ".interrupteur__etat",
-                    vec![
-                        ("min-width", "48px"),
-                        ("padding", "2px 10px"),
-                        ("border-radius", "999px"),
-                        ("background-color", "#111111"),
-                        ("color", "#ffffff"),
-                        ("text-align", "center"),
-                    ],
-                ),
-                (
-                    "[aria-pressed=\"false\"] .interrupteur__etat",
-                    vec![("background-color", "#8a8a8a")],
-                ),
-            ],
-            Preset::Consent => vec![
-                (
-                    ".consentement",
-                    vec![
-                        ("position", "fixed"),
-                        ("right", "16px"),
-                        ("bottom", "16px"),
-                        ("left", "16px"),
-                        ("z-index", "60"),
-                        ("max-width", "480px"),
-                        ("margin-left", "auto"),
-                        ("padding", "20px"),
-                        ("border-radius", "12px"),
-                        ("background-color", "#212328"),
-                        ("color", "#ffffff"),
-                    ],
-                ),
-                (
-                    ".consentement__actions",
-                    vec![("display", "flex"), ("gap", "8px"), ("margin-top", "12px")],
-                ),
-            ],
-            Preset::ListFilters => vec![
-                (
-                    ".filtres",
-                    vec![("display", "flex"), ("flex-wrap", "wrap"), ("gap", "8px")],
-                ),
-                (
-                    ".filtre",
-                    vec![
-                        ("padding", "8px 16px"),
-                        ("border", "1px solid currentColor"),
-                        ("border-radius", "999px"),
-                        ("background", "none"),
-                        ("color", "inherit"),
-                        ("font", "inherit"),
-                        ("cursor", "pointer"),
-                    ],
-                ),
-                (
-                    ".filtre.is-active",
-                    vec![("background-color", "currentColor")],
-                ),
-            ],
-            Preset::VideoPlayer => vec![
-                (
-                    ".lecteur",
-                    vec![
-                        ("position", "relative"),
-                        ("margin", "0"),
-                        ("aspect-ratio", "16 / 9"),
-                        ("overflow", "hidden"),
-                        ("background-color", "#000000"),
-                    ],
-                ),
-                (
-                    ".lecteur__couverture",
-                    vec![
-                        ("display", "block"),
-                        ("position", "relative"),
-                        ("width", "100%"),
-                        ("height", "100%"),
-                        ("padding", "0"),
-                        ("border", "0"),
-                        ("background", "none"),
-                        ("color", "#ffffff"),
-                        ("cursor", "pointer"),
-                    ],
-                ),
-                (
-                    ".lecteur__image",
-                    vec![
-                        ("display", "block"),
-                        ("width", "100%"),
-                        ("height", "100%"),
-                        ("object-fit", "cover"),
-                    ],
-                ),
-                (
-                    ".lecteur__bouton",
-                    vec![
-                        ("position", "absolute"),
-                        ("top", "50%"),
-                        ("left", "50%"),
-                        ("display", "grid"),
-                        ("place-items", "center"),
-                        ("width", "72px"),
-                        ("height", "72px"),
-                        ("border-radius", "50%"),
-                        ("background-color", "rgba(0, 0, 0, 0.6)"),
-                        ("transform", "translate(-50%, -50%)"),
-                    ],
-                ),
-                (
-                    ".lecteur__bouton svg",
-                    vec![("width", "32px"), ("height", "32px")],
-                ),
-            ],
-            Preset::Ticker => vec![
-                (
-                    ".defilement",
-                    vec![
-                        ("display", "flex"),
-                        ("align-items", "center"),
-                        ("gap", "48px"),
-                        ("overflow", "hidden"),
-                    ],
-                ),
-                (
-                    ".defilement__element",
-                    vec![("flex", "none"), ("white-space", "nowrap")],
-                ),
-            ],
-            Preset::Carousel => slider_rules(
-                [
-                    ".carrousel",
-                    ".carrousel__piste",
-                    ".carrousel__diapo",
-                    ".carrousel__commandes",
-                    ".carrousel__fleche",
-                    ".carrousel__fleche:disabled",
-                ],
-                true,
-            ),
-            Preset::Slideshow => {
-                let mut v = slider_rules(
-                    [
-                        ".diaporama",
-                        ".diaporama__piste",
-                        ".diaporama__diapo",
-                        ".diaporama__commandes",
-                        ".diaporama__fleche",
-                        ".diaporama__fleche:disabled",
-                    ],
-                    false,
-                );
-                v.push((
-                    ".diaporama__points",
-                    vec![("display", "flex"), ("gap", "8px")],
-                ));
-                v.push((
-                    ".diaporama__points button",
-                    vec![
-                        ("width", "8px"),
-                        ("height", "8px"),
-                        ("padding", "0"),
-                        ("border", "0"),
-                        ("border-radius", "50%"),
-                        ("background-color", "currentColor"),
-                        ("opacity", "0.3"),
-                        ("cursor", "pointer"),
-                    ],
-                ));
-                v.push((
-                    ".diaporama__points button.is-active",
-                    vec![("opacity", "1")],
-                ));
-                v
-            }
-            Preset::Navbar => vec![
-                (
-                    ".barre-nav",
-                    vec![
-                        ("position", "relative"),
-                        ("display", "flex"),
-                        ("align-items", "center"),
-                        ("justify-content", "space-between"),
-                        ("gap", "24px"),
-                        ("padding", "16px 24px"),
-                    ],
-                ),
-                (
-                    ".barre-nav__marque",
-                    vec![
-                        ("font-weight", "700"),
-                        ("color", "inherit"),
-                        ("text-decoration", "none"),
-                    ],
-                ),
-                (
-                    ".barre-nav__menu",
-                    vec![
-                        ("display", "flex"),
-                        ("align-items", "center"),
-                        ("gap", "24px"),
-                    ],
-                ),
-                (
-                    ".barre-nav__lien",
-                    vec![("color", "inherit"), ("text-decoration", "none")],
-                ),
-                (
-                    ".barre-nav__bouton",
-                    vec![
-                        ("display", "none"),
-                        ("padding", "8px 12px"),
-                        ("border", "1px solid currentColor"),
-                        ("border-radius", "6px"),
-                        ("background", "none"),
-                        ("color", "inherit"),
-                        ("font", "inherit"),
-                        ("cursor", "pointer"),
-                    ],
-                ),
-            ],
-            Preset::CollectionList => vec![(
-                ".liste-collection",
-                vec![
-                    ("display", "grid"),
-                    (
-                        "grid-template-columns",
-                        "repeat(auto-fill, minmax(240px, 1fr))",
-                    ),
-                    ("gap", "24px"),
-                ],
-            )],
-            _ => Vec::new(),
+        match self.block() {
+            Some(b) => b.rules(),
+            None => Vec::new(),
         }
     }
 
@@ -864,6 +330,116 @@ impl Preset {
         if let Some(b) = self.block() {
             return b.node(site);
         }
+        let n = self.raw_node(site, text);
+        self.finish(n)
+    }
+
+    /// Élément construit fermé (D-159) : un seul calque, réglé depuis ses réglages.
+    pub fn is_widget(self) -> bool {
+        matches!(
+            self,
+            Preset::Switch
+                | Preset::ThemeSwitch
+                | Preset::Consent
+                | Preset::ListFilters
+                | Preset::VideoPlayer
+                | Preset::Reveal
+                | Preset::ScrollProgress
+                | Preset::Tabs
+                | Preset::Accordion
+                | Preset::Ticker
+                | Preset::Carousel
+                | Preset::Slideshow
+                | Preset::Navbar
+                | Preset::LocaleSwitch
+        )
+    }
+
+    /// Classes de la construction remplacées par l'allure propre de Revel (D-159) : la racine
+    /// reçoit `data-revel-base` (styles de Revel, priorité nulle, voir `revel_render::toolcss`),
+    /// ses parties `data-revel-part` ; aucune classe n'est posée, l'utilisateur ajoute les
+    /// siennes. Racine d'un élément construit : `data-revel-widget` (fermé).
+    fn finish(self, mut n: Node) -> Node {
+        let widget = self.is_widget();
+        fn walk(n: &mut Node, root: bool, widget: bool, in_part: bool) {
+            match n {
+                Node::Element {
+                    tag,
+                    attrs,
+                    children,
+                    ..
+                } => {
+                    let class = attrs
+                        .iter()
+                        .find(|a| a.name == "class")
+                        .and_then(|a| a.value.clone())
+                        .unwrap_or_default();
+                    attrs.retain(|a| a.name != "class");
+                    let role = role_of(class.split_whitespace().next().unwrap_or(""));
+                    let mut part = false;
+                    match role {
+                        Some(Role::Base(kind)) if root => attrs.insert(
+                            0,
+                            Attr {
+                                name: revel_model::BASE_ATTR.into(),
+                                value: Some(kind.into()),
+                                when: None,
+                            },
+                        ),
+                        Some(Role::Part(name)) if widget => {
+                            part = true;
+                            attrs.insert(
+                                0,
+                                Attr {
+                                    name: revel_model::PART_ATTR.into(),
+                                    value: Some(name.into()),
+                                    when: None,
+                                },
+                            );
+                        }
+                        // Contenu accueilli (diapositive, panneau) : calque ordinaire.
+                        Some(Role::Content) => {}
+                        // Élément sans nom dans une partie (dessin d'un bouton…) : partie aussi.
+                        _ if widget && !root && (in_part || role.is_none()) => {
+                            part = true;
+                            attrs.insert(
+                                0,
+                                Attr {
+                                    name: revel_model::PART_ATTR.into(),
+                                    value: Some(tag.to_ascii_lowercase()),
+                                    when: None,
+                                },
+                            );
+                        }
+                        _ => {}
+                    }
+                    if root && widget {
+                        attrs.push(Attr {
+                            name: revel_model::WIDGET_ATTR.into(),
+                            value: None,
+                            when: None,
+                        });
+                    }
+                    // Contenu accueilli : ce qu'il contient reste ordinaire.
+                    let inner = widget && role != Some(Role::Content);
+                    for c in children {
+                        walk(c, false, inner, part);
+                    }
+                }
+                Node::Image(img) => img.class = None,
+                Node::Each { children, .. } => {
+                    for c in children {
+                        walk(c, false, widget, in_part);
+                    }
+                }
+                _ => {}
+            }
+        }
+        walk(&mut n, true, widget, false);
+        n
+    }
+
+    fn raw_node(self, site: &Site, text: &str) -> Node {
         let mut taken = site.node_ids();
         let mut id = || {
             let i = fresh(&taken);
@@ -1596,6 +1172,72 @@ impl Preset {
             }
         }
     }
+}
+
+/// Place d'un élément d'une construction, d'après la classe qu'elle lui donnait.
+#[derive(Clone, Copy, PartialEq)]
+enum Role {
+    /// Racine : allure propre de Revel (`data-revel-base`).
+    Base(&'static str),
+    /// Partie de l'élément construit (`data-revel-part`).
+    Part(&'static str),
+    /// Contenu accueilli (diapositive, panneau, lien du menu) : calque ordinaire.
+    Content,
+}
+
+fn role_of(class: &str) -> Option<Role> {
+    use Role::*;
+    Some(match class {
+        "grille" => Base("grid"),
+        "colonnes" => Base("columns"),
+        "grille__cellule" | "colonne" => Content,
+        "button" => Base("button"),
+        "video" => Base("video"),
+        "toile-pixels" => Base("pixels"),
+        "bouton-panier" => Base("cart-add"),
+        "media-survol" => Base("hover-media"),
+        "lottie" => Base("lottie"),
+        "code-html" => Content,
+        "liste-collection" => Base("collection"),
+        "liste-collection__element" => Content,
+        "revele" => Base("reveal"),
+        "barre-progression" => Base("progress"),
+        "barre-progression__remplissage" => Part("fill"),
+        "onglets" => Base("tabs"),
+        "onglets__liste" => Part("tablist"),
+        "onglet" => Part("tab"),
+        "onglets__panneau" => Content,
+        "accordeon" => Base("accordion"),
+        "accordeon__titre" => Part("summary"),
+        "accordeon__contenu" => Content,
+        "interrupteur" => Base("switch"),
+        "interrupteur__libelle" => Part("label"),
+        "interrupteur__etat" => Part("state"),
+        "consentement" => Base("consent"),
+        "consentement__actions" => Part("actions"),
+        "filtres" => Base("filters"),
+        "filtre" => Part("filter"),
+        "lecteur" => Base("video-player"),
+        "lecteur__couverture" => Part("cover"),
+        "lecteur__bouton" => Part("play"),
+        "defilement" => Base("ticker"),
+        "defilement__element" => Content,
+        "carrousel" => Base("carousel"),
+        "diaporama" => Base("slideshow"),
+        "carrousel__piste" | "diaporama__piste" => Part("track"),
+        "carrousel__diapo" | "diaporama__diapo" => Content,
+        "carrousel__commandes" | "diaporama__commandes" => Part("controls"),
+        "carrousel__fleche" | "diaporama__fleche" => Part("arrow"),
+        "carrousel__compteur" => Part("count"),
+        "diaporama__points" => Part("dots"),
+        "barre-nav" => Base("navbar"),
+        "barre-nav__marque" | "barre-nav__lien" => Content,
+        "barre-nav__menu" => Part("menu"),
+        "barre-nav__bouton" => Part("toggle"),
+        "langues" => Base("locales"),
+        "langue" => Part("link"),
+        _ => return None,
+    })
 }
 
 /// Icône `name` en `<svg>` (dessin au trait, couleur du texte).

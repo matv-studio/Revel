@@ -1029,6 +1029,8 @@ fn value_settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let has_link = link.is_some();
     let has_image = image.is_some();
     let text_bound = !text_cur.is_empty();
+    // Rien de relié : une simple icône (en haut à droite des réglages) ouvre les choix.
+    let open = RwSignal::new(text_bound || !link_cur.is_empty() || !image_cur.is_empty());
     Some(
         view! {
             {move || {
@@ -1037,6 +1039,13 @@ fn value_settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                 if es.is_empty() && !has_text && !text_bound && link_cur.is_empty() && image_cur.is_empty() {
                     return ().into_any();
                 }
+                if !open.get() {
+                    return view! {
+                        <button type="button" class="icon-btn icon-btn--small siteinfo-toggle" data-siteinfo="open"
+                            title=ui.t("siteinfo-bind-help") aria-label=ui.t("siteinfo-bind")
+                            on:click=move |_| open.set(true)>{crate::icons::link()}</button>
+                    }.into_any();
+                }
                 let es2 = es.clone();
                 let es3 = es.clone();
                 let tc = text_cur.clone();
@@ -1044,7 +1053,11 @@ fn value_settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                 let ic = image_cur.clone();
                 view! {
                     <div class="insp-group" data-siteinfo="">
-                        <p class="panel-title" title=ui.t("siteinfo-bind-help")>{ui.t("siteinfo-bind")}</p>
+                        <div class="panel-title-line">
+                            <p class="panel-title" title=ui.t("siteinfo-bind-help")>{ui.t("siteinfo-bind")}</p>
+                            <button type="button" class="icon-btn icon-btn--small siteinfo-go" title=ui.t("siteinfo-edit") aria-label=ui.t("siteinfo-edit")
+                                on:click=move |_| ui.tab(Tab::Settings(Section::SiteInfo))>{crate::icons::settings()}</button>
+                        </div>
                         {has_text.then(|| view! {
                             <label class="field" data-siteinfo="text">
                                 <span class="label">{ui.t("block-bound-text-label")}</span>
@@ -1106,9 +1119,6 @@ fn value_settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                                 </div>
                             </label>
                         })}
-                        <button type="button" class="btn btn--small siteinfo-go" on:click=move |_| ui.tab(Tab::Settings(Section::SiteInfo))>
-                            {crate::icons::settings()}<span>{ui.t("siteinfo-edit")}</span>
-                        </button>
                     </div>
                 }.into_any()
             }}

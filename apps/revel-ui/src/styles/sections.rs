@@ -3,7 +3,7 @@
 
 use super::color::{ColorField, ColorInput};
 use super::controls::*;
-use super::ctx::Sx;
+use super::ctx::{PropValue, Sx};
 use super::fx::{FILTERS, FuncList, TRANSFORMS, Transitions};
 use crate::icons;
 use leptos::ev;
@@ -87,7 +87,7 @@ fn Side(sx: Sx, group: &'static [&'static str; 4], side: usize) -> impl IntoView
                             && let Some(v) = dragged(&s, px, 1.0, "px", 1.0)
                         {
                             let list: Vec<(String, String)> = targets(e.alt_key(), e.shift_key()).into_iter().map(|p| (p.to_string(), v.clone())).collect();
-                            sx.preview(&list);
+                            sx.preview_live(&list);
                             drag_last(v);
                         }
                     }
@@ -1016,7 +1016,7 @@ fn Opacity(sx: Sx) -> impl IntoView {
                 aria-label=sx.ui.t("styles-opacity")
                 on:input=move |e| {
                     if let Ok(v) = event_target_value(&e).parse::<f64>() {
-                        sx.preview(&[("opacity".into(), to_css(v))]);
+                        sx.preview_live(&[("opacity".into(), to_css(v))]);
                         if let Some(t) = e.target().and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok()) {
                             let _ = t.style().set_property("--fill", &format!("{v}%"));
                         }
@@ -1191,12 +1191,61 @@ fn PointGrid(sx: Sx, prop: &'static str, key: &'static str) -> impl IntoView {
                         }><i></i></button>
                 }).collect_view()}
             </div>
-            <input class="input input--mono" aria-label=ui.t(key)
-                placeholder=ui.t("pos-center")
-                prop:value=move || pv.get().here.unwrap_or_default()
-                on:change=move |e| { let v = event_target_value(&e); sx.set(prop, (!v.trim().is_empty()).then(|| v.trim().to_string())); }/>
+            // X et Y en nombres (mots-clés lus comme pourcentages) : pas de texte libre.
+            <div class="point-xy">
+                {[0usize, 1].into_iter().map(|axis| {
+                    let part = move || {
+                        pv.track();
+                        part_of(pv, axis)
+                    };
+                    let both = move |v: String| {
+                        let (x, y) = if axis == 0 { (v, part_of(pv, 1)) } else { (part_of(pv, 0), v) };
+                        format!("{x} {y}")
+                    };
+                    view! {
+                        <NumBox sx
+                            value=Signal::derive(move || pv.with(|p| p.here.is_some()).then(part))
+                            hint=Signal::derive(|| "50%".to_string())
+                            start=Signal::derive(part)
+                            on_preview=Callback::new(move |v: String| sx.preview(&[(prop.into(), both(v))]))
+                            on_commit=Callback::new(move |(v, _): (Option<String>, bool)| sx.set(prop, Some(both(v.unwrap_or_else(|| "50%".into())))))
+                            unit="%" units=GAP_UNITS prefix=Some(if axis == 0 { "X" } else { "Y" }) label=key/>
+                    }
+                }).collect_view()}
+            </div>
         </div>
     }
+}
+
+/// Mot-clé de position lu en pourcentage (`left` : `0%`), nombre gardé tel quel.
+fn point_pct(s: &str) -> String {
+    match s.trim() {
+        "left" | "top" => "0%".into(),
+        "center" => "50%".into(),
+        "right" | "bottom" => "100%".into(),
+        "0" => "0%".into(),
+        v => v.to_string(),
+    }
+}
+
+/// Partie X (0) ou Y (1) d'une position réglée, en pourcentage par défaut.
+fn part_of(pv: Memo<PropValue>, axis: usize) -> String {
+    let v = pv.with_untracked(|p| p.here.clone()).unwrap_or_default();
+    let t = split_top(&v, ' ');
+    let s = match t.as_slice() {
+        [x, y, ..] => {
+            if axis == 0 {
+                x.clone()
+            } else {
+                y.clone()
+            }
+        }
+        // Un seul mot : `top` ou `bottom` est vertical, les autres horizontaux.
+        [c] if axis == 1 && matches!(c.as_str(), "top" | "bottom") => c.clone(),
+        [c] if axis == 0 && !matches!(c.as_str(), "top" | "bottom") => c.clone(),
+        _ => "50%".into(),
+    };
+    point_pct(&s)
 }
 
 /// Découpes proposées (`clip-path`).

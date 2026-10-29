@@ -79,6 +79,8 @@ fn label_of(c: &CmsCollection) -> String {
 /// Réglages propres à l'élément sélectionné (en plus des réglages communs).
 pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView> {
     let mut parts: Vec<AnyView> = Vec::new();
+    // Élément construit fermé (D-159) : « Décomposer » en tête de ses réglages.
+    let widget = revel_model::is_widget(&node);
     if let Node::Element {
         id,
         tag,
@@ -152,24 +154,35 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         // pas ; ensuite, les réglages de son rôle.
         let has_role = attrs.iter().any(|a| ROLE_ATTRS.contains(&a.name.as_str()));
         if !has_role {
-            if let Some(v) = role_picker(ui, ed, &at, &lower, attrs) {
-                parts.push(v);
-            }
+            // (Rôle à donner : réglage avancé, voir `role_settings`.)
             // Texte d'état d'un interrupteur (élément dans un interrupteur).
             if let Some(v) = switch_settings(ui, ed, &at, &lower, attrs, false) {
                 parts.push(v);
             }
         } else {
-            // Filtres de liste : groupe, bouton, élément filtré, message sans résultat.
-            if let Some(v) = filter_settings(ui, ed, &at, attrs) {
+            // Filtres de liste : groupe, bouton, élément filtré, message sans résultat ; fermés
+            // (D-159) : leurs boutons aussi.
+            if widget {
+                if let Some(v) = crate::widgets::filters_settings(ui, ed, &at, &node) {
+                    parts.push(v);
+                }
+            } else if let Some(v) = filter_settings(ui, ed, &at, attrs) {
                 parts.push(v);
             }
-            // Consentement : bandeau (identifiant de mesure), boutons, lien qui le rouvre.
-            if let Some(v) = consent_settings(ui, ed, &at, &lower, attrs) {
+            // Consentement : bandeau (identifiant de mesure), boutons, lien qui le rouvre ; pas
+            // proposé à un autre élément construit (interrupteur).
+            if (!widget || attr(attrs, "data-revel-consent").is_some())
+                && let Some(v) = consent_settings(ui, ed, &at, &lower, attrs)
+            {
                 parts.push(v);
             }
-            // Interrupteur des sons ou de la musique, et texte de son état.
-            if let Some(v) = switch_settings(ui, ed, &at, &lower, attrs, true) {
+            // Interrupteur des sons ou de la musique, et texte de son état ; fermé (D-159) :
+            // ce qu'il commande et les textes de son état, en un seul groupe.
+            if widget {
+                if let Some(v) = crate::widgets::switch_settings(ui, ed, &at, &node) {
+                    parts.push(v);
+                }
+            } else if let Some(v) = switch_settings(ui, ed, &at, &lower, attrs, true) {
                 parts.push(v);
             }
             // Élément dans des onglets : onglet (bouton ou lien) ou panneau.
@@ -183,10 +196,6 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
                     "panel"
                 };
                 parts.push(tab_role(ui, ed, at.clone(), role));
-            }
-            // Parties d'un carrousel ou diaporama, d'un lecteur vidéo, d'un formulaire : leur rôle.
-            if let Some(v) = part_roles(ui, ed, &at, attrs) {
-                parts.push(v);
             }
         }
         // Horloge et toile de pixels (D-158).
@@ -283,6 +292,15 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
     // Informations du site (texte, lien, image, menu) et liens d'un menu.
     if let Some(b) = crate::siteinfo::element_settings(ui, ed, &at, &node) {
         parts.push(b);
+    }
+    if widget {
+        // Images de ses parties (couverture d'un lecteur) ; celles d'une image révélée ont
+        // leurs propres réglages.
+        let reveal = matches!(&node, Node::Element { attrs, .. } if attr(attrs, "data-revel-reveal").is_some());
+        if !reveal && let Some(v) = crate::widgets::images_settings(ui, ed, &at, &node) {
+            parts.push(v);
+        }
+        parts.push(crate::widgets::decompose_button(ui, ed, &at));
     }
     (!parts.is_empty()).then(|| parts.into_iter().collect_view().into_any())
 }
@@ -1375,6 +1393,17 @@ type Offer = (
     &'static str,
     Option<&'static str>,
 );
+
+/// Rôle de l'élément dans un élément interactif (paramètres avancés) : le choisir s'il n'en a
+/// pas ; partie d'un carrousel, d'un lecteur vidéo, d'un formulaire.
+pub fn role_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Option<AnyView> {
+    let lower = tag.to_ascii_lowercase();
+    if attrs.iter().any(|a| ROLE_ATTRS.contains(&a.name.as_str())) {
+        part_roles(ui, ed, at, attrs)
+    } else {
+        role_picker(ui, ed, at, &lower, attrs)
+    }
+}
 
 /// Choix unique du rôle d'un élément qui n'en a pas : rôles possibles à cet endroit, groupés
 /// par élément interactif (filtres de liste, consentement, interrupteur, onglets, carrousel,

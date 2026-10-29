@@ -138,8 +138,52 @@ const PRESET_NAMES: &[(&str, &str)] = &[
     ("texte-riche", "insert-rich-text"),
 ];
 
+/// Nom des éléments ajoutés sans classe, d'après leur nature (`data-revel-base`, D-159).
+const BASE_NAMES: &[(&str, &str)] = &[
+    ("grid", "insert-grid"),
+    ("columns", "insert-columns"),
+    ("button", "insert-button"),
+    ("video", "insert-video"),
+    ("pixels", "insert-pixels"),
+    ("cart-add", "insert-cart-add"),
+    ("hover-media", "insert-hover-media"),
+    ("lottie", "insert-lottie"),
+    ("collection", "insert-collection-list"),
+    ("reveal", "insert-reveal"),
+    ("progress", "insert-progress"),
+    ("tabs", "insert-tabs"),
+    ("accordion", "insert-accordion"),
+    ("switch", "insert-switch"),
+    ("consent", "insert-consent"),
+    ("filters", "insert-filters"),
+    ("video-player", "insert-video-player"),
+    ("ticker", "insert-ticker"),
+    ("carousel", "insert-carousel"),
+    ("slideshow", "insert-slideshow"),
+    ("navbar", "insert-navbar"),
+    ("locales", "insert-locale-switch"),
+];
+
+/// Classes d'un élément pour son nom : sans classe, sa nature (`@switch`) s'il en a une.
+pub fn with_base(class: String, attrs: &[revel_model::Attr]) -> String {
+    if !class.trim().is_empty() {
+        return class;
+    }
+    attrs
+        .iter()
+        .find(|a| a.name == revel_model::BASE_ATTR)
+        .and_then(|a| a.value.as_deref())
+        .map(|k| format!("@{k}"))
+        .unwrap_or(class)
+}
+
 /// Nom affiché d'un élément : classe principale rendue lisible, sinon sa nature.
 pub fn element_name(ui: Ui, tag: &str, classes: &str) -> String {
+    if let Some(kind) = classes.trim().strip_prefix('@')
+        && let Some((_, key)) = BASE_NAMES.iter().find(|(k, _)| *k == kind)
+    {
+        return ui.tx(key, &[]);
+    }
     let main = main_class(classes);
     if let Some((_, key)) = main.and_then(|m| PRESET_NAMES.iter().find(|(c, _)| *c == m)) {
         return ui.tx(key, &[]);
@@ -152,7 +196,7 @@ pub fn element_name(ui: Ui, tag: &str, classes: &str) -> String {
 /// Nom technique (`h1.bloc-titre.grand`), pour les info-bulles.
 pub fn technical(tag: &str, classes: &str) -> String {
     let mut s = tag.to_ascii_lowercase();
-    for c in classes.split_whitespace() {
+    for c in classes.split_whitespace().filter(|c| !c.starts_with('@')) {
         s.push('.');
         s.push_str(c);
     }

@@ -39,7 +39,7 @@
   // place (voir `refreshPage`).
   const headSig = (h) => [...h.children]
     .filter((e) => !/^(TITLE|META)$/.test(e.tagName) && !(e.tagName === "LINK" && /\b(canonical|alternate)\b/.test(e.getAttribute("rel") || "")))
-    .filter((e) => !(e.tagName === "STYLE" && e.hasAttribute("data-rv-hidden")))
+    .filter((e) => !(e.tagName === "STYLE" && (e.hasAttribute("data-rv-hidden") || e.hasAttribute("data-revel-tools"))))
     .map((e) => (e.tagName === "LINK" && /stylesheet/.test(e.getAttribute("rel") || "")
       ? "css:" + new URL(e.getAttribute("href") || "", location.href).pathname
       : e.outerHTML))
@@ -541,7 +541,10 @@
     if (!node || !node.closest) return null;
     let svg = node.closest("svg");
     while (svg && svg.parentElement && svg.parentElement.closest("svg")) svg = svg.parentElement.closest("svg");
-    return (svg || node).closest("[data-rv]");
+    const el = (svg || node).closest("[data-rv]");
+    // Partie d'un élément construit fermé (bouton, pastille…) : l'élément entier (D-159).
+    const w = el && el.hasAttribute("data-revel-part") ? el.closest("[data-revel-widget]") : null;
+    return w || el;
   };
 
   // Élément qui porte les styles : l'image d'une `<picture>` (ses classes sont sur `<img>`).
@@ -621,10 +624,19 @@
   // Textes modifiables de l'élément sélectionné (champ « Texte » du panneau de styles) : textes
   // dont il est l'élément le plus proche ; dans une utilisation de composant, ses propriétés de
   // texte et les textes venus des données.
+  // Texte d'une partie de l'élément construit `w` (pas d'un contenu qu'il accueille).
+  const partOf = (c, w) => {
+    for (let el = c.closest("[data-rv]"); el && el !== w; el = el.parentElement && el.parentElement.closest("[data-rv]")) {
+      if (!el.hasAttribute("data-revel-part")) return false;
+    }
+    return w.contains(c);
+  };
   const sendTexts = () => {
     const items = [];
     // Texte mis en forme modifié d'un bloc : un seul champ pour tout l'élément (D-72).
-    const hostId = selected && !selectedInst ? selected.getAttribute("data-rv") : null;
+    // Élément construit fermé : un champ par texte de ses parties, pas un seul pour tout.
+    const widget = !!selected && !selectedInst && selected.hasAttribute("data-revel-widget");
+    const hostId = selected && !selectedInst && !widget ? selected.getAttribute("data-rv") : null;
     if (hostId && richIds.has(hostId)) {
       for (let n = 0; n < ranges.length; n++) {
         const r = ranges[n];
@@ -647,13 +659,16 @@
         const ofItem = !!sl.binding && !!sl.binding.source && sl.binding.source.kind === "entry_item";
         const ok = selectedInst
           ? !!ir && ir.intersectsNode(c) && (propOf(sl, selectedInst) || (dataOf(sl) && !ofItem))
-          : c.closest("[data-rv]") === selected;
+          : c.closest("[data-rv]") === selected || (selected.hasAttribute("data-revel-widget") && partOf(c, selected));
         if (!ok) continue;
+        // Textes réglés par les réglages de l'élément construit (état d'un interrupteur, boutons
+        // des filtres) : pas répétés ici.
+        if (widget && c.closest("[data-revel-switch-text], [data-revel-filter]")) continue;
         const frag = r.cloneContents();
         const box = document.createElement("div");
         box.appendChild(frag);
         items.push({ slot: sl, text: sl.html ? box.innerHTML : box.textContent, rich: !!sl.html });
-        if (items.length >= 8) break;
+        if (items.length >= (selected.hasAttribute("data-revel-widget") ? 24 : 8)) break;
       }
     }
     post({ type: "texts", id: selected ? idOf(selected, selectedInst) : null, items });
@@ -1857,16 +1872,20 @@
     flex: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M5.5 2.5v11M10.5 2.5v11"/>',
     list: '<path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/>',
     lottie: '<path d="M8 2.5v3M8 10.5v3M2.5 8h3M10.5 8h3M4.2 4.2l1.6 1.6M10.2 10.2l1.6 1.6M4.2 11.8l1.6-1.6M10.2 5.8l1.6-1.6"/>',
+    image: '<rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="6.5" r="1.2"/><path d="M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3"/>',
   };
   const emptyCss = "[data-rv-empty]{min-height:50px!important;min-width:50px!important;" +
     "background:rgba(109,140,255,.07) center/20px no-repeat!important;outline:1px dashed rgba(109,140,255,.6)!important;outline-offset:-1px}" +
     Object.entries(EMPTY_ICONS).map(([k, d]) => '[data-rv-empty="' + k + '"]{background-image:url("data:image/svg+xml,' +
       encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#6d8cff" ' +
         'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + d + "</svg>") + '")!important}').join("");
+  // Image sans fichier : un cadre d'image vide, assez grand pour la voir et la sélectionner.
+  const emptyImageCss = '[data-rv-empty="image"]{min-width:160px!important;min-height:100px!important;' +
+    'background-size:28px!important;object-position:-9999px -9999px}';
   if ("adoptedStyleSheets" in document && typeof CSSStyleSheet === "function") {
     try {
       const sh = new CSSStyleSheet();
-      sh.replaceSync(emptyCss);
+      sh.replaceSync(emptyCss + emptyImageCss);
       document.adoptedStyleSheets = [...document.adoptedStyleSheets, sh];
     } catch (_) { /* moteur sans feuilles construites */ }
   }
@@ -1876,6 +1895,12 @@
     for (const el of document.querySelectorAll("[data-rv-empty]")) el.removeAttribute("data-rv-empty");
     const found = [];
     for (const el of document.querySelectorAll("[data-rv]")) {
+      // Image sans fichier (ou fichier introuvable) : repère d'image vide.
+      if (el.tagName === "IMG") {
+        const src = (el.getAttribute("src") || "").trim();
+        if ((!src || (el.complete && !el.naturalWidth)) && el.getClientRects().length) found.push(el);
+        continue;
+      }
       if (!CONTAINERS.has(el.tagName)) continue;
       if ([...el.childNodes].some((c) => c.nodeType === 1 || (c.nodeType === 3 && c.nodeValue.trim()))) continue;
       // Masqué (lui ou un parent) : laissé tel quel.
@@ -1889,7 +1914,8 @@
     for (const el of found) {
       const d = getComputedStyle(el).display;
       el.setAttribute("data-rv-empty",
-        el.hasAttribute("data-lottie") ? "lottie"
+        el.tagName === "IMG" ? "image"
+        : el.hasAttribute("data-lottie") ? "lottie"
           : /grid/.test(d) ? "grid"
             : /flex/.test(d) ? "flex"
               : /^(SECTION|HEADER|FOOTER|MAIN|ARTICLE|ASIDE|NAV)$/.test(el.tagName) ? "section"
@@ -2040,6 +2066,14 @@
       if (!res.ok) throw new Error(String(res.status));
       const doc = new DOMParser().parseFromString(await res.text(), "text/html");
       if (headSig(doc.head) !== headAtLoad) { location.reload(); return; }
+      // Styles propres des éléments ajoutés (`data-revel-tools`) : remplacés sur place.
+      {
+        const next = doc.head.querySelector("style[data-revel-tools]");
+        const cur = document.head.querySelector("style[data-revel-tools]");
+        if (next && cur) { if (cur.textContent !== next.textContent) cur.textContent = next.textContent; }
+        else if (next) document.head.prepend(document.importNode(next, true));
+        else if (cur) cur.remove();
+      }
       const sEl = doc.getElementById("rv-slots");
       const vEl = doc.getElementById("rv-vars");
       const nextSlots = JSON.parse(sEl ? sEl.textContent : "[]");

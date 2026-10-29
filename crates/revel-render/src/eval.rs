@@ -780,7 +780,9 @@ impl<'a> Builder<'a> {
                 }
                 for a in attrs {
                     if a.name == revel_model::LAYER_NAME_ATTR
-                        || (a.name == revel_model::SLOT_ATTR && self.editor.is_none())
+                        || ((a.name == revel_model::SLOT_ATTR
+                            || a.name == revel_model::WIDGET_ATTR)
+                            && self.editor.is_none())
                     {
                         continue;
                     }
@@ -1152,6 +1154,19 @@ impl<'a> Builder<'a> {
                                 )?,
                                 _ => body(out)?,
                             }
+                        } else if let (true, Some(id)) = (marking, &img.id) {
+                            // Canevas : image sans fichier gardée (vide) pour la voir et la
+                            // sélectionner ; rien sur le site publié.
+                            let class = args.class.trim();
+                            let html = if class.is_empty() {
+                                "<img alt=\"\">".to_string()
+                            } else {
+                                format!(
+                                    "<img class=\"{}\" alt=\"\">",
+                                    class.replace('&', "&amp;").replace('"', "&quot;")
+                                )
+                            };
+                            out.push_str(&with_marker(&html, id));
                         }
                     }
                 }

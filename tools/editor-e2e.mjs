@@ -647,6 +647,18 @@ try {
   f = await waitFrame(() => [...document.querySelectorAll('section.hero h2')].some((h) => h.textContent === 'Nouveau titre'), 'titre ajouté');
   await page.waitForFunction(() => document.querySelector('.editor-status .node-crumb.is-on')?.dataset.tech === 'h2');
   check('ajouter : titre inséré dans la section, sélectionné', true);
+  // Recherche dans le panneau Ajouter (D-159) : nom ou description, sans accents.
+  {
+    await page.fill('.insert-search-input', 'interrupteur');
+    await page.waitForFunction(() => document.querySelectorAll('.insert-item').length === 1);
+    const only = await page.$eval('.insert-item', (e) => e.dataset.item);
+    await page.fill('.insert-search-input', 'carre');
+    const none = await page.$$eval('.insert-item', (l) => l.length);
+    await page.fill('.insert-search-input', '');
+    await page.waitForFunction(() => document.querySelectorAll('.insert-item').length > 20);
+    check('ajouter : recherche (un seul interrupteur, texte riche et liste retirés)',
+      only === 'insert-switch' && !(await page.$('.insert-item[data-item="insert-rich-text"], .insert-item[data-item="insert-list"]')), `${only} · ${none}`);
+  }
   // Défilement (D-123) : éléments réglés depuis Styles ; « Ajouter une image » en ajoute un.
   await page.dblclick('.insert-item[data-item="insert-ticker"]');
   await page.waitForSelector('.dock-panel[data-panel="styles"] .items-list .items-row');
@@ -1177,21 +1189,21 @@ try {
       await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');
       await page.click('.dock-tab[data-panel="insert"]');
       await page.dblclick('.insert-item[data-item="insert-collection-list"]');
-      const listed = await untilE(async () => (await frame.locator('.liste-collection__element').count()) > 2);
+      const listed = await untilE(async () => (await frame.locator('[data-revel-base="collection"] article').count()) > 2);
       await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.collection-list select');
       await page.selectOption('.collection-list select[data-list="sort"]', 'date');
       await untilE(async () => (await pageJson()).includes('sort(attribute=\\"date\\", reverse=true)'));
       await page.fill('.collection-list input[type=number]:not([data-list])', '2');
       await page.keyboard.press('Tab');
-      const two = await untilE(async () => (await frame.locator('.liste-collection__element').count()) === 2);
+      const two = await untilE(async () => (await frame.locator('[data-revel-base="collection"] article').count()) === 2);
       check('éléments : liste de collection (collection, tri par date décroissante, 2 contenus)', listed && two
         && (await pageJson()).includes('[:2]'));
       // Affichage progressif (D-114) : « Afficher d'abord » sur la liste ; le canevas montre tout.
       await page.fill('.collection-list input[data-list="more"]', '1');
       await page.keyboard.press('Tab');
       const moreOn = await untilE(async () => (await pageJson()).includes('"name":"data-revel-more","value":"1"'));
-      const allShown = (await frame.locator('.liste-collection__element').count()) === 2
+      const allShown = (await frame.locator('[data-revel-base="collection"] article').count()) === 2
         && (await frame.locator('[data-revel-more="1"]').count()) === 1;
       await page.fill('.collection-list input[data-list="more"]', '');
       await page.keyboard.press('Tab');
@@ -1209,7 +1221,7 @@ try {
       check('éléments : liste de collection à deux collections (+ Autre collection)', multi, others2[0]);
       await page.click('.list-also .prop-chip .chip-x');
       check('éléments : seconde collection retirée', await untilE(async () => !(await pageJson()).includes(' + collections.')));
-      await frame.locator('.liste-collection__element h3').first().click();
+      await frame.locator('[data-revel-base="collection"] article h3').first().click();
       await page.waitForSelector('[data-bound="block-bound-text-label"] select');
       await page.waitForFunction(() => document.querySelectorAll('[data-bound="block-bound-text-label"] select option').length > 2);
       const boundTitle = await page.inputValue('[data-bound="block-bound-text-label"] select');
@@ -1231,11 +1243,11 @@ try {
       await page.waitForTimeout(500);
       const oneClick = (await pageJson()) === before1;
       await page.dblclick('.insert-item[data-item="insert-grid"]');
-      const grid = await untilE(async () => (await frame.locator('.grille .grille__cellule').count()) === 2);
+      const grid = await untilE(async () => (await frame.locator('[data-revel-base="grid"] > div').count()) === 2);
       check('ajouter : un clic n\'ajoute rien, un double-clic ajoute', oneClick && grid);
       check('canevas : page mise à jour sur place après un ajout (sans rechargement)',
         await frameOf().evaluate(() => window.__sansRechargement === 1));
-      const gridCss = await frame.locator('.grille').evaluate((g) => getComputedStyle(g).display);
+      const gridCss = await frame.locator('[data-revel-base="grid"]').evaluate((g) => getComputedStyle(g).display);
       check('éléments : grille insérée avec ses styles', grid && gridCss === 'grid', gridCss);
       // Icône : dessin choisi dans les réglages.
       await page.dblclick('.insert-item[data-item="insert-icon"]');
@@ -1243,7 +1255,7 @@ try {
       await page.click('.icon-tab[data-tab="icons-objects"]');
       await page.waitForSelector('.icon-choice[data-icon="coeur"]');
       await page.click('.icon-choice[data-icon="coeur"]');
-      const heart = await untilE(async () => (await frame.locator('svg.icone[data-icon="coeur"]').count()) === 1);
+      const heart = await untilE(async () => (await frame.locator('svg[data-icon="coeur"]').count()) === 1);
       check('éléments : icône insérée, dessin changé', heart);
       // Code HTML écrit tel quel.
       await page.click('.dock-tab[data-panel="insert"]');
@@ -1252,7 +1264,7 @@ try {
       await page.waitForSelector('.embed-code');
       await page.fill('.embed-code', '<p class="essai-code">Bonjour</p>');
       await page.locator('.embed-code').blur();
-      const embed = await untilE(async () => (await frame.locator('.code-html .essai-code').count()) === 1);
+      const embed = await untilE(async () => (await frame.locator('.essai-code').count()) === 1);
       check('éléments : code HTML écrit tel quel', embed);
       // Bloc prêt à l'emploi : section complète avec ses icônes et ses styles.
       await page.click('.dock-tab[data-panel="layers"]');
@@ -1283,24 +1295,40 @@ try {
       // interactif) ; une fois choisi, les réglages de ce rôle.
       await frame.locator('[data-revel-tabs] [data-revel-panel] p').first().click();
       await page.click('.dock-tab[data-panel="styles"]');
+      // Rôle : réglage avancé (D-159), rubrique repliée en bas de Styles.
+      await page.evaluate(() => { const d = document.querySelector('.advanced-settings'); if (d) d.open = true; });
       await page.waitForSelector('.insp-group[data-role="picker"] select');
       const groups = await page.$$eval('.insp-group[data-role="picker"] optgroup', (g) => g.map((x) => x.label));
-      const others = await page.$$eval('.content-settings .insp-group:not([data-role="picker"]) select option', (o) => o.map((x) => x.textContent).filter((t) => /Onglet|Panneau/.test(t)));
+      const others = await page.$$eval('.styles .insp-group:not([data-role="picker"]) select option', (o) => o.map((x) => x.textContent).filter((t) => /Onglet|Panneau/.test(t)));
       check('rôle : un seul choix pour un élément sans rôle (groupé)', groups.includes('Dans les onglets') && others.length === 0, groups.join(', '));
       await page.locator('.insp-group[data-role="picker"] select').selectOption({ label: 'Panneau' });
       const panelSet = await untilE(async () => (await frame.locator('[data-revel-panel] p[data-revel-panel]').count()) === 1);
       await page.waitForFunction(() => !document.querySelector('.insp-group[data-role="picker"]'));
       check('rôle : choisi (attribut posé), réglages du rôle à la place du choix', panelSet);
       await addIn('accordion');
-      const accIn = await untilE(async () => (await frame.locator('details.accordeon > summary.accordeon__titre').count()) === 1);
+      const accIn = await untilE(async () => (await frame.locator('details[data-revel-base="accordion"] > summary[data-revel-part="summary"]').count()) === 1);
       check('éléments : onglets (deux boutons, deux panneaux), accordéon', tabsIn && accIn);
+      // Élément construit fermé (D-159) : un clic sur une partie (bouton d'onglet) choisit
+      // l'élément ; « Décomposer » retire la fermeture.
+      {
+        await frame.locator('[data-revel-tabs] [data-revel-tab]').first().click();
+        await page.click('.dock-tab[data-panel="styles"]');
+        await page.waitForSelector('.styles .widget-decompose');
+        const rootPick = await page.$eval('.editor-status .node-crumb.is-on', (e) => e.dataset.tech);
+        const closedRow = await page.$eval('.styles .style-layerbar-name', (e) => e.textContent.trim());
+        await page.click('.styles .widget-decompose');
+        const opened = await untilE(async () => (await frame.locator('[data-revel-tabs][data-revel-widget]').count()) === 0
+          && (await frame.locator('[data-revel-tabs]').count()) === 1);
+        check('élément fermé : clic sur une partie = l\'élément entier (Onglets), Décomposer',
+          rootPick === 'div' && closedRow === 'Onglets' && opened, `${rootPick} · ${closedRow}`);
+      }
       // Barre de progression (D-110) : ajoutée, suit la colonne qui la contient puis la page.
       await addIn('progress');
-      const barIn = await untilE(async () => (await frame.locator('.barre-progression[data-revel-progress="parent"] > .barre-progression__remplissage').count()) === 1);
+      const barIn = await untilE(async () => (await frame.locator('[data-revel-base="progress"][data-revel-progress="parent"] > [data-revel-part="fill"]').count()) === 1);
       // Barre ajoutée : déjà choisie (la cliquer dans le canevas viserait 4 px de haut).
       await page.click('.dock-tab[data-panel="styles"]');
       await page.locator('.content-settings .seg button', { hasText: 'Page' }).click();
-      const barPage = await untilE(async () => (await frame.locator('.barre-progression[data-revel-progress="page"]').count()) === 1);
+      const barPage = await untilE(async () => (await frame.locator('[data-revel-base="progress"][data-revel-progress="page"]').count()) === 1);
       check('éléments : barre de progression (colonne, puis page)', barIn && barPage);
       // Maçonnerie (D-110) : grille du bloc « avantages » mise en maçonnerie puis remise.
       await frame.locator('.bloc-avantages .bloc-avantage').first().click();
@@ -1391,23 +1419,23 @@ try {
         await page.click('.dock-tab[data-panel="pages"]');
       }
       await addIn('lottie');
-      const lottieIn = await untilE(async () => (await frame.locator('.lottie[data-lottie]').count()) === 1);
+      const lottieIn = await untilE(async () => (await frame.locator('[data-revel-base="lottie"][data-lottie]').count()) === 1);
       await page.click('.dock-tab[data-panel="styles"]');
       await page.locator('.styles label.field:has(> .label:text-is("Lecture")) select').selectOption('hover');
-      const hover = await untilE(async () => (await frame.locator('.lottie[data-lottie-play="hover"]').count()) === 1);
+      const hover = await untilE(async () => (await frame.locator('[data-revel-base="lottie"][data-lottie-play="hover"]').count()) === 1);
       check('éléments : animation Lottie ajoutée, lecture au survol', lottieIn && hover);
       // Média au survol (D-99) : liste de collection et média ajoutés ; le média piloté par la
       // liste choisie comme source ; éléments survolés listés et sélectionnables.
       await addIn('collection-list');
-      const listIn = await untilE(async () => (await frame.locator('section.intro-agency .liste-collection a').count()) > 0);
+      const listIn = await untilE(async () => (await frame.locator('section.intro-agency [data-revel-base="collection"] a').count()) > 0);
       await addIn('hover-media');
-      const mediaIn = await untilE(async () => (await frame.locator('video.media-survol').count()) === 1);
+      const mediaIn = await untilE(async () => (await frame.locator('video[data-revel-base="hover-media"]').count()) === 1);
       await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.hover-media[data-hover="display"] [data-hover="source"] select');
       const listOpt = await page.$eval('.hover-media[data-hover="display"] [data-hover="source"] select',
         (sel) => [...sel.options].map((o) => o.value).find((v) => v.startsWith('list:')));
       await page.selectOption('.hover-media[data-hover="display"] [data-hover="source"] select', listOpt);
-      const linked = await untilE(async () => (await frame.locator('.liste-collection a[data-revel-media-for]').count()) > 0);
+      const linked = await untilE(async () => (await frame.locator('[data-revel-base="collection"] a[data-revel-media-for]').count()) > 0);
       await page.waitForSelector('.hover-media[data-hover="display"] .hover-row');
       check('média au survol : piloté par la liste choisie, éléments survolés listés', listIn && mediaIn && linked, String(listOpt));
       if (shots) await page.locator('.hover-media[data-hover="display"]').screenshot({ path: `${shots}/editeur-media-survol.png` });
@@ -2314,12 +2342,13 @@ try {
   check('styles : sélecteur de la classe de l\'élément', true);
   // Balises dans une classe (D-151) : « Contenu… » d'un élément à classe, puis retour.
   {
-    await page.selectOption('.styles .sel-nested', 'strong');
+    await page.click('.styles .selector-add');
+    await page.click('.class-suggest .class-suggest-item[data-sel=".hero__title strong"]');
     await page.waitForSelector('.styles .sel-chip.is-nested.is-on');
     const nested = (await page.textContent('.styles .sel-chip.is-nested.is-on')).trim();
     await page.click('.styles .sel-chip.is-nested.is-on .sel-chip-x');
     await page.waitForFunction(() => document.querySelector('.styles .sel-chip.is-on')?.textContent.trim() === 'hero__title');
-    check('styles : balises dans une classe (« Contenu… »), puis retour à la classe', /hero__title/.test(nested), nested);
+    check('styles : balises dans une classe (menu « + »), puis retour à la classe', /hero__title/.test(nested), nested);
   }
   // Élément à glisser (D-154) : réglages écrits, puis retirés.
   {

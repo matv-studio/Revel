@@ -9,6 +9,25 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 29/10/2026 : retours sur la 0.7.2 (D-159)
+Retours de l'utilisateur (captures) : élément ajouté invisible (image), panneau Styles chargé (liaison aux infos
+du site, sélecteurs de balise, « Contenus… », doublons dans Effets, cadrage en texte libre, glisser sans
+valeur), classes créées d'office, éléments construits exposés dans les calques, deux interrupteurs. Choix de
+l'utilisateur : « élément unique » (pas composant de bibliothèque), Texte riche et Liste retirés.
+- Éléments ajoutés sans classe : allure de Revel par `data-revel-base` (`toolcss.rs`, `BASES`, `:where`, couleurs
+  `currentColor`) ; `Preset::finish` remplace les classes des constructions par `data-revel-base` (racine),
+  `data-revel-part` (parties), `data-revel-widget` (fermé) ; `Preset::rules` vide hors blocs.
+- Fermés : calques (`layers.rs`, `chrome`), clic sur une partie = l'élément (`canvas.js`, `targetOf`), textes
+  des parties dans le panneau (`sendTexts`), noms d'après la nature (`names::with_base`), « Décomposer »
+  (`widgets.rs`, menus contextuels), interrupteur unique (Commande), filtres (boutons, valeurs, paramètre),
+  image de couverture. Feuille `data-revel-tools` remplacée sur place dans le canevas (pas de rechargement).
+- Styles : classes en tête, « + » (balises dans son menu), Effets sur une ligne, cadrage et point d'appui en
+  X / Y, valeur en direct au glisser (`Sx::live`, `preview_live`, `NumBox` local), information du site en icône,
+  rôles dans Paramètres avancés ; Alt+clic, double-clic, Ctrl+clic dans « Aligner » (comme Webflow).
+- Canevas : image sans fichier rendue vide (`eval.rs`) et repérée (cadre, icône). Ajouter : recherche.
+- Essais : tests du dépôt (406), clippy (espace de travail, interface wasm), format, éditeur 358/358, modèles
+  26/26, `tplcmp.sh` : relevé 0, 162 pages identiques ; nouveaux écrans vérifiés dans les deux thèmes.
+
 ## Travail du 28/10/2026 au soir, après la 0.7.2
 Commit 36360fa : panneau Styles complété (barre de défilement, soulignement : couleur, épaisseur, écart ; masque
 `mask-image` avec les calques du fond) ; mise à plat (D-157, complément) : classe d'image écrite par une

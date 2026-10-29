@@ -1436,8 +1436,11 @@ fn couleurs_des_blocs_dans_les_couleurs_du_site() {
 
 #[test]
 fn elements_avec_leurs_styles() {
+    // Éléments ajoutés (D-159) : aucune classe ni règle écrite dans la feuille du site ; leur
+    // allure vient de Revel (`data-revel-base`), à priorité nulle.
     let mut s = sample();
     let before = json(&s);
+    let rules = s.style_rules().count();
     let parent = Parent::of(&at(&s, "main"), Branch::Children);
     let inv = apply(
         &mut s,
@@ -1449,57 +1452,15 @@ fn elements_avec_leurs_styles() {
         },
     )
     .unwrap();
+    assert_eq!(s.style_rules().count(), rules);
+    let body = serde_json::to_string(&s.pages[0].body).unwrap();
     assert!(
-        css(&s).contains(".grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }"),
-        "{}",
-        css(&s)
+        body.contains("\"data-revel-base\",\"value\":\"grid\""),
+        "{body}"
     );
-    assert!(css(&s).contains(".grille__cellule { min-height: 80px; }"));
-    // Deuxième grille : règles déjà là, pas de doublon.
-    let n = s.style_rules().count();
-    apply(
-        &mut s,
-        &Command::InsertPreset {
-            parent: parent.clone(),
-            index: 0,
-            preset: make::Preset::Grid,
-            text: String::new(),
-        },
-    )
-    .unwrap();
-    assert_eq!(s.style_rules().count(), n);
-    let _ = inv;
-    // Annulation de la première insertion sur un site neuf : identique.
-    let mut s3 = sample();
-    let main3 = Parent::of(&at(&s3, "main"), Branch::Children);
-    let inv3 = apply(
-        &mut s3,
-        &Command::InsertPreset {
-            parent: main3,
-            index: 0,
-            preset: make::Preset::Icon,
-            text: String::new(),
-        },
-    )
-    .unwrap();
-    let Node::Element { children, .. } = &s3.pages[0].body[0] else {
-        panic!()
-    };
-    let Node::Element {
-        tag,
-        children: inner,
-        ..
-    } = &children[0]
-    else {
-        panic!()
-    };
-    assert_eq!(tag, "svg");
-    assert!(matches!(&inner[0], Node::Html { html } if html.contains("<path")));
-    apply(&mut s3, &inv3).unwrap();
-    assert_eq!(json(&s3), before);
-    // Toutes les icônes sont dessinées.
-    assert!(icons::ICONS.iter().all(|(_, p)| p.starts_with('<')));
-    assert!(icons::ICONS.len() >= 30);
+    assert!(!body.contains("grille"), "{body}");
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
 }
 
 #[test]
@@ -1913,9 +1874,12 @@ fn selecteur_de_langue() {
     )
     .unwrap();
     apply(&mut s, &cmd).unwrap();
-    let c = css(&s);
-    assert!(c.contains(".langue[aria-current=\"page\"]"), "{c}");
-    assert!(json(&s).contains("\"locales\""));
+    let j = json(&s);
+    assert!(
+        j.contains("\"locales\"") && j.contains("data-revel-widget"),
+        "{j}"
+    );
+    assert!(!css(&s).contains(".langue"));
 }
 
 #[test]
@@ -2140,8 +2104,7 @@ fn texte_mis_en_forme_modifie_d_un_bloc() {
 }
 
 /// Éléments complexes du panneau Ajouter (Défilement, Carrousel, Diaporama, Barre de
-/// navigation) : leurs règles, celles de la barre de navigation aussi pour tablette (point de
-/// rupture le plus large du site) ; annulés à l'identique.
+/// navigation) : fermés, parties nommées, sans classe ni règle (D-159) ; annulés à l'identique.
 #[test]
 fn elements_complexes() {
     let mut s = sample();
@@ -2167,29 +2130,24 @@ fn elements_complexes() {
             .unwrap_or_else(|e| panic!("{p:?} : {e}")),
         );
     }
+    // Fermés (un seul calque), parties nommées, aucune classe (D-159).
     let c = css(&s);
-    for sel in [
-        ".defilement {",
-        ".carrousel__piste {",
-        ".diaporama__points button.is-active {",
-        ".barre-nav__menu {",
-    ] {
-        assert!(c.contains(sel), "{sel}\n{c}");
-    }
-    let tablet = s
-        .breakpoints
-        .iter()
-        .filter_map(|b| b.max_width)
-        .max()
-        .unwrap();
-    rule_id(
-        &s,
-        ".barre-nav.is-open .barre-nav__menu",
-        Some(&format!("(max-width: {tablet}px)")),
-    );
+    assert!(!c.contains("carrousel") && !c.contains("barre-nav"), "{c}");
     let html = serde_json::to_string(&s.pages[0].body).unwrap();
     assert!(html.contains("ticker speed=60 pause") && html.contains("autoplay=5 loop"));
     assert!(html.contains("click class:is-open parent") && html.contains("Projets"));
+    for part in [
+        "track", "controls", "arrow", "dots", "count", "menu", "toggle",
+    ] {
+        assert!(
+            html.contains(&format!("\"data-revel-part\",\"value\":\"{part}\"")),
+            "{part}"
+        );
+    }
+    assert_eq!(html.matches("\"data-revel-widget\"").count(), 4);
+    for cls in ["carrousel", "diaporama", "defilement", "barre-nav"] {
+        assert!(!html.contains(cls), "{cls}");
+    }
     for inv in inverses.into_iter().rev() {
         apply(&mut s, &inv).unwrap();
     }

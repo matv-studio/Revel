@@ -1130,6 +1130,28 @@ pub const SLOT_ATTR: &str = "data-revel-slot";
 /// Attribut d'un calque masqué : l'élément n'est pas écrit dans le site publié, le canevas et
 /// l'aperçu le cachent.
 pub const HIDDEN_ATTR: &str = "data-revel-hidden";
+/// Allure propre de Revel d'un élément ajouté (D-159) : nature de l'élément (`grid`, `switch`…),
+/// lue par les styles de Revel écrits avec une priorité nulle ; les classes de l'utilisateur
+/// passent devant.
+pub const BASE_ATTR: &str = "data-revel-base";
+/// Attribut d'un élément construit fermé (D-159) : un seul calque, ses parties
+/// ([`PART_ATTR`]) réglées depuis l'élément ; « Décomposer » le retire. Écrit dans le canevas
+/// seulement.
+pub const WIDGET_ATTR: &str = "data-revel-widget";
+/// Attribut d'une partie d'un élément construit (bouton, pastille, piste…) : nom de la partie,
+/// lu par les styles propres de Revel ; ce qui n'en porte pas est du contenu (diapositive,
+/// panneau).
+pub const PART_ATTR: &str = "data-revel-part";
+
+/// Élément construit fermé ([`WIDGET_ATTR`]).
+pub fn is_widget(n: &Node) -> bool {
+    matches!(n, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == WIDGET_ATTR))
+}
+
+/// Partie d'un élément construit ([`PART_ATTR`]).
+pub fn is_part(n: &Node) -> bool {
+    matches!(n, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == PART_ATTR))
+}
 
 /// `{{ content | safe }}` (ou `{{ content }}`) d'un gabarit -> emplacement de la page : la page
 /// apparaît dans les calques à cet endroit.

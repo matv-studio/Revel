@@ -186,6 +186,9 @@ struct Builder<'a> {
     vis: Vec<Vis>,
     /// Composants en cours de parcours (garde contre un composant qui s'utilise lui-même).
     stack: Vec<String>,
+    /// Parcours dans les parties d'un élément construit fermé (D-159) : les parties n'ont pas
+    /// de ligne (leur contenu remonte), leurs images non plus.
+    chrome: bool,
 }
 
 impl<'a> Builder<'a> {
@@ -226,7 +229,7 @@ impl<'a> Builder<'a> {
             let kind = match n {
                 Node::Element { tag, attrs, .. } => Kind::Element {
                     tag: tag.clone(),
-                    class: class_of(attrs),
+                    class: crate::names::with_base(class_of(attrs), attrs),
                 },
                 Node::Text { text } => Kind::Text(short(text, 40)),
                 Node::Out { expr } => Kind::Expr(short(expr, 40)),
@@ -284,6 +287,9 @@ impl<'a> Builder<'a> {
                 .find(|&p| self.vis[p] != Vis::Through || !matches!(self.rows[p].kind, Kind::If(_)))
                 .is_some_and(|p| matches!(self.rows[p].kind, Kind::Element { .. }));
             let vis = match n {
+                // Élément construit fermé : ses parties sans ligne, ses images non plus.
+                Node::Element { .. } if self.chrome && revel_model::is_part(n) => Vis::Through,
+                Node::Image(_) if self.chrome => Vis::Hide,
                 Node::Element { tag, attrs, .. } => {
                     let t = tag.to_ascii_lowercase();
                     if t == "html" {
@@ -355,7 +361,12 @@ impl<'a> Builder<'a> {
             }
             match n {
                 Node::Element { children, .. } => {
+                    // Racine ou partie d'un élément construit fermé : ses enfants sont des parties
+                    // (ou un contenu qu'il accueille) ; un contenu ordinaire sort de ce mode.
+                    let was = self.chrome;
+                    self.chrome = revel_model::is_widget(n) || (was && revel_model::is_part(n));
                     self.list(children, owner, of(Branch::Children), &k, &anc, slot_level);
+                    self.chrome = was;
                 }
                 Node::If {
                     then, otherwise, ..
@@ -486,6 +497,7 @@ pub fn component_rows(doc: &Site, id: &str) -> Vec<Row> {
         rows: Vec::new(),
         vis: Vec::new(),
         stack: vec![c.id.clone()],
+        chrome: false,
     };
     b.list(&c.body, &owner, Parent::root(owner.clone()), "", &[], 0);
     simplify(b.rows, b.vis)
@@ -530,6 +542,7 @@ fn tree(doc: &Site, page: &revel_protocol::EditorPageInfo) -> (Vec<Row>, Vec<Var
         rows: Vec::new(),
         vis: Vec::new(),
         stack: Vec::new(),
+        chrome: false,
     };
     if let Some((o, body)) = inner.first().cloned() {
         b.list(body, &o, Parent::root(o.clone()), "", &[], 0);
@@ -1304,6 +1317,16 @@ pub fn Layers() -> impl IntoView {
                     }
                 })
                 .icon(icons::unlink),
+            );
+        } else if at.get_value().is_some_and(|t| crate::widgets::is_widget_at(ed, &t)) {
+            items.push(
+                CtxItem::new(ui.now("widget-decompose", &[]), move || {
+                    if let Some(t) = at.get_value() {
+                        crate::widgets::decompose(ui, ed, t)
+                    }
+                })
+                .icon(icons::unlink)
+                .sep(),
             );
         } else {
             items.push(

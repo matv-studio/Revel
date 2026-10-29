@@ -263,6 +263,12 @@ button.layer-mark:hover { color: var(--text); background: var(--surface-active);
 /* --- Ajouter ------------------------------------------------------------------ */
 .insert { padding: var(--s-2) var(--s-3) var(--s-3); overflow: auto; display: flex; flex-direction: column; gap: var(--s-3); }
 .insert-group { display: flex; flex-direction: column; gap: var(--s-2); }
+/* Recherche des éléments à ajouter, en tête du panneau (reste visible au défilement) ; un élément
+   amené dans la vue ne passe pas dessous. */
+.insert { scroll-padding-top: calc(var(--control-md) + var(--s-3)); }
+.insert-search { position: sticky; top: calc(-1 * var(--s-2)); z-index: 2; display: flex; align-items: center; margin: calc(-1 * var(--s-2)) 0 0; padding: var(--s-2) 0 0; background: var(--surface); }
+.insert-search svg.icon { position: absolute; left: 8px; top: calc(var(--s-2) + (var(--control-md) - 14px) / 2); width: 14px; height: 14px; color: var(--text-faint); pointer-events: none; }
+.insert-search-input { flex: 1; height: var(--control-md); padding-left: 28px; background: var(--bg); border-color: var(--line-strong); }
 .insert-group-title { font-size: var(--text-xs); color: var(--text-faint); font-weight: var(--weight-medium); }
 .insert-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
 .insert-item {

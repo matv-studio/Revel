@@ -1579,6 +1579,29 @@ marque, minutage des apparitions).
 - Import de Framer : propriétés lues dans le code de l'instance, conteneur reconnu par sa classe ; le texte caché
   rendu par Framer devient l'horloge, les calques de la toile sont retirés.
 
+**D-159 — 29/10/2026 — prise (retours de l'utilisateur sur la 0.7.2).** **Éléments ajoutés simples, panneau
+Styles allégé.** Demandes : un élément du panneau Ajouter doit être rapide à poser et à régler, sans classe
+créée d'office ni structure exposée dans les calques ; panneau Styles sans menus inutiles.
+- Éléments ajoutés sans classe : leur allure vient de Revel (`data-revel-base="grid|switch|…"`, styles écrits à
+  priorité nulle, `crates/revel-render/src/toolcss.rs`, couleurs tirées du texte : clair comme sombre) ; les
+  classes de l'utilisateur passent devant. Aucune règle écrite dans la feuille du site (sauf blocs prêts à
+  l'emploi). Choix de l'utilisateur parmi deux : « élément unique » plutôt que « composant de la bibliothèque ».
+- Éléments construits fermés (`data-revel-widget`) : interrupteur, lecteur vidéo, filtres, onglets,
+  accordéon, carrousel, diaporama, défilement, barre de navigation, langues, barre de progression, image
+  révélée, consentement. Un seul calque ; leurs parties (`data-revel-part`) n'ont pas de ligne, un clic dessus
+  choisit l'élément ; le contenu accueilli (diapositive, panneau, lien du menu) reste un calque. Réglages à
+  l'élément : textes de ses parties, images (couverture), commande et textes d'un interrupteur, boutons et
+  valeurs des filtres. « Décomposer » (réglages, menus contextuels) retire `data-revel-widget`.
+- Un seul « Interrupteur » (thème par défaut ; Commande : thème, musique, sons). Texte riche et Liste
+  retirés du panneau Ajouter (choix de l'utilisateur ; l'éditeur de texte des contenus garde les listes).
+  Recherche dans le panneau Ajouter.
+- Panneau Styles : classes en tête, « + » seul tant que l'élément n'en a pas (balises et balises d'un texte
+  riche dans son menu) ; liste d'Effets sur une ligne avec son « + » ; cadrage et point d'appui en X / Y
+  chiffrés ; valeur montrée pendant un glisser ; information du site repliée en une icône ; rôles dans un
+  élément interactif rangés dans Paramètres avancés.
+- Grille « Aligner » : Alt+clic étire, double-clic ou Ctrl+clic répartit (comme la boîte d'alignement de
+  Webflow, vérifié sur help.webflow.com). Image sans fichier montrée dans le canevas (cadre et icône).
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

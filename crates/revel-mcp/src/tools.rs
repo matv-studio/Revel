@@ -336,6 +336,10 @@ pub struct InsertPresetArg {
     /// collection_list, locale_switch, navbar, ticker, carousel, slideshow, block_hero,
     /// block_features, block_text_image, block_cta, block_testimonial, block_faq, block_contact,
     /// block_form, video_player, list_filters, consent, switch, theme_switch, scroll_progress.
+    /// Added elements carry no class: Revel's own look (`data-revel-base`, zero specificity)
+    /// until classes are added. Built elements (switch, video_player, tabs, carousel…) are closed
+    /// (`data-revel-widget`): one layer, parts marked `data-revel-part`, set from the element;
+    /// remove `data-revel-widget` (set_attr / remove) to break it apart.
     pub preset: String,
     /// Default text of the new element (site's language). navbar: "Brand|Menu|Link 1|Link 2|…";
     /// carousel/slideshow: "Slide|Previous|Next"; switch: "Label|On|Off";

@@ -210,6 +210,9 @@ pub struct Sx {
     /// Variante du composant ouvert dans le canevas des composants : (classe de l'élément
     /// racine, suffixe de la variante, identifiant de l'élément racine, nom de la variante).
     pub scope: Memo<Option<(String, String, String, String)>>,
+    /// Valeurs montrées pendant un geste (glisser un nombre, choisir une couleur) : les champs
+    /// les affichent avant qu'elles ne soient écrites.
+    pub live: RwSignal<Vec<(String, String)>>,
 }
 
 /// Sélecteur complet : classe et état ; dans une variante, préfixé par la racine du composant
@@ -342,6 +345,7 @@ impl Sx {
             menu: RwSignal::new(None),
             tag,
             scope,
+            live: RwSignal::new(Vec::new()),
         }
     }
 
@@ -380,9 +384,25 @@ impl Sx {
 
     /// Valeur d'une propriété et son origine (réactif).
     pub fn get(self, prop: &str) -> PropValue {
+        let live = self
+            .live
+            .with(|l| l.iter().find(|(p, _)| p == prop).map(|(_, v)| v.clone()));
         let here = self
             .rule
             .with(|r| r.as_ref().and_then(|r| values::read(&r.decls, prop)));
+        // Geste en cours : la valeur montrée est celle du geste.
+        let here = match (live, here) {
+            (Some(v), Some(mut f)) => {
+                f.value = Some(v);
+                Some(f)
+            }
+            (Some(v), None) => Some(values::Found {
+                value: Some(v),
+                via: None,
+                important: false,
+            }),
+            (None, h) => h,
+        };
         let inherited = self.sources.with(|s| {
             s.iter().find_map(|(decls, label)| {
                 values::read(decls, prop).map(|f| (f.value, label.clone()))
@@ -455,6 +475,7 @@ impl Sx {
     /// Règle plusieurs propriétés en une seule étape d'annulation. `coalesce` : fusionnée avec la
     /// précédente si elle porte sur le même champ (flèches du clavier).
     pub fn set_many(self, list: Vec<(String, Option<String>)>, coalesce: bool) {
+        self.live.set(Vec::new());
         // Pas de valeur négative là où elle n'a pas de sens (D-125).
         let list: Vec<(String, Option<String>)> = list
             .into_iter()
@@ -501,6 +522,17 @@ impl Sx {
     }
 
     /// Aperçu dans le canevas pendant un geste, sans écrire le fichier.
+    /// Aperçu d'un glisser sur un libellé : la valeur est aussi montrée dans le champ.
+    pub fn preview_live(self, list: &[(String, String)]) {
+        self.live.set(
+            list.iter()
+                .filter(|(_, v)| !v.trim().is_empty())
+                .cloned()
+                .collect(),
+        );
+        self.preview(list);
+    }
+
     pub fn preview(self, list: &[(String, String)]) {
         let sel = self.full_selector_now();
         let body: String = list
@@ -520,6 +552,7 @@ impl Sx {
     }
 
     pub fn clear_preview(self) {
+        self.live.set(Vec::new());
         self.ed
             .post(serde_json::json!({ "type": "preview", "css": "" }));
     }

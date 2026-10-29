@@ -222,7 +222,7 @@ pub fn Label(
                     && let Some((start, px)) = drag.moved(&e, false)
                     && let Some(v) = dragged(&start, px, s.step, s.unit, mult(e.shift_key(), e.alt_key()))
                 {
-                    sx.preview(&[(s.prop.to_string(), v.clone())]);
+                    sx.preview_live(&[(s.prop.to_string(), v.clone())]);
                     drag_last(v);
                 }
             }
@@ -471,8 +471,10 @@ pub fn NumBox(
     let ui = sx.ui;
     let id = menu_id();
     let with_units = !units.is_empty();
+    // Valeur montrée pendant un glisser sur la lettre du champ (avant d'être écrite).
+    let dragging = RwSignal::new(None::<String>);
     let shown = move || {
-        let v = value.get().unwrap_or_default();
+        let v = dragging.get().or_else(|| value.get()).unwrap_or_default();
         // Variable du site (`var(--step-3)`) : son nom lisible (« Step 3 »).
         if let Some(name) = var_label(&v) {
             return name;
@@ -618,10 +620,12 @@ pub fn NumBox(
                             && let Some(v) = dragged(&s, px, step, &unit_of(), mult(e.shift_key(), e.alt_key()))
                         {
                             on_preview.run(v.clone());
+                            dragging.set(Some(v.clone()));
                             drag_last(v);
                         }
                     }
                     on:pointerup=move |_| {
+                        dragging.set(None);
                         if drag.up() == Some(true) && let Some(v) = take_last() {
                             on_commit.run((Some(v), false));
                         }

@@ -61,6 +61,7 @@ mod textfield;
 mod variables;
 mod versions;
 mod visibility;
+mod widgets;
 
 use dialog::Ask;
 use leptos::prelude::*;

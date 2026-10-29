@@ -397,21 +397,14 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     "div",
                     true,
                 ),
-                item(
-                    Preset::Switch,
-                    "insert-switch",
-                    "insert-help-switch",
-                    "insert-text-switch",
-                    icons::toggle,
-                    "button",
-                    true,
-                ),
+                // Interrupteur : thème clair / sombre par défaut, ou musique, sons (réglage
+                // « Commande »).
                 item(
                     Preset::ThemeSwitch,
-                    "insert-theme-switch",
-                    "insert-help-theme-switch",
+                    "insert-switch",
+                    "insert-help-switch",
                     "insert-text-theme-switch",
-                    icons::moon,
+                    icons::toggle,
                     "button",
                     true,
                 ),
@@ -509,24 +502,6 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     icons::wrap,
                     "a",
                     false,
-                ),
-                item(
-                    Preset::List,
-                    "insert-list",
-                    "insert-help-list",
-                    "insert-text-list",
-                    icons::list,
-                    "ul",
-                    true,
-                ),
-                item(
-                    Preset::RichText,
-                    "insert-rich-text",
-                    "insert-help-rich-text",
-                    "insert-text-rich",
-                    icons::text,
-                    "div",
-                    true,
                 ),
             ],
         ),
@@ -801,9 +776,42 @@ pub fn Insert() -> impl IntoView {
     });
     on_cleanup(move || on_key.remove());
 
+    // Recherche : nom ou description de l'élément, sans tenir compte des accents.
+    let query = RwSignal::new(String::new());
+    let fold = |t: &str| -> String {
+        t.to_lowercase()
+            .chars()
+            .map(|c| match c {
+                'à' | 'â' | 'ä' | 'á' => 'a',
+                'é' | 'è' | 'ê' | 'ë' => 'e',
+                'î' | 'ï' | 'í' => 'i',
+                'ô' | 'ö' | 'ó' => 'o',
+                'ù' | 'û' | 'ü' | 'ú' => 'u',
+                'ç' => 'c',
+                c => c,
+            })
+            .collect()
+    };
+    let shown = move |it: &Item| {
+        let q = fold(query.get().trim());
+        q.is_empty()
+            || fold(&ui.now(it.key, &[])).contains(&q)
+            || (!it.help.is_empty() && fold(&ui.now(it.help, &[])).contains(&q))
+    };
     view! {
         <div class="insert">
-            {groups().into_iter().map(|(title, items)| view! {
+            <div class="insert-search">
+                {icons::search()}
+                <input class="input insert-search-input" type="search" autocomplete="off" spellcheck="false"
+                    placeholder=ui.t("insert-search") aria-label=ui.t("insert-search")
+                    prop:value=move || query.get()
+                    on:input=move |e| query.set(event_target_value(&e))
+                    on:keydown=move |e: ev::KeyboardEvent| if e.key() == "Escape" { query.set(String::new()) }/>
+            </div>
+            {move || groups().into_iter().filter_map(|(title, items)| {
+                let items: Vec<Item> = items.into_iter().filter(|it| shown(it)).collect();
+                (!items.is_empty()).then_some((title, items))
+            }).map(|(title, items)| view! {
                 <section class="insert-group">
                     <p class="insert-group-title">{ui.t(title)}</p>
                     <div class="insert-grid">

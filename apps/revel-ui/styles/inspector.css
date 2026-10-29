@@ -42,13 +42,6 @@
 .sel-chip.is-tag:not(.is-on) { background: none; color: var(--text-muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .sel-chip.is-tag .sel-chip-name { display: inline-flex; align-items: center; gap: 4px; }
 .sel-chip.is-tag svg.icon { width: 12px; height: 12px; }
-/* Balises contenues dans la classe (texte riche, mots mis en valeur) : liste discrète. */
-.sel-nested {
-  height: 22px; max-width: 110px; padding: 0 18px 0 6px; border-radius: var(--radius-sm);
-  border: 0; box-shadow: inset 0 0 0 1px var(--line-strong); background-color: transparent;
-  color: var(--text-muted); font-size: var(--text-xs); font-weight: var(--weight-medium);
-}
-.sel-nested:hover { color: var(--text); }
 .sel-chip-name {
   height: 100%; padding: 0 6px; border: 0; background: none; color: inherit;
   font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -61,6 +54,12 @@
   color: var(--text); font-size: var(--text-xs);
 }
 .selector-add::placeholder { color: var(--text-faint); }
+/* Sans saisie : un simple « + » qui ouvre le champ et ses propositions. */
+.selector-add.is-idle { flex: 0 0 22px; min-width: 22px; padding: 0; text-align: center; cursor: pointer; border-radius: var(--radius-sm); }
+.selector-add.is-idle::placeholder { color: var(--text-muted); font-size: 15px; }
+.selector-add.is-idle:hover { background: var(--surface-hover); }
+.class-suggest-item.is-sel { color: var(--text-muted); }
+.class-suggest-item.is-sel svg.icon { flex: none; width: 12px; height: 12px; }
 .target-meta { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 /* État (Normal, Survol…) : bouton et menu des états utiles à l'élément ; point bleu devant un
    état qui a des styles pour la classe. Un état choisi s'écrit en orange (comme une valeur reprise
@@ -876,3 +875,25 @@
 @keyframes tr-flip { 0%, 40% { opacity: 0; transform: rotateY(-90deg); } 80%, 100% { opacity: 1; transform: none; } }
 @keyframes tr-flip-out { 0% { opacity: 1; transform: none; } 40%, 100% { opacity: 0; transform: rotateY(90deg); } }
 .tr-tile .anim-stage { overflow: hidden; }
+
+/* Listes (ombres, transformations, filtres, transitions, fonds, masque) : le « + » sur la ligne
+   du libellé ; pas de texte « Aucun… » (le libellé dit déjà si une valeur est réglée ou héritée). */
+.style-row--stack { position: relative; }
+.style-row--stack > .style-control > * > :is(.ctl-line--end, .bg-layers-head):first-child {
+  position: absolute; top: 0; right: 0; height: var(--control-sm); margin: 0;
+}
+.style-row--stack .shadow-count, .style-row--stack .bg-empty { display: none; }
+/* Liste vide : pas d'écart sous le libellé. */
+.style-row--stack:has(> .style-control > * > :is(.ctl-line--end, .bg-layers-head):first-child) { row-gap: 0; }
+/* Cadrage, point d'appui : X et Y en nombres à côté de la grille. */
+.point-xy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+/* Information du site : une icône en haut à droite des réglages tant que rien n'est relié. */
+.content-settings { position: relative; }
+.content-settings .siteinfo-toggle { position: absolute; top: 0; right: 0; z-index: 1; }
+.content-settings:not(:has(> :not(.siteinfo-toggle))):has(> .siteinfo-toggle) { min-height: var(--control-sm); }
+.insp-group .panel-title-line { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+/* Filtres de liste fermés : texte, valeur, retirer. */
+.filter-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px; align-items: center; }
+.filter-line .input { height: var(--control-sm); font-size: var(--text-sm); }
+.widget-decompose { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+.widget-decompose svg.icon { width: 12px; height: 12px; }

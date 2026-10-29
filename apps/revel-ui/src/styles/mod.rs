@@ -69,13 +69,21 @@ const STATES: &[(&str, &str)] = &[
 /// l'élément (voisins, classe du parent, même balise), filtrées par la saisie ; ↑ ↓ pour choisir,
 /// Entrée pour ajouter (la classe proposée ou celle saisie), Échap pour fermer.
 #[component]
-fn ClassAdd(add: Callback<String>, has_classes: Signal<bool>) -> impl IntoView {
+fn ClassAdd(
+    add: Callback<String>,
+    has_classes: Signal<bool>,
+    /// Autres sélecteurs proposés en fin de liste (sélecteur, libellé) : toutes les balises de ce
+    /// type, balises dans une classe.
+    extras: Signal<Vec<(String, String)>>,
+    choose_sel: Callback<String>,
+) -> impl IntoView {
     use revel_edit::classes::Why;
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
     let typed = RwSignal::new(String::new());
     let open = RwSignal::new(false);
     let hl = RwSignal::new(None::<usize>);
+    let focused = RwSignal::new(false);
     let input = NodeRef::<leptos::html::Input>::new();
     let list = Memo::new(move |_| {
         if !open.get() {
@@ -105,7 +113,22 @@ fn ClassAdd(add: Callback<String>, has_classes: Signal<bool>) -> impl IntoView {
             && !list.with(|l| l.iter().any(|(n, _)| *n == q)))
         .then_some(q)
     });
-    let count = move || list.with(Vec::len) + usize::from(create.with(Option::is_some));
+    let more = Memo::new(move |_| {
+        if !open.get() {
+            return Vec::new();
+        }
+        let q = typed.get().trim().to_lowercase();
+        extras
+            .get()
+            .into_iter()
+            .filter(|(sel, label)| {
+                q.is_empty() || label.to_lowercase().contains(&q) || sel.to_lowercase().contains(&q)
+            })
+            .collect::<Vec<_>>()
+    });
+    let count = move || {
+        list.with(Vec::len) + usize::from(create.with(Option::is_some)) + more.with(Vec::len)
+    };
     let pick = move |name: String| {
         add.run(name);
         typed.set(String::new());
@@ -114,12 +137,27 @@ fn ClassAdd(add: Callback<String>, has_classes: Signal<bool>) -> impl IntoView {
             i.set_value("");
         }
     };
+    let leave = move || {
+        typed.set(String::new());
+        hl.set(None);
+        open.set(false);
+        if let Some(i) = input.get_untracked() {
+            i.set_value("");
+            let _ = i.blur();
+        }
+    };
     let choose = move |i: usize| {
         let n = list.with_untracked(Vec::len);
+        let c = usize::from(create.with_untracked(Option::is_some));
         if i < n {
             pick(list.with_untracked(|l| l[i].0.clone()));
-        } else if let Some(c) = create.get_untracked() {
-            pick(c);
+        } else if i < n + c {
+            if let Some(c) = create.get_untracked() {
+                pick(c);
+            }
+        } else if let Some((sel, _)) = more.with_untracked(|m| m.get(i - n - c).cloned()) {
+            choose_sel.run(sel);
+            leave();
         }
     };
     let why_key = |w: Why| match w {
@@ -164,11 +202,14 @@ fn ClassAdd(add: Callback<String>, has_classes: Signal<bool>) -> impl IntoView {
     let visible = move || open.get() && count() > 0;
     view! {
         <input class="selector-add" node_ref=input autocomplete="off" spellcheck="false"
-            placeholder=move || if has_classes.get() { ui.tx("styles-class-new", &[]) } else { ui.tx("styles-class-first", &[]) }
+            // Sans saisie : un simple « + » ; le champ s'ouvre au clic.
+            class:is-idle=move || !focused.get()
+            placeholder=move || if !focused.get() { "+".to_string() } else if has_classes.get() { ui.tx("styles-class-new", &[]) } else { ui.tx("styles-class-first", &[]) }
+            title=ui.t("styles-class-new")
             aria-label=ui.t("styles-class-new") role="combobox" aria-autocomplete="list"
             aria-expanded=move || (open.get() && count() > 0).to_string()
-            on:focus=move |_| open.set(true)
-            on:blur=move |_| { open.set(false); hl.set(None); }
+            on:focus=move |_| { focused.set(true); open.set(true); }
+            on:blur=move |_| { focused.set(false); open.set(false); hl.set(None); }
             on:input=move |e| { typed.set(event_target_value(&e)); open.set(true); hl.set(None); }
             on:keydown=keydown/>
         <Show when=visible>
@@ -205,6 +246,27 @@ fn ClassAdd(add: Callback<String>, has_classes: Signal<bool>) -> impl IntoView {
                         </button>
                     }
                 })}
+                // Autres sélecteurs : toutes les balises de ce type, balises dans la classe.
+                {move || {
+                    let base = list.with(Vec::len) + usize::from(create.with(Option::is_some));
+                    let m = more.get();
+                    let sep = base > 0 && !m.is_empty();
+                    view! {
+                        {sep.then(|| view! { <div class="menu-sep" role="separator"></div> })}
+                        {m.into_iter().enumerate().map(|(j, (sel, label))| {
+                            let i = base + j;
+                            let s2 = sel.clone();
+                            view! {
+                                <button class="menu-item class-suggest-item is-sel" role="option" data-sel=sel.clone()
+                                    class:is-hl=move || hl.get() == Some(i) aria-selected=move || (hl.get() == Some(i)).to_string()
+                                    on:mousedown=move |e| { e.prevent_default(); choose_sel.run(s2.clone()); leave(); }
+                                    on:mouseenter=move |_| hl.set(Some(i))>
+                                    {icons::tag()}<span class="class-suggest-name">{label}</span>
+                                </button>
+                            }
+                        }).collect_view()}
+                    }
+                }}
             </div>
         </Show>
     }
@@ -548,6 +610,12 @@ pub fn Styles() -> impl IntoView {
         ed.post(serde_json::json!({ "type": "state-preview", "state": st }));
     });
     on_cleanup(move || ed.post(serde_json::json!({ "type": "state-preview", "state": "" })));
+    // Autre élément ou autre classe : plus de valeur de geste en cours.
+    Effect::new(move |_| {
+        ed.selected.track();
+        selector.track();
+        sx.live.set(Vec::new());
+    });
 
     let node = Memo::new(move |_| {
         let t = ed.selected_target()?;
@@ -726,10 +794,10 @@ pub fn Styles() -> impl IntoView {
         let name = revel_model::layer_name(&n)
             .map(str::to_string)
             .or_else(|| match &n {
-                Node::Element { tag, .. } => Some(crate::names::element_name(
+                Node::Element { tag, attrs, .. } => Some(crate::names::element_name(
                     ui,
                     tag,
-                    &classes_of(&n).join(" "),
+                    &crate::names::with_base(classes_of(&n).join(" "), attrs),
                 )),
                 Node::Use { component, .. } => ed.doc.with_untracked(|d| {
                     d.as_ref()?
@@ -762,11 +830,12 @@ pub fn Styles() -> impl IntoView {
             // Contenu de l'élément (lien, image, composant, condition, liste) en tête, avec ses
             // textes (ceux d'une utilisation de composant après son nom) ; ses paramètres avancés
             // en bas (onglet Réglages fondu dans Styles).
-            {move || if is_use.get() {
+            // (Élément ou image : sous les classes, qui restent tout en haut.)
+            {move || (kind.get() != 3).then(|| if is_use.get() {
                 view! { <crate::inspector::ContentSettings/><crate::textfield::SelectedTexts/> }.into_any()
             } else {
                 view! { <crate::textfield::SelectedTexts/><crate::inspector::ContentSettings/> }.into_any()
-            }}
+            })}
             {move || match kind.get() {
                 0 => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
                 1 => ().into_any(),
@@ -803,56 +872,52 @@ pub fn Styles() -> impl IntoView {
                                     }
                                 }).collect_view()
                             }}
-                            // Toutes les balises de ce type (élément sans classe).
-                            {move || tag_sel.get().map(|(t, key)| view! {
-                                <span class="sel-chip is-tag" class:is-on=move || selector.get() == t
-                                    role="option" aria-selected=move || (selector.get() == t).to_string()
-                                    title=ui.t("styles-tag-help")>
-                                    <button class="sel-chip-name" on:click=move |_| {
-                                        let on = selector.get_untracked() == t;
-                                        selector.set(if on { String::new() } else { t.to_string() });
-                                    }>{icons::tag()}{ui.t(key)}</button>
-                                </span>
-                            })}
-                            // Balises dans la classe d'un ancêtre (élément sans classe).
-                            {move || nested_sel.get().map(|(sel, cls, tag)| {
-                                let (s2, s3) = (sel.clone(), sel.clone());
-                                view! {
-                                    <span class="sel-chip is-tag is-nested" class:is-on=move || selector.get() == s2
-                                        role="option" aria-selected=move || (selector.get() == s3).to_string()
-                                        title=ui.t("styles-nested-help")>
-                                        <button class="sel-chip-name" on:click=move |_| {
-                                            let on = selector.get_untracked() == sel;
-                                            selector.set(if on { String::new() } else { sel.clone() });
-                                        }>{icons::tag()}{ui.tx("styles-nested", &[("tag", ui.now(tag_label_key(tag), &[])), ("parent", format!(".{cls}"))])}</button>
-                                    </span>
-                                }
-                            })}
-                            // Élément à classe : balises qu'il contient (texte riche, mots mis en
-                            // valeur), réglées dans sa classe.
+                            // Toutes les balises de ce type, ou balises dans la classe d'un ancêtre
+                            // (élément sans classe) : pastille seulement une fois choisies dans « + ».
                             {move || {
-                                let list = classes.get();
-                                let first = list.first().cloned()?;
                                 let cur = selector.get();
-                                let on = nested_of(&cur).filter(|(p, _)| list.iter().any(|c| c == p)).map(|(p, t)| (p.to_string(), t.to_string()));
-                                Some(match on {
-                                    Some((p, t)) => view! {
-                                        <span class="sel-chip is-tag is-nested is-on" title=ui.t("styles-nested-help")>
-                                            <span class="sel-chip-name">{icons::tag()}{ui.tx("styles-nested", &[("tag", ui.now(tag_label_key(&t), &[])), ("parent", format!(".{p}"))])}</span>
-                                            <button class="sel-chip-x" title=ui.t("styles-nested-leave") aria-label=ui.t("styles-nested-leave")
-                                                on:click=move |_| selector.set(format!(".{p}"))>{icons::close()}</button>
-                                        </span>
-                                    }.into_any(),
-                                    None => view! {
-                                        <select class="sel-nested" title=ui.t("styles-nested-pick-help") aria-label=ui.t("styles-nested-pick")
-                                            on:change=move |e| { let t = event_target_value(&e); if !t.is_empty() { selector.set(format!(".{first} {t}")); } }>
-                                            <option value="" selected=true>{ui.t("styles-nested-pick")}</option>
-                                            {revel_edit::styleaudit::NESTED_TAGS.iter().map(|t| view! { <option value=*t>{ui.t(tag_label_key(t))}</option> }).collect_view()}
-                                        </select>
-                                    }.into_any(),
+                                let tag = tag_sel.get().filter(|(t, _)| *t == cur && *t != "body").map(|(t, key)| (t.to_string(), ui.tx(key, &[])));
+                                let nested = nested_sel.get().filter(|(sel, _, _)| *sel == cur).map(|(sel, cls, tag)| (sel, ui.tx("styles-nested", &[("tag", ui.now(tag_label_key(tag), &[])), ("parent", format!(".{cls}"))])));
+                                tag.or(nested).map(|(_, label)| view! {
+                                    <span class="sel-chip is-tag is-on" role="option" aria-selected="true" title=ui.t("styles-tag-help")>
+                                        <span class="sel-chip-name">{icons::tag()}{label}</span>
+                                        <button class="sel-chip-x" title=ui.t("styles-nested-leave") aria-label=ui.t("styles-nested-leave")
+                                            on:click=move |_| selector.set(String::new())>{icons::close()}</button>
+                                    </span>
                                 })
                             }}
-                            <ClassAdd add=Callback::new(add_class) has_classes=Signal::derive(move || !classes.get().is_empty())/>
+                            // Élément à classe : balises qu'il contient (texte riche, mots mis en
+                            // valeur), réglées dans sa classe ; choisies dans « + ».
+                            {move || {
+                                let list = classes.get();
+                                let cur = selector.get();
+                                let (p, t) = nested_of(&cur).filter(|(p, _)| list.iter().any(|c| c == p)).map(|(p, t)| (p.to_string(), t.to_string()))?;
+                                Some(view! {
+                                    <span class="sel-chip is-tag is-nested is-on" title=ui.t("styles-nested-help")>
+                                        <span class="sel-chip-name">{icons::tag()}{ui.tx("styles-nested", &[("tag", ui.now(tag_label_key(&t), &[])), ("parent", format!(".{p}"))])}</span>
+                                        <button class="sel-chip-x" title=ui.t("styles-nested-leave") aria-label=ui.t("styles-nested-leave")
+                                            on:click=move |_| selector.set(format!(".{p}"))>{icons::close()}</button>
+                                    </span>
+                                })
+                            }}
+                            <ClassAdd add=Callback::new(add_class) has_classes=Signal::derive(move || !classes.get().is_empty())
+                                extras=Signal::derive(move || {
+                                    let list = classes.get();
+                                    let mut v: Vec<(String, String)> = Vec::new();
+                                    if let Some((t, key)) = tag_sel.get().filter(|(t, _)| *t != "body") {
+                                        v.push((t.to_string(), ui.tx(key, &[])));
+                                    }
+                                    if let Some((sel, cls, tag)) = nested_sel.get() {
+                                        v.push((sel, ui.tx("styles-nested", &[("tag", ui.now(tag_label_key(tag), &[])), ("parent", format!(".{cls}"))])));
+                                    }
+                                    if let Some(first) = list.first() {
+                                        for t in revel_edit::styleaudit::NESTED_TAGS {
+                                            v.push((format!(".{first} {t}"), ui.tx("styles-nested", &[("tag", ui.now(tag_label_key(t), &[])), ("parent", format!(".{first}"))])));
+                                        }
+                                    }
+                                    v
+                                })
+                                choose_sel=Callback::new(move |sel: String| selector.set(sel))/>
                         </div>
                         <div class="target-meta">
                             <StateMenu sx/>
@@ -869,6 +934,8 @@ pub fn Styles() -> impl IntoView {
                             })}
                         </div>
                     </div>
+                    <crate::textfield::SelectedTexts/>
+                    <crate::inspector::ContentSettings/>
                     // Sans classe ni balise choisie : la première valeur crée la classe.
                     <LayoutSection sx/>
                     <ChildSection sx/>

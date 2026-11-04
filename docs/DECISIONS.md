@@ -1601,6 +1601,12 @@ créée d'office ni structure exposée dans les calques ; panneau Styles sans me
   élément interactif rangés dans Paramètres avancés.
 - Grille « Aligner » : Alt+clic étire, double-clic ou Ctrl+clic répartit (comme la boîte d'alignement de
   Webflow, vérifié sur help.webflow.com). Image sans fichier montrée dans le canevas (cadre et icône).
+- Complément (04/11, choix de l'utilisateur) : la première valeur réglée sur un élément sans classe crée une
+  classe, comme Webflow, sans double inutile : nom d'après la nature de l'élément (`grid`, `button`… pour un
+  élément ajouté) ; un nom porté par aucun élément et sans réglage est repris (sa règle vide remplie) plutôt
+  que numéroté.
+- Prévu avec l'intégration 3D (04/11, demande de l'utilisateur) : le catalogue `matv-studio/revel-templates`
+  n'est alimenté que par l'utilisateur ; l'envoi de template par défaut vers ce dépôt est retiré de Revel.
 
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.

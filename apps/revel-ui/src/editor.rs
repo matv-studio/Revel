@@ -1541,7 +1541,7 @@ impl Ed {
             else {
                 return release();
             };
-            let decls = list
+            let decls: Vec<revel_model::Decl> = list
                 .into_iter()
                 .filter_map(|(prop, value)| {
                     Some(revel_model::Decl {
@@ -1554,17 +1554,28 @@ impl Ed {
             // État choisi (survol…) gardé : la règle le porte.
             let state = self.style_state.get_untracked();
             self.style_sel.set(format!(".{name}"));
+            let selector = crate::styles::with_state(&format!(".{name}"), &state);
+            // Nom repris (règle vide déjà là) : la règle existante est remplie, pas doublée.
+            let existing = self
+                .doc
+                .with_untracked(|d| crate::styles::find_rule(d.as_ref()?, &selector, &media));
+            let fill = match existing {
+                Some(rule) => {
+                    crate::styles::style_command(Some(rule), selector, media, decls_list(&decls))
+                }
+                None => Some(Command::AddRule {
+                    selector,
+                    media,
+                    decls,
+                }),
+            };
+            let Some(fill) = fill else {
+                return release();
+            };
             self.apply(
                 ui,
                 Command::Batch {
-                    commands: vec![
-                        set_class,
-                        Command::AddRule {
-                            selector: crate::styles::with_state(&format!(".{name}"), &state),
-                            media,
-                            decls,
-                        },
-                    ],
+                    commands: vec![set_class, fill],
                 },
                 false,
             );
@@ -2614,6 +2625,14 @@ fn first_insert_parent(c: &Command) -> Option<&revel_edit::Parent> {
         Command::Batch { commands } => commands.iter().find_map(first_insert_parent),
         _ => None,
     }
+}
+
+/// Déclarations en couples (propriété, valeur) pour `style_command`.
+fn decls_list(decls: &[revel_model::Decl]) -> Vec<(String, Option<String>)> {
+    decls
+        .iter()
+        .map(|d| (d.prop.clone(), Some(d.value.clone())))
+        .collect()
 }
 
 /// Nœud inséré par une commande (première insertion d'une suite).

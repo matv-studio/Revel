@@ -4,7 +4,7 @@
 Revel est une application gratuite pour Windows, macOS et Linux, dans 15 langues. Tout se fait sur votre
 ordinateur : pas de compte à créer, pas d'abonnement, et votre site reste à vous.
 
-> Version actuelle : **0.7.2**, en **préversion**. Revel est en cours de développement : l'essentiel fonctionne,
+> Version actuelle : **0.7.3**, en **préversion**. Revel est en cours de développement : l'essentiel fonctionne,
 > mais attendez-vous à des défauts. Gardez une copie de vos sites importants.
 
 ![L'éditeur de Revel : les pages et les calques à gauche, la page au centre, les réglages de l'élément choisi à droite](docs/captures/editeur.png)
@@ -217,7 +217,7 @@ with on-device machine translation, one-click publishing (SFTP hosts or GitHub P
 Framer, Figma, WordPress, static HTML, Eleventy and Git repositories (sites that need building are built by Revel
 on request; imported sites become fully editable in the panels, without code), team work through a shared network
 folder or an online repository, and a local connector for AI assistants. Download the installer for your system
-from the [releases page](https://github.com/matv-studio/Revel/releases). Revel is a pre-release (0.7.2): expect
+from the [releases page](https://github.com/matv-studio/Revel/releases). Revel is a pre-release (0.7.3): expect
 rough edges, and keep a copy of important sites.
 
 </details>

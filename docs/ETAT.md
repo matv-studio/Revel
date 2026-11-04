@@ -9,6 +9,15 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Version 0.7.3 (04/11/2026)
+Contenu : D-159 (éléments ajoutés simples, panneau Styles allégé) et son complément : la première valeur
+réglée sur un élément sans classe crée une classe comme Webflow, nommée d'après la nature de l'élément
+ajouté, et reprend un nom laissé sans élément ni réglage au lieu de le numéroter (`styles::new_class`). Essais :
+tests du dépôt et de l'interface, clippy, format, éditeur 358/358, modèles 26/26. Piège : la préversion simulée
+`X.Y.Z-beta.1` figure deux fois dans `tools/editor-e2e.mjs` (motif échappé `0\\.7\\.3` et texte de la pastille).
+Prévu avec l'intégration 3D : catalogue `matv-studio/revel-templates` alimenté par l'utilisateur seul, envoi de
+template par défaut retiré.
+
 ## Travail du 29/10/2026 : retours sur la 0.7.2 (D-159)
 Retours de l'utilisateur (captures) : élément ajouté invisible (image), panneau Styles chargé (liaison aux infos
 du site, sélecteurs de balise, « Contenus… », doublons dans Effets, cadrage en texte libre, glisser sans

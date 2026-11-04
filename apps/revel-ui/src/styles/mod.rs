@@ -458,9 +458,20 @@ pub(crate) fn class_command(at: revel_edit::Target, n: &Node, list: &[String]) -
 }
 
 /// Classe à créer pour un élément qui n'en a pas (comme Webflow : d'après sa nature,
-/// numérotée si elle existe déjà dans la feuille de style ou la page).
+/// numérotée si elle est déjà prise). Prise : portée par un élément, ou réglée (déclarations)
+/// dans la feuille de style ; un nom laissé sans élément ni réglage (élément supprimé, valeurs
+/// retirées) est repris plutôt que d'en créer un double (D-159).
 pub(crate) fn new_class(d: &revel_model::Site, n: &Node) -> String {
+    // Élément ajouté depuis le panneau Ajouter : sa nature (`grid`, `switch`…).
+    let kind = match n {
+        Node::Element { attrs, .. } => attrs
+            .iter()
+            .find(|a| a.name == revel_model::BASE_ATTR)
+            .and_then(|a| a.value.clone()),
+        _ => None,
+    };
     let base = match n {
+        _ if kind.is_some() => kind.as_deref().unwrap_or("block"),
         Node::Image(_) => "image",
         Node::Element { tag, .. } => match tag.to_ascii_lowercase().as_str() {
             "div" => "div-block",
@@ -492,7 +503,7 @@ pub(crate) fn new_class(d: &revel_model::Site, n: &Node) -> String {
         _ => "block",
     };
     let mut taken = std::collections::HashSet::new();
-    for r in d.style_rules() {
+    for r in d.style_rules().filter(|r| !r.decls.is_empty()) {
         for part in r
             .selector
             .split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.'))
@@ -973,6 +984,47 @@ mod tests {
             };
             assert!(ok, "{st}");
         }
+    }
+
+    /// Nom repris quand il n'est porté par aucun élément ni réglé ; numéroté sinon (D-159).
+    #[test]
+    fn classe_creee_sans_double() {
+        let img = Node::Image(revel_model::ImageNode::default());
+        let mut site = revel_model::Site::new("Essai", "fr");
+        let rule = |site: &mut revel_model::Site, sel: &str, decls: Vec<revel_model::Decl>| {
+            site.stylesheet
+                .get_or_insert_with(Default::default)
+                .items
+                .push(revel_model::StyleItem::Rule(revel_model::StyleRule {
+                    selector: sel.into(),
+                    media: None,
+                    decls,
+                    ..Default::default()
+                }));
+        };
+        rule(&mut site, ".image", vec![]);
+        assert_eq!(new_class(&site, &img), "image");
+        rule(
+            &mut site,
+            ".image",
+            vec![revel_model::Decl {
+                prop: "width".into(),
+                value: "10px".into(),
+                important: false,
+            }],
+        );
+        assert_eq!(new_class(&site, &img), "image-2");
+        let grid = Node::Element {
+            id: None,
+            tag: "div".into(),
+            attrs: vec![revel_model::Attr {
+                name: revel_model::BASE_ATTR.into(),
+                value: Some("grid".into()),
+                when: None,
+            }],
+            children: vec![],
+        };
+        assert_eq!(new_class(&site, &grid), "grid");
     }
 
     #[test]

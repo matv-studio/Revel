@@ -51,6 +51,24 @@ border-radius:999px;background:none;color:inherit;font:inherit;font-weight:600;c
         "B{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}",
     ),
     ("lottie", "B{display:block;width:100%;max-width:480px}"),
+    // Modèle 3D (D-160) : forme réglée dans Styles (proportions par point de rupture) ; boutons
+    // (parties) en bas à droite ; plein écran : tout l'écran.
+    (
+        "model",
+        "B{position:relative;display:block;width:100%;aspect-ratio:4/3;overflow:hidden}\
+B:fullscreen{width:100%;height:100%;aspect-ratio:auto}\
+B [data-revel-part=controls]{position:absolute;right:12px;bottom:12px;z-index:1;display:flex;gap:6px}\
+B [data-revel-part=button]{display:grid;place-items:center;width:36px;height:36px;padding:0;border:0;border-radius:8px;\
+background-color:color-mix(in srgb,currentColor 12%,transparent);color:inherit;cursor:pointer}\
+B [data-revel-part=button].is-active{background-color:color-mix(in srgb,currentColor 30%,transparent)}\
+B [data-revel-part=button] svg{width:18px;height:18px}\
+B [data-revel-part=views]{position:absolute;top:12px;left:12px;z-index:1;display:flex;flex-wrap:wrap;gap:4px}\
+B [data-revel-part=views] [data-revel-part=button]{width:auto;height:28px;padding:0 10px;font:inherit;font-size:12px}",
+    ),
+    (
+        "mview",
+        "B{position:relative;display:block;width:100%;aspect-ratio:4/3;overflow:hidden}",
+    ),
     (
         "collection",
         "B{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:24px}",

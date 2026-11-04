@@ -1359,8 +1359,18 @@
   // Déplacement d'un élément de la page : appui puis déplacement de plus de 4 px.
   let press = null;
   let dragged = false;
+  // Modèles 3D dont la caméra se règle au glisser (D-160) : pas de déplacement d'élément.
+  let orbitEls = [];
+  const inOrbit = (t) => orbitEls.some((el) => el.isConnected && el.contains(t));
+  document.addEventListener("revel-model-ready", (e) => {
+    const el = e.target;
+    const id = el && el.getAttribute && el.getAttribute("data-rv");
+    if (id && e.detail) post({ type: "model_info", id, animations: e.detail.animations || [], cameras: e.detail.cameras || [] });
+    if (orbitEls.includes(el) && window.RevelModel) window.RevelModel.orbit(el, true);
+    markEmpty();
+  });
   document.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || editing || inEdit(e.target) || onBar(e)) return;
+    if (e.button !== 0 || editing || inEdit(e.target) || onBar(e) || inOrbit(e.target)) return;
     const p = pick(e.target);
     if (p) press = { el: p.el, inst: p.inst, x: e.clientX, y: e.clientY, id: e.pointerId };
   }, true);
@@ -1629,13 +1639,14 @@
     if (n !== null) startEdit(n, e.clientX, e.clientY);
   }, true);
   for (const type of ["auxclick", "submit", "mouseup", "pointerup"]) {
-    document.addEventListener(type, (e) => { if (!inEdit(e.target) && !onBar(e)) block(e); }, true);
+    document.addEventListener(type, (e) => { if (!inEdit(e.target) && !onBar(e) && !inOrbit(e.target)) block(e); }, true);
   }
   // Appui : pas de sélection de texte ni de focus d'un champ du site, mais le canevas reçoit le
   // clavier (Échap, raccourcis).
   for (const type of ["mousedown", "pointerdown"]) {
     document.addEventListener(type, (e) => {
-      if (inEdit(e.target) || onBar(e)) return;
+      // Modèle 3D en mode « Tourner » (D-160) : l'appui va à son lecteur.
+      if (inEdit(e.target) || onBar(e) || inOrbit(e.target)) return;
       block(e);
       window.focus();
     }, true);
@@ -1696,6 +1707,7 @@
   // Page entièrement visible dans ce sens (cadre allongé à la hauteur de la page) : la vue de
   // l'éditeur se déplace (comme Framer) ; sinon la page défile.
   window.addEventListener("wheel", (e) => {
+    if (inOrbit(e.target) && !e.altKey) return;
     if (e.altKey || e.ctrlKey || e.metaKey) { e.preventDefault(); post({ type: "zoom", dy: e.deltaY || e.deltaX, x: e.clientX, y: e.clientY }); return; }
     const se = document.scrollingElement || document.documentElement;
     const canY = se.scrollHeight > innerHeight + 1;
@@ -1873,6 +1885,7 @@
     list: '<path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/>',
     lottie: '<path d="M8 2.5v3M8 10.5v3M2.5 8h3M10.5 8h3M4.2 4.2l1.6 1.6M10.2 10.2l1.6 1.6M4.2 11.8l1.6-1.6M10.2 5.8l1.6-1.6"/>',
     image: '<rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="6.5" r="1.2"/><path d="M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3"/>',
+    model: '<path d="M8 1.8 13.5 5v6L8 14.2 2.5 11V5z"/><path d="M2.5 5 8 8.2 13.5 5M8 8.2v6"/>',
   };
   const emptyCss = "[data-rv-empty]{min-height:50px!important;min-width:50px!important;" +
     "background:rgba(109,140,255,.07) center/20px no-repeat!important;outline:1px dashed rgba(109,140,255,.6)!important;outline-offset:-1px}" +
@@ -1901,6 +1914,13 @@
         if ((!src || (el.complete && !el.naturalWidth)) && el.getClientRects().length) found.push(el);
         continue;
       }
+      // Modèle 3D ou scène Marmoset sans fichier (ou illisible) : repère de modèle (D-160).
+      if (el.hasAttribute("data-model") || el.hasAttribute("data-mview")) {
+        const src = (el.getAttribute("data-model") || el.getAttribute("data-mview") || "").trim();
+        const st = el.getAttribute("data-model-state") || el.getAttribute("data-mview-state");
+        if ((!src || st === "error") && el.getClientRects().length) found.push(el);
+        continue;
+      }
       if (!CONTAINERS.has(el.tagName)) continue;
       if ([...el.childNodes].some((c) => c.nodeType === 1 || (c.nodeType === 3 && c.nodeValue.trim()))) continue;
       // Masqué (lui ou un parent) : laissé tel quel.
@@ -1916,6 +1936,7 @@
       el.setAttribute("data-rv-empty",
         el.tagName === "IMG" ? "image"
         : el.hasAttribute("data-lottie") ? "lottie"
+        : el.hasAttribute("data-model") || el.hasAttribute("data-mview") ? "model"
           : /grid/.test(d) ? "grid"
             : /flex/.test(d) ? "flex"
               : /^(SECTION|HEADER|FOOTER|MAIN|ARTICLE|ASIDE|NAV)$/.test(el.tagName) ? "section"
@@ -2000,9 +2021,20 @@
   };
   const lottieOf = (el) => [...el.attributes].filter((a) => a.name.startsWith("data-lottie"))
     .map((a) => a.name + "=" + a.value).sort().join(" ");
+  // Nœuds ajoutés par un lecteur (modèle 3D, scène Marmoset : `data-rv-live`) : gardés tels quels.
+  const isLive = (n) => n.nodeType === 1 && n.hasAttribute("data-rv-live");
+  // États posés par les lecteurs, gardés d'une mise à jour à l'autre.
+  const LIVE_ATTRS = ["data-model-state", "data-mview-state"];
   const morphNode = (cur, next) => {
     if (cur.nodeType !== 1) {
       if (cur.nodeValue !== next.nodeValue) cur.nodeValue = next.nodeValue;
+      return;
+    }
+    if (cur.__rvModel || cur.__rvMview) {
+      // Modèle 3D : lecteur gardé, réglages relus (fichier rechargé seulement s'il change).
+      syncAttrs(cur, next, ["style", ...LIVE_ATTRS]);
+      morphChildren(cur, next);
+      if (cur.__rvModel && window.RevelModel) window.RevelModel.update(cur);
       return;
     }
     if (cur.__rvLottie) {
@@ -2018,9 +2050,11 @@
   const morphChildren = (parent, src) => {
     const list = [...src.childNodes];
     const wanted = new Set(list.map(keyOf).filter(Boolean));
-    const spare = (x) => !keyOf(x) || !wanted.has(keyOf(x));
+    const spare = (x) => !isLive(x) && (!keyOf(x) || !wanted.has(keyOf(x)));
     let cur = parent.firstChild;
+    const skipLive = () => { while (cur && isLive(cur)) cur = cur.nextSibling; };
     for (const n of list) {
+      skipLive();
       if (cur && fits(cur, n)) { morphNode(cur, n); cur = cur.nextSibling; continue; }
       // Élément repéré plus loin : les nœuds qui le précèdent sont retirés s'ils ne servent plus
       // (l'élément reste en place), sinon il est déplacé.
@@ -2031,7 +2065,7 @@
         let before = true;
         for (let x = cur; x !== found; x = x.nextSibling) if (!spare(x)) { before = false; break; }
         if (before) {
-          while (cur !== found) { const nx = cur.nextSibling; parent.removeChild(cur); cur = nx; }
+          while (cur !== found) { const nx = cur.nextSibling; if (!isLive(cur)) parent.removeChild(cur); cur = nx; }
           morphNode(found, n);
           cur = found.nextSibling;
         } else {
@@ -2043,7 +2077,7 @@
       // Nouveau nœud (ses scripts ne sont pas exécutés).
       parent.insertBefore(document.importNode(n, true), cur);
     }
-    while (cur) { const nx = cur.nextSibling; parent.removeChild(cur); cur = nx; }
+    while (cur) { const nx = cur.nextSibling; if (!isLive(cur)) parent.removeChild(cur); cur = nx; }
   };
   let refreshing = false;
   let refreshAgain = false;
@@ -2100,6 +2134,8 @@
       buildInstances();
       if (STAGE && stageState && instances[0] && instances[0].root) instances[0].root.classList.add("rv-force-" + stageState);
       if (window.RevelLottie) window.RevelLottie.refresh();
+      if (window.RevelModel) window.RevelModel.refresh();
+      if (window.RevelMview) window.RevelMview.refresh();
       markEmpty();
       for (const path of new Set(sheets)) reloadSheet(path);
       // Sélection retrouvée par son identifiant (l'interface la confirme sur `refreshed`).
@@ -2172,8 +2208,11 @@
               try { el.setAttribute(n, v); } catch (_) { /* nom invalide */ }
             }
             for (const n of c.remove || []) el.removeAttribute(n);
+            // Modèle 3D : réglages relus sur place (caméra, rendu…), sans recharger le fichier.
+            const names = [...Object.keys(c.set || {}), ...(c.remove || [])];
+            if (el.__rvModel && window.RevelModel && names.some((n) => n.startsWith("data-model"))) window.RevelModel.update(el);
             // Animation Lottie : relue avec ses nouveaux réglages (fichier, lecture, boucle).
-            const lottie = [...Object.keys(c.set || {}), ...(c.remove || [])].some((n) => n.startsWith("data-lottie"));
+            const lottie = names.some((n) => n.startsWith("data-lottie"));
             if (lottie && el.__rvLottie) {
               try { el.__rvLottie.destroy(); } catch (_) { /* déjà retirée */ }
               el.__rvLottie = null;
@@ -2182,11 +2221,26 @@
           }
         }
         if (window.RevelLottie) window.RevelLottie.refresh();
+        if (window.RevelModel) window.RevelModel.refresh();
+        if (window.RevelMview) window.RevelMview.refresh();
         markEmpty();
         // Animation Lottie chargée : l'élément n'est plus vide.
         setTimeout(markEmpty, 400);
         redraw();
         break;
+      case "model-orbit": {
+        // Caméra d'un modèle 3D réglée au glisser dans le canevas (D-160).
+        const els = document.querySelectorAll('[data-rv="' + CSS.escape(m.id) + '"]');
+        orbitEls = m.on ? [...els] : [];
+        for (const el of els) if (window.RevelModel) window.RevelModel.orbit(el, !!m.on);
+        break;
+      }
+      case "model-view": {
+        const el = document.querySelector('[data-rv="' + CSS.escape(m.id) + '"]');
+        const view = el && window.RevelModel ? window.RevelModel.view(el) : null;
+        if (view) post({ type: "model_view", id: m.id, view });
+        break;
+      }
       case "rich":
         // Éléments de texte mis en forme modifiés d'un bloc (D-72).
         richIds = new Set(Array.isArray(m.ids) ? m.ids : []);

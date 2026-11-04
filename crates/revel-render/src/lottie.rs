@@ -21,8 +21,15 @@ pub fn script() -> String {
     out.push_str("/*! lottie-web 5.13.0 | MIT License | (c) 2015 Bodymovin */\n");
     out.push_str(PLAYER.trim_end());
     out.push('\n');
+    out.push_str(&strip_comments(LOADER));
+    out
+}
+
+/// Script sans commentaires de bloc ni lignes `//` ni lignes vides (lecteurs du site).
+pub(crate) fn strip_comments(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
     let mut in_block = false;
-    for line in LOADER.lines() {
+    for line in src.lines() {
         let t = line.trim();
         if in_block {
             if t.ends_with("*/") {

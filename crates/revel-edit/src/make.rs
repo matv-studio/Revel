@@ -242,6 +242,11 @@ pub enum Preset {
     /// Toile de pixels (D-158) : dessin ou traînée de pixels sous le pointeur, comme le
     /// composant « Pixel Trail » de Framer.
     Pixels,
+    /// Modèle 3D (D-160) : fichier GLB ou glTF des médias, affiché par three.js, avec ses
+    /// boutons (recadrer, plein écran).
+    Model,
+    /// Scène Marmoset (D-160) : fichier `.mview` de Marmoset Toolbag, lecteur de Marmoset.
+    Mview,
 }
 
 impl Preset {
@@ -262,7 +267,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 43] = [
+    pub const ALL: [Preset; 45] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -306,6 +311,8 @@ impl Preset {
         Preset::CartAdd,
         Preset::Clock,
         Preset::Pixels,
+        Preset::Model,
+        Preset::Mview,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -352,6 +359,7 @@ impl Preset {
                 | Preset::Slideshow
                 | Preset::Navbar
                 | Preset::LocaleSwitch
+                | Preset::Model
         )
     }
 
@@ -740,6 +748,56 @@ impl Preset {
                     attr("data-lottie-play", "auto"),
                     Attr {
                         name: "data-lottie-loop".into(),
+                        value: None,
+                        when: None,
+                    },
+                ],
+                vec![],
+            ),
+            Preset::Model => {
+                // `text` : « Recadrer|Plein écran » (noms des boutons).
+                let mut names = text.split('|');
+                let reset = names.next().unwrap_or("Recadrer");
+                let full = names.next().unwrap_or(reset);
+                let bar = id();
+                let buttons = [("reset", reset), ("fullscreen", full)]
+                    .into_iter()
+                    .map(|(cmd, label)| {
+                        let (b, svg, path) = (id(), id(), id());
+                        let mut n = model_button(cmd, label, [b, svg, path]);
+                        if let Node::Element { attrs, .. } = &mut n {
+                            attrs.retain(|a| a.name != revel_model::PART_ATTR);
+                            attrs.insert(0, attr("class", "modele-3d__bouton"));
+                        }
+                        strip_parts(&mut n);
+                        n
+                    })
+                    .collect();
+                el(
+                    id(),
+                    "div",
+                    vec![
+                        attr("class", "modele-3d"),
+                        attr("data-model", ""),
+                        attr("data-model-pitch", "15"),
+                        attr("data-model-shadow", "0.5"),
+                    ],
+                    vec![el(
+                        bar,
+                        "div",
+                        vec![attr("class", "modele-3d__commandes")],
+                        buttons,
+                    )],
+                )
+            }
+            Preset::Mview => el(
+                id(),
+                "div",
+                vec![
+                    attr("class", "scene-marmoset"),
+                    attr("data-mview", ""),
+                    Attr {
+                        name: "data-mview-autostart".into(),
                         value: None,
                         when: None,
                     },
@@ -1197,6 +1255,10 @@ fn role_of(class: &str) -> Option<Role> {
         "bouton-panier" => Base("cart-add"),
         "media-survol" => Base("hover-media"),
         "lottie" => Base("lottie"),
+        "modele-3d" => Base("model"),
+        "modele-3d__commandes" => Part("controls"),
+        "modele-3d__bouton" => Part("button"),
+        "scene-marmoset" => Base("mview"),
         "code-html" => Content,
         "liste-collection" => Base("collection"),
         "liste-collection__element" => Content,
@@ -1238,6 +1300,84 @@ fn role_of(class: &str) -> Option<Role> {
         "langue" => Part("link"),
         _ => return None,
     })
+}
+
+/// Dessin des boutons d'un modèle 3D (D-160), au trait (viewBox 24).
+fn model_icon(cmd: &str) -> &'static str {
+    match cmd {
+        "reset" => "M3 12a9 9 0 1 0 2.6-6.4M3 4v5h5",
+        "fullscreen" => "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+        "rotate" => "M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5",
+        "play" => "M8 5v14l11-7z",
+        _ => "",
+    }
+}
+
+/// Bouton d'un modèle 3D (D-160), partie de l'élément fermé : `cmd` (`reset`, `fullscreen`,
+/// `rotate`, `play`, `view:<vue>`), `label` (nom lu par les lecteurs d'écran ; texte du bouton
+/// pour une vue). Identifiants : bouton, dessin, trait.
+pub fn model_button(cmd: &str, label: &str, ids: [Option<String>; 3]) -> Node {
+    let [b, svg, path] = ids;
+    let a = |n: &str, v: &str| Attr {
+        name: n.into(),
+        value: Some(v.into()),
+        when: None,
+    };
+    let part = |v: &str| a(revel_model::PART_ATTR, v);
+    let d = model_icon(cmd);
+    let children = if d.is_empty() {
+        vec![Node::Text { text: label.into() }]
+    } else {
+        let fill = cmd == "play";
+        vec![Node::Element {
+            id: svg,
+            tag: "svg".into(),
+            attrs: vec![
+                part("svg"),
+                a("viewBox", "0 0 24 24"),
+                a("fill", "none"),
+                a("aria-hidden", "true"),
+            ],
+            children: vec![Node::Element {
+                id: path,
+                tag: "path".into(),
+                attrs: vec![
+                    part("path"),
+                    a("d", d),
+                    a("fill", if fill { "currentColor" } else { "none" }),
+                    a("stroke", if fill { "none" } else { "currentColor" }),
+                    a("stroke-width", "2"),
+                    a("stroke-linecap", "round"),
+                    a("stroke-linejoin", "round"),
+                ],
+                children: vec![],
+            }],
+        }]
+    };
+    let mut attrs = vec![part("button"), a("type", "button"), a("data-model-do", cmd)];
+    if !d.is_empty() {
+        attrs.push(a("aria-label", label));
+        attrs.push(a("title", label));
+    }
+    Node::Element {
+        id: b,
+        tag: "button".into(),
+        attrs,
+        children,
+    }
+}
+
+/// Retire les marques de partie (nœud repris par `Preset::finish`, qui les pose).
+fn strip_parts(n: &mut Node) {
+    if let Node::Element {
+        attrs, children, ..
+    } = n
+    {
+        attrs.retain(|a| a.name != revel_model::PART_ATTR);
+        for c in children {
+            strip_parts(c);
+        }
+    }
 }
 
 /// Icône `name` en `<svg>` (dessin au trait, couleur du texte).
@@ -2217,4 +2357,150 @@ pub fn set_slot(site: &Site, at: &Target, on: bool) -> Result<Command, EditError
         }
     });
     Ok(Command::Batch { commands })
+}
+
+/// Vues de contrôle d'un modèle 3D (D-160), dans l'ordre des boutons.
+pub const MODEL_VIEWS: [&str; 6] = [
+    "render",
+    "albedo",
+    "normals",
+    "roughness",
+    "metalness",
+    "wireframe",
+];
+
+/// Partie `part` (enfant direct) d'un élément : (index, identifiant, enfants).
+fn part_of<'a>(n: &'a Node, part: &str) -> Option<(usize, String, &'a Vec<Node>)> {
+    let Node::Element { children, .. } = n else {
+        return None;
+    };
+    children.iter().enumerate().find_map(|(i, c)| match c {
+        Node::Element {
+            id: Some(id),
+            attrs,
+            children,
+            ..
+        } if attrs
+            .iter()
+            .any(|a| a.name == revel_model::PART_ATTR && a.value.as_deref() == Some(part)) =>
+        {
+            Some((i, id.clone(), children))
+        }
+        _ => None,
+    })
+}
+
+/// Bouton `cmd` présent dans un modèle 3D (`views` : barre des vues).
+pub fn model_has_button(n: &Node, cmd: &str) -> bool {
+    if cmd == "views" {
+        return part_of(n, "views").is_some();
+    }
+    part_of(n, "controls").is_some_and(|(_, _, kids)| {
+        kids.iter().any(|k| {
+            matches!(k, Node::Element { attrs, .. }
+                if attrs.iter().any(|a| a.name == "data-model-do" && a.value.as_deref() == Some(cmd)))
+        })
+    })
+}
+
+/// Ajoute ou retire un bouton d'un modèle 3D (D-160) : `reset`, `fullscreen`, `rotate`,
+/// `play` dans la barre des commandes (créée au besoin), ou `views` (barre des vues ;
+/// `labels` : noms des vues, dans l'ordre de `MODEL_VIEWS`). `None` : rien à changer.
+pub fn model_button_command(
+    site: &Site,
+    at: &Target,
+    cmd: &str,
+    labels: &[String],
+    on: bool,
+) -> Result<Option<Command>, EditError> {
+    let n = crate::address::node(site, at)?;
+    if model_has_button(n, cmd) == on {
+        return Ok(None);
+    }
+    let mut taken = site.node_ids();
+    let mut id = || {
+        let i = revel_model::ids::fresh(&taken);
+        taken.insert(i.clone());
+        Some(i)
+    };
+    let part = |id: Option<String>, name: &str, kids: Vec<Node>| Node::Element {
+        id,
+        tag: "div".into(),
+        attrs: vec![Attr {
+            name: revel_model::PART_ATTR.into(),
+            value: Some(name.into()),
+            when: None,
+        }],
+        children: kids,
+    };
+    let Node::Element { children, .. } = n else {
+        return Err(EditError::NotFound(at.node.clone()));
+    };
+    let inside = |id: &str| Parent {
+        owner: at.owner.clone(),
+        node: Some(id.to_string()),
+        branch: Branch::Children,
+    };
+    if cmd == "views" {
+        if !on {
+            let (_, vid, _) = part_of(n, "views").expect("présente");
+            return Ok(Some(Command::Remove {
+                at: Target {
+                    owner: at.owner.clone(),
+                    node: vid,
+                },
+            }));
+        }
+        let pid = id();
+        let kids = MODEL_VIEWS
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let label = labels.get(i).map(String::as_str).unwrap_or(v);
+                model_button(&format!("view:{v}"), label, [id(), id(), id()])
+            })
+            .collect();
+        return Ok(Some(Command::Insert {
+            parent: Parent::of(at, Branch::Children),
+            index: children.len(),
+            node: part(pid, "views", kids),
+        }));
+    }
+    let label = labels.first().map(String::as_str).unwrap_or(cmd);
+    match part_of(n, "controls") {
+        Some((_, bar, kids)) if on => Ok(Some(Command::Insert {
+            parent: inside(&bar),
+            index: kids.len(),
+            node: model_button(cmd, label, [id(), id(), id()]),
+        })),
+        Some((_, _, kids)) => {
+            let b = kids.iter().find_map(|k| match k {
+                Node::Element {
+                    id: Some(bid),
+                    attrs,
+                    ..
+                } if attrs
+                    .iter()
+                    .any(|a| a.name == "data-model-do" && a.value.as_deref() == Some(cmd)) =>
+                {
+                    Some(bid.clone())
+                }
+                _ => None,
+            });
+            Ok(b.map(|node| Command::Remove {
+                at: Target {
+                    owner: at.owner.clone(),
+                    node,
+                },
+            }))
+        }
+        None => {
+            let (bar, b) = (id(), model_button(cmd, label, [id(), id(), id()]));
+            Ok(Some(Command::Insert {
+                parent: Parent::of(at, Branch::Children),
+                index: children.len(),
+                node: part(bar, "controls", vec![b]),
+            }))
+        }
+    }
 }

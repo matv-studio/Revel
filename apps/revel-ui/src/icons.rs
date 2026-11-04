@@ -134,6 +134,11 @@ pub fn redo() -> AnyView {
     svg(r#"<path d="m10.5 3.5 3 3-3 3"/><path d="M13.5 6.5h-7a4 4 0 0 0 0 8H9"/>"#)
 }
 
+/// Modèle 3D (médias, panneau Ajouter).
+pub fn cube() -> AnyView {
+    svg(r#"<path d="M8 1.8 13.5 5v6L8 14.2 2.5 11V5z"/><path d="M2.5 5 8 8.2 13.5 5M8 8.2v6"/>"#)
+}
+
 /// Élément HTML (calques).
 pub fn box_() -> AnyView {
     svg(r#"<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/>"#)

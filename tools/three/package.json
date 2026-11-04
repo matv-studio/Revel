@@ -1,0 +1,10 @@
+{
+  "name": "revel-three",
+  "private": true,
+  "description": "Assemblage de three.js pour le visualiseur de modèles de Revel (D-160) : node build.mjs",
+  "type": "module",
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "three": "0.186.1"
+  }
+}

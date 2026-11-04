@@ -1608,6 +1608,43 @@ créée d'office ni structure exposée dans les calques ; panneau Styles sans me
 - Prévu avec l'intégration 3D (04/11, demande de l'utilisateur) : le catalogue `matv-studio/revel-templates`
   n'est alimenté que par l'utilisateur ; l'envoi de template par défaut vers ce dépôt est retiré de Revel.
 
+**D-160 — 04/11/2026 — prise (demande de l'utilisateur).** **3D, étape 1 : visualiseur de modèles et
+élément Marmoset.** Demande : un visualiseur de modèles 3D du niveau de Marmoset Viewer, et plus tard des
+outils de sites 3D interactifs (onglet à part : scène, états, événements, caméra, listes de collection en 3D,
+pages dans la scène, solution de repli ; accord de principe de l'utilisateur, phases suivantes). Étape 1 :
+- Formats : GLB et glTF seulement, sans conversion (choix de l'utilisateur : « trop de risques d'erreurs »).
+  OBJ et FBX écartés. Les extensions de compression courantes sont lues : Draco, Meshopt, KTX2 (Basis).
+- Moteur : three.js 0.186.1 (MIT ; la 0.187.0 du 30/10 est trop récente), assemblé une fois par
+  `tools/three/` (esbuild) et rangé dans `crates/revel-render/vendor/three/` avec sa licence. Hébergé avec
+  le site, aucun service extérieur. Script `/assets/revel-model.js` ajouté aux seules pages qui ont un
+  modèle ; moteur (`revel-three.js`) chargé quand le modèle approche de l'écran ; décodeurs Draco et Basis
+  (`/assets/revel-3d/`) téléchargés seulement si le fichier en a besoin.
+- Caméra et tailles d'écran : cadrage calculé à chaque changement de taille d'après la sphère englobante
+  du modèle et les proportions de l'élément. Le plus étroit des deux angles de vue décide : en portrait, la
+  largeur, donc le modèle n'est jamais coupé sur téléphone. Réglages relatifs (angle horizontal, angle
+  vertical, marge, point visé décalé, champ de vision), donc valables à toutes les tailles ; la forme de
+  l'élément se règle dans Styles par point de rupture, comme une vidéo. Limites de rotation verticale et de
+  zoom. Caméra du fichier utilisable. « Prendre la vue actuelle » dans le canevas.
+- Gestes : glissement vertical d'un doigt réservé au défilement de la page (`touch-action: pan-y`),
+  horizontal pour tourner, pincer pour zoomer ; molette sans effet tant qu'on n'a pas cliqué dans le
+  modèle (ou avec Ctrl), pour ne pas bloquer le défilement. Mouvement réduit demandé : pas de rotation
+  automatique.
+- Rendu : éclairage studio intégré (RoomEnvironment) ou fichier HDR, exposition, ombre au sol, fond
+  transparent (couleur réglée dans Styles) ou environnement visible. Animations du fichier (choix, boucle).
+  Vues : rendu, couleur de base, normales, rugosité, métal, filaire.
+- Économie : calcul seulement quand quelque chose bouge ; pause hors de l'écran ; finesse plafonnée à 2 ;
+  image d'attente (poster) jusqu'au chargement et si WebGL manque ; contexte WebGL perdu : rechargé.
+- Élément fermé (D-159) `data-revel-base="model"` ; ses commandes visibles (plein écran, recadrer, vues)
+  sont des boutons parties de l'élément (`data-model-do`), donc stylables et retirables.
+- Élément Marmoset `data-revel-base="mview"` : fichier `.mview` (exporté de Marmoset Toolbag, format
+  propriétaire) lu par le lecteur officiel chargé depuis `https://viewer.marmoset.co/main/marmoset.js`
+  (non copié dans Revel). Taille suivie (`resize`), démarrage automatique ou au clic, fond transparent,
+  interface masquée. Licence du lecteur non vérifiée (choix de l'utilisateur : « on veut des éléments
+  fonctionnels, le reste on verra après »). Le serveur doit répondre aux requêtes partielles
+  (`Accept-Ranges`, `Content-Length`) pour la vignette ; sinon un dégradé la remplace.
+- Sources : [three.js — npm](https://www.npmjs.com/package/three),
+  [Marmoset Viewer — embedding](https://marmoset.co/?p=45453).
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

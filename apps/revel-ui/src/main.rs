@@ -33,6 +33,7 @@ mod layers;
 mod library;
 mod livetools;
 mod locales;
+mod model3d;
 mod names;
 mod pageops;
 mod pagesettings;

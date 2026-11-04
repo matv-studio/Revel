@@ -215,6 +215,8 @@ pub enum MediaKind {
     Font,
     /// Animation Lottie (`.lottie`).
     Animation,
+    /// Modèle 3D (`.glb`, `.gltf`) ou scène Marmoset (`.mview`), D-160.
+    Model,
     Other,
 }
 
@@ -231,8 +233,10 @@ impl MediaKind {
             | "pptx" | "odp" | "key" | "pages" | "numbers" | "epub" => MediaKind::Document,
             "woff" | "woff2" | "ttf" | "otf" | "eot" => MediaKind::Font,
             "lottie" => MediaKind::Animation,
-            "zip" | "rar" | "7z" | "gz" | "dmg" | "exe" | "msi" | "apk" | "glb" | "gltf"
-            | "usdz" | "vtt" | "srt" => MediaKind::Other,
+            "glb" | "gltf" | "mview" => MediaKind::Model,
+            // Fichiers d'un glTF (données, textures compressées), éclairage HDR (D-160).
+            "zip" | "rar" | "7z" | "gz" | "dmg" | "exe" | "msi" | "apk" | "usdz" | "vtt"
+            | "srt" | "bin" | "ktx2" | "hdr" => MediaKind::Other,
             _ => return None,
         })
     }

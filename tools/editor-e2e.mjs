@@ -24,6 +24,8 @@ if (!ui || !bridge) {
 const mock = fs.readFileSync(new URL('../apps/revel-ui/dev/mock-tauri.js', import.meta.url), 'utf8');
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
+// Modèle 3D d'essai (D-160) : cube posé au sol, caméra « Vue », animation « Tour » (2 Ko).
+const GLB_ESSAI = 'Z2xURgIAAACECAAApAUAAEpTT057ImFzc2V0Ijp7InZlcnNpb24iOiIyLjAiLCJnZW5lcmF0b3IiOiJyZXZlbC1lc3NhaSJ9LCJzY2VuZSI6MCwic2NlbmVzIjpbeyJub2RlcyI6WzAsMV19XSwibm9kZXMiOlt7Im5hbWUiOiJDdWJlIiwibWVzaCI6MH0seyJuYW1lIjoiVnVlIiwiY2FtZXJhIjowLCJ0cmFuc2xhdGlvbiI6WzIuNSwxLjUsMi41XSwicm90YXRpb24iOlstMC4xNDY0LDAuMzUzNiwwLjA2MDcsMC45MjE3XX1dLCJjYW1lcmFzIjpbeyJuYW1lIjoiVnVlIiwidHlwZSI6InBlcnNwZWN0aXZlIiwicGVyc3BlY3RpdmUiOnsieWZvdiI6MC42LCJ6bmVhciI6MC4wMSwiYXNwZWN0UmF0aW8iOjEuNX19XSwibWVzaGVzIjpbeyJwcmltaXRpdmVzIjpbeyJhdHRyaWJ1dGVzIjp7IlBPU0lUSU9OIjowLCJOT1JNQUwiOjF9LCJpbmRpY2VzIjoyLCJtYXRlcmlhbCI6MH1dfV0sIm1hdGVyaWFscyI6W3sibmFtZSI6IlJvdWdlIiwiZG91YmxlU2lkZWQiOnRydWUsInBick1ldGFsbGljUm91Z2huZXNzIjp7ImJhc2VDb2xvckZhY3RvciI6WzAuOSwwLjIsMC4xNSwxXSwibWV0YWxsaWNGYWN0b3IiOjAuMSwicm91Z2huZXNzRmFjdG9yIjowLjV9fV0sImFjY2Vzc29ycyI6W3siYnVmZmVyVmlldyI6MCwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjI0LCJ0eXBlIjoiVkVDMyIsIm1pbiI6Wy0wLjUsMCwtMC41XSwibWF4IjpbMC41LDEsMC41XX0seyJidWZmZXJWaWV3IjoxLCJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6MjQsInR5cGUiOiJWRUMzIn0seyJidWZmZXJWaWV3IjoyLCJjb21wb25lbnRUeXBlIjo1MTIzLCJjb3VudCI6MzYsInR5cGUiOiJTQ0FMQVIifSx7ImJ1ZmZlclZpZXciOjMsImNvbXBvbmVudFR5cGUiOjUxMjYsImNvdW50IjozLCJ0eXBlIjoiU0NBTEFSIiwibWluIjpbMF0sIm1heCI6WzJdfSx7ImJ1ZmZlclZpZXciOjQsImNvbXBvbmVudFR5cGUiOjUxMjYsImNvdW50IjozLCJ0eXBlIjoiVkVDNCJ9XSwiYW5pbWF0aW9ucyI6W3sibmFtZSI6IlRvdXIiLCJzYW1wbGVycyI6W3siaW5wdXQiOjMsIm91dHB1dCI6NCwiaW50ZXJwb2xhdGlvbiI6IkxJTkVBUiJ9XSwiY2hhbm5lbHMiOlt7InNhbXBsZXIiOjAsInRhcmdldCI6eyJub2RlIjowLCJwYXRoIjoicm90YXRpb24ifX1dfV0sImJ1ZmZlcnMiOlt7ImJ5dGVMZW5ndGgiOjcwOH1dLCJidWZmZXJWaWV3cyI6W3siYnVmZmVyIjowLCJieXRlT2Zmc2V0IjowLCJieXRlTGVuZ3RoIjoyODgsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0IjoyODgsImJ5dGVMZW5ndGgiOjI4OCwidGFyZ2V0IjozNDk2Mn0seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjU3NiwiYnl0ZUxlbmd0aCI6NzIsInRhcmdldCI6MzQ5NjN9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0Ijo2NDgsImJ5dGVMZW5ndGgiOjEyfSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6NjYwLCJieXRlTGVuZ3RoIjo0OH1dfSAgxAIAAEJJTgAAAAA/AAAAAAAAAL8AAAA/AACAPwAAAL8AAAA/AACAPwAAAD8AAAA/AAAAAAAAAD8AAAC/AAAAAAAAAD8AAAC/AACAPwAAAD8AAAC/AACAPwAAAL8AAAC/AAAAAAAAAL8AAAC/AACAPwAAAD8AAAC/AACAPwAAAL8AAAA/AACAPwAAAL8AAAA/AACAPwAAAD8AAAC/AAAAAAAAAL8AAAC/AAAAAAAAAD8AAAA/AAAAAAAAAD8AAAA/AAAAAAAAAL8AAAA/AAAAAAAAAD8AAAA/AACAPwAAAD8AAAC/AACAPwAAAD8AAAC/AAAAAAAAAD8AAAC/AAAAAAAAAL8AAAC/AACAPwAAAL8AAAA/AACAPwAAAL8AAAA/AAAAAAAAAL8AAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAEAAgAAAAIAAwAEAAUABgAEAAYABwAIAAkACgAIAAoACwAMAA0ADgAMAA4ADwAQABEAEgAQABIAEwAUABUAFgAUABYAFwAAAAAAAACAPwAAAEAAAAAAAAAAAAAAAAAAAIA/AAAAAPMENT8AAAAA8wQ1PwAAAAAAAIA/AAAAADIxjSQ=';
 const results = [];
 // Premier écart entre deux textes (message d'un essai qui compare des documents).
 const diffHint = (a, b) => {
@@ -1424,6 +1426,94 @@ try {
       await page.locator('.styles label.field:has(> .label:text-is("Lecture")) select').selectOption('hover');
       const hover = await untilE(async () => (await frame.locator('[data-revel-base="lottie"][data-lottie-play="hover"]').count()) === 1);
       check('éléments : animation Lottie ajoutée, lecture au survol', lottieIn && hover);
+      // Modèle 3D (D-160) : élément fermé, repère vide, fichier choisi et rendu dans le canevas,
+      // animation du fichier proposée, caméra chiffrée puis réglée au glisser, boutons des vues.
+      const glbPath = siteDir ? path.join(siteDir, 'src/media/essai-3d.glb') : null;
+      if (glbPath) {
+        fs.writeFileSync(glbPath, Buffer.from(GLB_ESSAI, 'base64'));
+        await addIn('model');
+        const modelIn = await untilE(async () => (await frame.locator('[data-revel-base="model"][data-revel-widget] [data-model-do="reset"]').count()) === 1);
+        const modelEmpty = await untilE(async () => (await frame.locator('[data-revel-base="model"][data-rv-empty="model"]').count()) === 1);
+        await page.click('.dock-tab[data-panel="styles"]');
+        await page.waitForSelector('[data-model-settings] input[data-model-file="data-model"]');
+        await page.click('[data-model-settings] input[data-model-file="data-model"]');
+        await page.waitForSelector('.picker .asset[data-url$="essai-3d.glb"]');
+        await page.click('.picker .asset[data-url$="essai-3d.glb"]');
+        // Chargé à l'approche de l'écran : l'élément est amené à l'écran.
+        await frame.locator('[data-revel-base="model"]').first().scrollIntoViewIfNeeded().catch(() => {});
+        const loaded = await untilE(async () => (await frame.locator('[data-revel-base="model"][data-model-state="ready"] > canvas[data-rv-live]').count()) === 1, 30000);
+        const modelState = await frame.locator('[data-revel-base="model"]').first().evaluate((el) =>
+          `${el.getAttribute('data-model')} ${el.getAttribute('data-model-state')} ${!!window.RevelModel}`).catch((e) => e.message);
+        check('modèle 3D : ajouté fermé, repère vide, fichier rendu dans le canevas', modelIn && modelEmpty && loaded,
+          `${modelIn} ${modelEmpty} ${modelState}`);
+        if (!loaded) throw new Error('modèle 3D non chargé');
+        const anim = await untilE(async () => (await page.locator('select[data-model-select="data-model-animation"] option[value="Tour"]').count()) === 1, 15000);
+        const cam = await untilE(async () => (await page.locator('select[data-model-select="data-model-camera"] option[value="Vue"]').count()) === 1);
+        if (anim) await page.selectOption('select[data-model-select="data-model-animation"]', 'Tour');
+        const animSet = await untilE(async () => (await frame.locator('[data-revel-base="model"][data-model-animation="Tour"]').count()) === 1);
+        check('modèle 3D : animations et caméras du fichier proposées', anim && cam && animSet);
+        const view = () => frame.locator('[data-revel-base="model"]').evaluate((el) => window.RevelModel.view(el));
+        await page.fill('[data-model-field="data-model-yaw"] .nbox-input', '45');
+        await page.press('[data-model-field="data-model-yaw"] .nbox-input', 'Enter');
+        const yawSet = await untilE(async () => (await frame.locator('[data-revel-base="model"][data-model-yaw="45"]').count()) === 1
+          && Math.abs(((await view()) || {}).yaw - 45) <= 1);
+        // Tourner dans le canevas : glisser fait tourner le modèle (l'élément ne bouge pas),
+        // « Prendre la vue » écrit l'angle.
+        await page.click('[data-action="model-orbit"]');
+        const mb = await frame.locator('[data-revel-base="model"] > canvas[data-rv-live]').boundingBox();
+        const mx = mb.x + mb.width / 2;
+        const my = mb.y + mb.height / 3;
+        await frame.locator('[data-revel-base="model"]').first().evaluate((el) => {
+          const c = el.querySelector(':scope > canvas[data-rv-live]');
+          window.__rvDbg = { down: 0, move: 0, start: 0, prevented: 0 };
+          c.addEventListener('pointerdown', (e) => { window.__rvDbg.down++; if (e.defaultPrevented) window.__rvDbg.prevented++; });
+          c.addEventListener('pointermove', () => { window.__rvDbg.move++; });
+          el.__rvModel.controls.addEventListener('start', () => { window.__rvDbg.start++; });
+        });
+        await page.mouse.move(mx, my);
+        await page.mouse.down();
+        await page.mouse.move(mx + 160, my, { steps: 10 });
+        await page.mouse.up();
+        await page.waitForTimeout(700);
+        const orbitDbg = await frame.locator('[data-revel-base="model"]').first().evaluate((el) => {
+          const v = el.__rvModel;
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 3);
+          return JSON.stringify({ dbg: window.__rvDbg, on: v && v.orbiting, en: v && v.controls && v.controls.enabled, view: window.RevelModel.view(el),
+            hit: hit ? hit.tagName + (hit.hasAttribute('data-rv-live') ? '*' : '') : null });
+        }).catch((e) => e.message);
+        await page.click('[data-action="model-take"]');
+        const taken = await untilE(async () => {
+          const y = await frame.locator('[data-revel-base="model"]').getAttribute('data-model-yaw');
+          return y !== null && y !== '45';
+        });
+        const notMoved = (await frame.locator('section.intro-agency [data-revel-base="model"]').count()) === 1;
+        await page.click('[data-action="model-orbit"]');
+        check('modèle 3D : caméra chiffrée, réglée au glisser puis prise', yawSet && taken && notMoved,
+          `${await frame.locator('[data-revel-base="model"]').getAttribute('data-model-yaw')} ${orbitDbg}`);
+        await page.check('input[data-model-button="views"]');
+        const views = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-revel-part="views"] [data-model-do^="view:"]').count()) === 6);
+        await page.selectOption('select[data-model-select="data-model-view"]', 'normals');
+        const normals = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-model-do="view:normals"].is-active').count()) === 1);
+        check('modèle 3D : boutons des vues ajoutés, vue « Normales » montrée', views && normals);
+        if (shots) await frame.locator('[data-revel-base="model"]').screenshot({ path: `${shots}/editeur-modele-3d.png` });
+        if (shots) {
+          // Réglages du modèle dans les deux thèmes : colonne du panneau, en haut des réglages
+          // puis sur le rendu.
+          const col = page.locator('.dock-col:has([data-model-settings])');
+          for (const theme of ['dark', 'light']) {
+            await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
+            await page.locator('[data-model-settings]').evaluate((e) => e.scrollIntoView({ block: 'start' }));
+            await page.waitForTimeout(200);
+            await col.screenshot({ path: `${shots}/editeur-modele-3d-reglages-${theme}-1.png` });
+            await page.locator('[data-model-field="data-model-exposure"]').evaluate((e) => e.scrollIntoView({ block: 'start' }));
+            await page.waitForTimeout(200);
+            await col.screenshot({ path: `${shots}/editeur-modele-3d-reglages-${theme}-2.png` });
+          }
+          await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+        }
+        fs.rmSync(glbPath, { force: true });
+      }
       // Média au survol (D-99) : liste de collection et média ajoutés ; le média piloté par la
       // liste choisie comme source ; éléments survolés listés et sélectionnables.
       await addIn('collection-list');

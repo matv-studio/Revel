@@ -9,7 +9,33 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 04/11/2026 : 3D, étape 1 (D-160)
+- Visualiseur de modèles 3D (GLB, glTF) : élément `data-revel-base="model"` (préréglage `model`, panneau
+  Ajouter › Médias), fermé, avec ses boutons en parties (`data-model-do`). Lecteur
+  `crates/revel-render/src/model.js` (source commentée, servie sans commentaires), moteur three.js 0.186.1
+  assemblé par `tools/three/` (`npm ci && node build.mjs`, esbuild, `import.meta.url` remplacé par
+  `location.href`), rangé dans `crates/revel-render/vendor/three/` avec les décodeurs Draco et Basis et les
+  licences. Fichiers du site : `/assets/revel-model.js`, `/assets/revel-3d/…` (seulement si une page a un
+  modèle), servis aussi par le canevas (`revel_render::model::file`).
+- Réglages (`apps/revel-ui/src/model3d.rs`) : fichier, image d'attente, caméra chiffrée ou réglée au glisser
+  dans le canevas (« Tourner » puis « Prendre la vue » : messages `model-orbit`, `model-view` → `model_view`),
+  caméra du fichier, interaction, déplacement, rotation automatique, éclairage (studio, simple, HDR),
+  exposition, ombre, fond, vue, animation du fichier (noms relevés par le canevas : `model_info`), boutons
+  (`revel_edit::make::model_button_command`, annulable).
+- Scène Marmoset `data-mview` (préréglage `mview`) : lecteur officiel chargé depuis viewer.marmoset.co,
+  `/assets/revel-mview.js` ; non essayé ici (réseau bloqué), essai à faire sur le PC.
+- Nouveau type de média `Model` (`.glb`, `.gltf`, `.mview`) ; `.bin`, `.ktx2`, `.hdr` importables (Autres).
+  Adresses `data-model`, `data-lottie`, `data-mview`… préfixées sous un sous-dossier (`rebase.rs`).
+- Pièges : un signal partagé par module doit être un `ArcRwSignal` (un `RwSignal` créé dans une vue est
+  libéré avec elle : panique « reactive value … disposed ») ; `enableZoom` d'OrbitControls doit être un vrai
+  booléen (`undefined` y vaut « permis ») ; vider l'élan amorti avant de poser une vue (`enableDamping` coupé
+  le temps d'un `update`) ; un modèle ajouté sans fichier démarre son lecteur quand le fichier arrive
+  (`boot`). Canevas : nœuds `data-rv-live` gardés par la mise à jour sur place, états `data-model-state`
+  gardés, glisser d'élément coupé dans un modèle en mode « Tourner ».
+
 ## Version 0.7.3 (04/11/2026)
+Brouillon créé le 04/11 (id 433870719, étiquette `v0.7.3` sur `329479e`, 17 fichiers), à publier par
+l'utilisateur. CI : essai d'équivalence (capture de l'accueil à 860 px) en échec une fois, réussi à la relance.
 Contenu : D-159 (éléments ajoutés simples, panneau Styles allégé) et son complément : la première valeur
 réglée sur un élément sans classe crée une classe comme Webflow, nommée d'après la nature de l'élément
 ajouté, et reprend un nom laissé sans élément ni réglage au lieu de le numéroter (`styles::new_class`). Essais :

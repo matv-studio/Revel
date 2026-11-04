@@ -46,7 +46,7 @@ pub fn pick(accept: &str, multiple: bool, on: impl Fn(Vec<web_sys::File>) + 'sta
 }
 
 /// Types de fichiers acceptés pour les médias.
-pub const MEDIA_ACCEPT: &str = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.woff,.woff2,.ttf,.otf,.lottie,.json,.zip";
+pub const MEDIA_ACCEPT: &str = "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.woff,.woff2,.ttf,.otf,.lottie,.json,.zip,.glb,.gltf,.bin,.ktx2,.hdr,.mview";
 
 /// Dossiers d'un dépôt de fichiers du système (noms) : entrées du glisser-déposer qui sont des
 /// dossiers (`webkitGetAsEntry`, aussi lu par WebView2, WebKit et Chromium).

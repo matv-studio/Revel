@@ -117,6 +117,13 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         if attr(attrs, "data-lottie").is_some() {
             parts.push(lottie_options(ui, ed, at.clone(), attrs.clone()));
         }
+        // Modèle 3D et scène Marmoset (D-160).
+        if let Some(v) = crate::model3d::settings(ui, ed, &at, &node) {
+            parts.push(v);
+        }
+        if let Some(v) = crate::model3d::mview_settings(ui, ed, &at, &node) {
+            parts.push(v);
+        }
         if let Some(v) = attr(attrs, "data-revel-video") {
             parts.push(video_player_options(
                 ui,

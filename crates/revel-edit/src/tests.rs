@@ -1464,6 +1464,116 @@ fn elements_avec_leurs_styles() {
 }
 
 #[test]
+fn modele_3d_ferme_avec_ses_boutons() {
+    // D-160 : modèle 3D fermé, boutons en parties (recadrer, plein écran), aucune classe.
+    let s = sample();
+    let n = make::Preset::Model.node(&s, "Recadrer|Plein écran");
+    let body = serde_json::to_string(&n).unwrap();
+    for want in [
+        "\"data-revel-base\",\"value\":\"model\"",
+        "\"data-revel-widget\"",
+        "\"data-revel-part\",\"value\":\"controls\"",
+        "\"data-revel-part\",\"value\":\"button\"",
+        "\"data-model-do\",\"value\":\"reset\"",
+        "\"data-model-do\",\"value\":\"fullscreen\"",
+        "\"aria-label\",\"value\":\"Plein écran\"",
+    ] {
+        assert!(body.contains(want), "{want}\n{body}");
+    }
+    assert!(!body.contains("modele-3d"), "{body}");
+    assert_eq!(
+        body.matches("\"data-revel-part\",\"value\":\"button\"")
+            .count(),
+        2
+    );
+    let m = make::Preset::Mview.node(&s, "");
+    let body = serde_json::to_string(&m).unwrap();
+    assert!(
+        body.contains("\"data-revel-base\",\"value\":\"mview\""),
+        "{body}"
+    );
+    assert!(!body.contains("data-revel-widget"), "{body}");
+    // Bouton ajouté depuis les réglages : même forme.
+    let b = make::model_button("view:normals", "Normales", [None, None, None]);
+    let body = serde_json::to_string(&b).unwrap();
+    assert!(body.contains("Normales") && !body.contains("svg"), "{body}");
+}
+
+#[test]
+fn boutons_du_modele_3d() {
+    // D-160 : boutons ajoutés et retirés depuis les réglages, annulables.
+    let mut s = sample();
+    let parent = Parent::of(&at(&s, "main"), Branch::Children);
+    apply(
+        &mut s,
+        &Command::InsertPreset {
+            parent,
+            index: 0,
+            preset: make::Preset::Model,
+            text: "Recadrer|Plein écran".into(),
+        },
+    )
+    .unwrap();
+    let id = match &s.pages[0].body[0] {
+        revel_model::Node::Element { children, .. } => match &children[0] {
+            revel_model::Node::Element { id, .. } => id.clone().unwrap(),
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+    let model = Target {
+        owner: Owner::Page(s.pages[0].id.clone()),
+        node: id,
+    };
+    let node = |s: &revel_model::Site| crate::address::node(s, &model).unwrap().clone();
+    assert!(make::model_has_button(&node(&s), "reset"));
+    assert!(!make::model_has_button(&node(&s), "rotate"));
+    let before = json(&s);
+    let c = make::model_button_command(&s, &model, "rotate", &["Rotation".into()], true)
+        .unwrap()
+        .unwrap();
+    let inv = apply(&mut s, &c).unwrap();
+    assert!(make::model_has_button(&node(&s), "rotate"));
+    assert!(
+        make::model_button_command(&s, &model, "rotate", &[], true)
+            .unwrap()
+            .is_none()
+    );
+    let labels: Vec<String> = [
+        "Rendu",
+        "Couleur",
+        "Normales",
+        "Rugosité",
+        "Métal",
+        "Filaire",
+    ]
+    .map(String::from)
+    .to_vec();
+    let v = make::model_button_command(&s, &model, "views", &labels, true)
+        .unwrap()
+        .unwrap();
+    apply(&mut s, &v).unwrap();
+    let body = serde_json::to_string(&node(&s)).unwrap();
+    assert!(
+        body.contains("view:roughness") && body.contains("Rugosité"),
+        "{body}"
+    );
+    let off = make::model_button_command(&s, &model, "views", &[], false)
+        .unwrap()
+        .unwrap();
+    apply(&mut s, &off).unwrap();
+    assert!(!make::model_has_button(&node(&s), "views"));
+    let rm = make::model_button_command(&s, &model, "rotate", &[], false)
+        .unwrap()
+        .unwrap();
+    apply(&mut s, &rm).unwrap();
+    assert_eq!(json(&s), before);
+    apply(&mut s, &c).unwrap();
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+}
+
+#[test]
 fn blocs_prets_a_l_emploi() {
     let mut s = sample();
     let before = json(&s);

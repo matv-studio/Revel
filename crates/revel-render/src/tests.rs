@@ -787,6 +787,48 @@ fn lottie_interactions_et_transitions() {
 }
 
 #[test]
+fn modele_3d_et_scene_marmoset() {
+    // D-160 : lecteur, moteur et décodeurs produits une fois ; styles de Revel de l'élément.
+    let mut s = site();
+    s.pages[0].body.extend(parse(
+        r#"<div data-revel-base="model" data-model="/media/a.glb" data-model-shadow="0.5"></div><div data-revel-base="mview" data-mview="/media/b.mview"></div>"#,
+    ));
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains("<script src=\"/assets/revel-model.js\" defer>"),
+        "{home}"
+    );
+    assert!(
+        home.contains("<script src=\"/assets/revel-mview.js\" defer>"),
+        "{home}"
+    );
+    assert!(
+        home.contains(":where([data-revel-base=\"model\"])"),
+        "{home}"
+    );
+    for f in [
+        "assets/revel-model.js",
+        "assets/revel-3d/three.js",
+        "assets/revel-3d/draco_decoder.wasm",
+        "assets/revel-3d/basis_transcoder.js",
+        "assets/revel-3d/LICENSE",
+        "assets/revel-mview.js",
+    ] {
+        assert!(out.files.iter().any(|x| x.path == f), "{f}");
+    }
+    // Sous un dossier (GitHub Pages d'un dépôt) : adresse du fichier préfixée.
+    let html = crate::rebase::rebase_html(home, "/depot");
+    assert!(html.contains("data-model=\"/depot/media/a.glb\""), "{html}");
+    let out = build(&input(&site(), vec![])).unwrap();
+    assert!(
+        !out.files
+            .iter()
+            .any(|x| x.path.contains("revel-3d") || x.path.contains("revel-mview"))
+    );
+}
+
+#[test]
 fn dates_en_toutes_lettres() {
     use chrono::TimeZone;
     let d = chrono::Utc.with_ymd_and_hms(2026, 10, 16, 0, 0, 0).unwrap();

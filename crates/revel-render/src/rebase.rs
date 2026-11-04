@@ -12,7 +12,7 @@ use std::sync::LazyLock;
 /// Attributs contenant une seule adresse.
 static ATTR: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)(\s(?:href|src|action|poster|formaction|data-src|data-href|data-poster)\s*=\s*)(["'])/([^/"'][^"']*|)(["'])"#,
+        r#"(?i)(\s(?:href|src|action|poster|formaction|data-src|data-href|data-poster|data-lottie|data-model|data-model-poster|data-model-env|data-mview|data-mview-thumbnail)\s*=\s*)(["'])/([^/"'][^"']*|)(["'])"#,
     )
     .expect("expression valide")
 });

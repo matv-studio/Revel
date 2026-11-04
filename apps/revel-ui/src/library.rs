@@ -530,13 +530,14 @@ impl MediaSort {
     }
 }
 
-const KINDS: [MediaKind; 7] = [
+const KINDS: [MediaKind; 8] = [
     MediaKind::Image,
     MediaKind::Video,
     MediaKind::Audio,
     MediaKind::Document,
     MediaKind::Font,
     MediaKind::Animation,
+    MediaKind::Model,
     MediaKind::Other,
 ];
 
@@ -548,6 +549,7 @@ fn kind_id(k: MediaKind) -> &'static str {
         MediaKind::Document => "document",
         MediaKind::Font => "font",
         MediaKind::Animation => "animation",
+        MediaKind::Model => "model",
         MediaKind::Other => "other",
     }
 }
@@ -560,6 +562,7 @@ fn kind_icon(k: MediaKind) -> AnyView {
         MediaKind::Document => icons::file(),
         MediaKind::Font => icons::font(),
         MediaKind::Animation => icons::play(),
+        MediaKind::Model => icons::cube(),
         MediaKind::Other => icons::box_(),
     }
 }
@@ -953,6 +956,7 @@ pub fn Media() -> impl IntoView {
                                 MediaKind::Document => "media-kind-document",
                                 MediaKind::Font => "media-kind-font",
                                 MediaKind::Animation => "media-kind-animation",
+                                MediaKind::Model => "media-kind-model",
                                 MediaKind::Other => "media-kind-other",
                             })}</option>
                         }).collect_view()}
@@ -1545,6 +1549,8 @@ pub fn MediaPicker() -> impl IntoView {
                 "image/*"
             } else if only == Some(MediaKind::Animation) {
                 ".json,.lottie"
+            } else if only == Some(MediaKind::Model) {
+                ".glb,.gltf,.bin,.ktx2,.mview"
             } else {
                 crate::files::MEDIA_ACCEPT
             };

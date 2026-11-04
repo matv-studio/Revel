@@ -113,6 +113,19 @@ enum FromCanvas {
         #[serde(default)]
         reset: Option<String>,
     },
+    /// Modèle 3D chargé (D-160) : animations et caméras du fichier.
+    ModelInfo {
+        id: String,
+        #[serde(default)]
+        animations: Vec<String>,
+        #[serde(default)]
+        cameras: Vec<String>,
+    },
+    /// Vue actuelle d'un modèle 3D (« Prendre la vue actuelle »).
+    ModelView {
+        id: String,
+        view: crate::model3d::View,
+    },
     /// Espacements réglés sur le canevas (propriété -> valeur, `None` : retirée).
     Spacing {
         id: String,
@@ -623,6 +636,8 @@ impl Ed {
                     | "scroll"
                     | "spacing"
                     | "animate"
+                    | "model-orbit"
+                    | "model-view"
             )
         );
         if only_active {
@@ -3179,6 +3194,12 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 height,
                 reset,
             } => ed.resize(ui, &id, width, height, reset),
+            FromCanvas::ModelInfo {
+                id,
+                animations,
+                cameras,
+            } => crate::model3d::on_info(id, animations, cameras),
+            FromCanvas::ModelView { id, view } => crate::model3d::on_view(ui, ed, id, view),
             FromCanvas::Spacing { id, values } => {
                 if let Some(at) = ed.selected_target().filter(|t| t.node == id)
                     && let Some(node) = ed.doc.with_untracked(|d| {

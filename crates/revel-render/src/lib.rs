@@ -24,6 +24,7 @@ mod head;
 mod html;
 pub mod lottie;
 pub mod masonry;
+pub mod model;
 pub mod more;
 pub mod pixels;
 pub mod rebase;
@@ -318,6 +319,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     forms::handler_file(site, forms, &mut files, &mut warnings);
     animations::script_file(used.animations, &mut files);
     lottie::script_file(used.lottie, &mut files);
+    model::script_files(used.model, &mut files);
     actions::script_file(used.actions, &mut files);
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(BuildOutput { files, warnings })
@@ -528,6 +530,7 @@ pub(crate) fn feeds(
 struct Scripts {
     animations: bool,
     lottie: bool,
+    model: model::Used,
     actions: bool,
 }
 
@@ -564,6 +567,9 @@ fn build_pages(
             used.animations |= a;
             let (html, l) = lottie::wire(html);
             used.lottie |= l;
+            let (html, m) = model::wire(html);
+            used.model.model |= m.model;
+            used.model.mview |= m.mview;
             let (html, i) = actions::wire(html, scripts);
             used.actions |= i;
             let html = transitions::wire(
@@ -1648,10 +1654,11 @@ fn editor_page(
     let mut warnings = Vec::new();
     let html = b.render_job(&prepared.globals, job, DocKind::Html, &mut warnings)?;
     let html = finish_html(&b, input.site, job, html);
-    // Scripts du site : animations Lottie aussi dans le canevas (elles s'y voient) ; animations,
-    // interactions et transitions dans l'aperçu seulement (`scripts`).
+    // Scripts du site : animations Lottie et modèles 3D aussi dans le canevas (ils s'y voient) ;
+    // animations, interactions et transitions dans l'aperçu seulement (`scripts`).
     let (html, _) = animations::wire(html, opts.scripts);
     let (html, _) = lottie::wire(html);
+    let (html, _) = model::wire(html);
     let (html, _) = actions::wire(html, opts.scripts);
     let html = transitions::wire(
         html,

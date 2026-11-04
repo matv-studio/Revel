@@ -128,6 +128,9 @@ fn content_type(path: &str) -> &'static str {
         "pdf" => "application/pdf",
         "xml" => "application/xml",
         "txt" => "text/plain; charset=utf-8",
+        "glb" => "model/gltf-binary",
+        "gltf" => "model/gltf+json",
+        "wasm" => "application/wasm",
         _ => "application/octet-stream",
     }
 }
@@ -608,6 +611,19 @@ impl Core {
                 "text/javascript; charset=utf-8",
                 revel_render::lottie::script().into_bytes(),
             )));
+        }
+        // Modèles 3D et scènes Marmoset (D-160) : lecteurs, moteur et décodeurs.
+        if path.starts_with("/assets/revel-")
+            && let Some(bytes) = revel_render::model::file(path)
+        {
+            let ty = if path.ends_with(".wasm") {
+                "application/wasm"
+            } else if path.ends_with(".js") {
+                "text/javascript; charset=utf-8"
+            } else {
+                "text/plain; charset=utf-8"
+            };
+            return Ok(Some(CanvasResponse::ok(ty, bytes)));
         }
         let (site, pipeline, opts, environment) = {
             let slot = if preview { &self.preview } else { &self.canvas };

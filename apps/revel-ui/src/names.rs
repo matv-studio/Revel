@@ -162,6 +162,8 @@ const BASE_NAMES: &[(&str, &str)] = &[
     ("slideshow", "insert-slideshow"),
     ("navbar", "insert-navbar"),
     ("locales", "insert-locale-switch"),
+    ("model", "insert-model"),
+    ("mview", "insert-mview"),
 ];
 
 /// Classes d'un élément pour son nom : sans classe, sa nature (`@switch`) s'il en a une.

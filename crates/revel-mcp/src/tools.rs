@@ -118,7 +118,16 @@ Animations: `data-revel-appear|text|hover|press|loop|scroll|active` (e.g. `data-
 `data-revel-active=\"pop\"` plays when its tab, filter or switch becomes active), \
 `data-revel-loop=\"ticker speed=60 pause\"`). Draggable element (mouse or finger): `data-revel-drag` with options \
 `axis=x|y`, `bounds` (stays in its container), `momentum` (keeps moving once released), `collide` (draggable \
-elements of the same container push each other). Lottie: `data-lottie=\"/media/x.json\"` with `data-lottie-play`.\n\
+elements of the same container push each other). Lottie: `data-lottie=\"/media/x.json\"` with `data-lottie-play`. \
+3D model (preset `model`, GLB/glTF, three.js hosted with the site): `data-model=\"/media/x.glb\"`, camera \
+`data-model-yaw|pitch` (degrees), `data-model-zoom` (100 = whole model framed on every screen size), \
+`data-model-target=\"x y z\"` (% of radius), `data-model-fov`, `data-model-camera` (camera of the file), \
+`data-model-controls=\"none\"`, `data-model-pan`, `data-model-rotate` (deg/s), `data-model-env` (studio, none, \
+/media/x.hdr), `data-model-exposure`, `data-model-shadow` (0-1), `data-model-backdrop` (blur 0-1), \
+`data-model-view` (render|albedo|normals|roughness|metalness|wireframe), `data-model-animation`, \
+`data-model-loop`, `data-model-speed`, `data-model-poster`; buttons inside: `data-model-do=\"reset|fullscreen|\
+rotate|play|view:normals\"`. Marmoset scene (preset `mview`): `data-mview=\"/media/x.mview\"`, \
+`data-mview-autostart|transparent|noui`, `data-mview-thumbnail`.\n\
 - Page settings (title, description, share image, body class, theme, share type, publication date) and site settings (site name, \
 icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`. Redirections \
 (old address, with or without `?parameters`, to a new one) are a site setting: `apply_commands` with \
@@ -335,7 +344,8 @@ pub struct InsertPresetArg {
     /// list, grid, columns, rich_text, video, icon, embed, lottie, tabs, accordion,
     /// collection_list, locale_switch, navbar, ticker, carousel, slideshow, block_hero,
     /// block_features, block_text_image, block_cta, block_testimonial, block_faq, block_contact,
-    /// block_form, video_player, list_filters, consent, switch, theme_switch, scroll_progress.
+    /// block_form, video_player, list_filters, consent, switch, theme_switch, scroll_progress,
+    /// model (3D, GLB/glTF), mview (Marmoset scene).
     /// Added elements carry no class: Revel's own look (`data-revel-base`, zero specificity)
     /// until classes are added. Built elements (switch, video_player, tabs, carousel…) are closed
     /// (`data-revel-widget`): one layer, parts marked `data-revel-part`, set from the element;
@@ -343,7 +353,7 @@ pub struct InsertPresetArg {
     pub preset: String,
     /// Default text of the new element (site's language). navbar: "Brand|Menu|Link 1|Link 2|…";
     /// carousel/slideshow: "Slide|Previous|Next"; switch: "Label|On|Off";
-    /// theme_switch: "Theme|Dark|Light"; icon: icon name
+    /// theme_switch: "Theme|Dark|Light"; model: "Reset view|Full screen"; icon: icon name
     /// (fleche-droite, chevron-droite, plus, croix, coche, menu, etoile, coeur…).
     #[serde(default)]
     pub text: Option<String>,

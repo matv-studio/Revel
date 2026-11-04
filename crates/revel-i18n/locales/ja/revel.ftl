@@ -630,6 +630,7 @@ settings-author-placeholder = 姓 名
 error-github-signed-out = GitHubアカウントが接続されていないか、接続の有効期限が切れています。GitHubに接続してから、もう一度お試しください。
 error-github-repo = GitHubリポジトリ「{ $repo }」が見つかりません。名前（オーナー/リポジトリ）と、接続中のアカウントにアクセス権があるかを確認してください。
 error-github-no-push = 接続中のGitHubアカウントには、リポジトリ{ $repo }への書き込み権限がありません。
+error-github-pages = サイトは { $branch } ブランチに送信されましたが、GitHub が GitHub Pages を有効にしませんでした（エラー { $status }：{ $detail }）。もう一度公開するか、リポジトリの設定でこのブランチから GitHub Pages を有効にしてください：{ $url }
 error-github-cancelled = GitHubへの接続がキャンセルされました。
 error-github-code-expired = コードが入力される前に有効期限が切れました。もう一度接続を開始してください。
 error-github-denied = github.comで承認が拒否されました。

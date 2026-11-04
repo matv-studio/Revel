@@ -638,6 +638,7 @@ settings-author-placeholder = Имя Фамилия
 error-github-signed-out = Аккаунт GitHub не подключён, или подключение истекло. Подключитесь к GitHub и повторите попытку.
 error-github-repo = Репозиторий GitHub не найден: «{ $repo }». Проверьте название (владелец/репозиторий) и то, что у подключённого аккаунта есть к нему доступ.
 error-github-no-push = У подключённого аккаунта GitHub нет прав на запись в репозиторий { $repo }.
+error-github-pages = Сайт отправлен в ветку { $branch }, но GitHub не включил GitHub Pages (ошибка { $status }: { $detail }). Опубликуйте ещё раз или включите GitHub Pages из этой ветки в настройках репозитория: { $url }
 error-github-cancelled = Подключение к GitHub отменено.
 error-github-code-expired = Срок действия кода истёк до того, как его ввели. Начните подключение заново.
 error-github-denied = Доступ отклонён на github.com.

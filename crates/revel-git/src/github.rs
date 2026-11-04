@@ -35,6 +35,12 @@ pub fn override_api(base: Option<String>) {
     API_OVERRIDE.with(|o| *o.borrow_mut() = base);
 }
 
+/// Attente avant le nouvel essai d'activation de GitHub Pages (erreur 5xx).
+#[cfg(not(test))]
+const PAGES_RETRY: std::time::Duration = std::time::Duration::from_secs(3);
+#[cfg(test)]
+const PAGES_RETRY: std::time::Duration = std::time::Duration::from_millis(10);
+
 fn api() -> String {
     API_OVERRIDE
         .with(|o| o.borrow().clone())
@@ -400,6 +406,45 @@ impl Client {
         }
     }
 
+    /// GitHub Pages servi depuis `branch` (racine), avec le domaine `cname` : activé s'il ne l'est
+    /// pas (une erreur passagère de GitHub, 5xx, est suivie d'une relecture puis d'un nouvel essai,
+    /// une fois), source et domaine mis à jour sinon. Rend (activé ici, adresse du site).
+    pub fn ensure_pages(
+        &self,
+        full_name: &str,
+        branch: &str,
+        cname: Option<&str>,
+    ) -> Result<(bool, Option<String>), GitError> {
+        match self.pages(full_name)? {
+            None => {
+                let p = match self.enable_pages(full_name, branch) {
+                    Err(GitError::Api(st, _)) if st >= 500 => {
+                        std::thread::sleep(PAGES_RETRY);
+                        match self.pages(full_name)? {
+                            Some(p) => p,
+                            None => self.enable_pages(full_name, branch)?,
+                        }
+                    }
+                    r => r?,
+                };
+                if cname.is_some() {
+                    self.update_pages(full_name, branch, cname)?;
+                }
+                Ok((true, p.html_url))
+            }
+            Some(p) => {
+                let same_source = p
+                    .source
+                    .as_ref()
+                    .is_some_and(|s| s.branch == branch && s.path == "/");
+                if !same_source || p.cname.as_deref() != cname {
+                    self.update_pages(full_name, branch, cname)?;
+                }
+                Ok((false, p.html_url))
+            }
+        }
+    }
+
     /// Met à jour la source et le domaine personnalisé.
     pub fn update_pages(
         &self,
@@ -569,6 +614,89 @@ pub fn default_pages_url(owner: &str, repo: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// GitHub Pages : une erreur 500 vide à l'activation est suivie d'un nouvel essai qui
+    /// réussit ; une seconde erreur remonte avec son statut.
+    #[test]
+    fn pages_reessai_apres_erreur_500() {
+        use std::io::{Read, Write};
+        use std::sync::{Arc, Mutex};
+        let calls = Arc::new(Mutex::new(Vec::<String>::new()));
+        let fail_twice = Arc::new(Mutex::new(false));
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", l.local_addr().unwrap());
+        {
+            let (calls, fail_twice) = (calls.clone(), fail_twice.clone());
+            std::thread::spawn(move || {
+                let mut posts = 0;
+                for stream in l.incoming() {
+                    let mut stream = stream.unwrap();
+                    // Requête entière (en-têtes puis corps) lue avant de répondre.
+                    let mut data = Vec::new();
+                    let mut buf = [0u8; 4096];
+                    loop {
+                        let n = stream.read(&mut buf).unwrap_or(0);
+                        if n == 0 {
+                            break;
+                        }
+                        data.extend_from_slice(&buf[..n]);
+                        let text = String::from_utf8_lossy(&data).to_string();
+                        if let Some(h) = text.find("\r\n\r\n") {
+                            let len = text[..h]
+                                .lines()
+                                .find_map(|l| {
+                                    let l = l.to_ascii_lowercase();
+                                    l.strip_prefix("content-length:")
+                                        .and_then(|v| v.trim().parse::<usize>().ok())
+                                })
+                                .unwrap_or(0);
+                            if data.len() >= h + 4 + len {
+                                break;
+                            }
+                        }
+                    }
+                    let req = String::from_utf8_lossy(&data).to_string();
+                    let line = req.lines().next().unwrap_or("").to_string();
+                    calls.lock().unwrap().push(line.clone());
+                    let (status, body) = if line.starts_with("GET /repos/a/b/pages") {
+                        (404, "{\"message\":\"Not Found\"}".to_string())
+                    } else if line.starts_with("POST /repos/a/b/pages") {
+                        posts += 1;
+                        if posts == 1 || *fail_twice.lock().unwrap() {
+                            (500, String::new())
+                        } else {
+                            (201, "{\"html_url\":\"https://a.github.io/b/\"}".to_string())
+                        }
+                    } else {
+                        (404, "{}".to_string())
+                    };
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                }
+            });
+        }
+        override_api(Some(base));
+        let c = Client::new("essai");
+        let (enabled, url) = c.ensure_pages("a/b", "gh-pages", None).unwrap();
+        assert!(enabled);
+        assert_eq!(url.as_deref(), Some("https://a.github.io/b/"));
+        let posts = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| l.starts_with("POST"))
+            .count();
+        assert_eq!(posts, 2, "{:?}", calls.lock().unwrap());
+        *fail_twice.lock().unwrap() = true;
+        match c.ensure_pages("a/b", "gh-pages", None) {
+            Err(GitError::Api(500, _)) => {}
+            other => panic!("{other:?}"),
+        }
+        override_api(None);
+    }
 
     #[test]
     fn depot_d_une_adresse() {

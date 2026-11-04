@@ -630,6 +630,7 @@ settings-author-placeholder = 성 이름
 error-github-signed-out = 연결된 GitHub 계정이 없거나 연결이 만료되었습니다. GitHub에 연결한 후 다시 시도하세요.
 error-github-repo = GitHub 저장소를 찾을 수 없습니다: “{ $repo }”. 이름(owner/repository)과, 연결된 계정이 접근할 수 있는지 확인하세요.
 error-github-no-push = 연결된 GitHub 계정에는 { $repo } 저장소에 쓸 권한이 없습니다.
+error-github-pages = 사이트를 { $branch } 브랜치로 보냈지만 GitHub가 GitHub Pages를 켜지 않았습니다(오류 { $status }: { $detail }). 다시 게시하거나 저장소 설정에서 이 브랜치로 GitHub Pages를 켜세요: { $url }
 error-github-cancelled = GitHub 연결이 취소되었습니다.
 error-github-code-expired = 코드를 입력하기 전에 만료되었습니다. 연결을 처음부터 다시 시작하세요.
 error-github-denied = github.com에서 승인이 거부되었습니다.

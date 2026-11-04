@@ -630,6 +630,7 @@ settings-author-placeholder = 姓 名
 error-github-signed-out = 未连接 GitHub 账号，或连接已过期。请连接 GitHub 后重试。
 error-github-repo = 未找到 GitHub 仓库：“{ $repo }”。请检查名称（所有者/仓库）以及已连接的账号是否有权访问。
 error-github-no-push = 已连接的 GitHub 账号无法写入仓库 { $repo }。
+error-github-pages = 站点已发送到 { $branch } 分支，但 GitHub 未启用 GitHub Pages（错误 { $status }：{ $detail }）。请重新发布，或在仓库设置中从该分支启用 GitHub Pages：{ $url }
 error-github-cancelled = GitHub 连接已取消。
 error-github-code-expired = 代码在输入前已过期。请重新开始连接。
 error-github-denied = 已在 github.com 上拒绝授权。

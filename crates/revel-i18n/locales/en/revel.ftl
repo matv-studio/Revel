@@ -630,6 +630,7 @@ settings-author-placeholder = First Last
 error-github-signed-out = No GitHub account connected, or the connection has expired. Connect to GitHub, then try again.
 error-github-repo = GitHub repository not found: “{ $repo }”. Check the name (owner/repository) and that the connected account can access it.
 error-github-no-push = The connected GitHub account cannot write to the repository { $repo }.
+error-github-pages = The site was sent to the { $branch } branch, but GitHub did not turn on GitHub Pages (error { $status }: { $detail }). Publish again, or turn on GitHub Pages from that branch in the repository settings: { $url }
 error-github-cancelled = GitHub connection cancelled.
 error-github-code-expired = The code expired before it was entered. Start the connection again.
 error-github-denied = Authorization declined on github.com.

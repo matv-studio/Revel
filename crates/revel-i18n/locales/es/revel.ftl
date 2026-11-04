@@ -630,6 +630,7 @@ settings-author-placeholder = Nombre Apellido
 error-github-signed-out = No hay ninguna cuenta de GitHub conectada o la conexión ha caducado. Conéctate a GitHub e inténtalo de nuevo.
 error-github-repo = No se ha encontrado el repositorio de GitHub «{ $repo }». Comprueba el nombre (propietario/repositorio) y que la cuenta conectada pueda acceder a él.
 error-github-no-push = La cuenta de GitHub conectada no puede escribir en el repositorio { $repo }.
+error-github-pages = El sitio se envió a la rama { $branch }, pero GitHub no activó GitHub Pages (error { $status }: { $detail }). Vuelva a publicar o active GitHub Pages desde esa rama en la configuración del repositorio: { $url }
 error-github-cancelled = Conexión con GitHub cancelada.
 error-github-code-expired = El código caducó antes de introducirlo. Inicia la conexión de nuevo.
 error-github-denied = Autorización rechazada en github.com.

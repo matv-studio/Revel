@@ -630,6 +630,7 @@ settings-author-placeholder = Voornaam Achternaam
 error-github-signed-out = Geen GitHub-account verbonden, of de verbinding is verlopen. Maak verbinding met GitHub en probeer het opnieuw.
 error-github-repo = GitHub-repository niet gevonden: ‘{ $repo }’. Controleer de naam (eigenaar/repository) en of het verbonden account er toegang toe heeft.
 error-github-no-push = Het verbonden GitHub-account kan niet schrijven naar de repository { $repo }.
+error-github-pages = De site is naar de branch { $branch } verzonden, maar GitHub heeft GitHub Pages niet ingeschakeld (fout { $status }: { $detail }). Publiceer opnieuw of schakel GitHub Pages voor die branch in via de instellingen van de repository: { $url }
 error-github-cancelled = GitHub-verbinding geannuleerd.
 error-github-code-expired = De code is verlopen voordat hij is ingevoerd. Start de verbinding opnieuw.
 error-github-denied = Autorisatie geweigerd op github.com.

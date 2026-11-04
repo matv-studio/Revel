@@ -184,6 +184,12 @@ impl Core {
         })
         .await?;
         let info = info.ok_or_else(|| CoreError::GithubRepoNotFound(repo.clone()))?;
+        // Nom exact du dépôt (casse, dépôt renommé) : adresse du site et appels suivants.
+        let repo = if info.full_name.is_empty() {
+            repo
+        } else {
+            info.full_name.clone()
+        };
         if !info.permissions.as_ref().is_some_and(|p| p.push) {
             return Err(CoreError::GithubNoPush(repo.clone()));
         }
@@ -263,29 +269,16 @@ impl Core {
             let full = repo.clone();
             let b = branch.clone();
             let d = domain.clone();
-            let (enabled, html) = blocking(move || {
-                let c = Client::new(&access);
-                match c.pages(&full)? {
-                    None => {
-                        let p = c.enable_pages(&full, &b)?;
-                        if d.is_some() {
-                            c.update_pages(&full, &b, d.as_deref())?;
+            let (enabled, html) =
+                blocking(move || Client::new(&access).ensure_pages(&full, &b, d.as_deref()))
+                    .await
+                    .map_err(|e| match e {
+                        // Le site est sur la branche : seule l'activation manque, à faire dans GitHub.
+                        CoreError::Git(revel_git::GitError::Api(st, d)) => {
+                            CoreError::GithubPages(repo.clone(), branch.clone(), st, d)
                         }
-                        Ok::<_, revel_git::GitError>((true, p.html_url))
-                    }
-                    Some(p) => {
-                        let same_source = p
-                            .source
-                            .as_ref()
-                            .is_some_and(|s| s.branch == b && s.path == "/");
-                        if !same_source || p.cname.as_deref() != d.as_deref() {
-                            c.update_pages(&full, &b, d.as_deref())?;
-                        }
-                        Ok((false, p.html_url))
-                    }
-                }
-            })
-            .await?;
+                        e => e,
+                    })?;
             pages_enabled = enabled;
             if domain.is_none()
                 && let Some(h) = html

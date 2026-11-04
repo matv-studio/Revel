@@ -630,6 +630,7 @@ settings-author-placeholder = Nama Depan Nama Belakang
 error-github-signed-out = Tidak ada akun GitHub yang terhubung, atau koneksi telah kedaluwarsa. Hubungkan ke GitHub, lalu coba lagi.
 error-github-repo = Repositori GitHub tidak ditemukan: “{ $repo }”. Periksa namanya (pemilik/repositori) dan pastikan akun yang terhubung dapat mengaksesnya.
 error-github-no-push = Akun GitHub yang terhubung tidak dapat menulis ke repositori { $repo }.
+error-github-pages = Situs sudah dikirim ke cabang { $branch }, tetapi GitHub tidak mengaktifkan GitHub Pages (galat { $status }: { $detail }). Terbitkan lagi, atau aktifkan GitHub Pages dari cabang itu di pengaturan repositori: { $url }
 error-github-cancelled = Koneksi GitHub dibatalkan.
 error-github-code-expired = Kode kedaluwarsa sebelum dimasukkan. Mulai koneksi lagi.
 error-github-denied = Otorisasi ditolak di github.com.

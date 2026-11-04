@@ -9,6 +9,11 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 04/11/2026 : GitHub Pages, activation (D-161)
+- Activation de GitHub Pages après l'envoi : nouvel essai sur une erreur 5xx, message propre à l'étape
+  (`error-github-pages`, adresse des réglages Pages), nom exact du dépôt. Essai : faux serveur GitHub
+  (`revel-git`, `pages_reessai_apres_erreur_500`).
+
 ## Travail du 04/11/2026 : 3D, étape 1 (D-160)
 - Visualiseur de modèles 3D (GLB, glTF) : élément `data-revel-base="model"` (préréglage `model`, panneau
   Ajouter › Médias), fermé, avec ses boutons en parties (`data-model-do`). Lecteur

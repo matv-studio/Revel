@@ -78,6 +78,9 @@ pub enum CoreError {
     GithubNoPush(String),
     #[error("connexion GitHub annulée")]
     GithubCancelled,
+    /// Site envoyé sur la branche, mais GitHub Pages non activé (dépôt, branche, statut, détail).
+    #[error("GitHub Pages non activé pour {0} ({2}) : {3}")]
+    GithubPages(String, String, u16, String),
     #[error("{0}")]
     Edit(revel_edit::EditError),
     #[error("site non ouvert dans l'éditeur")]
@@ -222,6 +225,18 @@ impl CoreError {
                 Failure::new("error-github-no-push").arg("repo", repo.clone())
             }
             Self::GithubCancelled => Failure::new("error-github-cancelled"),
+            Self::GithubPages(repo, branch, status, detail) => Failure::new("error-github-pages")
+                .arg("branch", branch.clone())
+                .arg("status", status.to_string())
+                .arg(
+                    "detail",
+                    if detail.trim().is_empty() {
+                        "—".to_string()
+                    } else {
+                        detail.chars().take(300).collect::<String>()
+                    },
+                )
+                .arg("url", format!("https://github.com/{repo}/settings/pages")),
             Self::Edit(e) => Failure::new(e.key()).arg("detail", e.to_string()),
             Self::NotOpen => Failure::new("error-edit-not-open"),
             Self::NotASite => Failure::new("error-not-a-site"),

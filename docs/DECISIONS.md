@@ -1645,6 +1645,18 @@ pages dans la scène, solution de repli ; accord de principe de l'utilisateur, p
 - Sources : [three.js — npm](https://www.npmjs.com/package/three),
   [Marmoset Viewer — embedding](https://marmoset.co/?p=45453).
 
+**D-161 — 04/11/2026 — prise (erreur relevée par l'utilisateur).** **GitHub Pages : activation après
+l'envoi.** En publiant alunites.com vers `Alunites/alunites-revel`, la branche `gh-pages` a été envoyée, puis
+l'activation de GitHub Pages (`POST /repos/{dépôt}/pages`) a répondu 500 sans détail ; Revel affichait
+« GitHub returned an error (500): ». Une erreur 500 vide à cet appel est déjà connue comme passagère côté
+GitHub ([discussion GitHub Community](https://github.community/t/cannot-enable-github-pages-via-api-blank-500-error/124406)).
+- Après une erreur 5xx : relecture de l'état de Pages (il a pu être créé malgré l'erreur), puis un nouvel
+  essai, une fois (`Client::ensure_pages`).
+- Échec persistant : message propre à cette étape (le site est sur la branche, seule l'activation manque),
+  statut et détail, adresse des réglages Pages du dépôt pour l'activer à la main.
+- Appels et préfixe d'adresse du site faits avec le nom exact du dépôt rendu par GitHub (casse, dépôt
+  renommé), pas avec le nom tapé.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

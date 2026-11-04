@@ -646,6 +646,7 @@ settings-author-placeholder = Imię Nazwisko
 error-github-signed-out = Brak połączonego konta GitHub lub połączenie wygasło. Połącz z GitHub, a następnie spróbuj ponownie.
 error-github-repo = Nie znaleziono repozytorium GitHub: „{ $repo }”. Sprawdź nazwę (właściciel/repozytorium) i czy połączone konto ma do niego dostęp.
 error-github-no-push = Połączone konto GitHub nie może zapisywać w repozytorium { $repo }.
+error-github-pages = Witryna została wysłana do gałęzi { $branch }, ale GitHub nie włączył GitHub Pages (błąd { $status }: { $detail }). Opublikuj ponownie lub włącz GitHub Pages z tej gałęzi w ustawieniach repozytorium: { $url }
 error-github-cancelled = Połączenie z GitHub zostało anulowane.
 error-github-code-expired = Kod wygasł, zanim został wpisany. Rozpocznij połączenie od nowa.
 error-github-denied = Autoryzacja odrzucona na github.com.

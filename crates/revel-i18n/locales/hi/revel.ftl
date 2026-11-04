@@ -630,6 +630,7 @@ settings-author-placeholder = पहला नाम उपनाम
 error-github-signed-out = कोई GitHub खाता जुड़ा नहीं है, या कनेक्शन की अवधि समाप्त हो गई है। GitHub से कनेक्ट करें, फिर दोबारा कोशिश करें।
 error-github-repo = GitHub रिपॉज़िटरी नहीं मिली: “{ $repo }”। नाम (owner/repository) जाँचें और देखें कि जुड़ा हुआ खाता उस तक पहुँच सकता है।
 error-github-no-push = जुड़ा हुआ GitHub खाता रिपॉज़िटरी { $repo } में नहीं लिख सकता।
+error-github-pages = साइट { $branch } ब्रांच पर भेज दी गई, लेकिन GitHub ने GitHub Pages चालू नहीं किया (त्रुटि { $status }: { $detail })। फिर से प्रकाशित करें, या रिपॉज़िटरी सेटिंग्स में इस ब्रांच से GitHub Pages चालू करें: { $url }
 error-github-cancelled = GitHub कनेक्शन रद्द किया गया।
 error-github-code-expired = कोड डालने से पहले ही उसकी अवधि समाप्त हो गई। कनेक्शन दोबारा शुरू करें।
 error-github-denied = github.com पर अनुमति अस्वीकार कर दी गई।

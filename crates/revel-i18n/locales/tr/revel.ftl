@@ -630,6 +630,7 @@ settings-author-placeholder = Ad Soyad
 error-github-signed-out = Bağlı bir GitHub hesabı yok ya da bağlantının süresi doldu. GitHub’a bağlanın, sonra yeniden deneyin.
 error-github-repo = GitHub deposu bulunamadı: “{ $repo }”. Adı (sahip/depo) ve bağlı hesabın ona erişebildiğini kontrol edin.
 error-github-no-push = Bağlı GitHub hesabı şu depoya yazamıyor: { $repo }.
+error-github-pages = Site { $branch } dalına gönderildi, ancak GitHub, GitHub Pages’i etkinleştirmedi (hata { $status }: { $detail }). Yeniden yayımlayın veya depo ayarlarından bu dal için GitHub Pages’i etkinleştirin: { $url }
 error-github-cancelled = GitHub bağlantısı iptal edildi.
 error-github-code-expired = Kod girilmeden önce süresi doldu. Bağlantıyı yeniden başlatın.
 error-github-denied = Yetkilendirme github.com’da reddedildi.

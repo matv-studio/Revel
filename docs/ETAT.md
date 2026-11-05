@@ -22,8 +22,11 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   ~45 min, interface en `--release` ~14 min (crate `revel-ui` seule plus de 10 min : la lancer en arrière-plan,
   une limite d'attente qui la coupe la refait de zéro) ; éditeur de bout en bout ~9 min. Le conteneur peut
   redémarrer entre deux messages (processus arrêtés, fichiers gardés).
-- Essai « attribut relié » : en local, la liaison choisie est `collections.projets|length` au lieu d'un champ
-  du contenu (2 échecs sur 2 passages, réussi sur la CI la veille) : ordre des liaisons proposées à examiner.
+- Défaut « Relier » corrigé : `blocks::collections(ed)` lance un chargement à chaque appel ; les valeurs
+  proposées (`boundattr::options`) en faisaient deux (champs de l'endroit, nombres de contenus), finis dans
+  n'importe quel ordre : avant la fin du premier, « Relier » prenait un nombre de contenus. Un seul chargement
+  partagé (`condition_fields_with`) ; liste vide tant que les collections d'un endroit lié n'ont pas été
+  chargées. Visible sur une machine lente (essai « attribut relié » 2 échecs sur 3 en local), 363/363 après.
 
 ## Travail du 05/11/2026 : 3D, fin de l'étape 1 (D-160, complément)
 - Templates partagés : `glb`, `gltf`, `mview`, `bin`, `ktx2`, `hdr` en fichiers lourds (`sharing.rs`) ;

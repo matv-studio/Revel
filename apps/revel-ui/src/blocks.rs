@@ -4426,6 +4426,17 @@ fn in_loop(d: &Site, at: &Target) -> bool {
 }
 
 pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, String)>>> {
+    condition_fields_with(ed, at, collections(ed))
+}
+
+/// Comme [`condition_fields`], avec des collections déjà chargées : un appelant qui lit aussi
+/// les collections partage le même chargement (deux chargements finissent dans n'importe quel
+/// ordre, et la liste montrait un temps les seules valeurs du second).
+pub fn condition_fields_with(
+    ed: Ed,
+    at: &Target,
+    cols: RwSignal<Vec<CmsCollection>>,
+) -> Option<Signal<Vec<(String, String)>>> {
     // Endroit : liste de valeurs (variable, collection, champ), contenu relié, propriétés.
     let (values, content, props) = ed.doc.with_untracked(|d| {
         let d = d.as_ref()?;
@@ -4488,11 +4499,17 @@ pub fn condition_fields(ed: Ed, at: &Target) -> Option<Signal<Vec<(String, Strin
     if values.is_none() && content.is_none() && props.is_empty() {
         return None;
     }
-    let cols = collections(ed);
     let label = |f: &revel_protocol::CmsField| f.label.clone().unwrap_or_else(|| f.name.clone());
     let url_label = expect_context::<Ui>().now("condition-field-page", &[]);
     Some(Signal::derive(move || {
         let mut out: Vec<(String, String)> = Vec::new();
+        // Endroit lié à une collection : rien tant que les collections ne sont pas chargées, pour
+        // que ses champs viennent toujours en premier.
+        if (content.is_some() || values.as_ref().is_some_and(|(_, c)| c.is_some()))
+            && cols.with(Vec::is_empty)
+        {
+            return out;
+        }
         cols.with(|cs| {
             if let Some((var, col)) = &values {
                 out.push((var.clone(), var.clone()));

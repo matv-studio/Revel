@@ -13,8 +13,11 @@ use revel_edit::{Command, Target};
 /// Valeurs proposées à cet endroit : champs, propriétés, informations du site, environnement,
 /// nombre de contenus de chaque collection.
 fn options(ui: Ui, ed: Ed, at: &Target) -> Signal<Vec<(String, String)>> {
-    let base = crate::blocks::condition_fields(ed, at);
+    // Un seul chargement des collections pour les champs et les nombres de contenus : la liste
+    // reste vide (bouton « Relier » désactivé) jusqu'à ce qu'il arrive, puis les champs
+    // viennent en premier.
     let cols = crate::blocks::collections(ed);
+    let base = crate::blocks::condition_fields_with(ed, at, cols);
     Signal::derive(move || {
         let mut out: Vec<(String, String)> = base.map(|s| s.get()).unwrap_or_default();
         // Valeurs vraies ou fausses (premier de la liste) et variables de publication : pas des

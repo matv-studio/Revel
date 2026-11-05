@@ -310,6 +310,17 @@ jobs:
           # Les essais annulent tout : copie identique au cobaye (document, données, contenus).
           cmp cobaye/site.revel.json cobaye-essai/site.revel.json
           diff -r cobaye/src cobaye-essai/src
+      # Lancement manuel : captures de contrôle de l'éditeur écrites dans le journal (les fichiers
+      # joints ne sont pas lisibles depuis toutes les sessions de travail).
+      - name: Captures de l'éditeur dans le journal
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          for f in captures-ecarts/editeur/modele-3d-*.png; do
+            [ -f "$f" ] || continue
+            echo "PNG $(basename "$f")"
+            base64 -w 3000 "$f" | sed 's/^/B64 /'
+          done
       # Site neuf d'après un modèle (D-128 à D-131) : galerie du CMS, volet de la fiche, modèle des
       # pages, images en ligne copiées dans le site.
       - name: Site d'après un modèle, de bout en bout

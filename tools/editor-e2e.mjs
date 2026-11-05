@@ -343,9 +343,20 @@ try {
     await page.click('.import-sources .import-tile[data-source="figma"]');
     const figOff = await page.$eval('.import-run', (b) => b.disabled);
     const readLabel = (await page.textContent('.import-run')).trim();
-    await page.fill('.import-figma-url', 'https://www.figma.com/design/AbCdEf1234567890/Maquette');
+    const figUrl = 'https://www.figma.com/design/AbCdEf1234567890/Maquette';
+    await page.fill('.import-figma-url', figUrl);
     const noToken = await page.$eval('.import-run', (b) => b.disabled);
-    await page.fill('.import-figma-token', 'mauvais');
+    // Champs saisis jusqu'à ce que le bouton s'active : il arrive (rarement, sur la CI) que la
+    // saisie faite juste après le changement de source soit perdue ; le nombre de reprises est
+    // donné dans le compte rendu pour suivre le défaut.
+    let figRetries = 0;
+    for (let i = 0; i < 20; i++) {
+      if ((await page.inputValue('.import-figma-url')) !== figUrl) await page.fill('.import-figma-url', figUrl);
+      await page.fill('.import-figma-token', 'mauvais');
+      if (!(await page.$eval('.import-run', (b) => b.disabled))) break;
+      figRetries++;
+      await page.waitForTimeout(250);
+    }
     await page.click('.import-run');
     await page.waitForSelector('.import-dialog .import-error');
     const badToken = (await page.textContent('.import-error')).trim();
@@ -367,7 +378,7 @@ try {
     await page.waitForSelector('.import-figma-token');
     check('import : Figma (jeton refusé signalé, cadres lus et choisis, jeton gardé puis oublié)',
       figOff && readLabel === 'Lire le fichier' && noToken && badToken === 'Jeton Figma absent ou refusé.' && count === '3 / 4' && saved && frames.join() === '1:1,1:2',
-      `${readLabel} · ${badToken} · ${count} · ${frames}`);
+      `${readLabel} · ${badToken} · ${count} · ${frames}${figRetries ? ` · saisie reprise ${figRetries} fois` : ''}`);
     // WordPress : fichier examiné, images non téléchargées sur demande.
     await page.click('.import-sources .import-tile[data-source="wordpress"]');
     await page.evaluate(() => { window.__revelPickFiles = ['C:\\Exports\\atelier.WordPress.2026-10-17.xml']; });
@@ -1452,6 +1463,18 @@ try {
         if (anim) await page.selectOption('select[data-model-select="data-model-animation"]', 'Tour');
         const animSet = await untilE(async () => (await frame.locator('[data-revel-base="model"][data-model-animation="Tour"]').count()) === 1);
         check('modèle 3D : animations et caméras du fichier proposées', anim && cam && animSet);
+        // Captures du panneau et du canevas dans les deux thèmes (contrôle visuel, D-160).
+        if (shots) {
+          await page.waitForTimeout(800);
+          const theme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+          for (const t of ['dark', 'light']) {
+            await page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), t);
+            await page.waitForTimeout(400);
+            await page.screenshot({ path: `${shots}/modele-3d-${t}.png` });
+          }
+          await page.evaluate((v) => (v ? document.documentElement.setAttribute('data-theme', v)
+            : document.documentElement.removeAttribute('data-theme')), theme);
+        }
         const view = () => frame.locator('[data-revel-base="model"]').evaluate((el) => window.RevelModel.view(el));
         await page.fill('[data-model-field="data-model-yaw"] .nbox-input', '45');
         await page.press('[data-model-field="data-model-yaw"] .nbox-input', 'Enter');

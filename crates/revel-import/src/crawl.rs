@@ -890,7 +890,7 @@ pub(crate) fn js_modules(js: &str) -> Vec<String> {
 
 /// Extensions des fichiers qu'un script charge par leur adresse (sons, vidéos, images, données,
 /// polices, modèles 3D, animations).
-const SCRIPT_ASSETS: &str = "mp3|wav|ogg|oga|m4a|aac|flac|mp4|webm|mov|png|jpe?g|gif|webp|avif|svg|ico|json|woff2?|ttf|otf|glb|gltf|bin|wasm|lottie|riv|css|js|mjs|txt|xml|pdf";
+const SCRIPT_ASSETS: &str = "mp3|wav|ogg|oga|m4a|aac|flac|mp4|webm|mov|png|jpe?g|gif|webp|avif|svg|ico|json|woff2?|ttf|otf|glb|gltf|bin|ktx2|hdr|mview|wasm|lottie|riv|css|js|mjs|txt|xml|pdf";
 
 /// Fichiers cités par une adresse depuis la racine dans un script (`"/sfx/navigation.wav"`).
 pub(crate) fn js_root_assets(js: &str) -> Vec<String> {
@@ -1462,6 +1462,18 @@ mod tests {
         );
         let page = r#"const s=new Howl({src:["/sfx/navigation.wav"]});const t=["Changing Seasons -Reload-.mp3","Full Moon Full Life.mp3"];h(`/music/${t[i]}`);fetch("/api/data");el.src="//cdn.x/a.png""#;
         assert_eq!(js_root_assets(page), vec!["/sfx/navigation.wav"]);
+        // Fichiers 3D chargés par un script (D-160) : modèle, données, textures, éclairage, scène.
+        let scene = r#"load("/3d/robot.gltf");b="/3d/robot.bin";k='/3d/t.ktx2';e=`/3d/studio.hdr`;m("/3d/s.mview?v=2")"#;
+        assert_eq!(
+            js_root_assets(scene),
+            vec![
+                "/3d/robot.gltf",
+                "/3d/robot.bin",
+                "/3d/t.ktx2",
+                "/3d/studio.hdr",
+                "/3d/s.mview"
+            ]
+        );
         assert_eq!(
             js_composed_assets(page),
             vec![

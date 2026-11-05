@@ -100,7 +100,8 @@ enum Kind {
     Text,
     Font,
     Image,
-    /// Vidéos, sons, documents : gardés dans le catalogue, retirés du fichier léger.
+    /// Vidéos, sons, documents, modèles 3D et leurs fichiers : gardés dans le catalogue, retirés
+    /// du fichier léger.
     Heavy,
     /// Scripts, programmes, fichiers de construction : jamais repris.
     Code,
@@ -129,7 +130,9 @@ fn kind(rel: &str) -> Kind {
             Kind::Image
         }
         "mp4" | "webm" | "mov" | "m4v" | "ogv" | "mp3" | "wav" | "ogg" | "oga" | "m4a" | "aac"
-        | "flac" | "pdf" | "lottie" | "glb" | "gltf" => Kind::Heavy,
+        | "flac" | "pdf" | "lottie" => Kind::Heavy,
+        // Modèles 3D, scènes Marmoset et fichiers d'un glTF (données, textures, éclairage, D-160).
+        "glb" | "gltf" | "mview" | "bin" | "ktx2" | "hdr" => Kind::Heavy,
         _ => Kind::Code,
     }
 }
@@ -1167,6 +1170,9 @@ mod tests {
         assert_eq!(kind("media/fonts/a/b.woff2"), Kind::Font);
         assert_eq!(kind("media/photos/a.JPG"), Kind::Image);
         assert_eq!(kind("media/v.mp4"), Kind::Heavy);
+        for f in ["a.glb", "a.gltf", "a.bin", "a.KTX2", "a.hdr", "a.mview"] {
+            assert_eq!(kind(&format!("media/3d/{f}")), Kind::Heavy, "{f}");
+        }
         assert_eq!(kind("eleventy.config.js"), Kind::Code);
         assert_eq!(kind("package.json"), Kind::Code);
         assert_eq!(kind("form.php"), Kind::Code);

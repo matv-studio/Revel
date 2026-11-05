@@ -9,6 +9,24 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 05/11/2026 : 3D, fin de l'étape 1 (D-160, complément)
+- Templates partagés : `glb`, `gltf`, `mview`, `bin`, `ktx2`, `hdr` en fichiers lourds (`sharing.rs`) ;
+  `mview`, `bin`, `ktx2`, `hdr` n'étaient jamais repris (traités comme du code). Import depuis un lien :
+  `ktx2|hdr|mview` ajoutés à `SCRIPT_ASSETS` (`crawl.rs`).
+- Essais ajoutés : routes du canevas `/assets/revel-model.js`, `/assets/revel-3d/three.js`, décodeur Draco
+  (`canevas_par_le_protocole`), import d'un GLB, d'une scène `.mview` et d'un `.bin`
+  (`medias_importes_et_remplaces`), adresses 3D citées dans un script (`modules_et_fichiers_des_scripts`).
+- Essai « import Figma » de l'éditeur (bouton `.import-run` resté désactivé, échecs intermittents sur la
+  CI de 8489355 et b299657) : champs ressaisis jusqu'à l'activation du bouton, nombre de reprises affiché
+  dans le compte rendu (« saisie reprise N fois ») pour suivre le défaut, cause non trouvée.
+- Captures de contrôle du modèle 3D (panneau et canevas, thèmes sombre et clair) : écrites par
+  `editor-e2e.mjs` (`modele-3d-dark.png`, `modele-3d-light.png`) ; une CI lancée à la main
+  (`workflow_dispatch`) les écrit en base64 dans le journal de la tâche Équivalence (lignes `PNG`/`B64`).
+- Pièges : session du 05/11 sans accès à `static.crates.io`, `static.rust-lang.org` ni aux paquets Ubuntu
+  (rien ne se compile dans le conteneur ; la machine Linux du PC a les mêmes limites et 3 Go de mémoire) ;
+  fichiers joints de la CI non téléchargeables (stockage Azure bloqué), journaux lisibles par
+  `gh api repos/matv-studio/Revel/actions/jobs/<id>/logs`.
+
 ## Travail du 04/11/2026 : GitHub Pages, activation (D-161)
 - Activation de GitHub Pages après l'envoi : nouvel essai sur une erreur 5xx, message propre à l'étape
   (`error-github-pages`, adresse des réglages Pages), nom exact du dépôt. Essai : faux serveur GitHub

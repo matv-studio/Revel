@@ -515,6 +515,35 @@ fn canevas_par_le_protocole() {
             .unwrap()
             .contains("RevelAnimations")
     );
+    // Modèles 3D (D-160) : lecteur, moteur et décodeurs servis par le canevas, rien hors du dossier.
+    let model = c.canvas_respond("/assets/revel-model.js");
+    assert_eq!(
+        (model.status, model.content_type.as_str()),
+        (200, "text/javascript; charset=utf-8")
+    );
+    assert!(
+        String::from_utf8(model.body)
+            .unwrap()
+            .contains("RevelModel")
+    );
+    let three = c.canvas_respond("/assets/revel-3d/three.js");
+    assert_eq!(
+        (three.status, three.content_type.as_str()),
+        (200, "text/javascript; charset=utf-8")
+    );
+    assert!(three.body.len() > 100_000, "moteur complet");
+    let wasm = c.canvas_respond("/assets/revel-3d/draco_decoder.wasm");
+    assert_eq!(
+        (wasm.status, wasm.content_type.as_str()),
+        (200, "application/wasm")
+    );
+    assert_eq!(wasm.body.get(..4), Some(&b"\0asm"[..]));
+    assert_eq!(c.canvas_respond("/assets/revel-3d/absent.js").status, 404);
+    assert_eq!(
+        c.canvas_respond("/assets/revel-3d/%2E%2E/revel-model.js")
+            .status,
+        404
+    );
     assert_eq!(
         c.canvas_respond("/m%C3%A9dia/a.txt").body,
         b"fichier".to_vec(),
@@ -1675,7 +1704,17 @@ fn medias_importes_et_remplaces() {
     let m2 = c.edit_import_media(&site, "photo-ete.jpg", b"x").unwrap();
     assert_eq!(m2.url, "/media/photo-ete-2.jpg");
     assert!(c.edit_import_media(&site, "script.php", b"<?php").is_err());
-    assert_eq!(c.edit_media(&site).unwrap().len(), 2);
+    // Modèle 3D (D-160) : GLB et scène Marmoset rangés comme modèles, fichiers d'un glTF à part.
+    let glb = c
+        .edit_import_media(&site, "Robot Mécanique.GLB", b"glTF\x02\0\0\0")
+        .unwrap();
+    assert_eq!(glb.url, "/media/robot-mecanique.glb");
+    assert_eq!((glb.kind, glb.size), (revel_protocol::MediaKind::Model, 8));
+    let scene = c.edit_import_media(&site, "scene.mview", b"x").unwrap();
+    assert_eq!(scene.kind, revel_protocol::MediaKind::Model);
+    let bin = c.edit_import_media(&site, "robot.bin", b"x").unwrap();
+    assert_eq!(bin.kind, revel_protocol::MediaKind::Other);
+    assert_eq!(c.edit_media(&site).unwrap().len(), 5);
     // Remplacement : même adresse, ancien fichier gardé, format identique exigé.
     let r = c
         .edit_replace_media(&site, "/media/photo-ete.jpg", "nouvelle.jpg", b"abcdef")

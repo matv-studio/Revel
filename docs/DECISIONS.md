@@ -1651,6 +1651,14 @@ pages dans la scène, solution de repli ; accord de principe de l'utilisateur, p
   cités dans un script sont copiés comme `glb`, `gltf` et `bin`. Scène Marmoset essayée en vrai
   (05/11/2026, navigateur réel, lecteur officiel, scène publique de Marmoset) : chargement, démarrage
   automatique, taille suivie, fond transparent, démontage et remontage.
+- Un seul outil (05/11/2026, demande de l'utilisateur : même utilité, seul le fichier diffère) : la tuile
+  « Scène Marmoset » est retirée du panneau Ajouter ; « Modèle 3D » a dans ses réglages un choix « Format »
+  (GLB / glTF ou Marmoset). Changer de format garde l'élément (identifiant, calque, classes, autres
+  attributs), retire les réglages et boutons de l'ancien format, pose ceux du nouveau, garde le fichier s'il
+  convient et reprend l'image d'attente (`revel_edit::make::model_kind_command`, une étape annulable).
+  Choisir un fichier de l'autre format (`.mview` dans un modèle GLB, ou l'inverse) change aussi le format.
+  Le site produit garde deux lecteurs (`data-model`, `data-mview`) : formats et moteurs différents. Le
+  préréglage `mview` reste pour les assistants (MCP). Calque nommé « Modèle 3D » dans les deux formats.
 
 **D-161 — 04/11/2026 — prise (erreur relevée par l'utilisateur).** **GitHub Pages : activation après
 l'envoi.** En publiant alunites.com vers `Alunites/alunites-revel`, la branche `gh-pages` a été envoyée, puis

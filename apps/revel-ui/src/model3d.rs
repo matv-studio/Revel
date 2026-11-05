@@ -250,7 +250,19 @@ fn file_field(
     let src = value(attrs, name).unwrap_or_default();
     let file = src.rsplit('/').next().unwrap_or_default().to_string();
     let pick = move || {
-        let on = move |u: String| set(name, Some(u));
+        // Fichier d'un autre format (`.mview` dans un modèle GLB, ou l'inverse) : l'élément passe
+        // à ce format, avec le fichier.
+        let on = move |u: String| {
+            let cur = match name {
+                "data-model" => Some("model"),
+                "data-mview" => Some("mview"),
+                _ => None,
+            };
+            match (cur, revel_edit::make::model_kind_of_file(&u)) {
+                (Some(cur), Some(k)) if k != cur => switch_kind(ui, ed, at, k, Some(u)),
+                _ => set(name, Some(u)),
+            }
+        };
         match kind {
             Some(k) => crate::library::pick_kind(ui, k, on),
             None => crate::library::pick_image(ui, crate::library::media_shelf(ed), on),
@@ -270,6 +282,46 @@ fn file_field(
                         aria-label=ui.t("model-remove-file") on:click=move |_| set(name, None)>{crate::icons::close()}</button>
                 })}
             </span>
+        </div>
+    }
+    .into_any()
+}
+
+/// Change le format de l'élément 3D (GLB / glTF ou Marmoset), en une étape annulable.
+fn switch_kind(ui: Ui, ed: Ed, at: StoredValue<Target>, to: &'static str, file: Option<String>) {
+    let at = at.get_value();
+    let text = ui.tx("insert-text-model", &[]);
+    let c = ed.doc.with_untracked(|d| {
+        d.as_ref().and_then(|d| {
+            revel_edit::make::model_kind_command(d, &at, to, file.as_deref(), &text)
+                .ok()
+                .flatten()
+        })
+    });
+    if let Some(c) = c {
+        ed.apply_keep(ui, c)
+    }
+}
+
+/// Choix du format : un seul élément « Modèle 3D », lu par le lecteur de Revel (GLB, glTF) ou
+/// par celui de Marmoset (`.mview`).
+fn kind_switch(ui: Ui, ed: Ed, at: StoredValue<Target>, cur: &'static str) -> AnyView {
+    view! {
+        <div class="field">
+            <span class="label" title=ui.t("model-kind-help")>{ui.t("model-kind")}</span>
+            <div class="seg model-kind" role="radiogroup" aria-label=ui.t("model-kind")>
+                {[("model", "model-kind-gltf", "model-kind-gltf-help"), ("mview", "model-kind-mview", "model-kind-mview-help")]
+                    .into_iter()
+                    .map(|(v, k, h)| {
+                        let on = cur == v;
+                        view! {
+                            <button type="button" role="radio" data-model-kind=v class:is-on=on
+                                aria-checked=on.to_string() title=ui.t(h)
+                                on:click=move |_| if !on { switch_kind(ui, ed, at, v, None) }>{ui.t(k)}</button>
+                        }
+                    })
+                    .collect_view()}
+            </div>
         </div>
     }
     .into_any()
@@ -423,6 +475,7 @@ pub fn settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
         view! {
             <div class="insp-group" data-model-settings="">
                 <p class="panel-title">{ui.t("model-title")}</p>
+                {kind_switch(ui, ed, at, "model")}
                 {file_field(ui, ed, at, attrs, "data-model", "model-file", Some(revel_protocol::MediaKind::Model), false)}
                 {file_field(ui, ed, at, attrs, "data-model-poster", "model-poster", None, true)}
             </div>
@@ -510,7 +563,7 @@ pub fn settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     )
 }
 
-/// Réglages d'une scène Marmoset (`data-mview`).
+/// Réglages d'un modèle 3D au format Marmoset (`data-mview`).
 pub fn mview_settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let Node::Element { attrs, .. } = node else {
         return None;
@@ -522,7 +575,8 @@ pub fn mview_settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyVie
     Some(
         view! {
             <div class="insp-group" data-mview-settings="">
-                <p class="panel-title">{ui.t("mview-title")}</p>
+                <p class="panel-title">{ui.t("model-title")}</p>
+                {kind_switch(ui, ed, at, "mview")}
                 {file_field(ui, ed, at, attrs, "data-mview", "mview-file", Some(revel_protocol::MediaKind::Model), false)}
                 {file_field(ui, ed, at, attrs, "data-mview-thumbnail", "mview-thumbnail", None, true)}
                 {toggle(ui, ed, at, attrs, "data-mview-autostart", "mview-autostart", None)}

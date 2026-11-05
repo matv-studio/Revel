@@ -126,7 +126,8 @@ elements of the same container push each other). Lottie: `data-lottie=\"/media/x
 /media/x.hdr), `data-model-exposure`, `data-model-shadow` (0-1), `data-model-backdrop` (blur 0-1), \
 `data-model-view` (render|albedo|normals|roughness|metalness|wireframe), `data-model-animation`, \
 `data-model-loop`, `data-model-speed`, `data-model-poster`; buttons inside: `data-model-do=\"reset|fullscreen|\
-rotate|play|view:normals\"`. Marmoset scene (preset `mview`): `data-mview=\"/media/x.mview\"`, \
+rotate|play|view:normals\"`. Same 3D model element in Marmoset format (preset `mview`, one tool in the \
+interface, format chosen in its settings): `data-mview=\"/media/x.mview\"`, \
 `data-mview-autostart|transparent|noui`, `data-mview-thumbnail`.\n\
 - Page settings (title, description, share image, body class, theme, share type, publication date) and site settings (site name, \
 icons, organisation, RSS feeds, forms) are settings, not markup: Revel writes the `<head>`. Redirections \

@@ -9,6 +9,14 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 05/11/2026 : un seul outil « Modèle 3D » (D-160, complément)
+- Tuile « Scène Marmoset » retirée d'Ajouter ; choix « Format » (GLB / glTF, Marmoset) en tête des réglages
+  du modèle (`apps/revel-ui/src/model3d.rs`, `kind_switch`, `switch_kind`) ; conversion par
+  `revel_edit::make::model_kind_command` (commande `Replace` du nœud, identifiant gardé) ; fichier de
+  l'autre format choisi : format changé (`model_kind_of_file`). Clés `model-kind*` (15 langues) ;
+  `insert-mview`, `insert-help-mview`, `mview-title` retirées. Essais : `format_du_modele_3d` (revel-edit),
+  éditeur « format Marmoset choisi dans ses réglages… » et captures `modele-3d-marmoset-{dark,light}.png`.
+
 ## Travail du 05/11/2026 : 3D, fin de l'étape 1 (D-160, complément)
 - Templates partagés : `glb`, `gltf`, `mview`, `bin`, `ktx2`, `hdr` en fichiers lourds (`sharing.rs`) ;
   `mview`, `bin`, `ktx2`, `hdr` n'étaient jamais repris (traités comme du code). Import depuis un lien :

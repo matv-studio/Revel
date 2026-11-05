@@ -580,15 +580,6 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     "div",
                     true,
                 ),
-                item(
-                    Preset::Mview,
-                    "insert-mview",
-                    "insert-help-mview",
-                    "",
-                    icons::cube,
-                    "div",
-                    true,
-                ),
             ],
         ),
         (

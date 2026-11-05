@@ -2390,6 +2390,149 @@ fn part_of<'a>(n: &'a Node, part: &str) -> Option<(usize, String, &'a Vec<Node>)
     })
 }
 
+/// Format d'un élément 3D (D-160) : `"model"` (GLB ou glTF, lecteur de Revel) ou `"mview"` (scène
+/// Marmoset). Un seul élément « Modèle 3D » ; le format se choisit dans ses réglages.
+pub fn model_kind(n: &Node) -> Option<&'static str> {
+    let Node::Element { attrs, .. } = n else {
+        return None;
+    };
+    if attrs.iter().any(|a| a.name == "data-mview") {
+        Some("mview")
+    } else if attrs.iter().any(|a| a.name == "data-model") {
+        Some("model")
+    } else {
+        None
+    }
+}
+
+/// Format qui lit un fichier d'après son extension (`.mview` : Marmoset ; `.glb`, `.gltf` : Revel).
+pub fn model_kind_of_file(url: &str) -> Option<&'static str> {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    let ext = path.rsplit_once('.')?.1.to_ascii_lowercase();
+    match ext.as_str() {
+        "mview" => Some("mview"),
+        "glb" | "gltf" => Some("model"),
+        _ => None,
+    }
+}
+
+/// Change le format d'un élément 3D (`to` : `"model"` ou `"mview"`) en gardant l'élément : son
+/// identifiant, ses classes et ses autres attributs. Les réglages propres à l'ancien format et
+/// ses parties (boutons) sont retirés, ceux du nouveau posés par défaut ; le fichier est gardé
+/// s'il convient au nouveau format (`file` : fichier choisi qui impose le changement), l'image
+/// d'attente reprise. `text` : noms des boutons d'un modèle (« Recadrer|Plein écran »).
+/// `None` si l'élément a déjà ce format (un fichier se pose alors par `SetAttr`).
+pub fn model_kind_command(
+    site: &Site,
+    at: &Target,
+    to: &str,
+    file: Option<&str>,
+    text: &str,
+) -> Result<Option<Command>, EditError> {
+    let preset = match to {
+        "model" => Preset::Model,
+        "mview" => Preset::Mview,
+        _ => return Ok(None),
+    };
+    let n = address::node(site, at)?;
+    let Some(from) = model_kind(n) else {
+        return Err(EditError::NotFound(at.node.clone()));
+    };
+    if from == to {
+        return Ok(None);
+    }
+    let Node::Element {
+        id,
+        tag,
+        attrs,
+        children,
+    } = n
+    else {
+        return Err(EditError::NotFound(at.node.clone()));
+    };
+    let Node::Element {
+        attrs: fresh_attrs,
+        children: fresh_children,
+        ..
+    } = preset.node(site, text)
+    else {
+        return Err(EditError::NotFound(at.node.clone()));
+    };
+    let get = |name: &str| {
+        attrs
+            .iter()
+            .find(|a| a.name == name)
+            .and_then(|a| a.value.clone())
+            .filter(|v| !v.is_empty())
+    };
+    let (old_file, old_poster) = match from {
+        "mview" => (get("data-mview"), get("data-mview-thumbnail")),
+        _ => (get("data-model"), get("data-model-poster")),
+    };
+    let file = file
+        .map(str::to_string)
+        .or(old_file.filter(|f| model_kind_of_file(f) == Some(to)))
+        .unwrap_or_default();
+    let (file_attr, poster_attr) = match to {
+        "mview" => ("data-mview", "data-mview-thumbnail"),
+        _ => ("data-model", "data-model-poster"),
+    };
+    let own = |name: &str| {
+        name.starts_with("data-model")
+            || name.starts_with("data-mview")
+            || name == revel_model::BASE_ATTR
+            || name == revel_model::WIDGET_ATTR
+    };
+    let mut new_attrs: Vec<Attr> = Vec::new();
+    let mut widget = None;
+    for a in fresh_attrs {
+        if a.name == revel_model::WIDGET_ATTR {
+            widget = Some(a);
+        } else if a.name == file_attr {
+            new_attrs.push(Attr {
+                value: Some(file.clone()),
+                ..a
+            });
+        } else {
+            new_attrs.push(a);
+        }
+    }
+    if let Some(p) = old_poster {
+        new_attrs.push(Attr {
+            name: poster_attr.into(),
+            value: Some(p),
+            when: None,
+        });
+    }
+    // Attributs de l'élément sans lien avec le format (classes, rôle, interactions…).
+    let base = new_attrs
+        .iter()
+        .position(|a| a.name == revel_model::BASE_ATTR)
+        .map_or(0, |i| i + 1);
+    let keep: Vec<Attr> = attrs.iter().filter(|a| !own(&a.name)).cloned().collect();
+    let tail = new_attrs.split_off(base);
+    new_attrs.extend(keep);
+    new_attrs.extend(tail);
+    new_attrs.extend(widget);
+    let mut kids: Vec<Node> = children
+        .iter()
+        .filter(|c| !revel_model::is_part(c))
+        .cloned()
+        .collect();
+    kids.extend(fresh_children);
+    let (parent, index) = address::locate(site, at)?;
+    Ok(Some(Command::Replace {
+        parent,
+        index,
+        node: Node::Element {
+            id: id.clone(),
+            tag: tag.clone(),
+            attrs: new_attrs,
+            children: kids,
+        },
+    }))
+}
+
 /// Bouton `cmd` présent dans un modèle 3D (`views` : barre des vues).
 pub fn model_has_button(n: &Node, cmd: &str) -> bool {
     if cmd == "views" {

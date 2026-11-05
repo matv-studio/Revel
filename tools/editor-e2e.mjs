@@ -1535,6 +1535,27 @@ try {
           }
           await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
         }
+        // Format (D-160) : un seul élément « Modèle 3D » ; Marmoset se choisit dans ses réglages,
+        // l'élément est gardé (même calque, mêmes classes), puis retour au format GLB / glTF.
+        const modelId = await frame.locator('[data-revel-base="model"]').first().getAttribute('data-rv');
+        const oneTile = (await page.locator('.insert-item[data-item="insert-mview"]').count()) === 0;
+        await page.click('[data-model-settings] [data-model-kind="mview"]');
+        const toMview = await untilE(async () => (await frame.locator(`[data-rv="${modelId}"][data-revel-base="mview"][data-mview]`).count()) === 1
+          && (await frame.locator('[data-revel-base="model"]').count()) === 0);
+        const mviewPanel = await untilE(async () => (await page.locator('[data-mview-settings] [data-model-kind="mview"].is-on').count()) === 1);
+        if (shots) {
+          await page.waitForTimeout(500);
+          for (const t of ['dark', 'light']) {
+            await page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), t);
+            await page.waitForTimeout(400);
+            await page.screenshot({ path: `${shots}/modele-3d-marmoset-${t}.png` });
+          }
+          await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+        }
+        if (mviewPanel) await page.click('[data-mview-settings] [data-model-kind="model"]');
+        const backToModel = await untilE(async () => (await frame.locator(`[data-rv="${modelId}"][data-revel-base="model"] [data-model-do="reset"]`).count()) === 1);
+        check('modèle 3D : format Marmoset choisi dans ses réglages, élément gardé, retour au GLB / glTF',
+          oneTile && toMview && mviewPanel && backToModel, `${oneTile} ${toMview} ${mviewPanel} ${backToModel}`);
         fs.rmSync(glbPath, { force: true });
       }
       // Média au survol (D-99) : liste de collection et média ajoutés ; le média piloté par la

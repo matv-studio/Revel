@@ -1574,6 +1574,121 @@ fn boutons_du_modele_3d() {
 }
 
 #[test]
+fn format_du_modele_3d() {
+    // D-160 : un seul élément « Modèle 3D », format choisi dans ses réglages (GLB / glTF ou
+    // Marmoset) ; l'élément, ses classes et son image d'attente sont gardés, annulable.
+    let mut s = sample();
+    let parent = Parent::of(&at(&s, "main"), Branch::Children);
+    apply(
+        &mut s,
+        &Command::InsertPreset {
+            parent,
+            index: 0,
+            preset: make::Preset::Model,
+            text: "Recadrer|Plein écran".into(),
+        },
+    )
+    .unwrap();
+    let id = match &s.pages[0].body[0] {
+        revel_model::Node::Element { children, .. } => match &children[0] {
+            revel_model::Node::Element { id, .. } => id.clone().unwrap(),
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+    let model = Target {
+        owner: Owner::Page(s.pages[0].id.clone()),
+        node: id.clone(),
+    };
+    for (name, value) in [
+        ("class", "vitrine"),
+        ("data-model", "/media/robot.glb"),
+        ("data-model-poster", "/media/robot.jpg"),
+        ("data-model-yaw", "30"),
+    ] {
+        apply(
+            &mut s,
+            &Command::SetAttr {
+                at: model.clone(),
+                name: name.into(),
+                value: Some(value.into()),
+            },
+        )
+        .unwrap();
+    }
+    let node = |s: &revel_model::Site| crate::address::node(s, &model).unwrap().clone();
+    let attr = |n: &revel_model::Node, name: &str| match n {
+        revel_model::Node::Element { attrs, .. } => attrs
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| a.value.clone().unwrap_or_default()),
+        _ => None,
+    };
+    assert_eq!(make::model_kind(&node(&s)), Some("model"));
+    assert_eq!(
+        make::model_kind_of_file("/media/a.MVIEW?v=2"),
+        Some("mview")
+    );
+    assert_eq!(make::model_kind_of_file("/media/a.gltf"), Some("model"));
+    assert_eq!(make::model_kind_of_file("/media/a.png"), None);
+    assert!(
+        make::model_kind_command(&s, &model, "model", None, "")
+            .unwrap()
+            .is_none()
+    );
+    let before = json(&s);
+    let c = make::model_kind_command(&s, &model, "mview", None, "")
+        .unwrap()
+        .unwrap();
+    let inv = apply(&mut s, &c).unwrap();
+    let m = node(&s);
+    assert_eq!(make::model_kind(&m), Some("mview"));
+    assert_eq!(attr(&m, "class").as_deref(), Some("vitrine"));
+    assert_eq!(attr(&m, "data-revel-base").as_deref(), Some("mview"));
+    // Fichier GLB : ne convient pas à Marmoset, retiré ; image d'attente reprise en vignette.
+    assert_eq!(attr(&m, "data-mview").as_deref(), Some(""));
+    assert_eq!(
+        attr(&m, "data-mview-thumbnail").as_deref(),
+        Some("/media/robot.jpg")
+    );
+    assert!(attr(&m, "data-mview-autostart").is_some());
+    assert!(attr(&m, "data-model-yaw").is_none() && attr(&m, "data-revel-widget").is_none());
+    let body = serde_json::to_string(&m).unwrap();
+    assert!(!body.contains("data-revel-part"), "{body}");
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+    // Fichier .mview choisi dans un modèle : le format suit le fichier.
+    let c = make::model_kind_command(&s, &model, "mview", Some("/media/scene.mview"), "")
+        .unwrap()
+        .unwrap();
+    apply(&mut s, &c).unwrap();
+    assert_eq!(
+        attr(&node(&s), "data-mview").as_deref(),
+        Some("/media/scene.mview")
+    );
+    // Retour au format GLB / glTF : boutons et réglages par défaut remis, élément fermé.
+    let back = make::model_kind_command(&s, &model, "model", None, "Recadrer|Plein écran")
+        .unwrap()
+        .unwrap();
+    apply(&mut s, &back).unwrap();
+    let m = node(&s);
+    assert_eq!(make::model_kind(&m), Some("model"));
+    assert_eq!(attr(&m, "data-model").as_deref(), Some(""));
+    assert_eq!(
+        attr(&m, "data-model-poster").as_deref(),
+        Some("/media/robot.jpg")
+    );
+    assert_eq!(attr(&m, "class").as_deref(), Some("vitrine"));
+    assert!(attr(&m, "data-revel-widget").is_some());
+    assert!(make::model_has_button(&m, "reset") && make::model_has_button(&m, "fullscreen"));
+    assert!(attr(&m, "data-mview").is_none());
+    match &m {
+        revel_model::Node::Element { id: i, .. } => assert_eq!(i.as_deref(), Some(id.as_str())),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn blocs_prets_a_l_emploi() {
     let mut s = sample();
     let before = json(&s);

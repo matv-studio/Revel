@@ -163,7 +163,7 @@ const BASE_NAMES: &[(&str, &str)] = &[
     ("navbar", "insert-navbar"),
     ("locales", "insert-locale-switch"),
     ("model", "insert-model"),
-    ("mview", "insert-mview"),
+    ("mview", "insert-model"),
 ];
 
 /// Classes d'un élément pour son nom : sans classe, sa nature (`@switch`) s'il en a une.

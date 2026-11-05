@@ -1648,8 +1648,9 @@ pages dans la scène, solution de repli ; accord de principe de l'utilisateur, p
   et les fichiers d'un glTF (`bin`, `ktx2`, `hdr`) sont des fichiers lourds : gardés dans le catalogue,
   retirés du fichier léger. Avant, `mview`, `bin`, `ktx2` et `hdr` étaient traités comme du code, donc
   jamais repris : un glTF partagé perdait ses données. Import depuis un lien : `ktx2`, `hdr` et `mview`
-  cités dans un script sont copiés comme `glb`, `gltf` et `bin`. Reste en suspens : essai réel d'une
-  scène Marmoset (lecteur en ligne).
+  cités dans un script sont copiés comme `glb`, `gltf` et `bin`. Scène Marmoset essayée en vrai
+  (05/11/2026, navigateur réel, lecteur officiel, scène publique de Marmoset) : chargement, démarrage
+  automatique, taille suivie, fond transparent, démontage et remontage.
 
 **D-161 — 04/11/2026 — prise (erreur relevée par l'utilisateur).** **GitHub Pages : activation après
 l'envoi.** En publiant alunites.com vers `Alunites/alunites-revel`, la branche `gh-pages` a été envoyée, puis

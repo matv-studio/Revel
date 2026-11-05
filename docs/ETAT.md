@@ -22,6 +22,11 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
 - Captures de contrôle du modèle 3D (panneau et canevas, thèmes sombre et clair) : écrites par
   `editor-e2e.mjs` (`modele-3d-dark.png`, `modele-3d-light.png`) ; une CI lancée à la main
   (`workflow_dispatch`) les écrit en base64 dans le journal de la tâche Équivalence (lignes `PNG`/`B64`).
+- Scène Marmoset essayée en vrai dans un navigateur du PC : `mview.js` de Revel avec le lecteur officiel et la
+  scène publique `https://marmoset.co/wp-content/uploads/viewer/scenes/vivfox.mview` (page de même
+  origine) : chargement, démarrage automatique, taille suivie, fond transparent (couleur de l'élément
+  visible), démontage et remontage par `RevelMview.refresh` après un changement de réglage. Captures 3D
+  relues (thèmes sombre et clair) : CI lancée à la main 41950748804, éditeur 362/362, modèles 26/26.
 - Pièges : session du 05/11 sans accès à `static.crates.io`, `static.rust-lang.org` ni aux paquets Ubuntu
   (rien ne se compile dans le conteneur ; la machine Linux du PC a les mêmes limites et 3 Go de mémoire) ;
   fichiers joints de la CI non téléchargeables (stockage Azure bloqué), journaux lisibles par
@@ -46,7 +51,7 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   exposition, ombre, fond, vue, animation du fichier (noms relevés par le canevas : `model_info`), boutons
   (`revel_edit::make::model_button_command`, annulable).
 - Scène Marmoset `data-mview` (préréglage `mview`) : lecteur officiel chargé depuis viewer.marmoset.co,
-  `/assets/revel-mview.js` ; non essayé ici (réseau bloqué), essai à faire sur le PC.
+  `/assets/revel-mview.js` ; essayé en vrai le 05/11 (voir plus haut).
 - Nouveau type de média `Model` (`.glb`, `.gltf`, `.mview`) ; `.bin`, `.ktx2`, `.hdr` importables (Autres).
   Adresses `data-model`, `data-lottie`, `data-mview`… préfixées sous un sous-dossier (`rebase.rs`).
 - Pièges : un signal partagé par module doit être un `ArcRwSignal` (un `RwSignal` créé dans une vue est

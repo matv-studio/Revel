@@ -1652,6 +1652,8 @@ fn format_du_modele_3d() {
         Some("/media/robot.jpg")
     );
     assert!(attr(&m, "data-mview-autostart").is_some());
+    // Fond transparent par défaut dans les deux formats.
+    assert!(attr(&m, "data-mview-transparent").is_some());
     assert!(attr(&m, "data-model-yaw").is_none() && attr(&m, "data-revel-widget").is_none());
     let body = serde_json::to_string(&m).unwrap();
     assert!(!body.contains("data-revel-part"), "{body}");

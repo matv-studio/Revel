@@ -801,6 +801,12 @@ impl Preset {
                         value: None,
                         when: None,
                     },
+                    // Fond transparent par défaut, comme un modèle GLB / glTF.
+                    Attr {
+                        name: "data-mview-transparent".into(),
+                        value: None,
+                        when: None,
+                    },
                 ],
                 vec![],
             ),

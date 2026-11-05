@@ -1659,6 +1659,12 @@ pages dans la scène, solution de repli ; accord de principe de l'utilisateur, p
   Choisir un fichier de l'autre format (`.mview` dans un modèle GLB, ou l'inverse) change aussi le format.
   Le site produit garde deux lecteurs (`data-model`, `data-mview`) : formats et moteurs différents. Le
   préréglage `mview` reste pour les assistants (MCP). Calque nommé « Modèle 3D » dans les deux formats.
+- Parité des deux formats (05/11/2026, règle de l'utilisateur : la parité est très importante, à faire sans
+  demander) : mêmes textes pour les mêmes réglages (« Fichier », « Image d'attente », mêmes info-bulles),
+  mêmes groupes (Rendu › « Fond visible », Boutons › « Commandes du lecteur »), même sens (fond visible
+  allumé = fond de la scène, éteint = transparent) et même valeur par défaut (fond transparent : le
+  préréglage `mview` pose `data-mview-transparent`). Clés propres à Marmoset retirées (`mview-file`,
+  `mview-thumbnail`, `mview-transparent`, `mview-noui`), `mview-controls` ajoutée.
 
 **D-161 — 04/11/2026 — prise (erreur relevée par l'utilisateur).** **GitHub Pages : activation après
 l'envoi.** En publiant alunites.com vers `Alunites/alunites-revel`, la branche `gh-pages` a été envoyée, puis

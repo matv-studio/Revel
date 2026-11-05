@@ -16,6 +16,14 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   l'autre format choisi : format changé (`model_kind_of_file`). Clés `model-kind*` (15 langues) ;
   `insert-mview`, `insert-help-mview`, `mview-title` retirées. Essais : `format_du_modele_3d` (revel-edit),
   éditeur « format Marmoset choisi dans ses réglages… » et captures `modele-3d-marmoset-{dark,light}.png`.
+- Parité des réglages des deux formats (mêmes textes, groupes, sens et défaut ; détails dans D-160).
+- Environnement du conteneur rétabli le 05/11 (domaines ouverts par l'utilisateur) : Rust 1.99 + wasm,
+  paquets système, trunk 0.21.14, SFTP d'essai ; machine de 2 cœurs et 7 Go : première construction du CLI
+  ~45 min, interface en `--release` ~14 min (crate `revel-ui` seule plus de 10 min : la lancer en arrière-plan,
+  une limite d'attente qui la coupe la refait de zéro) ; éditeur de bout en bout ~9 min. Le conteneur peut
+  redémarrer entre deux messages (processus arrêtés, fichiers gardés).
+- Essai « attribut relié » : en local, la liaison choisie est `collections.projets|length` au lieu d'un champ
+  du contenu (2 échecs sur 2 passages, réussi sur la CI la veille) : ordre des liaisons proposées à examiner.
 
 ## Travail du 05/11/2026 : 3D, fin de l'étape 1 (D-160, complément)
 - Templates partagés : `glb`, `gltf`, `mview`, `bin`, `ktx2`, `hdr` en fichiers lourds (`sharing.rs`) ;

@@ -577,11 +577,19 @@ pub fn mview_settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyVie
             <div class="insp-group" data-mview-settings="">
                 <p class="panel-title">{ui.t("model-title")}</p>
                 {kind_switch(ui, ed, at, "mview")}
-                {file_field(ui, ed, at, attrs, "data-mview", "mview-file", Some(revel_protocol::MediaKind::Model), false)}
-                {file_field(ui, ed, at, attrs, "data-mview-thumbnail", "mview-thumbnail", None, true)}
+                {file_field(ui, ed, at, attrs, "data-mview", "model-file", Some(revel_protocol::MediaKind::Model), false)}
+                {file_field(ui, ed, at, attrs, "data-mview-thumbnail", "model-poster", None, true)}
                 {toggle(ui, ed, at, attrs, "data-mview-autostart", "mview-autostart", None)}
-                {toggle(ui, ed, at, attrs, "data-mview-transparent", "mview-transparent", None)}
-                {toggle(ui, ed, at, attrs, "data-mview-noui", "mview-noui", None)}
+            </div>
+            // Mêmes groupes et mêmes réglages que le format GLB / glTF (parité) : fond visible
+            // (transparent sinon), commandes du lecteur avec les boutons.
+            <div class="insp-group">
+                <p class="panel-title">{ui.t("model-render")}</p>
+                {toggle(ui, ed, at, attrs, "data-mview-transparent", "model-backdrop", Some(""))}
+            </div>
+            <div class="insp-group">
+                <p class="panel-title">{ui.t("model-buttons")}</p>
+                {toggle(ui, ed, at, attrs, "data-mview-noui", "mview-controls", Some(""))}
             </div>
         }
         .into_any(),

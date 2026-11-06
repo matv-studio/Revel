@@ -24,6 +24,9 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   `layerBands`, `layerMarks`) et réglage « Triangles et sommets » (`data-model-stats`, `V.stats`) ; mots du
   lecteur tirés des traductions de l'interface (`revel-render` dépend de `revel-i18n`, `model::words`).
   Essai éditeur « vue Calques… et compteur », captures `editeur-modele-3d-calques-{dark,light}.png`.
+  Template « Galerie 3D » : barre des vues et compteur actifs ; les règles du site qui visent des parties
+  (`[data-revel-part]`, `[data-rv-stats]`) sont retirées à la création du site : la page se place autour des
+  places par défaut des parties (modèle sous la barre du haut, description remontée).
 - Pièges : un modèle 3D placé en absolu sur toute une scène garde la proportion 4/3 de son style par défaut
   (déborde, boutons hors écran) : `aspect-ratio: auto` ; la règle commune `.page-hero .lead` reste orpheline
   (relevé) si l'en-tête de page n'a pas de `.lead` ; le libellé « Position » existe deux fois dans Styles

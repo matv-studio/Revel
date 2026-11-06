@@ -1678,6 +1678,54 @@ GitHub ([discussion GitHub Community](https://github.community/t/cannot-enable-g
 - Appels et préfixe d'adresse du site faits avec le nom exact du dépôt rendu par GitHub (casse, dépôt
   renommé), pas avec le nom tapé.
 
+**D-162 — 06/11/2026 — prise (choix de l'utilisateur : « comme Framer »).** **Styles propres à une
+utilisation de composant.** Une utilisation de composant n'avait dans Styles que ses propriétés : impossible
+de la placer (en-tête fixe sur une page, carte absolue) sans changer le composant partout. Comme dans Framer
+(position, taille d'une instance), le panneau Styles complet s'affiche pour une utilisation : ses classes
+sont posées sur l'élément racine du composant pour cette utilisation seule (attribut `class` de `Node::Use`,
+déjà fusionné par `patched_body`) ; la première valeur crée la classe `<composant>-instance`. Le composant
+garde son allure ; l'utilisation règle sa place. Écartée : la façon de Webflow (racine du composant seule,
+bloc autour pour un cas particulier). Essai éditeur : position relative posée sur l'utilisation « Header »
+puis annulée.
+
+**D-163 — 06/11/2026 — prise.** **Contenu précédent ou suivant d'une collection.** Filtres
+`getPreviousCollectionItem` et `getNextCollectionItem` (noms d'Eleventy, pour les imports) :
+`(collections.x | getNextCollectionItem(page, true)).url`, `true` : du dernier au premier. Dans un modèle des
+pages, la destination d'un lien propose « Contenu précédent » et « Contenu suivant » (Page › Contenu
+voisin) ; le relevé les reconnaît (`collection::neighbor_link`).
+
+**D-164 — 06/11/2026 — prise (demande de l'utilisateur, tableau validé).** **Template « Galerie 3D ».**
+Accueil en grille filtrable (catégories), collection `models` (nom, catégorie, fichier 3D, image d'attente,
+description, auteur, licence, source), modèle des pages en visionneuse plein écran : modèle absolu sur toute
+la scène (`100dvh`), barre du haut, description et crédit, flèches vers les modèles voisins (D-163), menu
+des modèles à droite (panneau qui monte du bas sur téléphone) ouvert et fermé par l'action « Ajouter une
+classe » (`click class:is-open .viewer`). Page À propos avec les crédits tirés du CMS.
+- Modèles : Khronos glTF Sample Assets, licences relevées dans `metadata.json` de chaque dossier : CC0
+  (ToyCar, SheenChair, Lantern, BoomBox, WaterBottle, Corset) et CC BY 4.0 (AnisotropyBarnLamp,
+  MaterialsVariantsShoe, DiffuseTransmissionPlant) ; écartés : DamagedHelmet (part CC BY-NC 4.0), ceux qui
+  portent des logos (CarConcept, ChronographWatch…), ceux sans GLB. Liés en ligne (les fichiers des
+  templates sont du texte) ; « Copier dans le site » copie aussi `.glb` et `.mview` (dossier `3d/`).
+- Images d'attente : rendus faits avec le lecteur de Revel (fond transparent), dans
+  `docs/templates/gallery3d/`, liés comme les photos des autres templates (`photos.json`).
+- Action « Ajouter une classe » : son état suit désormais la classe de l'élément visé, pour que plusieurs
+  boutons (« Modèles », la croix du menu) pilotent le même panneau.
+- Écart avec le tableau : pas de compteur « 03 / 09 » (pas d'écriture du rang d'un contenu dans l'interface).
+- La visionneuse montre la barre des vues (dont Calques, D-165) et le compteur triangles / sommets.
+
+**D-165 — 06/11/2026 — prise (demande de l'utilisateur : « la fonction la plus importante de mviewer »).**
+**Modèle 3D : vue « Calques » et compteur de triangles et de sommets.** Vue `layers` ajoutée aux vues du
+modèle (`data-model-view`, barre des vues) : six bandes obliques (rendu, normales, couleur, métal, rugosité,
+filaire), chacune dessinée seulement dans sa bande par le tampon de pochoir de WebGL (bandes écrites dans le
+pochoir, puis une passe du modèle par vue), traits et noms des bandes par-dessus (nœuds `data-rv-layers`), à
+la manière du lecteur de Marmoset Toolbag. Le fond de la scène n'est pas montré dans cette vue (il couvrirait
+toutes les bandes). Réglage « Triangles et sommets » (`data-model-stats`, groupe Rendu) : nombre de triangles
+et de sommets de toutes les mailles du modèle (`index.count / 3` ou `position.count / 3` ; sommets :
+`position.count`), en bas à gauche (`[data-rv-stats]`, styles de l'outil, réglables par le site). Noms des
+bandes et du compteur : textes de l'interface (mêmes clés que les réglages, 15 langues) insérés dans
+`revel-model.js` à la génération, choisis d'après la langue de la page.
+- En suspens : pente des bandes et ordre des vues fixes (pas de réglage) ; pas de glissement des traits à la
+  souris comme dans Marmoset.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

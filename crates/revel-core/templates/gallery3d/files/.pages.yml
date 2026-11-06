@@ -1,0 +1,27 @@
+media:
+  input: media
+  output: /media
+content:
+  - name: models
+    label: "[[Modèles 3D||3D models]]"
+    type: collection
+    path: content/models
+    filename: "{fields.slug}.md"
+    view:
+      fields: [title, category, license]
+      primary: title
+    fields:
+      - { name: title, label: "[[Nom||Name]]", type: string, required: true }
+      - { name: slug, label: "[[Adresse de la page||Page address]]", type: string, required: true }
+      - { name: order, label: "[[Ordre||Order]]", type: number }
+      - name: category
+        label: "[[Catégorie||Category]]"
+        type: select
+        options:
+          values: ["[[Objets||Objects]]", "[[Mobilier||Furniture]]", "[[Luminaires||Lighting]]", "[[Mode||Fashion]]"]
+      - { name: model, label: "[[Fichier 3D (GLB, glTF, .mview)||3D file (GLB, glTF, .mview)]]", type: file }
+      - { name: poster, label: "[[Image d'attente||Placeholder image]]", type: image }
+      - { name: description, label: "[[Description||Description]]", type: text }
+      - { name: author, label: "[[Auteur||Author]]", type: string }
+      - { name: license, label: "[[Licence||License]]", type: string }
+      - { name: source, label: "[[Source du modèle||Model source]]", type: string }

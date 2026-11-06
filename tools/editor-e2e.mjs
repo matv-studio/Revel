@@ -693,6 +693,39 @@ try {
   await page.frameLocator('iframe.canvas-frame').locator('header nav a', { hasText: 'Agence' }).first().click();
   await page.waitForSelector('.dock-panel[data-panel="styles"] .instance-name');
   check('composant : un clic sélectionne l\'utilisation entière', (await page.textContent('.dock-panel[data-panel="styles"] .instance-name')).trim() === 'Header');
+  // Styles propres à une utilisation (comme Framer) : Position réglée sur cette utilisation
+  // seule, par une classe posée sur la racine du composant ; annulée ensuite.
+  {
+    const sec = page.locator('.dock-panel[data-panel="styles"] details.style-section', { has: page.locator('summary', { hasText: /^\s*Position\s*$/ }) });
+    const has = (await sec.count()) === 1;
+    const untilE = async (fn, ms = 8000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await fn()) return true;
+        await page.waitForTimeout(100);
+      }
+      return false;
+    };
+    let set = false;
+    let undone = false;
+    if (has) {
+      await sec.locator('summary').click();
+      await sec.locator('select.input').first().selectOption('relative');
+      const fr = () => page.frameLocator('iframe.canvas-frame').locator('header').first();
+      const own = (h) => [...h.classList].some((c) => c.endsWith('-instance'));
+      set = await untilE(async () => (await fr().evaluate((h) => [...h.classList].includes('header-instance') && getComputedStyle(h).position === 'relative').catch(() => false)));
+      if (!set) {
+        const info = await fr().evaluate((h) => `${h.className} | ${getComputedStyle(h).position}`).catch((e) => String(e));
+        const doc = fs.readFileSync(path.join(siteDir, 'site.revel.json'), 'utf8').match(/.{0,60}header-instance.{0,80}/g);
+        console.log('DBG instance', info, doc && doc.slice(0, 4));
+      }
+      if (await fr().evaluate(own).catch(() => false)) {
+        await page.keyboard.press('Control+z');
+        undone = await untilE(async () => !(await fr().evaluate(own).catch(() => true)), 4000);
+      }
+    }
+    check('composant : position réglée sur l\'utilisation seule (classe propre), annulée', has && set && undone, `${has} ${set} ${undone}`);
+  }
   await page.click('.dock-panel[data-panel="styles"] .instance-actions .btn >> nth=0');
   await page.waitForSelector('.comp-bar');
   await page.waitForSelector('iframe.canvas-frame[data-key="@"]');
@@ -1515,11 +1548,31 @@ try {
         check('modèle 3D : caméra chiffrée, réglée au glisser puis prise', yawSet && taken && notMoved,
           `${await frame.locator('[data-revel-base="model"]').getAttribute('data-model-yaw')} ${orbitDbg}`);
         await page.check('input[data-model-button="views"]');
-        const views = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-revel-part="views"] [data-model-do^="view:"]').count()) === 6);
+        const views = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-revel-part="views"] [data-model-do^="view:"]').count()) === 7);
         await page.selectOption('select[data-model-select="data-model-view"]', 'normals');
         const normals = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-model-do="view:normals"].is-active').count()) === 1);
         check('modèle 3D : boutons des vues ajoutés, vue « Normales » montrée', views && normals);
         if (shots) await frame.locator('[data-revel-base="model"]').screenshot({ path: `${shots}/editeur-modele-3d.png` });
+        // Calques (vues en bandes obliques nommées) et compteur de triangles et de sommets.
+        await page.selectOption('select[data-model-select="data-model-view"]', 'layers');
+        const layers = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-rv-layers] div').count()) === 11
+          && (await frame.locator('[data-revel-base="model"] [data-model-do="view:layers"].is-active').count()) === 1);
+        const layerNames = await frame.locator('[data-revel-base="model"] [data-rv-layers]').innerText().catch(() => '');
+        await page.check('input[data-model-toggle="data-model-stats"]');
+        const stats = await untilE(async () => /Triangles : [\d\s\u202f,.]+\s*Sommets : [\d\s\u202f,.]+/.test(
+          await frame.locator('[data-revel-base="model"] [data-rv-stats]').innerText().catch(() => '')));
+        check('modèle 3D : vue « Calques » (6 bandes nommées) et compteur triangles / sommets', layers && stats
+          && /Rendu/.test(layerNames) && /Filaire/.test(layerNames), layerNames.replace(/\s+/g, ' '));
+        if (shots) {
+          for (const t of ['dark', 'light']) {
+            await page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), t);
+            await page.waitForTimeout(400);
+            await frame.locator('[data-revel-base="model"]').screenshot({ path: `${shots}/editeur-modele-3d-calques-${t}.png` });
+          }
+          await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+        }
+        await page.uncheck('input[data-model-toggle="data-model-stats"]');
+        await page.selectOption('select[data-model-select="data-model-view"]', 'normals');
         if (shots) {
           // Réglages du modèle dans les deux thèmes : colonne du panneau, en haut des réglages
           // puis sur le rendu.
@@ -4040,7 +4093,7 @@ try {
     await status('à jour');
     const help = await page.getAttribute(`${card} .label:has-text("Recevoir les préversions")`, 'title');
     await page.click(`${card} .switch`);
-    await status('^Préversion 0\\.7\\.3-beta\\.1 disponible$');
+    await status('^Préversion 0\\.7\\.4-beta\\.1 disponible$');
     await page.waitForSelector('.update-pill');
     const pill = (await page.textContent('.update-pill')).trim();
     const saved = await page.evaluate(() => window.__revelSettings?.prereleases === true);
@@ -4051,7 +4104,7 @@ try {
     const off = await page.evaluate(() => window.__revelSettings?.prereleases === false);
     await page.evaluate(() => { window.__revelUpdates = false; });
     check('réglages : préversions demandées puis retirées (enregistrées, recherche relancée, « Préversion » dans la barre)',
-      !!help && pill === 'Préversion 0.7.3-beta.1' && saved && pillGone && off, pill);
+      !!help && pill === 'Préversion 0.7.4-beta.1' && saved && pillGone && off, pill);
   }
 
   // Réglages › Assistants IA (4.2, serveur simulé) : activation, port, clé, configurations.

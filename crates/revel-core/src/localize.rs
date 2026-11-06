@@ -48,6 +48,29 @@ pub fn is_online_image(url: &str) -> bool {
         .any(|e| path.ends_with(e))
 }
 
+/// Adresse d'un modèle 3D en ligne (`.glb`, scène Marmoset `.mview`) : copié dans `3d/` comme
+/// les images (D-160 ; un glTF en plusieurs fichiers reste lié).
+pub fn is_online_model(url: &str) -> bool {
+    let u = url.trim();
+    let Some(rest) = u
+        .strip_prefix("https://")
+        .or_else(|| u.strip_prefix("http://"))
+    else {
+        return false;
+    };
+    let path = rest
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    path.ends_with(".glb") || path.ends_with(".mview")
+}
+
+/// Média en ligne à copier dans le site : image ou modèle 3D.
+fn is_online_media(url: &str) -> bool {
+    is_online_image(url) || is_online_model(url)
+}
+
 /// Adresses d'images en ligne dans un texte (adresse entière, jusqu'au premier guillemet, espace,
 /// parenthèse ou chevron).
 pub fn urls_in(text: &str) -> Vec<String> {
@@ -59,7 +82,7 @@ pub fn urls_in(text: &str) -> Vec<String> {
             .find(|c: char| c.is_whitespace() || "\"'<>)`,".contains(c))
             .unwrap_or(tail.len());
         let u = &tail[..end];
-        if is_online_image(u) && !out.iter().any(|x| x == u) {
+        if is_online_media(u) && !out.iter().any(|x| x == u) {
             out.push(u.to_string());
         }
         rest = &tail[end.max(4)..];
@@ -82,13 +105,13 @@ fn nodes_urls(nodes: &[Node], out: &mut BTreeSet<String>) {
             }
         }
         Node::Image(i) => {
-            if let Some(u) = literal(&i.src).filter(|u| is_online_image(u)) {
+            if let Some(u) = literal(&i.src).filter(|u| is_online_media(u)) {
                 out.insert(u);
             }
         }
         Node::Use { args, attrs, .. } => {
             for v in args.values() {
-                if let Some(u) = literal(v).filter(|u| is_online_image(u)) {
+                if let Some(u) = literal(v).filter(|u| is_online_media(u)) {
                     out.insert(u);
                 }
             }
@@ -104,7 +127,7 @@ fn nodes_urls(nodes: &[Node], out: &mut BTreeSet<String>) {
 
 fn value_urls(v: &Value, out: &mut BTreeSet<String>) {
     match v {
-        Value::String(s) if is_online_image(s) => {
+        Value::String(s) if is_online_media(s) => {
             out.insert(s.clone());
         }
         Value::Array(a) => a.iter().for_each(|x| value_urls(x, out)),
@@ -385,7 +408,8 @@ impl Core {
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("")
                 .to_string();
-            if !ct.is_empty() && !ct.starts_with("image/") {
+            let model = is_online_model(u);
+            if !model && !ct.is_empty() && !ct.starts_with("image/") {
                 continue;
             }
             let mut data = Vec::new();
@@ -399,10 +423,24 @@ impl Core {
             {
                 continue;
             }
-            let name = file_name(u, &extension(&ct, u));
+            let (dir, ext) = if model {
+                let path = u.split(['?', '#']).next().unwrap_or(u).to_ascii_lowercase();
+                (
+                    "3d",
+                    if path.ends_with(".mview") {
+                        "mview"
+                    } else {
+                        "glb"
+                    }
+                    .to_string(),
+                )
+            } else {
+                ("photos", extension(&ct, u))
+            };
+            let name = file_name(u, &ext);
             let staged = stage.join(&name);
             std::fs::write(&staged, &data)?;
-            let target = media.join("photos").join(&name);
+            let target = media.join(dir).join(&name);
             if !target.exists() {
                 let rel = |p: &Path| {
                     p.strip_prefix(path)
@@ -413,7 +451,7 @@ impl Core {
                     moves.push((f, t));
                 }
             }
-            map.insert(u.clone(), format!("{prefix}/photos/{name}"));
+            map.insert(u.clone(), format!("{prefix}/{dir}/{name}"));
         }
         if map.is_empty() {
             return Err(CoreError::Other(
@@ -443,6 +481,14 @@ mod tests {
         assert!(is_online_image("https://exemple.fr/a/b.JPG"));
         assert!(!is_online_image("https://exemple.fr/page/"));
         assert!(!is_online_image("/media/a.jpg"));
+        assert!(is_online_model("https://exemple.fr/m/ToyCar.glb?raw=1"));
+        assert!(is_online_model("https://exemple.fr/s.MVIEW"));
+        assert!(!is_online_model("https://exemple.fr/m/ToyCar.gltf"));
+        assert!(!is_online_model("/media/3d/a.glb"));
+        assert_eq!(
+            urls_in("x \"https://exemple.fr/m/a.glb\" y"),
+            vec!["https://exemple.fr/m/a.glb"]
+        );
         let t = r#"image: "https://images.unsplash.com/photo-1?w=800&q=80"
 <img src="https://x.org/a.png"> https://x.org/page"#;
         assert_eq!(

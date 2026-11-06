@@ -385,7 +385,9 @@ pub(crate) fn with_state(sel: &str, state: &str) -> String {
 /// sont des expressions : sa classe est un texte entre guillemets (`"carte__image"`).
 pub(crate) fn classes_of(n: &Node) -> Vec<String> {
     let value = match n {
-        Node::Element { attrs, .. } => attrs
+        // Utilisation de composant : ses classes vont sur la racine du composant, pour cette
+        // utilisation seulement (position, taille, marges propres, comme dans Framer).
+        Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
             .iter()
             .find(|a| a.name == "class")
             .and_then(|a| a.value.clone()),
@@ -418,7 +420,7 @@ pub(crate) fn classes_of(n: &Node) -> Vec<String> {
 pub(crate) fn class_command(at: revel_edit::Target, n: &Node, list: &[String]) -> Option<Command> {
     // Classes ajoutées selon un champ gardées telles quelles ; les autres réécrites.
     let conds = match n {
-        Node::Element { attrs, .. } => attrs
+        Node::Element { attrs, .. } | Node::Use { attrs, .. } => attrs
             .iter()
             .find(|a| a.name == "class")
             .and_then(|a| a.value.as_deref())
@@ -443,7 +445,7 @@ pub(crate) fn class_command(at: revel_edit::Target, n: &Node, list: &[String]) -
     }
     let value = (!value.trim().is_empty()).then_some(value);
     match n {
-        Node::Element { .. } => Some(Command::SetAttr {
+        Node::Element { .. } | Node::Use { .. } => Some(Command::SetAttr {
             at,
             name: "class".into(),
             value,
@@ -470,7 +472,19 @@ pub(crate) fn new_class(d: &revel_model::Site, n: &Node) -> String {
             .and_then(|a| a.value.clone()),
         _ => None,
     };
+    // Utilisation de composant : d'après le nom du composant (`en-tete-instance`).
+    let use_base = match n {
+        Node::Use { component, .. } => Some(format!(
+            "{}-instance",
+            d.component(component)
+                .map(|c| revel_model::slugify(&crate::names::component_name(c)))
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "component".into())
+        )),
+        _ => None,
+    };
     let base = match n {
+        _ if use_base.is_some() => use_base.as_deref().unwrap_or("block"),
         _ if kind.is_some() => kind.as_deref().unwrap_or("block"),
         Node::Image(_) => "image",
         Node::Element { tag, .. } => match tag.to_ascii_lowercase().as_str() {
@@ -723,7 +737,7 @@ pub fn Styles() -> impl IntoView {
     // panneau (3). Le panneau reste en place d'un élément à l'autre (sections ouvertes gardées).
     let kind = Memo::new(move |_| match node.get() {
         None => 0u8,
-        Some(n) if !matches!(n, Node::Element { .. } | Node::Image(_)) => 1,
+        Some(n) if !matches!(n, Node::Element { .. } | Node::Image(_) | Node::Use { .. }) => 1,
         Some(_) => 3,
     });
 

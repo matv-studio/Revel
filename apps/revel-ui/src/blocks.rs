@@ -3683,7 +3683,7 @@ fn binding_context(d: &Site, at: &Target) -> Option<(String, String, String)> {
 }
 
 /// Collection dont le modèle de page est le gabarit propriétaire de `at`.
-fn template_collection(d: &Site, at: &Target) -> Option<String> {
+pub(crate) fn template_collection(d: &Site, at: &Target) -> Option<String> {
     let revel_edit::Owner::Layout(lid) = &at.owner else {
         return None;
     };

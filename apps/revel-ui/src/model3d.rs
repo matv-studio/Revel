@@ -538,6 +538,7 @@ pub fn settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                 {toggle(ui, ed, at, attrs, "data-model-backdrop", "model-backdrop", None)}
                 {has(attrs, "data-model-backdrop").then(|| slider(ui, ed, at, &a, "data-model-backdrop", "model-blur", (0.0, 1.0, 0.05, 0.0), "", true))}
                 {select(ui, ed, at, "data-model-view", "model-view", view_cur, views)}
+                {toggle(ui, ed, at, attrs, "data-model-stats", "model-stats", None)}
             </div>
             {move || {
                 let list = info.get().animations;

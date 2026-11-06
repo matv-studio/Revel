@@ -1350,6 +1350,35 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
                 .collect::<Vec<_>>(),
         )
     });
+    // Contenu voisin dans une collection, avec les noms d'Eleventy : `page` (la page ou son
+    // adresse) ; `wrap` : du dernier au premier et du premier au dernier (liens « précédent »,
+    // « suivant » d'une page de contenu).
+    for (name, step) in [
+        ("getNextCollectionItem", 1isize),
+        ("getPreviousCollectionItem", -1isize),
+    ] {
+        env.add_filter(name, move |v: Value, page: Value, wrap: Option<bool>| {
+            let items = items_of(&v);
+            let url = if page.as_str().is_some() {
+                page.clone()
+            } else {
+                path(&page, "url")
+            };
+            let Some(i) = items.iter().position(|it| path(it, "url") == url) else {
+                return Value::UNDEFINED;
+            };
+            let n = items.len() as isize;
+            let j = i as isize + step;
+            let j = if wrap.unwrap_or(false) {
+                j.rem_euclid(n)
+            } else if (0..n).contains(&j) {
+                j
+            } else {
+                return Value::UNDEFINED;
+            };
+            items[j as usize].clone()
+        });
+    }
     env.add_filter("by_slug", |v: Value, slug: Value| {
         items_of(&v)
             .into_iter()

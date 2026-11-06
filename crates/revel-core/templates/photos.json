@@ -1234,5 +1234,79 @@
    "author": "Amari Shutters",
    "page": "https://unsplash.com/photos/people-in-formal-attire-dancing-energetically-outdoors-at-night-pblE1tZi_do"
   }
+ ],
+ "gallery3d": [
+  {
+   "role": "toy-car",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/toy-car.webp",
+   "alt_fr": "Voiture miniature verte sur un drapé rouge",
+   "alt_en": "Green toy car on a red drape",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  },
+  {
+   "role": "sheen-chair",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/sheen-chair.webp",
+   "alt_fr": "Fauteuil orange en velours",
+   "alt_en": "Orange velvet chair",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  },
+  {
+   "role": "lantern",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/lantern.webp",
+   "alt_fr": "Lanterne suspendue à un poteau",
+   "alt_en": "Lantern hanging from a post",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  },
+  {
+   "role": "boom-box",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/boom-box.webp",
+   "alt_fr": "Radio-cassette noire et argent",
+   "alt_en": "Black and silver boom box",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  },
+  {
+   "role": "barn-lamp",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/barn-lamp.webp",
+   "alt_fr": "Applique en cuivre",
+   "alt_en": "Copper wall lamp",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  },
+  {
+   "role": "shoe",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/shoe.webp",
+   "alt_fr": "Basket bleue",
+   "alt_en": "Blue sneaker",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  },
+  {
+   "role": "plant",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/plant.webp",
+   "alt_fr": "Plante en pot de terre cuite",
+   "alt_en": "Plant in a terracotta pot",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  },
+  {
+   "role": "corset",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/corset.webp",
+   "alt_fr": "Corset rouge sur un buste",
+   "alt_en": "Red corset on a dress form",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  },
+  {
+   "role": "water-bottle",
+   "url": "https://raw.githubusercontent.com/matv-studio/Revel/main/docs/templates/gallery3d/water-bottle.webp",
+   "alt_fr": "Gourde dorée dans son étui",
+   "alt_en": "Gold water bottle in its sleeve",
+   "author": "Khronos glTF Sample Assets (rendu Revel)",
+   "page": "https://github.com/KhronosGroup/glTF-Sample-Assets"
+  }
  ]
 }

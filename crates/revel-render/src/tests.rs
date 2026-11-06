@@ -762,6 +762,40 @@ fn liste_de_collection() {
 }
 
 #[test]
+fn contenu_voisin_d_une_collection() {
+    // Liens « précédent » et « suivant » d'une page de contenu (D-160, template Galerie 3D) :
+    // filtres aux noms d'Eleventy, du dernier au premier avec `true`.
+    let mut s = site();
+    let n = |f: &str, at: &str, wrap: &str| {
+        format!(
+            "{{{{ ((collections.projets | {f}((collections.projets | {at}).url{wrap})).data.title) or 'aucun' }}}}"
+        )
+    };
+    let src = format!(
+        "<p id=\"v\">{}|{}|{}|{}</p>",
+        n("getNextCollectionItem", "first", ""),
+        n("getNextCollectionItem", "last", ""),
+        n("getNextCollectionItem", "last", ", true"),
+        n("getPreviousCollectionItem", "first", ", true"),
+    );
+    s.pages[0].body.extend(parse(&src));
+    let out = build(&input(
+        &s,
+        vec![
+            entry("a", json!({"slug": "a", "title": "Alpha"})),
+            entry("b", json!({"slug": "b", "title": "Bêta"})),
+            entry("c", json!({"slug": "c", "title": "Gamma"})),
+        ],
+    ))
+    .unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains(r#"<p id="v">Bêta|aucun|Alpha|Gamma</p>"#),
+        "{home}"
+    );
+}
+
+#[test]
 fn lottie_interactions_et_transitions() {
     let mut s = site();
     s.settings.page_transition = Some("fade".into());

@@ -1,0 +1,140 @@
+{
+ "name": "[[Galerie 3D||3D gallery]]",
+ "category": "creative",
+ "order": 55,
+ "description": "[[Galerie de modèles 3D : grille filtrable, visionneuse plein écran avec menu des modèles, modèles dans le CMS.||Gallery of 3D models: filterable grid, full-screen viewer with a model menu, models in the CMS.]]",
+ "preview": "toy-car",
+ "palette": [
+  "#ecebe7",
+  "#141518",
+  "#2f55e4"
+ ],
+ "features": [
+  "cms",
+  "3d",
+  "filters",
+  "dark"
+ ],
+ "fonts": [
+  {
+   "family": "Archivo",
+   "variants": [
+    "500",
+    "600",
+    "700"
+   ]
+  },
+  {
+   "family": "Inter",
+   "variants": [
+    "400",
+    "500",
+    "600"
+   ]
+  }
+ ],
+ "settings": {
+  "page_transition": "fade"
+ },
+ "navbar": {
+  "cta": "[[Nous écrire||Write to us]]",
+  "cta_link": "mailto:bonjour@volume.studio"
+ },
+ "site": {
+  "description": "[[Galerie de modèles 3D à faire tourner, zoomer et comparer.||A gallery of 3D models to turn, zoom and compare.]]",
+  "email": "bonjour@volume.studio",
+  "phone": "",
+  "address": "[[Lyon, France||Bristol, United Kingdom]]",
+  "menus": {
+   "main": [
+    {
+     "label": "[[Galerie||Gallery]]",
+     "url": "/"
+    },
+    {
+     "label": "[[À propos||About]]",
+     "url": "[[/a-propos/||/about/]]"
+    }
+   ],
+   "social": [
+    {
+     "label": "Instagram",
+     "url": "https://www.instagram.com/"
+    },
+    {
+     "label": "Sketchfab",
+     "url": "https://sketchfab.com/"
+    }
+   ]
+  }
+ },
+ "kit": [
+  "navbar",
+  "footer"
+ ],
+ "components": [
+  {
+   "id": "model-card",
+   "name": "[[Carte de modèle||Model card]]",
+   "props": [
+    {
+     "name": "image",
+     "label": "[[Aperçu||Preview]]",
+     "type": "image",
+     "default": ""
+    },
+    {
+     "name": "title",
+     "label": "[[Nom||Name]]",
+     "type": "text",
+     "default": "[[Modèle||Model]]"
+    },
+    {
+     "name": "category",
+     "label": "[[Catégorie||Category]]",
+     "type": "text",
+     "default": ""
+    },
+    {
+     "name": "link",
+     "label": "[[Lien||Link]]",
+     "type": "link",
+     "default": "#"
+    }
+   ]
+  }
+ ],
+ "layouts": [
+  {
+   "id": "base"
+  },
+  {
+   "id": "model"
+  }
+ ],
+ "collections": [
+  {
+   "id": "models",
+   "folder": "content/models",
+   "path": "[[/modeles/{{ slug }}/||/models/{{ slug }}/]]",
+   "layout": "model",
+   "sort": {
+    "field": "order",
+    "descending": false
+   }
+  }
+ ],
+ "pages": [
+  {
+   "id": "index",
+   "path": "/",
+   "name": "[[Galerie||Gallery]]"
+  },
+  {
+   "id": "about",
+   "path": "[[/a-propos/||/about/]]",
+   "name": "[[À propos||About]]",
+   "title": "[[À propos||About]]"
+  }
+ ]
+}

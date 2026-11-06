@@ -2366,13 +2366,15 @@ pub fn set_slot(site: &Site, at: &Target, on: bool) -> Result<Command, EditError
 }
 
 /// Vues de contrôle d'un modèle 3D (D-160), dans l'ordre des boutons.
-pub const MODEL_VIEWS: [&str; 6] = [
+/// `layers` : toutes les vues à la fois, en bandes obliques nommées.
+pub const MODEL_VIEWS: [&str; 7] = [
     "render",
     "albedo",
     "normals",
     "roughness",
     "metalness",
     "wireframe",
+    "layers",
 ];
 
 /// Partie `part` (enfant direct) d'un élément : (index, identifiant, enfants).

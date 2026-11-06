@@ -443,9 +443,67 @@ impl FieldList {
     }
 }
 
+/// Lien vers le contenu voisin d'une collection, sur la page d'un contenu :
+/// `(collections.modeles | getNextCollectionItem(page, true)).url` ; du dernier contenu au
+/// premier (et inversement). Rend la collection et `true` pour le suivant.
+pub fn neighbor_link(e: &str) -> Option<(String, bool)> {
+    let e = e.trim().strip_prefix('(')?;
+    let (inner, rest) = e.rsplit_once(')')?;
+    if rest.trim() != ".url" {
+        return None;
+    }
+    let (col, f) = inner.split_once('|')?;
+    let col = col.trim().strip_prefix("collections.")?;
+    if col.is_empty()
+        || !col
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
+        return None;
+    }
+    let next = match f.trim() {
+        "getNextCollectionItem(page, true)" => true,
+        "getPreviousCollectionItem(page, true)" => false,
+        _ => return None,
+    };
+    Some((col.to_string(), next))
+}
+
+/// Expression du lien vers le contenu voisin (voir [`neighbor_link`]).
+pub fn neighbor_expr(collection: &str, next: bool) -> String {
+    let f = if next {
+        "getNextCollectionItem"
+    } else {
+        "getPreviousCollectionItem"
+    };
+    format!("(collections.{collection} | {f}(page, true)).url")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lien_vers_le_contenu_voisin() {
+        let e = neighbor_expr("modeles", true);
+        assert_eq!(
+            e,
+            "(collections.modeles | getNextCollectionItem(page, true)).url"
+        );
+        assert_eq!(neighbor_link(&e), Some(("modeles".into(), true)));
+        assert_eq!(
+            neighbor_link(&neighbor_expr("modeles", false)),
+            Some(("modeles".into(), false))
+        );
+        assert_eq!(
+            neighbor_link("(collections.a | getNextCollectionItem(page)).url"),
+            None
+        );
+        assert_eq!(
+            neighbor_link("collections.a | getNextCollectionItem(page, true)"),
+            None
+        );
+    }
 
     #[test]
     fn aller_retour() {

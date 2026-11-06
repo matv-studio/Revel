@@ -288,6 +288,8 @@ impl Ctx {
         self.field(e)
             || self.site_value(e)
             || self.url.as_deref() == Some(e)
+            // Contenu précédent ou suivant de la collection (page d'un contenu).
+            || (name == "href" && crate::collection::neighbor_link(e).is_some())
             || (name == "href" && self.prop(e, Some(PropKind::Link)))
             || (matches!(name, "src" | "poster") && self.prop(e, Some(PropKind::Image)))
             || self.prop(e, Some(PropKind::Text))

@@ -9,6 +9,27 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 06/11/2026 : version 0.7.4 (D-162 à D-165)
+- D-162 styles propres à une utilisation de composant (comme Framer) : panneau Styles complet pour une
+  utilisation, classes posées sur la racine du composant pour elle seule (`classes_of`, `class_command`,
+  `new_class` → `<nom-du-composant>-instance`). Essai éditeur sur l'utilisation « Header » du cobaye.
+- D-163 contenu précédent / suivant : filtres `getPreviousCollectionItem`, `getNextCollectionItem` (rendu),
+  `collection::neighbor_link`/`neighbor_expr` (relevé), Page › Contenu voisin dans la destination d'un lien.
+- D-164 template « Galerie 3D » (`crates/revel-core/templates/gallery3d/`) d'après le tableau de design
+  validé (https://claude.ai/artifact/TjcmDi9SNZDHJ6LMy4PjY2) : 9 modèles Khronos (licences dans D-164),
+  aperçus rendus par le lecteur de Revel dans `docs/templates/gallery3d/` (script de rendu : Playwright +
+  `model.js`, SwiftShader, `omitBackground`), « Copier dans le site » étendu aux `.glb`/`.mview` (`3d/`),
+  action « Ajouter une classe » pilotée par plusieurs boutons (état lu sur l'élément visé).
+- D-165 vue « Calques » (`layers`, bandes obliques par tampon de pochoir, `model.js` : `renderLayers`,
+  `layerBands`, `layerMarks`) et réglage « Triangles et sommets » (`data-model-stats`, `V.stats`) ; mots du
+  lecteur tirés des traductions de l'interface (`revel-render` dépend de `revel-i18n`, `model::words`).
+  Essai éditeur « vue Calques… et compteur », captures `editeur-modele-3d-calques-{dark,light}.png`.
+- Pièges : un modèle 3D placé en absolu sur toute une scène garde la proportion 4/3 de son style par défaut
+  (déborde, boutons hors écran) : `aspect-ratio: auto` ; la règle commune `.page-hero .lead` reste orpheline
+  (relevé) si l'en-tête de page n'a pas de `.lead` ; le libellé « Position » existe deux fois dans Styles
+  (titre exact dans les essais) ; Chromium du conteneur ne passe pas par le proxy : `ctx.route` + fichiers
+  locaux ou `curl` pour les ressources en ligne.
+
 ## Travail du 05/11/2026 : un seul outil « Modèle 3D » (D-160, complément)
 - Tuile « Scène Marmoset » retirée d'Ajouter ; choix « Format » (GLB / glTF, Marmoset) en tête des réglages
   du modèle (`apps/revel-ui/src/model3d.rs`, `kind_switch`, `switch_kind`) ; conversion par

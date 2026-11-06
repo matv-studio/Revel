@@ -14,7 +14,9 @@
    - data-model-backdrop : environnement visible derrière le modèle (flou de 0 à 1) ;
    - data-model-shadow : ombre au sol (0 à 1) ;
    - data-model-animation : animation du fichier (nom) ; data-model-loop ; data-model-speed ;
-   - data-model-view : render, albedo, normals, roughness, metalness, wireframe.
+   - data-model-view : render, albedo, normals, roughness, metalness, wireframe, ou layers (calques :
+     toutes les vues côte à côte, en bandes obliques nommées, comme le lecteur de Marmoset) ;
+   - data-model-stats : nombre de triangles et de sommets affiché en bas à gauche.
    Boutons contenus (`data-model-do`) : fullscreen, reset, rotate, play, view:<vue>.
    Cadrage : sphère englobante, le plus étroit des deux angles de vue décide (jamais coupé, même en
    portrait) ; recalculé à chaque changement de taille. Gestes : glissement vertical d'un doigt
@@ -87,6 +89,14 @@
     return n;
   }
 
+  // Noms des vues et du compteur, dans la langue de la page (textes de l'interface de Revel).
+  var WORDS = /*WORDS*/{}/*/WORDS*/;
+  function word(el, key) {
+    var l = ((el.closest && el.closest("[lang]") || document.documentElement).getAttribute("lang") || "en").toLowerCase().slice(0, 2);
+    var t = WORDS[l] || WORDS.en || {};
+    return t[key] || (WORDS.en && WORDS.en[key]) || key;
+  }
+
   function Viewer(el) {
     this.el = el;
     this.raf = 0;
@@ -148,7 +158,7 @@
     this.canvas = canvas;
     var renderer;
     try {
-      renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
+      renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, stencil: true, powerPreference: "high-performance" });
     } catch (e) {
       canvas.remove();
       el.setAttribute("data-model-state", "error");
@@ -252,6 +262,7 @@
     this.ground.visible = sh > 0;
     this.key.castShadow = sh > 0;
     this.setView(el.getAttribute("data-model-view") || "render");
+    this.stats();
     this.animation();
     this.fullButtons();
     // Caméra refaite seulement si ses réglages changent (la vue du visiteur, ou celle réglée au
@@ -443,6 +454,7 @@
     this.w = w;
     this.h = h;
     this.renderer.setSize(w, h, false);
+    this.bandKey = null;
     if (this.model) this.frame(false, this.touched);
     else { this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
     this.draw();
@@ -461,7 +473,8 @@
     var moving = c.update(dt);
     if (this.mixer && this.playing) { this.mixer.update(dt); moving = true; }
     if (c.autoRotate) moving = true;
-    this.renderer.render(this.scene, this.camera);
+    if (this.layers && this.model) this.renderLayers();
+    else this.renderer.render(this.scene, this.camera);
     if (this.poster && this.model && this.poster.style.opacity !== "0") this.poster.style.opacity = "0";
     if ((moving || (this.idle && this.rotate && t - this.idle <= 3000)) && this.visible) this.draw();
     else this.last = 0;
@@ -506,9 +519,13 @@
     if (!this.model) { this.view = view; return; }
     var T = RT.THREE;
     var self = this;
-    var ok = ["render", "albedo", "normals", "roughness", "metalness", "wireframe"];
+    var ok = ["render", "albedo", "normals", "roughness", "metalness", "wireframe", "layers"];
     if (ok.indexOf(view) < 0) view = "render";
     var wire = new T.Color(getComputedStyle(this.el).color || "#888");
+    this.layers = view === "layers";
+    this.bandKey = null;
+    if (!this.layers) this.layerMarks();
+    if (this.layers) view = "render";
     this.model.traverse(function (o) {
       if (!o.isMesh) return;
       if (!o.userData.rvMat) o.userData.rvMat = o.material;
@@ -517,9 +534,176 @@
       var one = function (m) { return self.altMaterial(m, view, wire); };
       o.material = Array.isArray(orig) ? orig.map(one) : one(orig);
     });
-    this.view = view;
+    this.view = this.layers ? "layers" : view;
     this.pressed();
     this.draw();
+  };
+  // Calques : une bande oblique par vue (rendu, normales, couleur, métal, rugosité, filaire), chaque
+  // vue dessinée seulement dans sa bande (tampon de pochoir), traits et noms par-dessus.
+  var LAYERS = ["render", "normals", "albedo", "metalness", "roughness", "wireframe"];
+  var SLOPE = 0.42;
+  V.layerX = function (k, y) {
+    // Trait `k` (0 à 6) : abscisse à la hauteur `y` (pixels, depuis le haut).
+    var sp = this.span;
+    return sp.x0 + (sp.x1 - sp.x0) * k / LAYERS.length + SLOPE * (y - sp.cy);
+  };
+  // Largeur partagée entre les bandes : celle du modèle à l'écran (entre 40 % et 90 % de la
+  // largeur), pour que chaque vue en montre une part.
+  V.layerSpan = function () {
+    var w = this.w, h = this.h;
+    var cx = w / 2, cy = h / 2, half = w * 0.45;
+    if (this.sphere && this.camera.isPerspectiveCamera) {
+      var v = this.sphere.center.clone().project(this.camera);
+      cx = (v.x + 1) / 2 * w;
+      cy = (1 - v.y) / 2 * h;
+      var d = this.camera.position.distanceTo(this.sphere.center);
+      var r = this.sphere.radius / (d * Math.tan(this.camera.fov * Math.PI / 360)) * h / 2;
+      half = Math.min(Math.max(r * 0.7, w * 0.2), w * 0.45);
+    }
+    return { x0: cx - half, x1: cx + half, cy: cy };
+  };
+  V.layerMarks = function () {
+    if (this.marks) { this.marks.remove(); this.marks = null; }
+    if (!this.layers || !this.span) return;
+    var m = liveNode(this.el, "div");
+    m.setAttribute("aria-hidden", "true");
+    m.setAttribute("data-rv-layers", "");
+    m.style.cssText = "position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;color:inherit;font:12px/1 system-ui,sans-serif";
+    var deg = Math.atan(SLOPE) * 180 / Math.PI;
+    var top = 0;
+    var len = Math.sqrt(this.h * this.h * (1 + SLOPE * SLOPE));
+    var w = this.w, n = LAYERS.length;
+    // Noms sous la barre des vues si elle est en haut, sinon près du bord.
+    var bar = this.el.querySelector(":scope > [data-revel-part=views]");
+    var ty = bar && bar.offsetTop < this.h / 2 ? bar.offsetTop + bar.offsetHeight + 12 : 14;
+    for (var k = 0; k < n; k++) {
+      if (k > 0) {
+        var line = document.createElement("div");
+        line.style.cssText = "position:absolute;top:0;left:" + this.layerX(k, top) + "px;width:1px;height:" + len + "px;background:currentColor;opacity:.55;transform-origin:0 0;transform:rotate(" + (-deg) + "deg)";
+        m.appendChild(line);
+      }
+      // Nom au milieu de la bande, en haut, le long des traits (bandes du bord : partie visible).
+      var a = Math.max(this.layerX(k, ty), 0), b = Math.min(this.layerX(k + 1, ty), w);
+      var lab = document.createElement("div");
+      lab.textContent = word(this.el, LAYERS[k]);
+      lab.style.cssText = "position:absolute;top:" + ty + "px;left:" + Math.max((a + b) / 2 + 6, 20) + "px;opacity:.8;transform-origin:0 0;transform:rotate(" + (90 - deg) + "deg);white-space:nowrap;letter-spacing:.04em";
+      m.appendChild(lab);
+    }
+    this.marks = m;
+  };
+  // Bandes écrites dans le pochoir (valeur k + 1 pour la vue k), refaites si la taille change.
+  V.layerBands = function () {
+    var T = RT.THREE;
+    var sp = this.layerSpan();
+    var key = this.w + "x" + this.h + ":" + Math.round(sp.x0) + "," + Math.round(sp.x1) + "," + Math.round(sp.cy);
+    if (this.bandKey === key && this.bands) return;
+    this.bandKey = key;
+    this.span = sp;
+    this.layerMarks();
+    if (!this.bands) {
+      this.bands = new T.Scene();
+      this.bandCam = new T.OrthographicCamera(0, 1, 1, 0, -1, 1);
+    }
+    var sc = this.bands;
+    while (sc.children.length) {
+      var c = sc.children.pop();
+      c.geometry.dispose();
+      c.material.dispose();
+    }
+    var w = this.w, h = this.h, far = w + h * SLOPE + 10;
+    this.bandCam.right = w;
+    this.bandCam.top = h;
+    this.bandCam.updateProjectionMatrix();
+    for (var k = 0; k < LAYERS.length; k++) {
+      var l0 = k === 0 ? [-far, -far] : [this.layerX(k, 0), this.layerX(k, h)];
+      var l1 = k === LAYERS.length - 1 ? [far + w, far + w] : [this.layerX(k + 1, 0), this.layerX(k + 1, h)];
+      // Coins (y vers le haut pour la caméra) : haut gauche, haut droit, bas droit, bas gauche.
+      var pts = [l0[0], h, l1[0], h, l1[1], 0, l0[1], 0];
+      var g = new T.BufferGeometry();
+      g.setAttribute("position", new T.Float32BufferAttribute([
+        pts[0], pts[1], 0, pts[2], pts[3], 0, pts[4], pts[5], 0,
+        pts[0], pts[1], 0, pts[4], pts[5], 0, pts[6], pts[7], 0
+      ], 3));
+      var mat = new T.MeshBasicMaterial({
+        colorWrite: false, depthWrite: false, depthTest: false, side: T.DoubleSide,
+        stencilWrite: true, stencilRef: k + 1, stencilFunc: T.AlwaysStencilFunc, stencilZPass: T.ReplaceStencilOp
+      });
+      sc.add(new T.Mesh(g, mat));
+    }
+  };
+  V.renderLayers = function () {
+    var T = RT.THREE;
+    var r = this.renderer;
+    var self = this;
+    this.layerBands();
+    var bg = this.scene.background;
+    this.scene.background = null;
+    r.autoClear = false;
+    r.clear(true, true, true);
+    r.render(this.bands, this.bandCam);
+    var wire = new T.Color(0x202226);
+    var used = [];
+    var stencil = function (m, ref) {
+      m.stencilWrite = true;
+      m.stencilRef = ref;
+      m.stencilFunc = T.EqualStencilFunc;
+      m.stencilFail = m.stencilZFail = m.stencilZPass = T.KeepStencilOp;
+      used.push(m);
+    };
+    for (var k = 0; k < LAYERS.length; k++) {
+      var view = LAYERS[k];
+      var passes = view === "wireframe" ? ["clay", "wireframe"] : [view];
+      for (var p = 0; p < passes.length; p++) {
+        var v = passes[p];
+        r.clearDepth();
+        this.model.traverse(function (o) {
+          if (!o.isMesh) return;
+          var orig = o.userData.rvMat || o.material;
+          var one = function (m) {
+            var x = v === "render" ? m : self.altMaterial(m, v, wire);
+            stencil(x, k + 1);
+            return x;
+          };
+          o.material = Array.isArray(orig) ? orig.map(one) : one(orig);
+        });
+        this.ground.visible = view === "render" && this.ground.material.opacity > 0;
+        if (this.ground.visible) stencil(this.ground.material, k + 1);
+        r.render(this.scene, this.camera);
+      }
+    }
+    // Matériaux remis comme avant (rendu, sans pochoir).
+    used.forEach(function (m) { m.stencilWrite = false; m.stencilFunc = T.AlwaysStencilFunc; });
+    this.model.traverse(function (o) { if (o.isMesh && o.userData.rvMat) o.material = o.userData.rvMat; });
+    this.ground.visible = this.ground.material.opacity > 0;
+    this.scene.background = bg;
+    r.autoClear = true;
+  };
+  // Nombre de triangles et de sommets du modèle (`data-model-stats`).
+  V.stats = function () {
+    var on = this.el.hasAttribute("data-model-stats") && this.model;
+    if (!on) { if (this.statsBox) { this.statsBox.remove(); this.statsBox = null; } return; }
+    var tri = 0, vert = 0;
+    this.model.traverse(function (o) {
+      if (!o.isMesh || !o.geometry) return;
+      var g = o.geometry, pos = g.getAttribute("position");
+      if (!pos) return;
+      vert += pos.count;
+      tri += (g.index ? g.index.count : pos.count) / 3;
+    });
+    if (!this.statsBox) {
+      this.statsBox = liveNode(this.el, "div");
+      this.statsBox.setAttribute("data-rv-stats", "");
+      // Place et aspect : styles de l'outil (`[data-rv-stats]`, en bas à gauche), réglables par le site.
+    }
+    var lang = document.documentElement.lang || undefined;
+    var fmt = function (n) { try { return Math.round(n).toLocaleString(lang); } catch (_) { return String(Math.round(n)); } };
+    this.statsBox.textContent = "";
+    var a = document.createElement("div");
+    a.textContent = word(this.el, "triangles") + " : " + fmt(tri);
+    var b = document.createElement("div");
+    b.textContent = word(this.el, "vertices") + " : " + fmt(vert);
+    this.statsBox.appendChild(a);
+    this.statsBox.appendChild(b);
   };
   V.altMaterial = function (m, view, wire) {
     var T = RT.THREE;
@@ -538,6 +722,9 @@
       out = new T.MeshNormalMaterial({ side: m.side, normalMap: m.normalMap || null, normalScale: m.normalScale || new T.Vector2(1, 1) });
     } else if (view === "wireframe") {
       out = new T.MeshBasicMaterial({ color: wire, wireframe: true, toneMapped: false });
+    } else if (view === "clay") {
+      // Fond clair sous le filaire des calques (faces visibles, traits par-dessus).
+      out = new T.MeshBasicMaterial({ color: 0xd9dadc, toneMapped: false, side: m.side, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
     } else {
       // Rugosité (canal vert) ou métal (canal bleu) de la texture glTF, en gris brut.
       var rough = view === "roughness";
@@ -635,6 +822,7 @@
       this.alt.forEach(function (o) { for (var k in o) o[k].dispose(); });
       this.alt = new Map();
     }
+    if (this.statsBox) { this.statsBox.remove(); this.statsBox = null; }
     this.model = null;
     this.camKey = null;
     this.gltf = null;
@@ -660,6 +848,10 @@
     var ns = this.el.querySelectorAll(":scope > [data-rv-live]");
     for (var i = 0; i < ns.length; i++) ns[i].remove();
     this.renderer = null;
+    this.marks = null;
+    this.statsBox = null;
+    this.bands = null;
+    this.bandKey = null;
     this.bar = null;
     this.poster = null;
     this.envKey = null;

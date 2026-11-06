@@ -65,9 +65,36 @@ pub fn file(path: &str) -> Option<Vec<u8>> {
         .map(|(_, b)| b.to_vec())
 }
 
+/// Mots affichés par le lecteur (vue « Calques », compteur) : (mot du lecteur, clé de l'interface).
+const WORDS: [(&str, &str); 8] = [
+    ("render", "model-view-render"),
+    ("normals", "model-view-normals"),
+    ("albedo", "model-view-albedo"),
+    ("metalness", "model-view-metalness"),
+    ("roughness", "model-view-roughness"),
+    ("wireframe", "model-view-wireframe"),
+    ("triangles", "model-stats-triangles"),
+    ("vertices", "model-stats-vertices"),
+];
+
+/// Mots du lecteur dans les langues de l'interface (mêmes noms que les réglages), en JSON.
+fn words() -> String {
+    let mut all = serde_json::Map::new();
+    for (code, _) in revel_i18n::LOCALES {
+        let l = revel_i18n::Localizer::new(code);
+        let mut one = serde_json::Map::new();
+        for (word, key) in WORDS {
+            one.insert(word.into(), l.t(key, &[]).into());
+        }
+        all.insert((*code).into(), one.into());
+    }
+    serde_json::Value::Object(all).to_string()
+}
+
 /// Lecteur de modèles (sans commentaires de bloc).
 pub fn script() -> String {
-    crate::lottie::strip_comments(LOADER)
+    let code = LOADER.replacen("/*WORDS*/{}/*/WORDS*/", &words(), 1);
+    crate::lottie::strip_comments(&code)
 }
 
 /// Lecteur de scènes Marmoset (sans commentaires de bloc).
@@ -136,6 +163,14 @@ pub fn script_files(used: Used, files: &mut Vec<OutputFile>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mots_du_lecteur_traduits() {
+        let js = script();
+        assert!(!js.contains("WORDS*/"));
+        assert!(js.contains("\"wireframe\":\"Filaire\""), "français");
+        assert!(js.contains("\"vertices\":\"Vertices\""), "anglais");
+    }
 
     #[test]
     fn page_avec_modele() {

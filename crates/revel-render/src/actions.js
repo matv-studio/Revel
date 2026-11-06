@@ -188,10 +188,16 @@
           src.setAttribute("aria-pressed", "true");
         });
       }
+      var hasClass = function () {
+        var ts = targets(src, key);
+        return ts.length > 0 && ts[0].classList.contains(act.slice(6));
+      };
       src.addEventListener("click", function (e) {
         if (src.tagName === "A" && (src.getAttribute("href") || "#") === "#") e.preventDefault();
-        // Classe : ajoutée puis retirée à l'appui suivant ; autres actions : à chaque appui.
-        state = !state;
+        // Classe : ajoutée puis retirée à l'appui suivant (d'après l'élément visé : plusieurs
+        // boutons, « ouvrir » et « fermer », pilotent le même panneau) ; autres actions : à
+        // chaque appui.
+        state = act.indexOf("class:") === 0 ? !hasClass() : !state;
         each(act.indexOf("class:") === 0 ? state : true);
         if (act === "toggle" || act.indexOf("class:") === 0) src.setAttribute("aria-expanded", String(state));
         if (act === "play") src.setAttribute("aria-pressed", String(state));
@@ -199,7 +205,7 @@
       // Menu ouvert à l'appui : refermé par Échap, le focus revient au bouton.
       if (act === "toggle" || act.indexOf("class:") === 0) {
         document.addEventListener("keydown", function (e) {
-          if (e.key !== "Escape" || !state) return;
+          if (e.key !== "Escape" || !(act.indexOf("class:") === 0 ? hasClass() : state)) return;
           state = false;
           if (act === "toggle") targets(src, key).forEach(function (t) { run("hide", t, true, key); });
           else each(false);

@@ -4,7 +4,7 @@
 Revel est une application gratuite pour Windows, macOS et Linux, dans 15 langues. Tout se fait sur votre
 ordinateur : pas de compte à créer, pas d'abonnement, et votre site reste à vous.
 
-> Version actuelle : **0.7.3**, en **préversion**. Revel est en cours de développement : l'essentiel fonctionne,
+> Version actuelle : **0.7.4**, en **préversion**. Revel est en cours de développement : l'essentiel fonctionne,
 > mais attendez-vous à des défauts. Gardez une copie de vos sites importants.
 
 ![L'éditeur de Revel : les pages et les calques à gauche, la page au centre, les réglages de l'élément choisi à droite](docs/captures/editeur.png)
@@ -22,7 +22,7 @@ vous voulez, et il continue de fonctionner sans Revel.
 <details>
 <summary><b>Partir d'un modèle</b></summary>
 
-26 modèles de site par métier (agence, restaurant, boutique, cabinet, événement, portfolio…), prêts à
+27 modèles de site par métier (agence, restaurant, boutique, cabinet, événement, portfolio, galerie 3D…), prêts à
 personnaliser. Vous pouvez partager les vôtres sous forme de fichier ou de catalogue GitHub, et ouvrir ceux des
 autres depuis « Nouveau site ».
 
@@ -211,13 +211,13 @@ HTML, CSS and images that you own.
 <details>
 <summary>What it does</summary>
 
-The interface is available in 15 languages (Settings › General). Revel includes 26 site templates, a visual
+The interface is available in 15 languages (Settings › General). Revel includes 27 site templates, a visual
 editor, a CMS, components, animations, a site map, a cart with Stripe or PayPal payment links, multilingual sites
 with on-device machine translation, one-click publishing (SFTP hosts or GitHub Pages), imports from Webflow,
 Framer, Figma, WordPress, static HTML, Eleventy and Git repositories (sites that need building are built by Revel
 on request; imported sites become fully editable in the panels, without code), team work through a shared network
 folder or an online repository, and a local connector for AI assistants. Download the installer for your system
-from the [releases page](https://github.com/matv-studio/Revel/releases). Revel is a pre-release (0.7.3): expect
+from the [releases page](https://github.com/matv-studio/Revel/releases). Revel is a pre-release (0.7.4): expect
 rough edges, and keep a copy of important sites.
 
 </details>

@@ -426,7 +426,8 @@ fn element_content(
         {is_link.then(|| view! {
             <div class="stack insp-content">
                 // Adresse reliée (contenu, information du site, menu) : réglée plus haut.
-                {(!href.contains("{{")).then(|| view! {
+                // Contenu précédent ou suivant : réglé ici, comme une page.
+                {(!href.contains("{{") || is_neighbor(&href)).then(|| view! {
                     <LinkTarget ed href=href.clone() on_commit=move |v: String| set_href("href", v)/>
                 })}
                 <label class="row-switch">
@@ -527,6 +528,14 @@ fn is_file_link(href: &str) -> bool {
         .any(|e| path.ends_with(e))
 }
 
+/// Adresse du contenu précédent ou suivant de la collection (`{{ (collections.x | …).url }}`).
+fn is_neighbor(href: &str) -> bool {
+    href.trim()
+        .strip_prefix("{{")
+        .and_then(|h| h.strip_suffix("}}"))
+        .is_some_and(|e| revel_edit::collection::neighbor_link(e).is_some())
+}
+
 fn link_kind(href: &str, pages: &[String]) -> LinkKind {
     if href.starts_with("mailto:") {
         LinkKind::Email
@@ -610,9 +619,33 @@ fn LinkTarget(
         }
         out
     });
+    // Élément du modèle des pages d'une collection : contenu précédent ou suivant de la
+    // collection (du dernier au premier).
+    let neighbors: Vec<(String, &'static str)> = ed
+        .selected_target()
+        .and_then(|at| {
+            ed.doc
+                .with_untracked(|d| crate::blocks::template_collection(d.as_ref()?, &at))
+        })
+        .map(|c| {
+            [(false, "link-prev"), (true, "link-next")]
+                .into_iter()
+                .map(|(next, key)| {
+                    (
+                        format!(
+                            "{{{{ {} }}}}",
+                            revel_edit::collection::neighbor_expr(&c, next)
+                        ),
+                        key,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let urls: Vec<String> = pages
         .iter()
         .map(|(u, _)| u.clone())
+        .chain(neighbors.iter().map(|(u, _)| u.clone()))
         .chain(
             entries
                 .iter()
@@ -668,6 +701,13 @@ fn LinkTarget(
                         <div class="select">
                             <select class="input" aria-label=ui.t("link-page") on:change=move |e| run(event_target_value(&e))>
                                 <option value="" hidden=true selected=!known>{ui.t("link-page-choose")}</option>
+                                {(!neighbors.is_empty()).then(|| view! {
+                                    <optgroup label=ui.t("link-neighbor")>
+                                        {neighbors.iter().map(|(u, key)| view! {
+                                            <option value=u.clone() selected=*u == cur>{ui.t(key)}</option>
+                                        }).collect_view()}
+                                    </optgroup>
+                                })}
                                 {pages.iter().map(|(u, name)| view! {
                                     <option value=u.clone() selected=*u == cur>{name.clone()}</option>
                                 }).collect_view()}

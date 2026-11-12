@@ -410,6 +410,22 @@ pub struct CmsEntry {
     pub url: Option<String>,
 }
 
+/// Reprise des flux reliés à une collection (D-167).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct FeedSyncReport {
+    /// Articles lus dans les flux.
+    pub items: usize,
+    pub created: usize,
+    pub updated: usize,
+    pub unchanged: usize,
+    /// Articles déjà repris d'un autre flux (même titre).
+    #[serde(default)]
+    pub duplicates: usize,
+    /// Flux non lus : (adresse, raison).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<(String, String)>,
+}
+
 /// Résultat d'un import.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportResult {

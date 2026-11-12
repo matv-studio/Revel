@@ -9,6 +9,21 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 12/11/2026 : calques façon Marmoset, flux RSS reliés (D-166, D-167)
+- D-166 : `model.js` (`strips`, `cutTargets`, `stripStep`, `tap`, `bandAt`, `layerMarks`, `layerPlace`,
+  `stats` en icônes), `toolcss.rs` (traits, noms, compteur), bouton `layers` (`make.rs`, `model3d.rs`),
+  template `gallery3d` refait. Référence lue : lecteur officiel de Marmoset (`StripData`).
+- D-167 : `revel-import/src/feed.rs` (lecture, `plan`), `FeedSource` (modèle), `SetFeedSources` (commande),
+  `Core::feed_sync`, commande Tauri et pont d'essai `feed_sync`, `apps/revel-ui/src/feeds.rs` (bouton
+  « Flux » du CMS ; état gardé par la vue CMS car l'en-tête est redessiné à chaque relecture).
+- Essais : éditeur (flux servi par l'essai lui-même, reprise, nouvelle reprise sans doublon, annulation ;
+  calques et compteur), `feed.rs` (6 essais).
+- Pièges : captures de la visionneuse lentes sous SwiftShader (flou d'arrière-plan + WebGL) : délai des
+  captures porté à 150 s ; le pont d'essai (`canvas-serve --bridge`) doit être arrêté avant de relancer les
+  essais (port occupé : « fetch failed » en série).
+- Suite : site Alunites Groupe (maquette et contexte fournis le 12/11) à recréer dans Revel, flux des marques
+  reliés aux collections Projets et Actualités, hébergement OVH.
+
 ## Travail du 06/11/2026 : version 0.7.4 (D-162 à D-165)
 - D-162 styles propres à une utilisation de composant (comme Framer) : panneau Styles complet pour une
   utilisation, classes posées sur la racine du composant pour elle seule (`classes_of`, `class_command`,

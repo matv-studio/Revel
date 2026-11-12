@@ -85,6 +85,9 @@ pub enum CoreError {
     Edit(revel_edit::EditError),
     #[error("site non ouvert dans l'éditeur")]
     NotOpen,
+    /// Flux relié à une collection (D-167) : adresse, lecture ou réglage.
+    #[error("flux : {0}")]
+    Feed(String),
     #[error("ce dossier ne contient pas de site Revel")]
     NotASite,
     #[error("mise à la corbeille impossible : {0}")]
@@ -239,6 +242,7 @@ impl CoreError {
                 .arg("url", format!("https://github.com/{repo}/settings/pages")),
             Self::Edit(e) => Failure::new(e.key()).arg("detail", e.to_string()),
             Self::NotOpen => Failure::new("error-edit-not-open"),
+            Self::Feed(detail) => Failure::new("error-feed").arg("detail", detail.clone()),
             Self::NotASite => Failure::new("error-not-a-site"),
             Self::Trash(detail) => Failure::new("error-trash").arg("detail", detail.clone()),
             Self::NoTranslation(from, to) => Failure::new("error-translate-pair")
@@ -1205,6 +1209,107 @@ impl Core {
         }
         scan(&p.dir, &p.dir, 0, &used, &mut out);
         Ok(out)
+    }
+
+    /// Reprend les flux reliés à une collection (D-167), dans leur ordre : articles nouveaux
+    /// ajoutés, articles déjà repris mis à jour, doublons d'un autre flux écartés, en une seule
+    /// modification (annulable) ; date de reprise notée. Un flux illisible est signalé, les
+    /// autres sont repris.
+    pub fn feed_sync(
+        &self,
+        path: &Path,
+        collection: &str,
+    ) -> Result<revel_protocol::FeedSyncReport> {
+        let p = revel_project::Project::open(path)?;
+        let sources: Vec<revel_model::FeedSource> = p
+            .site
+            .settings
+            .feed_sources
+            .iter()
+            .filter(|f| f.collection == collection)
+            .cloned()
+            .collect();
+        if sources.is_empty() {
+            return Err(CoreError::Feed(format!("aucun flux relié à {collection}")));
+        }
+        let folder = p
+            .site
+            .collections
+            .iter()
+            .find(|c| c.id == collection)
+            .map(|c| c.folder.clone())
+            .filter(|f| !f.is_empty())
+            .ok_or_else(|| CoreError::Feed(format!("collection {collection} sans dossier")))?;
+        let mut existing: Vec<revel_import::feed::Existing> = p
+            .load_entries()?
+            .into_iter()
+            .filter(|e| e.folder == folder)
+            .map(|e| revel_import::feed::Existing {
+                file: e.file_stem,
+                data: e.data,
+                body: e.body,
+            })
+            .collect();
+        let http = revel_import::crawl::Http::new();
+        let mut report = revel_protocol::FeedSyncReport::default();
+        let mut commands: Vec<revel_edit::Command> = Vec::new();
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+        let mut done: Vec<String> = Vec::new();
+        for src in &sources {
+            let feed = match revel_import::feed::fetch(&http, &src.url) {
+                Ok(f) => f,
+                Err(e) => {
+                    report.errors.push((src.url.clone(), e));
+                    continue;
+                }
+            };
+            let plan = revel_import::feed::plan(&feed, &existing, &src.source);
+            report.items += feed.items.len();
+            report.created += plan.create.len();
+            report.updated += plan.update.len();
+            report.unchanged += plan.unchanged;
+            report.duplicates += plan.duplicates;
+            for (file, data, body) in plan.create {
+                commands.push(revel_edit::Command::CreateEntry {
+                    folder: folder.clone(),
+                    file: file.clone(),
+                    data: data.clone(),
+                    body: body.clone(),
+                });
+                existing.push(revel_import::feed::Existing { file, data, body });
+            }
+            for (file, data, body) in plan.update {
+                commands.push(revel_edit::Command::WriteEntry {
+                    folder: folder.clone(),
+                    file: file.clone(),
+                    text: Some(revel_project::entries::entry_text(&data, &body)),
+                });
+                if let Some(e) = existing.iter_mut().find(|e| e.file == file) {
+                    e.data = data;
+                    e.body = body;
+                }
+            }
+            done.push(src.url.clone());
+        }
+        if done.is_empty() {
+            let detail = report
+                .errors
+                .iter()
+                .map(|(u, e)| format!("{u} : {e}"))
+                .collect::<Vec<_>>()
+                .join(" ; ");
+            return Err(CoreError::Feed(detail));
+        }
+        let mut all = p.site.settings.feed_sources.clone();
+        for f in all
+            .iter_mut()
+            .filter(|f| f.collection == collection && done.contains(&f.url))
+        {
+            f.synced = Some(now.clone());
+        }
+        commands.push(revel_edit::Command::SetFeedSources { sources: all });
+        self.edit_apply(path, revel_edit::Command::Batch { commands }, false)?;
+        Ok(report)
     }
 
     pub fn cms(&self, path: &Path) -> Result<Vec<revel_protocol::CmsCollection>> {

@@ -141,6 +141,10 @@ impl Core {
             "edit_redo" => json(self.edit_redo(site).map_err(f)?),
             "cms_collections" => json(self.cms(site).map_err(f)?),
             "cms_folders" => json(self.cms_folders(site).map_err(f)?),
+            "feed_sync" => json(
+                self.feed_sync(site, &arg::<String>(args, "collection")?)
+                    .map_err(f)?,
+            ),
             "translate_can" => {
                 json(self.translate_can(&arg::<String>(args, "from")?, &arg::<String>(args, "to")?))
             }

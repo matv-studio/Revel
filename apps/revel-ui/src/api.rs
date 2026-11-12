@@ -232,6 +232,16 @@ pub async fn cms_folders(path: &str) -> Res<Vec<revel_protocol::CmsFolder>> {
     call("cms_folders", &PathArg { path }).await
 }
 
+/// Reprend le flux relié à une collection (D-167).
+pub async fn feed_sync(path: &str, collection: &str) -> Res<revel_protocol::FeedSyncReport> {
+    #[derive(serde::Serialize)]
+    struct A<'a> {
+        path: &'a str,
+        collection: &'a str,
+    }
+    call("feed_sync", &A { path, collection }).await
+}
+
 /// Version de Revel, version du format des sites.
 pub async fn app_info() -> Res<(String, u32)> {
     call("app_info", &serde_json::json!({})).await

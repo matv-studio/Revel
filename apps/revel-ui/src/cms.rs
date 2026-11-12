@@ -314,6 +314,9 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
             .map(|c| c.id.clone())
             .collect::<Vec<_>>(),
     );
+    let feed_state = crate::feeds::FeedState::new();
+    // Après une reprise ou un réglage des flux : contenus et historique relus.
+    let feed_done = RwSignal::new(0u32);
     let reload = move || {
         let Some(p) = path.try_get_value() else {
             return;
@@ -360,6 +363,22 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         }
     });
     reload();
+    Effect::new(move |prev: Option<u32>| {
+        let n = feed_done.get();
+        if prev.is_some_and(|p| p != n) {
+            reload();
+            if let Some(p) = path.try_get_value() {
+                spawn_local(async move {
+                    if let Ok(o) = api::edit_open(&p).await
+                        && !state.is_disposed()
+                    {
+                        state.set(Some(o.state));
+                    }
+                });
+            }
+        }
+        n
+    });
     let apply = Callback::new(move |cmd: Command| {
         let Some(p) = path.try_get_value() else {
             return;
@@ -1259,6 +1278,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                             on:click=move |_| fields_mode.update(|m| *m = !*m)>
                             {icons::database()}<span class="btn-label">{ui.t("cms-fields-edit")}</span>
                         </button>
+                        <crate::feeds::FeedButton state=feed_state path=path collection=Signal::derive(move || current.get())
+                            done=feed_done
+                            disabled=Signal::derive(move || lang.get().is_some())
+                            revision=Signal::derive(move || state.with(|s| s.as_ref().map(|s| s.revision)))/>
                         <button class="btn cms-template-btn" title=ui.t("cms-template-help")
                             prop:disabled=move || busy_template.get()
                             on:click=move |_| if let Some(id) = current.get_untracked() { edit_template(id) }>

@@ -15,9 +15,12 @@
    - data-model-shadow : ombre au sol (0 à 1) ;
    - data-model-animation : animation du fichier (nom) ; data-model-loop ; data-model-speed ;
    - data-model-view : render, albedo, normals, roughness, metalness, wireframe, ou layers (calques :
-     toutes les vues côte à côte, en bandes obliques nommées, comme le lecteur de Marmoset) ;
-   - data-model-stats : nombre de triangles et de sommets affiché en bas à gauche.
-   Boutons contenus (`data-model-do`) : fullscreen, reset, rotate, play, view:<vue>.
+     les vues en bandes obliques égales sur tout l'écran ; un appui sur une bande la montre seule,
+     un nouvel appui revient aux bandes, comme le lecteur de Marmoset) ;
+   - data-model-stats : nombre de triangles et de vertex (icônes) affiché en bas à gauche.
+   Variable CSS `--model-layers-top` : hauteur des noms des bandes (sous les boutons du site).
+   Boutons contenus (`data-model-do`) : fullscreen, reset, rotate, play, layers (ouvre ou ferme les
+   calques), view:<vue>. Vue montrée : `data-model-shown` (layers, ou le nom de la vue).
    Cadrage : sphère englobante, le plus étroit des deux angles de vue décide (jamais coupé, même en
    portrait) ; recalculé à chaque changement de taille. Gestes : glissement vertical d'un doigt
    laissé au défilement, molette active seulement après un appui dans le modèle (ou avec Ctrl).
@@ -106,6 +109,8 @@
     this.src = null;
     this.envKey = null;
     this.view = "render";
+    this.strip = null;
+    this.hot = -1;
     this.alt = new Map();
     this.idle = 0;
     this.last = 0;
@@ -201,6 +206,29 @@
       var b = e.target.closest && e.target.closest("[data-model-do]");
       if (b && el.contains(b) && !editor()) { e.preventDefault(); self.command(b.getAttribute("data-model-do")); }
     });
+    // Calques : un appui bref (sans glisser) choisit la bande visée, ou revient aux bandes.
+    var down = null;
+    var at = function (e) {
+      var r = canvas.getBoundingClientRect();
+      return [e.clientX - r.left, e.clientY - r.top];
+    };
+    on(canvas, "pointerdown", function (e) {
+      down = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
+    });
+    on(canvas, "pointerup", function (e) {
+      var d = down;
+      down = null;
+      if (!d || editor() || self.strip == null) return;
+      if (Math.abs(e.clientX - d.x) > 6 || Math.abs(e.clientY - d.y) > 6 || performance.now() - d.t > 600) return;
+      var p = at(e);
+      self.tap(p[0], p[1]);
+    });
+    on(canvas, "pointermove", function (e) {
+      if (self.strip !== "menu" || editor() || e.buttons) { self.hover(-1); return; }
+      var p = at(e);
+      self.hover(self.bandAt(p[0], p[1]));
+    });
+    on(canvas, "pointerleave", function () { self.hover(-1); });
     on(document, "fullscreenchange", function () { self.pressed(); setTimeout(function () { self.resize(); }, 50); });
     canvas.addEventListener("webglcontextlost", function (e) { e.preventDefault(); });
     canvas.addEventListener("webglcontextrestored", function () { self.restart(); });
@@ -454,7 +482,7 @@
     this.w = w;
     this.h = h;
     this.renderer.setSize(w, h, false);
-    this.bandKey = null;
+    if (this.cuts) this.cuts = this.cutTargets();
     if (this.model) this.frame(false, this.touched);
     else { this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
     this.draw();
@@ -473,7 +501,8 @@
     var moving = c.update(dt);
     if (this.mixer && this.playing) { this.mixer.update(dt); moving = true; }
     if (c.autoRotate) moving = true;
-    if (this.layers && this.model) this.renderLayers();
+    if (this.stripStep(dt)) moving = true;
+    if (this.stripLive && this.model && this.cuts) { this.renderLayers(); this.layerPlace(); }
     else this.renderer.render(this.scene, this.camera);
     if (this.poster && this.model && this.poster.style.opacity !== "0") this.poster.style.opacity = "0";
     if ((moving || (this.idle && this.rotate && t - this.idle <= 3000)) && this.visible) this.draw();
@@ -491,6 +520,9 @@
       this.draw();
     } else if (cmd === "play") {
       if (this.anim) { this.playing = !this.playing; this.anim.paused = !this.playing; this.draw(); }
+    } else if (cmd === "layers" || cmd === "view:layers") {
+      // Calques ouverts ou fermés (une vue choisie dans les calques : retour aux bandes).
+      if (this.model) this.strips(this.strip === "menu" ? null : "menu");
     } else if (cmd.indexOf("view:") === 0) {
       this.setView(cmd.slice(5));
     }
@@ -502,9 +534,10 @@
     var bs = this.el.querySelectorAll("[data-model-do]");
     for (var i = 0; i < bs.length; i++) {
       var d = bs[i].getAttribute("data-model-do");
-      var on = d === "view:" + this.view || (d === "rotate" && !!this.rotate && this.spin !== false) ||
+      var on = d === "view:" + this.view || (d === "layers" && this.strip != null) ||
+        (d === "rotate" && !!this.rotate && this.spin !== false) ||
         (d === "play" && !!this.playing) || (d === "fullscreen" && document.fullscreenElement === self.el);
-      if (d.indexOf("view:") === 0 || d === "rotate" || d === "play" || d === "fullscreen") {
+      if (d.indexOf("view:") === 0 || d === "layers" || d === "rotate" || d === "play" || d === "fullscreen") {
         bs[i].setAttribute("aria-pressed", on ? "true" : "false");
         bs[i].classList.toggle("is-active", on);
       }
@@ -515,17 +548,10 @@
     for (var i = 0; i < bs.length; i++) bs[i].style.display = shared.fs === "no" ? "none" : "";
   };
   // Vues de contrôle : matériaux de remplacement, faits une fois par matériau.
-  V.setView = function (view) {
-    if (!this.model) { this.view = view; return; }
+  V.applyView = function (view) {
     var T = RT.THREE;
     var self = this;
-    var ok = ["render", "albedo", "normals", "roughness", "metalness", "wireframe", "layers"];
-    if (ok.indexOf(view) < 0) view = "render";
     var wire = new T.Color(getComputedStyle(this.el).color || "#888");
-    this.layers = view === "layers";
-    this.bandKey = null;
-    if (!this.layers) this.layerMarks();
-    if (this.layers) view = "render";
     this.model.traverse(function (o) {
       if (!o.isMesh) return;
       if (!o.userData.rvMat) o.userData.rvMat = o.material;
@@ -534,108 +560,209 @@
       var one = function (m) { return self.altMaterial(m, view, wire); };
       o.material = Array.isArray(orig) ? orig.map(one) : one(orig);
     });
-    this.view = this.layers ? "layers" : view;
+    this.single = view;
+  };
+  V.setView = function (view) {
+    if (!this.model) { this.view = view; return; }
+    var ok = ["render", "albedo", "normals", "roughness", "metalness", "wireframe", "layers"];
+    if (ok.indexOf(view) < 0) view = "render";
+    if (view === "layers") {
+      // Déjà ouverts : le choix du visiteur (bandes ou vue seule) est gardé.
+      if (this.strip == null) this.strips("menu");
+      return;
+    }
+    this.strips(null, true);
+    this.applyView(view);
+    this.view = view;
+    this.shown();
     this.pressed();
     this.draw();
   };
-  // Calques : une bande oblique par vue (rendu, normales, couleur, métal, rugosité, filaire), chaque
-  // vue dessinée seulement dans sa bande (tampon de pochoir), traits et noms par-dessus.
-  var LAYERS = ["render", "normals", "albedo", "metalness", "roughness", "wireframe"];
-  var SLOPE = 0.42;
-  V.layerX = function (k, y) {
-    // Trait `k` (0 à 6) : abscisse à la hauteur `y` (pixels, depuis le haut).
-    var sp = this.span;
-    return sp.x0 + (sp.x1 - sp.x0) * k / LAYERS.length + SLOPE * (y - sp.cy);
-  };
-  // Largeur partagée entre les bandes : celle du modèle à l'écran (entre 40 % et 90 % de la
-  // largeur), pour que chaque vue en montre une part.
-  V.layerSpan = function () {
-    var w = this.w, h = this.h;
-    var cx = w / 2, cy = h / 2, half = w * 0.45;
-    if (this.sphere && this.camera.isPerspectiveCamera) {
-      var v = this.sphere.center.clone().project(this.camera);
-      cx = (v.x + 1) / 2 * w;
-      cy = (1 - v.y) / 2 * h;
-      var d = this.camera.position.distanceTo(this.sphere.center);
-      var r = this.sphere.radius / (d * Math.tan(this.camera.fov * Math.PI / 360)) * h / 2;
-      half = Math.min(Math.max(r * 0.7, w * 0.2), w * 0.45);
+  // Calques, à la manière du lecteur de Marmoset : les vues de contrôle en bandes obliques égales
+  // sur tout l'écran, le rendu à droite. Un appui sur une bande la montre seule ; un nouvel appui
+  // revient aux bandes ; la bande du rendu ferme les calques. Les traits glissent d'un état à
+  // l'autre (demi-vie de 70 ms). Chaque vue n'est dessinée que dans sa bande (tampon de pochoir).
+  var LAYERS = ["normals", "albedo", "metalness", "roughness", "wireframe", "render"];
+  var SLANT = 0.25;
+  var HALF = 0.07;
+  // Pente des traits, en pixels par pixel (un quart de la largeur pour toute la hauteur).
+  V.slope = function () { return SLANT * this.w / this.h; };
+  // Place visée de chaque trait (abscisse à mi-hauteur) : bandes égales, ou hors de l'écran de part
+  // et d'autre de la vue montrée seule (calques fermés : tous à gauche, le rendu partout).
+  V.cutTargets = function () {
+    var n = LAYERS.length, w = this.w, off = this.slope() * this.h / 2 + 2;
+    var sel = this.strip == null || this.strip === "menu" ? -1 : LAYERS.indexOf(this.strip);
+    var out = [];
+    for (var k = 1; k < n; k++) {
+      if (this.strip === "menu") out.push(w * k / n);
+      else out.push(sel >= 0 && k > sel ? w + off : -off);
     }
-    return { x0: cx - half, x1: cx + half, cy: cy };
+    return out;
   };
+  // État des calques : `null` (fermés), "menu" (bandes) ou le nom de la vue montrée seule.
+  V.strips = function (state, instant) {
+    if (state == null && this.strip == null && !this.stripLive) return;
+    if (state === this.strip && !instant) return;
+    if (!this.w) this.resize();
+    if (!this.w) return;
+    var opening = this.strip == null && state != null;
+    // Départ : calques fermés (traits hors de l'écran, à gauche).
+    if (!this.cuts) { this.strip = null; this.cuts = this.cutTargets(); }
+    this.strip = state;
+    if (opening) this.applyView("render");
+    if (instant || reduce) this.cuts = this.cutTargets();
+    if (state != null) this.stripLive = true;
+    else if (instant || reduce) this.stripLive = false;
+    this.view = state != null ? "layers" : (this.single || "render");
+    this.layerMarks();
+    this.hover(-1);
+    this.shown();
+    this.pressed();
+    this.draw();
+  };
+  // Un pas du glissement des traits ; vrai tant qu'ils bougent.
+  V.stripStep = function (dt) {
+    if (!this.stripLive || !this.cuts) return false;
+    var to = this.cutTargets(), moving = false;
+    var f = Math.exp(-0.6931 / HALF * dt);
+    for (var i = 0; i < to.length; i++) {
+      var d = to[i] - this.cuts[i];
+      if (Math.abs(d) < 0.5) this.cuts[i] = to[i];
+      else { this.cuts[i] = to[i] - d * f; moving = true; }
+    }
+    if (!moving && this.strip == null) { this.stripLive = false; this.layerMarks(); }
+    return moving;
+  };
+  // Trait `i` (0 à 4) : abscisse à la hauteur `y` (pixels, depuis le haut).
+  V.cutX = function (i, y) { return this.cuts[i] + this.slope() * (y - this.h / 2); };
+  // Bande (0 à 5, dans l'ordre de LAYERS) sous le point (x, y).
+  V.bandAt = function (x, y) {
+    if (!this.cuts) return -1;
+    for (var i = 0; i < LAYERS.length - 1; i++) if (x < this.cutX(i, y)) return i;
+    return LAYERS.length - 1;
+  };
+  V.pick = function (view) { this.strips(view === "render" ? null : view); };
+  V.tap = function (x, y) {
+    if (this.strip == null) return;
+    if (this.strip === "menu") this.pick(LAYERS[this.bandAt(x, y)]);
+    else this.strips("menu");
+  };
+  // Bande survolée : son nom en évidence, pointeur en main sur les bandes.
+  V.hover = function (band) {
+    if (band === this.hot) return;
+    this.hot = band;
+    if (this.canvas) this.canvas.style.cursor = band >= 0 ? "pointer" : "";
+    var E = this.markEls;
+    if (E) for (var i = 0; i < E.labels.length; i++) E.labels[i].classList.toggle("is-hover", i === band);
+  };
+  // Vue montrée, lue par les styles du site et les essais.
+  V.shown = function () {
+    this.el.setAttribute("data-model-shown", this.strip === "menu" ? "layers" : (this.strip || this.single || "render"));
+  };
+  // Traits et noms par-dessus le modèle (allure : styles de l'outil). Chaque nom est un bouton,
+  // suspendu au trait qui ferme sa bande à droite.
   V.layerMarks = function () {
-    if (this.marks) { this.marks.remove(); this.marks = null; }
-    if (!this.layers || !this.span) return;
-    var m = liveNode(this.el, "div");
-    m.setAttribute("aria-hidden", "true");
-    m.setAttribute("data-rv-layers", "");
-    m.style.cssText = "position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;color:inherit;font:12px/1 system-ui,sans-serif";
-    var deg = Math.atan(SLOPE) * 180 / Math.PI;
-    var top = 0;
-    var len = Math.sqrt(this.h * this.h * (1 + SLOPE * SLOPE));
-    var w = this.w, n = LAYERS.length;
-    // Noms sous la barre des vues si elle est en haut, sinon près du bord.
-    var bar = this.el.querySelector(":scope > [data-revel-part=views]");
-    var ty = bar && bar.offsetTop < this.h / 2 ? bar.offsetTop + bar.offsetHeight + 12 : 14;
-    for (var k = 0; k < n; k++) {
-      if (k > 0) {
-        var line = document.createElement("div");
-        line.style.cssText = "position:absolute;top:0;left:" + this.layerX(k, top) + "px;width:1px;height:" + len + "px;background:currentColor;opacity:.55;transform-origin:0 0;transform:rotate(" + (-deg) + "deg)";
-        m.appendChild(line);
-      }
-      // Nom au milieu de la bande, en haut, le long des traits (bandes du bord : partie visible).
-      var a = Math.max(this.layerX(k, ty), 0), b = Math.min(this.layerX(k + 1, ty), w);
-      var lab = document.createElement("div");
-      lab.textContent = word(this.el, LAYERS[k]);
-      lab.style.cssText = "position:absolute;top:" + ty + "px;left:" + Math.max((a + b) / 2 + 6, 20) + "px;opacity:.8;transform-origin:0 0;transform:rotate(" + (90 - deg) + "deg);white-space:nowrap;letter-spacing:.04em";
-      m.appendChild(lab);
+    if (!this.stripLive) {
+      if (this.marks) { this.marks.remove(); this.marks = null; this.markEls = null; }
+      return;
     }
-    this.marks = m;
+    var self = this;
+    if (!this.marks) {
+      var m = liveNode(this.el, "div");
+      m.setAttribute("data-rv-layers", "");
+      var lines = [], labels = [];
+      LAYERS.slice(0, -1).forEach(function (v) {
+        var line = document.createElement("div");
+        line.setAttribute("data-rv-layer-line", "");
+        line.setAttribute("aria-hidden", "true");
+        var lab = document.createElement("button");
+        lab.type = "button";
+        lab.setAttribute("data-rv-layer", v);
+        lab.textContent = word(self.el, v);
+        lab.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (!editor() && self.strip === "menu") self.pick(v);
+        });
+        m.appendChild(line);
+        m.appendChild(lab);
+        lines.push(line);
+        labels.push(lab);
+      });
+      var name = document.createElement("div");
+      name.setAttribute("data-rv-layer-name", "");
+      m.appendChild(name);
+      this.marks = m;
+      this.markEls = { lines: lines, labels: labels, name: name };
+    }
+    var E = this.markEls;
+    var one = this.strip != null && this.strip !== "menu";
+    if (one) E.name.textContent = word(this.el, this.strip);
+    E.name.classList.toggle("is-on", one);
+    for (var i = 0; i < E.labels.length; i++) {
+      // Noms atteignables au clavier seulement quand les bandes sont montrées.
+      E.labels[i].tabIndex = this.strip === "menu" ? 0 : -1;
+    }
+    this.layerPlace();
   };
-  // Bandes écrites dans le pochoir (valeur k + 1 pour la vue k), refaites si la taille change.
+  V.layerPlace = function () {
+    var E = this.markEls;
+    if (!E || !this.cuts) return;
+    var s = this.slope(), h = this.h;
+    var deg = Math.atan(s) * 180 / Math.PI;
+    var len = Math.sqrt(1 + s * s) * h;
+    // Haut des noms : `--model-layers-top` (réglé par le site, sous ses boutons), sinon sous la barre
+    // des vues si elle est en haut, sinon 60 px.
+    var bar = this.el.querySelector(":scope > [data-revel-part=views]");
+    var y0 = parseFloat(getComputedStyle(this.el).getPropertyValue("--model-layers-top"));
+    if (!isFinite(y0)) y0 = Math.max(60, bar && bar.offsetTop < h / 2 ? bar.offsetTop + bar.offsetHeight + 16 : 0);
+    for (var i = 0; i < E.lines.length; i++) {
+      var xt = this.cuts[i] - s * h / 2;
+      E.lines[i].style.height = len + "px";
+      E.lines[i].style.transform = "translateX(" + xt.toFixed(2) + "px) rotate(" + (-deg) + "deg)";
+      E.labels[i].style.transform = "translate(" + (xt + s * y0).toFixed(2) + "px," + y0 + "px) rotate(" + (90 - deg) + "deg)";
+    }
+  };
+  // Bandes écrites dans le pochoir (valeur k + 1 pour la vue k) ; rend les bandes visibles.
   V.layerBands = function () {
     var T = RT.THREE;
-    var sp = this.layerSpan();
-    var key = this.w + "x" + this.h + ":" + Math.round(sp.x0) + "," + Math.round(sp.x1) + "," + Math.round(sp.cy);
-    if (this.bandKey === key && this.bands) return;
-    this.bandKey = key;
-    this.span = sp;
-    this.layerMarks();
+    var n = LAYERS.length, w = this.w, h = this.h, k;
     if (!this.bands) {
       this.bands = new T.Scene();
       this.bandCam = new T.OrthographicCamera(0, 1, 1, 0, -1, 1);
+      for (k = 0; k < n; k++) {
+        var g = new T.BufferGeometry();
+        g.setAttribute("position", new T.BufferAttribute(new Float32Array(18), 3));
+        var mesh = new T.Mesh(g, new T.MeshBasicMaterial({
+          colorWrite: false, depthWrite: false, depthTest: false, side: T.DoubleSide,
+          stencilWrite: true, stencilRef: k + 1, stencilFunc: T.AlwaysStencilFunc, stencilZPass: T.ReplaceStencilOp
+        }));
+        mesh.frustumCulled = false;
+        this.bands.add(mesh);
+      }
     }
-    var sc = this.bands;
-    while (sc.children.length) {
-      var c = sc.children.pop();
-      c.geometry.dispose();
-      c.material.dispose();
-    }
-    var w = this.w, h = this.h, far = w + h * SLOPE + 10;
     this.bandCam.right = w;
     this.bandCam.top = h;
     this.bandCam.updateProjectionMatrix();
-    for (var k = 0; k < LAYERS.length; k++) {
-      var l0 = k === 0 ? [-far, -far] : [this.layerX(k, 0), this.layerX(k, h)];
-      var l1 = k === LAYERS.length - 1 ? [far + w, far + w] : [this.layerX(k + 1, 0), this.layerX(k + 1, h)];
-      // Coins (y vers le haut pour la caméra) : haut gauche, haut droit, bas droit, bas gauche.
-      var pts = [l0[0], h, l1[0], h, l1[1], 0, l0[1], 0];
-      var g = new T.BufferGeometry();
-      g.setAttribute("position", new T.Float32BufferAttribute([
-        pts[0], pts[1], 0, pts[2], pts[3], 0, pts[4], pts[5], 0,
-        pts[0], pts[1], 0, pts[4], pts[5], 0, pts[6], pts[7], 0
-      ], 3));
-      var mat = new T.MeshBasicMaterial({
-        colorWrite: false, depthWrite: false, depthTest: false, side: T.DoubleSide,
-        stencilWrite: true, stencilRef: k + 1, stencilFunc: T.AlwaysStencilFunc, stencilZPass: T.ReplaceStencilOp
-      });
-      sc.add(new T.Mesh(g, mat));
+    var far = w + h + 10;
+    var seen = [];
+    for (k = 0; k < n; k++) {
+      // Bords gauche et droit de la bande, en haut et en bas de l'écran.
+      var a0 = k === 0 ? -far : this.cutX(k - 1, 0), a1 = k === 0 ? -far : this.cutX(k - 1, h);
+      var b0 = k === n - 1 ? w + far : this.cutX(k, 0), b1 = k === n - 1 ? w + far : this.cutX(k, h);
+      var p = this.bands.children[k].geometry.attributes.position;
+      // La caméra des bandes compte les hauteurs depuis le bas.
+      p.setXYZ(0, a0, h, 0); p.setXYZ(1, b0, h, 0); p.setXYZ(2, b1, 0, 0);
+      p.setXYZ(3, a0, h, 0); p.setXYZ(4, b1, 0, 0); p.setXYZ(5, a1, 0, 0);
+      p.needsUpdate = true;
+      seen.push(b0 - a0 > 0.25 && Math.max(b0, b1) > 0 && Math.min(a0, a1) < w);
     }
+    return seen;
   };
   V.renderLayers = function () {
     var T = RT.THREE;
     var r = this.renderer;
     var self = this;
-    this.layerBands();
+    var seen = this.layerBands();
     var bg = this.scene.background;
     this.scene.background = null;
     r.autoClear = false;
@@ -651,6 +778,7 @@
       used.push(m);
     };
     for (var k = 0; k < LAYERS.length; k++) {
+      if (!seen[k]) continue;
       var view = LAYERS[k];
       var passes = view === "wireframe" ? ["clay", "wireframe"] : [view];
       for (var p = 0; p < passes.length; p++) {
@@ -678,7 +806,12 @@
     this.scene.background = bg;
     r.autoClear = true;
   };
-  // Nombre de triangles et de sommets du modèle (`data-model-stats`).
+  // Nombre de triangles et de vertex du modèle (`data-model-stats`) : une icône et un nombre
+  // chacun, le nom en info-bulle.
+  var STAT_ICONS = {
+    triangles: '<path d="M8 2.6 14 13H2z"/>',
+    vertices: '<path d="M2.6 13 8 4.2 13.4 13"/><circle cx="8" cy="4.2" r="1.9" fill="currentColor" stroke="none"/>'
+  };
   V.stats = function () {
     var on = this.el.hasAttribute("data-model-stats") && this.model;
     if (!on) { if (this.statsBox) { this.statsBox.remove(); this.statsBox = null; } return; }
@@ -693,17 +826,25 @@
     if (!this.statsBox) {
       this.statsBox = liveNode(this.el, "div");
       this.statsBox.setAttribute("data-rv-stats", "");
-      // Place et aspect : styles de l'outil (`[data-rv-stats]`, en bas à gauche), réglables par le site.
+      // Place et aspect : styles de l'outil (`[data-rv-stats]`, en bas à gauche).
     }
+    var self = this;
     var lang = document.documentElement.lang || undefined;
     var fmt = function (n) { try { return Math.round(n).toLocaleString(lang); } catch (_) { return String(Math.round(n)); } };
     this.statsBox.textContent = "";
-    var a = document.createElement("div");
-    a.textContent = word(this.el, "triangles") + " : " + fmt(tri);
-    var b = document.createElement("div");
-    b.textContent = word(this.el, "vertices") + " : " + fmt(vert);
-    this.statsBox.appendChild(a);
-    this.statsBox.appendChild(b);
+    [["triangles", tri], ["vertices", vert]].forEach(function (it) {
+      var name = word(self.el, it[0]);
+      var one = document.createElement("span");
+      one.setAttribute("data-rv-stat", it[0]);
+      one.title = name;
+      one.setAttribute("role", "img");
+      one.setAttribute("aria-label", name + " : " + fmt(it[1]));
+      one.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + STAT_ICONS[it[0]] + "</svg>";
+      var n = document.createElement("span");
+      n.textContent = fmt(it[1]);
+      one.appendChild(n);
+      self.statsBox.appendChild(one);
+    });
   };
   V.altMaterial = function (m, view, wire) {
     var T = RT.THREE;
@@ -823,6 +964,11 @@
       this.alt = new Map();
     }
     if (this.statsBox) { this.statsBox.remove(); this.statsBox = null; }
+    this.strip = null;
+    this.stripLive = false;
+    this.cuts = null;
+    this.single = null;
+    this.layerMarks();
     this.model = null;
     this.camKey = null;
     this.gltf = null;
@@ -849,9 +995,10 @@
     for (var i = 0; i < ns.length; i++) ns[i].remove();
     this.renderer = null;
     this.marks = null;
+    this.markEls = null;
     this.statsBox = null;
     this.bands = null;
-    this.bandKey = null;
+    this.cuts = null;
     this.bar = null;
     this.poster = null;
     this.envKey = null;

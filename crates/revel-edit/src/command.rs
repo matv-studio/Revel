@@ -292,6 +292,11 @@ pub enum Command {
         #[serde(default)]
         feeds: Vec<revel_model::FeedSettings>,
     },
+    /// Flux d'autres sites reliés aux collections (D-167) : liste entière remplacée.
+    SetFeedSources {
+        #[serde(default)]
+        sources: Vec<revel_model::FeedSource>,
+    },
     /// Information du site (valeur des données globales du document, `site.email`,
     /// `site.menus.principal`) : chemin de clés, valeur ; `None` : retirée. Les objets
     /// intermédiaires sont créés au besoin ; l'inverse retire ce qui a été créé.
@@ -1333,6 +1338,18 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             }
             Ok(Command::SetFeeds {
                 feeds: std::mem::replace(&mut site.settings.feeds, feeds.clone()),
+            })
+        }
+        Command::SetFeedSources { sources } => {
+            for f in sources {
+                let ok = (f.url.starts_with("https://") || f.url.starts_with("http://"))
+                    && site.collections.iter().any(|c| c.id == f.collection);
+                if !ok {
+                    return Err(EditError::WrongKind(f.url.clone()));
+                }
+            }
+            Ok(Command::SetFeedSources {
+                sources: std::mem::replace(&mut site.settings.feed_sources, sources.clone()),
             })
         }
         Command::SetFormSettings { forms } => {

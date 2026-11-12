@@ -18,6 +18,7 @@ mod dialog;
 mod dock;
 mod domain;
 mod editor;
+mod feeds;
 mod files;
 mod help;
 mod home;

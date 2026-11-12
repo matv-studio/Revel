@@ -400,6 +400,10 @@ pub struct Settings {
     /// Flux RSS des collections (abonnement aux actualités), produits à la génération.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub feeds: Vec<FeedSettings>,
+    /// Flux d'autres sites reliés à des collections (D-167) : leurs articles deviennent des
+    /// contenus de la collection, repris à la demande.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub feed_sources: Vec<FeedSource>,
     /// Noms affichés des informations du site (chemin `address.city` -> « Ville ») donnés dans
     /// Paramètres › Informations du site.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -425,6 +429,22 @@ pub struct FeedSettings {
     /// Nombre de contenus (20 par défaut).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
+}
+
+/// Flux RSS 2.0 ou Atom d'un autre site relié à une collection (D-167).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeedSource {
+    /// Collection (identifiant).
+    pub collection: String,
+    /// Adresse du flux.
+    pub url: String,
+    /// Origine écrite dans le champ `source` des contenus repris (nom de la marque, du site) ;
+    /// vide : champ non écrit. Plusieurs flux peuvent remplir une même collection.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
+    /// Dernière reprise (`AAAA-MM-JJ HH:MM`), écrite à chaque reprise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synced: Option<String>,
 }
 
 /// Formulaires du site (5.8) : les messages des `<form data-revel-form>` sont transmis par

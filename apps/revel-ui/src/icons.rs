@@ -815,6 +815,13 @@ pub fn share() -> AnyView {
     )
 }
 
+/// Flux RSS (point et deux arcs).
+pub fn rss() -> AnyView {
+    svg(
+        r#"<circle cx="3.75" cy="12.25" r="1" fill="currentColor" stroke="none"/><path d="M3 7.5A5.5 5.5 0 0 1 8.5 13"/><path d="M3 3a10 10 0 0 1 10 10"/>"#,
+    )
+}
+
 /// Synchronisation (deux flèches en cercle).
 pub fn sync() -> AnyView {
     svg(

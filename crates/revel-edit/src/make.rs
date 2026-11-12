@@ -1315,12 +1315,14 @@ fn model_icon(cmd: &str) -> &'static str {
         "fullscreen" => "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
         "rotate" => "M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5",
         "play" => "M8 5v14l11-7z",
+        // Calques : trois plans empilés.
+        "layers" => "M12 3 3 8l9 5 9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5",
         _ => "",
     }
 }
 
 /// Bouton d'un modèle 3D (D-160), partie de l'élément fermé : `cmd` (`reset`, `fullscreen`,
-/// `rotate`, `play`, `view:<vue>`), `label` (nom lu par les lecteurs d'écran ; texte du bouton
+/// `rotate`, `play`, `layers`, `view:<vue>`), `label` (nom lu par les lecteurs d'écran ; texte du bouton
 /// pour une vue). Identifiants : bouton, dessin, trait.
 pub fn model_button(cmd: &str, label: &str, ids: [Option<String>; 3]) -> Node {
     let [b, svg, path] = ids;
@@ -2555,7 +2557,7 @@ pub fn model_has_button(n: &Node, cmd: &str) -> bool {
 }
 
 /// Ajoute ou retire un bouton d'un modèle 3D (D-160) : `reset`, `fullscreen`, `rotate`,
-/// `play` dans la barre des commandes (créée au besoin), ou `views` (barre des vues ;
+/// `play`, `layers` dans la barre des commandes (créée au besoin), ou `views` (barre des vues ;
 /// `labels` : noms des vues, dans l'ordre de `MODEL_VIEWS`). `None` : rien à changer.
 pub fn model_button_command(
     site: &Site,

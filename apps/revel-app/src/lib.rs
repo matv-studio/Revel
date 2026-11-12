@@ -421,6 +421,20 @@ async fn cms_collections(
         .map_err(err)
 }
 
+/// Reprend le flux relié à une collection (D-167).
+#[tauri::command]
+async fn feed_sync(
+    s: State<'_, AppState>,
+    path: String,
+    collection: String,
+) -> Res<revel_protocol::FeedSyncReport> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.feed_sync(&PathBuf::from(path), &collection))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
 /// Dossiers de contenus qu'aucune collection ne lit encore (création d'une collection).
 #[tauri::command]
 async fn cms_folders(s: State<'_, AppState>, path: String) -> Res<Vec<revel_protocol::CmsFolder>> {
@@ -1704,6 +1718,7 @@ pub fn run() {
             create_site,
             cms_collections,
             cms_folders,
+            feed_sync,
             import_eleventy,
             probe_site,
             import_site,

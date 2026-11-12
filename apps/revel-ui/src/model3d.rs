@@ -441,6 +441,7 @@ pub fn settings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
         ("fullscreen", "model-button-fullscreen"),
         ("rotate", "model-button-rotate"),
         ("play", "model-button-play"),
+        ("layers", "model-button-layers"),
         ("views", "model-button-views"),
     ];
     let button_rows = buttons

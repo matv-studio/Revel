@@ -18,6 +18,7 @@ use std::path::Path;
 pub mod adapt;
 pub mod crawl;
 pub mod eleventy;
+pub mod feed;
 pub mod figma;
 pub mod flatten;
 pub mod framer;

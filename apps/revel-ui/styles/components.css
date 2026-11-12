@@ -677,6 +677,26 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 /* Champs de la collection (mode « Champs ») */
 .cms-fields-btn.is-on { background: var(--set-bg); border-color: transparent; color: var(--set-text); }
 .cms-fields-btn.is-on svg.icon { color: var(--set-text); }
+/* Flux relié à la collection (D-167) : bouton bleu quand un flux est relié, menu flottant. */
+.cms-feed { position: relative; }
+.cms-feed-btn.is-on { background: var(--set-bg); border-color: transparent; color: var(--set-text); }
+.cms-feed-btn.is-on svg.icon { color: var(--set-text); }
+.cms-feed-pop { left: auto; right: 0; width: 440px; padding: var(--s-3); gap: var(--s-2); }
+.cms-feed-head, .cms-feed-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) var(--control-sm); align-items: center; gap: var(--s-2); }
+.cms-feed-head .label:last-child { grid-column: 2 / 4; }
+.cms-feed-row .input { min-width: 0; }
+.cms-feed-add { justify-self: start; align-self: flex-start; }
+.cms-feed-count { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--radius-full); background: var(--set-text); color: var(--bg); font-size: 10px; font-weight: var(--weight-strong); }
+.cms-feed-report { display: flex; flex-direction: column; gap: var(--s-1); }
+.cms-feed-report .muted { margin-left: 4px; }
+.cms-feed-error { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cms-feed-error { font-size: var(--text-sm); color: var(--danger-text); }
+.cms-feed-report .status--ok { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
+.cms-feed-actions { display: flex; align-items: center; gap: var(--s-2); }
+.cms-feed-gap { flex: 1; }
+.cms-feed-date { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.cms-feed-date svg.icon { width: 14px; height: 14px; }
+.cms-feed-actions .btn--small { align-self: auto; }
 .schema { padding: var(--s-3) var(--s-5) var(--s-5); max-width: 860px; }
 .schema-note {
   display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-3);

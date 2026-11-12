@@ -52,8 +52,8 @@ border-radius:999px;background:none;color:inherit;font:inherit;font-weight:600;c
     ),
     ("lottie", "B{display:block;width:100%;max-width:480px}"),
     // Modèle 3D (D-160) : forme réglée dans Styles (proportions par point de rupture) ; boutons
-    // (parties) en bas à droite ; compteur (`data-model-stats`) en bas à gauche ; plein écran :
-    // tout l'écran.
+    // (parties) en bas à droite ; compteur (`data-model-stats`, icônes) en bas à gauche ; calques
+    // (traits, noms des bandes, nom de la vue montrée seule) ; plein écran : tout l'écran.
     (
         "model",
         "B{position:relative;display:block;width:100%;aspect-ratio:4/3;overflow:hidden}\
@@ -65,7 +65,18 @@ B [data-revel-part=button].is-active{background-color:color-mix(in srgb,currentC
 B [data-revel-part=button] svg{width:18px;height:18px}\
 B [data-revel-part=views]{position:absolute;top:12px;left:12px;z-index:1;display:flex;flex-wrap:wrap;gap:4px}\
 B [data-revel-part=views] [data-revel-part=button]{width:auto;height:28px;padding:0 10px;font:inherit;font-size:12px}\
-B [data-rv-stats]{position:absolute;left:12px;bottom:12px;z-index:1;pointer-events:none;font-size:12px;line-height:1.4;opacity:.75}",
+B [data-rv-stats]{position:absolute;left:12px;bottom:12px;z-index:1;display:flex;align-items:center;gap:14px;height:36px;\
+font-size:12px;line-height:1;font-variant-numeric:tabular-nums;opacity:.75}\
+B [data-rv-stat]{display:flex;align-items:center;gap:6px}\
+B [data-rv-layers]{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;font-size:12px;line-height:1;letter-spacing:.02em}\
+B [data-rv-layer-line]{position:absolute;top:0;left:0;width:1px;background-color:currentColor;opacity:.35;transform-origin:0 0}\
+B [data-rv-layer]{position:absolute;top:0;left:0;margin:0;padding:8px 14px 8px 0;border:0;background:none;color:inherit;font:inherit;\
+letter-spacing:inherit;white-space:nowrap;cursor:pointer;pointer-events:auto;opacity:.65;transform-origin:0 0;transition:opacity .15s}\
+B [data-rv-layer]:hover,B [data-rv-layer].is-hover,B [data-rv-layer]:focus-visible{opacity:1}\
+B [data-rv-layer-name]{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:grid;place-items:center;height:32px;\
+padding:0 12px;border-radius:8px;background-color:color-mix(in srgb,currentColor 12%,transparent);white-space:nowrap;opacity:0;\
+transition:opacity .2s}\
+B [data-rv-layer-name].is-on{opacity:1}",
     ),
     (
         "mview",

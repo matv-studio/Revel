@@ -1553,17 +1553,21 @@ try {
         const normals = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-model-do="view:normals"].is-active').count()) === 1);
         check('modèle 3D : boutons des vues ajoutés, vue « Normales » montrée', views && normals);
         if (shots) await frame.locator('[data-revel-base="model"]').screenshot({ path: `${shots}/editeur-modele-3d.png` });
-        // Calques (vues en bandes obliques nommées) et compteur de triangles et de sommets.
+        // Calques (vues en bandes obliques égales, nommées) et compteur de triangles et de vertex.
         await page.selectOption('select[data-model-select="data-model-view"]', 'layers');
-        const layers = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-rv-layers] div').count()) === 11
+        const layers = await untilE(async () => (await frame.locator('[data-revel-base="model"] [data-rv-layer]').count()) === 5
+          && (await frame.locator('[data-revel-base="model"]').getAttribute('data-model-shown')) === 'layers'
           && (await frame.locator('[data-revel-base="model"] [data-model-do="view:layers"].is-active').count()) === 1);
         const layerNames = await frame.locator('[data-revel-base="model"] [data-rv-layers]').innerText().catch(() => '');
         await page.check('input[data-model-toggle="data-model-stats"]');
-        const stats = await untilE(async () => /Triangles : [\d\s\u202f,.]+\s*Sommets : [\d\s\u202f,.]+/.test(
-          await frame.locator('[data-revel-base="model"] [data-rv-stats]').innerText().catch(() => '')));
-        check('modèle 3D : vue « Calques » (6 bandes nommées) et compteur triangles / sommets', layers && stats
-          && /Rendu/.test(layerNames) && /Filaire/.test(layerNames), layerNames.replace(/\s+/g, ' '));
+        const stats = await untilE(async () => {
+          const l = await frame.locator('[data-revel-base="model"] [data-rv-stat]').evaluateAll((xs) => xs.map((x) => x.getAttribute('aria-label') + '|' + !!x.querySelector('svg')));
+          return l.length === 2 && /^Triangles : [\d\s\u202f,.]+\|true$/.test(l[0]) && /^Vertex : [\d\s\u202f,.]+\|true$/.test(l[1]);
+        });
+        check('modèle 3D : vue « Calques » (5 bandes nommées et le rendu) et compteur triangles / vertex en icônes', layers && stats
+          && /Normales/.test(layerNames) && /Filaire/.test(layerNames), layerNames.replace(/\s+/g, ' '));
         if (shots) {
+          await frame.locator('[data-revel-base="model"]').evaluate(() => new Promise((r) => setTimeout(r, 1500)));
           for (const t of ['dark', 'light']) {
             await page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), t);
             await page.waitForTimeout(400);
@@ -3149,6 +3153,53 @@ try {
     await page.keyboard.press('Control+z');
     await until(() => !fs.existsSync(created) && listing() === list0, 'création annulée');
     check('CMS : Ctrl+Z rétablit puis retire le contenu, dossier identique', true);
+
+    // ---------------------------------------------------------------- Flux relié à la collection (D-167)
+    {
+      const http = await import('node:http');
+      const rss = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Studio Nord</title><link>https://nord.example/</link><description>Projets</description>
+<item><title>Maison du lac</title><link>https://nord.example/projets/lac/</link><guid>nord-1</guid><pubDate>Tue, 03 Nov 2026 09:30:00 +0100</pubDate><category>Architecture</category><description>Une maison ouverte sur le lac.</description><content:encoded><![CDATA[<p>Texte complet.</p>]]></content:encoded><enclosure url="https://nord.example/lac.jpg" type="image/jpeg" length="1"/></item>
+<item><title>Atelier bois</title><link>https://nord.example/projets/atelier/</link><guid>nord-2</guid><pubDate>Mon, 02 Nov 2026 08:00:00 +0100</pubDate><description>Charpente apparente.</description></item>
+</channel></rss>`;
+      const server = http.createServer((req, res) => { res.writeHead(200, { 'content-type': 'application/rss+xml' }); res.end(rss); });
+      await new Promise((r) => server.listen(0, '127.0.0.1', r));
+      const feedUrl = `http://127.0.0.1:${server.address().port}/feed.xml`;
+      await page.click('.cms-feed-btn');
+      await page.fill('[data-role="feed-source"]', 'Nord');
+      await page.fill('[data-role="feed-url"]', feedUrl);
+      await page.click('[data-action="feed-sync"]');
+      const lac = path.join(dir, 'maison-du-lac.md');
+      await until(() => fs.existsSync(lac) && fs.existsSync(path.join(dir, 'atelier-bois.md')), 'contenus repris du flux');
+      await page.waitForSelector('[data-role="feed-report"]');
+      const lacText = fs.readFileSync(lac, 'utf8');
+      check('CMS : flux RSS relié, articles repris en contenus (titre, date, image, catégories, adresse d\'origine, texte)',
+        /title: Maison du lac/.test(lacText) && /date: '?2026-11-03'?/.test(lacText) && /image: https:\/\/nord\.example\/lac\.jpg/.test(lacText)
+          && /tags:\n\s+- Architecture/.test(lacText) && /guid: nord-1/.test(lacText) && /source: Nord/.test(lacText) && /<p>Texte complet\.<\/p>/.test(lacText)
+          && (await page.$eval('.cms-feed-btn', (b) => b.classList.contains('is-on'))),
+        lacText.split('\n').slice(0, 12).join(' | '));
+      if (shots) {
+        for (const t of ['dark', 'light']) {
+          await page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), t);
+          await page.waitForTimeout(300);
+          await page.screenshot({ path: `${shots}/cms-flux-${t}.png` });
+        }
+        await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+      }
+      // Nouvelle reprise : rien d'ajouté, contenus identiques.
+      const before = fs.readFileSync(lac, 'utf8');
+      await page.click('[data-action="feed-sync"]');
+      await page.waitForFunction(() => /0 ajoutés/.test(document.querySelector('[data-role="feed-report"]')?.textContent || ''), null, { timeout: 15000 });
+      check('CMS : nouvelle reprise du flux sans doublon', fs.readFileSync(lac, 'utf8') === before && fs.readdirSync(dir).length === list0.split(',').length + 2);
+      await page.keyboard.press('Escape');
+      for (let i = 0; i < 3; i++) {
+        await page.keyboard.press('Control+z');
+        await page.waitForTimeout(400);
+      }
+      await until(() => listing() === list0, 'reprise annulée');
+      await page.waitForFunction(() => !document.querySelector('.cms-feed-btn')?.classList.contains('is-on'), null, { timeout: 8000 }).catch(() => {});
+      check('CMS : reprise du flux annulée (Ctrl+Z), dossier identique, bouton « Flux » éteint', !(await page.$eval('.cms-feed-btn', (b) => b.classList.contains('is-on')).catch(() => true)));
+      server.close();
+    }
 
     // ---------------------------------------------------------------- Champs de la collection (3.3)
     const cfgPath = path.join(siteDir, '.pages.yml');

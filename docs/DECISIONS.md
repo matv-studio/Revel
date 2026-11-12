@@ -1726,6 +1726,47 @@ bandes et du compteur : textes de l'interface (mêmes clés que les réglages, 1
 - En suspens : pente des bandes et ordre des vues fixes (pas de réglage) ; pas de glissement des traits à la
   souris comme dans Marmoset.
 
+**D-166 — 12/11/2026 — prise (demande de l'utilisateur, capture à l'appui).**
+**Calques à la manière de Marmoset Viewer, compteur en icônes, template « Galerie 3D » refait.**
+Lecteur officiel relu (`https://viewer.marmoset.co/main/marmoset.js`, objet `StripData`) : un bouton « Layer
+Views » ouvre les bandes ; cinq bandes égales (pente 0,25) couvrent l'écran, le rendu reste à droite ; un
+appui sur une bande la montre seule en plein écran, un nouvel appui revient aux bandes ; les traits glissent
+par décroissance exponentielle (demi-vie 50 ms). Repris dans `model.js` (remplace le dessin de D-165) :
+- bandes égales sur toute la largeur (Normales, Couleur, Métal, Rugosité, Filaire, puis le rendu), traits
+  `cuts` animés (demi-vie 70 ms, `prefers-reduced-motion` : sans animation) à l'ouverture, au choix d'une
+  vue et à la fermeture ;
+- choix à l'écran : appui bref sans glisser sur une bande (ou son nom, bouton atteignable au clavier) ; vue
+  seule : nom en pastille en haut, appui : retour aux bandes ; bande du rendu : calques fermés ; glisser
+  tourne toujours le modèle ; survol : nom de la bande en évidence, pointeur en main ;
+- bouton `data-model-do="layers"` (icône de plans empilés, Styles › Boutons › Calques) ; `view:layers` garde
+  le même effet ; `data-model-shown` donne la vue montrée ; `--model-layers-top` règle la hauteur des noms ;
+- allure des traits, noms et compteur dans les styles de l'outil (`toolcss.rs`), plus dans le script.
+Compteur : une icône et un nombre par mesure (triangle ; vertex : angle et point), nom en info-bulle et pour
+les lecteurs d'écran ; « Vertex » en français (demande), « Triangles et vertex » dans Styles.
+Template « Galerie 3D » : visionneuse sans nom de modèle ni barre des vues ; boutons en verre dépoli (retour,
+menu), modèle sur toute la scène, description sur deux lignes et crédit en bas à gauche, flèches au centre,
+boutons Calques / Recadrer / Plein écran en bas à droite ; voile cliquable derrière le menu ; accueil :
+cartes sans cadre (vignette carrée sur fond de scène, nom et catégorie dessous), surtitre retiré.
+- En suspens : ordre des bandes fixe ; traits non déplaçables à la souris.
+
+**D-167 — 12/11/2026 — prise (besoin du site Alunites Groupe : projets et articles de deux autres sites).**
+**Flux RSS 2.0 (et Atom) reliés à une collection.** Avant : Revel produisait des flux RSS (`feeds`) mais
+n'en lisait pas. Ajout : `settings.feed_sources` (collection, adresse, origine, dernière reprise), commande
+`SetFeedSources`, lecture dans `revel-import::feed` (roxmltree, déjà présent) : RSS 2.0 (titre, lien, guid,
+pubDate, description, category, enclosure, `content:encoded`, `dc:creator`, `media:content`,
+`media:thumbnail`), RSS 1.0 et Atom 1.0. Chaque article devient un contenu Markdown de la collection : `title`,
+`date`, `summary` (300 caractères), `image`, `tags`, `author`, `link`, `guid`, `source`, texte en HTML.
+Reprise (`Core::feed_sync`, commande `feed_sync`) : contenus reconnus par `guid` et mis à jour (champs du
+flux remplacés, champs ajoutés par l'auteur gardés), nouveaux ajoutés, rien de supprimé ; plusieurs flux par
+collection, repris dans l'ordre, un article de même titre déjà repris d'un autre flux écarté (doublon
+espècehumaine / alunites.com) ; un flux illisible est signalé, les autres repris ; une seule étape
+d'annulation. Interface : bouton « Flux » de l'en-tête d'une collection (bleu quand un flux est relié), menu
+(origine, adresse, ajouter, retirer, Reprendre, date, bilan). Images laissées à leur adresse d'origine
+(« Copier dans le site » des médias en ligne les rapatrie).
+- En suspens : reprise automatique (à la génération ou planifiée) ; flux JSON Feed ; correspondance de
+  champs réglable ; les sites sources doivent exposer un flux (espece-humaine.com, superficiel.film à
+  vérifier).
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

@@ -999,6 +999,7 @@ impl Ed {
                     | Command::SetPageTransition { .. }
                     | Command::SetSmoothScroll { .. }
                     | Command::SetFeeds { .. }
+                    | Command::SetFeedSources { .. }
             ) {
                 // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.
             } else if style_only(cmd) {

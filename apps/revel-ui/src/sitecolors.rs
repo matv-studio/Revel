@@ -241,6 +241,7 @@ pub fn SiteColors(s: DocSession) -> impl IntoView {
         let cur = Rgba::parse(&shown);
         let alpha = cur.map(|c| c.a).unwrap_or(1.0);
         let (v3, m3) = (var.clone(), media.clone());
+        let named = label(&var);
         let shown2 = shown.clone();
         view! {
             <span class="color-cell">
@@ -266,7 +267,7 @@ pub fn SiteColors(s: DocSession) -> impl IntoView {
                         c.a = (a / 100.0).clamp(0.0, 1.0);
                         set(v3.clone(), m3.clone(), Some(if c.a >= 1.0 { c.hex6() } else { c.to_css() }))
                     }/>
-                <input class="input input--mono color-value" prop:value=value spellcheck="false"
+                <input class="input input--mono color-value" aria-label=named prop:value=value spellcheck="false"
                     placeholder=placeholder.unwrap_or_default()
                     on:change=move |e| {
                         let v = event_target_value(&e).trim().to_string();

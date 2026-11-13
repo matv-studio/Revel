@@ -261,7 +261,7 @@
 .pub-dest-side .chip svg.icon { width: 12px; height: 12px; margin-right: 3px; }
 .pub-waiting { font-size: var(--text-sm); }
 .pub-check {
-  appearance: none; flex: none; width: 14px; height: 14px; margin: 0; cursor: pointer;
+  appearance: none; flex: none; width: 14px; height: 14px; margin: 0; cursor: default;
   border: var(--border) solid var(--text-faint); border-radius: 3px; background: none;
   display: inline-grid; place-items: center;
 }
@@ -277,7 +277,7 @@
 .pub-dest:has(.pub-check) > :not(.pub-dest-row) { margin-left: 22px; }
 .pub-changes {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 6px 0 2px;
-  margin-left: -2px; border: 0; border-radius: var(--radius-sm); background: none; cursor: pointer;
+  margin-left: -2px; border: 0; border-radius: var(--radius-sm); background: none; cursor: default;
   font: inherit; font-size: var(--text-sm); color: var(--warning-text);
 }
 .pub-changes:hover { background: var(--surface-hover); }
@@ -373,5 +373,5 @@
 .topbar-undo { display: flex; align-items: center; gap: 2px; margin-right: 4px; }
 /* Aperçu d'un composant (D-143) : comme sur son canevas, centré, à la même échelle. */
 .preview-stage.is-comp { align-items: center; overflow: auto; padding: var(--s-6); }
-.preview-comp { position: relative; flex: none; margin: auto; border-radius: 6px; box-shadow: var(--shadow-dialog); overflow: hidden; }
+.preview-comp { position: relative; flex: none; margin: auto; border-radius: var(--radius-md); box-shadow: var(--shadow-dialog); overflow: hidden; }
 .preview-frame--comp { position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: none; }

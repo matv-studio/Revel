@@ -55,8 +55,8 @@
 }
 .selector-add::placeholder { color: var(--text-faint); }
 /* Sans saisie : un simple « + » qui ouvre le champ et ses propositions. */
-.selector-add.is-idle { flex: 0 0 22px; min-width: 22px; padding: 0; text-align: center; cursor: pointer; border-radius: var(--radius-sm); }
-.selector-add.is-idle::placeholder { color: var(--text-muted); font-size: 15px; }
+.selector-add.is-idle { flex: 0 0 22px; min-width: 22px; padding: 0; text-align: center; cursor: default; border-radius: var(--radius-sm); }
+.selector-add.is-idle::placeholder { color: var(--text-muted); font-size: var(--text-lg); }
 .selector-add.is-idle:hover { background: var(--surface-hover); }
 .class-suggest-item.is-sel { color: var(--text-muted); }
 .class-suggest-item.is-sel svg.icon { flex: none; width: 12px; height: 12px; }
@@ -188,16 +188,16 @@
 .nbox-input.is-hidden:focus { opacity: 1; pointer-events: auto; background: var(--surface-raised); border-radius: inherit; }
 .nbox:has(.nbox-input:focus) .nbox-chip { visibility: hidden; }
 .nbox-chip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; height: 20px; margin: 0 2px; padding: 0 6px; border: 0;
-  border-radius: var(--radius-sm); background: var(--set-bg); color: var(--set-text); font: inherit; font-size: var(--text-xs); cursor: pointer; }
+  border-radius: var(--radius-sm); background: var(--set-bg); color: var(--set-text); font: inherit; font-size: var(--text-xs); cursor: default; }
 .nbox-chip.is-var { background: var(--comp-bg); color: var(--comp); }
 .nbox-chip:hover { filter: brightness(1.15); }
 .nbox-chip__fn { font-weight: var(--weight-medium); }
-.nbox-chip__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 10.5px; }
+.nbox-chip__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); }
 .nbox-fn { display: grid; gap: 6px; padding: var(--s-2); min-width: 200px; }
 .nbox-fn__row { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: var(--s-2); }
 .nbox-fn__input { font-family: var(--font-mono); }
 .nbox-fn__actions { display: flex; justify-content: flex-end; padding-top: 2px; }
-.nbox-vars .menu-hint { margin-left: auto; padding-left: var(--s-3); color: var(--text-faint); font-size: 10.5px; }
+.nbox-vars .menu-hint { margin-left: auto; padding-left: var(--s-3); color: var(--text-faint); font-size: var(--text-xs); }
 .nbox-unit.is-faint { color: var(--text-faint); }
 
 /* --- Menus flottants ------------------------------------------------------------ */
@@ -282,7 +282,7 @@
 }
 .bm-box--inner { background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--line); }
 .bm-caption { position: absolute; top: 5px; left: 6px; z-index: 1; }
-.bm-caption .style-label { height: 16px; margin-left: 0; padding: 0 4px; font-size: 10px; color: var(--text-faint); }
+.bm-caption .style-label { height: 16px; margin-left: 0; padding: 0 4px; font-size: var(--text-xs); color: var(--text-faint); }
 .bm-caption .style-label.is-here { color: var(--set-text); }
 .bm-caption .style-label.is-inherited { color: var(--inherit-text); }
 .bm-caption .style-label-text { overflow: visible; }
@@ -343,7 +343,7 @@
 .cp-row { display: flex; align-items: center; gap: var(--s-2); }
 .cp-eye { flex: none; width: var(--control-md); height: var(--control-md); }
 .cp-sliders { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.cp-hue, .cp-alpha { position: relative; height: 6px; margin: 5px 0; border-radius: 3px; touch-action: none; cursor: pointer; outline: none; }
+.cp-hue, .cp-alpha { position: relative; height: 6px; margin: 5px 0; border-radius: 3px; touch-action: none; cursor: default; outline: none; }
 .cp-hue { background: linear-gradient(to right, #f00 0%, #ff0 16.7%, #0f0 33.3%, #0ff 50%, #00f 66.7%, #f0f 83.3%, #f00 100%); }
 .cp-alpha { background: linear-gradient(to right, rgb(0 0 0 / 0), var(--cp-color)), var(--checker); }
 .cp-knob {
@@ -365,14 +365,14 @@
   font-size: var(--text-xs);
 }
 .cp-channel .nbox-input:focus { outline: 2px solid var(--focus); outline-offset: -1px; border-color: transparent; }
-.cp-channel-label { text-align: center; font-size: 10px; color: var(--text-faint); margin-top: 2px; }
+.cp-channel-label { text-align: center; font-size: var(--text-xs); color: var(--text-faint); margin-top: 2px; }
 .cp-contrast { font-size: var(--text-xs); color: var(--text-muted); }
 .cp-contrast.is-low { color: var(--danger-text); }
 .cp-site { display: flex; flex-direction: column; gap: 6px; border-top: var(--border) solid var(--line); padding-top: var(--s-2); }
 .cp-title { font-size: var(--text-xs); color: var(--text-muted); }
 .cp-swatches { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
 .cp-swatch {
-  aspect-ratio: 1; padding: 0; border: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18);
+  aspect-ratio: 1; padding: 0; border: 0; border-radius: var(--radius-sm); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18);
   background: linear-gradient(var(--swatch), var(--swatch)), var(--checker);
 }
 .cp-swatch.is-var { border-radius: 50%; }
@@ -453,7 +453,7 @@
 /* --- Éléments de 3.7 : icône, code HTML, liste de collection ------------------------- */
 .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 4px; }
 .icon-choice { display: grid; place-items: center; height: 32px; border: var(--border) solid transparent; border-radius: var(--radius-sm);
-  background: var(--bg); color: var(--text-muted); cursor: pointer; padding: 0; }
+  background: var(--bg); color: var(--text-muted); cursor: default; padding: 0; }
 .icon-choice:hover { color: var(--text); background: var(--surface-hover); }
 .icon-choice.is-on { color: var(--set-text); background: var(--set-bg); border-color: color-mix(in srgb, var(--set-text) 40%, transparent); }
 .icon-choice svg { width: 18px; height: 18px; }
@@ -461,7 +461,7 @@
 .field-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .collection-list .field, .insp-group > .field { display: flex; flex-direction: column; gap: 4px; }
 /* Autres attributs : repliés quand ils sont nombreux (icône, vidéo…). */
-.insp-attrs > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; }
+.insp-attrs > summary { display: flex; align-items: center; gap: 6px; cursor: default; list-style: none; }
 .insp-attrs > summary::-webkit-details-marker { display: none; }
 .insp-attrs > summary::after { content: ""; width: 5px; height: 5px; margin-left: auto; border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform var(--fast) var(--ease); }
 .insp-attrs[open] > summary::after { transform: rotate(45deg); }
@@ -588,8 +588,8 @@
 @keyframes ico-parallax { 0%, 100% { transform: translateY(3px); } 50% { transform: translateY(-3px); } }
 @keyframes ico-type { 0%, 10% { clip-path: inset(0 100% 0 0); } 70%, 100% { clip-path: inset(0); } }
 @media (prefers-reduced-motion: reduce) { .anim-tile:hover .anim-ico .s { animation-duration: 6s; } }
-.anim-thumb { display: block; width: 14px; height: 14px; border-radius: 4px; background: currentColor; }
-.anim-thumb.is-text { width: auto; height: auto; background: none; font-size: 13px; font-weight: var(--weight-strong); line-height: 1.1; }
+.anim-thumb { display: block; width: 14px; height: 14px; border-radius: var(--radius-sm); background: currentColor; }
+.anim-thumb.is-text { width: auto; height: auto; background: none; font-size: var(--text-md); font-weight: var(--weight-strong); line-height: 1.1; }
 .anim-thumb.is-ticker { display: flex; align-items: center; gap: 6px; width: 100%; height: 14px; background: none; border-radius: 0; }
 .anim-thumb.is-ticker i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .anim-tile-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -656,8 +656,8 @@
 .dial-hand { position: absolute; left: 50%; top: 50%; width: 2px; height: 10px; margin-left: -1px; margin-top: -10px; border-radius: 1px; background: var(--text); transform-origin: 50% 100%; }
 /* Barre des couleurs du dégradé. */
 .stops { display: flex; flex-direction: column; gap: 6px; }
-.stops-bar { position: relative; height: 18px; margin: 0 7px; border-radius: 4px; background: var(--checker); cursor: copy; touch-action: none; }
-.stops-fill { position: absolute; inset: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); pointer-events: none; }
+.stops-bar { position: relative; height: 18px; margin: 0 7px; border-radius: var(--radius-sm); background: var(--checker); cursor: copy; touch-action: none; }
+.stops-fill { position: absolute; inset: 0; border-radius: var(--radius-sm); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); pointer-events: none; }
 .stop {
   position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; padding: 0;
   border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgb(0 0 0 / .45), 0 1px 3px rgb(0 0 0 / .3);
@@ -706,7 +706,7 @@
 .pair-ctl > .tool-toggle { margin-top: 0; }
 .pair-fields { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px; }
 .pair-fields--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.pair-label { font-size: 10px; color: var(--text-faint); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair-label { font-size: var(--text-xs); color: var(--text-faint); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pair-label--two { grid-column: span 2; }
 .style-label-spacer { display: block; }
 

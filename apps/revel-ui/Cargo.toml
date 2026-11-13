@@ -23,7 +23,7 @@ futures-channel = "0.3.34"
 js-sys = "0.3"
 web-sys = { version = "0.3", features = [
     "Element", "HtmlElement", "CssStyleDeclaration", "HtmlIFrameElement", "MessageEvent",
-    "Window", "KeyboardEvent", "DomRect", "EventTarget", "HtmlSelectElement", "DragEvent",
+    "Window", "KeyboardEvent", "KeyboardEventInit", "PointerEventInit", "DomRect", "EventTarget", "HtmlSelectElement", "DragEvent",
     "DataTransfer", "DataTransferItem", "DataTransferItemList", "ScrollIntoViewOptions", "ScrollLogicalPosition", "PointerEvent", "MouseEvent",
     "HtmlInputElement", "ResizeObserver", "Storage", "NodeList", "WheelEvent",
     "Node", "Text", "Document", "ClipboardEvent", "Selection", "Range", "HtmlDocument",

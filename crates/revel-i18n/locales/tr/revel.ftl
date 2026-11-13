@@ -3684,3 +3684,14 @@ mview-autostart = Otomatik başlat
 mview-autostart-help = Sahne gösterildiğinde yüklenir; aksi halde oynat düğmesine tıklanınca (daha az veri)
 mview-controls = Oynatıcı denetimleri
 mview-controls-help = Marmoset görüntüleyicisinin düğmeleri (oynatma, tam ekran, ayarlar) sahnenin üzerinde gösterilir
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = İçerikten önce
+styles-state-after = İçerikten sonra
+styles-state-before-help = Öğenin içeriğinden önce eklenen parça (çizgi, nokta, tırnak): ::before.
+styles-state-after-help = Öğenin içeriğinden sonra eklenen parça: ::after.
+styles-state-in-hover = { $name } üzerine gelince
+styles-state-in-focus = { $name } odaklanınca
+styles-state-in-hover-help = İşaretçi, öğeyi içeren { $name } üzerindeyken öğe.
+styles-state-in-focus-help = Öğeyi içeren { $name } klavye odağındayken öğe.
+styles-content = İçerik

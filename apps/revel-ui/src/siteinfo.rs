@@ -395,7 +395,7 @@ pub fn SiteMenus(s: DocSession, path: String) -> impl IntoView {
             {move || {
                 let menus = obj.get().map(|o| si::menus(&o)).unwrap_or_default();
                 if menus.is_empty() {
-                    return view! { <div class="section"><p class="muted">{ui.t("sitemenus-none")}</p></div> }.into_any();
+                    return view! { <div class="section">{icons::empty_tip(ui.tx("map-none", &[]), ui.tx("sitemenus-none", &[]))}</div> }.into_any();
                 }
                 menus.into_iter().enumerate().map(|(n, (name, links))| {
                     let key = StoredValue::new(name.clone());

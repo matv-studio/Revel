@@ -3684,3 +3684,14 @@ mview-autostart = 自動で開始
 mview-autostart-help = 表示時に読み込み。オフでは再生ボタンのクリック時（データ量が少ない）
 mview-controls = プレーヤーのコントロール
 mview-controls-help = Marmoset ビューアーのボタン（再生、全画面、設定）をシーンの上に表示
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = コンテンツの前
+styles-state-after = コンテンツの後
+styles-state-before-help = 要素のコンテンツの前に追加される部分（線、点、引用符）：::before。
+styles-state-after-help = 要素のコンテンツの後に追加される部分：::after。
+styles-state-in-hover = { $name } のホバー
+styles-state-in-focus = { $name } のフォーカス
+styles-state-in-hover-help = この要素を含む { $name } の上にポインターがある状態。
+styles-state-in-focus-help = この要素を含む { $name } にキーボードフォーカスがある状態。
+styles-content = コンテンツ

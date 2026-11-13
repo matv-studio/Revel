@@ -605,13 +605,27 @@
     if (el.matches("[data-revel-hover-media]")) s.push(".is-ready");
     const paused = actionTargets("play");
     if (up((p) => paused.has(p))) s.push("^.is-paused");
+    // Parties ajoutées avant et après le contenu (pas sur une image, un champ, une vidéo…) (D-169).
+    if (!el.matches("img,input,select,textarea,video,audio,iframe,canvas,br,hr,svg,svg *,picture,object,embed")) s.push("::before", "::after");
+    // Survol (et focus au clavier) d'un ancêtre : sa première classe, du plus proche au plus lointain.
+    let n = 0;
+    for (let p = el.parentElement; p && p !== document.body && n < 5; p = p.parentElement) {
+      const cls = [...p.classList].find((x) => /^[A-Za-z_-][\w-]*$/.test(x) && !x.startsWith("is-"));
+      if (!cls) continue;
+      n += 1;
+      s.push("^." + cls + ":hover");
+      if (p.matches("a[href],button,summary,[tabindex]")) s.push("^." + cls + ":focus-visible");
+    }
     return s;
   };
+  let stateNow = "";
   const sendComputed = () => {
     clearTimeout(computedTimer);
     computedTimer = setTimeout(() => {
       if (!selected || !selected.isConnected || !watched.length) return;
-      const cs = getComputedStyle(styled(selected));
+      // Partie « avant » ou « après » réglée : ses valeurs, pas celles de l'élément.
+      const part = /::(before|after)$/.exec(stateNow);
+      const cs = getComputedStyle(styled(selected), part ? part[0] : null);
       const values = {};
       for (const p of watched) values[p] = cs.getPropertyValue(p).trim();
       // Affichage du parent (réglages d'un élément dans une pile) et fond effectif sous l'élément
@@ -1377,6 +1391,8 @@
     if (orbitEls.includes(el) && window.RevelModel) window.RevelModel.orbit(el, true);
     markEmpty();
   });
+  // Tout appui dans la page est signalé à l'interface : ses menus ouverts se ferment (D-169).
+  window.addEventListener("pointerdown", () => post({ type: "down" }), true);
   document.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || editing || inEdit(e.target) || onBar(e) || inOrbit(e.target)) return;
     const p = pick(e.target);
@@ -1682,7 +1698,9 @@
     if (e.key === "Escape") {
       if (drag && drag.move) { release(e, true); return; }
       if (resizing) { endResize(true); return; }
-      select(null, true);
+      // L'interface décide : un menu ou une fenêtre ouverts se ferment d'abord, sinon la sélection
+      // est retirée (D-169).
+      post({ type: "escape" });
       return;
     }
     // Espace maintenue : déplacement de la vue (comme Figma), géré par l'interface.
@@ -2282,6 +2300,7 @@
         // État choisi dans le panneau de styles : accordéon de la sélection ouvert le temps du réglage.
         if (stateOpened) { stateOpened.open = !!stateOpened.__rvWasOpen; stateOpened = null; }
         const st = String(m.state || "");
+        stateNow = st;
         const d = (st === "[open]" || st === "^[open]") && selected ? selected.closest("details") : null;
         if (d) { d.__rvWasOpen = d.open; d.open = true; stateOpened = d; }
         redraw();

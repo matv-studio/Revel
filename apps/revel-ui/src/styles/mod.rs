@@ -63,7 +63,68 @@ const STATES: &[(&str, &str)] = &[
     ("^.is-open", "styles-state-in-open-menu"),
     // Panier vide (outil Panier) : ce qu'il contient (total, bouton de commande).
     ("^.is-empty", "styles-state-in-empty-cart"),
+    // Parties ajoutées avant et après le contenu (trait, pastille, guillemet…) (D-169).
+    ("::before", "styles-state-before"),
+    ("::after", "styles-state-after"),
 ];
+
+/// État « ancêtre survolé » ou « ancêtre atteint au clavier » (`^.carte:hover`) : (classe, clé du
+/// libellé). Proposé par le canevas pour chaque ancêtre qui porte une classe (D-169).
+pub(crate) fn ancestor_state(st: &str) -> Option<(String, &'static str)> {
+    let rest = st.strip_prefix("^.")?;
+    let (cls, key) = match rest.strip_suffix(":hover") {
+        Some(c) => (c, "styles-state-in-hover"),
+        None => (
+            rest.strip_suffix(":focus-visible")?,
+            "styles-state-in-focus",
+        ),
+    };
+    (!cls.is_empty() && !cls.contains([' ', ':', '.', '['])).then(|| (format!(".{cls}"), key))
+}
+
+/// Texte d'une partie « avant » ou « après » (`content`) : montré dans ces deux états seulement.
+/// Un texte est écrit entre guillemets ; `counter(…)`, `attr(…)`, `url(…)` et les mots-clés sont
+/// gardés tels quels (D-169).
+#[component]
+fn PartContent(sx: Sx) -> impl IntoView {
+    let ui = sx.ui;
+    let on = move || {
+        let s = sx.state.get();
+        s.ends_with("::before") || s.ends_with("::after")
+    };
+    let raw = |v: &str| {
+        ["counter(", "counters(", "attr(", "url("]
+            .iter()
+            .any(|f| v.starts_with(f))
+            || matches!(v, "none" | "normal" | "open-quote" | "close-quote")
+    };
+    let text = move || {
+        let v = sx.get("content").here.unwrap_or_default();
+        let v = v.trim();
+        match v.strip_prefix('"').and_then(|x| x.strip_suffix('"')) {
+            Some(x) => x.replace("\\\"", "\"").replace("\\\\", "\\"),
+            None => v.to_string(),
+        }
+    };
+    view! {
+        <Show when=on>
+            <div class="part-content">
+                <controls::Row sx props=&["content"] key="styles-content">
+                    <input class="input" spellcheck="false" aria-label=ui.t("styles-content") prop:value=text
+                        on:change=move |e| {
+                            let v = event_target_value(&e);
+                            let css = if raw(v.trim()) {
+                                v.trim().to_string()
+                            } else {
+                                format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\""))
+                            };
+                            sx.set("content", Some(css));
+                        }/>
+                </controls::Row>
+            </div>
+        </Show>
+    }
+}
 
 /// Champ « Ajouter une classe » des pastilles : propose les classes du site d'après la place de
 /// l'élément (voisins, classe du parent, même balise), filtrées par la saisie ; ↑ ↓ pour choisir,
@@ -323,13 +384,62 @@ fn StateMenu(sx: Sx) -> impl IntoView {
             .map(|(st, k)| (*st, *k))
             .collect::<Vec<_>>()
     });
+    // États d'un ancêtre proposés par le canevas, plus celui en cours ; un point devant ceux qui
+    // ont des styles.
+    let around = Memo::new(move |_| {
+        let ctx_states = sx.computed("--rv-states");
+        let cur = state.get();
+        let mut list: Vec<String> = ctx_states
+            .lines()
+            .filter(|l| ancestor_state(l).is_some())
+            .map(str::to_string)
+            .collect();
+        if ancestor_state(&cur).is_some() && !list.contains(&cur) {
+            list.push(cur);
+        }
+        let sel = sx.selector.get();
+        let scope = sx.scope.get();
+        let root = sx.root_selected();
+        ed.doc.with(|d| {
+            list.into_iter()
+                .map(|st| {
+                    let full = ctx::scoped(&scope, root, &sel, &st);
+                    let set = d.as_ref().is_some_and(|d| {
+                        d.style_rules()
+                            .any(|r| r.selector == full && !r.decls.is_empty())
+                    });
+                    (st, set)
+                })
+                .collect::<Vec<_>>()
+        })
+    });
     let label = move || {
         let cur = state.get();
+        if let Some((name, key)) = ancestor_state(&cur) {
+            return ui.tx(key, &[("name", name)]);
+        }
         STATES
             .iter()
             .find(|(st, _)| *st == cur)
             .map(|(_, k)| ui.tx(k, &[]))
             .unwrap_or(cur)
+    };
+    let around_item = move |st: String, set: bool| {
+        let (name, key) = ancestor_state(&st).unwrap_or_default();
+        let help = format!("{key}-help");
+        let (s1, s2, s3, s4) = (st.clone(), st.clone(), st.clone(), st.clone());
+        let n2 = name.clone();
+        view! {
+            <button class="menu-item state-item" role="menuitemradio" data-state=st
+                class:is-on=move || state.get() == s1
+                aria-checked=move || (state.get() == s2).to_string()
+                title=move || ui.tx(&help, &[("name", n2.clone())])
+                on:click=move |_| { state.set(s3.clone()); sx.menu.set(None); }>
+                <span class="state-dot" class:is-set=set></span>
+                <span>{ui.tx(key, &[("name", name)])}</span>
+                <span class="state-check">{move || (state.get() == s4).then(icons::check)}</span>
+            </button>
+        }
     };
     let item = move |st: &'static str, key: &'static str| {
         let help = format!("{key}-help");
@@ -365,6 +475,13 @@ fn StateMenu(sx: Sx) -> impl IntoView {
                             {sep.then(|| view! { <div class="menu-sep" role="separator"></div> })}
                             {more.into_iter().map(|(st, k)| item(st, k)).collect_view()}
                         }
+                    }}
+                    {move || {
+                        let list = around.get();
+                        (!list.is_empty()).then(|| view! {
+                            <div class="menu-sep" role="separator"></div>
+                            {list.into_iter().map(|(st, set)| around_item(st, set)).collect_view()}
+                        })
                     }}
                 </div>
             </controls::Pop>
@@ -862,7 +979,7 @@ pub fn Styles() -> impl IntoView {
                 view! { <crate::textfield::SelectedTexts/><crate::inspector::ContentSettings/> }.into_any()
             })}
             {move || match kind.get() {
-                0 => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
+                0 => view! { <div class="inspector-empty">{icons::empty_tip(ui.tx("editor-no-selection", &[]), ui.tx("inspector-none", &[]))}</div> }.into_any(),
                 1 => ().into_any(),
                 _ => view! {
                     <div class="style-target">
@@ -962,6 +1079,7 @@ pub fn Styles() -> impl IntoView {
                     <crate::textfield::SelectedTexts/>
                     <crate::inspector::ContentSettings/>
                     // Sans classe ni balise choisie : la première valeur crée la classe.
+                    <PartContent sx/>
                     <LayoutSection sx/>
                     <ChildSection sx/>
                     <SpacingSection sx/>

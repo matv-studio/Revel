@@ -117,8 +117,8 @@
   --line: var(--gray-750);
   --line-strong: var(--gray-700);
   --text: #ededed;
-  --text-muted: #9d9d9d;
-  --text-faint: #8a8a8a;
+  --text-muted: #a3a3a3;
+  --text-faint: #969696;
   --inverse: #f2f2f2;               /* bouton principal sans accent */
   --inverse-ink: var(--gray-900);
   --danger-text: var(--red-text-dark);

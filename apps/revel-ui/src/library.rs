@@ -1157,6 +1157,7 @@ fn MediaDetails(
     on_replaced: Callback<()>,
 ) -> impl IntoView {
     let ui = expect_context::<Ui>();
+    crate::pagesettings::close_on_escape(on_close);
     let ed = expect_context::<Ed>();
     let url = StoredValue::new(url);
     let file = Memo::new(move |_| {
@@ -1256,7 +1257,7 @@ fn MediaDetails(
                                     placeholder=ui.now("media-alt-help", &[])
                                     on_commit=move |v: String| ed.apply(ui, revel_edit::Command::SetMediaAlt { url: url.get_value(), alt: Some(v) }, false)/>
                             })}
-                            <p class="page-settings-note muted">{ui.t("media-replace-help")}</p>
+                            {icons::note_tip(ui.tx("media-replace-help", &[]))}
                         </div>
                         <footer class="panel-foot page-settings-foot">
                             <button class="btn btn--small" on:click=move |_| replace()>{icons::upload()}{ui.t("media-replace")}</button>

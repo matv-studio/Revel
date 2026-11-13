@@ -250,7 +250,7 @@ pub fn Assistants() -> impl IntoView {
                     </span>
                 </div>
                 <span class="label" title=ui.t("mcp-port-help")>{ui.t("mcp-port")}</span>
-                <input class="input input--port mcp-port" type="number" min="1024" max="65535"
+                <input class="input input--port mcp-port" aria-label=ui.t("mcp-port") type="number" min="1024" max="65535"
                     prop:value=move || port().to_string()
                     prop:disabled=move || busy.get()
                     on:change=move |e| {

@@ -335,7 +335,7 @@ fn field_selects(
             </div>
         </label>
         {move || (cols.with(|c| !c.is_empty()) && of(image).is_empty()).then(|| view! {
-            <p class="muted small" data-hover="no-field">{ui.t(if image { "hover-image-field-none" } else { "hover-video-field-none" })}</p>
+            <div data-hover="no-field">{icons::empty_tip(ui.tx("map-none", &[]), ui.tx(if image { "hover-image-field-none" } else { "hover-video-field-none" }, &[]))}</div>
         })}
         {(!image).then(|| view! {
             <label class="field" data-hover="poster-field" title=ui.t("hover-poster-help")>
@@ -551,7 +551,7 @@ pub fn display_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) 
                 </label>
                 {fields_view}
                 {move || (mode.get() == "manual" && count == 0).then(|| view! {
-                    <p class="muted small" data-hover="manual-help">{ui.t("hover-source-manual-help")}</p>
+                    <div data-hover="manual-help">{icons::note_tip(ui.tx("hover-source-manual-help", &[]))}</div>
                 })}
                 {(count > 0).then(|| view! {
                     <div class="field hover-links" data-hover="items">
@@ -760,7 +760,7 @@ pub fn trigger_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) 
                     {missing.then(|| view! { <p class="muted small">{ui.t("hover-missing")}</p> })}
                     {media_view}
                     {(linked.is_some() && in_list.is_some()).then(|| view! {
-                        <p class="muted small" data-hover="list-note">{ui.t("hover-list-note")}</p>
+                        <div data-hover="list-note">{icons::note_tip(ui.tx("hover-list-note", &[]))}</div>
                     })}
                 </div>
             }

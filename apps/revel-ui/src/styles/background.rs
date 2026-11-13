@@ -587,6 +587,7 @@ fn RadialRows(
                         let (cx, cy) = (c as f64 * 50.0, r as f64 * 50.0);
                         view! {
                             <button class="align-cell" class:is-on=move || { let (_, x, y) = get(); x == cx && y == cy }
+                                title=super::sections::pos_name(ui, c, r) aria-label=super::sections::pos_name(ui, c, r)
                                 on:click=move |_| set_at(Some(cx), Some(cy))><i></i></button>
                         }
                     }).collect_view()}

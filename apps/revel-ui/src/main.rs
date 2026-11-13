@@ -651,7 +651,17 @@ fn TopBar() -> impl IntoView {
                 preview_menu.set(false);
             }
         });
-    on_cleanup(move || on_down.remove());
+    let on_esc = window_event_listener(leptos::ev::keydown, move |e: web_sys::KeyboardEvent| {
+        if e.key() == "Escape" {
+            preview_menu.set(false);
+        }
+    });
+    let on_blur = window_event_listener(leptos::ev::blur, move |_| preview_menu.set(false));
+    on_cleanup(move || {
+        on_down.remove();
+        on_esc.remove();
+        on_blur.remove();
+    });
     view! {
         <header class="topbar">
             <div class="topbar-start">

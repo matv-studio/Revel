@@ -3684,3 +3684,14 @@ mview-autostart = Inicio automático
 mview-autostart-help = La escena se carga al mostrarse; si no, al pulsar reproducir (menos datos)
 mview-controls = Controles del reproductor
 mview-controls-help = Botones del visor de Marmoset (reproducción, pantalla completa, ajustes) mostrados sobre la escena
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = Antes del contenido
+styles-state-after = Después del contenido
+styles-state-before-help = Parte añadida antes del contenido del elemento (línea, punto, comilla): ::before.
+styles-state-after-help = Parte añadida después del contenido del elemento: ::after.
+styles-state-in-hover = Al pasar sobre { $name }
+styles-state-in-focus = Foco en { $name }
+styles-state-in-hover-help = Elemento mientras el puntero está sobre { $name }, que lo contiene.
+styles-state-in-focus-help = Elemento mientras { $name }, que lo contiene, tiene el foco del teclado.
+styles-content = Contenido

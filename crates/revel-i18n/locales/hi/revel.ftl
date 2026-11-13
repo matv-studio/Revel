@@ -3684,3 +3684,14 @@ mview-autostart = स्वतः शुरू करें
 mview-autostart-help = दिखने पर दृश्य लोड होता है; अन्यथा प्ले बटन दबाने पर (कम डेटा)
 mview-controls = प्लेयर नियंत्रण
 mview-controls-help = Marmoset व्यूअर के बटन (चलाएँ, फ़ुल स्क्रीन, सेटिंग) दृश्य के ऊपर दिखते हैं
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = सामग्री से पहले
+styles-state-after = सामग्री के बाद
+styles-state-before-help = तत्व की सामग्री से पहले जोड़ा गया भाग (रेखा, बिंदु, उद्धरण चिह्न): ::before.
+styles-state-after-help = तत्व की सामग्री के बाद जोड़ा गया भाग: ::after.
+styles-state-in-hover = { $name } पर होवर
+styles-state-in-focus = { $name } पर फ़ोकस
+styles-state-in-hover-help = तत्व, जब पॉइंटर उसे समाहित करने वाले { $name } पर हो।
+styles-state-in-focus-help = तत्व, जब उसे समाहित करने वाले { $name } पर कीबोर्ड फ़ोकस हो।
+styles-content = सामग्री

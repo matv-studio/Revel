@@ -187,9 +187,15 @@ pub fn ProfileButton() -> impl IntoView {
             open.set(false);
         }
     });
+    let on_blur = window_event_listener(leptos::ev::blur, move |_| {
+        if ui.ask.with_untracked(Option::is_none) {
+            open.set(false);
+        }
+    });
     on_cleanup(move || {
         on_down.remove();
         on_key.remove();
+        on_blur.remove();
     });
     let shown = move || name(ui).unwrap_or_else(|| ui.tx("profile-title", &[]));
     view! {

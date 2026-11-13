@@ -367,7 +367,7 @@ pub fn Interactions() -> impl IntoView {
                             on:click=move |_| ed.wrap(ui, at.clone())>{icons::wrap()}{ui.t("anim-wrap")}</button>
                     </div>
                 }.into_any(),
-                _ => view! { <p class="muted inspector-empty">{ui.t("inspector-none")}</p> }.into_any(),
+                _ => view! { <div class="inspector-empty">{icons::empty_tip(ui.tx("editor-no-selection", &[]), ui.tx("inspector-none", &[]))}</div> }.into_any(),
             }}
         </div>
     }

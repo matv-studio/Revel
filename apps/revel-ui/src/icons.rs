@@ -856,3 +856,18 @@ pub fn cart() -> AnyView {
         r#"<path d="M2.5 3h1.6l1.5 7.2a1 1 0 0 0 1 .8h5.6a1 1 0 0 0 1-.75L14 6H5"/><circle cx="7" cy="13.25" r=".9"/><circle cx="12" cy="13.25" r=".9"/>"#,
     )
 }
+
+/// Explication en info-bulle (ⓘ) : aucune phrase d'explication visible dans l'interface (D-169).
+pub fn info_tip(text: String) -> impl IntoView {
+    view! { <span class="settings-sub-info info-tip" title=text.clone() aria-label=text role="img">{info()}</span> }
+}
+
+/// État vide ou note : mot court visible, explication en info-bulle.
+pub fn empty_tip(short: String, text: String) -> impl IntoView {
+    view! { <p class="muted small empty-tip"><span>{short}</span>{info_tip(text)}</p> }
+}
+
+/// Note sans libellé : l'icône seule, sur sa ligne.
+pub fn note_tip(text: String) -> impl IntoView {
+    view! { <p class="muted small empty-tip">{info_tip(text)}</p> }
+}

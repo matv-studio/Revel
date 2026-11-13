@@ -313,7 +313,7 @@ pub fn SchemaList(
     view! {
         <div class="schema">
             {move || col.with(|c| c.as_ref().is_some_and(|c| c.schema.is_none())).then(|| view! {
-                <p class="schema-note">{icons::info()}<span>{ui.t("cms-schema-inferred")}</span></p>
+                <div class="schema-note">{icons::note_tip(ui.tx("cms-schema-inferred", &[]))}</div>
             })}
             <ul class="schema-list" node_ref=list class:is-dragging=move || drag.get().is_some()>
                 {move || {

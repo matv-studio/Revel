@@ -3687,3 +3687,14 @@ mview-autostart = Démarrage automatique
 mview-autostart-help = La scène se charge à l'affichage ; sinon au clic sur le bouton de lecture (moins de données)
 mview-controls = Commandes du lecteur
 mview-controls-help = Boutons du lecteur de Marmoset (lecture, plein écran, réglages) montrés par-dessus la scène
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = Avant le contenu
+styles-state-after = Après le contenu
+styles-state-before-help = Partie ajoutée avant le contenu de l'élément (trait, pastille, guillemet) : ::before.
+styles-state-after-help = Partie ajoutée après le contenu de l'élément : ::after.
+styles-state-in-hover = Survol de { $name }
+styles-state-in-focus = Focus sur { $name }
+styles-state-in-hover-help = Élément quand le pointeur est sur { $name }, qui le contient.
+styles-state-in-focus-help = Élément quand { $name }, qui le contient, est atteint au clavier.
+styles-content = Contenu

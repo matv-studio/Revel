@@ -131,6 +131,10 @@ enum FromCanvas {
         id: String,
         values: std::collections::BTreeMap<String, Option<String>>,
     },
+    /// Appui dans la page : les menus ouverts de l'interface se ferment.
+    Down,
+    /// Échap dans la page, hors saisie et hors geste.
+    Escape,
     Key {
         key: String,
         #[serde(default)]
@@ -3079,6 +3083,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 | FromCanvas::Stage { .. }
                 | FromCanvas::OpenComponent { .. }
                 | FromCanvas::Key { .. }
+                | FromCanvas::Down
+                | FromCanvas::Escape
                 | FromCanvas::Keyup { .. }
                 | FromCanvas::Pan { .. }
                 | FromCanvas::Zoom { .. }
@@ -3211,6 +3217,16 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                     ed.set_props(ui, at, node, values.into_iter().collect());
                 }
             }
+            // Le canevas est un autre document : ses appuis et son Échap ne parviennent pas à la
+            // fenêtre. Ils sont rejoués ici pour les menus, qui écoutent la fenêtre (D-169).
+            FromCanvas::Down => replay_on_window("pointerdown", None),
+            FromCanvas::Escape => {
+                if float_open() {
+                    replay_on_window("keydown", Some("Escape"));
+                } else {
+                    let _ = ed.run_action(ui, "deselect");
+                }
+            }
             FromCanvas::Key {
                 key,
                 code,
@@ -3307,6 +3323,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     });
     // Raccourcis dans l'interface, calques compris (hors champs de saisie), quand l'éditeur est
     // la vue affichée (il reste en place, caché, pendant les autres vues).
+    watch_keys();
     let on_key = window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
         if !matches!(
             ui.route.get_untracked(),
@@ -3328,7 +3345,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok())
                 .is_some_and(|el| is_field(&el));
         // Un menu ouvert (panneau de styles) se ferme d'abord avec Échap.
-        let menu_open = document().query_selector(".pop").ok().flatten().is_some();
+        // De même pour tout menu, fenêtre ou volet de l'interface (D-169).
+        let menu_open = e.key() == "Escape" && (OPEN_AT_KEY.get().0 || float_open());
         if (in_field && !crate::keys::undo_on_control(&e)) || (menu_open && e.key() == "Escape") {
             return;
         }
@@ -3532,6 +3550,96 @@ fn LocaleSwitch() -> impl IntoView {
                 </div>
             }
         })
+    }
+}
+
+thread_local! {
+    /// Ce qui était ouvert quand la dernière touche a été enfoncée : (un menu, une fenêtre ou un
+    /// volet ; la même chose sans compter les volets). Relevé avant tout autre écouteur, car le menu
+    /// qui se ferme sur Échap a déjà disparu quand vient le tour des raccourcis (D-169).
+    static OPEN_AT_KEY: std::cell::Cell<(bool, bool)> = const { std::cell::Cell::new((false, false)) };
+    static KEY_WATCH: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+const FLOATS: &str = ".ctx-menu, .pop, .menu, .overlay, .dialog, [role=menu], [role=dialog]";
+
+/// Installe, une fois, le relevé fait à chaque touche (phase de capture, avant les autres écouteurs).
+pub fn watch_keys() {
+    if KEY_WATCH.replace(true) {
+        return;
+    }
+    let cb = wasm_bindgen::closure::Closure::<dyn Fn(web_sys::Event)>::new(|_: web_sys::Event| {
+        let above = any_visible(FLOATS);
+        OPEN_AT_KEY.set((above || any_visible(".page-settings-overlay"), above));
+    });
+    let _ = window().add_event_listener_with_callback_and_bool(
+        "keydown",
+        wasm_bindgen::JsCast::unchecked_ref(cb.as_ref()),
+        true,
+    );
+    cb.forget();
+}
+
+/// Un menu ou une fenêtre (volets non comptés) était ouvert quand la touche a été enfoncée.
+pub fn float_above_at_key() -> bool {
+    OPEN_AT_KEY.get().1 || any_visible(FLOATS)
+}
+
+fn any_visible(sel: &str) -> bool {
+    let Ok(list) = document().query_selector_all(sel) else {
+        return false;
+    };
+    (0..list.length()).any(|i| {
+        list.item(i)
+            .and_then(|n| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(n).ok())
+            .is_some_and(|e| {
+                let r = e.get_bounding_client_rect();
+                r.width() > 0.0 && r.height() > 0.0
+            })
+    })
+}
+
+/// Un menu, une fenêtre ou un volet de l'interface est ouvert (il se ferme avant toute autre chose).
+fn float_open() -> bool {
+    let Ok(list) = document().query_selector_all(
+        ".ctx-menu, .pop, .menu, .overlay, .dialog, .page-settings-overlay, [role=menu], [role=dialog]",
+    ) else {
+        return false;
+    };
+    (0..list.length()).any(|i| {
+        list.item(i)
+            .and_then(|n| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(n).ok())
+            .is_some_and(|e| {
+                let r = e.get_bounding_client_rect();
+                r.width() > 0.0 && r.height() > 0.0
+            })
+    })
+}
+
+/// Rejoue sur la fenêtre un appui ou une touche reçus du canevas.
+fn replay_on_window(kind: &str, key: Option<&str>) {
+    let Some(body) = document().body() else {
+        return;
+    };
+    let ev: Option<web_sys::Event> = match key {
+        Some(k) => {
+            let init = web_sys::KeyboardEventInit::new();
+            init.set_bubbles(true);
+            init.set_key(k);
+            web_sys::KeyboardEvent::new_with_keyboard_event_init_dict(kind, &init)
+                .ok()
+                .map(Into::into)
+        }
+        None => {
+            let init = web_sys::PointerEventInit::new();
+            init.set_bubbles(true);
+            web_sys::PointerEvent::new_with_event_init_dict(kind, &init)
+                .ok()
+                .map(Into::into)
+        }
+    };
+    if let Some(ev) = ev {
+        let _ = body.dispatch_event(&ev);
     }
 }
 
@@ -3860,7 +3968,7 @@ fn BreakpointMenu() -> impl IntoView {
                 }).collect_view()}
                 <div class="bp-add">
                     <div class="select" title=move || ui.tx(if kind_max.get() { "editor-bp-kind-max-help" } else { "editor-bp-kind-min-help" }, &[])>
-                        <select class="input" on:change=move |e| kind_max.set(event_target_value(&e) == "max")>
+                        <select class="input" aria-label=ui.t("editor-bp-add") on:change=move |e| kind_max.set(event_target_value(&e) == "max")>
                             <option value="max" title=ui.t("editor-bp-kind-max-help") selected=move || kind_max.get()>{ui.t("editor-bp-kind-max")}</option>
                             <option value="min" title=ui.t("editor-bp-kind-min-help") selected=move || !kind_max.get()>{ui.t("editor-bp-kind-min")}</option>
                         </select>

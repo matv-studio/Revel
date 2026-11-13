@@ -1011,6 +1011,46 @@ try {
           await page.waitForTimeout(400);
         }
       }
+      // D-169 : partie « avant » (contenu vide posé d'office, texte), bordure tracée dès que son
+      // épaisseur est réglée, Échap dans le canevas ferme d'abord un menu de l'interface.
+      {
+        await page.click('.dock-tab[data-panel="styles"]');
+        await page.waitForSelector('.styles .state-btn');
+        const openAll = () => page.evaluate(() => document.querySelectorAll('.styles details').forEach((d) => { d.open = true; }));
+        const setNum = async (prop, v) => { const n = page.locator(`.styles [data-prop="${prop}"] .nbox-input`).first(); await n.click(); await n.fill(v); await n.press('Enter'); };
+        const part = (prop) => f.evaluate((p) => getComputedStyle(document.querySelector('section.hero'), '::before').getPropertyValue(p), prop);
+        await page.click('.styles .state-btn');
+        const offered = await page.$$eval('.state-pop .state-item', (l) => l.map((e) => e.getAttribute('data-state')));
+        await page.click('.state-pop .state-item[data-state="::before"]');
+        await page.waitForSelector('.styles .part-content input');
+        await openAll();
+        await setNum('width', '7');
+        f = await waitFrame(() => getComputedStyle(document.querySelector('section.hero'), '::before').content === '""', 'partie avant : contenu vide posé');
+        await page.fill('.styles .part-content input', 'Avant');
+        await page.press('.styles .part-content input', 'Enter');
+        f = await waitFrame(() => getComputedStyle(document.querySelector('section.hero'), '::before').content === '"Avant"', 'partie avant : texte');
+        if (shots) await page.screenshot({ path: `${shots}/editeur-styles-partie-avant.png` });
+        check('styles : partie « avant » proposée, créée avec un contenu vide, puis son texte', offered.includes('::before') && offered.includes('::after') && (await part('width')) === '7px');
+        await page.click('.styles .state-btn');
+        await page.click('.state-pop .state-item[data-state=""]');
+        await openAll();
+        await setNum('border-width', '3');
+        f = await waitFrame(() => { const cs = getComputedStyle(document.querySelector('section.hero')); return cs.borderTopStyle === 'solid' && cs.borderTopWidth === '3px'; }, 'bordure tracée');
+        check('styles : épaisseur de bordure réglée, trait plein posé avec elle', true);
+        // Menu « Options de l'aperçu » ouvert, Échap dans le canevas : le menu se ferme, la
+        // sélection reste.
+        await page.click('.preview-split .split-more');
+        await page.waitForSelector('.preview-split [role="menuitem"]');
+        await f.locator('section.hero').press('Escape');
+        await page.waitForSelector('.preview-split [role="menuitem"]', { state: 'detached' });
+        check('Échap dans le canevas : le menu ouvert se ferme, la sélection reste', !!(await page.$('.layers .layer.is-selected')));
+        for (let i = 0; i < 6 && JSON.stringify((await invoke('edit_open')).site) !== docA; i++) {
+          await page.click('.editor-toolbar .btn-undo');
+          await page.waitForTimeout(400);
+        }
+        check('styles : partie « avant » et bordure annulées', JSON.stringify((await invoke('edit_open')).site) === docA);
+        await page.click('.dock-tab[data-panel="interactions"]');
+      }
     }
     // Variables : affectations de la page (plus dans les calques), valeur calculée au rendu ;
     // expression modifiée sur place, refusée si sa syntaxe est fausse, annulée par Ctrl+Z.
@@ -1837,7 +1877,7 @@ try {
       // Page dont le référencement vient d'un fichier de données (site importé).
       await page.hover('.pages .page-row[data-url="/agence/"]');
       await page.click('.pages .page-row[data-url="/agence/"] .row-action');
-      await page.waitForSelector('.page-settings-note');
+      await page.waitForSelector('.page-settings .empty-tip .info-tip');
       const desc = page.locator('.page-settings-seo textarea');
       await desc.fill('Agence de communication plurielle, essai.');
       await desc.blur();

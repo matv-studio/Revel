@@ -3684,3 +3684,14 @@ mview-autostart = Mulai otomatis
 mview-autostart-help = Adegan dimuat saat tampil; jika tidak, saat tombol putar diklik (data lebih sedikit)
 mview-controls = Kontrol pemutar
 mview-controls-help = Tombol penampil Marmoset (putar, layar penuh, pengaturan) ditampilkan di atas adegan
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = Sebelum konten
+styles-state-after = Setelah konten
+styles-state-before-help = Bagian yang ditambahkan sebelum konten elemen (garis, titik, tanda kutip): ::before.
+styles-state-after-help = Bagian yang ditambahkan setelah konten elemen: ::after.
+styles-state-in-hover = Hover pada { $name }
+styles-state-in-focus = Fokus pada { $name }
+styles-state-in-hover-help = Elemen saat penunjuk berada di atas { $name }, yang memuatnya.
+styles-state-in-focus-help = Elemen saat { $name }, yang memuatnya, mendapat fokus keyboard.
+styles-content = Konten

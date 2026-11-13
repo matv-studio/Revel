@@ -3684,3 +3684,14 @@ mview-autostart = 自动开始
 mview-autostart-help = 显示时加载场景；否则点击播放按钮时加载（流量更少）
 mview-controls = 播放器控件
 mview-controls-help = Marmoset 查看器的按钮（播放、全屏、设置）显示在场景上方
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = 内容之前
+styles-state-after = 内容之后
+styles-state-before-help = 添加在元素内容之前的部分（线条、圆点、引号）：::before。
+styles-state-after-help = 添加在元素内容之后的部分：::after。
+styles-state-in-hover = 悬停于 { $name }
+styles-state-in-focus = 聚焦于 { $name }
+styles-state-in-hover-help = 指针位于包含它的 { $name } 上时的元素。
+styles-state-in-focus-help = 包含它的 { $name } 获得键盘焦点时的元素。
+styles-content = 内容

@@ -1389,7 +1389,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                             <button class="btn btn--small" on:click=move |_| if let Some(id) = current.get_untracked() { edit_template(id) }>
                                                                 {icons::template()}{ui.t("cms-template-edit")}</button>
                                                         </p>
-                                                        <p class="cms-empty-help">{ui.t("cms-template-help")}</p>
+                                                        <div class="cms-empty-help">{icons::note_tip(ui.tx("cms-template-help", &[]))}</div>
                                                     </td></tr>
                                                 }.into_any();
                                             }
@@ -1407,7 +1407,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                         }
                                                         on:click=move |_| open.set(Some(file.clone()))>
                                                         <td class="strong cms-td-title" style=move || width_style("")><div class="cms-title-cell">
-                                                            <span class="cms-cell">{entry_title(&e, &title)}</span>
+                                                            <span class="cms-cell" title=entry_title(&e, &title)>{entry_title(&e, &title)}</span>
                                                             {draft.then(|| view! { <span class="chip chip--draft">{ui.t("cms-draft")}</span> })}
                                                             {
                                                                 // Autre langue : point bleu (traduit) ou orange (contenu de la

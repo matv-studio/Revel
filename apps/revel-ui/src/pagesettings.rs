@@ -14,6 +14,7 @@ use leptos::prelude::*;
 use revel_edit::Command;
 use revel_edit::canvas::{Binding, Seg, Source};
 use serde_json::{Value, json};
+use wasm_bindgen::JsCast;
 
 /// Écrit une valeur de référencement (`title`, `description`, `image`) ; vide : retirée.
 fn write_seo(ui: Ui, ed: Ed, id: &str, data_path: &[String], key: &str, text: String) {
@@ -62,10 +63,37 @@ fn write_seo(ui: Ui, ed: Ed, id: &str, data_path: &[String], key: &str, text: St
     ed.apply(ui, cmd, false);
 }
 
+/// Échap ferme le volet : d'abord le champ en cours de saisie est quitté, et rien n'est fermé tant
+/// qu'un menu ou une fenêtre est ouvert par-dessus (D-169).
+pub fn close_on_escape(on_close: Callback<()>) {
+    crate::editor::watch_keys();
+    let on_key = window_event_listener(leptos::ev::keydown, move |e: web_sys::KeyboardEvent| {
+        if e.key() != "Escape" || crate::editor::float_above_at_key() {
+            return;
+        }
+        if let Some(field) = e
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok())
+            .filter(|t| {
+                t.closest("input, textarea, select, [contenteditable]")
+                    .ok()
+                    .flatten()
+                    .is_some()
+            })
+        {
+            let _ = field.blur();
+            return;
+        }
+        on_close.run(());
+    });
+    on_cleanup(move || on_key.remove());
+}
+
 #[component]
 pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
+    close_on_escape(on_close);
     let id = StoredValue::new(id);
     let page = Memo::new(move |_| {
         ed.doc.with(|d| {
@@ -283,7 +311,7 @@ pub fn PageSettings(id: String, on_close: Callback<()>) -> impl IntoView {
                                 <span class="switch-track"></span>
                             </span>
                         </label>
-                        {source_note.map(|n| view! { <p class="page-settings-note muted">{n}</p> })}
+                        {source_note.map(icons::note_tip)}
                         <div class="serp" aria-label=ui.t("pages-serp")>
                             <span class="serp-url">{shown_url}</span>
                             <span class="serp-title">{shown_title}</span>
@@ -397,6 +425,7 @@ fn server_file_settings(ui: Ui, ed: Ed, p: &revel_model::Page) -> AnyView {
 /// type de partage, pour toutes les pages de la collection (une page peut les changer).
 #[component]
 pub fn TemplateSettings(layout: String, on_close: Callback<()>) -> impl IntoView {
+    close_on_escape(on_close);
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
     let layout = StoredValue::new(layout);
@@ -435,7 +464,7 @@ pub fn TemplateSettings(layout: String, on_close: Callback<()>) -> impl IntoView
                 <span class="page-settings-title">{ui.t("template-settings")}</span>
             </header>
             <div class="page-settings-body">
-                <p class="muted small">{ui.t("template-settings-help")}</p>
+                {icons::note_tip(ui.tx("template-settings-help", &[]))}
                 <h3 class="page-settings-section">{ui.t("pages-look")}</h3>
                 <BodyClasses ed value=Signal::derive(move || text("bodyClass"))
                     on_commit=Callback::new(move |v: String| set("bodyClass", v))/>

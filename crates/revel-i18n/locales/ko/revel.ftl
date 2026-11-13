@@ -3684,3 +3684,14 @@ mview-autostart = 자동 시작
 mview-autostart-help = 표시되면 장면을 불러옵니다. 끄면 재생 버튼을 누를 때(데이터 절약)
 mview-controls = 플레이어 컨트롤
 mview-controls-help = Marmoset 뷰어 버튼(재생, 전체 화면, 설정)을 장면 위에 표시
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = 콘텐츠 앞
+styles-state-after = 콘텐츠 뒤
+styles-state-before-help = 요소의 콘텐츠 앞에 추가되는 부분(선, 점, 따옴표): ::before.
+styles-state-after-help = 요소의 콘텐츠 뒤에 추가되는 부분: ::after.
+styles-state-in-hover = { $name } 호버
+styles-state-in-focus = { $name } 포커스
+styles-state-in-hover-help = 이 요소를 포함하는 { $name } 위에 포인터가 있을 때의 요소.
+styles-state-in-focus-help = 이 요소를 포함하는 { $name }에 키보드 포커스가 있을 때의 요소.
+styles-content = 콘텐츠

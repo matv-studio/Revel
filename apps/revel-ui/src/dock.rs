@@ -1155,6 +1155,9 @@ pub fn Workspace(panel: fn(PanelId) -> AnyView, children: Children) -> impl Into
             e.prevent_default();
             dock.layout.update(|l| l.hidden = !l.hidden);
         }
+        if e.key() == "Escape" && dock.menu.get_untracked().is_some() {
+            dock.menu.set(None);
+        }
     });
     let on_blur = window_event_listener(ev::blur, move |_| dock.menu.set(None));
     on_cleanup(move || {

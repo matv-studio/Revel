@@ -86,7 +86,13 @@ pub const STATE_SUFFIXES: &[&str] = &[
     "[aria-current=\"page\"]",
     "[open]",
     "[aria-pressed=\"false\"]",
+    // Parties ajoutées avant et après le contenu (D-169).
+    "::before",
+    "::after",
 ];
+
+/// États d'un ancêtre réglés depuis le panneau : « Survol de .carte » (D-169).
+pub const ANCESTOR_STATES: &[&str] = &[":hover", ":focus-visible"];
 
 /// États « dans un élément … » : sélecteur de l'ancêtre écrit devant.
 pub const OUTER_STATES: &[&str] = &[
@@ -172,6 +178,7 @@ pub const PANEL_PROPS: &[&str] = &[
     "text-decoration",
     "text-decoration-line",
     "text-overflow",
+    "content",
     "text-shadow",
     "text-wrap",
     "white-space",
@@ -320,6 +327,13 @@ fn variant_root(part: &str, roots: &[(String, Vec<String>)]) -> bool {
     })
 }
 
+/// Classe d'un ancêtre dans un de ses états réglables ([`ANCESTOR_STATES`]).
+fn ancestor_state(part: &str) -> bool {
+    compound(part).is_some_and(|(classes, st)| {
+        !classes.is_empty() && st.is_some_and(|s| ANCESTOR_STATES.contains(&s))
+    })
+}
+
 /// Balise de [`NESTED_TAGS`], avec au plus un état.
 fn nested_tag(s: &str) -> bool {
     let base = STATE_SUFFIXES
@@ -331,17 +345,38 @@ fn nested_tag(s: &str) -> bool {
 
 /// Le panneau Styles sait régler ce sélecteur (voir l'en-tête du module).
 pub fn panel_selector(sel: &str, roots: &[(String, Vec<String>)]) -> bool {
+    selector_form(sel, roots, true)
+}
+
+/// Formes du panneau d'avant D-169 (sans partie « avant » / « après » ni état d'un ancêtre) : celles
+/// que la mise au format d'un site importé laisse telles quelles. Les autres y sont toujours
+/// transformées (partie ajoutée devenue un élément) ou gardées comme code, comme avant.
+pub fn panel_selector_basic(sel: &str, roots: &[(String, Vec<String>)]) -> bool {
+    !sel.contains("::") && selector_form(sel, roots, false)
+}
+
+fn selector_form(sel: &str, roots: &[(String, Vec<String>)], around: bool) -> bool {
     let parts: Vec<&str> = sel.split_whitespace().collect();
     let plain = |p: &str| compound(p).is_some_and(|(_, st)| st.is_none());
     match parts.as_slice() {
         [one] => compound(one).is_some(),
         [outer, x] if OUTER_STATES.contains(outer) => plain(x),
         [root, x] if variant_root(root, roots) => compound(x).is_some(),
+        // Élément dans un ancêtre survolé ou atteint au clavier (`.carte:hover .titre`).
+        [anc, x] if around && ancestor_state(anc) => compound(x).is_some(),
+
         // Balise dans une classe (texte riche, mots mis en valeur).
         [cls, tag] => {
             compound(cls).is_some_and(|(c, st)| !c.is_empty() && st.is_none()) && nested_tag(tag)
         }
-        [root, outer, x] => variant_root(root, roots) && OUTER_STATES.contains(outer) && plain(x),
+        [root, outer, x] => {
+            (variant_root(root, roots) && OUTER_STATES.contains(outer) && plain(x))
+                // Balise dans une classe, sous un ancêtre survolé (`.carte:hover .puces li`).
+                || (around
+                    && ancestor_state(root)
+                    && compound(outer).is_some_and(|(c, st)| !c.is_empty() && st.is_none())
+                    && nested_tag(x))
+        }
         _ => false,
     }
 }
@@ -584,6 +619,13 @@ mod tests {
             ".prose p",
             ".prose a:hover",
             ".hero__title strong",
+            // D-169 : parties avant / après, état d'un ancêtre.
+            ".a::before",
+            ".voir::after",
+            ".autre:hover .titre",
+            ".autre__lien:focus-visible .autre__voir",
+            ".a:hover p",
+            ".maison:hover .maison__puces li",
         ] {
             assert!(panel_selector(ok, &roots), "{ok}");
         }
@@ -592,12 +634,12 @@ mod tests {
             ".a > .b",
             ".a .b",
             ".prose div",
-            ".a:hover p",
-            ".a::before",
+            ".a:active .b",
+            ".a:hover .b .c",
+            ".a::marker",
             "a.bouton",
             ".x:not(.y)",
             "*",
-            ".autre:hover .titre",
             ".carte .titre",
             "div",
         ] {

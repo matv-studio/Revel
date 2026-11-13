@@ -9,6 +9,35 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 13/11/2026 : contrôle qualité de l'interface (D-169)
+
+Demande : contrôler chaque menu, sous-menu et outil contre la charte et les règles d'ergonomie, tester chaque
+réglage, mesurer animations et temps de réaction, corriger ; prendre en compte le relevé `revel audit` du
+site Alunites Groupe. Captures en thème sombre seulement (le clair suit la charte).
+
+- **Outil de contrôle** : `tools/ui-audit/` (README sur place). Règles de la charte mesurées dans la page,
+  parcours des écrans (éditeur, panneaux, styles, menus, CMS, Paramètres, accueil, Réglages, Localisation,
+  plan), essai de fermeture des menus, essai de chaque commande du panneau Styles, mesures de temps.
+  À relancer après tout changement d'interface ; `report.py` donne le bilan par règle.
+- **Corrigé** (détail dans D-169) : menus laissés ouverts par un clic ou Échap dans le canevas ; Échap sur les
+  volets ; contrastes du thème sombre (`--text-muted` #a3a3a3, `--text-faint` #969696) ; main sur les
+  commandes ; tailles de texte, rayons et durées en dur ; phrases d'explication visibles passées en
+  info-bulle (ⓘ) ; noms accessibles ; bordure sans trait ; fenêtre flottante plus large que le panneau
+  Styles (le panneau défilait de côté).
+- **Ajouté au panneau Styles** : états « Avant le contenu » / « Après le contenu » (`::before`, `::after`,
+  champ « Contenu ») et « Survol de .classe » / « Focus sur .classe » pour les ancêtres.
+- **Mesures** (machine de construction, Chromium sans écran, site de 7 pages et 5 collections) : réglage de
+  style → canevas 66 ms en médiane (95 ms au plus) sur 37 commandes ; voir `tools/ui-audit/mesures.mjs`
+  pour les autres temps.
+- **Faux positifs du contrôle, à connaître** : boutons à l'intérieur d'un choix segmenté (18 px dans un
+  contrôle de 24) ; flèches de déploiement des calques (cachées aux lecteurs d'écran, la ligne porte le
+  rôle) ; tuiles et aperçus (« Aa », titres de contenus) ; nœuds du plan (échelle du zoom).
+- **Piège** : `cargo check`, `trunk build` et `cargo build --release` lancés ensemble dépassent la mémoire
+  de la machine (rustc tué, signal 9) : les enchaîner.
+- **CI** : le 12/11, l'étape « Reconstruction » du contrôle d'équivalence avec Eleventy a échoué une fois
+  sur une capture (animation en cours), sans différence en local ; relancée, verte.
+- **Reste du relevé `revel audit`** (Alunites Groupe) : voir « En suspens » de D-169.
+
 ## Travail du 12/11/2026 (suite) : outils pour le site Alunites Groupe (D-168)
 - `animations.js` : `unveil` (apparition), `follow` (survol), `drops` (défilement, fonction `drops`) ;
   listes et réglages dans `apps/revel-ui/src/interactions.rs` (`Setting::Opposite`), dessins dans

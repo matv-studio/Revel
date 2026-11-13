@@ -53,7 +53,8 @@ fn feeds_section(
         return ().into_any();
     };
     if cols.is_empty() {
-        return view! { <p class="muted">{ui.t("settings-feeds-none")}</p> }.into_any();
+        return icons::empty_tip(ui.tx("map-none", &[]), ui.tx("settings-feeds-none", &[]))
+            .into_any();
     }
     let feeds = StoredValue::new(feeds);
     // Remplace (ou retire) le flux d'une collection.

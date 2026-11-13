@@ -409,8 +409,8 @@ fn TrackCount(sx: Sx, prop: &'static str, label: &'static str) -> impl IntoView 
                 })
                 unit="" label/>
             <div class="stepper-arrows">
-                <button tabindex="-1" aria-label="+1" on:click=move |_| step(1)>{icons::chevron_up()}</button>
-                <button tabindex="-1" aria-label="-1" on:click=move |_| step(-1)>{icons::chevron_down()}</button>
+                <button tabindex="-1" aria-label="+1" title="+1" on:click=move |_| step(1)>{icons::chevron_up()}</button>
+                <button tabindex="-1" aria-label="-1" title="−1" on:click=move |_| step(-1)>{icons::chevron_down()}</button>
             </div>
         </div>
     }

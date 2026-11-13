@@ -3788,3 +3788,14 @@ mview-autostart = Запускать автоматически
 mview-autostart-help = Сцена загружается при показе; иначе по нажатию кнопки запуска (меньше данных)
 mview-controls = Элементы управления
 mview-controls-help = Кнопки просмотрщика Marmoset (воспроизведение, полный экран, настройки) поверх сцены
+
+# Parties avant / après et états d'un ancêtre (D-169)
+styles-state-before = Перед содержимым
+styles-state-after = После содержимого
+styles-state-before-help = Часть, добавленная перед содержимым элемента (линия, точка, кавычка): ::before.
+styles-state-after-help = Часть, добавленная после содержимого элемента: ::after.
+styles-state-in-hover = Наведение на { $name }
+styles-state-in-focus = Фокус на { $name }
+styles-state-in-hover-help = Элемент, когда указатель находится над { $name }, который его содержит.
+styles-state-in-focus-help = Элемент, когда { $name }, который его содержит, получает фокус с клавиатуры.
+styles-content = Содержимое

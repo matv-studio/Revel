@@ -2382,12 +2382,12 @@ fn panel(
                     <div class="map-actions">
                         <button class="btn btn--small" on:click=move |_| ui.tab(Tab::Settings(Section::Menus))>{icons::menu()}{ui.t("map-edit-menus")}</button>
                     </div>
-                    <p class="muted small">{ui.t("map-menu-help")}</p>
+                    {icons::note_tip(ui.tx("map-menu-help", &[]))}
                 }
                 .into_any()),
                 NodeKind::Component | NodeKind::Layout => Some(view! {
                     <p class="muted small">{ui.now("map-shared-pages", &[("count", n.count.unwrap_or(0).to_string())])}</p>
-                    <p class="muted small">{ui.t("map-shared-note")}</p>
+                    {icons::note_tip(ui.tx("map-shared-note", &[]))}
                 }
                 .into_any()),
                 NodeKind::Missing => {
@@ -2448,7 +2448,7 @@ fn panel(
                 {settings}
                 {(!external).then(|| view! {
                     <h3 class="map-panel-h">{ui.now("map-links-in", &[("count", n_in.to_string())])}</h3>
-                    {(n_in == 0).then(|| view! { <p class="muted small">{ui.t(if n.kind == NodeKind::Page { "map-orphan-help" } else { "map-none" })}</p> })}
+                    {(n_in == 0).then(|| if n.kind == NodeKind::Page { icons::empty_tip(ui.tx("map-none", &[]), ui.tx("map-orphan-help", &[])).into_any() } else { view! { <p class="muted small">{ui.tx("map-none", &[])}</p> }.into_any() })}
                     <ul class="map-links">{incoming.into_iter().map(|l| { let o = l.from.clone(); let e = Picked::Edge(l.from.clone(), l.to.clone()); link_row(l, o, e) }).collect_view()}</ul>
                     <h3 class="map-panel-h">{ui.now("map-links-out", &[("count", n_out.to_string())])}</h3>
                     {(n_out == 0).then(|| view! { <p class="muted small">{ui.t("map-none")}</p> })}

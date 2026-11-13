@@ -184,8 +184,7 @@ pub fn SaveTemplate(site: SiteSummary) -> impl IntoView {
                     <div class="save-template__target" data-target="file">
                         <span class="save-template__icon">{icons::download()}</span>
                         <span class="save-template__text">
-                            <span class="save-template__name">{ui.t("template-target-file")}</span>
-                            <span class="muted">{ui.t("template-target-file-what")}</span>
+                            <span class="save-template__name">{ui.t("template-target-file")}{icons::info_tip(ui.tx("template-target-file-what", &[]))}</span>
                         </span>
                         <button type="button" class="btn save-template-file" title=ui.t("template-target-file-help")
                             disabled=move || invalid() || busy.get().is_some() on:click=save_file>

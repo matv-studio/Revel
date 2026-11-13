@@ -789,7 +789,7 @@ fn BgPosition(sx: Sx) -> impl IntoView {
         <div class="align-box align-box--small" role="group">
             {(0..3).flat_map(|r| (0..3).map(move |c| (c, r))).map(|(c, r)| view! {
                 <button class="align-cell" class:is-on=move || at() == (Some(c), Some(r))
-                    title=pos_name(sx.ui, c, r)
+                    title=pos_name(sx.ui, c, r) aria-label=pos_name(sx.ui, c, r)
                     on:click=move |_| sx.set("background-position", Some(format!("{} {}", X[c], Y[r]))) ><i></i></button>
             }).collect_view()}
         </div>
@@ -1134,7 +1134,7 @@ fn Shadows(sx: Sx, #[prop(default = "box-shadow")] prop: &'static str) -> impl I
 }
 
 /// Nom d'une case de la grille 3 × 3 (colonne, ligne) dans la langue de l'interface.
-fn pos_name(ui: crate::Ui, c: usize, r: usize) -> String {
+pub(super) fn pos_name(ui: crate::Ui, c: usize, r: usize) -> String {
     const KEYS: [[&str; 3]; 3] = [
         ["pos-top-left", "pos-top", "pos-top-right"],
         ["pos-left", "pos-center", "pos-right"],
@@ -1456,7 +1456,7 @@ pub fn CodeSection(sx: Sx) -> impl IntoView {
                     view! {
                         <div class="decl-row">
                             <span class="attr-name" title=d.prop.clone()>{d.prop.clone()}</span>
-                            <input class="input input--mono" prop:value=d.value.clone()
+                            <input class="input input--mono" aria-label=d.prop.clone() prop:value=d.value.clone()
                                 on:change=move |e| set(prop.clone(), event_target_value(&e))/>
                             <button class="chip chip--toggle" class:is-on=d.important title=ui.t("styles-important")
                                 on:click=move |_| toggle_important(d2.clone())>"!"</button>

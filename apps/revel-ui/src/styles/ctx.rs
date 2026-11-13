@@ -484,6 +484,42 @@ impl Sx {
                 (p, v)
             })
             .collect();
+        // Épaisseur de bordure ou de contour réglée sans trait : trait plein, sinon rien ne se
+        // dessine (D-169).
+        let mut list = list;
+        let traits: Vec<String> = list
+            .iter()
+            .filter_map(|(p, v)| {
+                let style = format!("{}-style", p.strip_suffix("-width")?);
+                let drawn = v.as_deref().is_some_and(|v| {
+                    !v.trim().is_empty()
+                        && v.trim()
+                            .trim_end_matches(|c: char| c.is_ascii_alphabetic() || c == '%')
+                            .parse::<f64>()
+                            != Ok(0.0)
+                        && (p.starts_with("border") || p.starts_with("outline"))
+                });
+                let unset = matches!(self.get(&style).current().trim(), "" | "none");
+                (drawn && unset && !list.iter().any(|(q, _)| *q == style)).then_some(style)
+            })
+            .collect();
+        list.extend(traits.into_iter().map(|s| (s, Some("solid".to_string()))));
+        // Partie « avant » ou « après » : sans `content`, elle n'existe pas. Un contenu vide est
+        // posé avec le premier réglage (D-169).
+        let part = {
+            let st = self.state.get_untracked();
+            st.ends_with("::before") || st.ends_with("::after")
+        };
+        if part
+            && list.iter().any(|(_, v)| v.is_some())
+            && !list.iter().any(|(p, _)| p == "content")
+            && self.rule.with_untracked(|r| {
+                r.as_ref()
+                    .is_none_or(|r| !r.decls.iter().any(|d| d.prop == "content"))
+            })
+        {
+            list.push(("content".to_string(), Some("\"\"".to_string())));
+        }
         // Même modification reçue deux fois avant que le document ne change (Entrée puis
         // `change` d'un même champ) : une seule commande, sinon la règle serait créée deux fois.
         let key = format!(

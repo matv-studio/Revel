@@ -368,8 +368,9 @@ pub fn flatten_with(
             .as_ref()
             .map(selector::specificity)
             .unwrap_or((0, 0, 0));
-        let ok_sel =
-            root || styleaudit::is_foundation(r) || styleaudit::panel_selector(&r.selector, &roots);
+        let ok_sel = root
+            || styleaudit::is_foundation(r)
+            || styleaudit::panel_selector_basic(&r.selector, &roots);
         let bad_var = !root
             && r.decls.iter().any(|d| {
                 d.prop.starts_with("--") && !styleaudit::REVEL_PROPS.contains(&d.prop.as_str())

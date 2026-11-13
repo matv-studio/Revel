@@ -1343,8 +1343,8 @@ pub(crate) fn tab_pairing(ui: Ui, ed: Ed, at: &Target) -> Option<AnyView> {
                             }).collect_view()}
                         </ul>
                     })}
-                    {empty.then(|| view! { <p class="muted small">{ui.t("tabs-pair-none")}</p> })}
-                    {m.repeated.then(|| view! { <p class="muted small">{ui.t("tabs-pair-repeated")}</p> })}
+                    {empty.then(|| icons::empty_tip(ui.tx("map-none", &[]), ui.tx("tabs-pair-none", &[])))}
+                    {m.repeated.then(|| icons::note_tip(ui.tx("tabs-pair-repeated", &[])))}
                     {mismatch.then(|| view! {
                         <p class="muted small insp-warn">{ui.now("tabs-pair-mismatch", &[("tabs", nt.to_string()), ("panels", np.to_string())])}</p>
                     })}

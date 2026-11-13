@@ -835,7 +835,7 @@ fn image_row(
                     None => icons::image(),
                 }}
             </button>
-            <input class="input" spellcheck="false" prop:value=move || value.get()
+            <input class="input" spellcheck="false" aria-label=ui.t(label) prop:value=move || value.get()
                 on:change=move |e| on_change.run(event_target_value(&e))/>
             {move || (!value.get().is_empty()).then(|| view! {
                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")

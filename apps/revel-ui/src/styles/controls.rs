@@ -280,7 +280,7 @@ pub fn Row(
     view! {
         <div class="style-row" class:style-row--stack=stack data-prop=props.first().copied().unwrap_or_default()>
             <Label sx props key scrub/>
-            <div class="style-control">{children()}</div>
+            <div class="style-control" role="group" aria-label=sx.ui.t(key)>{children()}</div>
         </div>
     }
 }
@@ -330,6 +330,26 @@ pub fn Pop(
     Effect::new(move |_| {
         if let Some(e) = el.get() {
             request_animation_frame(move || {
+                // Ramené dans la largeur du panneau : sinon le panneau défilerait de côté (D-169).
+                if let Ok(Some(panel)) = e.closest(".dock-panel") {
+                    let (p, r) = (
+                        panel.get_bounding_client_rect(),
+                        e.get_bounding_client_rect(),
+                    );
+                    let over = r.right() - (p.right() - 8.0);
+                    let under = (p.left() + 8.0) - r.left();
+                    let dx = if over > 0.0 {
+                        -over
+                    } else if under > 0.0 {
+                        under
+                    } else {
+                        0.0
+                    };
+                    if dx != 0.0 {
+                        let _ = web_sys::HtmlElement::style(&e)
+                            .set_property("margin-left", &format!("{dx}px"));
+                    }
+                }
                 let opts = web_sys::ScrollIntoViewOptions::new();
                 opts.set_block(web_sys::ScrollLogicalPosition::Nearest);
                 e.scroll_into_view_with_scroll_into_view_options(&opts);
@@ -930,10 +950,21 @@ pub fn Choice(
     // Rien de réglé ici : la valeur en vigueur s'affiche dans le champ (en gris, en orange si
     // héritée), sans ligne de plus dans la liste.
     let unset = move || pv.with(|p| p.here.is_none());
+    // Nom accessible : le libellé de la ligne (D-169).
+    let field = NodeRef::<leptos::html::Select>::new();
+    Effect::new(move |_| {
+        if let Some(f) = field.get()
+            && let Ok(Some(row)) = f.closest(".style-row, .style-cell, .xy-line")
+            && let Ok(Some(l)) = row.query_selector(".style-label-text, .style-label, label")
+            && let Some(t) = l.text_content().filter(|t| !t.trim().is_empty())
+        {
+            let _ = f.set_attribute("aria-label", t.trim());
+        }
+    });
     view! {
         <div class="select" class:is-unset=unset
             class:is-inherited=move || unset() && pv.with(|p| matches!(p.origin, super::ctx::Origin::Inherited(_)))>
-            <select class="input" on:change=move |e| {
+            <select class="input" node_ref=field on:change=move |e| {
                 let v = event_target_value(&e);
                 sx.set(prop, (!v.is_empty()).then_some(v));
             }>

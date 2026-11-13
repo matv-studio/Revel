@@ -794,11 +794,10 @@ fn HostForm(
                       help: Option<&'static str>| {
         view! {
             <label class="field">
-                <span class="label">{ui.t(key)}</span>
+                <span class="label">{ui.tx(key, &[])}{help.map(|h| icons::info_tip(ui.tx(h, &[])))}</span>
                 <input class="input" type=kind autocomplete="off" spellcheck="false"
                     prop:value=move || editing.with(|f| f.as_ref().map(get).unwrap_or_default())
                     on:input=move |ev| { let v = event_target_value(&ev); editing.update(|f| if let Some(f) = f { set(f, v) }) }/>
-                {help.map(|h| view! { <span class="help">{ui.t(h)}</span> })}
             </label>
         }
     };

@@ -1799,6 +1799,53 @@ ajoutés pour refaire le site dans Revel, chacun rangé là où l'interface règ
   choix du visiteur ; reprise planifiée des flux ; réglages des seuils de « Gouttes » dans l'interface
   (`down`, `up`, `in` lus dans l'attribut).
 
+**D-169 — 13/11/2026 — prise (demande de l'utilisateur : contrôle qualité complet de l'interface, relevé
+`revel audit` du site Alunites Groupe à prendre en compte).** **Chaque écran, menu et outil contrôlé contre
+la charte et les règles d'ergonomie ; écarts corrigés ; deux outils ajoutés au panneau Styles.**
+Méthode : règles de la charte traduites en contrôles mesurés dans la page (libellé et info-bulle des
+boutons-icônes, curseur, cibles de clic, nom accessible des champs, hauteurs et tailles de texte hors
+échelle, capitales, phrase visible, contraste AA, défilement horizontal, rôle des choix exclusifs), passés
+sur environ 200 états de l'interface en thème sombre ; fermeture de chaque menu essayée par Échap, clic
+dans le canevas et clic dans un panneau ; chaque commande du panneau Styles essayée (effet dans le canevas,
+annulation) ; temps de réaction mesurés.
+- **Menus et canevas.** Le canevas est un autre document : ses appuis et son Échap ne parvenaient pas à la
+  fenêtre, donc les menus ouverts (options de l'aperçu, profil, options d'un panneau, menu contextuel)
+  restaient ouverts. Le canevas signale tout appui (`down`) et Échap hors saisie et hors geste (`escape`) ;
+  l'interface les rejoue sur la fenêtre, où les menus écoutent. Échap ferme d'abord le menu ou la fenêtre
+  ouverts, sinon retire la sélection (décidé par l'interface, plus par le canevas). Échap ferme aussi le
+  menu de l'aperçu, le menu d'un panneau et les volets (paramètres de page, de modèle, détails d'un média :
+  le champ en cours de saisie est quitté d'abord).
+- **Contraste (thème sombre).** `--text-muted` #a3a3a3 et `--text-faint` #969696 (4,5:1 au moins sur toutes
+  les surfaces où ils servent) ; texte discret d'une ligne active, survolée ou sélectionnée : un cran plus
+  clair. Pourquoi : compteurs, en-têtes de tableau, pastilles et légendes passaient sous AA (3,4 à 4,4:1).
+- **Curseur.** Plus de main sur les commandes (charte : outil de bureau) ; la main reste aux liens.
+- **Échelles.** Tailles de texte, rayons et durées écrits en dur ramenés aux jetons (10 et 10,5 px → 11 px) ;
+  parties des Paramètres et tri des médias à 24 px ; cibles de clic des en-têtes triables et des compteurs
+  du site portées à 24 px sans changer la mise en page ; libellés du menu contextuel jamais coupés.
+- **Aucune phrase d'explication visible.** Aides et états vides : un mot court et l'explication en
+  info-bulle (ⓘ) — panneaux Styles et Interactions sans sélection, média au survol, onglets, modèle des
+  pages, flux RSS, remplacement d'un média, plan du site, champs déduits du CMS, menus du site, formulaire
+  d'hébergement (`icons::info_tip`, `empty_tip`, `note_tip`).
+- **Noms accessibles.** Commandes d'une ligne du panneau Styles groupées sous le nom de la ligne ; valeur
+  d'une couleur du site, déclaration libre, type de point de rupture, champ de texte, cases de position du
+  fond : nommés. Titre complet en info-bulle des titres coupés du CMS.
+- **Bordure.** Régler une épaisseur de bordure ou de contour sans trait pose le trait plein avec elle :
+  avant, rien ne se dessinait.
+- **Parties « avant » et « après »** (`::before`, `::after`) : deux états du menu « État » du panneau Styles,
+  proposés pour tout élément qui peut en porter. Le champ « Contenu » règle leur texte (`content`) ; un
+  contenu vide est posé d'office au premier réglage, sans quoi la partie n'existe pas. Le canevas donne les
+  valeurs calculées de la partie réglée.
+- **État d'un ancêtre** (`.carte:hover .titre`, `.lien:focus-visible .fleche`) : le menu « État » propose
+  « Survol de .classe » pour chaque ancêtre qui porte une classe (cinq au plus, du plus proche au plus
+  lointain) et « Focus sur .classe » si l'ancêtre se prend au clavier. Plus besoin d'en faire un composant
+  avec une variante. Le relevé des styles reconnaît ces formes (`ANCESTOR_STATES`).
+- Relevé du site Alunites Groupe : sélecteurs écrits 66 → 26, propriétés sans réglage 31 → 25.
+En suspens : variables locales (`--c` posée sur une classe, `rgba(var(--c), …)`), propriétés sans commande
+(`-webkit-line-clamp`, `transition-delay`, `isolation`, `writing-mode`, compteurs, `-webkit-text-stroke`),
+`:nth-child`, balises `li` et `span` dans une classe ; côté page : classe calculée d'après un champ, attribut
+conditionnel (`target` si lien externe), liste filtrée par référence. L'opacité d'un élément animé à
+l'apparition reste masquée dans le canevas par l'animation jouée (valeur réglée correcte).
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

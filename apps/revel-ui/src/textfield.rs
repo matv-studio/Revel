@@ -119,7 +119,7 @@ pub fn SelectedTexts() -> impl IntoView {
                             }.into_any()
                         } else {
                             view! {
-                                <textarea class="input text-field-input" rows=rows.to_string() spellcheck="true"
+                                <textarea class="input text-field-input" aria-label=ui.t("text-field") rows=rows.to_string() spellcheck="true"
                                     prop:value=text.clone()
                                     on:change=move |e| { let v = event_target_value(&e); item.with_value(|i| commit(i, v)) }
                                     on:keydown=move |e: leptos::ev::KeyboardEvent| {

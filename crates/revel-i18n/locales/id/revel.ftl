@@ -3695,3 +3695,10 @@ styles-state-in-focus = Fokus pada { $name }
 styles-state-in-hover-help = Elemen saat penunjuk berada di atas { $name }, yang memuatnya.
 styles-state-in-focus-help = Elemen saat { $name }, yang memuatnya, mendapat fokus keyboard.
 styles-content = Konten
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = Penerima menurut kolom
+forms-route-help = Nama kolom formulir (misalnya daftar “kebutuhan”) yang nilai pilihannya menentukan alamat penerima pesan. Nilai tanpa baris dikirim ke alamat penerima.
+forms-route-value = Nilai yang dipilih
+forms-route-add = Tambah alamat
+forms-route-remove = Hapus

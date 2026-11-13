@@ -3695,3 +3695,10 @@ styles-state-in-focus = { $name } 포커스
 styles-state-in-hover-help = 이 요소를 포함하는 { $name } 위에 포인터가 있을 때의 요소.
 styles-state-in-focus-help = 이 요소를 포함하는 { $name }에 키보드 포커스가 있을 때의 요소.
 styles-content = 콘텐츠
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = 필드에 따른 수신자
+forms-route-help = 선택한 값에 따라 메시지를 받을 주소가 정해지는 양식 필드의 이름(예: “문의 유형” 목록). 행이 없는 값은 수신 주소로 전송됩니다.
+forms-route-value = 선택한 값
+forms-route-add = 주소 추가
+forms-route-remove = 삭제

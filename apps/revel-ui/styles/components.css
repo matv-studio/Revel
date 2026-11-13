@@ -1729,3 +1729,7 @@ button.site-facts__item:hover .muted { color: var(--text); text-decoration: unde
 .empty-tip { display: flex; align-items: center; gap: var(--s-1, 4px); margin: 0; }
 .label > .info-tip, .empty-tip > .info-tip { margin-left: 2px; vertical-align: -2px; }
 .info-tip svg.icon { width: 13px; height: 13px; }
+/* Formulaires : destinataire selon un champ (D-170). */
+.forms-route-list { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
+.forms-route { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: var(--s-2); align-items: center; }
+.forms-route-add { align-self: flex-start; }

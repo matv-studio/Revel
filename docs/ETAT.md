@@ -9,6 +9,13 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 13/11/2026 (suite) : destinataire d'un formulaire selon un champ (D-170)
+
+Paramètres › Formulaires : « Destinataire selon le champ » (nom du champ, puis une ligne valeur → adresse).
+Modèle `FormSettings.route_field` / `routes`, script PHP (`crates/revel-render/src/forms.rs`, essai
+`destinataire_selon_un_champ`), 5 clés de traduction × 15 langues. Demandé pour le site Alunites Groupe
+(liste « marque » du formulaire de contact).
+
 ## Travail du 13/11/2026 : contrôle qualité de l'interface (D-169)
 
 Demande : contrôler chaque menu, sous-menu et outil contre la charte et les règles d'ergonomie, tester chaque

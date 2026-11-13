@@ -1050,6 +1050,36 @@ fn Forms(site: SiteSummary) -> impl IntoView {
                         prop:value=move || forms().recipient
                         on:change=move |e| { let v = event_target_value(&e); set(&|f| f.recipient = v.trim().to_string()) }/>
                 </label>
+                // Destinataire selon la valeur d'un champ (D-170).
+                <div class="forms-routes stack">
+                    <label class="field">
+                        <span class="label">{ui.t("forms-route-field")}{icons::info_tip(ui.tx("forms-route-help", &[]))}</span>
+                        <input class="input input--mono forms-route-field" type="text" spellcheck="false" autocomplete="off"
+                            placeholder="besoin"
+                            prop:value=move || forms().route_field
+                            on:change=move |e| { let v = event_target_value(&e); set(&|f| f.route_field = v.trim().to_string()) }/>
+                    </label>
+                    <Show when=move || !forms().route_field.trim().is_empty()>
+                        <ul class="forms-route-list">
+                            {move || forms().routes.into_iter().enumerate().map(|(i, r)| view! {
+                                <li class="forms-route">
+                                    <input class="input forms-route-value" type="text" aria-label=ui.t("forms-route-value") placeholder=ui.t("forms-route-value")
+                                        prop:value=r.value.clone()
+                                        on:change=move |e| { let v = event_target_value(&e); set(&|f| if let Some(x) = f.routes.get_mut(i) { x.value = v.trim().to_string() }) }/>
+                                    <input class="input forms-route-recipient" type="email" spellcheck="false" autocomplete="off"
+                                        aria-label=ui.t("forms-recipient") placeholder=ui.t("forms-recipient")
+                                        prop:value=r.recipient.clone()
+                                        on:change=move |e| { let v = event_target_value(&e); set(&|f| if let Some(x) = f.routes.get_mut(i) { x.recipient = v.trim().to_string() }) }/>
+                                    <button class="icon-btn" aria-label=ui.t("forms-route-remove") title=ui.t("forms-route-remove")
+                                        on:click=move |_| set(&|f| { if i < f.routes.len() { f.routes.remove(i); } })>{icons::trash()}</button>
+                                </li>
+                            }).collect_view()}
+                        </ul>
+                        <button class="btn btn--sm forms-route-add" on:click=move |_| set(&|f| f.routes.push(Default::default()))>
+                            {icons::plus()}<span>{ui.t("forms-route-add")}</span>
+                        </button>
+                    </Show>
+                </div>
                 <div class="form-cols">
                     <label class="field">
                         <span class="label">{ui.t("forms-subject")}</span>

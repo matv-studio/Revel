@@ -3698,3 +3698,10 @@ styles-state-in-focus = Focus sur { $name }
 styles-state-in-hover-help = Élément quand le pointeur est sur { $name }, qui le contient.
 styles-state-in-focus-help = Élément quand { $name }, qui le contient, est atteint au clavier.
 styles-content = Contenu
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = Destinataire selon le champ
+forms-route-help = Nom du champ du formulaire (par exemple une liste « besoin ») dont la valeur choisie décide de l'adresse qui reçoit le message. Une valeur sans ligne va à l'adresse de réception.
+forms-route-value = Valeur choisie
+forms-route-add = Ajouter une adresse
+forms-route-remove = Retirer

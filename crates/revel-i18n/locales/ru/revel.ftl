@@ -3799,3 +3799,10 @@ styles-state-in-focus = Фокус на { $name }
 styles-state-in-hover-help = Элемент, когда указатель находится над { $name }, который его содержит.
 styles-state-in-focus-help = Элемент, когда { $name }, который его содержит, получает фокус с клавиатуры.
 styles-content = Содержимое
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = Получатель по полю
+forms-route-help = Имя поля формы (например, список «запрос»), выбранное значение которого определяет адрес получателя. Значение без строки отправляется на основной адрес.
+forms-route-value = Выбранное значение
+forms-route-add = Добавить адрес
+forms-route-remove = Удалить

@@ -3695,3 +3695,10 @@ styles-state-in-focus = { $name } odaklanınca
 styles-state-in-hover-help = İşaretçi, öğeyi içeren { $name } üzerindeyken öğe.
 styles-state-in-focus-help = Öğeyi içeren { $name } klavye odağındayken öğe.
 styles-content = İçerik
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = Alana göre alıcı
+forms-route-help = Seçilen değeri iletinin hangi adrese gideceğini belirleyen form alanının adı (örneğin bir “ihtiyaç” listesi). Satırı olmayan değer alıcı adresine gider.
+forms-route-value = Seçilen değer
+forms-route-add = Adres ekle
+forms-route-remove = Kaldır

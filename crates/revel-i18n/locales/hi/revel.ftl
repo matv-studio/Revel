@@ -3695,3 +3695,10 @@ styles-state-in-focus = { $name } पर फ़ोकस
 styles-state-in-hover-help = तत्व, जब पॉइंटर उसे समाहित करने वाले { $name } पर हो।
 styles-state-in-focus-help = तत्व, जब उसे समाहित करने वाले { $name } पर कीबोर्ड फ़ोकस हो।
 styles-content = सामग्री
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = फ़ील्ड के अनुसार प्राप्तकर्ता
+forms-route-help = फ़ॉर्म फ़ील्ड का नाम (जैसे “ज़रूरत” सूची) जिसका चुना गया मान तय करता है कि संदेश किस पते पर जाएगा। बिना पंक्ति वाला मान प्राप्ति पते पर जाता है।
+forms-route-value = चुना गया मान
+forms-route-add = पता जोड़ें
+forms-route-remove = हटाएँ

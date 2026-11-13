@@ -3695,3 +3695,10 @@ styles-state-in-focus = { $name } のフォーカス
 styles-state-in-hover-help = この要素を含む { $name } の上にポインターがある状態。
 styles-state-in-focus-help = この要素を含む { $name } にキーボードフォーカスがある状態。
 styles-content = コンテンツ
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = フィールドに応じた宛先
+forms-route-help = 選択された値によってメッセージの宛先が決まるフォームフィールドの名前（例：「ご用件」リスト）。行のない値は受信アドレスに送られます。
+forms-route-value = 選択された値
+forms-route-add = アドレスを追加
+forms-route-remove = 削除

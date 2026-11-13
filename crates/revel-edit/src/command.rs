@@ -1368,6 +1368,11 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         Command::SetFormSettings { forms } => {
             let mut forms = forms.clone();
             forms.recipient = forms.recipient.trim().to_string();
+            forms.route_field = forms.route_field.trim().to_string();
+            for r in &mut forms.routes {
+                r.value = r.value.trim().to_string();
+                r.recipient = r.recipient.trim().to_string();
+            }
             Ok(Command::SetFormSettings {
                 forms: std::mem::replace(&mut site.settings.forms, forms),
             })

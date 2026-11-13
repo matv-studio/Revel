@@ -3695,3 +3695,10 @@ styles-state-in-focus = 聚焦于 { $name }
 styles-state-in-hover-help = 指针位于包含它的 { $name } 上时的元素。
 styles-state-in-focus-help = 包含它的 { $name } 获得键盘焦点时的元素。
 styles-content = 内容
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = 按字段选择收件人
+forms-route-help = 表单字段的名称（例如“需求”列表），其所选值决定由哪个地址接收消息。没有对应行的值发送到接收地址。
+forms-route-value = 所选值
+forms-route-add = 添加地址
+forms-route-remove = 移除

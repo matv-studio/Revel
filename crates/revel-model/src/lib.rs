@@ -464,6 +464,20 @@ pub struct FormSettings {
     /// Message affiché après l'envoi (par défaut selon la langue du site).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub success: Option<String>,
+    /// Champ du formulaire (attribut `name`) dont la valeur choisit le destinataire (D-170) ; vide :
+    /// tout va à [`FormSettings::recipient`].
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub route_field: String,
+    /// Destinataire par valeur de ce champ ; une valeur absente d'ici va à l'adresse générale.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub routes: Vec<FormRoute>,
+}
+
+/// Une valeur du champ d'aiguillage et l'adresse qui reçoit alors le message (D-170).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FormRoute {
+    pub value: String,
+    pub recipient: String,
 }
 
 impl FormSettings {

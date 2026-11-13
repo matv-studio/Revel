@@ -178,13 +178,42 @@ fn site_domain(site: &Site) -> Option<String> {
 }
 
 /// Script PHP qui reçoit les formulaires (adresse, objet, messages du site).
+/// Première adresse réglée : la générale, sinon celle d'une ligne d'aiguillage.
+fn first_recipient(f: &revel_model::FormSettings) -> &str {
+    let general = f.recipient.trim();
+    if !general.is_empty() {
+        return general;
+    }
+    f.routes
+        .iter()
+        .map(|r| r.recipient.trim())
+        .find(|r| !r.is_empty())
+        .unwrap_or("")
+}
+
 pub fn handler(site: &Site) -> String {
     let f = &site.settings.forms;
     let t = texts(&site.default_locale);
     // Expéditeur : adresse du domaine du site (exigée par OVHcloud et IONOS), sinon le destinataire.
     let from = site_domain(site)
         .map(|d| format!("site@{d}"))
-        .unwrap_or_else(|| f.recipient.trim().to_string());
+        .unwrap_or_else(|| first_recipient(f).to_string());
+    // Destinataire selon la valeur d'un champ (D-170) : lignes complètes seulement.
+    let routes: String = if f.route_field.trim().is_empty() {
+        String::new()
+    } else {
+        f.routes
+            .iter()
+            .filter(|r| !r.value.trim().is_empty() && !r.recipient.trim().is_empty())
+            .map(|r| {
+                format!(
+                    "{} => {}, ",
+                    php_str(r.value.trim()),
+                    php_str(r.recipient.trim())
+                )
+            })
+            .collect()
+    };
     let subject = f
         .subject
         .clone()
@@ -202,6 +231,8 @@ pub fn handler(site: &Site) -> String {
 declare(strict_types=1);
 
 const RECIPIENT = {recipient};
+const ROUTE_FIELD = {route_field};
+const ROUTES = [{routes}];
 const FROM = {from};
 const SITE = {site};
 const SUBJECT = {subject};
@@ -302,13 +333,28 @@ if ($email !== '') {{
     $headers[] = 'Reply-To: ' . $clean($email);
 }}
 $subject = '=?UTF-8?B?' . base64_encode(SUBJECT) . '?=';
-$sent = @mail(RECIPIENT, $subject, $body, implode("\r\n", $headers), '-f' . FROM);
+// Destinataire : celui de la valeur choisie dans le champ d'aiguillage, sinon l'adresse générale.
+$to = RECIPIENT;
+if (ROUTE_FIELD !== '' && isset($fields[ROUTE_FIELD])) {{
+    foreach (ROUTES as $value => $address) {{
+        if (strcasecmp(trim((string)$value), trim($fields[ROUTE_FIELD])) === 0) {{
+            $to = $address;
+            break;
+        }}
+    }}
+}}
+if ($to === '') {{
+    reply(500, false, MSG_FAIL, $json);
+}}
+$sent = @mail($to, $subject, $body, implode("\r\n", $headers), '-f' . FROM);
 if (!$sent) {{
     reply(500, false, MSG_FAIL, $json);
 }}
 reply(200, true, MSG_OK, $json);
 "#,
         recipient = php_str(f.recipient.trim()),
+        route_field = php_str(f.route_field.trim()),
+        routes = routes,
         from = php_str(&from),
         site = php_str(&site.name),
         subject = php_str(&subject),
@@ -331,7 +377,7 @@ pub(crate) fn handler_file(
     if forms == 0 || files.iter().any(|f| f.path == HANDLER) {
         return;
     }
-    if site.settings.forms.recipient.trim().is_empty() {
+    if first_recipient(&site.settings.forms).is_empty() {
         warnings.push(
             "formulaires non reçus : adresse de réception absente (Paramètres › Formulaires)"
                 .into(),
@@ -374,6 +420,38 @@ mod tests {
         // Sans formulaire Revel : page inchangée.
         let plain = "<form action=\"/x\"></form>".to_string();
         assert_eq!(wire(&site(), plain.clone(), true), (plain, 0));
+    }
+
+    #[test]
+    fn destinataire_selon_un_champ() {
+        // D-170 : la valeur du champ « besoin » choisit l'adresse ; lignes incomplètes ignorées.
+        let mut s = site();
+        s.settings.forms.route_field = "besoin".into();
+        s.settings.forms.routes = vec![
+            revel_model::FormRoute {
+                value: "Film".into(),
+                recipient: "films@lumen.fr".into(),
+            },
+            revel_model::FormRoute {
+                value: "L'atelier".into(),
+                recipient: "atelier@lumen.fr".into(),
+            },
+            revel_model::FormRoute {
+                value: "Vide".into(),
+                recipient: String::new(),
+            },
+        ];
+        let php = handler(&s);
+        assert!(php.contains("const ROUTE_FIELD = 'besoin';"), "{php}");
+        assert!(php.contains("const ROUTES = ['Film' => 'films@lumen.fr', 'L\\'atelier' => 'atelier@lumen.fr', ];"), "{php}");
+        assert!(php.contains("$sent = @mail($to, $subject"));
+        // Sans champ d'aiguillage : aucune ligne écrite.
+        s.settings.forms.route_field.clear();
+        assert!(handler(&s).contains("const ROUTES = [];"));
+        // Adresse générale vide, une ligne réglée : le script est quand même produit.
+        s.settings.forms.recipient.clear();
+        s.settings.forms.route_field = "besoin".into();
+        assert_eq!(first_recipient(&s.settings.forms), "films@lumen.fr");
     }
 
     #[test]

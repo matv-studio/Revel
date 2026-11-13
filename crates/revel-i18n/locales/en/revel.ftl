@@ -3695,3 +3695,10 @@ styles-state-in-focus = Focus on { $name }
 styles-state-in-hover-help = Element while the pointer is over { $name }, which contains it.
 styles-state-in-focus-help = Element while { $name }, which contains it, has keyboard focus.
 styles-content = Content
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = Recipient by field
+forms-route-help = Name of the form field (for example a “need” list) whose chosen value decides which address receives the message. A value with no row goes to the recipient address.
+forms-route-value = Chosen value
+forms-route-add = Add an address
+forms-route-remove = Remove

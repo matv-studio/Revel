@@ -3695,3 +3695,10 @@ styles-state-in-focus = Focus op { $name }
 styles-state-in-hover-help = Element terwijl de aanwijzer op { $name } staat, dat het bevat.
 styles-state-in-focus-help = Element terwijl { $name }, dat het bevat, toetsenbordfocus heeft.
 styles-content = Inhoud
+
+# Destinataire d'un formulaire selon un champ (D-170)
+forms-route-field = Ontvanger per veld
+forms-route-help = Naam van het formulierveld (bijvoorbeeld een lijst ‘behoefte’) waarvan de gekozen waarde bepaalt welk adres het bericht ontvangt. Een waarde zonder regel gaat naar het ontvangstadres.
+forms-route-value = Gekozen waarde
+forms-route-add = Adres toevoegen
+forms-route-remove = Verwijderen

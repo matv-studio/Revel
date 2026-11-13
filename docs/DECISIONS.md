@@ -1846,6 +1846,18 @@ En suspens : variables locales (`--c` posée sur une classe, `rgba(var(--c), …
 conditionnel (`target` si lien externe), liste filtrée par référence. L'opacité d'un élément animé à
 l'apparition reste masquée dans le canevas par l'animation jouée (valeur réglée correcte).
 
+**D-170 — 13/11/2026 — prise (demande de l'utilisateur, site Alunites Groupe : une adresse de réception par
+type de besoin choisi dans le formulaire de contact).** **Formulaires : destinataire selon la valeur d'un
+champ.** `FormSettings.route_field` (nom du champ, attribut `name`) et `routes` (valeur → adresse) ;
+Paramètres › Formulaires : « Destinataire selon le champ », une ligne par valeur. Le script PHP produit à la
+génération compare la valeur reçue (sans tenir compte de la casse) et envoie à l'adresse de la ligne, sinon à
+l'adresse générale ; lignes incomplètes ignorées ; les adresses restent côté serveur, rien n'est choisi par
+le visiteur en dehors de la liste. Le script est produit dès qu'une adresse existe (générale ou d'une ligne).
+Pourquoi : jusque-là une seule adresse par site, donc un tri à la main des messages d'un groupe à plusieurs
+marques. Conseil : donner aux choix de la liste une valeur stable (`value`), la même dans toutes les
+langues, sinon la valeur envoyée change avec la traduction. En suspens : choisir le champ et ses valeurs
+dans une liste tirée des formulaires du site plutôt que de les écrire ; essai de bout en bout de l'écran.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

@@ -26,6 +26,10 @@ pub struct Query {
     /// Nombre maximal de contenus.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
+    /// Contenus sautés au début (« Start at » de Webflow) : la liste commence au contenu
+    /// `offset + 1` ; une seconde liste reprend où la première s'arrête (D-171).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub offset: usize,
     /// Sans le contenu affiché par la page (« autres projets » sur la page d'un projet).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exclude_current: bool,
@@ -46,6 +50,10 @@ pub struct Query {
     /// sinon la liste ordinaire.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_full: bool,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// Contenus mis en premier écrits à la main : `["a", "b"]` -> identifiants.
@@ -228,9 +236,11 @@ impl Query {
                 _ => e.push_str(&format!(" | pick_first({f})")),
             }
         }
-        match self.limit {
-            Some(n) => format!("({e})[:{n}]"),
-            None => e,
+        match (self.offset, self.limit) {
+            (0, Some(n)) => format!("({e})[:{n}]"),
+            (0, None) => e,
+            (o, Some(n)) => format!("({e})[{o}:{}]", o + n),
+            (o, None) => format!("({e})[{o}:]"),
         }
     }
 
@@ -238,17 +248,34 @@ impl Query {
     pub fn parse(expr: &str) -> Option<Query> {
         let mut e = expr.trim().to_string();
         let mut limit = None;
+        let mut offset = 0;
+        // Tranche finale : `(…)[:n]`, `(…)[a:b]` ou `(…)[a:]`.
         if e.starts_with('(')
-            && let Some(i) = e.rfind(")[:")
             && e.ends_with(']')
+            && let Some(i) = e.rfind(")[")
         {
-            let n = e[i + 3..e.len() - 1].trim().parse::<usize>().ok()?;
+            let (a, b) = e[i + 2..e.len() - 1].split_once(':')?;
+            let (a, b) = (a.trim(), b.trim());
+            let start = if a.is_empty() {
+                0
+            } else {
+                a.parse::<usize>().ok()?
+            };
+            let end = if b.is_empty() {
+                None
+            } else {
+                Some(b.parse::<usize>().ok()?)
+            };
+            if end.is_some_and(|n| n <= start) || (start == 0 && end.is_none()) {
+                return None;
+            }
             let inner = e[1..i].to_string();
-            // La parenthèse ouvrante répond à celle qui précède `[:n]`.
+            // La parenthèse ouvrante répond à celle qui précède la tranche.
             if !balanced(&inner) {
                 return None;
             }
-            limit = Some(n);
+            offset = start;
+            limit = end.map(|n| n - start);
             e = inner;
         }
         let parts = split_top(&e, '|');
@@ -279,6 +306,7 @@ impl Query {
             collection,
             also: ids,
             limit,
+            offset,
             ..Default::default()
         };
         for f in filters {
@@ -522,6 +550,7 @@ mod tests {
                 contains: None,
                 first: None,
                 first_full: false,
+                offset: 0,
                 also: Vec::new(),
             },
             Query {
@@ -534,6 +563,7 @@ mod tests {
                 contains: None,
                 first: None,
                 first_full: false,
+                offset: 0,
                 also: Vec::new(),
             },
             Query {
@@ -611,10 +641,29 @@ mod tests {
                 first: None,
                 first_full: false,
                 also: Vec::new(),
+                offset: 0,
             }
             .to_expr(),
             r#"(collections.projets | selectattr("data.une") | sort(attribute="date", reverse=true))[:3]"#
         );
+        // D-171 : à partir du deuxième contenu, avec ou sans nombre maximal.
+        let q = Query {
+            collection: "actualites".into(),
+            offset: 1,
+            limit: Some(3),
+            ..Default::default()
+        };
+        assert_eq!(q.to_expr(), "(collections.actualites)[1:4]");
+        assert_eq!(Query::parse(&q.to_expr()), Some(q));
+        let q = Query {
+            collection: "actualites".into(),
+            offset: 1,
+            ..Default::default()
+        };
+        assert_eq!(q.to_expr(), "(collections.actualites)[1:]");
+        assert_eq!(Query::parse(&q.to_expr()), Some(q));
+        assert_eq!(Query::parse("(collections.actualites)[3:2]"), None);
+        assert_eq!(Query::parse("(collections.actualites)[0:]"), None);
         for f in [
             FieldList::Values {
                 field: "item.data.tags".into(),

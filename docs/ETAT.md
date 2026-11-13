@@ -9,6 +9,14 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 13/11/2026 (fin) : outils pour les restes d'import (D-171)
+
+Liste de collection « À partir du n° » (`Query.offset`, `crates/revel-edit/src/collection.rs`,
+`apps/revel-ui/src/blocks.rs`) ; panneau Styles : lignes affichées, sens d'écriture, contour du texte,
+perspective, isolation, apparence, redimensionnement, découpe du fond, hauteur des lignes de grille
+(`apps/revel-ui/src/styles/sections.rs`, `layout.rs`, `PANEL_PROPS`). Clés de traduction × 15 langues. Le site
+Alunites Groupe passe `revel audit` sans relevé.
+
 ## Travail du 13/11/2026 (suite) : destinataire d'un formulaire selon un champ (D-170)
 
 Paramètres › Formulaires : « Destinataire selon le champ » (nom du champ, puis une ligne valeur → adresse).

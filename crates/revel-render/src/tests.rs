@@ -712,6 +712,7 @@ fn liste_de_collection() {
             contains: None,
             first: None,
             first_full: false,
+            offset: 0,
             also: Vec::new(),
         }
         .to_expr()

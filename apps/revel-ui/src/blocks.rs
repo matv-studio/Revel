@@ -2996,6 +2996,14 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     let sort_field = q.with_value(|q| q.sort.as_ref().map(|s| s.0.clone()).unwrap_or_default());
     let desc = q.with_value(|q| q.sort.as_ref().is_some_and(|s| s.1));
     let limit = q.with_value(|q| q.limit.map(|n| n.to_string()).unwrap_or_default());
+    // Premier contenu montré (D-171) : 1 = depuis le début.
+    let start = q.with_value(|q| {
+        if q.offset > 0 {
+            (q.offset + 1).to_string()
+        } else {
+            String::new()
+        }
+    });
     let exclude = q.with_value(|q| q.exclude_current);
     // Affichage progressif (D-114) : élément qui contient la liste, et nombre montré d'abord.
     let holder = ed.doc.with_untracked(|d| {
@@ -3323,6 +3331,14 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                     on:change=move |e| {
                         let n = event_target_value(&e).trim().parse::<usize>().ok().filter(|n| *n > 0);
                         write(Box::new(move |q| q.limit = n))
+                    }/>
+            </label>
+            <label class="field">
+                <span class="label">{ui.t("block-list-start")}{icons::info_tip(ui.tx("block-list-start-help", &[]))}</span>
+                <input class="input" type="number" min="1" step="1" data-list="start" prop:value=start placeholder="1"
+                    on:change=move |e| {
+                        let n = event_target_value(&e).trim().parse::<usize>().ok().filter(|n| *n > 1).map(|n| n - 1).unwrap_or(0);
+                        write(Box::new(move |q| q.offset = n))
                     }/>
             </label>
             {holder.map(|(t, more)| {

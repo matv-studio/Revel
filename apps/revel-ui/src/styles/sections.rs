@@ -448,6 +448,50 @@ const TEXT_WRAP: &[Opt] = &[
     o("pretty", "tw-pretty"),
 ];
 
+/// Sens d'écriture : lignes horizontales ou verticales (titre le long d'un bord).
+const WRITING_MODE: &[Opt] = &[
+    o("horizontal-tb", "wm-horizontal"),
+    o("vertical-rl", "wm-vertical-rl"),
+    o("vertical-lr", "wm-vertical-lr"),
+];
+
+/// Texte limité à N lignes, la dernière finie par des points de suspension (« Line clamp ») :
+/// quatre déclarations posées ou retirées ensemble (D-171).
+#[component]
+fn LineClamp(sx: Sx) -> impl IntoView {
+    let pv = Memo::new(move |_| sx.get("-webkit-line-clamp"));
+    let ui = expect_context::<crate::Ui>();
+    let value = move || pv.with(|p| p.here.clone().unwrap_or_default());
+    let placeholder = move || {
+        pv.with(|p| {
+            if p.here.is_none() {
+                p.current()
+            } else {
+                String::new()
+            }
+        })
+    };
+    view! {
+        <div class="nbox" class:is-here=move || pv.with(|p| p.here.is_some())>
+        <input class="input nbox-input" type="number" min="1" step="1" aria-label=ui.t("styles-line-clamp")
+            prop:value=value placeholder=move || { let p = placeholder(); if p.is_empty() || p == "none" { ui.tx("styles-line-clamp-none", &[]) } else { p } }
+            on:change=move |e| {
+                let n = event_target_value(&e).trim().parse::<u32>().ok().filter(|n| *n > 0);
+                let display_is_box = sx.get("display").here.as_deref() == Some("-webkit-box");
+                let mut list: Vec<(String, Option<String>)> = vec![
+                    ("-webkit-line-clamp".into(), n.map(|n| n.to_string())),
+                    ("-webkit-box-orient".into(), n.map(|_| "vertical".into())),
+                    ("overflow".into(), n.map(|_| "hidden".into())),
+                ];
+                if n.is_some() || display_is_box {
+                    list.push(("display".into(), n.map(|_| "-webkit-box".into())));
+                }
+                sx.set_many(list, false);
+            }/>
+        </div>
+    }
+}
+
 /// Texte coupé sur une ligne avec des points de suspension (« Truncate » de Webflow) : trois
 /// déclarations posées ou retirées ensemble.
 #[component]
@@ -667,6 +711,7 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
             "text-align", "font-style", "text-decoration-line", "text-decoration-color", "text-decoration-thickness",
             "text-underline-offset", "text-transform", "white-space", "text-wrap",
             "text-overflow", "text-shadow", "list-style-type", "overflow-wrap", "word-break", "fill",
+            "-webkit-line-clamp", "writing-mode", "-webkit-text-stroke-width", "-webkit-text-stroke-color",
         ]>
             <Row sx props=&["font-family"] key="styles-font-family">
                 <Choice sx prop="font-family" options=font_options(sx)/>
@@ -739,6 +784,22 @@ pub fn TextSection(sx: Sx) -> impl IntoView {
             <Row sx props=&["text-overflow", "overflow", "white-space"] key="styles-truncate">
                 <Truncate sx/>
             </Row>
+            // Lignes au plus, la dernière finie par des points de suspension (D-171).
+            <Row sx props=&["-webkit-line-clamp"] key="styles-line-clamp">
+                <LineClamp sx/>
+            </Row>
+            <Row sx props=&["writing-mode"] key="styles-writing-mode">
+                <Choice sx prop="writing-mode" options=opts(sx, WRITING_MODE)/>
+            </Row>
+            // Contour des lettres (texte creux ou souligné d'un trait) ; couleur dès qu'il est réglé.
+            <Row sx props=&["-webkit-text-stroke-width"] key="styles-text-stroke" scrub=Some(LabelScrub { prop: "-webkit-text-stroke-width", unit: "px", step: 0.5, zero: "0px" })>
+                <PropNum sx prop="-webkit-text-stroke-width" units=GAP_UNITS step=0.5 label="styles-text-stroke"/>
+            </Row>
+            <Show when=move || sx.get("-webkit-text-stroke-width").here.is_some() || sx.get("-webkit-text-stroke-color").here.is_some()>
+                <Row sx props=&["-webkit-text-stroke-color"] key="styles-text-stroke-color">
+                    <ColorField sx prop="-webkit-text-stroke-color"/>
+                </Row>
+            </Show>
             <Row sx props=&["text-shadow"] key="styles-text-shadow" stack=true><Shadows sx prop="text-shadow"/></Row>
             // Listes : puces (ou numéros) des éléments.
             <Show when=move || {
@@ -806,7 +867,7 @@ pub fn BackgroundSection(sx: Sx) -> impl IntoView {
             .any(|l| matches!(l, super::background::Layer::Image(_)))
     };
     view! {
-        <Section sx key="styles-backgrounds" props=&["background-color", "background-image", "background-size", "background-position", "background-repeat"]>
+        <Section sx key="styles-backgrounds" props=&["background-color", "background-image", "background-size", "background-position", "background-repeat", "background-clip"]>
             <Row sx props=&["background-color"] key="styles-background-color">
                 <ColorField sx prop="background-color"/>
             </Row>
@@ -822,6 +883,12 @@ pub fn BackgroundSection(sx: Sx) -> impl IntoView {
                 </Row>
                 <Row sx props=&["background-repeat"] key="styles-background-repeat">
                     <Switch sx prop="background-repeat" on="repeat" off="no-repeat"/>
+                </Row>
+            </Show>
+            // Découpe du fond : jusqu'au bord, à l'intérieur, ou dans les lettres (texte en dégradé) (D-171).
+            <Show when=move || has_image() || sx.get("background-clip").here.is_some()>
+                <Row sx props=&["background-clip"] key="styles-background-clip">
+                    <Choice sx prop="background-clip" options=opts(sx, BG_CLIP)/>
                 </Row>
             </Show>
         </Section>
@@ -963,6 +1030,24 @@ const CURSORS: &[Opt] = &[
     o("not-allowed", "cursor-not-allowed"),
     o("help", "cursor-help"),
     o("none", "cursor-none"),
+];
+
+const BG_CLIP: &[Opt] = &[
+    o("border-box", "bg-clip-border"),
+    o("padding-box", "bg-clip-padding"),
+    o("content-box", "bg-clip-content"),
+    o("text", "bg-clip-text"),
+];
+const ISOLATION: &[Opt] = &[
+    o("auto", "isolation-auto"),
+    o("isolate", "isolation-isolate"),
+];
+const APPEARANCE: &[Opt] = &[o("auto", "appearance-auto"), o("none", "appearance-none")];
+const RESIZE: &[Opt] = &[
+    o("none", "resize-none"),
+    o("vertical", "resize-vertical"),
+    o("horizontal", "resize-horizontal"),
+    o("both", "resize-both"),
 ];
 
 const POINTER: &[Opt] = &[
@@ -1377,7 +1462,7 @@ fn ClipPath(sx: Sx) -> impl IntoView {
 #[component]
 pub fn EffectsSection(sx: Sx) -> impl IntoView {
     view! {
-        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "pointer-events", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transform-origin", "clip-path", "mask-image", "transition"]>
+        <Section sx key="styles-effects" props=&["opacity", "box-shadow", "cursor", "pointer-events", "mix-blend-mode", "filter", "backdrop-filter", "transform", "transform-origin", "clip-path", "mask-image", "transition", "isolation", "appearance", "resize", "perspective"]>
             <Row sx props=&["mix-blend-mode"] key="styles-blend"><Choice sx prop="mix-blend-mode" options=opts(sx, BLEND)/></Row>
             <Row sx props=&["opacity"] key="styles-opacity"><Opacity sx/></Row>
             <Row sx props=&["box-shadow"] key="styles-box-shadow" stack=true><Shadows sx/></Row>
@@ -1385,6 +1470,10 @@ pub fn EffectsSection(sx: Sx) -> impl IntoView {
                 <FuncList sx prop="transform" defs=TRANSFORMS add_key="fx-transform-add" none_key="fx-transform-none"/>
             </Row>
             <Row sx props=&["transform-origin"] key="styles-transform-origin"><TransformOrigin sx/></Row>
+            // Profondeur des enfants tournés en 3D (rotation autour d'un axe horizontal) (D-171).
+            <Row sx props=&["perspective"] key="styles-perspective" scrub=Some(LabelScrub { prop: "perspective", unit: "px", step: 10.0, zero: "800px" })>
+                <PropNum sx prop="perspective" step=10.0 zero="800px" label="styles-perspective"/>
+            </Row>
             <Row sx props=&["clip-path"] key="styles-clip-path" stack=true><ClipPath sx/></Row>
             // Masque : images ou dégradés dont l'opacité fait la transparence (fondu d'un bord).
             <Row sx props=&["mask-image"] key="styles-mask" stack=true>
@@ -1401,6 +1490,15 @@ pub fn EffectsSection(sx: Sx) -> impl IntoView {
             // Clics : ignorés par l'élément (texte posé sur une image, bouton indisponible), ils
             // passent à ce qui est dessous.
             <Row sx props=&["pointer-events"] key="styles-pointer-events" stack=true><Seg sx prop="pointer-events" options=POINTER/></Row>
+            // Empilement isolé : les couches de l'élément (fond, lueur, mélange) restent entre elles,
+            // sous le contenu des éléments voisins (D-171).
+            <Row sx props=&["isolation"] key="styles-isolation"><Seg sx prop="isolation" options=ISOLATION/></Row>
+            // Champs de formulaire : aspect du navigateur retiré, poignée de redimensionnement.
+            <Show when=move || matches!(sx.tag.get().as_str(), "input" | "select" | "textarea" | "button")
+                || sx.get("appearance").here.is_some() || sx.get("resize").here.is_some()>
+                <Row sx props=&["appearance"] key="styles-appearance"><Seg sx prop="appearance" options=APPEARANCE/></Row>
+                <Row sx props=&["resize"] key="styles-resize"><Choice sx prop="resize" options=opts(sx, RESIZE)/></Row>
+            </Show>
         </Section>
     }
 }

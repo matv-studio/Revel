@@ -555,6 +555,33 @@ fn GridFlow(sx: Sx) -> impl IntoView {
     }
 }
 
+const AUTO_ROWS: &[Opt] = &[
+    Opt {
+        v: "auto",
+        key: "auto-rows-auto",
+        icon: None,
+        also: &[],
+    },
+    Opt {
+        v: "1fr",
+        key: "auto-rows-equal",
+        icon: None,
+        also: &["minmax(0, 1fr)", "minmax(0,1fr)"],
+    },
+    Opt {
+        v: "min-content",
+        key: "auto-rows-min",
+        icon: None,
+        also: &[],
+    },
+    Opt {
+        v: "max-content",
+        key: "auto-rows-max",
+        icon: None,
+        also: &[],
+    },
+];
+
 /// Répartition des colonnes et des lignes dans la grille (`justify-content`, `align-content`).
 const CONTENT_X: &[Opt] = &[
     Opt {
@@ -660,7 +687,7 @@ pub fn LayoutSection(sx: Sx) -> impl IntoView {
     view! {
         <Section sx key="styles-layout" open=true
             props=&["display", "flex-direction", "flex-wrap", "justify-content", "align-items", "align-content",
-                "justify-items", "gap", "row-gap", "column-gap", "grid-template-columns", "grid-template-rows", "grid-auto-flow"]>
+                "justify-items", "gap", "row-gap", "column-gap", "grid-template-columns", "grid-template-rows", "grid-auto-flow", "grid-auto-rows"]>
             <Row sx props=&["display"] key="styles-display" stack=true>
                 <div class="display-ctl">
                     <Seg sx prop="display" options=DISPLAY/>
@@ -678,6 +705,8 @@ pub fn LayoutSection(sx: Sx) -> impl IntoView {
             <Show when=is_grid>
                 <GridSize sx/>
                 <Row sx props=&["grid-auto-flow"] key="styles-direction"><GridFlow sx/></Row>
+                // Hauteur des rangées ajoutées par la grille (au-delà de celles réglées) (D-171).
+                <Row sx props=&["grid-auto-rows"] key="styles-grid-auto-rows"><Choice sx prop="grid-auto-rows" options=opts(sx, AUTO_ROWS)/></Row>
                 <AlignRow sx x="justify-items" y="align-items"
                     x_opts=Signal::derive(|| GRID_X) y_opts=Signal::derive(|| GRID_Y)
                     values=["start", "center", "end"] props=&["justify-items", "align-items"]/>

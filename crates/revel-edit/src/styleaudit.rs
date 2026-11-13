@@ -114,6 +114,18 @@ pub const DARK: &str = "(prefers-color-scheme: dark)";
 
 /// Propriétés réglées par une commande du panneau Styles (raccourcis lus et modifiés sur place).
 pub const PANEL_PROPS: &[&str] = &[
+    // D-171
+    "-webkit-line-clamp",
+    "-webkit-box-orient",
+    "writing-mode",
+    "-webkit-text-stroke-width",
+    "-webkit-text-stroke-color",
+    "isolation",
+    "appearance",
+    "resize",
+    "grid-auto-rows",
+    "background-clip",
+    "perspective",
     "display",
     "flex-direction",
     "flex-wrap",
@@ -653,7 +665,7 @@ mod tests {
 @media (prefers-color-scheme: dark) { :root { --texte: #eee; } .carte { color: red; } }
 @keyframes tourne { to { transform: rotate(1turn); } }
 @font-face { font-family: X; src: url(x.woff2); }
-.carte { --dot: red; color: var(--texte); padding: var(--marge); transition: color 0.3s var(--courbe); isolation: isolate; }
+.carte { --dot: red; color: var(--texte); padding: var(--marge); transition: color 0.3s var(--courbe); box-decoration-break: clone; }
 @media (max-width: 991px) { .carte { color: blue; } }
 @media (max-width: 500px) { .carte { color: blue; } }";
         let mut site = Site::new("x", "fr");

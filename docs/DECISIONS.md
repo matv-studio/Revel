@@ -1858,6 +1858,23 @@ marques. Conseil : donner aux choix de la liste une valeur stable (`value`), la 
 langues, sinon la valeur envoyée change avec la traduction. En suspens : choisir le champ et ses valeurs
 dans une liste tirée des formulaires du site plutôt que de les écrire ; essai de bout en bout de l'écran.
 
+**D-171 — 13/11/2026 — prise (demande de l'utilisateur, site Alunites Groupe : « si un outil Revel permet de
+faire on remplace par l'outil de Revel, sinon on crée l'outil ; pas de restes d'import »).** **Outils ajoutés pour
+ce que `revel audit` relevait encore sans commande.** Listes de collection : « À partir du n° » (`Query.offset`,
+écrit `(liste)[o:o+n]` ou `[o:]`, relu à l'ouverture), pour une liste qui reprend après une mise en avant
+(« la une » puis les suivantes). Panneau Styles : Typographie › nombre de lignes affichées
+(`-webkit-line-clamp` et ses propriétés liées posées ensemble), sens d'écriture (`writing-mode`), contour du
+texte (épaisseur et couleur, `-webkit-text-stroke-*`) ; Effets › perspective, isolation, apparence native et
+redimensionnement (ces deux derniers montrés pour les champs et boutons, ou s'ils ont une valeur) ; Fonds ›
+découpe du fond (`background-clip`, montrée avec une image ou une valeur) ; Disposition (grille) › hauteur des
+lignes ajoutées (`grid-auto-rows`). Le relevé connaît ces propriétés (`PANEL_PROPS`). Pourquoi : ces règles
+venaient de maquettes importées et ne se réglaient qu'en code ; d'autres sites en auront besoin. Le reste du
+relevé du site Alunites Groupe a été repris avec les outils existants (carrousel `data-revel-slider` pour une
+galerie défilante, ligne et colonne de grille à la place de `grid-area`, défilement doux du site à la place de
+`scroll-behavior`, couleurs de marque en couleurs du site) : relevé à zéro. En suspens : le relevé ne reconnaît
+pas, dans une boucle dans une boucle, une valeur reliée à la variable de la boucle extérieure (contourné sur le
+site par la variable de la boucle intérieure) ; essai de bout en bout des nouvelles commandes.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

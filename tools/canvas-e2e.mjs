@@ -154,11 +154,15 @@ try {
     .filter((l) => new URL(l.href).pathname === url).map((l) => new URL(l.href).searchParams.has('rv')), sheet);
   check('feuille de style rechargée sur demande', reloaded.length === 1 && reloaded[0] === true);
 
-  // Échap : désélection.
+  // Appui et Échap signalés à l'interface, qui ferme ses menus puis retire la sélection (D-169) :
+  // le canevas ne désélectionne plus de lui-même, il attend le message de l'interface.
   await frame.locator('main p').first().click();
+  await waitFor((m) => m.type === 'down', 'appui signalé');
   await parent.keyboard.press('Escape');
-  await waitFor((m) => m.type === 'select' && m.id === null, 'désélection');
-  check('Échap : désélection transmise', true);
+  await waitFor((m) => m.type === 'escape', 'Échap signalé');
+  await parent.evaluate(() => window.send({ type: 'select', id: null }));
+  await parent.waitForTimeout(200);
+  check('appui et Échap signalés à l\'interface ; désélection sur son message', true);
 } catch (e) {
   check('déroulement', false, e.message);
 } finally {

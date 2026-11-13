@@ -34,8 +34,12 @@ site Alunites Groupe. Captures en thème sombre seulement (le clair suit la char
   rôle) ; tuiles et aperçus (« Aa », titres de contenus) ; nœuds du plan (échelle du zoom).
 - **Piège** : `cargo check`, `trunk build` et `cargo build --release` lancés ensemble dépassent la mémoire
   de la machine (rustc tué, signal 9) : les enchaîner.
-- **CI** : le 12/11, l'étape « Reconstruction » du contrôle d'équivalence avec Eleventy a échoué une fois
-  sur une capture (animation en cours), sans différence en local ; relancée, verte.
+- **CI** : la capture de `/` à 1280 px avec mouvement (≈ 255 000 pixels en écart à partir de y = 47, vidéo
+  et animation d'en-tête en cours) a échoué deux fois sans différence en local : le 12/11 à l'étape
+  « Reconstruction », le 13/11 à l'étape « Canevas de l'éditeur ». Relancer le travail en échec ; à
+  stabiliser dans `tools/compare-styles.mjs` (attendre la fin des animations de l'en-tête). Le 13/11, cet
+  échec masquait un vrai écart : `tools/canvas-e2e.mjs` attendait la désélection par le canevas sur Échap,
+  remplacée par les messages `down` et `escape` (corrigé).
 - **Reste du relevé `revel audit`** (Alunites Groupe) : voir « En suspens » de D-169.
 
 ## Travail du 12/11/2026 (suite) : outils pour le site Alunites Groupe (D-168)

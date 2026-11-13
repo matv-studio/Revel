@@ -25,7 +25,16 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   marques ne sont pas encore reliés (adresses des flux à confirmer).
 - Pièges : `revel import` copie aussi les dossiers des pages d'origine (`passthrough`) : les retirer une
   fois le site importé ; la mise à plat se fait après la pose des listes de collection (sinon les classes
-  propres à chaque marque sont figées sur la carte modèle) ; `PropDef` s'écrit `type`, pas `kind`.
+  propres à chaque marque sont figées sur la carte modèle) ; `PropDef` s'écrit `type`, pas `kind` ; un
+  attribut posé depuis l'interface est écrit dans le canevas sans redessiner la page : une règle d'outil
+  qui doit agir tout de suite se pose dans `crates/revel-core/src/canvas.js` (comme `data-revel-hidden`
+  et `data-revel-scheme-only`), pas dans le rendu (le canevas doit rester identique à la page générée).
+- État du 13/11 (`712cfb4`) : essais de l'éditeur 373/373, des modèles 26/26. Site livré sur le PC
+  (`Sites\alunites-groupe` : projet, site généré, captures, scripts de fabrication). Relevé `revel audit`
+  du site : 62 éléments de page et 127 de style que l'interface ne produit pas encore (classes calculées
+  par marque, `:hover` d'un parent, pseudo-éléments, quelques propriétés). Flux non reliés : les sites
+  des marques (Webflow) n'exposent pas de flux. Deux sections masquées (emplacements entre crochets).
+  Aucune version préparée depuis la 0.7.4 : le site a besoin de la suivante.
 
 ## Travail du 12/11/2026 : calques façon Marmoset, flux RSS reliés (D-166, D-167)
 - D-166 : `model.js` (`strips`, `cutTargets`, `stripStep`, `tap`, `bandAt`, `layerMarks`, `layerPlace`,

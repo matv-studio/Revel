@@ -6,8 +6,23 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 13/11/2026 (version 0.7.5 : D-166 à D-171). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 13/11/2026 (soir) : version 0.7.5 (D-166 à D-171)
+
+Commit « Version 0.7.5 » (`fdf75a3`, message : « D-159 à D-171 », en fait D-166 à D-171 depuis la 0.7.4).
+CI réussie (flux 43459126226 ; « Équivalence » relancée deux fois : captures en écart sur des pages
+différentes à chaque passage, sans rapport avec le changement). Étiquette `v0.7.5` (flux 43472535845),
+installateurs (flux 43472531932) : brouillon « Revel v0.7.5 » (préversion, id 444554996, 17 fichiers, `latest.json` à 11 cibles, clé EA5F2855415468CD) à publier par l’utilisateur.
+Essais locaux : éditeur 377/377, modèles 26/26, 424 essais Rust.
+Site Alunites Groupe (`maj-1311-b`) : 26 projets et 19 actualités d'alunites.com (hors contenus des sites
+d'espècehumaine et de Superficiel), pages dans la DA, redirections WordPress, traduction anglaise des
+45 contenus (`content/en/<collection>/`, champs traduits seuls), routes du formulaire Alunites /
+espècehumaine / Superficiel, `revel audit` à zéro. En attente : logos des distinctions (fichiers à fournir
+dans `prix\`), flux RSS des marques.
+Piège : la construction de l'interface (trunk, LTO) en même temps qu'une construction des essais en
+mode release dépasse la mémoire (7 Go, 2 cœurs) : rustc tué (SIGKILL) ; les lancer l'une après l'autre.
 
 ## Travail du 13/11/2026 (fin) : outils pour les restes d'import (D-171)
 

@@ -397,6 +397,10 @@ pub struct Settings {
     /// demandent moins de mouvement.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub smooth_scroll: bool,
+    /// Thème à la première visite (D-168) : `dark` ou `light` ; absent : celui de l'appareil du
+    /// visiteur. L'interrupteur clair / sombre garde ensuite le choix du visiteur.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_scheme: Option<String>,
     /// Flux RSS des collections (abonnement aux actualités), produits à la génération.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub feeds: Vec<FeedSettings>,
@@ -1154,6 +1158,9 @@ pub const HIDDEN_ATTR: &str = "data-revel-hidden";
 /// lue par les styles de Revel écrits avec une priorité nulle ; les classes de l'utilisateur
 /// passent devant.
 pub const BASE_ATTR: &str = "data-revel-base";
+/// Élément montré dans un seul thème du site (D-168) : `light` ou `dark` (logo en deux
+/// versions, icône de l'interrupteur de thème).
+pub const SCHEME_ONLY_ATTR: &str = "data-revel-scheme-only";
 /// Attribut d'un élément construit fermé (D-159) : un seul calque, ses parties
 /// ([`PART_ATTR`]) réglées depuis l'élément ; « Décomposer » le retire. Écrit dans le canevas
 /// seulement.

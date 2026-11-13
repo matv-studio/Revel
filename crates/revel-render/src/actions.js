@@ -162,6 +162,9 @@
       if (on) playMusic(a.slice(6));
     } else if (a === "dismiss") {
       if (on) { el.classList.add("rv-hide"); store.set("rv-dismiss:" + key, "1"); }
+    } else if (a === "more") {
+      // Suite d'une liste à affichage progressif (script de `data-revel-more`).
+      el.dispatchEvent(new CustomEvent("rv-more"));
     } else if (a.indexOf("class:") === 0) {
       el.classList.toggle(a.slice(6), on);
     }
@@ -173,6 +176,24 @@
     var each = function (on) { targets(src, key).forEach(function (t) { run(act, t, on, key); }); };
     if (act === "dismiss" && store.get("rv-dismiss:" + key)) {
       targets(src, key).forEach(function (t) { t.classList.add("rv-hide"); });
+    }
+    if (act === "more") {
+      // La liste avance au bouton (plus au défilement) ; bouton masqué quand tout est montré.
+      var rest = function () {
+        var ts = targets(src, key), n = 0;
+        ts.forEach(function (t) { n += t.__rvMoreRest === undefined ? 1 : t.__rvMoreRest; });
+        src.hidden = ts.length > 0 && n === 0;
+      };
+      targets(src, key).forEach(function (t) {
+        t.setAttribute("data-rv-more-manual", "");
+        t.addEventListener("rv-more-rest", rest);
+      });
+      rest();
+      src.addEventListener("click", function (e) {
+        if (src.tagName === "A" && (src.getAttribute("href") || "#") === "#") e.preventDefault();
+        each(true);
+      });
+      return;
     }
     if (trig === "click") {
       var state = false;

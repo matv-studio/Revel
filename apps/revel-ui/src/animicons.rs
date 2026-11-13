@@ -95,6 +95,21 @@ pub fn icon(family: &str, preset: &str) -> String {
             r#"<rect class="s" x="6" y="6" width="12" height="12" rx="2"/>"#,
             "reveal",
         ),
+        (_, "unveil") => (
+            r#"<rect class="ghost" x="6" y="6" width="12" height="12" rx="2"/><path class="cue" d="M8 4h8"/>"#,
+            r#"<rect class="s" x="6" y="6" width="12" height="12" rx="4"/>"#,
+            "reveal",
+        ),
+        (_, "follow") => (
+            r#"<circle class="shade" cx="16" cy="9" r="2.2"/>"#,
+            SQ,
+            "lift",
+        ),
+        (_, "drops") => (
+            r#"<circle class="shade" cx="12" cy="6" r="2"/>"#,
+            SQ,
+            "lift",
+        ),
         (_, "lift") => (
             r#"<ellipse class="shade" cx="12" cy="20" rx="5" ry="1.4"/>"#,
             SQ,
@@ -211,7 +226,7 @@ mod tests {
         use std::collections::HashSet;
         let appear = [
             "fade", "up", "down", "left", "right", "zoom-in", "zoom-out", "blur", "pop", "flip",
-            "rotate", "reveal",
+            "rotate", "reveal", "unveil",
         ];
         let icons: HashSet<String> = appear.iter().map(|p| icon("appear", p)).collect();
         assert_eq!(icons.len(), appear.len(), "dessins en double");

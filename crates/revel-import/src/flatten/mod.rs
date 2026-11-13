@@ -2069,14 +2069,26 @@ fn with_image_classes(expr: &str, add: &[String]) -> String {
 }
 
 fn static_classes(v: &str) -> Vec<String> {
+    // Une expression collée à du texte (`dot--{{ source }}`) forme une classe calculée : le
+    // morceau écrit (`dot--`) n'est pas une classe.
+    const HOLE: char = '\u{1}';
     let mut s = v.to_string();
     for (a, b) in [("{{", "}}"), ("{%", "%}")] {
         while let Some(i) = s.find(a) {
             let Some(j) = s[i..].find(b) else { break };
-            s.replace_range(i..i + j + b.len(), " ");
+            // Bloc `{% … %}` : sépare des classes entières (`carte{% if x %} carte--y{% endif %}`).
+            let hole = if a == "{{" {
+                HOLE.to_string()
+            } else {
+                " ".to_string()
+            };
+            s.replace_range(i..i + j + b.len(), &hole);
         }
     }
-    s.split_whitespace().map(str::to_string).collect()
+    s.split_whitespace()
+        .filter(|t| !t.contains(HOLE))
+        .map(str::to_string)
+        .collect()
 }
 
 fn unique_name(base: &str, used: &mut HashSet<String>) -> String {

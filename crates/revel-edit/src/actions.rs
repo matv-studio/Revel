@@ -14,6 +14,8 @@
 //!   `sound:<adresse>|<adresse>…[~<volume %>]` (un son, pris au hasard s'il y en a plusieurs),
 //!   `music:<adresse>|…[~<volume %>]` (une musique au hasard, jouée en boucle ; remplace la
 //!   précédente) : sons et musique se coupent avec les interrupteurs `data-revel-switch` ;
+//!   `more` (suite d'une liste à affichage progressif, `data-revel-more` : la liste n'avance plus
+//!   au défilement, le déclencheur est masqué quand tout est montré) ;
 //! - élément visé : `self`, `parent`, `next` (élément suivant), `body`, `.<classe>` (tous les
 //!   éléments de la classe), `closest:.<classe>` (l'élément de la classe qui contient le
 //!   déclencheur : la carte d'une liste de cartes semblables), `#<identifiant>`.
@@ -39,6 +41,8 @@ pub enum Act {
     Class(String),
     Play,
     Dismiss,
+    /// Suite d'une liste à affichage progressif (bouton « Afficher plus »).
+    More,
     /// Un enfant au hasard affiché seul, après un délai (ms).
     Random(u32),
     /// Rotation ajoutée (degrés), plus 0 à 3 quarts de tour au hasard.
@@ -144,6 +148,7 @@ impl Rule {
             Act::Class(c) => format!("class:{c}"),
             Act::Play => "play".to_string(),
             Act::Dismiss => "dismiss".to_string(),
+            Act::More => "more".to_string(),
             Act::Random(ms) => format!("random:{ms}"),
             Act::Spin(deg) => format!("spin:{deg}"),
             Act::Sound(a) => format!("sound:{}", a.write()),
@@ -171,6 +176,7 @@ impl Rule {
             "hide" => Act::Hide,
             "play" => Act::Play,
             "dismiss" => Act::Dismiss,
+            "more" => Act::More,
             a if a.starts_with("random:") => Act::Random(a[7..].parse().ok()?),
             a if a.starts_with("spin:") => Act::Spin(a[5..].parse().ok()?),
             a if a.starts_with("sound:") => Act::Sound(Audio::parse(&a[6..])?),

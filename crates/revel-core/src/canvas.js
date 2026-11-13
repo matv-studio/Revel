@@ -23,11 +23,19 @@
 
   // Calques masqués : cachés dès qu'ils le sont (attribut posé sur place, sans recharger) ; la
   // règle, posée ici, ne compte pas dans la signature de l'en-tête.
-  if (!document.querySelector("style[data-rv-hidden]")) {
-    const hid = document.createElement("style");
-    hid.setAttribute("data-rv-hidden", "");
-    hid.textContent = "[data-revel-hidden]{display:none!important}";
-    document.head.appendChild(hid);
+  {
+    // De même pour un élément montré dans un seul thème (`data-revel-scheme-only`, D-168 ; même
+    // règle que celle du site, `toolcss.rs`).
+    const only = "@media (prefers-color-scheme: dark){[data-revel-scheme-only=light]{display:none!important}}" +
+      "@media not (prefers-color-scheme: dark){[data-revel-scheme-only=dark]{display:none!important}}";
+    let hid = document.querySelector("style[data-rv-hidden]");
+    if (!hid) {
+      hid = document.createElement("style");
+      hid.setAttribute("data-rv-hidden", "");
+      hid.textContent = "[data-revel-hidden]{display:none!important}";
+      document.head.appendChild(hid);
+    }
+    if (hid.textContent.indexOf("data-revel-scheme-only") < 0) hid.textContent += only;
   }
 
   // La page doit rester identique au site généré : les éléments ajoutés par Revel sont retirés

@@ -49,6 +49,8 @@ pub(crate) enum Setting {
     Dir,
     Pause,
     Replay,
+    /// Suivre le curseur : à l'opposé du pointeur (second halo en miroir).
+    Opposite,
     /// Défilement : vitesse (px/s).
     Speed,
     /// Défilement : bords estompés (px).
@@ -97,7 +99,7 @@ impl Family {
         match self {
             Family::Appear => &[
                 "fade", "up", "down", "left", "right", "zoom-in", "zoom-out", "blur", "pop",
-                "flip", "rotate", "reveal",
+                "flip", "rotate", "reveal", "unveil",
             ],
             Family::Text => &["fade", "up", "blur", "pop", "flip", "typewriter"],
             Family::Hover => &[
@@ -109,6 +111,7 @@ impl Family {
                 "tilt",
                 "brighten",
                 "underline",
+                "follow",
             ],
             Family::Press => &["press", "squish", "push"],
             Family::Loop => &[
@@ -123,7 +126,7 @@ impl Family {
                 "ticker",
             ],
             Family::Scroll => &[
-                "parallax", "fade-in", "zoom-in", "rotate", "slide-x", "fade-out",
+                "parallax", "fade-in", "zoom-in", "rotate", "slide-x", "fade-out", "drops",
             ],
             Family::Active => &["pop", "jump", "shake", "flash", "spin"],
         }
@@ -142,6 +145,7 @@ impl Family {
             }
             Family::Text if preset == "typewriter" => vec![Trigger, Stagger, Delay, Replay],
             Family::Text => vec![Split, Trigger, Dur, Stagger, Delay, Ease, Replay],
+            Family::Hover if preset == "follow" => vec![Dur, Ease, Opposite],
             Family::Hover => vec![Dur, Ease, Amount],
             Family::Press => vec![Dur, Amount],
             Family::Loop => match preset {
@@ -150,6 +154,7 @@ impl Family {
                 "pulse" | "float" | "swing" | "blink" => vec![Dur, Delay, Ease, Amount, Mirror],
                 _ => vec![Dur, Delay, Amount],
             },
+            Family::Scroll if preset == "drops" => vec![Dur],
             Family::Scroll => vec![Amount],
             Family::Active => vec![Dur, Ease, Amount],
         }
@@ -173,6 +178,8 @@ fn default_of(f: Family, preset: &str, key: &str) -> Option<&'static str> {
         (Family::Loop, "ticker", "fade") => Some("0"),
         (Family::Loop, "pulse" | "float" | "swing" | "blink", "mirror") => Some("on"),
         (Family::Loop, _, "mirror") => Some("off"),
+        (Family::Hover, "follow", "dur") => Some("1.2"),
+        (Family::Scroll, "drops", "dur") => Some("1"),
         _ => None,
     };
     if special.is_some() {
@@ -313,6 +320,7 @@ fn setting_key(s: Setting) -> &'static str {
         Setting::Dir => "dir",
         Setting::Pause => "pause",
         Setting::Replay => "replay",
+        Setting::Opposite => "opposite",
         Setting::Speed => "speed",
         Setting::Fade => "fade",
     }
@@ -389,6 +397,7 @@ const ACTS: &[(&str, &str)] = &[
     ("hide", "act-hide"),
     ("play", "act-play"),
     ("dismiss", "act-dismiss"),
+    ("more", "act-more"),
     ("random", "act-random"),
     ("spin", "act-spin"),
     ("sound", "act-sound"),
@@ -549,6 +558,7 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                         Act::Hide => ("hide", None),
                         Act::Play => ("play", None),
                         Act::Dismiss => ("dismiss", None),
+                        Act::More => ("more", None),
                         Act::Random(_) => ("random", None),
                         Act::Spin(_) => ("spin", None),
                         Act::Sound(_) => ("sound", None),
@@ -607,6 +617,7 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                                         "hide" => Act::Hide,
                                         "play" => Act::Play,
                                         "dismiss" => Act::Dismiss,
+                                        "more" => Act::More,
                                         "random" => Act::Random(0),
                                         "spin" => Act::Spin(360),
                                         "sound" => Act::Sound(revel_edit::actions::Audio { urls: Vec::new(), volume: 100 }),
@@ -1087,6 +1098,7 @@ pub(crate) fn setting_row(
         Setting::Dir => ("anim-dir", None),
         Setting::Pause => ("anim-pause", None),
         Setting::Replay => ("anim-replay", Some("anim-replay-help")),
+        Setting::Opposite => ("anim-opposite", Some("anim-opposite-help")),
         Setting::Speed => ("anim-speed", Some("anim-speed-help")),
         Setting::Fade => ("anim-fade", Some("anim-fade-help")),
     };
@@ -1174,7 +1186,7 @@ pub(crate) fn setting_row(
             </label>
         }
         .into_any(),
-        Setting::Pause | Setting::Replay => view! {
+        Setting::Pause | Setting::Replay | Setting::Opposite => view! {
             <label class="switch">
                 <input type="checkbox" prop:checked=move || current().has(key)
                     on:change=move |e| { let on = event_target_checked(&e); update(&|a| a.flag(key, on)) }/>
@@ -1266,7 +1278,7 @@ mod tests {
                 assert!(!preset_key(f, p).is_empty());
                 for s in f.settings(p) {
                     let k = setting_key(s);
-                    if !matches!(s, Setting::Replay | Setting::Pause) {
+                    if !matches!(s, Setting::Replay | Setting::Pause | Setting::Opposite) {
                         assert!(
                             Anim::parse(p).fallback(f, k).is_some(),
                             "{} {p} {k}",

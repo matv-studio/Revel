@@ -1000,6 +1000,7 @@ impl Ed {
                     | Command::SetSmoothScroll { .. }
                     | Command::SetFeeds { .. }
                     | Command::SetFeedSources { .. }
+                    | Command::SetDefaultScheme { .. }
             ) {
                 // Points de rupture, rangement : réglages de l'éditeur, la page ne change pas.
             } else if style_only(cmd) {

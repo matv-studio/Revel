@@ -115,10 +115,13 @@ pub fn text(year: i32, month: u32, day: u32, locale: &str, style: &str) -> Strin
         ("month", _) => format!("{} {year}", long[m]),
         ("short", "en") => format!("{} {day}, {year}", short[m]),
         ("short", "de") => format!("{day}. {} {year}", short[m]),
+        ("short", "fr") if day == 1 => format!("1er {} {year}", short[m]),
         ("short", _) => format!("{day} {} {year}", short[m]),
         (_, "en") => format!("{} {day}, {year}", long[m]),
         (_, "de") => format!("{day}. {} {year}", long[m]),
         (_, "es") => format!("{day} de {} de {year}", long[m]),
+        // Français : premier jour du mois écrit « 1er ».
+        (_, "fr") if day == 1 => format!("1er {} {year}", long[m]),
         _ => format!("{day} {} {year}", long[m]),
     }
 }
@@ -184,6 +187,9 @@ mod tests {
     #[test]
     fn ecritures() {
         assert_eq!(text(2026, 10, 16, "fr", "long"), "16 octobre 2026");
+        assert_eq!(text(2026, 10, 1, "fr", "long"), "1er octobre 2026");
+        assert_eq!(text(2026, 10, 1, "fr-CA", "short"), "1er oct. 2026");
+        assert_eq!(text(2026, 10, 1, "en", "long"), "October 1, 2026");
         assert_eq!(text(2026, 10, 16, "en-GB", "short"), "Oct 16, 2026");
         assert_eq!(
             example("date_text(locale, \"month\")", "fr"),

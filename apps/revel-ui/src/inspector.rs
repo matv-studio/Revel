@@ -787,6 +787,10 @@ fn element_advanced(
     let id_value = attr(&attrs, "id")
         .and_then(|a| a.value.clone())
         .unwrap_or_default();
+    let scheme_only = attr(&attrs, revel_model::SCHEME_ONLY_ATTR)
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    let set_scheme = set.clone();
     let tag_at = at.clone();
     let tag_now = tag.clone();
     let lower = tag.to_ascii_lowercase();
@@ -798,7 +802,9 @@ fn element_advanced(
     let is_link = lower == "a";
     let others: Vec<Attr> = attrs
         .iter()
-        .filter(|a| !matches!(a.name.as_str(), "id" | "class"))
+        .filter(|a| {
+            !matches!(a.name.as_str(), "id" | "class") && a.name != revel_model::SCHEME_ONLY_ATTR
+        })
         // Lien et média : réglés en tête de l'onglet.
         .filter(|a| !(is_link && matches!(a.name.as_str(), "href" | "target")))
         .filter(|a| !(media && matches!(a.name.as_str(), "src" | "alt")))
@@ -855,6 +861,16 @@ fn element_advanced(
                 </div>
             </label>
             <Field label=ui.t("inspector-id") value=id_value mono=true on_commit=move |v| set_id("id", v)/>
+            <label class="field" title=ui.t("inspector-scheme-only-help")>
+                <span class="label">{ui.t("inspector-scheme-only")}</span>
+                <div class="select">
+                    <select class="input" data-role="scheme-only" on:change=move |e| set_scheme(revel_model::SCHEME_ONLY_ATTR, event_target_value(&e))>
+                        <option value="" selected=scheme_only.is_empty()>{ui.t("inspector-scheme-both")}</option>
+                        <option value="light" selected=scheme_only == "light">{ui.t("inspector-scheme-light")}</option>
+                        <option value="dark" selected=scheme_only == "dark">{ui.t("inspector-scheme-dark")}</option>
+                    </select>
+                </div>
+            </label>
             {dynamic_class.then(|| view! {
                 // Classes calculées (expression) : modifiées comme du texte.
                 <label class="field">

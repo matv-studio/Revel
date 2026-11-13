@@ -579,7 +579,7 @@ fn build_pages(
             );
             let html = scroll::wire(html, input.site.settings.smooth_scroll, scripts);
             let html = more::wire(html, scripts);
-            let html = theme::wire(html, scripts);
+            let html = theme::wire(html, scripts, input.site.settings.default_scheme.as_deref());
             let html = fit::wire(html, fit::site_uses(input.site));
             let html = clock::wire(html);
             let html = pixels::wire(html);
@@ -869,10 +869,20 @@ fn prefix_links(html: &str, prefix: &str, site: &Site) -> String {
         .iter()
         .map(|l| format!("/{}", l.code))
         .collect();
+    // Pages du site : toujours préfixées, même sous un dossier copié (site importé, dont les
+    // dossiers des pages sont aussi copiés pour leurs fichiers).
+    let pages: std::collections::HashSet<&str> = site
+        .pages
+        .iter()
+        .map(|p| p.path.trim_end_matches('/'))
+        .collect();
     let page_link = |u: &str| {
         let path = u.split(['?', '#']).next().unwrap_or(u);
         if path.starts_with("//") {
             return false;
+        }
+        if pages.contains(path.trim_end_matches("index.html").trim_end_matches('/')) {
+            return true;
         }
         let under = |p: &String| path == p || path.starts_with(&format!("{p}/"));
         if locales.iter().any(under) || copied.iter().any(under) {
@@ -1667,7 +1677,11 @@ fn editor_page(
     );
     let html = scroll::wire(html, input.site.settings.smooth_scroll, opts.scripts);
     let html = more::wire(html, opts.scripts);
-    let html = theme::wire(html, opts.scripts);
+    let html = theme::wire(
+        html,
+        opts.scripts,
+        input.site.settings.default_scheme.as_deref(),
+    );
     let html = fit::wire_editor(html, fit::site_uses(input.site));
     let html = clock::wire(html);
     let html = pixels::wire(html);

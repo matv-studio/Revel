@@ -9,6 +9,24 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 28/10/2026 (version 0.7.2 : D-151 à D-158). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 12/11/2026 (suite) : outils pour le site Alunites Groupe (D-168)
+- `animations.js` : `unveil` (apparition), `follow` (survol), `drops` (défilement, fonction `drops`) ;
+  listes et réglages dans `apps/revel-ui/src/interactions.rs` (`Setting::Opposite`), dessins dans
+  `animicons.rs`. Les valeurs par défaut sont écrites deux fois (script et `default_of`) : les garder égales.
+- `theme.rs` (`wire(html, scripts, default)`), `settings.default_scheme`, `SetDefaultScheme`,
+  `sitecolors.rs` (« Thème par défaut ») ; `toolcss.rs` + `inspector.rs` (`data-revel-scheme-only`).
+- `more.rs` (script refait : filtres, événements `rv-more` et `rv-more-rest`), action `more`
+  (`revel-edit/src/actions.rs`, `actions.js`, liste des actions de l'interface).
+- Corrections : `static_classes` (mise à plat, classes calculées), `prefix_links` (pages sous un dossier
+  copié), `dates::text` (« 1er »).
+- Site Alunites Groupe : construit hors dépôt à partir de la maquette (pages statiques générées, import,
+  collections et listes posées après l'import, mise à plat). Collections `marques`, `projets`,
+  `actualites` ; langue `en` ; gabarit `site` avec le réglage de page « Bloc de contact ». Les flux des
+  marques ne sont pas encore reliés (adresses des flux à confirmer).
+- Pièges : `revel import` copie aussi les dossiers des pages d'origine (`passthrough`) : les retirer une
+  fois le site importé ; la mise à plat se fait après la pose des listes de collection (sinon les classes
+  propres à chaque marque sont figées sur la carte modèle) ; `PropDef` s'écrit `type`, pas `kind`.
+
 ## Travail du 12/11/2026 : calques façon Marmoset, flux RSS reliés (D-166, D-167)
 - D-166 : `model.js` (`strips`, `cutTargets`, `stripStep`, `tap`, `bandAt`, `layerMarks`, `layerPlace`,
   `stats` en icônes), `toolcss.rs` (traits, noms, compteur), bouton `layers` (`make.rs`, `model3d.rs`),

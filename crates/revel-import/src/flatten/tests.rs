@@ -273,3 +273,18 @@ fn utilisation_de_composant_selon_l_endroit() {
     let html = page_html(&s);
     assert_eq!(html.matches("bouton bouton--intro").count(), 1, "{html}");
 }
+
+/// Classe calculée (`dot--{{ source }}`) : le morceau écrit n'est pas une classe, les classes
+/// entières autour le restent (D-168).
+#[test]
+fn classes_ecrites_sans_morceau_de_classe_calculee() {
+    assert_eq!(
+        super::static_classes("dot dot--{{ item.data.source }} dot--tag"),
+        vec!["dot", "dot--tag"]
+    );
+    assert_eq!(
+        super::static_classes("carte{% if x %} carte--y{% endif %}"),
+        vec!["carte", "carte--y"]
+    );
+    assert_eq!(super::static_classes("{{ classe }}"), Vec::<String>::new());
+}

@@ -92,7 +92,7 @@ href=\"{{ lien.url }}\">{{ lien.label }}</a>{% endfor %}`; set them with `apply_
 - Components: repeated blocks become components with properties (text, image, link, visibility, list) that each \
 use sets, and a slot (`data-revel-slot`) for per-use content; variants for alternate looks.\n\
 - Behaviour without code: `data-revel-on` on the triggering element, `<trigger> <action> <target>` separated by \
-`;`: trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss|random:<ms>|spin:<deg>, \
+`;`: trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss|more|random:<ms>|spin:<deg>, \
 target self|parent|next|body|.<class>|closest:.<class> (enclosing element)|#<id> (e.g. `click class:is-active #menu; scroll:40 class:is-active self`, styled with the Active state); \
 sound: `hover sound:/media/a.wav~50 self` (several files `a.wav|b.wav`: one at random; `~50` volume %), music on a loop: \
 `click music:/media/x.mp3|/media/y.mp3 self` (spaces as %20); music/sound switches: `<button data-revel-switch=\"music|sounds\">` \

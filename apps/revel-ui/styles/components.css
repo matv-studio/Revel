@@ -681,7 +681,7 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .cms-feed { position: relative; }
 .cms-feed-btn.is-on { background: var(--set-bg); border-color: transparent; color: var(--set-text); }
 .cms-feed-btn.is-on svg.icon { color: var(--set-text); }
-.cms-feed-pop { left: auto; right: 0; width: 440px; padding: var(--s-3); gap: var(--s-2); }
+.cms-feed .cms-feed-pop { left: auto; right: 0; width: 460px; padding: var(--s-3); gap: var(--s-2); }
 .cms-feed-head, .cms-feed-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) var(--control-sm); align-items: center; gap: var(--s-2); }
 .cms-feed-head .label:last-child { grid-column: 2 / 4; }
 .cms-feed-row .input { min-width: 0; }

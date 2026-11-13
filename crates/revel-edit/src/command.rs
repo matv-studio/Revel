@@ -287,6 +287,11 @@ pub enum Command {
     },
     /// Défilement doux du site (D-110).
     SetSmoothScroll { on: bool },
+    /// Thème à la première visite (D-168) : `dark`, `light`, ou `None` (appareil du visiteur).
+    SetDefaultScheme {
+        #[serde(default)]
+        scheme: Option<String>,
+    },
     /// Flux RSS des collections (adresse en `.xml`, collection existante).
     SetFeeds {
         #[serde(default)]
@@ -1322,6 +1327,14 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
                     &mut site.settings.page_transition,
                     transition.clone(),
                 ),
+            })
+        }
+        Command::SetDefaultScheme { scheme } => {
+            if !matches!(scheme.as_deref(), None | Some("dark") | Some("light")) {
+                return Err(EditError::WrongKind(scheme.clone().unwrap_or_default()));
+            }
+            Ok(Command::SetDefaultScheme {
+                scheme: std::mem::replace(&mut site.settings.default_scheme, scheme.clone()),
             })
         }
         Command::SetSmoothScroll { on } => Ok(Command::SetSmoothScroll {

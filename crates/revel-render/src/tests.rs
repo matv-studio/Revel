@@ -885,6 +885,41 @@ fn dates_en_toutes_lettres() {
     assert!(home.contains(r#"<p id="v"></p>"#), "{home}");
 }
 
+/// Site importé : le dossier d'une page est aussi copié (ses fichiers) ; le lien vers la page
+/// reste préfixé par la langue, pas le lien vers un fichier du dossier (D-168).
+#[test]
+fn langues_page_sous_un_dossier_copie() {
+    let mut s = site();
+    s.locales = vec![revel_model::Locale::new("en")];
+    s.passthrough.push(revel_model::Passthrough {
+        from: "langues".into(),
+        to: "langues".into(),
+    });
+    s.pages.push(Page {
+        id: "langues".into(),
+        path: "/langues/".into(),
+        layout: None,
+        props: Default::default(),
+        body: parse(
+            r#"<html><head></head><body><a href="/langues/">p</a><a href="/langues/index.html#x">i</a><a href="/langues/f.pdf">f</a></body></html>"#,
+        ),
+        computed: Default::default(),
+        draft: false,
+        code: Default::default(),
+        name: None,
+    });
+    s.ensure_ids();
+    let mut inp = input(&s, vec![]);
+    inp.locales = vec![LocaleInput {
+        code: "en".into(),
+        data: Default::default(),
+        entries: vec![],
+    }];
+    let out = build(&inp).unwrap();
+    let l = file(&out, "en/langues/index.html");
+    assert!(l.contains(r#"<a href="/en/langues/">p</a><a href="/en/langues/index.html#x">i</a><a href="/langues/f.pdf">f</a>"#), "{l}");
+}
+
 #[test]
 fn langues() {
     let mut s = site();

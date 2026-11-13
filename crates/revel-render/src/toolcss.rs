@@ -5,6 +5,12 @@
 
 /// (attribut qui signale l'outil, règles).
 const TOOLS: &[(&str, &str)] = &[
+    // Élément montré dans un seul thème (D-168) ; l'interrupteur de thème réécrit ces requêtes.
+    (
+        " data-revel-scheme-only",
+        "@media (prefers-color-scheme: dark){[data-revel-scheme-only=light]{display:none!important}}\
+@media not (prefers-color-scheme: dark){[data-revel-scheme-only=dark]{display:none!important}}",
+    ),
     // Horloge : chiffres de même largeur (l'heure ne bouge pas à chaque seconde), sur une ligne.
     (
         " data-revel-clock",

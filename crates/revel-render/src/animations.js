@@ -43,6 +43,8 @@
     "appear:pop": { ease: "bounce" },
     "text:pop": { ease: "bounce" },
     "text:typewriter": { split: "chars", dur: 0.01, stagger: 0.05 },
+    "hover:follow": { dur: 1.2 },
+    "scroll:drops": { dur: 1 },
     "loop:spin": { ease: "linear", dur: 4 },
     "loop:shake": { dur: 0.8 },
     "loop:blink": { dur: 1.2 },
@@ -94,6 +96,8 @@
       case "flip": return [merge({ opacity: 0 }, tr("perspective(800px) rotateX(70deg)")), merge({ opacity: 1 }, tr("perspective(800px) rotateX(0deg)"))];
       case "rotate": return [merge({ opacity: 0 }, tr("translateY(" + d / 2 + "px) rotate(-8deg)")), merge({ opacity: 1 }, tr("translateY(0px) rotate(0deg)"))];
       case "reveal": return [{ clipPath: "inset(100% 0% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)" }];
+      // Dévoilement d'une image : cadre ouvert par le haut, image resserrée (voir `appear`).
+      case "unveil": return [{ opacity: 0, clipPath: "inset(8% 0% 0% 0% round 24px)" }, { opacity: 1, clipPath: "inset(0% 0% 0% 0% round 0px)" }];
       case "typewriter": return [{ opacity: 0 }, { opacity: 1 }];
       default: return null;
     }
@@ -276,6 +280,181 @@
   }
 
   // ------------------------------------------------------------------ moments
+  // Gouttes (défilement) : une barre de navigation en trois pastilles liquides. La barre garde
+  // sa couleur de fond (Styles), dessinée par l'outil en trois pastilles fondues (filtre SVG) :
+  // début (premier enfant), centre (enfants du milieu), fin (dernier enfant). En descendant la
+  // page (`down` px), la pastille du centre se resserre sur son contenu, se détache par des
+  // filaments et monte hors de l'écran (`out` s) ; en remontant (`up` px), elle revient (`in` s).
+  var dropsFilter = false;
+  function drops(el, o) {
+    var kids = Array.prototype.filter.call(el.children, function (c) { return !c.hasAttribute("data-rv-drops"); });
+    if (kids.length < 3) return;
+    var first = kids[0], lastKid = kids[kids.length - 1], mid = kids.slice(1, -1);
+    // `dur` : durée du départ ; le retour est plus court (0,7 fois), sauf `in` donné.
+    var dur = typeof o.dur === "number" && o.dur > 0 ? o.dur : 1;
+    var OUT = dur * 1000, IN = (typeof o["in"] === "number" ? o["in"] : dur * 0.7) * 1000;
+    var DOWN = typeof o.down === "number" ? o.down : 24, UP = typeof o.up === "number" ? o.up : 12, NB = 11;
+    if (!dropsFilter) {
+      dropsFilter = true;
+      var svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("width", "0");
+      svg.setAttribute("height", "0");
+      svg.style.cssText = "position:absolute;width:0;height:0;overflow:hidden";
+      svg.innerHTML = '<defs><filter id="rv-drops" x="-20%" y="-60%" width="140%" height="220%" color-interpolation-filters="sRGB">' +
+        '<feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"></feGaussianBlur>' +
+        '<feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10"></feColorMatrix></filter></defs>';
+      doc.body.appendChild(svg);
+    }
+    var layer = doc.createElement("div");
+    layer.setAttribute("data-rv-drops", "");
+    layer.setAttribute("aria-hidden", "true");
+    layer.style.cssText = "position:absolute;inset:0;z-index:-1;pointer-events:none;filter:url(#rv-drops)";
+    var pill = function () {
+      var i = doc.createElement("i");
+      i.style.cssText = "position:absolute;top:0;bottom:0;left:0;border-radius:999px;will-change:transform";
+      layer.appendChild(i);
+      return i;
+    };
+    var pl = pill(), pc = pill(), pr = pill(), beads = { l: [], r: [] };
+    ["l", "r"].forEach(function (side) {
+      for (var i = 0; i < NB; i++) {
+        var b = pill();
+        b.style.bottom = "auto";
+        b.style.width = b.style.height = "0";
+        beads[side].push(b);
+      }
+    });
+    if (getComputedStyle(el).position === "static") el.style.position = "relative";
+    el.style.isolation = "isolate";
+    el.insertBefore(layer, el.firstChild);
+    // Couleur de la barre reprise par les pastilles (relue quand le thème change).
+    var paint = function () {
+      // Transition coupée le temps de lire la couleur réglée (sinon : valeur en cours de fondu).
+      el.style.setProperty("transition", "none", "important");
+      ["background-color", "border-color", "box-shadow", "backdrop-filter", "-webkit-backdrop-filter"].forEach(function (p) { el.style.removeProperty(p); });
+      var c = getComputedStyle(el).backgroundColor;
+      Array.prototype.forEach.call(layer.children, function (i) { i.style.backgroundColor = c; });
+      el.style.setProperty("background-color", "transparent", "important");
+      el.style.setProperty("border-color", "transparent", "important");
+      el.style.setProperty("box-shadow", "none", "important");
+      el.style.setProperty("backdrop-filter", "none", "important");
+      el.style.setProperty("-webkit-backdrop-filter", "none", "important");
+      void el.offsetWidth;
+      el.style.removeProperty("transition");
+    };
+    paint();
+    new MutationObserver(paint).observe(root, { attributes: true, attributeFilter: ["data-revel-scheme"] });
+    if (window.matchMedia) {
+      var scheme = matchMedia("(prefers-color-scheme: dark)");
+      if (scheme.addEventListener) scheme.addEventListener("change", paint);
+    }
+    var g = null, p = 0, target = 0, raf = 0;
+    var measure = function () {
+      var r = el.getBoundingClientRect();
+      if (!r.width) { g = null; return; }
+      var a = null, b = null;
+      mid.forEach(function (m) {
+        // Contenu du centre : sa liste si elle existe (la pastille se resserre sur les liens).
+        var box = (m.firstElementChild && m.children.length === 1 ? m.firstElementChild : m).getBoundingClientRect();
+        if (!box.width) return;
+        a = a === null ? box.left : Math.min(a, box.left);
+        b = b === null ? box.right : Math.max(b, box.right);
+      });
+      g = {
+        W: r.width, H: r.height,
+        bw: Math.round(first.getBoundingClientRect().right - r.left + 19),
+        tw: Math.round(r.right - lastKid.getBoundingClientRect().left + 8),
+        nl: a === null ? r.width / 2 : a - r.left, nw: a === null ? 0 : b - a,
+        rise: Math.round(r.top + r.height + 10)
+      };
+      pl.style.width = g.bw + "px";
+      pr.style.left = "auto";
+      pr.style.right = "0";
+      pr.style.width = g.tw + "px";
+    };
+    var strand = function (bs, ax, ay, bx, by, H) {
+      var dx = bx - ax, dy = by - ay, L = Math.sqrt(dx * dx + dy * dy);
+      var k = Math.max(0, 1 - Math.max(0, L - H) / (H * 4.2)) * Math.min(1, (1 - p) / 0.22) * Math.min(1, p / 0.06);
+      var gk = Math.min(1, k * 3.2), R = H * 0.42;
+      bs.forEach(function (e, i) {
+        var u = i / (NB - 1), w = Math.pow(1 - Math.sin(Math.PI * u), 1.6);
+        var r = k < 0.06 ? 0 : R * (w + (1 - w) * Math.pow(k, 1.25)) * (0.35 + 0.65 * gk);
+        e.style.width = e.style.height = (2 * r) + "px";
+        e.style.transform = "translate(" + (ax + dx * u - r) + "px," + (ay + dy * u - r) + "px)";
+      });
+    };
+    var draw = function () {
+      if (!g) return;
+      var a = Math.min(1, p * 1.6), cl = (g.nl - 14) * a, cw = g.W + (g.nw + 28 - g.W) * a, H = g.H;
+      var up = -g.rise * p, cy = H / 2 + up;
+      pc.style.width = cw + "px";
+      pc.style.transform = "translate(" + cl + "px," + up + "px)";
+      mid.forEach(function (m) {
+        m.style.transform = p ? "translateY(" + up + "px)" : "";
+        m.style.pointerEvents = target === 1 ? "none" : "";
+      });
+      strand(beads.l, g.bw - H * 0.5, H / 2, cl + H * 0.5, cy, H);
+      strand(beads.r, g.W - g.tw + H * 0.5, H / 2, cl + cw - H * 0.5, cy, H);
+    };
+    var go = function (T) {
+      if (T === target) return;
+      target = T;
+      el.classList.toggle("is-split", T === 1);
+      if (reduced) { p = T; draw(); return; }
+      var p0 = p, dur = (T === 1 ? OUT : IN) * Math.abs(T - p0), t0 = performance.now();
+      cancelAnimationFrame(raf);
+      (function f(now) {
+        var u = dur ? Math.min(1, (now - t0) / dur) : 1;
+        p = p0 + (T - p0) * (1 - Math.cos(Math.PI * u)) / 2;
+        draw();
+        if (u < 1) raf = requestAnimationFrame(f);
+      })(t0);
+    };
+    var last = Math.max(0, scrollY), ups = 0, downs = 0;
+    var onScroll = function () {
+      var y = Math.max(0, scrollY), dy = y - last;
+      last = y;
+      if (!g) { measure(); draw(); }
+      if (y < 8) { ups = downs = 0; go(0); return; }
+      if (dy > 0) { downs += dy; ups = 0; if (downs > DOWN) go(1); }
+      else if (dy < 0) { ups -= dy; downs = 0; if (ups >= UP) go(0); }
+    };
+    addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", function () {
+      // Mesures prises barre entière : contenu du centre remis en place le temps de mesurer.
+      mid.forEach(function (m) { m.style.transform = ""; });
+      measure();
+      draw();
+    });
+    measure();
+    draw();
+    if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(function () { if (!p) { measure(); draw(); } });
+  }
+
+  // Suivre le curseur (survol) : l'élément (un halo, une pastille) glisse vers le pointeur tant que
+  // celui-ci survole son parent, puis revient à sa place. Place en % du parent (`left`, `top`) ;
+  // `opposite` : place opposée (second halo en miroir).
+  function follow(el, o) {
+    var box = el.offsetParent || el.parentElement;
+    if (!box || reduced) return;
+    var cs = getComputedStyle(el);
+    if (cs.position === "static") el.style.position = "absolute";
+    var t = cs.transition && cs.transition !== "all 0s ease 0s" ? cs.transition + "," : "";
+    el.style.transition = t + "left " + o.dur + "s " + o.easing + ",top " + o.dur + "s " + o.easing;
+    var mirror = !!o.given.opposite;
+    box.addEventListener("pointermove", function (e) {
+      if (e.pointerType && e.pointerType !== "mouse") return;
+      var r = box.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var x = (e.clientX - r.left) / r.width * 100, y = (e.clientY - r.top) / r.height * 100;
+      if (mirror) { x = 100 - x; y = 100 - y; }
+      el.style.left = x.toFixed(1) + "%";
+      el.style.top = y.toFixed(1) + "%";
+    });
+    box.addEventListener("pointerleave", function () { el.style.left = ""; el.style.top = ""; });
+  }
+
   // Apparition : l'élément, ou ses enfants l'un après l'autre (`stagger`).
   function appear(el, o) {
     var frames = enter(o.preset, o.dist);
@@ -284,9 +463,13 @@
     var targets = o.stagger > 0 && el.children.length ? Array.prototype.slice.call(el.children) : [el];
     var out = [];
     targets.forEach(function (t, i) {
-      out = out.concat(play(t, frames, {
-        duration: o.dur * 1000, delay: (o.delay + i * (o.stagger || 0)) * 1000, easing: o.easing, fill: "backwards",
-      }));
+      var delay = (o.delay + i * (o.stagger || 0)) * 1000;
+      out = out.concat(play(t, frames, { duration: o.dur * 1000, delay: delay, easing: o.easing, fill: "backwards" }));
+      if (o.preset === "unveil") {
+        // L'image (ou la vidéo) du cadre se resserre un peu plus longtemps que le cadre ne s'ouvre.
+        var m = t.matches("img,video") ? null : t.querySelector("img,video");
+        if (m) out = out.concat(play(m, [tr("scale(1.08)"), tr("scale(1)")], { duration: o.dur * 1333, delay: delay, easing: o.easing, fill: "backwards" }));
+      }
     });
     return out;
   }
@@ -483,7 +666,9 @@
       if (st.appear || st.hover || st.press || st.loop || st.scroll || st.active) ensureBox(el);
       if (st.appear && st.appear.trigger === "load") { st.appear.played = true; st.appear.anims = appear(el, st.appear); }
       if (st.text && st.text.trigger === "load") { st.text.played = true; st.text.anims = text(el, st.text); }
-      if (st.hover) {
+      if (st.hover && st.hover.preset === "follow") {
+        follow(el, st.hover);
+      } else if (st.hover) {
         var h = toggler(el, "hover", st.hover);
         el.addEventListener("pointerenter", function (e) { if (e.pointerType === "mouse") h(true); });
         el.addEventListener("pointerleave", function () { h(false); });
@@ -505,7 +690,9 @@
           was = now;
         }).observe(w, { attributes: true, attributeFilter: ["class"] });
       }
-      if (st.scroll) {
+      if (st.scroll && st.scroll.preset === "drops") {
+        drops(el, st.scroll);
+      } else if (st.scroll) {
         var anims = scrollAnims(el, st.scroll);
         if (anims.length) scrolls.push({ el: el, anims: anims });
       }

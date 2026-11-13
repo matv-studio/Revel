@@ -313,6 +313,28 @@ pub fn SiteColors(s: DocSession) -> impl IntoView {
                     <span>{ui.t("colors-dark-mode")}</span>
                 </label>
             </div>
+            {move || has_dark.get().then(|| {
+                let cur = s.doc.with(|d| d.as_ref().and_then(|d| d.settings.default_scheme.clone())).unwrap_or_default();
+                let opt = |v: &'static str, key: &'static str| {
+                    let on = cur == v;
+                    view! {
+                        <button type="button" role="radio" aria-checked=on.to_string() class:is-on=on data-scheme=v
+                            on:click=move |_| s.apply.run(Command::SetDefaultScheme { scheme: (!v.is_empty()).then(|| v.to_string()) })>
+                            {ui.t(key)}
+                        </button>
+                    }
+                };
+                view! {
+                    <div class="form-grid colors-default" title=ui.t("colors-default-help")>
+                        <span class="label">{ui.t("colors-default")}</span>
+                        <div class="segmented" role="radiogroup" aria-label=ui.t("colors-default") data-role="default-scheme">
+                            {opt("", "colors-default-device")}
+                            {opt("light", "inspector-scheme-light")}
+                            {opt("dark", "inspector-scheme-dark")}
+                        </div>
+                    </div>
+                }
+            })}
         </section>
     }
 }

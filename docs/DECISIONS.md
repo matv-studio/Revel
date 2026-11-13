@@ -1767,6 +1767,38 @@ d'annulation. Interface : bouton « Flux » de l'en-tête d'une collection (bleu
   champs réglable ; les sites sources doivent exposer un flux (espece-humaine.com, superficiel.film à
   vérifier).
 
+**D-168 — 12/11/2026 — prise (besoin du site Alunites Groupe, maquette et contexte fournis).** **Outils
+ajoutés pour refaire le site dans Revel, chacun rangé là où l'interface règle déjà la même chose.**
+- **Thème par défaut du site** (`settings.default_scheme`, commande `SetDefaultScheme`) : Paramètres ›
+  Couleurs, sous les couleurs sombres (Appareil, Clair, Sombre). Le script de l'interrupteur de thème
+  (D-149) l'applique tant que le visiteur n'a pas choisi ; il est posé sur toutes les pages dès qu'un thème
+  par défaut est réglé, même sans interrupteur.
+- **Élément montré en mode clair ou sombre seulement** (`data-revel-scheme-only`, réglage « Thème » sous
+  l'identifiant) : pour ce qui n'est pas une couleur (deux versions d'un logo, icône lune ou soleil). Le
+  mode sombre de Revel reste fait de couleurs ; cet outil couvre le reste sans requête média écrite.
+  Dans le canevas, la règle est posée par `canvas.js` avec celle des calques masqués (l'attribut est
+  écrit sur place, sans redessiner la page).
+- **Animations** (panneau Interactions) : « Dévoiler une image » (apparition `unveil` : cadre ouvert par le
+  haut, image resserrée de 1,08 à 1) ; « Suivre » (survol `follow` : un halo glisse vers le
+  pointeur dans son parent, puis revient ; réglage « À l'opposé » pour un second halo en miroir) ; « Gouttes »
+  (défilement `drops` : barre en trois pastilles fondues par un filtre SVG, celle du centre se détache en
+  descendant la page et revient en remontant ; couleur reprise du fond de la barre, relue au changement de
+  thème ; durée réglable, retour à 0,7 fois ; sans mouvement si le visiteur le demande).
+- **Action « Afficher la suite d'une liste »** (`more`) : un bouton fait avancer une liste à affichage
+  progressif (`data-revel-more`), qui n'avance alors plus au défilement ; le bouton disparaît quand tout
+  est montré. L'affichage progressif tient compte des filtres de liste (seuls les éléments gardés comptent,
+  la liste repart de ses premiers éléments à chaque filtre).
+- **Dates en français** : premier jour du mois écrit « 1er ».
+- **Corrections trouvées en route** : la mise à plat des styles prenait le morceau écrit d'une classe
+  calculée (`dot--{{ source }}` -> `.dot--`) pour une classe, d'où des règles sans effet ; dans une autre
+  langue, les liens vers les pages d'un site importé n'étaient pas préfixés quand le dossier de la page
+  était aussi un dossier copié.
+- Pourquoi : la maquette fait foi pour les animations ; sans ces outils, il fallait du code écrit dans le
+  site (script, requêtes média), que l'interface ne règle pas.
+- En suspens : adresses traduites par langue (`/en/the-group`) ; destinataire du formulaire selon un
+  choix du visiteur ; reprise planifiée des flux ; réglages des seuils de « Gouttes » dans l'interface
+  (`down`, `up`, `in` lus dans l'attribut).
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

@@ -961,7 +961,56 @@ try {
         await page.waitForTimeout(400);
       }
       check('interactions : action annulée, document identique', JSON.stringify((await invoke('edit_open')).site) === docA);
+      // D-168 : dévoiler une image (apparition), suivre le curseur (survol, côté opposé), gouttes
+      // (défilement), action « Afficher la suite d'une liste » ; tout annulé.
+      {
+        const attr = (name) => f.evaluate((n) => document.querySelector('section.hero')?.getAttribute(n), name);
+        const until = async (name, value, why) => { f = await waitFrame(([n, v]) => document.querySelector('section.hero')?.getAttribute(n) === v, why, [name, value]); };
+        await page.click('.anim-family[data-family="appear"] .anim-add');
+        await page.click('.anim-family[data-family="appear"] .anim-tile[data-preset="unveil"]');
+        await until('data-revel-appear', 'unveil', 'dévoiler une image');
+        await page.click('.anim-family[data-family="hover"] .anim-add');
+        await page.click('.anim-family[data-family="hover"] .anim-tile[data-preset="follow"]');
+        await until('data-revel-hover', 'follow', 'suivre le curseur');
+        // Durée par défaut de l'animation : montrée en valeur proposée tant qu'elle n'est pas réglée.
+        const shownDur = (fam) => page.$eval(`.anim-family[data-family="${fam}"] [data-setting="dur"] input`, (i) => i.value || i.placeholder);
+        const followDur = await shownDur('hover');
+        await page.click('.anim-family[data-family="hover"] [data-setting="opposite"] .switch');
+        await until('data-revel-hover', 'follow opposite', 'côté opposé');
+        await page.click('.anim-family[data-family="scroll"] .anim-add');
+        await page.click('.anim-family[data-family="scroll"] .anim-tile[data-preset="drops"]');
+        await until('data-revel-scroll', 'drops', 'gouttes');
+        const dropsDur = await shownDur('scroll');
+        if (shots) await page.screenshot({ path: `${shots}/editeur-interactions-d168.png` });
+        check('interactions : dévoiler une image, suivre le curseur (1,2 s, côté opposé), gouttes (1 s)',
+          followDur === '1.2' && dropsDur === '1', `${followDur} s ; ${dropsDur} s ; ${await attr('data-revel-hover')}`);
+        await page.click('.act-family .anim-add');
+        await until('data-revel-on', 'click class:is-open self', 'action ajoutée');
+        await page.locator('.act-card select').nth(1).selectOption('more');
+        await until('data-revel-on', 'click more self', 'suite d\'une liste');
+        check('interactions : action « Afficher la suite d\'une liste »', true);
+        for (let i = 0; i < 14 && JSON.stringify((await invoke('edit_open')).site) !== docA; i++) {
+          await page.click('.editor-toolbar .btn-undo');
+          await page.waitForTimeout(400);
+        }
+        check('interactions : nouveautés annulées, document identique', JSON.stringify((await invoke('edit_open')).site) === docA);
+      }
       await page.click('.dock-tab[data-panel="styles"]');
+      // Élément montré en mode clair ou sombre seulement (D-168) : réglage sous l'identifiant.
+      {
+        if (!(await page.$('.advanced-settings[open]'))) await page.click('.advanced-settings > summary');
+        await page.selectOption('.advanced-settings select[data-role="scheme-only"]', 'dark');
+        f = await waitFrame(() => document.querySelector('section.hero')?.getAttribute('data-revel-scheme-only') === 'dark', 'montré en sombre seulement');
+        const css = await f.evaluate(() => [...document.styleSheets].some((sh) => { try { return [...sh.cssRules].some((r) => /data-revel-scheme-only/.test(r.cssText)); } catch { return false; } }));
+        if (shots) await page.screenshot({ path: `${shots}/editeur-theme-element.png` });
+        await page.selectOption('.advanced-settings select[data-role="scheme-only"]', '');
+        f = await waitFrame(() => !document.querySelector('section.hero')?.hasAttribute('data-revel-scheme-only'), 'montré dans les deux thèmes');
+        check('réglages : élément montré en mode sombre seulement (règle de l\'outil posée), puis dans les deux', css);
+        for (let i = 0; i < 4 && JSON.stringify((await invoke('edit_open')).site) !== docA; i++) {
+          await page.click('.editor-toolbar .btn-undo');
+          await page.waitForTimeout(400);
+        }
+      }
     }
     // Variables : affectations de la page (plus dans les calques), valeur calculée au rendu ;
     // expression modifiée sur place, refusée si sa syntaxe est fausse, annulée par Ctrl+Z.
@@ -2189,6 +2238,17 @@ try {
         })();
         check('couleurs du site : couleur ajoutée, mode sombre activé (valeurs claires reprises), valeur sombre réglée',
           added && copied && darkSet, `${before} → ${before + 1} couleur(s)`);
+        // Thème par défaut du site (D-168) : sombre, puis de nouveau celui de l'appareil.
+        {
+          const scheme = async () => (await invoke('edit_open')).site.settings.default_scheme || '';
+          const wait = async (v) => { for (let i = 0; i < 40 && (await scheme()) !== v; i++) await page.waitForTimeout(100); return (await scheme()) === v; };
+          await page.click('.colors-default [data-scheme="dark"]');
+          const set = await wait('dark');
+          const on = await page.$eval('.colors-default [data-scheme="dark"]', (b) => b.getAttribute('aria-checked') === 'true');
+          if (shots) await page.locator('.settings-sub[data-sub="colors"]').screenshot({ path: `${shots}/parametres-couleurs-theme.png` });
+          await page.click('.colors-default [data-scheme=""]');
+          check('couleurs du site : thème par défaut sombre, puis celui de l\'appareil', set && on && (await wait('')));
+        }
         if (shots) await page.locator('.settings-sub[data-sub="colors"]').screenshot({ path: `${shots}/parametres-couleurs.png` });
         // Aperçu sombre du canevas : la variable prend sa valeur sombre, quel que soit le système.
         await page.click('.view-tab[data-view="view-editor"]');

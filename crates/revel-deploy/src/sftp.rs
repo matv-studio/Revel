@@ -307,7 +307,10 @@ pub async fn probe(target: &SftpTarget) -> Result<Probe, SftpError> {
     // ceux reconnus (D-172).
     for d in list(".").await {
         let p = format!("{d}/");
-        if !folders.contains(&p) && !["domains", "sites"].contains(&d.as_str()) && is_dir(d.clone()).await {
+        if !folders.contains(&p)
+            && !["domains", "sites"].contains(&d.as_str())
+            && is_dir(d.clone()).await
+        {
             folders.push(p);
         }
     }

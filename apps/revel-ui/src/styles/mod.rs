@@ -63,6 +63,9 @@ const STATES: &[(&str, &str)] = &[
     ("^.is-open", "styles-state-in-open-menu"),
     // Panier vide (outil Panier) : ce qu'il contient (total, bouton de commande).
     ("^.is-empty", "styles-state-in-empty-cart"),
+    // Bouton « Copier le lien » qui vient de copier, et ce qu'il contient (D-172).
+    (".is-copied", "styles-state-copied"),
+    ("^.is-copied", "styles-state-in-copied"),
     // Parties ajoutées avant et après le contenu (trait, pastille, guillemet…) (D-169).
     ("::before", "styles-state-before"),
     ("::after", "styles-state-after"),

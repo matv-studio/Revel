@@ -43,6 +43,7 @@ pub fn uses(html: &str) -> bool {
         || html.contains(" data-revel-slider")
         || html.contains(" data-revel-video")
         || html.contains(" data-revel-filters")
+        || html.contains(" data-revel-toc")
         || html.contains(" data-revel-consent")
         || html.contains(" data-revel-switch")
         || html.contains(" data-revel-hover-media")

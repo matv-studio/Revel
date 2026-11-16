@@ -135,6 +135,7 @@ const PRESET_NAMES: &[(&str, &str)] = &[
     ("media-survol", "insert-hover-media"),
     ("onglets", "insert-tabs"),
     ("revele", "insert-reveal"),
+    ("sommaire", "insert-toc"),
     ("texte-riche", "insert-rich-text"),
 ];
 
@@ -153,6 +154,7 @@ const BASE_NAMES: &[(&str, &str)] = &[
     ("progress", "insert-progress"),
     ("tabs", "insert-tabs"),
     ("accordion", "insert-accordion"),
+    ("toc", "insert-toc"),
     ("switch", "insert-switch"),
     ("consent", "insert-consent"),
     ("filters", "insert-filters"),

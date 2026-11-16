@@ -192,6 +192,11 @@ pub struct Ui {
     pub locale: RwSignal<Option<String>>,
     /// Contenu à ouvrir dans la vue CMS (collection, fichier), demandé par une autre vue.
     pub goto_entry: RwSignal<Option<(String, String)>>,
+    /// Position de la vue CMS (D-172) : retrouvée en revenant dans l'onglet.
+    pub cms_pos: RwSignal<Option<cms::CmsPos>>,
+    /// Modèle des pages ouvert depuis le CMS (D-172) : onglet CMS gardé actif, retour en haut à
+    /// gauche.
+    pub from_cms: RwSignal<bool>,
     /// Traduction automatique en cours (D-36).
     pub auto: RwSignal<Option<autotr::Job>>,
     /// Langue de traduction en téléchargement : code, avancement (0..1, `None` : préparation).
@@ -467,6 +472,8 @@ fn App() -> impl IntoView {
         media_rev: RwSignal::new(0),
         locale: RwSignal::new(None),
         goto_entry: RwSignal::new(None),
+        cms_pos: RwSignal::new(None),
+        from_cms: RwSignal::new(false),
         auto: RwSignal::new(None),
         pack_job: RwSignal::new(None),
         deploys: RwSignal::new(Vec::new()),
@@ -479,6 +486,26 @@ fn App() -> impl IntoView {
         sync: RwSignal::new(sync::SyncState::default()),
     };
     provide_context(ui);
+    // Retour au CMS (D-172) : oublié en quittant l'éditeur ou le modèle des pages.
+    Effect::new(move |prev: Option<bool>| {
+        let editor = ui.route.with(|r| {
+            matches!(
+                r,
+                Route::Site {
+                    tab: Tab::Editor,
+                    ..
+                }
+            )
+        });
+        let model = ui.current_page.with(|p| {
+            p.as_deref()
+                .is_some_and(|u| revel_model::template_of(u).is_some())
+        });
+        if !editor || (prev == Some(true) && !model) {
+            ui.from_cms.set(false);
+        }
+        model
+    });
     // Site ouvert retenu (menu du site gardé dans les réglages de Revel) ; oublié une fois revenu
     // à l'accueil.
     Effect::new(move |_| match ui.route.get() {
@@ -671,6 +698,17 @@ fn TopBar() -> impl IntoView {
                     fallback=|| view! { <span class="topbar-title">"Revel"</span> }>
                     <SiteMenu/>
                 </Show>
+                // Modèle des pages ouvert depuis le CMS : retour à la collection et à la position
+                // quittées (D-172).
+                {move || (ui.from_cms.get() && tab() == Some(Tab::Editor)).then(|| {
+                    let name = ui.cms_pos.with(|p| p.as_ref().and_then(|p| p.label.clone())).unwrap_or_else(|| ui.now("view-cms", &[]));
+                    view! {
+                        <button class="btn btn--small topbar-back cms-back" title=ui.t("nav-back-cms-help")
+                            on:click=move |_| { ui.from_cms.set(false); ui.tab(Tab::Cms) }>
+                            {icons::arrow_left()}<span>{ui.tx("nav-back-to-site", &[("name", name)])}</span>
+                        </button>
+                    }
+                })}
                 // Réglages de Revel ouverts depuis un site : retour au site d'un clic (vue quittée).
                 {move || matches!(ui.route.get(), Route::Settings).then(|| ui.last_site.get()).flatten().map(|(site, tab)| {
                     let name = site.name.clone();
@@ -687,14 +725,23 @@ fn TopBar() -> impl IntoView {
                 {move || if site_open() {
                     VIEWS.iter().map(|(t, key)| {
                         let t = *t;
-                        let on = move || match (tab(), t) {
+                        let here = move || match (tab(), t) {
                             (Some(Tab::Settings(_)), Tab::Settings(_)) => true,
                             (Some(a), b) => a == b,
                             _ => false,
                         };
+                        // Modèle des pages ouvert depuis le CMS : l'onglet CMS reste actif (D-172).
+                        let on = move || match (ui.from_cms.get() && tab() == Some(Tab::Editor), t) {
+                            (true, Tab::Cms) => true,
+                            (true, Tab::Editor) => false,
+                            _ => here(),
+                        };
                         view! {
                             <button class="view-tab" role="tab" class:is-on=on aria-selected=move || on().to_string()
-                                data-view=*key on:click=move |_| if !on() { ui.tab(t) }>{ui.t(key)}</button>
+                                data-view=*key on:click=move |_| {
+                                    ui.from_cms.set(false);
+                                    if !here() { ui.tab(t) }
+                                }>{ui.t(key)}</button>
                         }
                     }).collect_view().into_any()
                 } else {

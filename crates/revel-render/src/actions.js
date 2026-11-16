@@ -183,6 +183,9 @@
         var ts = targets(src, key), n = 0;
         ts.forEach(function (t) { n += t.__rvMoreRest === undefined ? 1 : t.__rvMoreRest; });
         src.hidden = ts.length > 0 && n === 0;
+        // Nombre d'éléments encore cachés écrit dans le bouton (« +4 », D-172).
+        var left = src.querySelectorAll("[data-revel-rest]");
+        for (var r = 0; r < left.length; r++) left[r].textContent = String(n);
       };
       targets(src, key).forEach(function (t) {
         t.setAttribute("data-rv-more-manual", "");
@@ -192,6 +195,60 @@
       src.addEventListener("click", function (e) {
         if (src.tagName === "A" && (src.getAttribute("href") || "#") === "#") e.preventDefault();
         each(true);
+      });
+      return;
+    }
+    if (act.indexOf("share:") === 0) {
+      // Page partagée (D-172) : fenêtre du réseau, feuille de partage du téléphone (`native`,
+      // sinon lien copié).
+      var net = act.slice(6);
+      src.addEventListener("click", function (e) {
+        e.preventDefault();
+        var url = location.href.split("#")[0], title = document.title, u = encodeURIComponent(url), t = encodeURIComponent(title);
+        if (net === "native") {
+          if (navigator.share) { navigator.share({ title: title, url: url }).catch(function () {}); return; }
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(function () {
+            targets(src, key).forEach(function (x) {
+              x.classList.add("is-copied");
+              clearTimeout(x.__rvCopied);
+              x.__rvCopied = setTimeout(function () { x.classList.remove("is-copied"); }, 2000);
+            });
+          }, function () {});
+          return;
+        }
+        var to = {
+          linkedin: "https://www.linkedin.com/sharing/share-offsite/?url=" + u,
+          x: "https://x.com/intent/post?url=" + u + "&text=" + t,
+          facebook: "https://www.facebook.com/sharer/sharer.php?u=" + u,
+          whatsapp: "https://wa.me/?text=" + encodeURIComponent(title + " " + url),
+          email: "mailto:?subject=" + t + "&body=" + u
+        }[net];
+        if (!to) return;
+        if (net === "email") { location.href = to; return; }
+        window.open(to, "_blank", "noopener,width=640,height=640");
+      });
+      return;
+    }
+    if (act === "copy") {
+      // Adresse de la page copiée ; classe `is-copied` deux secondes sur l'élément visé.
+      src.addEventListener(trig === "hover" ? "mouseenter" : "click", function (e) {
+        if (src.tagName === "A" && (src.getAttribute("href") || "#") === "#") e.preventDefault();
+        var done = function () {
+          targets(src, key).forEach(function (t) {
+            t.classList.add("is-copied");
+            clearTimeout(t.__rvCopied);
+            t.__rvCopied = setTimeout(function () { t.classList.remove("is-copied"); }, 2000);
+          });
+        };
+        var url = location.href.split("#")[0];
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () {});
+        else {
+          var ta = document.createElement("textarea");
+          ta.value = url; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.appendChild(ta); ta.select();
+          try { document.execCommand("copy"); done(); } catch (_) { /* copie refusée */ }
+          ta.remove();
+        }
       });
       return;
     }
@@ -833,6 +890,65 @@
     el.addEventListener("pointerup", end);
     el.addEventListener("pointercancel", end);
   }
+  // Sommaire (`data-revel-toc="h2 h3 in:.zone"`, D-172) : un lien par titre de la zone (par
+  // défaut <main>, sinon la page), sur le modèle du premier lien du sommaire (son élément de
+  // liste s'il en a un) ; titres sans identifiant nommés d'après leur texte ; lien de la partie
+  // lue : `is-active` et `aria-current`. Sans titre, le sommaire est masqué.
+  function toc(nav) {
+    var opts = (nav.getAttribute("data-revel-toc") || "").split(/\s+/);
+    var levels = opts.filter(function (o) { return /^h[1-6]$/.test(o); });
+    if (!levels.length) levels = ["h2"];
+    var zone = null;
+    opts.forEach(function (o) {
+      if (o.indexOf("in:") === 0) { try { zone = document.querySelector(o.slice(3)); } catch (_) { zone = null; } }
+    });
+    zone = zone || document.querySelector("main") || document.body;
+    var model = nav.querySelector("a");
+    if (!model) return;
+    var li = model.closest("li");
+    var item = li && nav.contains(li) ? li : model;
+    var box = item.parentNode;
+    var heads = Array.prototype.filter.call(zone.querySelectorAll(levels.join(",")), function (h) {
+      return !nav.contains(h) && h.textContent.trim() && !h.closest("[hidden],.rv-hide");
+    });
+    if (!heads.length) { nav.hidden = true; return; }
+    var slug = function (t) {
+      return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "partie";
+    };
+    var links = heads.map(function (h) {
+      if (!h.id) {
+        var base = slug(h.textContent), id = base, n = 2;
+        while (document.getElementById(id)) id = base + "-" + n++;
+        h.id = id;
+      }
+      var it = item.cloneNode(true);
+      var a = it.tagName === "A" ? it : it.querySelector("a");
+      a.textContent = h.textContent.trim();
+      a.setAttribute("href", "#" + h.id);
+      a.classList.remove("is-active");
+      a.removeAttribute("aria-current");
+      it.setAttribute("data-revel-level", h.tagName.toLowerCase());
+      box.insertBefore(it, item);
+      return [h, a];
+    });
+    item.parentNode.removeChild(item);
+    var spy = function () {
+      var line = innerHeight * 0.3, cur = links[0];
+      links.forEach(function (l) { if (l[0].getBoundingClientRect().top - line <= 0) cur = l; });
+      links.forEach(function (l) {
+        var on = l === cur;
+        l[1].classList.toggle("is-active", on);
+        if (on) l[1].setAttribute("aria-current", "true"); else l[1].removeAttribute("aria-current");
+      });
+    };
+    var queued = false;
+    addEventListener("scroll", function () {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(function () { queued = false; spy(); });
+    }, { passive: true });
+    spy();
+  }
   function all() {
     var dr = document.querySelectorAll("[data-revel-drag]");
     for (var g = 0; g < dr.length; g++) drag(dr[g]);
@@ -853,6 +969,8 @@
     for (var v = 0; v < vs.length; v++) video(vs[v]);
     var hm = document.querySelectorAll("[data-revel-hover-media]");
     for (var m = 0; m < hm.length; m++) hoverMedia(hm[m]);
+    var tc = document.querySelectorAll("[data-revel-toc]");
+    for (var o = 0; o < tc.length; o++) toc(tc[o]);
     var rv = document.querySelectorAll("[data-revel-reveal]");
     for (var q = 0; q < rv.length; q++) reveal(rv[q]);
     switches();

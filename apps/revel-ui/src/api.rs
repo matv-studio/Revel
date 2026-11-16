@@ -873,15 +873,6 @@ pub async fn versions_resolve_items(
     .await
 }
 
-/// Dépôt central dans un dossier partagé (NAS, réseau local) ; renvoie son chemin (D-89).
-pub async fn versions_set_shared(path: &str, folder: &str) -> Res<String> {
-    call(
-        "versions_set_shared",
-        &serde_json::json!({ "path": path, "folder": folder }),
-    )
-    .await
-}
-
 pub async fn versions_set_remote(path: &str, url: &str) -> Res<()> {
     call(
         "versions_set_remote",

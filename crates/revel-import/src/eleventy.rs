@@ -859,6 +859,7 @@ fn known_filters(_site: &Site) -> Vec<&'static str> {
         "iso_date",
         "utc_string",
         "strip_tags",
+        "reading_time",
         "truncate",
         "json",
         "absolute_url",

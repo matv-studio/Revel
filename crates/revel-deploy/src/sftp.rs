@@ -303,6 +303,14 @@ pub async fn probe(target: &SftpTarget) -> Result<Probe, SftpError> {
             folders.push(format!("{d}/"));
         }
     }
+    // Autres dossiers de l'accueil (sous-domaine ou site en « multisite » : `groupe/`), après
+    // ceux reconnus (D-172).
+    for d in list(".").await {
+        let p = format!("{d}/");
+        if !folders.contains(&p) && !["domains", "sites"].contains(&d.as_str()) && is_dir(d.clone()).await {
+            folders.push(p);
+        }
+    }
     let _ = session
         .disconnect(russh::Disconnect::ByApplication, "", "fr")
         .await;

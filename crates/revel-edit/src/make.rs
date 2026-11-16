@@ -247,6 +247,9 @@ pub enum Preset {
     Model,
     /// Scène Marmoset (D-160) : fichier `.mview` de Marmoset Toolbag, lecteur de Marmoset.
     Mview,
+    /// Sommaire (D-172) : un lien par titre de la page (ou d'une zone), sur le modèle de son
+    /// premier lien ; lien de la partie lue marqué `is-active`.
+    Toc,
 }
 
 impl Preset {
@@ -267,7 +270,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 45] = [
+    pub const ALL: [Preset; 46] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -313,6 +316,7 @@ impl Preset {
         Preset::Pixels,
         Preset::Model,
         Preset::Mview,
+        Preset::Toc,
     ];
 
     /// Règles de style pour tablette et téléphone (point de rupture le plus large du site) :
@@ -360,6 +364,7 @@ impl Preset {
                 | Preset::Navbar
                 | Preset::LocaleSwitch
                 | Preset::Model
+                | Preset::Toc
         )
     }
 
@@ -718,6 +723,37 @@ impl Preset {
                     "div",
                     vec![attr("class", "onglets"), flag("data-revel-tabs")],
                     kids,
+                )
+            }
+            // `text` : « Sommaire|Titre de partie » (nom du sommaire, texte du lien modèle).
+            Preset::Toc => {
+                let mut parts = text.split('|');
+                let label = parts.next().filter(|t| !t.is_empty()).unwrap_or("Sommaire");
+                let link = parts.next().unwrap_or(label);
+                el(
+                    id(),
+                    "nav",
+                    vec![
+                        attr("class", "sommaire"),
+                        attr("aria-label", label),
+                        attr("data-revel-toc", "h2"),
+                    ],
+                    vec![el(
+                        id(),
+                        "ol",
+                        vec![attr("class", "sommaire__liste")],
+                        vec![el(
+                            id(),
+                            "li",
+                            vec![attr("class", "sommaire__element")],
+                            vec![el(
+                                id(),
+                                "a",
+                                vec![attr("class", "sommaire__lien"), attr("href", "#")],
+                                vec![txt(link)],
+                            )],
+                        )],
+                    )],
                 )
             }
             Preset::Accordion => el(
@@ -1275,6 +1311,10 @@ fn role_of(class: &str) -> Option<Role> {
         "onglets__liste" => Part("tablist"),
         "onglet" => Part("tab"),
         "onglets__panneau" => Content,
+        "sommaire" => Base("toc"),
+        "sommaire__liste" => Part("list"),
+        "sommaire__element" => Part("item"),
+        "sommaire__lien" => Part("link"),
         "accordeon" => Base("accordion"),
         "accordeon__titre" => Part("summary"),
         "accordeon__contenu" => Content,
@@ -2656,4 +2696,131 @@ pub fn model_button_command(
             }))
         }
     }
+}
+
+/// Média d'un élément (D-172) : adresse de la vidéo, image (expression de la source) et image de
+/// couverture, repris quand l'outil change de fonction ([`crate::command::Command::ConvertPreset`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Media {
+    pub video: Option<String>,
+    pub image: Option<String>,
+    pub poster: Option<String>,
+}
+
+fn attr_value(attrs: &[Attr], name: &str) -> Option<String> {
+    attrs
+        .iter()
+        .find(|a| a.name == name)
+        .and_then(|a| a.value.clone())
+        .filter(|v| !v.trim().is_empty())
+}
+
+/// Média trouvé dans un élément et ses enfants (premier de chaque sorte).
+pub fn media_of(n: &Node) -> Media {
+    let mut m = Media::default();
+    fn walk(n: &Node, m: &mut Media) {
+        match n {
+            Node::Element {
+                tag,
+                attrs,
+                children,
+                ..
+            } => {
+                if m.video.is_none() {
+                    m.video = attr_value(attrs, "data-revel-video")
+                        .or_else(|| (tag == "video").then(|| attr_value(attrs, "src")).flatten());
+                }
+                if m.poster.is_none() && tag == "video" {
+                    m.poster = attr_value(attrs, "poster");
+                }
+                for c in children {
+                    walk(c, m);
+                }
+            }
+            Node::Image(img) => {
+                if m.image.is_none() && !matches!(img.src.trim(), "" | "\"\"") {
+                    m.image = Some(img.src.clone());
+                }
+            }
+            Node::If {
+                then, otherwise, ..
+            } => {
+                for c in then.iter().chain(otherwise) {
+                    walk(c, m);
+                }
+            }
+            _ => {}
+        }
+    }
+    walk(n, &mut m);
+    m
+}
+
+/// Valeur littérale d'une expression de source d'image (`"/media/a.jpg"` -> `/media/a.jpg`) ;
+/// `None` pour un champ ou une expression calculée.
+fn literal(expr: &str) -> Option<String> {
+    let t = expr.trim();
+    (t.len() >= 2 && t.starts_with('"') && t.ends_with('"') && !t[1..t.len() - 1].contains('"'))
+        .then(|| t[1..t.len() - 1].to_string())
+}
+
+/// Média reporté dans la nouvelle forme d'un outil : vidéo, lecteur, image.
+pub fn carry_media(n: &mut Node, m: &Media) {
+    let image_url = m.image.as_deref().and_then(literal);
+    let set = |attrs: &mut Vec<Attr>, name: &str, v: &str| {
+        if let Some(a) = attrs.iter_mut().find(|a| a.name == name) {
+            a.value = Some(v.to_string());
+        } else {
+            attrs.push(Attr {
+                name: name.into(),
+                value: Some(v.into()),
+                when: None,
+            });
+        }
+    };
+    let mut image_done = false;
+    fn walk(
+        n: &mut Node,
+        m: &Media,
+        image_url: &Option<String>,
+        image_done: &mut bool,
+        set: &dyn Fn(&mut Vec<Attr>, &str, &str),
+    ) {
+        match n {
+            Node::Element {
+                tag,
+                attrs,
+                children,
+                ..
+            } => {
+                if attrs.iter().any(|a| a.name == "data-revel-video") {
+                    if let Some(v) = &m.video {
+                        set(attrs, "data-revel-video", v);
+                    }
+                } else if tag == "video" {
+                    if let Some(v) = &m.video {
+                        set(attrs, "src", v);
+                    }
+                    if let Some(p) = m.poster.clone().or_else(|| image_url.clone()) {
+                        set(attrs, "poster", &p);
+                    }
+                }
+                for c in children {
+                    walk(c, m, image_url, image_done, set);
+                }
+            }
+            Node::Image(img) if !*image_done => {
+                if let Some(src) = m
+                    .image
+                    .clone()
+                    .or_else(|| m.poster.as_ref().map(|p| format!("{p:?}")))
+                {
+                    img.src = src;
+                }
+                *image_done = true;
+            }
+            _ => {}
+        }
+    }
+    walk(n, m, &image_url, &mut image_done, &set);
 }

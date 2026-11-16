@@ -515,7 +515,7 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
             </Show>
             <Show when=adding>
                 <div class="section">
-                    <HostForm editing=editing envs=envs.get_value() save=save/>
+                    <HostForm editing=editing envs=envs.get_value() save=save path=path.get_value()/>
                 </div>
             </Show>
             <div class="stack">
@@ -559,7 +559,7 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
                                         {move || run_of(&id.get_value()).map(|r| view! { <RunView run=r on_edit=on_edit/> })}
                                     }
                                 }>
-                                    <HostForm editing=editing envs=envs.get_value() save=save/>
+                                    <HostForm editing=editing envs=envs.get_value() save=save path=path.get_value()/>
                                 </Show>
                             </article>
                         }
@@ -778,8 +778,35 @@ fn HostForm(
     editing: RwSignal<Option<Form>>,
     envs: Vec<String>,
     save: Callback<()>,
+    path: String,
 ) -> impl IntoView {
     let ui = expect_context::<Ui>();
+    let site_path = StoredValue::new(path);
+    // Dossiers du serveur lus à la demande (changer le dossier du site, D-172).
+    let folders = RwSignal::new(Vec::<String>::new());
+    let reading = RwSignal::new(false);
+    let read_folders = move || {
+        let Some(form) = editing.get_untracked() else {
+            return;
+        };
+        if reading.get_untracked() {
+            return;
+        }
+        reading.set(true);
+        let pw = Some(form.password.clone()).filter(|p| !p.is_empty());
+        let profile = form.to_profile();
+        spawn_local(async move {
+            let r = api::hosting_probe(&site_path.get_value(), &profile, pw).await;
+            if reading.is_disposed() {
+                return;
+            }
+            reading.set(false);
+            match r {
+                Ok(p) => folders.set(p.folders),
+                Err(e) => ui.fail(e),
+            }
+        });
+    };
     let is_new = editing.with_untracked(|f| f.as_ref().is_some_and(|f| f.id.is_empty()));
     let has_secret = editing.with_untracked(|f| f.as_ref().is_some_and(|f| f.has_secret));
     let kind = move || editing.with(|f| f.as_ref().map(|f| f.kind).unwrap_or_default());
@@ -865,7 +892,22 @@ fn HostForm(
                     {field("publish-user", "text", |f| f.user.clone(), |f, v| f.user = v, None)}
                     {field("publish-password", "password", |f| f.password.clone(), |f, v| f.password = v,
                         Some(if has_secret { "publish-password-saved" } else { "publish-password-help" }))}
-                    {field("publish-remote-dir", "text", |f| f.remote_dir.clone(), |f, v| f.remote_dir = v, Some("publish-remote-dir-help"))}
+                    <label class="field">
+                        <span class="label">{ui.t("publish-remote-dir")}{icons::info_tip(ui.tx("publish-remote-dir-help", &[]))}</span>
+                        <span class="input-with-btn">
+                            <input class="input input--mono publish-folder" type="text" autocomplete="off" spellcheck="false" list="publish-folders"
+                                prop:value=move || editing.with(|f| f.as_ref().map(|f| f.remote_dir.clone()).unwrap_or_default())
+                                on:input=move |ev| { let v = event_target_value(&ev); editing.update(|f| if let Some(f) = f { f.remote_dir = v }) }/>
+                            <button type="button" class="icon-btn publish-folders-read" title=ui.t("publish-folders-read")
+                                aria-label=ui.t("publish-folders-read") class:is-busy=move || reading.get()
+                                prop:disabled=move || reading.get() on:click=move |_| read_folders()>
+                                {icons::folder()}
+                            </button>
+                        </span>
+                        <datalist id="publish-folders">
+                            {move || folders.get().into_iter().map(|d| view! { <option value=d></option> }).collect_view()}
+                        </datalist>
+                    </label>
                 </div>
             </Show>
             <Show when=move || kind() == Kind::Github>

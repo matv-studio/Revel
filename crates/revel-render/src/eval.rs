@@ -1539,6 +1539,31 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
         let t = re.replace_all(&s, " ");
         Value::from(t.split_whitespace().collect::<Vec<_>>().join(" "))
     });
+    // Temps de lecture en minutes (D-172) : mots de tout le texte de la valeur (chaîne, liste,
+    // objet : blocs d'un contenu par exemple), balises retirées, 200 mots par minute, 1 au moins.
+    env.add_filter("reading_time", |v: Value, wpm: Option<u32>| {
+        fn words(v: &Value, n: &mut usize) {
+            if let Some(s) = v.as_str() {
+                let re = regex::Regex::new(r"<[^>]+>").expect("regex");
+                *n += re.replace_all(s, " ").split_whitespace().count();
+            } else if let Ok(it) = v.try_iter() {
+                let map = v.kind() == minijinja::value::ValueKind::Map;
+                for k in it {
+                    if map {
+                        if let Ok(x) = v.get_item(&k) {
+                            words(&x, n);
+                        }
+                    } else {
+                        words(&k, n);
+                    }
+                }
+            }
+        }
+        let mut n = 0;
+        words(&v, &mut n);
+        let wpm = wpm.unwrap_or(200).max(1) as usize;
+        Value::from(n.div_ceil(wpm).max(1))
+    });
     env.add_filter("truncate", |v: Value, n: Option<usize>| {
         let s = v.to_string();
         let n = n.unwrap_or(160);

@@ -116,6 +116,16 @@ pub enum Command {
         #[serde(default)]
         text: String,
     },
+    /// Change la fonction d'un outil (D-172) : l'élément est remplacé par une autre forme du même
+    /// outil (vidéo, lecteur vidéo, média des éléments survolés ; carrousel ou diaporama ; image ou
+    /// révélation au survol), sa source (adresse du média, image de couverture) reprise.
+    ConvertPreset {
+        parent: Parent,
+        index: usize,
+        preset: crate::make::Preset,
+        #[serde(default)]
+        text: String,
+    },
     /// Déclaration d'une règle de style (dernière occurrence de la propriété) : valeur changée sur
     /// place, ajoutée à la fin si absente, retirée si `value` vaut `None`.
     SetDecl {
@@ -622,6 +632,48 @@ pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
                 let mut commands = vec![insert];
                 commands.extend(rules);
                 expand(site, &Command::Batch { commands })?
+            }
+        }
+        Command::ConvertPreset {
+            parent,
+            index,
+            preset,
+            text,
+        } => {
+            let old = address::list(site, parent)?
+                .get(*index)
+                .cloned()
+                .ok_or(EditError::Index(*index))?;
+            let media = crate::make::media_of(&old);
+            let mut ins = expand(
+                site,
+                &Command::InsertPreset {
+                    parent: parent.clone(),
+                    index: *index,
+                    preset: *preset,
+                    text: text.clone(),
+                },
+            )?;
+            fn patch(c: &mut Command, media: &crate::make::Media) {
+                match c {
+                    Command::Insert { node, .. } => crate::make::carry_media(node, media),
+                    Command::Batch { commands } => {
+                        if let Some(first) = commands.first_mut() {
+                            patch(first, media);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            patch(&mut ins, &media);
+            Command::Batch {
+                commands: vec![
+                    Command::RemoveAt {
+                        parent: parent.clone(),
+                        index: *index,
+                    },
+                    ins,
+                ],
             }
         }
         Command::AddRule {
@@ -1855,6 +1907,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
         Command::Duplicate { .. }
         | Command::Wrap { .. }
         | Command::InsertPreset { .. }
+        | Command::ConvertPreset { .. }
         | Command::MakeComponent { .. }
         | Command::Detach { .. }
         | Command::Translate { .. }

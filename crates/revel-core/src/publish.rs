@@ -66,6 +66,17 @@ pub(crate) fn suggest_folder(
     {
         return Some(f.clone());
     }
+    // Sous-domaine (`groupe.exemple.fr`) : dossier à son nom (`groupe/`), réglage courant des
+    // hébergeurs mutualisés (OVHcloud « Multisite », D-172).
+    if let Some(sub) = domain
+        .filter(|d| d.split('.').count() >= 3)
+        .and_then(|d| d.split('.').next())
+        && let Some(f) = folders
+            .iter()
+            .find(|f| f.trim_end_matches('/').rsplit('/').next() == Some(sub))
+    {
+        return Some(f.clone());
+    }
     if let Some(r) = preset_root.filter(|r| !r.is_empty())
         && folders.iter().any(|f| f == r)
     {
@@ -367,5 +378,15 @@ mod tests {
             Some("sites/a.fr/")
         );
         assert_eq!(suggest_folder(&[], Some("www/"), None), None);
+        // Sous-domaine : dossier à son nom plutôt que la racine de l'hébergeur (D-172).
+        assert_eq!(
+            suggest_folder(
+                &f(&["archive/", "groupe/", "www/"]),
+                Some("www/"),
+                Some("groupe.alunites.com")
+            )
+            .as_deref(),
+            Some("groupe/")
+        );
     }
 }

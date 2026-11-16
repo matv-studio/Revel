@@ -287,18 +287,41 @@ const ITEM_W: f64 = 420.0;
 const ITEM_MIN: f64 = 320.0;
 const ITEM_MAX: f64 = 1100.0;
 
+/// Position de la vue CMS, gardée d'un onglet à l'autre (D-172) : collection, fiche ouverte,
+/// mode Champs, recherche, tri, défilement du tableau.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CmsPos {
+    site: String,
+    current: Option<String>,
+    /// Nom de la collection (bouton de retour de l'éditeur).
+    pub label: Option<String>,
+    open: Option<String>,
+    fields: bool,
+    field: Option<String>,
+    query: String,
+    sort: Option<Option<(String, bool)>>,
+    scroll: (i32, i32),
+}
+
 #[component]
 pub fn CmsView(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
+    // Position laissée en quittant l'onglet, pour ce site.
+    let saved = ui
+        .cms_pos
+        .get_untracked()
+        .filter(|p| p.site == site.path)
+        .unwrap_or_default();
     let cols = RwSignal::new(None::<Vec<CmsCollection>>);
-    let current = RwSignal::new(None::<String>);
-    let open = RwSignal::new(None::<String>);
+    let current = RwSignal::new(saved.current.clone());
+    let open = RwSignal::new(saved.open.clone());
     // Mode « Champs » (schéma de la collection) et champ choisi.
-    let fields_mode = RwSignal::new(false);
-    let sel_field = RwSignal::new(None::<String>);
-    let query = RwSignal::new(String::new());
+    let fields_mode = RwSignal::new(saved.fields);
+    let sel_field = RwSignal::new(saved.field.clone());
+    let query = RwSignal::new(saved.query.clone());
     // Tri choisi ; `None` : celui du schéma (`view.sort`).
-    let sort = RwSignal::new(None::<Option<(String, bool)>>);
+    let sort = RwSignal::new(saved.sort.clone());
+    let table = NodeRef::<leptos::html::Div>::new();
     let state = RwSignal::new(None::<EditState>);
     // Traductions automatiques à relire (D-36), par langue : clés `entry:<dossier>/<fichier>`.
     let marks = RwSignal::new(std::collections::BTreeMap::<
@@ -329,8 +352,12 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
             }
             match r {
                 Ok(c) => {
-                    if current.get_untracked().is_none() {
+                    if !current
+                        .get_untracked()
+                        .is_some_and(|id| c.iter().any(|c| c.id == id))
+                    {
                         current.set(c.first().map(|c| c.id.clone()));
+                        open.set(None);
                     }
                     let localized = c.iter().any(|c| !c.locales.is_empty());
                     cols.set(Some(c));
@@ -547,6 +574,69 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                 .unwrap_or_default()
         })
     });
+    // Position gardée pour le retour dans l'onglet (D-172).
+    let site_key = site.path.clone();
+    Effect::new(move |_| {
+        let current = current.get();
+        let label = current.as_ref().and_then(|id| {
+            cols.with(|c| {
+                c.as_ref()?
+                    .iter()
+                    .find(|c| &c.id == id)
+                    .map(|c| c.label.clone().unwrap_or_else(|| c.id.clone()))
+            })
+        });
+        let pos = CmsPos {
+            site: site_key.clone(),
+            current: current.clone(),
+            label,
+            open: open.get(),
+            fields: fields_mode.get(),
+            field: sel_field.get(),
+            query: query.get(),
+            sort: sort.get(),
+            // Autre collection : tableau repris en haut.
+            scroll: ui
+                .cms_pos
+                .with_untracked(|p| {
+                    p.as_ref()
+                        .filter(|p| p.site == site_key && p.current == current)
+                        .map(|p| p.scroll)
+                })
+                .unwrap_or_default(),
+        };
+        ui.cms_pos.set(Some(pos));
+    });
+    // Défilement du tableau rendu une fois les contenus lus.
+    let scroll0 = StoredValue::new(Some(saved.scroll));
+    Effect::new(move |_| {
+        if cols.with(Option::is_none) {
+            return;
+        }
+        let Some((top, left)) = scroll0.get_value() else {
+            return;
+        };
+        scroll0.set_value(None);
+        if (top, left) == (0, 0) {
+            return;
+        }
+        request_animation_frame(move || {
+            if let Some(el) = table.get_untracked() {
+                el.set_scroll_top(top);
+                el.set_scroll_left(left);
+            }
+        });
+    });
+    let on_scroll = move |_| {
+        if let Some(el) = table.get_untracked() {
+            let at = (el.scroll_top(), el.scroll_left());
+            ui.cms_pos.update_untracked(|p| {
+                if let Some(p) = p {
+                    p.scroll = at;
+                }
+            });
+        }
+    };
     // Contenu demandé par une autre vue (Localisation) : collection et fiche ouvertes.
     Effect::new(move |_| {
         let Some((id, file)) = ui.goto_entry.get() else {
@@ -1115,7 +1205,10 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
             }
             busy_template.set(false);
             match r {
-                Ok(true) => goto(revel_model::template_page(&id)),
+                Ok(true) => {
+                    goto(revel_model::template_page(&id));
+                    ui.from_cms.set(true);
+                }
                 Ok(false) => {}
                 Err(e) => ui.fail(e),
             }
@@ -1300,7 +1393,7 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                         }}
                     </header>
                 })}
-                <div class="cms-table-wrap">
+                <div class="cms-table-wrap" node_ref=table on:scroll=on_scroll>
                     {move || match (cols.get().is_none(), layout.get()) {
                         (false, Some(_)) if fields_mode.get() => view! {
                             <SchemaList col=col selected=sel_field apply=apply/>

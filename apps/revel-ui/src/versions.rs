@@ -91,11 +91,6 @@ fn mode_of(remote: Option<&str>) -> &'static str {
     }
 }
 
-/// Lignes de la comparaison des deux façons de travailler à plusieurs : libellé et valeurs.
-const COMPARE: &[&str] = &[
-    "where", "accounts", "remote", "browser", "backup", "provider",
-];
-
 /// Endroit modifié des deux côtés : où (page, composant…) et élément.
 fn item_place(ui: Ui, i: &SyncConflictItem) -> String {
     let key = match i.area.as_str() {
@@ -359,38 +354,40 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
             .danger(),
         ));
     };
+    // Dépôt choisi (D-172) : première synchronisation lancée tout de suite, pour envoyer les
+    // fichiers du site ; retiré (« Local ») : versions gardées sur cet ordinateur.
     let set_remote = move |url: String| {
         let p = path.get_value();
+        let url = url.trim().to_string();
+        let first = !url.is_empty();
         spawn_local(async move {
-            if let Err(e) = api::versions_set_remote(&p, url.trim()).await {
-                ui.fail(e);
+            match api::versions_set_remote(&p, &url).await {
+                Ok(_) if first => sync(),
+                Ok(_) => {}
+                Err(e) => ui.fail(e),
             }
             reload();
         });
     };
-    // Travail à plusieurs : dossier partagé (dépôt central créé puis premier envoi) ou dépôt en
-    // ligne ; « Seul » retire le dépôt commun (versions gardées sur cet ordinateur).
-    let set_shared = move |folder: String| {
-        let p = path.get_value();
-        team.set(None);
-        busy.set(Some("sync"));
-        spawn_local(async move {
-            match api::versions_set_shared(&p, &folder).await {
-                Ok(_) => {
-                    let _ = busy.try_set(None);
-                    sync();
-                }
-                Err(e) => {
-                    let _ = busy.try_set(None);
-                    ui.fail(e);
-                    reload();
-                }
-            }
-        });
-    };
+    // Dépôt en ligne choisi avant toute version : versions activées (première version), puis
+    // dépôt relié et premier envoi.
     let set_online = move |url: String| {
         team.set(None);
-        set_remote(url);
+        if status.with_untracked(|s| matches!(s, Some(None))) {
+            let p = path.get_value();
+            let m = ui.now("versions-first", &[]);
+            busy.set(Some("init"));
+            spawn_local(async move {
+                let r = api::versions_init(&p, &m).await;
+                let _ = busy.try_set(None);
+                match r {
+                    Ok(_) => set_remote(url),
+                    Err(e) => ui.fail(e),
+                }
+            });
+        } else {
+            set_remote(url);
+        }
     };
     let go_solo = move || {
         ui.ask.set(Some(
@@ -464,8 +461,10 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                 None => ().into_any(),
                 Some(None) => view! {
                     <div class="section versions-empty">
-                        <button class="btn btn--primary" title=ui.t("versions-init-help") disabled=move || busy.get().is_some()
-                            on:click=move |_| init()>{icons::branch()}{ui.t("versions-init")}</button>
+                        <button class="btn" title=ui.t("versions-init-help") disabled=move || busy.get().is_some()
+                            on:click=move |_| init()>{icons::branch()}{ui.t("versions-mode-solo")}</button>
+                        <button class="btn btn--primary versions-online" title=ui.t("versions-mode-online-help") disabled=move || busy.get().is_some()
+                            on:click=move |_| team.set(Some("online"))>{icons::globe()}{ui.t("versions-mode-online")}</button>
                     </div>
                 }.into_any(),
                 Some(Some(s)) => {
@@ -479,10 +478,10 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                             {[("solo", "versions-mode-solo", "versions-mode-solo-help"),
                               ("shared", "versions-mode-shared", "versions-mode-shared-help"),
                               ("online", "versions-mode-online", "versions-mode-online-help")]
-                                .into_iter().map(|(m, key, help)| view! {
+                                .into_iter().filter(|(m, _, _)| *m != "shared" || mode == "shared").map(|(m, key, help)| view! {
                                     <button role="radio" data-mode=m class:is-on=mode == m aria-checked=(mode == m).to_string()
                                         title=ui.t(help) disabled=move || busy.get().is_some()
-                                        on:click=move |_| if m != mode { if m == "solo" { go_solo() } else { team.set(Some(m)) } }>{ui.t(key)}</button>
+                                        on:click=move |_| if m != mode { if m == "solo" { go_solo() } else { team.set(Some("online")) } }>{ui.t(key)}</button>
                                 }).collect_view()}
                         </div>
                         {(mode != "solo").then(|| view! {
@@ -713,9 +712,9 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                 }.into_any()
                 }
             }}
-            {move || team.get().map(|target| {
+            {move || team.get().map(|_| {
                 let remote = status.get_untracked().flatten().and_then(|s| s.remote);
-                team_dialog(ui, team, target, remote, set_shared, set_online)
+                team_dialog(ui, team, remote, set_online)
             })}
             {move || saving.get().map(|_| {
                 let msg = RwSignal::new(String::new());
@@ -741,113 +740,30 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
     }
 }
 
-/// Fenêtre d'activation du travail à plusieurs : les deux façons comparées (la choisie mise en
-/// avant), puis le dossier partagé ou l'adresse du dépôt en ligne.
+/// Fenêtre du dépôt en ligne (D-172) : son adresse ; à la validation, première synchronisation.
 fn team_dialog(
     ui: Ui,
     team: RwSignal<Option<&'static str>>,
-    target: &'static str,
     remote: Option<String>,
-    set_shared: impl Fn(String) + Copy + 'static,
     set_online: impl Fn(String) + Copy + 'static,
 ) -> impl IntoView {
-    let current = mode_of(remote.as_deref());
-    let choice = RwSignal::new(target);
-    let initial = |m: &str| {
-        if current == m {
-            remote.clone().unwrap_or_default()
-        } else {
-            String::new()
-        }
-    };
-    let (shared0, online0) = (initial("shared"), initial("online"));
-    let folder = RwSignal::new(shared0.clone());
+    let online0 = remote
+        .filter(|r| mode_of(Some(r)) == "online")
+        .unwrap_or_default();
     let url = RwSignal::new(online0.clone());
-    let pick = move |_| {
-        let start = folder.get_untracked();
-        spawn_local(async move {
-            let start = (!start.trim().is_empty()).then_some(start);
-            match api::pick_folder_at(start.as_deref()).await {
-                Ok(Some(d)) => {
-                    let _ = folder.try_set(d);
-                }
-                Ok(None) => {}
-                Err(e) => ui.fail(e),
-            }
-        });
-    };
-    let (shared0, online0) = (StoredValue::new(shared0), StoredValue::new(online0));
-    let ready = move || match choice.get() {
-        "shared" => folder.with(|f| !f.trim().is_empty() && shared0.with_value(|s| f.trim() != s)),
-        _ => url.with(|u| !u.trim().is_empty() && online0.with_value(|s| u.trim() != s)),
-    };
-    let activate = move || {
-        if !ready() {
-            return;
-        }
-        match choice.get_untracked() {
-            "shared" => set_shared(folder.get_untracked().trim().to_string()),
-            _ => set_online(url.get_untracked().trim().to_string()),
-        }
-    };
-    let col = move |m: &'static str| {
-        view! {
-            <button type="button" role="radio" class="team-col" data-mode=m
-                class:is-on=move || choice.get() == m aria-checked=move || (choice.get() == m).to_string()
-                title=ui.t(if m == "shared" { "versions-mode-shared-help" } else { "versions-mode-online-help" })
-                on:click=move |_| choice.set(m)>
-                {ui.t(if m == "shared" { "versions-mode-shared" } else { "versions-mode-online" })}
-            </button>
-        }
-    };
+    let online0 = StoredValue::new(online0);
+    let ready = move || url.with(|u| !u.trim().is_empty() && online0.with_value(|s| u.trim() != s));
     view! {
         <div class="overlay" on:mousedown=move |e| if e.target() == e.current_target() { team.set(None) }>
-            <form class="dialog dialog--wide team-dialog" role="dialog" aria-modal="true" aria-labelledby="team-title"
-                on:submit=move |e| { e.prevent_default(); activate() }>
-                <h2 id="team-title" title=ui.t("versions-team-help")>{ui.t("versions-team-title")}</h2>
-                <table class="team-compare" role="radiogroup" aria-labelledby="team-title">
-                    <thead>
-                        <tr><th></th><th>{col("shared")}</th><th>{col("online")}</th></tr>
-                    </thead>
-                    <tbody>
-                        {COMPARE.iter().map(|row| {
-                            let row: &'static str = row;
-                            let k = move |suffix: &str| {
-                                let key = format!("versions-compare-{row}{suffix}");
-                                move || ui.tx(&key, &[])
-                            };
-                            view! {
-                                <tr data-row=row>
-                                    <th scope="row" title=k("-help")>{k("")}</th>
-                                    <td class:is-on=move || choice.get() == "shared">{k("-shared")}</td>
-                                    <td class:is-on=move || choice.get() == "online">{k("-online")}</td>
-                                </tr>
-                            }
-                        }).collect_view()}
-                    </tbody>
-                </table>
-                {move || if choice.get() == "shared" {
-                    view! {
-                        <label class="field team-field">
-                            <span class="label" title=ui.t("versions-shared-folder-help")>{ui.t("versions-shared-folder")}</span>
-                            <span class="team-folder-row">
-                                <input class="input input--mono team-folder" spellcheck="false" autocomplete="off"
-                                    placeholder=r"\\NAS\Equipe\Sites" title=ui.t("versions-shared-folder-help")
-                                    prop:value=move || folder.get() on:input=move |e| folder.set(event_target_value(&e))/>
-                                <button type="button" class="btn btn--small team-folder-pick" on:click=pick>{ui.t("versions-shared-choose")}</button>
-                            </span>
-                        </label>
-                    }.into_any()
-                } else {
-                    view! {
-                        <label class="field team-field">
-                            <span class="label" title=ui.t("versions-online-url-help")>{ui.t("versions-online-url")}</span>
-                            <input class="input input--mono team-url" spellcheck="false" autocomplete="off"
-                                placeholder="https://github.com/compte/site.git" title=ui.t("versions-online-url-help")
-                                prop:value=move || url.get() on:input=move |e| url.set(event_target_value(&e))/>
-                        </label>
-                    }.into_any()
-                }}
+            <form class="dialog team-dialog" role="dialog" aria-modal="true" aria-labelledby="team-title"
+                on:submit=move |e| { e.prevent_default(); if ready() { set_online(url.get_untracked().trim().to_string()) } }>
+                <h2 id="team-title" title=ui.t("versions-mode-online-help")>{ui.t("versions-mode-online")}</h2>
+                <label class="field team-field">
+                    <span class="label" title=ui.t("versions-online-url-help")>{ui.t("versions-online-url")}</span>
+                    <input class="input input--mono team-url" spellcheck="false" autocomplete="off" autofocus=true
+                        placeholder="https://github.com/compte/site" title=ui.t("versions-online-url-help")
+                        prop:value=move || url.get() on:input=move |e| url.set(event_target_value(&e))/>
+                </label>
                 <div class="dialog-actions">
                     <button type="button" class="btn" on:click=move |_| team.set(None)>{ui.t("action-cancel")}</button>
                     <button type="submit" class="btn btn--primary team-on" disabled=move || !ready()>{ui.t("versions-team-on")}</button>

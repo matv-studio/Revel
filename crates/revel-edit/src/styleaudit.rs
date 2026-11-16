@@ -103,6 +103,8 @@ pub const OUTER_STATES: &[&str] = &[
     ".is-playing",
     ".is-open",
     ".is-empty",
+    // Bouton « Copier le lien » qui vient de copier (D-172).
+    ".is-copied",
 ];
 
 /// Propriétés propres aux outils de Revel, réglées par le panneau (unité « écran » de la taille

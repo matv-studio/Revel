@@ -605,6 +605,10 @@
     if (el.matches("[data-revel-hover-media]")) s.push(".is-ready");
     const paused = actionTargets("play");
     if (up((p) => paused.has(p))) s.push("^.is-paused");
+    // « Copier le lien », partage du téléphone : élément visé marqué copié, et ce qu'il contient (D-172).
+    const copied = new Set([...actionTargets("copy"), ...actionTargets("share:native")]);
+    if (copied.has(el)) s.push(".is-copied");
+    if (up((p) => copied.has(p))) s.push("^.is-copied");
     // Parties ajoutées avant et après le contenu (pas sur une image, un champ, une vidéo…) (D-169).
     if (!el.matches("img,input,select,textarea,video,audio,iframe,canvas,br,hr,svg,svg *,picture,object,embed")) s.push("::before", "::after");
     // Survol (et focus au clavier) d'un ancêtre : sa première classe, du plus proche au plus lointain.

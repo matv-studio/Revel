@@ -15,7 +15,10 @@
 //!   `music:<adresse>|…[~<volume %>]` (une musique au hasard, jouée en boucle ; remplace la
 //!   précédente) : sons et musique se coupent avec les interrupteurs `data-revel-switch` ;
 //!   `more` (suite d'une liste à affichage progressif, `data-revel-more` : la liste n'avance plus
-//!   au défilement, le déclencheur est masqué quand tout est montré) ;
+//!   au défilement, le déclencheur est masqué quand tout est montré) ; `copy` (adresse de la page
+//!   copiée, classe `is-copied` sur l'élément visé pendant deux secondes : bouton « Copier le
+//!   lien ») ; `share:<réseau>` (page partagée : `linkedin`, `x`, `facebook`, `whatsapp`, `email`,
+//!   ou `native`, la feuille de partage du téléphone, sinon le lien copié) ;
 //! - élément visé : `self`, `parent`, `next` (élément suivant), `body`, `.<classe>` (tous les
 //!   éléments de la classe), `closest:.<classe>` (l'élément de la classe qui contient le
 //!   déclencheur : la carte d'une liste de cartes semblables), `#<identifiant>`.
@@ -43,6 +46,10 @@ pub enum Act {
     Dismiss,
     /// Suite d'une liste à affichage progressif (bouton « Afficher plus »).
     More,
+    /// Adresse de la page copiée (bouton « Copier le lien »).
+    Copy,
+    /// Page partagée sur un réseau (bouton « Partager », D-172) : nom du réseau ([`NETWORKS`]).
+    Share(String),
     /// Un enfant au hasard affiché seul, après un délai (ms).
     Random(u32),
     /// Rotation ajoutée (degrés), plus 0 à 3 quarts de tour au hasard.
@@ -52,6 +59,9 @@ pub enum Act {
     /// Musique jouée en boucle (prise au hasard parmi les adresses).
     Music(Audio),
 }
+
+/// Réseaux de l'action « Partager » (D-172).
+pub const NETWORKS: &[&str] = &["linkedin", "x", "facebook", "whatsapp", "email", "native"];
 
 /// Sons d'une action : adresses (un fichier pris au hasard) et volume (%).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,6 +159,8 @@ impl Rule {
             Act::Play => "play".to_string(),
             Act::Dismiss => "dismiss".to_string(),
             Act::More => "more".to_string(),
+            Act::Copy => "copy".to_string(),
+            Act::Share(n) => format!("share:{n}"),
             Act::Random(ms) => format!("random:{ms}"),
             Act::Spin(deg) => format!("spin:{deg}"),
             Act::Sound(a) => format!("sound:{}", a.write()),
@@ -177,6 +189,14 @@ impl Rule {
             "play" => Act::Play,
             "dismiss" => Act::Dismiss,
             "more" => Act::More,
+            "copy" => Act::Copy,
+            a if a.starts_with("share:") => {
+                let n = &a[6..];
+                if !NETWORKS.contains(&n) {
+                    return None;
+                }
+                Act::Share(n.to_string())
+            }
             a if a.starts_with("random:") => Act::Random(a[7..].parse().ok()?),
             a if a.starts_with("spin:") => Act::Spin(a[5..].parse().ok()?),
             a if a.starts_with("sound:") => Act::Sound(Audio::parse(&a[6..])?),

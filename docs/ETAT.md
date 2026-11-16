@@ -6,8 +6,28 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 13/11/2026 (version 0.7.5 : D-166 à D-171). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 16/11/2026 (D-172, après la 0.7.5). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 16/11/2026 : outils regroupés, « Sauvegarde », retour au CMS, outils des gabarits (D-172)
+
+- Panneau Ajouter : Vidéo (Vidéo, Lecteur, Média au survol) et Image (Image, Révélation) en un outil, fonction
+  choisie dans les réglages (`blocks.rs` `tool_family`, commande `ConvertPreset` qui garde les médias) ;
+  Diaporama retiré (Carrousel). Outil Sommaire (`Preset::Toc`, `data-revel-toc`).
+- Paramètres › Sauvegarde (ancien « Versions ») : Local ou Dépôt en ligne ; dossier partagé et tableau
+  comparatif retirés de l'interface ; dépôt choisi : synchronisation lancée aussitôt (`versions.rs`).
+- Barre du haut au-dessus de la bande des réglages du site (`.topbar` z-index 4) : panneau du profil visible.
+- CMS : modèle des pages ouvert depuis le CMS, onglet CMS actif et bouton de retour (`.cms-back`) ; position
+  gardée (`Ui.cms_pos`, `cms::CmsPos`, `Ui.from_cms`).
+- Interactions : `copy`, `share:<réseau>` ; états de style « Lien copié » / « Dans un bouton qui a copié »
+  (`.is-copied`) ; animation de texte « Palettes » (`flap`) ; filtre `reading_time` (écriture « Temps de
+  lecture » d'un champ) ; « Afficher plus » : `data-revel-rest` reçoit le nombre restant.
+- `<source>` des images responsives en `display:none` (décalage dans une rangée avec écart).
+- Site Alunites Groupe : gabarits Projet et Actualité validés mis en place (`fabrication/contenu/fiches.py`),
+  onglet « Event » (page de la marque Alunites, `/event/`), mot « Groupe » qui devient « Event » par
+  l'animation Palettes (réglage de page « Page Event »), collection Expertises retirée, intertitres tirés des
+  citations sans auteur et des titres écrits dans les textes (sommaire). `revel audit` à 0.
+- Essais : 426 essais Rust ; éditeur (nouvel essai du retour au CMS).
 
 ## Travail du 13/11/2026 (soir) : version 0.7.5 (D-166 à D-171)
 

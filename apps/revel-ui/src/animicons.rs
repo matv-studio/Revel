@@ -17,7 +17,7 @@ pub fn icon(family: &str, preset: &str) -> String {
                 "typewriter" => "type",
                 "blur" => "blur",
                 "pop" => "pop",
-                "flip" => "flip",
+                "flip" | "flap" => "flip",
                 _ => "fade",
             },
         ),

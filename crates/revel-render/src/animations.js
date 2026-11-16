@@ -43,6 +43,7 @@
     "appear:pop": { ease: "bounce" },
     "text:pop": { ease: "bounce" },
     "text:typewriter": { split: "chars", dur: 0.01, stagger: 0.05 },
+    "text:flap": { split: "chars", dur: 0.6, stagger: 0.06 },
     "hover:follow": { dur: 1.2 },
     "scroll:drops": { dur: 1 },
     "loop:spin": { ease: "linear", dur: 4 },
@@ -195,7 +196,7 @@
 
   // Styles des morceaux de texte, du texte lu par les lecteurs d'écran, du bandeau.
   var css = doc.createElement("style");
-  css.textContent = ".rv-w,.rv-c{display:inline-block}.rv-w{white-space:nowrap}" +
+  css.textContent = ".rv-w,.rv-c,.rv-flap{display:inline-block}.rv-w{white-space:nowrap}.rv-flap{white-space:pre;backface-visibility:hidden}" +
     ".rv-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}";
   (doc.head || root).appendChild(css);
 
@@ -474,7 +475,51 @@
     return out;
   }
 
+  // Palettes (horloge de gare, D-172) : chaque lettre tourne sur quelques palettes au hasard
+  // avant d'afficher la sienne ; `from` : texte affiché au départ (espaces écrits %20).
+  var FLAP_UP = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", FLAP_LOW = "abcdefghijklmnopqrstuvwxyz";
+  function flap(el, o) {
+    var target = el.__rvFlapText;
+    if (target === undefined) target = el.__rvFlapText = el.textContent;
+    var from = "";
+    try { from = o.from ? decodeURIComponent(String(o.from)) : ""; } catch (_) { from = String(o.from || ""); }
+    var tchars = Array.from(target), fchars = Array.from(from);
+    var n = Math.max(tchars.length, fchars.length);
+    var cells = el.__rvFlap;
+    if (!cells || !cells.length || !cells[0].isConnected) {
+      el.setAttribute("aria-label", target);
+      el.textContent = "";
+      cells = [];
+      for (var i = 0; i < n; i++) { var c = span("rv-flap"); c.setAttribute("aria-hidden", "true"); el.appendChild(c); cells.push(c); }
+      el.__rvFlap = cells;
+    }
+    var pick = function (ch) {
+      var set = ch && ch === ch.toLowerCase() && ch !== ch.toUpperCase() ? FLAP_LOW : FLAP_UP;
+      return set.charAt(Math.floor(Math.random() * set.length));
+    };
+    var out = [];
+    cells.forEach(function (c, i) {
+      var end = tchars[i] || "";
+      c.textContent = fchars[i] !== undefined ? fchars[i] : pick(end);
+      if (reduced) { c.textContent = end; return; }
+      var flips = 3 + Math.floor(Math.random() * 3);
+      var step = Math.max(40, o.dur * 1000 / flips);
+      var start = (o.delay + i * o.stagger) * 1000;
+      for (var k = 1; k <= flips; k++) {
+        (function (k) {
+          var at = start + (k - 1) * step;
+          setTimeout(function () { if (c.isConnected) c.textContent = k === flips ? end : pick(end || fchars[i]); }, at);
+          out = out.concat(play(c, [tr("perspective(400px) rotateX(-90deg)"), tr("perspective(400px) rotateX(0deg)")],
+            { duration: step, delay: at, easing: "ease-out", fill: "none" }));
+        })(k);
+      }
+    });
+    el.classList.add("rv-in");
+    return out;
+  }
+
   function text(el, o) {
+    if (o.preset === "flap") return flap(el, o);
     var frames = enter(o.preset, 12);
     if (!frames) return [];
     var pieces = split(el, o.split === "chars" ? "chars" : "words");
@@ -722,7 +767,7 @@
     var own = function (a) { return !(window.CSSAnimation && a instanceof CSSAnimation) && !(window.CSSTransition && a instanceof CSSTransition); };
     var later = function (fn, ms) { timers.push(setTimeout(fn, ms)); };
     var restore = function () {
-      if (html !== null) { el.innerHTML = html; el.__rvPieces = null; el.__rvTrack = null; el.style.overflow = ""; }
+      if (html !== null) { el.innerHTML = html; el.__rvPieces = null; el.__rvTrack = null; el.__rvFlap = null; el.__rvFlapText = undefined; el.style.overflow = ""; }
       if (boxed) el.style.display = "";
       el.classList.remove("rv-in");
     };

@@ -173,6 +173,8 @@ impl Ctx {
         let filter_ok = match tail {
             None => true,
             Some("safe") => true,
+            // Temps de lecture d'un texte ou des blocs (minutes, D-172).
+            Some("reading_time") => true,
             // Mots entre astérisques mis en valeur.
             Some(t) if t.starts_with("emphasis(") => true,
             Some(t) => crate::dates::format_of(t).is_some() || self.format_ok(t),

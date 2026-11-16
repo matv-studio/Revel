@@ -886,6 +886,20 @@ fn dates_en_toutes_lettres() {
     assert!(home.contains(r#"<p id="v"></p>"#), "{home}");
 }
 
+/// Temps de lecture (D-172) : mots de toute la valeur, balises retirées.
+#[test]
+fn temps_de_lecture() {
+    let mut s = site();
+    s.pages[0].body.extend(parse(
+        r#"{% set blocs = [{"type": "text", "body": "<p>" ~ ("mot " * 450) ~ "</p>"}, {"type": "quote", "quote": "un deux"}] %}<p id="r">{{ blocs | reading_time }}</p><p id="c">{{ "<b>court</b>" | reading_time }}</p><p id="w">{{ blocs | reading_time(100) }}</p>"#,
+    ));
+    let out = build(&input(&s, vec![])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(home.contains(r#"<p id="r">3</p>"#), "{home}");
+    assert!(home.contains(r#"<p id="c">1</p>"#), "{home}");
+    assert!(home.contains(r#"<p id="w">5</p>"#), "{home}");
+}
+
 /// Site importé : le dossier d'une page est aussi copié (ses fichiers) ; le lien vers la page
 /// reste préfixé par la langue, pas le lien vers un fichier du dossier (D-168).
 #[test]

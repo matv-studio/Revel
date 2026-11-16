@@ -233,11 +233,20 @@ fn Setup() -> impl IntoView {
         spawn_local(async move {
             match api::hosting_probe(&path.get_value(), &p, Some(pw)).await {
                 Ok(probe) => {
+                    // Dossier écrit par l'utilisateur (autre que celui de l'hébergeur par défaut)
+                    // gardé : la suggestion ne le remplace pas (D-172).
+                    let cur = f.with_untracked(|v| v.remote_dir.trim().to_string());
+                    let default = choice
+                        .get_untracked()
+                        .preset()
+                        .map(|p| p.web_root.to_string())
+                        .unwrap_or_default();
+                    let typed = !cur.is_empty() && cur != default;
                     let folder = probe
                         .suggested
                         .clone()
                         .or_else(|| probe.folders.first().cloned());
-                    if let Some(d) = folder {
+                    if let Some(d) = folder.filter(|_| !typed) {
                         f.update(|v| v.remote_dir = d);
                     }
                     phase.set(Phase::Connected(probe));
@@ -413,15 +422,17 @@ fn Setup() -> impl IntoView {
                                 if !cur.is_empty() && !folders.contains(&cur) {
                                     folders.insert(0, cur);
                                 }
+                                // Liste des dossiers du serveur, et saisie libre (dossier à créer,
+                                // sous-dossier) : champ avec propositions (D-172).
                                 view! {
                                     <label class="field">
                                         <span class="label">{ui.t("setup-folder")}</span>
-                                        <span class="select">
-                                            <select class="input setup-folder" prop:value=move || f.with(|v| v.remote_dir.clone())
-                                                on:change=move |ev| { let v = event_target_value(&ev); f.update(|f| f.remote_dir = v) }>
-                                                {folders.into_iter().map(|d| { let v = d.clone(); view! { <option value=v>{d}</option> } }).collect_view()}
-                                            </select>
-                                        </span>
+                                        <input class="input input--mono setup-folder" list="setup-folders" spellcheck="false"
+                                            prop:value=move || f.with(|v| v.remote_dir.clone())
+                                            on:change=move |ev| { let v = event_target_value(&ev); f.update(|f| f.remote_dir = v) }/>
+                                        <datalist id="setup-folders">
+                                            {folders.into_iter().map(|d| view! { <option value=d></option> }).collect_view()}
+                                        </datalist>
                                     </label>
                                 }.into_any()
                             } else {

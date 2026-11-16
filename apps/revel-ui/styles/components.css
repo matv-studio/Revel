@@ -1733,3 +1733,8 @@ button.site-facts__item:hover .muted { color: var(--text); text-decoration: unde
 .forms-route-list { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
 .forms-route { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: var(--s-2); align-items: center; }
 .forms-route-add { align-self: flex-start; }
+
+/* Champ et bouton accolé (dossier du site sur le serveur : lire les dossiers, D-172). */
+.input-with-btn { display: flex; gap: 6px; align-items: center; }
+.input-with-btn > .input { flex: 1; min-width: 0; }
+.publish-folders-read.is-busy svg { animation: gh-spin 1s linear infinite; }

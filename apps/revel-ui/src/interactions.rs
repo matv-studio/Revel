@@ -55,6 +55,8 @@ pub(crate) enum Setting {
     Speed,
     /// Défilement : bords estompés (px).
     Fade,
+    /// Palettes (horloge de gare) : texte affiché avant de tourner (D-172).
+    From,
 }
 
 impl Family {
@@ -101,7 +103,7 @@ impl Family {
                 "fade", "up", "down", "left", "right", "zoom-in", "zoom-out", "blur", "pop",
                 "flip", "rotate", "reveal", "unveil",
             ],
-            Family::Text => &["fade", "up", "blur", "pop", "flip", "typewriter"],
+            Family::Text => &["fade", "up", "blur", "pop", "flip", "typewriter", "flap"],
             Family::Hover => &[
                 "grow",
                 "shrink",
@@ -144,6 +146,7 @@ impl Family {
                 v
             }
             Family::Text if preset == "typewriter" => vec![Trigger, Stagger, Delay, Replay],
+            Family::Text if preset == "flap" => vec![From, Trigger, Dur, Stagger, Delay, Replay],
             Family::Text => vec![Split, Trigger, Dur, Stagger, Delay, Ease, Replay],
             Family::Hover if preset == "follow" => vec![Dur, Ease, Opposite],
             Family::Hover => vec![Dur, Ease, Amount],
@@ -167,6 +170,9 @@ fn default_of(f: Family, preset: &str, key: &str) -> Option<&'static str> {
         (Family::Appear | Family::Text, "pop", "ease") => Some("bounce"),
         (Family::Text, "typewriter", "split") => Some("chars"),
         (Family::Text, "typewriter", "stagger") => Some("0.05"),
+        (Family::Text, "flap", "split") => Some("chars"),
+        (Family::Text, "flap", "stagger") => Some("0.06"),
+        (Family::Text, "flap", "dur") => Some("0.6"),
         (Family::Loop, "spin", "dur") => Some("4"),
         (Family::Loop, "spin", "ease") => Some("linear"),
         (Family::Loop, "shake", "dur") => Some("0.8"),
@@ -278,7 +284,10 @@ impl Anim {
         }
     }
     fn fallback(&self, f: Family, k: &str) -> Option<String> {
-        if f == Family::Text && k == "stagger" && self.preset != "typewriter" {
+        if f == Family::Text
+            && k == "stagger"
+            && !matches!(self.preset.as_str(), "typewriter" | "flap")
+        {
             return Some(text_stagger(self.get("split").unwrap_or("words")).to_string());
         }
         default_of(f, &self.preset, k).map(str::to_string)
@@ -323,6 +332,7 @@ fn setting_key(s: Setting) -> &'static str {
         Setting::Opposite => "opposite",
         Setting::Speed => "speed",
         Setting::Fade => "fade",
+        Setting::From => "from",
     }
 }
 
@@ -398,6 +408,8 @@ const ACTS: &[(&str, &str)] = &[
     ("play", "act-play"),
     ("dismiss", "act-dismiss"),
     ("more", "act-more"),
+    ("copy", "act-copy"),
+    ("share", "act-share"),
     ("random", "act-random"),
     ("spin", "act-spin"),
     ("sound", "act-sound"),
@@ -559,6 +571,8 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                         Act::Play => ("play", None),
                         Act::Dismiss => ("dismiss", None),
                         Act::More => ("more", None),
+                        Act::Copy => ("copy", None),
+                        Act::Share(_) => ("share", None),
                         Act::Random(_) => ("random", None),
                         Act::Spin(_) => ("spin", None),
                         Act::Sound(_) => ("sound", None),
@@ -618,6 +632,8 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                                         "play" => Act::Play,
                                         "dismiss" => Act::Dismiss,
                                         "more" => Act::More,
+                                        "copy" => Act::Copy,
+                                        "share" => Act::Share("linkedin".into()),
                                         "random" => Act::Random(0),
                                         "spin" => Act::Spin(360),
                                         "sound" => Act::Sound(revel_edit::actions::Audio { urls: Vec::new(), volume: 100 }),
@@ -638,6 +654,22 @@ fn ActionsSection(at: StoredValue<Target>) -> impl IntoView {
                                             _ => Act::Spin(n),
                                         }));
                                     }/>
+                                </label>
+                            })}
+                            // Réseau du partage.
+                            {match &r.act { Act::Share(n) => Some(n.clone()), _ => None }.map(|net| view! {
+                                <label class="field">
+                                    <span class="label">{ui.t("act-share-net")}</span>
+                                    <div class="select">
+                                        <select class="input" title=ui.t("act-share-net-help") on:change=move |e| {
+                                            let v = event_target_value(&e);
+                                            edit(i, Box::new(move |r| r.act = Act::Share(v.clone())));
+                                        }>
+                                            {revel_edit::actions::NETWORKS.iter().map(|n| view! {
+                                                <option value=*n selected=*n == net>{ui.tx(&format!("act-share-{n}"), &[])}</option>
+                                            }).collect_view()}
+                                        </select>
+                                    </div>
                                 </label>
                             })}
                             {sounds.map(|a| audio_settings(ui, ed, i, a, edit))}
@@ -1101,6 +1133,7 @@ pub(crate) fn setting_row(
         Setting::Opposite => ("anim-opposite", Some("anim-opposite-help")),
         Setting::Speed => ("anim-speed", Some("anim-speed-help")),
         Setting::Fade => ("anim-fade", Some("anim-fade-help")),
+        Setting::From => ("anim-from", Some("anim-from-help")),
     };
     let label_view = view! {
         <span class="style-label" class:is-here=is_here title=move || help.map(|h| ui.tx(h, &[])).unwrap_or_default()>
@@ -1194,6 +1227,24 @@ pub(crate) fn setting_row(
             </label>
         }
         .into_any(),
+        // Texte de départ (espaces écrits %20 dans la valeur de l'attribut).
+        Setting::From => {
+            let shown = move || {
+                anim.with(|a| a.as_ref().and_then(|a| a.get(key).map(|v| v.replace("%20", " "))))
+                    .unwrap_or_default()
+            };
+            let commit = move |v: String| {
+                let v = v.trim().replace(' ', "%20");
+                update(&|a| a.set(f, key, (!v.is_empty()).then(|| v.clone())));
+            };
+            view! {
+                <input class="input" type="text" spellcheck="false" class:is-here=is_here
+                    prop:value=shown aria-label=ui.t(label)
+                    on:change=move |e| commit(event_target_value(&e))
+                    on:keydown=move |e: leptos::ev::KeyboardEvent| if e.key() == "Enter" { commit(event_target_value(&e)) }/>
+            }
+            .into_any()
+        }
         Setting::Dur
         | Setting::Delay
         | Setting::Dist

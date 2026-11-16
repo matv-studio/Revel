@@ -1875,6 +1875,38 @@ galerie défilante, ligne et colonne de grille à la place de `grid-area`, défi
 pas, dans une boucle dans une boucle, une valeur reliée à la variable de la boucle extérieure (contourné sur le
 site par la variable de la boucle intérieure) ; essai de bout en bout des nouvelles commandes.
 
+**D-172 — 16/11/2026 — prise (demandes de l'utilisateur du 16/11).** **Outils regroupés, « Sauvegarde », retour
+au CMS et outils créés pour les gabarits du site Alunites Groupe.**
+- Panneau Ajouter : un outil par famille, la fonction se choisit dans ses réglages (« outils > sous-outils »).
+  Vidéo : Vidéo, Lecteur (couverture et bouton), Média au survol ; Image : Image, Révélation. Commande
+  `ConvertPreset` : élément remplacé par la fonction choisie en gardant ses médias (vidéo, image, couverture).
+  Carrousel et diaporama : un seul outil (les réglages du carrousel couvrent défilement auto et boucle).
+- « Versions » devient « Sauvegarde » (Paramètres) : mise en ligne sur GitHub d'abord, historique en plus.
+  Emplacements « Local » (ancien « Seul ») et « Dépôt en ligne » ; « Dossier partagé » et le tableau comparatif
+  retirés de l'interface (un site déjà en dossier partagé le garde). Dépôt choisi : première synchronisation
+  lancée aussitôt (fichiers envoyés).
+- Menus de la barre du haut au premier plan (panneau du profil caché par la bande des réglages du site).
+- Modèle des pages ouvert depuis le CMS : l'onglet CMS reste actif, bouton de retour en haut à gauche (nom de
+  la collection) ; position du CMS (collection, fiche ouverte, champs, recherche, tri, défilement du tableau)
+  gardée d'un onglet à l'autre, pour le site ouvert. Le retour s'oublie en quittant l'éditeur ou le modèle.
+- Outils créés pour les gabarits validés (et tout site) : Sommaire (`data-revel-toc` : titres choisis d'une
+  zone, partie lue surlignée) ; actions « Copier l'adresse de la page » (`copy`, état « Lien copié »
+  `.is-copied`, aussi « dans un bouton qui a copié ») et « Partager la page » (`share:<réseau>` : LinkedIn, X,
+  Facebook, WhatsApp, e-mail, partage du téléphone) ; animation de texte « Palettes » (`flap`, tableau
+  d'affichage de gare, `from=` : texte de départ) ; écriture « Temps de lecture » d'un texte riche ou des blocs
+  (`reading_time`, 200 mots par minute) ; nombre d'éléments encore cachés écrit dans le bouton « Afficher
+  plus » (`data-revel-rest`).
+- Dossier du site sur le serveur (SFTP) : la connexion d'essai liste aussi les autres dossiers de l'accueil
+  (sous-domaine en « multisite » : `groupe/`) ; dossier écrit par l'utilisateur gardé (il était remplacé par
+  la suggestion) ; sous-domaine `x.domaine.fr` : dossier `x/` proposé ; champ avec propositions au lieu
+  d'une liste fermée ; Paramètres › Publication : bouton « Lire les dossiers du serveur » pour changer de
+  dossier.
+- Images responsives : les `<source>` d'un `<picture>` sans boîte, sinon dans une rangée ou une grille avec
+  écart chacune comptait comme un élément vide et décalait l'image.
+Pourquoi : demandes de l'utilisateur ; les gabarits validés demandaient ces fonctions, faites en outils plutôt
+qu'en code propre au site (relevé `revel audit` du site à zéro). En suspens : le partage ne montre pas de
+compteur ; le Sommaire ne suit qu'une zone par page.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

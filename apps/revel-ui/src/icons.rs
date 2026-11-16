@@ -376,13 +376,6 @@ pub fn bolt() -> AnyView {
     svg(r#"<path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/>"#)
 }
 
-/// Image révélée au survol : cadre et halo.
-pub fn reveal() -> AnyView {
-    svg(
-        r#"<rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="9.5" cy="8" r="3" stroke-dasharray="2 1.6"/>"#,
-    )
-}
-
 /// Pointeur de la souris (déclencheur « au clic »).
 pub fn pointer() -> AnyView {
     svg(r#"<path d="M4 2.5v10l2.8-2.6 1.9 4.1 1.8-.8-1.9-4.1H12.5z"/>"#)
@@ -777,13 +770,6 @@ pub fn pixels() -> AnyView {
 pub fn carousel() -> AnyView {
     svg(
         r#"<rect x="4" y="3" width="8" height="8" rx="1"/><path d="M1.5 4v6M14.5 4v6M6.5 13.5h3"/>"#,
-    )
-}
-
-/// Diaporama : diapositive et points.
-pub fn slideshow() -> AnyView {
-    svg(
-        r#"<rect x="1.5" y="2.5" width="13" height="8.5" rx="1.5"/><path d="M6 13.5h.01M8 13.5h.01M10 13.5h.01"/>"#,
     )
 }
 

@@ -2990,3 +2990,68 @@ fn icones_rangees_et_svg_importe_nettoye() {
     assert_eq!(vb, "0 0 24 24");
     assert!(icons::clean_svg("<p>pas un svg</p>").is_none());
 }
+
+#[test]
+fn fonction_d_un_outil_garde_le_media() {
+    // D-172 : la vidéo devient un lecteur puis un média des éléments survolés ; son adresse et son
+    // image de couverture sont reprises ; l'annulation rend le site d'origine.
+    let mut s = sample();
+    let parent = Parent::of(&at(&s, "main"), Branch::Children);
+    apply(
+        &mut s,
+        &Command::InsertPreset {
+            parent: parent.clone(),
+            index: 0,
+            preset: make::Preset::Video,
+            text: String::new(),
+        },
+    )
+    .unwrap();
+    let id = match &address::list(&s, &parent).unwrap()[0] {
+        Node::Element { id, .. } => id.clone().unwrap(),
+        n => panic!("{n:?}"),
+    };
+    let t = Target {
+        owner: parent.owner.clone(),
+        node: id,
+    };
+    apply(
+        &mut s,
+        &Command::SetAttr {
+            at: t.clone(),
+            name: "src".into(),
+            value: Some("/media/film.mp4".into()),
+        },
+    )
+    .unwrap();
+    apply(
+        &mut s,
+        &Command::SetAttr {
+            at: t,
+            name: "poster".into(),
+            value: Some("/media/film.jpg".into()),
+        },
+    )
+    .unwrap();
+    let before = json(&s);
+    let inv = apply(
+        &mut s,
+        &Command::ConvertPreset {
+            parent: parent.clone(),
+            index: 0,
+            preset: make::Preset::VideoPlayer,
+            text: "Lire".into(),
+        },
+    )
+    .unwrap();
+    let n = address::list(&s, &parent).unwrap()[0].clone();
+    let body = serde_json::to_string(&n).unwrap();
+    assert!(
+        body.contains("\"data-revel-video\",\"value\":\"/media/film.mp4\""),
+        "{body}"
+    );
+    assert!(body.contains("\\\"/media/film.jpg\\\""), "{body}");
+    assert_eq!(make::media_of(&n).video.as_deref(), Some("/media/film.mp4"));
+    apply(&mut s, &inv).unwrap();
+    assert_eq!(json(&s), before);
+}

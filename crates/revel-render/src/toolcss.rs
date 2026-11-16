@@ -57,6 +57,13 @@ border-radius:999px;background:none;color:inherit;font:inherit;font-weight:600;c
         "B{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}",
     ),
     ("lottie", "B{display:block;width:100%;max-width:480px}"),
+    // Sommaire (D-172) : liens les uns sous les autres, filet à gauche, partie lue soulignée.
+    (
+        "toc",
+        "B ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}\
+B a{display:block;padding:8px 0 8px 14px;border-left:2px solid color-mix(in srgb,currentColor 20%,transparent);\
+color:inherit;text-decoration:none;opacity:.7}B a.is-active{border-left-color:currentColor;opacity:1;font-weight:600}",
+    ),
     // Modèle 3D (D-160) : forme réglée dans Styles (proportions par point de rupture) ; boutons
     // (parties) en bas à droite ; compteur (`data-model-stats`, icônes) en bas à gauche ; calques
     // (traits, noms des bandes, nom de la vue montrée seule) ; plein écran : tout l'écran.

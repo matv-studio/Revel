@@ -2205,6 +2205,36 @@ try {
     await page.waitForSelector('.cms-table tbody tr[data-entry]');
     check('vue CMS : collections et contenus du site', (await page.$$('.cms-col')).length > 0, `${(await page.$$('.cms-col')).length} collections`);
     if (shots) await page.screenshot({ path: `${shots}/vue-cms.png` });
+    // Modèle des pages ouvert depuis le CMS (D-172) : onglet CMS gardé actif, bouton de retour en
+    // haut à gauche ; collection et défilement retrouvés au retour, et d'un onglet à l'autre.
+    {
+      const cols = await page.$$eval('.cms-col', (b) => b.map((x) => x.dataset.collection));
+      const target = cols.includes('projets') ? 'projets' : cols[cols.length - 1];
+      await page.click(`.cms-col[data-collection="${target}"]`);
+      await page.waitForSelector(`.cms-col.is-on[data-collection="${target}"]`);
+      await page.waitForSelector('.cms-table tbody tr[data-entry]');
+      await page.$eval('.cms-table-wrap', (w) => { w.style.maxHeight = '160px'; w.scrollTop = 60; w.dispatchEvent(new Event('scroll')); });
+      const top0 = await page.$eval('.cms-table-wrap', (w) => w.scrollTop);
+      await page.click('.view-tab[data-view="view-map"]');
+      await page.waitForFunction(() => !document.querySelector('.cms-table-wrap'));
+      await page.click('.view-tab[data-view="view-cms"]');
+      await page.waitForSelector(`.cms-col.is-on[data-collection="${target}"]`);
+      check('CMS : collection retrouvée en revenant dans l\'onglet', true, target);
+      await page.click('.cms-template-btn');
+      await page.waitForSelector('.cms-back');
+      const tabs = await page.$$eval('.view-tab.is-on', (t) => t.map((x) => x.dataset.view));
+      check('modèle ouvert depuis le CMS : onglet CMS actif, bouton de retour en haut à gauche',
+        tabs.length === 1 && tabs[0] === 'view-cms' && !!(await page.$('.topbar .cms-back')), tabs.join(','));
+      if (shots) await page.screenshot({ path: `${shots}/cms-modele-retour.png` });
+      await page.click('.cms-back');
+      await page.waitForSelector(`.cms-col.is-on[data-collection="${target}"]`);
+      await page.waitForSelector('.cms-table tbody tr[data-entry]');
+      await page.$eval('.cms-table-wrap', (w) => { w.style.maxHeight = '160px'; });
+      const top1 = await page.waitForFunction((t) => { const w = document.querySelector('.cms-table-wrap'); return w && (t === 0 || w.scrollTop > 0) && w.scrollTop; }, top0, { timeout: 3000 }).then((h) => h.jsonValue()).catch(() => -1);
+      check('retour au CMS : même collection, sans bouton de retour, onglet CMS seul actif',
+        !(await page.$('.cms-back')) && (await page.$$eval('.view-tab.is-on', (t) => t.map((x) => x.dataset.view).join(','))) === 'view-cms', `défilement ${top0} -> ${top1}`);
+      await page.$eval('.cms-table-wrap', (w) => { w.style.maxHeight = ''; });
+    }
     await page.click('.view-tab[data-view="view-settings"]');
     await page.waitForSelector('.settings-nav');
     // Paramètres (D-104) : rubrique ouverte raccordée à la page (ses parties listées) ;
@@ -3529,19 +3559,23 @@ try {
           fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
         };
         // Synchronisation automatique (D-108) arrêtée pendant la synchronisation à la main.
-        await page.click('.versions-mode button[data-mode="shared"]');
-        await page.waitForSelector('.team-dialog .team-compare');
-        const rows = await page.$$eval('.team-compare tbody tr', (l) => l.length);
-        const chosen = (await page.textContent('.team-col.is-on')).trim();
+        // Sauvegarde (D-172) : « Local » ou « Dépôt en ligne » ; plus de dossier partagé proposé.
+        // Dépôt choisi : première synchronisation lancée d'elle-même (fichiers envoyés). Ici, un
+        // dépôt nu local tient lieu de dépôt en ligne.
+        const modes = await page.$$eval('.versions-mode button', (l) => l.map((b) => b.dataset.mode).join(','));
+        execFileSync('git', ['init', '-q', '--bare', central]);
+        await page.click('.versions-mode button[data-mode="online"]');
+        await page.waitForSelector('.team-dialog .team-url');
+        const compare = await page.$('.team-compare');
         const disabled = await page.$eval('.team-on', (b) => b.disabled);
-        await page.fill('.team-folder', shared);
+        await page.fill('.team-url', central);
         if (shots) await page.locator('.team-dialog').screenshot({ path: `${shots}/versions-plusieurs.png` });
         await page.click('.team-on');
-        await page.waitForSelector('.versions-mode button[data-mode="shared"].is-on', { timeout: 60000 });
-        await until(() => head(central) !== '' && head(central) === head(path.join(siteDir, '.git')), 'premier envoi au dépôt central');
+        await page.waitForSelector('.versions-mode button.is-on:not([data-mode="solo"])', { timeout: 60000 });
+        await until(() => head(central) !== '' && head(central) === head(path.join(siteDir, '.git')), 'premier envoi au dépôt d\'elle-même');
         const shown = (await page.textContent('.versions-remote-value')).replace(/\u200e/g, '').trim();
-        check('versions : travail à plusieurs, dossier partagé (comparaison, dépôt central créé, premier envoi)',
-          rows === 6 && chosen === 'Dossier partagé' && disabled && shown === central, `${rows} lignes · ${chosen} · ${shown}`);
+        check('sauvegarde : Local ou dépôt en ligne, dépôt choisi puis premier envoi fait seul',
+          modes === 'solo,online' && !compare && disabled && shown === central, `${modes} · ${shown}`);
         await page.waitForSelector('.versions-auto-sync');
         const autoOn = () => page.$eval('.versions-auto-sync', (i) => i.checked);
         if (await autoOn()) await page.click('.versions-auto > span:last-child');
@@ -4244,7 +4278,7 @@ try {
     await status('à jour');
     const help = await page.getAttribute(`${card} .label:has-text("Recevoir les préversions")`, 'title');
     await page.click(`${card} .switch`);
-    await status('^Préversion 0\\.7\\.5-beta\\.1 disponible$');
+    await status('^Préversion 0\\.7\\.6-beta\\.1 disponible$');
     await page.waitForSelector('.update-pill');
     const pill = (await page.textContent('.update-pill')).trim();
     const saved = await page.evaluate(() => window.__revelSettings?.prereleases === true);
@@ -4255,7 +4289,7 @@ try {
     const off = await page.evaluate(() => window.__revelSettings?.prereleases === false);
     await page.evaluate(() => { window.__revelUpdates = false; });
     check('réglages : préversions demandées puis retirées (enregistrées, recherche relancée, « Préversion » dans la barre)',
-      !!help && pill === 'Préversion 0.7.5-beta.1' && saved && pillGone && off, pill);
+      !!help && pill === 'Préversion 0.7.6-beta.1' && saved && pillGone && off, pill);
   }
 
   // Réglages › Assistants IA (4.2, serveur simulé) : activation, port, clé, configurations.

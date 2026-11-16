@@ -7,6 +7,7 @@ use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_edit::collection::{FieldList, Query};
+use revel_edit::make::Preset;
 use revel_edit::{Branch, Command, Parent, Target};
 use revel_model::{Attr, Node, Site};
 use revel_protocol::CmsCollection;
@@ -79,6 +80,10 @@ fn label_of(c: &CmsCollection) -> String {
 /// Réglages propres à l'élément sélectionné (en plus des réglages communs).
 pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView> {
     let mut parts: Vec<AnyView> = Vec::new();
+    // Outil à plusieurs fonctions (D-172) : la fonction se choisit ici, pas dans « Ajouter ».
+    if let Some(v) = tool_function(ui, ed, &at, &node) {
+        parts.push(v);
+    }
     // Élément construit fermé (D-159) : « Décomposer » en tête de ses réglages.
     let widget = revel_model::is_widget(&node);
     if let Node::Element {
@@ -221,6 +226,15 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
                 v.value.clone().unwrap_or_default(),
             ));
         }
+        // Sommaire (D-172) : niveaux de titres, zone de la page.
+        if let Some(v) = attr(attrs, "data-revel-toc") {
+            parts.push(toc_settings(
+                ui,
+                ed,
+                at.clone(),
+                v.value.clone().unwrap_or_default(),
+            ));
+        }
         // Accordéon (`details`) : ouvert au chargement, un seul ouvert à la fois (D-123).
         if lower == "details" {
             parts.push(accordion_settings(ui, ed, at.clone(), attrs));
@@ -310,6 +324,216 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         parts.push(crate::widgets::decompose_button(ui, ed, &at));
     }
     (!parts.is_empty()).then(|| parts.into_iter().collect_view().into_any())
+}
+
+// ------------------------------------------------------------------ sommaire
+
+/// Réglages d'un sommaire (`data-revel-toc="h2 h3 in:.zone"`) : titres repris, zone lue.
+fn toc_settings(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
+    let at = StoredValue::new(at);
+    let value = RwSignal::new(value);
+    let levels = move || {
+        let v = value.get();
+        let l: Vec<String> = v
+            .split_whitespace()
+            .filter(|o| o.len() == 2 && o.starts_with('h'))
+            .map(str::to_string)
+            .collect();
+        if l.is_empty() {
+            vec!["h2".to_string()]
+        } else {
+            l
+        }
+    };
+    let zone = move || {
+        value
+            .get()
+            .split_whitespace()
+            .find_map(|o| o.strip_prefix("in:").map(str::to_string))
+            .unwrap_or_default()
+    };
+    let write = move |levels: Vec<String>, zone: String| {
+        let mut parts = levels;
+        if !zone.is_empty() {
+            parts.push(format!("in:{zone}"));
+        }
+        let v = parts.join(" ");
+        value.set(v.clone());
+        ed.apply(
+            ui,
+            Command::SetAttr {
+                at: at.get_value(),
+                name: "data-revel-toc".into(),
+                value: Some(v),
+            },
+            false,
+        );
+    };
+    let classes = ed.doc.with_untracked(|d| {
+        d.as_ref()
+            .map(|d| {
+                let mut c: Vec<String> = d
+                    .style_rules()
+                    .filter_map(|r| {
+                        let c = r.selector.trim().strip_prefix('.')?;
+                        c.chars()
+                            .all(|x| x.is_alphanumeric() || x == '-' || x == '_')
+                            .then(|| c.to_string())
+                    })
+                    .collect();
+                c.sort();
+                c.dedup();
+                c
+            })
+            .unwrap_or_default()
+    });
+    view! {
+        <div class="insp-group toc-settings">
+            <p class="panel-title">{ui.t("insert-toc")}</p>
+            <div class="style-row">
+                <span class="style-label" title=ui.t("toc-levels-help")><span class="style-label-text">{ui.t("toc-levels")}</span></span>
+                <div class="style-control">
+                    <div class="seg" role="group">
+                        {["h2", "h3", "h4"].into_iter().map(|h| {
+                            let on = move || levels().iter().any(|l| l == h);
+                            view! {
+                                <button type="button" class:is-on=on aria-pressed=move || on().to_string()
+                                    on:click=move |_| {
+                                        let mut l = levels();
+                                        if l.iter().any(|x| x == h) {
+                                            if l.len() > 1 { l.retain(|x| x != h); }
+                                        } else {
+                                            l.push(h.to_string());
+                                            l.sort();
+                                        }
+                                        write(l, zone());
+                                    }>{h.to_uppercase()}</button>
+                            }
+                        }).collect_view()}
+                    </div>
+                </div>
+            </div>
+            <div class="style-row">
+                <span class="style-label" title=ui.t("toc-zone-help")><span class="style-label-text">{ui.t("toc-zone")}</span></span>
+                <div class="style-control">
+                    <div class="select">
+                        <select class="input" on:change=move |e| write(levels(), event_target_value(&e))>
+                            <option value="" selected=move || zone().is_empty()>{ui.t("toc-zone-page")}</option>
+                            {classes.into_iter().map(|c| {
+                                let v = format!(".{c}");
+                                let sel = { let v = v.clone(); move || zone() == v };
+                                view! { <option value=v.clone() selected=sel>{v.clone()}</option> }
+                            }).collect_view()}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    .into_any()
+}
+
+// ------------------------------------------------------------------ fonction d'un outil
+
+/// Famille d'un élément construit par un outil à plusieurs fonctions, et sa fonction actuelle.
+/// Fonctions d'une famille d'outils : préréglage, libellé, aide.
+type ToolFunctions = &'static [(Preset, &'static str, &'static str)];
+
+fn tool_family(node: &Node) -> Option<(ToolFunctions, Preset)> {
+    const VIDEO: &[(Preset, &str, &str)] = &[
+        (Preset::Video, "fn-video", "fn-video-help"),
+        (
+            Preset::VideoPlayer,
+            "fn-video-player",
+            "fn-video-player-help",
+        ),
+        (Preset::HoverMedia, "fn-hover-media", "fn-hover-media-help"),
+    ];
+    const IMAGE: &[(Preset, &str, &str)] = &[
+        (Preset::Image, "fn-image", "fn-image-help"),
+        (Preset::Reveal, "fn-reveal", "fn-reveal-help"),
+    ];
+    match node {
+        Node::Image(_) => Some((IMAGE, Preset::Image)),
+        Node::Element { tag, attrs, .. } => {
+            if attr(attrs, "data-revel-reveal").is_some() {
+                Some((IMAGE, Preset::Reveal))
+            } else if attr(attrs, "data-revel-video").is_some() {
+                Some((VIDEO, Preset::VideoPlayer))
+            } else if tag.eq_ignore_ascii_case("video") {
+                if attr(attrs, revel_edit::hover::DISPLAY).is_some() {
+                    Some((VIDEO, Preset::HoverMedia))
+                } else {
+                    Some((VIDEO, Preset::Video))
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Choix « Fonction » d'un outil : l'élément est remplacé par l'autre forme de l'outil, son
+/// média repris (D-172).
+fn tool_function(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
+    let (family, current) = tool_family(node)?;
+    // Image dans une liste, un lecteur ou une image révélée : pas de changement de fonction.
+    let inside = ed.doc.with_untracked(|d| {
+        d.as_ref().is_some_and(|d| {
+            inside_attr(d, at, "data-revel-video")
+                || inside_attr(d, at, "data-revel-reveal")
+                || in_loop(d, at)
+        })
+    });
+    if inside {
+        return None;
+    }
+    let at = StoredValue::new(at.clone());
+    let buttons = family
+        .iter()
+        .map(|&(p, label, help)| {
+            let on = p == current;
+            view! {
+                <button type="button" role="radio" class:is-on=on aria-checked=on.to_string()
+                    title=ui.t(help)
+                    on:click=move |_| {
+                        if on {
+                            return;
+                        }
+                        let place = ed.doc.with_untracked(|d| {
+                            d.as_ref().and_then(|d| revel_edit::address::locate(d, &at.get_value()).ok())
+                        });
+                        if let Some((parent, index)) = place {
+                            ed.apply(
+                                ui,
+                                Command::ConvertPreset { parent, index, preset: p, text: if text_of(p).is_empty() { String::new() } else { ui.now(text_of(p), &[]) } },
+                                true,
+                            );
+                        }
+                    }>{ui.t(label)}</button>
+            }
+        })
+        .collect_view();
+    Some(view! {
+        <div class="insp-group tool-function">
+            <div class="style-row">
+                <span class="style-label" title=ui.t("fn-help")><span class="style-label-text">{ui.t("fn-title")}</span></span>
+                <div class="style-control">
+                    <div class="segmented segmented--small" role="radiogroup" aria-label=ui.t("fn-title")>{buttons}</div>
+                </div>
+            </div>
+        </div>
+    }.into_any())
+}
+
+/// Texte par défaut d'une forme d'outil (libellé du bouton de lecture).
+fn text_of(p: Preset) -> &'static str {
+    match p {
+        Preset::VideoPlayer => "insert-text-video-player",
+        Preset::Image => "insert-text-image",
+        _ => "",
+    }
 }
 
 // ------------------------------------------------------------------ icône
@@ -3510,6 +3734,8 @@ struct TextBind {
     safe: bool,
     /// Nombre de valeurs d'un champ liste (`x | length`).
     count: bool,
+    /// Temps de lecture en minutes d'un texte ou des blocs (`x | reading_time`, D-172).
+    reading: bool,
     /// Mots entre astérisques mis en valeur : classe (`x | emphasis("accent")`).
     emphasis: Option<String>,
     /// Valeurs d'un champ liste séparées (`x | join(", ")`) : séparateur.
@@ -3585,6 +3811,10 @@ fn text_bind(children: &[Node], field_of: &dyn Fn(&str) -> Option<String>) -> Op
             b.field = f;
             b.count = true;
         }
+        (Some(f), Some("reading_time")) => {
+            b.field = f;
+            b.reading = true;
+        }
         (Some(f), Some(t)) if t.starts_with("emphasis(") && t.ends_with(')') => {
             b.field = f;
             let arg = t["emphasis(".len()..t.len() - 1].trim();
@@ -3632,6 +3862,8 @@ fn text_children(b: &TextBind, prefix: &str) -> Vec<Node> {
     };
     if b.count {
         expr.push_str(" | length");
+    } else if b.reading {
+        expr.push_str(" | reading_time");
     } else if let Some(sep) = &b.join {
         expr.push_str(&format!(" | join({})", revel_edit::canvas::quote(sep)));
     } else if let Some(c) = &b.emphasis {
@@ -3765,6 +3997,8 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     (!b.field.is_empty()).then(|| {
                         if b.count {
                             format!("count:{}", b.field)
+                        } else if b.reading {
+                            format!("read:{}", b.field)
                         } else if b.join.is_some() {
                             format!("join:{}", b.field)
                         } else {
@@ -3899,6 +4133,34 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                                     )
                                 }),
                         )
+                        // Texte : temps de lecture d'un texte riche ou des blocs (minutes).
+                        .chain(
+                            c.fields
+                                .iter()
+                                .filter(|f| {
+                                    slot == Slot::Text
+                                        && (matches!(
+                                            f.kind.as_deref(),
+                                            Some("rich-text" | "rich_text" | "markdown" | "text")
+                                        ) || (f.list
+                                            && matches!(
+                                                f.kind.as_deref(),
+                                                Some("object" | "block")
+                                            )))
+                                })
+                                .map(|f| {
+                                    (
+                                        format!("read:{}", f.name),
+                                        ui.now(
+                                            "block-bound-reading",
+                                            &[(
+                                                "field",
+                                                f.label.clone().unwrap_or_else(|| f.name.clone()),
+                                            )],
+                                        ),
+                                    )
+                                }),
+                        )
                         // Texte : les valeurs d'un champ liste séparées (« Film, Identité »).
                         .chain(
                             c.fields
@@ -3976,16 +4238,20 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     Some("rich-text" | "rich_text" | "markdown")
                 );
                 let date = matches!(kind.as_deref(), Some("date" | "datetime"));
+                let reading = v.strip_prefix("read:").map(str::to_string);
                 let (field, count, join) = match (v.strip_prefix("count:"), v.strip_prefix("join:"))
                 {
                     (Some(f), _) => (f.to_string(), true, false),
                     (_, Some(f)) => (f.to_string(), false, true),
-                    _ => (v.clone(), false, false),
+                    _ => (reading.clone().unwrap_or_else(|| v.clone()), false, false),
                 };
+                let reading = reading.is_some();
+                let rich = rich && !reading;
                 set_text(Box::new(move |b| {
                     b.field = field.clone();
                     b.raw = None;
                     b.count = count;
+                    b.reading = reading;
                     b.join = join.then(|| ", ".to_string());
                     b.safe = rich && !count && !join;
                     b.format = (date && !count && !join)

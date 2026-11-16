@@ -1708,7 +1708,10 @@ try {
       // liste choisie comme source ; éléments survolés listés et sélectionnables.
       await addIn('collection-list');
       const listIn = await untilE(async () => (await frame.locator('section.intro-agency [data-revel-base="collection"] a').count()) > 0);
-      await addIn('hover-media');
+      // Un seul outil Vidéo (D-172) : fonction « Média au survol » choisie dans ses réglages.
+      await addIn('video');
+      await page.click('.dock-tab[data-panel="styles"]');
+      await page.click('.tool-function [data-fn="fn-hover-media"]');
       const mediaIn = await untilE(async () => (await frame.locator('video[data-revel-base="hover-media"]').count()) === 1);
       await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('.hover-media[data-hover="display"] [data-hover="source"] select');

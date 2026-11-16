@@ -496,7 +496,7 @@ fn tool_function(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
             let on = p == current;
             view! {
                 <button type="button" role="radio" class:is-on=on aria-checked=on.to_string()
-                    title=ui.t(help)
+                    title=ui.t(help) data-fn=label
                     on:click=move |_| {
                         if on {
                             return;
@@ -508,7 +508,7 @@ fn tool_function(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                             ed.apply(
                                 ui,
                                 Command::ConvertPreset { parent, index, preset: p, text: if text_of(p).is_empty() { String::new() } else { ui.now(text_of(p), &[]) } },
-                                true,
+                                false,
                             );
                         }
                     }>{ui.t(label)}</button>

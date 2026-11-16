@@ -21,9 +21,9 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
 - Essais de bout en bout : carrousel (panneau, calques, annulation), rouage, fenêtre de mise à jour, élément
   montré dans les calques. Le réglage `reveal_inserted` est désactivé dans la simulation (`reveal=1` l'active)
   pour que les essais qui enchaînent les ajouts gardent le panneau « Ajouter » devant.
-- Piège : sur le poste de travail en ligne, la configuration git de la session (`push.negotiate`, signature)
-  fait échouer l'essai « premier envoi au dépôt » ; il passe dans la CI. Pour les essais suivants en local,
-  le bloc « travail à plusieurs » a été sauté le temps d'un passage.
+- Piège : l'essai « premier envoi au dépôt » (D-172) échouait partout, CI comprise : le premier envoi porte
+  tous les fichiers du site (médias compris, une vingtaine de secondes) et l'essai n'attendait que six secondes.
+  Attente portée à deux minutes ; l'envoi lui-même fonctionnait.
 - Piège : `rm -rf $(…)` est refusé par le poste ; lire le chemin puis le supprimer en clair.
 - Reste à faire : panneaux des autres outils (onglets, accordéon, filtres, barre de navigation) sur le modèle du
   carrousel ; titres et introductions du site en composants (le mot accentué demande un texte mis en forme dans

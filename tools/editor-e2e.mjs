@@ -3618,11 +3618,18 @@ try {
         await page.waitForSelector('.versions-mode button.is-on:not([data-mode="solo"])', { timeout: 60000 });
         // Dépôt nu créé à la main : sa branche par défaut peut différer de celle du site ; elle
         // suit la branche reçue (comme un dépôt GitHub neuf).
-        await until(() => {
-          const ref = git(['--git-dir', central, 'for-each-ref', '--count=1', '--format=%(refname)', 'refs/heads']);
-          if (ref) git(['--git-dir', central, 'symbolic-ref', 'HEAD', ref]);
-          return head(central) !== '' && head(central) === head(path.join(siteDir, '.git'));
-        }, 'premier envoi au dépôt d\'elle-même');
+        // Premier envoi : tous les fichiers du site (médias compris), jusqu'à deux minutes.
+        {
+          const sent = () => {
+            const ref = git(['--git-dir', central, 'for-each-ref', '--count=1', '--format=%(refname)', 'refs/heads']);
+            if (!ref) return false;
+            git(['--git-dir', central, 'symbolic-ref', 'HEAD', ref]);
+            return head(central) !== '' && head(central) === head(path.join(siteDir, '.git'));
+          };
+          let ok = false;
+          for (let i = 0; i < 480 && !(ok = sent()); i++) await page.waitForTimeout(250);
+          if (!ok) throw new Error('CMS : premier envoi au dépôt d\'elle-même');
+        }
         const shown = (await page.textContent('.versions-remote-value')).replace(/\u200e/g, '').trim();
         check('sauvegarde : Local ou dépôt en ligne, dépôt choisi puis premier envoi fait seul',
           modes === 'solo,online' && !compare && disabled && shown === central, `${modes} · ${shown}`);

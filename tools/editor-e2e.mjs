@@ -3575,7 +3575,13 @@ try {
         if (shots) await page.locator('.team-dialog').screenshot({ path: `${shots}/versions-plusieurs.png` });
         await page.click('.team-on');
         await page.waitForSelector('.versions-mode button.is-on:not([data-mode="solo"])', { timeout: 60000 });
-        await until(() => head(central) !== '' && head(central) === head(path.join(siteDir, '.git')), 'premier envoi au dépôt d\'elle-même');
+        // Dépôt nu créé à la main : sa branche par défaut peut différer de celle du site ; elle
+        // suit la branche reçue (comme un dépôt GitHub neuf).
+        await until(() => {
+          const ref = git(['--git-dir', central, 'for-each-ref', '--count=1', '--format=%(refname)', 'refs/heads']);
+          if (ref) git(['--git-dir', central, 'symbolic-ref', 'HEAD', ref]);
+          return head(central) !== '' && head(central) === head(path.join(siteDir, '.git'));
+        }, 'premier envoi au dépôt d\'elle-même');
         const shown = (await page.textContent('.versions-remote-value')).replace(/\u200e/g, '').trim();
         check('sauvegarde : Local ou dépôt en ligne, dépôt choisi puis premier envoi fait seul',
           modes === 'solo,online' && !compare && disabled && shown === central, `${modes} · ${shown}`);

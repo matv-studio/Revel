@@ -1907,6 +1907,15 @@ Pourquoi : demandes de l'utilisateur ; les gabarits validés demandaient ces fon
 qu'en code propre au site (relevé `revel audit` du site à zéro). En suspens : le partage ne montre pas de
 compteur ; le Sommaire ne suit qu'une zone par page.
 
+**D-173 — 16/11/2026 — prise (retour de l'utilisateur : « les boutons de la galerie ne fonctionnent pas », « déplacer
+les images en clic-glisser à la souris »).** **Carrousel : images responsives en diapositives, glisser à la souris.**
+Une image responsive placée directement dans la piste est un `<picture>` sans boîte (`display:contents`) : sa
+position lue était toujours 0, les flèches et le compteur ne bougeaient pas. Le script lit maintenant la position
+de l'image contenue, et l'accroche du défilement vaut aussi pour elle. Glisser à la souris : la piste suit le
+pointeur puis s'arrête sur la diapositive la plus proche (la suivante après un geste court) ; curseur « main » ;
+le clic qui termine un glisser n'ouvre pas de lien. Référence : le carrousel et le diaporama de Framer se
+glissent à la souris ; un élément `display:contents` n'a pas de boîte (CSSOM View). Version 0.7.7.
+
 **D-07 — à confirmer avant la première version publique.** Identifiant d'application `app.revel-studio.desktop`
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.

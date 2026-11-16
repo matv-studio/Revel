@@ -20,7 +20,7 @@ const TOOLS: &[(&str, &str)] = &[
         " data-revel-track",
         ":where([data-revel-track]){overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}\
 :where([data-revel-track])::-webkit-scrollbar{display:none}\
-:where([data-revel-track]>*){scroll-snap-align:start}",
+:where([data-revel-track]>*,[data-revel-track]>picture>img){scroll-snap-align:start}",
     ),
 ];
 

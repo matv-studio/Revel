@@ -459,7 +459,12 @@
       var i = p.indexOf("=");
       opts[i < 0 ? p : p.slice(0, i)] = i < 0 ? true : p.slice(i + 1);
     });
-    var slides = function () { return Array.prototype.slice.call(track.children); };
+    // Diapositive sans boîte (`<picture>` d'une image responsive, `display:contents`) : sa
+    // position est celle de l'image qu'elle contient (D-173).
+    var boxOf = function (el) {
+      return getComputedStyle(el).display === "contents" ? (el.querySelector("img,video") || el.firstElementChild || el) : el;
+    };
+    var slides = function () { return Array.prototype.map.call(track.children, boxOf); };
     var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     var current = function () {
       var s = slides(), left = track.scrollLeft, best = 0, d = Infinity;
@@ -504,6 +509,45 @@
         if (next) next.disabled = i === n - 1;
       }
     };
+    // Glisser à la souris (D-173) : la piste suit le pointeur, puis s'arrête sur la diapositive
+    // la plus proche (la suivante ou la précédente après un geste court) ; le clic qui termine un
+    // glisser n'ouvre pas de lien. Au doigt, le défilement du navigateur fait déjà ce travail.
+    var drag = null;
+    track.addEventListener("dragstart", function (e) { e.preventDefault(); });
+    track.addEventListener("pointerdown", function (e) {
+      if (e.pointerType !== "mouse" || e.button !== 0 || track.scrollWidth <= track.clientWidth + 1) return;
+      drag = { x: e.clientX, left: track.scrollLeft, from: current(), moved: false };
+    });
+    window.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      var dx = e.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) < 5) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        track.style.scrollSnapType = "none";
+        track.style.cursor = "grabbing";
+        track.style.userSelect = "none";
+      }
+      track.scrollLeft = drag.left - dx;
+    });
+    var drop = function (e) {
+      if (!drag) return;
+      var d = drag;
+      drag = null;
+      if (!d.moved) return;
+      var dx = e.clientX - d.x, to = current();
+      if (to === d.from && Math.abs(dx) > 40) to = d.from + (dx < 0 ? 1 : -1);
+      track.style.cursor = "";
+      track.style.userSelect = "";
+      go(to);
+      setTimeout(function () { track.style.scrollSnapType = ""; }, reduce ? 0 : 450);
+      var stop = function (c) { c.preventDefault(); c.stopPropagation(); };
+      track.addEventListener("click", stop, { capture: true, once: true });
+      setTimeout(function () { track.removeEventListener("click", stop, true); }, 50);
+    };
+    window.addEventListener("pointerup", drop);
+    window.addEventListener("pointercancel", drop);
+    if (track.scrollWidth > track.clientWidth + 1) track.style.cursor = "grab";
     if (prev) prev.addEventListener("click", function () { go(current() - 1); });
     if (next) next.addEventListener("click", function () { go(current() + 1); });
     track.addEventListener("scroll", update, { passive: true });

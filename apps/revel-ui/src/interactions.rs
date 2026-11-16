@@ -1329,7 +1329,11 @@ mod tests {
                 assert!(!preset_key(f, p).is_empty());
                 for s in f.settings(p) {
                     let k = setting_key(s);
-                    if !matches!(s, Setting::Replay | Setting::Pause | Setting::Opposite) {
+                    // Texte de départ des palettes : vide par défaut (lettres au hasard).
+                    if !matches!(
+                        s,
+                        Setting::Replay | Setting::Pause | Setting::Opposite | Setting::From
+                    ) {
                         assert!(
                             Anim::parse(p).fallback(f, k).is_some(),
                             "{} {p} {k}",

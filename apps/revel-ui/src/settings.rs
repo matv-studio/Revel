@@ -226,6 +226,24 @@ pub(crate) fn update(ui: Ui, f: &dyn Fn(&mut AppSettings)) {
     });
 }
 
+/// Mise à jour proposée dans la barre du haut : fenêtre « installer et redémarrer » (D-175).
+pub fn ask_install(ui: Ui, version: String) {
+    ui.ask.set(Some(crate::dialog::Ask::confirm(
+        ui.now("update-ask-title", &[("version", version)]),
+        None,
+        ui.now("update-install", &[]),
+        move || {
+            ui.activity.set(Some(0.3));
+            spawn_local(async move {
+                if let Err(e) = api::update_install().await {
+                    ui.fail(e);
+                }
+                ui.activity.set(None);
+            });
+        },
+    )));
+}
+
 /// Général : langue, thème, couleur d'accent et son étendue, dossier des nouveaux sites.
 #[component]
 fn General() -> impl IntoView {
@@ -332,6 +350,14 @@ fn General() -> impl IntoView {
                         </Show>
                         <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
                     </div>
+                    <span class="label" title=ui.t("settings-reveal-help")>{ui.t("settings-reveal")}</span>
+                    <label class="switch">
+                        <input type="checkbox" class="settings-reveal"
+                            prop:checked=move || ui.settings.with(|s| s.reveal_inserted)
+                            aria-label=ui.t("settings-reveal")
+                            on:change=move |e| { let on = event_target_checked(&e); update(ui, &|s| s.reveal_inserted = on) }/>
+                        <span class="switch-track"></span>
+                    </label>
                 </div>
         </section>
     }

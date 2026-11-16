@@ -1032,6 +1032,9 @@ pub struct AppSettings {
     /// défaut.
     #[serde(default = "default_catalogs")]
     pub template_catalogs: Vec<String>,
+    /// Élément ajouté montré dans les calques : le panneau « Calques » passe devant (D-175).
+    #[serde(default = "yes")]
+    pub reveal_inserted: bool,
 }
 
 fn default_catalogs() -> Vec<String> {
@@ -1051,15 +1054,15 @@ fn default_theme() -> String {
 }
 
 fn default_accent_scope() -> String {
-    "standard".into()
+    "full".into()
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            lang: "fr".into(),
+            lang: "en".into(),
             theme: default_theme(),
-            accent: None,
+            accent: Some("#3D7EFF".into()),
             accent_scope: default_accent_scope(),
             projects_dir: None,
             prereleases: false,
@@ -1072,6 +1075,7 @@ impl Default for AppSettings {
             variant_links: default_links(),
             variant_link_end: default_link_end(),
             template_catalogs: default_catalogs(),
+            reveal_inserted: true,
         }
     }
 }

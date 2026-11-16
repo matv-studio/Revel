@@ -2868,6 +2868,15 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         ed.post(serde_json::json!({ "type": "ui-colors", "comp": c }));
     });
     let dock = crate::dock::Dock::provide();
+    // Élément ajouté : « Calques » passe devant dans son groupe (réglage, D-175).
+    Effect::new(move |prev: Option<u32>| {
+        let n = ui.show_layers.get();
+        if prev.is_some_and(|p| p != n) {
+            dock.layout
+                .update(|l| l.activate(crate::dock::PanelId::Layers));
+        }
+        n
+    });
     let failed = RwSignal::new(false);
     // Modification isolée d'un composant : ouverte quand la sélection est dans un composant,
     // fermée quand elle le quitte ; le canevas estompe le reste de la page.

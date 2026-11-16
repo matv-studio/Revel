@@ -140,6 +140,7 @@ fn diff(
             if vals.iter().any(|v| v.trim() != text.trim()) && !text.trim().is_empty() {
                 let name = prop_name(layer, "text", taken);
                 plan.props.push(PropDef {
+                    collection: None,
                     name: name.clone(),
                     label: layer.map(str::to_string),
                     kind: PropKind::Text,
@@ -192,6 +193,7 @@ fn diff(
                 let prop = prop_name(layer, suffix, taken);
                 let mine = mine.unwrap_or_default();
                 plan.props.push(PropDef {
+                    collection: None,
                     name: prop.clone(),
                     label: layer.map(|l| format!("{l} ({suffix})")),
                     kind,

@@ -8,6 +8,7 @@ mod autotr;
 mod blocks;
 mod boundattr;
 mod canvas;
+mod carousel;
 mod classes;
 mod cms;
 mod cmsfields;
@@ -215,6 +216,8 @@ pub struct Ui {
     pub update: RwSignal<Option<revel_protocol::UpdateInfo>>,
     /// Dernier site ouvert et sa vue : gardés dans les réglages de Revel pour y revenir.
     pub last_site: RwSignal<Option<(SiteSummary, Tab)>>,
+    /// Élément ajouté : le panneau « Calques » passe devant (compteur, lu par l'éditeur ; D-175).
+    pub show_layers: RwSignal<u32>,
     /// Synchronisation automatique du travail à plusieurs (D-108).
     pub sync: RwSignal<sync::SyncState>,
 }
@@ -483,6 +486,7 @@ fn App() -> impl IntoView {
         domain_for: RwSignal::new(None),
         update: RwSignal::new(None),
         last_site: RwSignal::new(None),
+        show_layers: RwSignal::new(0),
         sync: RwSignal::new(sync::SyncState::default()),
     };
     provide_context(ui);
@@ -709,57 +713,61 @@ fn TopBar() -> impl IntoView {
                         </button>
                     }
                 })}
-                // Réglages de Revel ouverts depuis un site : retour au site d'un clic (vue quittée).
-                {move || matches!(ui.route.get(), Route::Settings).then(|| ui.last_site.get()).flatten().map(|(site, tab)| {
-                    let name = site.name.clone();
-                    view! {
-                        <button class="btn btn--small topbar-back" title=site.path.clone()
-                            on:click=move |_| ui.route.set(Route::Site { site: site.clone(), tab })>
-                            {icons::arrow_left()}<span>{ui.tx("nav-back-to-site", &[("name", name)])}</span>
-                        </button>
-                    }
-                })}
             </div>
             // Onglets raccordés au plateau : vues du site ouvert, ou accueil et réglages de Revel.
             <nav class="views" role="tablist" aria-label=ui.t("views")>
-                {move || if site_open() {
-                    VIEWS.iter().map(|(t, key)| {
-                        let t = *t;
-                        let here = move || match (tab(), t) {
-                            (Some(Tab::Settings(_)), Tab::Settings(_)) => true,
-                            (Some(a), b) => a == b,
-                            _ => false,
-                        };
-                        // Modèle des pages ouvert depuis le CMS : l'onglet CMS reste actif (D-172).
-                        let on = move || match (ui.from_cms.get() && tab() == Some(Tab::Editor), t) {
-                            (true, Tab::Cms) => true,
-                            (true, Tab::Editor) => false,
-                            _ => here(),
-                        };
+                // Vues du site ouvert, gardées quand les réglages de Revel sont ouverts depuis ce
+                // site (un clic y ramène) ; sinon l'accueil. Réglages de Revel : rouage, toujours là.
+                {move || {
+                    let from_site = matches!(ui.route.get(), Route::Settings).then(|| ui.last_site.get()).flatten();
+                    if site_open() || from_site.is_some() {
+                        let from_site = StoredValue::new(from_site);
+                        VIEWS.iter().map(|(t, key)| {
+                            let t = *t;
+                            let here = move || match (tab(), t) {
+                                (Some(Tab::Settings(_)), Tab::Settings(_)) => true,
+                                (Some(a), b) => a == b,
+                                _ => false,
+                            };
+                            // Modèle des pages ouvert depuis le CMS : l'onglet CMS reste actif (D-172).
+                            let on = move || match (ui.from_cms.get() && tab() == Some(Tab::Editor), t) {
+                                (true, Tab::Cms) => true,
+                                (true, Tab::Editor) => false,
+                                _ => here(),
+                            };
+                            view! {
+                                <button class="view-tab" role="tab" class:is-on=on aria-selected=move || on().to_string()
+                                    data-view=*key on:click=move |_| {
+                                        ui.from_cms.set(false);
+                                        match from_site.get_value() {
+                                            Some((site, _)) => ui.route.set(Route::Site { site, tab: t }),
+                                            None => if !here() { ui.tab(t) },
+                                        }
+                                    }>{ui.t(key)}</button>
+                            }
+                        }).collect_view().into_any()
+                    } else {
+                        let on = move || ui.route.get() == Route::Home;
                         view! {
                             <button class="view-tab" role="tab" class:is-on=on aria-selected=move || on().to_string()
-                                data-view=*key on:click=move |_| {
-                                    ui.from_cms.set(false);
-                                    if !here() { ui.tab(t) }
-                                }>{ui.t(key)}</button>
-                        }
-                    }).collect_view().into_any()
-                } else {
-                    [(Route::Home, "home-title"), (Route::Settings, "nav-settings")].into_iter().map(|(r, key)| {
-                        let r2 = r.clone();
-                        let on = move || ui.route.get() == r2;
-                        view! {
-                            <button class="view-tab" role="tab" class:is-on=on.clone() aria-selected=move || on().to_string()
-                                data-view=key on:click=move |_| ui.route.set(r.clone())>{ui.t(key)}</button>
-                        }
-                    }).collect_view().into_any()
+                                data-view="home-title" on:click=move |_| ui.route.set(Route::Home)>{ui.t("home-title")}</button>
+                        }.into_any()
+                    }
                 }}
+                {
+                    let on = move || matches!(ui.route.get(), Route::Settings);
+                    view! {
+                        <button class="view-tab view-tab--icon" role="tab" class:is-on=on aria-selected=move || on().to_string()
+                            data-view="nav-settings" title=ui.t("nav-settings-help") aria-label=ui.t("nav-settings")
+                            on:click=move |_| if !on() { ui.route.set(Route::Settings) }>{icons::settings()}</button>
+                    }
+                }
             </nav>
             <div class="topbar-actions">
                 // Version plus récente publiée : installée depuis les réglages.
                 {move || ui.update.get().map(|u| view! {
                     <button class="btn btn--small update-pill" title=ui.t("update-pill-help")
-                        on:click=move |_| ui.route.set(Route::Settings)>
+                        on:click={ let version = u.version.clone(); move |_| settings::ask_install(ui, version.clone()) }>
                         {icons::download()}{ui.tx(if u.prerelease { "update-pill-pre" } else { "update-pill" }, &[("version", u.version.clone())])}
                     </button>
                 })}

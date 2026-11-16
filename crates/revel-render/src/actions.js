@@ -459,6 +459,28 @@
       var i = p.indexOf("=");
       opts[i < 0 ? p : p.slice(0, i)] = i < 0 ? true : p.slice(i + 1);
     });
+    // Mosaïque (D-174) : toutes les images en grille ; au-delà de `more` (6 par défaut), la
+    // dernière case montrée devient « +N », qui affiche la suite.
+    if (box.getAttribute("data-revel-layout") === "mosaic") {
+      var cells = Array.prototype.slice.call(track.children);
+      var max = parseInt(opts.more, 10) || 6;
+      track.style.overflow = "visible";
+      if (cells.length > max) {
+        var rest = cells.slice(max - 1);
+        rest.forEach(function (c) { c.__rvDisplay = c.style.display; c.style.display = "none"; });
+        var more = document.createElement("button");
+        more.type = "button";
+        more.className = "rv-more-tile";
+        more.textContent = "+" + rest.length;
+        more.setAttribute("aria-label", "+" + rest.length);
+        more.addEventListener("click", function () {
+          rest.forEach(function (c) { c.style.display = c.__rvDisplay || ""; });
+          more.remove();
+        });
+        track.appendChild(more);
+      }
+      return;
+    }
     // Diapositive sans boîte (`<picture>` d'une image responsive, `display:contents`) : sa
     // position est celle de l'image qu'elle contient (D-173).
     var boxOf = function (el) {
@@ -472,8 +494,9 @@
         var x = Math.abs(s[i].offsetLeft - s[0].offsetLeft - left);
         if (x < d) { d = x; best = i; }
       }
-      // Fin de piste atteinte : dernière diapositive.
-      if (left + track.clientWidth >= track.scrollWidth - 2) best = s.length - 1;
+      // Fin de piste atteinte : dernière diapositive (pas tant que la piste n'a pas de taille :
+      // élément encore caché par son animation d'apparition).
+      if (track.clientWidth > 0 && track.scrollWidth > track.clientWidth + 2 && left + track.clientWidth >= track.scrollWidth - 2) best = s.length - 1;
       return best;
     };
     var go = function (i) {
@@ -515,7 +538,7 @@
     var drag = null;
     track.addEventListener("dragstart", function (e) { e.preventDefault(); });
     track.addEventListener("pointerdown", function (e) {
-      if (e.pointerType !== "mouse" || e.button !== 0 || track.scrollWidth <= track.clientWidth + 1) return;
+      if (opts.drag === "off" || e.pointerType !== "mouse" || e.button !== 0 || track.scrollWidth <= track.clientWidth + 1) return;
       drag = { x: e.clientX, left: track.scrollLeft, from: current(), moved: false };
     });
     window.addEventListener("pointermove", function (e) {
@@ -547,7 +570,7 @@
     };
     window.addEventListener("pointerup", drop);
     window.addEventListener("pointercancel", drop);
-    if (track.scrollWidth > track.clientWidth + 1) track.style.cursor = "grab";
+    if (opts.drag !== "off" && track.scrollWidth > track.clientWidth + 1) track.style.cursor = "grab";
     if (prev) prev.addEventListener("click", function () { go(current() - 1); });
     if (next) next.addEventListener("click", function () { go(current() + 1); });
     track.addEventListener("scroll", update, { passive: true });
@@ -557,6 +580,11 @@
     });
     if (!track.hasAttribute("tabindex")) track.setAttribute("tabindex", "0");
     update();
+    // Taille de la piste changée (apparition, fenêtre redimensionnée) : compteur et flèches relus.
+    if (window.ResizeObserver) new ResizeObserver(function () {
+      update();
+      if (opts.drag !== "off") track.style.cursor = track.scrollWidth > track.clientWidth + 1 ? "grab" : "";
+    }).observe(track);
     var secs = Number(opts.autoplay) || 0;
     if (secs > 0 && !reduce) {
       var held = false;

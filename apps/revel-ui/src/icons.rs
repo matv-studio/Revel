@@ -775,6 +775,11 @@ pub fn carousel() -> AnyView {
     )
 }
 
+/// Accordéon : flèche vers le bas et trait de la ligne.
+pub fn accordion() -> AnyView {
+    svg(r#"<path d="M2.5 5.5h6M2.5 10.5h6M10.5 6.5 12.5 8.5l2-2"/>"#)
+}
+
 /// Barre de navigation : barre et menu.
 pub fn navbar() -> AnyView {
     svg(

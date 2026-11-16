@@ -862,6 +862,9 @@ pub struct PropDef {
     /// Valeur par défaut (texte, adresse, booléen), prise quand une utilisation n'en donne pas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<Value>,
+    /// Collection d'une propriété « Contenu » ([`PropKind::Entry`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection: Option<String>,
 }
 
 impl PropDef {
@@ -870,6 +873,21 @@ impl PropDef {
             .as_deref()
             .filter(|l| !l.trim().is_empty())
             .unwrap_or(&self.name)
+    }
+}
+
+impl PropDef {
+    /// Expression du contenu d'une propriété « Contenu » : celui de l'identifiant `slug`, sinon
+    /// le premier de la collection (aperçu du composant, valeur par défaut).
+    pub fn entry_expr(&self, slug: Option<&str>) -> Option<String> {
+        let c = self.collection.as_deref().filter(|c| !c.is_empty())?;
+        Some(match slug.filter(|s| !s.is_empty()) {
+            Some(s) => format!(
+                "collections.{c} | by_slug({})",
+                serde_json::Value::String(s.to_string())
+            ),
+            None => format!("(collections.{c})[0]"),
+        })
     }
 }
 
@@ -888,6 +906,9 @@ pub enum PropKind {
     /// Liste parcourue dans le composant (valeurs d'un champ, adresses de contenus reliés) :
     /// chaque utilisation la relie à un champ liste de son contenu.
     List,
+    /// Contenu d'une collection (D-174) : les éléments du composant lisent ses champs
+    /// (`marque.data.title`, `marque.url`) ; chaque utilisation choisit le contenu.
+    Entry,
 }
 
 /// Identifiant de variante valide : lettres minuscules, chiffres, tirets (classe `is-<id>`).

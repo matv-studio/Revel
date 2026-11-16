@@ -2221,3 +2221,49 @@ heure et par adresse IP, réponse JSON (envoi sans recharger la page) ou page de
 GitHub Pages n'exécute pas PHP : signalé dans Paramètres › Formulaires et par l'avertissement de publication.
 Les formulaires qui ont déjà leur propre `action` (comme `contact.php` du site Alunites) ne sont pas touchés.
 Limites des hébergeurs : `docs/HEBERGEURS.md` (Infomaniak : fonction mail à activer, 50 messages par 24 h).
+
+**D-174 — 16/11/2026 — prise (retour de l'utilisateur : « je ne suis pas censé voir toute la structure interne
+des outils dans les calques », « trois sections texte qui ne font aucun sens », « tu as utilisé une collection CMS
+pour les marques alors qu'il aurait fallu un composant » ; propositions validées sur une toile Design).**
+**Carrousel refait en outil fermé, composant relié au CMS.**
+- **Carrousel** (`Preset::Carousel`, `Preset::Slideshow`) : racine `data-revel-slider` fermée (`data-revel-widget`),
+  piste d'images (`Node::Image` vides : icône d'image du canevas, plus de texte « Diapositive 1 »), commandes
+  toutes présentes et montrées ou cachées par l'attribut `hidden` (titre, flèches, compteur, points). Une ligne
+  dans les calques, marquée de l'icône de l'outil ; seules les diapositives se déplient ; « Décomposer » (clic
+  droit) retire `data-revel-widget`. Panneau Styles (`apps/revel-ui/src/carousel.rs`) : fonction (Images,
+  Contenu, Mosaïque), images en vignettes (ajout, retrait, ordre) ou champ d'images du contenu, affichage
+  (nombre visible, écart, proportions, arrondi ; colonnes et bouton « +N » en mosaïque), commandes
+  (interrupteurs, icônes remplaçables, texte du titre, position dessous, dessus ou sur les côtés), défilement
+  (glisser, lecture automatique, boucle). Le champ « Texte » générique n'est plus montré pour l'outil. Réglages
+  portés par des variables (`--rv-show`, `--rv-gap`, `--rv-ratio`, `--rv-radius`, `--rv-cols`) et des attributs
+  (`data-revel-controls`, `data-revel-layout`), style de base dans `toolcss.rs` (spécificité nulle). Script :
+  mosaïque, glisser à la souris, compteur recalculé quand la piste prend sa taille (`ResizeObserver`).
+  Références comparées : Slider de Webflow (réglages dans le panneau, flèches et points en éléments), Slideshow
+  et Carousel de Framer (flèches, points, glisser en options), composants à variantes de Figma.
+- **Propriété « Contenu »** (`PropKind::Entry`, `PropDef.collection`) : un composant relié à une collection lit
+  les champs du contenu (`<prop>.data.<champ>`, `<prop>.url`) dans tous ses éléments ; l'utilisation choisit le
+  contenu : « Collection » (nom), puis un menu « Contenu » (premier de la collection, contenu de la liste qui
+  l'entoure, ou un contenu nommé : `collections.<c> | by_slug("…")`). Vérifié par `revel audit`.
+- **Site Alunites Groupe** : galeries, mosaïques, sommaire et lecteur vidéo des gabarits sont les outils fermés
+  de Revel ; cartes de projet, d'actualité et de marque sont des composants reliés au CMS (les textes des
+  marques sont passés dans la collection Marques, variante « Inversée ») ; composant « Bouton » (texte, lien,
+  variante « Contour »). `revel audit` : 0.
+- En suspens : les autres outils (onglets, accordéon, filtres, barre de navigation) n'ont pas encore leur
+  panneau refait sur ce modèle ; titres et sections d'introduction du site restent des éléments écrits (leur
+  mot accentué est un élément dans le titre, qu'une propriété « Texte » ne porte pas) ; templates de Revel à
+  refaire avec ces outils ; dépôt des templates à créer.
+
+**D-175 — 16/11/2026 — prise (demandes de l'utilisateur avant la 0.7.8).** **Réglages par défaut, rouage,
+mise à jour en un clic, élément ajouté montré dans les calques.**
+- Nouvelle installation : interface en anglais, accent bleu `#3D7EFF`, étendue « Étendue » (`full`). Les réglages
+  déjà enregistrés ne changent pas.
+- Barre du haut : les réglages de Revel sont un rouage, à l'accueil et à droite de « Settings » dans un site ;
+  les vues du site restent affichées quand les réglages de Revel sont ouverts (un clic y ramène) ; le bouton
+  « Revenir à [site] » est retiré.
+- Mise à jour disponible : la pastille ouvre la fenêtre « Installer Revel x et redémarrer ? » au lieu des
+  réglages.
+- Élément ajouté : le panneau « Calques » passe devant et montre l'élément (réglage « Montrer l'élément ajouté
+  dans les calques », Réglages › Général, activé par défaut ; `AppSettings.reveal_inserted`).
+- Panneaux : un groupe retiré d'une colonne rend sa hauteur aux autres (`Layout::fill`, aussi à la relecture de
+  la disposition enregistrée).
+

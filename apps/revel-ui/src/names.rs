@@ -285,3 +285,18 @@ mod tests {
         assert_eq!(technical("H1", "a  b"), "h1.a.b");
     }
 }
+
+/// Icône d'un outil fermé d'après sa nature (`data-revel-base`), montrée sur sa ligne des calques
+/// (D-174).
+pub fn tool_icon(base: &str) -> Option<AnyView> {
+    Some(match base {
+        "carousel" | "slideshow" => icons::carousel(),
+        "tabs" => icons::tabs(),
+        "accordion" => icons::accordion(),
+        "navbar" => icons::navbar(),
+        "filters" => icons::filter(),
+        "toc" => icons::list(),
+        "video-player" => icons::play(),
+        _ => return None,
+    })
+}

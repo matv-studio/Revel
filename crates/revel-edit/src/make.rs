@@ -1056,93 +1056,106 @@ impl Preset {
                 )
             }
             Preset::Carousel | Preset::Slideshow => {
-                // `text` : « Diapositive|Précédente|Suivante ».
+                // Carrousel (D-174) : images dans la piste (vides : l'icône image du canevas),
+                // commandes toutes présentes, montrées ou cachées depuis le panneau (`hidden`).
+                // `text` : « Précédente|Suivante|Titre ».
                 let mut parts = text.split('|');
-                let slide_text = parts.next().unwrap_or(text);
-                let prev = parts.next().unwrap_or("←");
+                let prev = parts.next().filter(|t| !t.is_empty()).unwrap_or("←");
                 let next = parts.next().unwrap_or("→");
+                let title = parts.next().unwrap_or("");
                 let carousel = self == Preset::Carousel;
-                let b = if carousel { "carrousel" } else { "diaporama" };
-                let slides = (1..=if carousel { 4 } else { 3 })
-                    .map(|n| {
-                        el(
-                            id(),
-                            "div",
-                            vec![attr("class", &format!("{b}__diapo"))],
-                            vec![el(
-                                id(),
-                                "p",
-                                vec![],
-                                vec![txt(&format!("{slide_text} {n}"))],
-                            )],
-                        )
-                    })
-                    .collect();
                 let flag = |n: &str| Attr {
                     name: n.into(),
                     value: None,
                     when: None,
                 };
-                let button = |id: Option<String>, flag_name: &str, label: &str, sign: &str| {
+                let slides: Vec<Node> = (0..3)
+                    .map(|_| {
+                        Node::Image(revel_model::ImageNode {
+                            id: id(),
+                            src: "\"\"".into(),
+                            alt: Some("\"\"".into()),
+                            ..Default::default()
+                        })
+                    })
+                    .collect();
+                let mut button = |flag_name: &str, label: &str, icon: &str| {
                     el(
-                        id,
+                        id(),
                         "button",
                         vec![
-                            attr("class", &format!("{b}__fleche")),
+                            attr("class", "carrousel__fleche"),
                             attr("type", "button"),
                             attr("aria-label", label),
                             flag(flag_name),
                         ],
-                        vec![txt(sign)],
+                        vec![icon_node(id(), icon)],
                     )
                 };
-                let middle = if carousel {
+                let (b_prev, b_next) = (
+                    button("data-revel-prev", prev, "chevron-gauche"),
+                    button("data-revel-next", next, "chevron-droite"),
+                );
+                let hidden = |mut attrs: Vec<Attr>, hide: bool| {
+                    if hide {
+                        attrs.push(flag("hidden"));
+                    }
+                    attrs
+                };
+                let controls = vec![
+                    el(
+                        id(),
+                        "h2",
+                        hidden(vec![attr("class", "carrousel__titre")], true),
+                        vec![txt(title)],
+                    ),
+                    b_prev,
                     el(
                         id(),
                         "p",
-                        vec![
-                            attr("class", "carrousel__compteur"),
-                            flag("data-revel-count"),
-                        ],
-                        vec![txt("1 / 4")],
-                    )
-                } else {
+                        hidden(
+                            vec![
+                                attr("class", "carrousel__compteur"),
+                                flag("data-revel-count"),
+                            ],
+                            !carousel,
+                        ),
+                        vec![],
+                    ),
                     el(
                         id(),
                         "div",
-                        vec![attr("class", "diaporama__points"), flag("data-revel-dots")],
+                        hidden(
+                            vec![attr("class", "carrousel__points"), flag("data-revel-dots")],
+                            carousel,
+                        ),
                         vec![],
-                    )
-                };
+                    ),
+                    b_next,
+                ];
                 el(
                     id(),
                     "div",
                     vec![
-                        attr("class", b),
+                        attr("class", "carrousel"),
                         attr(
                             "data-revel-slider",
                             if carousel { "" } else { "autoplay=5 loop" },
                         ),
+                        attr("data-revel-controls", "bottom"),
                     ],
                     vec![
                         el(
                             id(),
                             "div",
-                            vec![
-                                attr("class", &format!("{b}__piste")),
-                                flag("data-revel-track"),
-                            ],
+                            vec![attr("class", "carrousel__piste"), flag("data-revel-track")],
                             slides,
                         ),
                         el(
                             id(),
                             "div",
-                            vec![attr("class", &format!("{b}__commandes"))],
-                            vec![
-                                button(id(), "data-revel-prev", prev, "←"),
-                                middle,
-                                button(id(), "data-revel-next", next, "→"),
-                            ],
+                            vec![attr("class", "carrousel__commandes")],
+                            controls,
                         ),
                     ],
                 )
@@ -1337,6 +1350,8 @@ fn role_of(class: &str) -> Option<Role> {
         "carrousel__commandes" | "diaporama__commandes" => Part("controls"),
         "carrousel__fleche" | "diaporama__fleche" => Part("arrow"),
         "carrousel__compteur" => Part("count"),
+        "carrousel__points" => Part("dots"),
+        "carrousel__titre" => Part("title"),
         "diaporama__points" => Part("dots"),
         "barre-nav" => Base("navbar"),
         "barre-nav__marque" | "barre-nav__lien" => Content,
@@ -2823,4 +2838,190 @@ pub fn carry_media(n: &mut Node, m: &Media) {
         }
     }
     walk(n, m, &image_url, &mut image_done, &set);
+}
+
+// ------------------------------------------------------------------ carrousel (D-174)
+
+/// Fonction d'un carrousel : images seules, contenu libre par diapositive, mosaïque d'images.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CarouselMode {
+    Images,
+    Content,
+    Mosaic,
+}
+
+/// Attribut de la disposition en mosaïque, posé sur la racine du carrousel.
+pub const CAROUSEL_LAYOUT: &str = "data-revel-layout";
+
+fn has_attr(n: &Node, name: &str) -> bool {
+    matches!(n, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == name))
+}
+
+/// Piste d'un carrousel (`data-revel-track`) : son identifiant et ses enfants.
+pub fn carousel_track(root: &Node) -> Option<(&str, &[Node])> {
+    let Node::Element { children, .. } = root else {
+        return None;
+    };
+    children.iter().find_map(|c| match c {
+        Node::Element {
+            id: Some(id),
+            children,
+            ..
+        } if has_attr(c, "data-revel-track") => Some((id.as_str(), children.as_slice())),
+        _ => None,
+    })
+}
+
+/// Champ du contenu qui fournit les images (piste faite d'une seule liste) : son expression.
+pub fn carousel_field(root: &Node) -> Option<&str> {
+    match carousel_track(root)?.1 {
+        [Node::Each { expr, .. }] => Some(expr.as_str()),
+        _ => None,
+    }
+}
+
+/// Fonction en cours, lue dans la construction.
+pub fn carousel_mode(root: &Node) -> CarouselMode {
+    if matches!(root, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == CAROUSEL_LAYOUT && a.value.as_deref() == Some("mosaic")))
+    {
+        return CarouselMode::Mosaic;
+    }
+    let slides = carousel_track(root).map(|t| t.1).unwrap_or_default();
+    let image = |n: &Node| match n {
+        Node::Image(_) => true,
+        Node::Each { children, .. } => matches!(children.as_slice(), [Node::Image(_)]),
+        _ => false,
+    };
+    if slides.iter().all(image) {
+        CarouselMode::Images
+    } else {
+        CarouselMode::Content
+    }
+}
+
+/// Change la fonction : images sorties de leurs diapositives ou mises chacune dans une
+/// diapositive ; mosaïque : disposition de la racine (les images restent).
+pub fn carousel_set_mode(site: &Site, root_at: &Target, mode: CarouselMode) -> Option<Command> {
+    let root = address::node(site, root_at).ok()?;
+    let cur = carousel_mode(root);
+    if cur == mode {
+        return None;
+    }
+    let (track_id, slides) = carousel_track(root)?;
+    let track = Parent {
+        owner: root_at.owner.clone(),
+        node: Some(track_id.to_string()),
+        branch: Branch::Children,
+    };
+    let mut taken = site.node_ids();
+    let mut commands = Vec::new();
+    let to_images = mode != CarouselMode::Content && cur == CarouselMode::Content;
+    let to_content = mode == CarouselMode::Content;
+    for (index, n) in slides.iter().enumerate() {
+        let node = if to_images {
+            match n {
+                Node::Each { .. } | Node::Image(_) => continue,
+                _ => Node::Image(first_image(n).cloned().unwrap_or_else(|| {
+                    let id = fresh(&taken);
+                    taken.insert(id.clone());
+                    revel_model::ImageNode {
+                        id: Some(id),
+                        src: "\"\"".into(),
+                        alt: Some("\"\"".into()),
+                        ..Default::default()
+                    }
+                })),
+            }
+        } else if to_content {
+            match n {
+                Node::Image(_) => {
+                    let id = fresh(&taken);
+                    taken.insert(id.clone());
+                    Node::Element {
+                        id: Some(id),
+                        tag: "div".into(),
+                        attrs: Vec::new(),
+                        children: vec![n.clone()],
+                    }
+                }
+                _ => continue,
+            }
+        } else {
+            continue;
+        };
+        commands.push(Command::Replace {
+            parent: track.clone(),
+            index,
+            node,
+        });
+    }
+    match mode {
+        CarouselMode::Mosaic => commands.push(Command::SetAttr {
+            at: root_at.clone(),
+            name: CAROUSEL_LAYOUT.into(),
+            value: Some("mosaic".into()),
+        }),
+        _ if cur == CarouselMode::Mosaic => commands.push(Command::RemoveAttr {
+            at: root_at.clone(),
+            name: CAROUSEL_LAYOUT.into(),
+        }),
+        _ => {}
+    }
+    Some(Command::Batch { commands })
+}
+
+/// Images tirées d'un champ du contenu (`expr` : liste d'adresses d'images), ou de nouveau
+/// choisies une à une (`None` : trois images vides).
+pub fn carousel_set_field(site: &Site, root_at: &Target, expr: Option<&str>) -> Option<Command> {
+    let root = address::node(site, root_at).ok()?;
+    let (track_id, slides) = carousel_track(root)?;
+    let track = Parent {
+        owner: root_at.owner.clone(),
+        node: Some(track_id.to_string()),
+        branch: Branch::Children,
+    };
+    let mut taken = site.node_ids();
+    let mut id = || {
+        let i = fresh(&taken);
+        taken.insert(i.clone());
+        Some(i)
+    };
+    let mut commands: Vec<Command> = (0..slides.len())
+        .rev()
+        .map(|index| Command::RemoveAt {
+            parent: track.clone(),
+            index,
+        })
+        .collect();
+    let image = |id: Option<String>, src: &str| {
+        Node::Image(revel_model::ImageNode {
+            id,
+            src: src.into(),
+            alt: Some("\"\"".into()),
+            ..Default::default()
+        })
+    };
+    match expr {
+        Some(e) => commands.push(Command::Insert {
+            parent: track,
+            index: 0,
+            node: Node::Each {
+                id: id(),
+                expr: e.to_string(),
+                item: "image".into(),
+                children: vec![image(id(), "image")],
+                empty: Vec::new(),
+            },
+        }),
+        None => {
+            for index in 0..3 {
+                commands.push(Command::Insert {
+                    parent: track.clone(),
+                    index,
+                    node: image(id(), "\"\""),
+                });
+            }
+        }
+    }
+    Some(Command::Batch { commands })
 }

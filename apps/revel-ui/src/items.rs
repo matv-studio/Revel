@@ -71,6 +71,9 @@ pub fn ItemsList(
     /// Nombre d'éléments fixe (image révélée : dessous et dessus) : ni ajout, ni retrait.
     #[prop(optional)]
     fixed: bool,
+    /// Vignettes en grille (images d'un carrousel, D-174) : image seule, actions au survol.
+    #[prop(optional)]
+    grid: bool,
 ) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
@@ -187,7 +190,7 @@ pub fn ItemsList(
         });
     };
     view! {
-        <div class="items-list" role="list" aria-label=ui.t(if links { "items-links" } else { "items-title" })>
+        <div class="items-list" class:items-list--grid=grid role="list" aria-label=ui.t(if links { "items-links" } else { "items-title" })>
             <div class="items-head">
                 <span class="label">{ui.t(if links { "items-links" } else { "items-title" })}</span>
                 <span class="muted items-count">{move || items.with(Vec::len)}</span>
@@ -209,6 +212,7 @@ pub fn ItemsList(
                                     {move || match it.with_value(|i| i.src.clone()) {
                                         Some(src) => view! { <img alt="" src=crate::library::thumb_src(&base(), &src)/> }.into_any(),
                                         None if links => icons::link(),
+                                        None if grid => icons::image(),
                                         None => icons::box_(),
                                     }}
                                 </span>

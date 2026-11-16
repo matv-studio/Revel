@@ -278,6 +278,21 @@ impl Layout {
         self.left.retain(|g| !g.tabs.is_empty());
         self.right.retain(|g| !g.tabs.is_empty());
         self.floats.retain(|f| !f.group.tabs.is_empty());
+        self.fill();
+    }
+
+    /// Groupes d'une colonne : parts de hauteur ramenées à une moyenne de 1, pour que la colonne
+    /// reste remplie quand un groupe la quitte (un seul groupe : toute la hauteur).
+    fn fill(&mut self) {
+        for col in [&mut self.left, &mut self.right] {
+            let sum: f64 = col.iter().map(|g| g.size.max(0.05)).sum();
+            let n = col.len() as f64;
+            if n > 0.0 && (sum - n).abs() > 1e-6 {
+                for g in col.iter_mut() {
+                    g.size = g.size.max(0.05) * n / sum;
+                }
+            }
+        }
     }
 
     /// Place un panneau ; `false` si le dépôt ne change rien.
@@ -519,6 +534,10 @@ fn load() -> Layout {
         .and_then(|s| s.get_item(STORE).ok().flatten())
         .and_then(|j| serde_json::from_str::<Layout>(&j).ok())
         .map(Layout::normalize)
+        .map(|mut l| {
+            l.fill();
+            l
+        })
         .unwrap_or_default()
 }
 

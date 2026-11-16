@@ -6,8 +6,29 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 16/11/2026 (version 0.7.7 : D-172, D-173 ; refonte des outils demandée). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 16/11/2026 (version 0.7.8 : D-174, D-175). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 16/11/2026 (soir) : version 0.7.8, carrousel en outil fermé, composant relié au CMS (D-174, D-175)
+
+- Carrousel refait (outil fermé, panneau `carousel.rs`, base `toolcss.rs`, script `actions.js`), propriété
+  « Contenu » des composants (`PropKind::Entry`), réglages par défaut, rouage, fenêtre de mise à jour, élément
+  ajouté montré dans les calques, hauteur des panneaux : voir D-174 et D-175.
+- Site Alunites Groupe (chaîne `gen.py` → import → `post.py` → reconstruction, hors dépôt) : outils fermés dans
+  les gabarits, composants `carte-projet`, `carte-actualite*`, `carte-marque` (collection Marques, variante
+  « Inversée »), `bouton` (variante « Contour ») ; `revel audit` à 0. À publier avec la 0.7.8 seulement (une
+  version plus ancienne ne connaît ni la propriété « Contenu » ni le nouveau carrousel).
+- Essais de bout en bout : carrousel (panneau, calques, annulation), rouage, fenêtre de mise à jour, élément
+  montré dans les calques. Le réglage `reveal_inserted` est désactivé dans la simulation (`reveal=1` l'active)
+  pour que les essais qui enchaînent les ajouts gardent le panneau « Ajouter » devant.
+- Piège : sur le poste de travail en ligne, la configuration git de la session (`push.negotiate`, signature)
+  fait échouer l'essai « premier envoi au dépôt » ; il passe dans la CI. Pour les essais suivants en local,
+  le bloc « travail à plusieurs » a été sauté le temps d'un passage.
+- Piège : `rm -rf $(…)` est refusé par le poste ; lire le chemin puis le supprimer en clair.
+- Reste à faire : panneaux des autres outils (onglets, accordéon, filtres, barre de navigation) sur le modèle du
+  carrousel ; titres et introductions du site en composants (le mot accentué demande un texte mis en forme dans
+  une propriété) ; templates de Revel refaits avec ces outils ; dépôt des templates (nom, organisation et
+  visibilité à confirmer par l'utilisateur).
 
 ## Travail du 16/11/2026 (après-midi) : versions 0.7.6 et 0.7.7, logo, refonte demandée
 

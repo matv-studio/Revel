@@ -507,6 +507,21 @@ pub fn neighbor_expr(collection: &str, next: bool) -> String {
     format!("(collections.{collection} | {f}(page, true)).url")
 }
 
+/// Contenu choisi d'une propriété « Contenu » (`collections.marques | by_slug("alunites")`,
+/// D-174) : collection et identifiant.
+pub fn entry_slug(expr: &str) -> Option<(String, String)> {
+    let e = expr.trim();
+    let (head, tail) = e.split_once('|')?;
+    let col = head.trim().strip_prefix("collections.")?;
+    let arg = tail.trim().strip_prefix("by_slug(")?.strip_suffix(')')?;
+    let slug = crate::canvas::literal(arg.trim())?;
+    (!col.is_empty()
+        && col
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-'))
+    .then(|| (col.to_string(), slug))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

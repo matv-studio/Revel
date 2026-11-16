@@ -3,7 +3,7 @@
 (() => {
   const params = new URLSearchParams(location.hash.slice(1));
   const state = {
-    settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null, ...(params.get("scope") ? { accent_scope: params.get("scope") } : {}) },
+    settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null, ...(params.get("scope") ? { accent_scope: params.get("scope") } : {}), reveal_inserted: !!params.get("reveal") },
     // `update=1` : une version plus récente est proposée (Réglages › Mises à jour).
     update: params.get("update") ? { enabled: true, available: { version: "0.7.0", notes: "Version d’essai de la simulation." } } : null,
     recents: params.get("empty") ? [] : [
@@ -184,16 +184,16 @@
       case "create_site": window.__revelCreated = args; return { ...site, name: args.name, path: args.parent + "\\" + slug(args.name), pages: 0, layouts: 0, components: 0, collections: [], redirects: [] };
       case "cms_collections": return cms;
       case "cms_folders": return [];
-      case "app_info": return ["0.7.7", 3];
+      case "app_info": return ["0.7.8", 3];
       // `window.__revelUpdates` : mises à jour actives sans version plus récente ; préversions
       // demandées (D-86) : une préversion plus récente est proposée.
       case "update_check": {
         const u = state.update || (window.__revelUpdates ? { enabled: true } : null);
         if (!u) return { enabled: false };
-        if (state.settings.prereleases) return { enabled: true, available: { version: "0.7.7-beta.1", notes: "Préversion de la simulation.", prerelease: true } };
+        if (state.settings.prereleases) return { enabled: true, available: { version: "0.7.8-beta.1", notes: "Préversion de la simulation.", prerelease: true } };
         return u;
       }
-      case "update_install": return null;
+      case "update_install": window.__revelInstalled = true; return null;
       // Sans pont : document minimal (vue CMS, captures) ; modifications non simulées.
       case "edit_open": return { site: { schema_version: 3, name: site.name, default_locale: "fr" }, state: { revision: 0, can_undo: false, can_redo: false } };
       case "has_site": return !/import|eleventy|static/i.test(args.path || "");

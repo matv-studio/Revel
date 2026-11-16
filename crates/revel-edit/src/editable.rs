@@ -590,7 +590,15 @@ impl Audit<'_> {
                         || (kind == Some(PropKind::Link) && ctx.url.as_deref() == Some(e.trim()))
                         || (kind == Some(PropKind::List)
                             && (ctx.field(e) || ctx.prop(e, Some(PropKind::List))))
-                        || (kind == Some(PropKind::Switch) && ctx.condition(e));
+                        || (kind == Some(PropKind::Switch) && ctx.condition(e))
+                        // Contenu choisi dans sa collection, ou contenu de la liste qui entoure.
+                        || (kind == Some(PropKind::Entry)
+                            && (crate::collection::entry_slug(e).is_some()
+                                || ctx
+                                    .fields
+                                    .as_deref()
+                                    .and_then(|f| f.strip_suffix(".data."))
+                                    .is_some_and(|item| item == e.trim())));
                     if !literal && !bound {
                         self.push(id, Kind::Argument, format!("{name} = {}", short(e)));
                     }
@@ -772,12 +780,17 @@ pub fn audit(site: &Site) -> Vec<Issue> {
     }
     for c in &site.components {
         a.owner = owner_name(&Owner::Component(c.id.clone()));
-        let ctx = Ctx {
+        let mut ctx = Ctx {
             props: c.props.iter().map(|p| (p.name.clone(), p.kind)).collect(),
             env: env.clone(),
             formats: formats.clone(),
             ..Default::default()
         };
+        // Propriété « Contenu » (D-174) : ses champs se relient aux éléments du composant.
+        if let Some(p) = c.props.iter().find(|p| p.kind == PropKind::Entry) {
+            ctx.fields = Some(format!("{}.data.", p.name));
+            ctx.url = Some(format!("{}.url", p.name));
+        }
         a.nodes(&c.body, &ctx);
     }
     a.out
@@ -876,6 +889,7 @@ mod tests {
             vec![el("div", &[], vec![el("strong", &[], vec![out("valeur")])])],
         );
         c.props.push(PropDef {
+            collection: None,
             name: "valeur".into(),
             label: None,
             kind: PropKind::Text,

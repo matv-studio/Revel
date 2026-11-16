@@ -422,7 +422,7 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     "insert-accordion",
                     "insert-help-accordion",
                     "insert-text-accordion",
-                    icons::chevron_down,
+                    icons::accordion,
                     "details",
                     true,
                 ),
@@ -930,8 +930,18 @@ impl CanvasDrag {
     }
 }
 
+/// Élément ajouté montré dans les calques (réglage « reveal_inserted », D-175).
+fn show_in_layers(ui: Ui) {
+    if ui.settings.with_untracked(|s| s.reveal_inserted) {
+        ui.show_layers.update(|n| *n = n.wrapping_add(1));
+    }
+}
+
 /// Insère l'élément glissé (prédéfini ou nœud fourni) à un emplacement.
 pub fn insert_item(ui: Ui, ed: Ed, it: &DragItem, parent: Parent, index: usize) {
+    if it.node.is_some() {
+        show_in_layers(ui);
+    }
     match &it.node {
         Some(n) => {
             let mut node = n.clone();
@@ -961,6 +971,7 @@ fn insert_at(ui: Ui, ed: Ed, preset: Preset, text_key: &str, parent: Parent, ind
     } else {
         ui.now(text_key, &[])
     };
+    show_in_layers(ui);
     ed.apply(
         ui,
         Command::InsertPreset {

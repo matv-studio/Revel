@@ -73,6 +73,8 @@ pub struct Row {
     pub hidden: bool,
     /// Calque dans un calque masqué (grisé aussi).
     pub dimmed: bool,
+    /// Outil fermé (D-159, D-174) : sa nature (`data-revel-base`), icône de l'outil sur sa ligne.
+    pub tool: Option<String>,
 }
 
 /// Affichage d'une ligne dans l'arbre simplifié.
@@ -338,6 +340,13 @@ impl<'a> Builder<'a> {
                 name: revel_model::layer_name(n).map(str::to_string),
                 hidden: revel_model::is_hidden(n),
                 dimmed: false,
+                tool: match n {
+                    Node::Element { attrs, .. } if revel_model::is_widget(n) => attrs
+                        .iter()
+                        .find(|a| a.name == revel_model::BASE_ATTR)
+                        .and_then(|a| a.value.clone()),
+                    _ => None,
+                },
             });
             self.vis.push(vis);
             // Image : nom du fichier sur sa ligne ; adresse venue des données : ligne liée.
@@ -467,6 +476,7 @@ impl<'a> Builder<'a> {
             name: None,
             hidden: false,
             dimmed: false,
+            tool: None,
         });
         self.vis.push(Vis::Show);
         let mut anc = ancestors.to_vec();
@@ -1362,7 +1372,7 @@ pub fn Layers() -> impl IntoView {
             </label>
             <div class="layers-tree" role="tree" tabindex="0" on:keydown=on_key>
                 <For each=move || visible.get()
-                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}{}{:?}{}{:?}{}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated, r.bound, r.condition, r.textual, r.name, r.hidden, r.dimmed))
+                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}{}{:?}{}{:?}{}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated, r.bound, r.condition, r.textual, r.name, r.hidden, r.dimmed) + r.tool.as_deref().unwrap_or(""))
                     let:item>
                     {
                         let (r, open) = item;
@@ -1376,6 +1386,8 @@ pub fn Layers() -> impl IntoView {
                         let has_children = r.with_value(|r| r.has_children);
                         let kind = r.with_value(|r| r.kind.clone());
                         let animated = r.with_value(|r| r.animated);
+                        let tool = r.with_value(|r| r.tool.clone());
+                        let tool2 = tool.clone();
                         let bound = r.with_value(|r| r.bound);
                         let textual = r.with_value(|r| r.textual);
                         let condition = r.with_value(|r| r.condition.clone());
@@ -1530,7 +1542,10 @@ pub fn Layers() -> impl IntoView {
                                     class:is-hidden=!has_children on:click=toggle>
                                     {if open { icons::chevron_down() } else { icons::chevron_right() }}
                                 </button>
-                                <span class="layer-icon">{icon(&kind, textual, has_children)}</span>
+                                <span class="layer-icon">{match tool.as_deref().and_then(crate::names::tool_icon) {
+                                    Some(i) => i,
+                                    None => icon(&kind, textual, has_children),
+                                }}</span>
                                 {let kind = kind.clone(); move || if is_renaming() {
                                     let at = StoredValue::new(r.with_value(|r| r.id.clone().map(|id| Target { owner: r.owner.clone(), node: id })));
                                     let initial = r.with_value(|r| shown_name(ui, r));
@@ -1568,6 +1583,7 @@ pub fn Layers() -> impl IntoView {
                                         title=move || textual.then(|| ui.now("layers-edit-text", &[]))>{p}</span>
                                 })}
                                 <span class="layer-marks">
+                                    {tool2.as_deref().and_then(crate::names::tool_icon).map(|i| view! { <span class="layer-mark layer-tool" title=ui.t("layers-tool")>{i}</span> })}
                                     {bound.then(|| view! { <span class="layer-mark" title=ui.t("layers-bound")>{icons::database()}</span> })}
                                     {condition.map(|c| view! { <span class="layer-mark" title=ui.tx("layers-condition", &[("cond", c)])>{icons::branch()}</span> })}
                                     {animated.then(|| view! { <span class="layer-mark layer-anim" title=ui.t("layers-animated")>{icons::bolt()}</span> })}

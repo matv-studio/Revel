@@ -565,18 +565,21 @@ fn proprietes_de_composant() {
     );
     carte.props = vec![
         revel_model::PropDef {
+            collection: None,
             name: "titre".into(),
             label: None,
             kind: revel_model::PropKind::Text,
             default: Some(json!("Sans titre")),
         },
         revel_model::PropDef {
+            collection: None,
             name: "lien".into(),
             label: None,
             kind: revel_model::PropKind::Link,
             default: None,
         },
         revel_model::PropDef {
+            collection: None,
             name: "visible".into(),
             label: None,
             kind: revel_model::PropKind::Switch,
@@ -1965,6 +1968,7 @@ fn emplacement_de_composant() {
         parse(r#"<section class="groupe"><h3>{{ titre }}</h3><ul class="liste" data-revel-slot><li>Défaut</li></ul></section>"#),
     ));
     s.components.last_mut().unwrap().props = vec![revel_model::PropDef {
+        collection: None,
         name: "titre".into(),
         label: None,
         kind: revel_model::PropKind::Text,
@@ -1975,6 +1979,7 @@ fn emplacement_de_composant() {
         parse(r#"<li class="outil">{{ nom }}</li>"#),
     ));
     s.components.last_mut().unwrap().props = vec![revel_model::PropDef {
+        collection: None,
         name: "nom".into(),
         label: None,
         kind: revel_model::PropKind::Text,

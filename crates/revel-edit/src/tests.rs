@@ -1151,12 +1151,14 @@ fn composants_creer_proprietes_detacher() {
             id: id.clone(),
             props: vec![
                 revel_model::PropDef {
+                    collection: None,
                     name: "titre".into(),
                     label: Some("Titre".into()),
                     kind: revel_model::PropKind::Text,
                     default: Some(serde_json::json!("Bonjour")),
                 },
                 revel_model::PropDef {
+                    collection: None,
                     name: "visible".into(),
                     label: None,
                     kind: revel_model::PropKind::Switch,
@@ -1172,6 +1174,7 @@ fn composants_creer_proprietes_detacher() {
             &Command::SetComponentProps {
                 id: id.clone(),
                 props: vec![revel_model::PropDef {
+                    collection: None,
                     name: "page".into(),
                     label: None,
                     kind: revel_model::PropKind::Text,
@@ -1279,18 +1282,21 @@ fn detacher_condition_et_expression() {
     let mut c = Component::new("bouton", body);
     c.props = vec![
         revel_model::PropDef {
+            collection: None,
             name: "visible".into(),
             label: None,
             kind: revel_model::PropKind::Switch,
             default: Some(serde_json::json!(true)),
         },
         revel_model::PropDef {
+            collection: None,
             name: "lien".into(),
             label: None,
             kind: revel_model::PropKind::Link,
             default: None,
         },
         revel_model::PropDef {
+            collection: None,
             name: "titre".into(),
             label: None,
             kind: revel_model::PropKind::Text,
@@ -2418,6 +2424,7 @@ fn proprietes_du_gabarit() {
     // Variable de page lue par le gabarit : relevée (donnée de page et condition écrite).
     assert_eq!(flagged(&s), 2);
     let field = PropDef {
+        collection: None,
         name: "masquer".into(),
         label: Some("Masquer l'appel".into()),
         kind: PropKind::Switch,

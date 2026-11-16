@@ -160,12 +160,36 @@ border-radius:50%;background-color:rgba(0,0,0,.6);transform:translate(-50%,-50%)
     ),
     (
         "carousel",
-        "B{position:relative}B [data-revel-part=track]{display:flex;gap:16px}\
-B [data-revel-part=track]>*{flex:0 0 min(80%,420px);min-height:240px;padding:24px;\
-background-color:color-mix(in srgb,currentColor 8%,transparent)}\
-B [data-revel-part=controls]{display:flex;align-items:center;gap:12px;margin-top:12px}\
-B [data-revel-part=arrow]{width:40px;height:40px;border:1px solid currentColor;border-radius:50%;background:none;\
-color:inherit;font:inherit;cursor:pointer}B [data-revel-part=arrow]:disabled{opacity:.35;cursor:default}",
+        // D-174 : largeur des diapositives selon le nombre montré (`--rv-show`), écart, proportions
+        // des images ; commandes dessous, dessus ou sur les côtés ; mosaïque ; compteur écrit par
+        // un compteur CSS tant que le script ne l'a pas rempli (canevas).
+        "B{position:relative;display:flex;flex-direction:column;gap:12px;counter-reset:rv-slide;--rv-gap:12px;--rv-show:1}\
+B [data-revel-part=track]{display:flex;gap:var(--rv-gap)}\
+B [data-revel-part=track]>*{flex:none;min-width:0;counter-increment:rv-slide}\
+B [data-revel-part=track]>*,B [data-revel-part=track]>picture>img{width:calc((100% - var(--rv-gap) * (var(--rv-show) - 1)) / var(--rv-show))}\
+B [data-revel-part=track]>img,B [data-revel-part=track]>picture>img{height:auto;aspect-ratio:var(--rv-ratio,4 / 3);object-fit:cover}\
+B [data-revel-part=track]>*,B [data-revel-part=track]>picture>img,B .rv-more-tile{border-radius:var(--rv-radius,0)}\
+B [data-revel-part=track]>div{min-height:240px}\
+B [data-revel-part=controls]{display:flex;align-items:center;justify-content:flex-end;gap:12px}\
+B [data-revel-part=title]{order:-2;margin:0 auto 0 0}\
+B [data-revel-part=count]{order:-1;margin:0;font-variant-numeric:tabular-nums}\
+B [data-revel-part=count]:empty::before{content:\"1 / \" counter(rv-slide)}\
+B [data-revel-part=arrow]{width:44px;height:44px;flex:none;display:grid;place-items:center;padding:0;border:1px solid currentColor;border-radius:50%;background:none;\
+color:inherit;font:inherit;cursor:pointer}B [data-revel-part=arrow]:disabled{opacity:.35;cursor:default}\
+B [data-revel-part=arrow] svg{width:18px;height:18px}\
+B [data-revel-part=dots]{display:flex;gap:8px}B [data-revel-part=dots] button{width:8px;height:8px;padding:0;border:0;\
+border-radius:50%;background:currentColor;opacity:.3;cursor:pointer}B [data-revel-part=dots] button.is-active{opacity:1}\
+B[data-revel-controls=top] [data-revel-part=controls]{order:-1}\
+B[data-revel-controls=sides] [data-revel-part=controls]{position:absolute;inset:0;justify-content:space-between;padding:0 12px;pointer-events:none}\
+B[data-revel-controls=sides] [data-revel-part=arrow]{pointer-events:auto;background-color:color-mix(in srgb,Canvas 70%,transparent)}\
+B[data-revel-controls=sides] [data-revel-part=title]{display:none}\
+B[data-revel-controls=sides] [data-revel-part=count],B[data-revel-controls=sides] [data-revel-part=dots]{position:absolute;left:50%;bottom:12px;transform:translateX(-50%)}\
+B[data-revel-layout=mosaic] [data-revel-part=track]{display:grid;grid-template-columns:repeat(var(--rv-cols,3),minmax(0,1fr))}\
+B[data-revel-layout=mosaic] [data-revel-part=track]>*,B[data-revel-layout=mosaic] [data-revel-part=track]>picture>img{width:100%;aspect-ratio:var(--rv-ratio,1)}\
+B[data-revel-layout=mosaic] [data-revel-part=controls]{display:none}\
+B .rv-more-tile{aspect-ratio:var(--rv-ratio,1);display:grid;place-items:center;padding:0;border:1px solid color-mix(in srgb,currentColor 20%,transparent);\
+background:color-mix(in srgb,currentColor 8%,transparent);color:inherit;font:inherit;font-weight:600;font-size:1.25em;cursor:pointer}\
+B [hidden]{display:none}",
     ),
     (
         "slideshow",
@@ -216,7 +240,12 @@ fn base_css(kind: &str, rules: &str) -> String {
         let rule = &rest[..=end];
         if let Some(open) = rule.find('{') {
             let sel = rule[..open].replace('B', &root);
-            out.push_str(&format!(":where({sel}){}", &rule[open..]));
+            // Partie ajoutée (`::before`, `::after`) : hors de `:where()`, qui ne l'accepte pas.
+            let (sel, pseudo) = ["::before", "::after"]
+                .iter()
+                .find_map(|p| sel.strip_suffix(p).map(|s| (s.to_string(), *p)))
+                .unwrap_or((sel, ""));
+            out.push_str(&format!(":where({sel}){pseudo}{}", &rule[open..]));
         }
         rest = &rest[end + 1..];
     }

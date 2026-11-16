@@ -685,6 +685,47 @@ try {
     const last = await page.$$eval('.items-list .items-row .items-thumb img', (l) => (l.length ? l[l.length - 1].getAttribute('src') : ''));
     check('défilement : éléments listés dans Styles, image ajoutée à la fin', n0 > 0 && last.endsWith(url.replace(/^\//, '')), `${n0} → ${n0 + 1} (${url})`);
   }
+  // Carrousel (D-174) : outil fermé, une ligne dans les calques (marque de l'outil) ; images,
+  // fonction et commandes réglées dans Styles, sans champ « Texte » ; tout annulé ensuite.
+  {
+    const known = await frameOf().evaluate(() => [...document.querySelectorAll('[data-revel-slider]')].map((e) => e.getAttribute('data-rv')));
+    await page.click('.dock-tab[data-panel="insert"]');
+    await page.dblclick('.insert-item[data-item="insert-carousel"]');
+    await page.waitForSelector('.dock-panel[data-panel="styles"] .carousel-settings[data-carousel="images"]');
+    let steps = 1;
+    const state = () => frameOf().evaluate((known) => {
+      const s = [...document.querySelectorAll('[data-revel-slider]')].find((e) => !known.includes(e.getAttribute('data-rv')));
+      if (!s) return null;
+      return { count: !s.querySelector('[data-revel-count]').hidden, dots: !s.querySelector('[data-revel-dots]').hidden,
+        layout: s.getAttribute('data-revel-layout') || '', pos: s.getAttribute('data-revel-controls'),
+        n: s.querySelector('[data-revel-track]').children.length };
+    }, known);
+    const stateIs = async (pred, what) => { for (let i = 0; i < 100; i++) { const st = await state().catch(() => null); if (st && pred(st)) return st; await page.waitForTimeout(100); } throw new Error('carrousel : ' + what); };
+    const s0 = await stateIs((st) => st.n === 3, 'inséré');
+    const noText = (await page.$('.dock-panel[data-panel="styles"] .text-fields')) === null;
+    const thumbs = await page.$$eval('.carousel-settings .items-list .items-row', (r) => r.length);
+    await page.click('.dock-tab[data-panel="layers"]');
+    await page.waitForSelector('.layers .layer.is-selected .layer-tool');
+    const parts = await page.$$eval('.layers .layer', (l) => l.filter((x) => /carrousel__|Précédente|Suivante/.test(x.textContent)).length);
+    check('carrousel : trois images vides, compteur montré, une ligne dans les calques, pas de champ « Texte »',
+      s0.count && !s0.dots && s0.pos === 'bottom' && noText && thumbs === 3 && parts === 0, `${s0.n} images · ${thumbs} vignettes · ${parts} partie(s) dans les calques`);
+    await page.click('.carousel-controls [data-row="carousel-count"] .switch');
+    await stateIs((st) => !st.count, 'compteur caché'); steps++;
+    await page.click('.carousel-controls [data-row="carousel-dots"] .switch');
+    await stateIs((st) => st.dots, 'points montrés'); steps++;
+    await page.selectOption('.carousel-controls [data-row="carousel-position"] select', 'top');
+    await stateIs((st) => st.pos === 'top', 'commandes au-dessus'); steps++;
+    await page.click('.carousel-mode [data-mode="carousel-mosaic"]');
+    const s1 = await stateIs((st) => st.layout === 'mosaic', 'mosaïque'); steps++;
+    await page.waitForSelector('.dock-panel[data-panel="styles"] .carousel-settings[data-carousel="mosaic"]');
+    const mosaicRows = await page.$$eval('.carousel-layout .style-row', (l) => l.map((r) => r.dataset.row).join(','));
+    check('carrousel : compteur, points et position réglés par le panneau, fonction « Mosaïque » (colonnes, bouton « +N »)',
+      !s1.count && s1.dots && /carousel-cols,carousel-more/.test(mosaicRows) && (await page.$('.carousel-controls')) === null, mosaicRows);
+    if (shots) await page.screenshot({ path: `${shots}/carrousel.png` });
+    for (let i = 0; i < steps; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(250); }
+    for (let i = 0; i < 100 && await state().catch(() => null); i++) await page.waitForTimeout(100);
+    check('carrousel : tout annulé', (await state().catch(() => null)) === null);
+  }
   await page.click('.dock-tab[data-panel="layers"]');
 
   // Lien : nouvel onglet (target + rel). Le lien est dans le composant de l'en-tête : un clic
@@ -4172,14 +4213,42 @@ try {
       check('couleurs de l\'interface : composants recolorés, puis couleur par défaut', true);
     }
     if (shots) await page.screenshot({ path: `${shots}/reglages-revel.png` });
-    // Retour au site d'un clic (bouton de la barre, hors du menu du site).
-    const back = (await page.textContent('.topbar-back')).trim();
-    await page.click('.site-menu-btn');
-    const inMenu = await page.$$eval('.site-menu-pop .menu-item', (l) => l.some((x) => x.textContent.includes('Revenir')));
-    await page.keyboard.press('Escape');
-    await page.click('.topbar-back');
+    // Réglages de Revel ouverts depuis un site (D-175) : rouage actif à droite des vues du site,
+    // plus de bouton « Revenir » ; un clic sur une vue ramène au site.
+    const tabs = await page.$$eval('.views .view-tab', (l) => l.map((b) => b.dataset.view + (b.classList.contains('is-on') ? '*' : '')).join(' '));
+    const noBack = (await page.$('.topbar-back')) === null;
+    await page.click('.view-tab[data-view="view-editor"]');
     await page.waitForSelector('iframe.canvas-frame');
-    check('réglages : menu du site gardé, retour au projet d\'un clic', kept && /^Revenir à /.test(back) && !inMenu, back);
+    // Rouage : réglages de Revel sans passer par le menu du site.
+    await page.click('.view-tab[data-view="nav-settings"]');
+    await page.waitForSelector('.settings-nav');
+    const gearOn = await page.$eval('.view-tab[data-view="nav-settings"]', (b) => b.classList.contains('is-on') && !!b.querySelector('svg') && !b.textContent.trim());
+    await page.click('.view-tab[data-view="view-editor"]');
+    await page.waitForSelector('iframe.canvas-frame');
+    check('réglages : menu et vues du site gardés, rouage actif, retour au projet par une vue',
+      kept && noBack && gearOn && /^view-editor .*view-settings nav-settings\*$/.test(tabs), tabs);
+    // Élément ajouté montré dans les calques (D-175) : réglage activé, « Calques » passe devant.
+    {
+      const reveal = async (on) => {
+        await page.click('.view-tab[data-view="nav-settings"]');
+        await page.waitForSelector('.settings-reveal');
+        if (await page.$eval('.settings-reveal', (i) => i.checked) !== on) await page.click('label.switch:has(.settings-reveal)');
+        await page.waitForFunction((on) => window.__revelSettings?.reveal_inserted === on, on);
+        await page.click('.view-tab[data-view="view-editor"]');
+        await page.waitForSelector('iframe.canvas-frame');
+        await waitFrame(() => document.readyState === 'complete' && !!document.querySelector('[data-rv]'), 'retour au canevas');
+      };
+      await reveal(true);
+      await page.frameLocator('iframe.canvas-frame').locator('h1').first().click();
+      await page.click('.dock-tab[data-panel="insert"]');
+      await page.dblclick('.insert-item[data-item="insert-carousel"]');
+      await page.waitForSelector('.dock-tab[data-panel="layers"].is-on');
+      await page.waitForSelector('.layers .layer.is-selected .layer-tool');
+      await page.click('.editor-toolbar .btn-undo');
+      await page.waitForTimeout(400);
+      await reveal(false);
+      check('ajout : élément montré dans les calques (réglage), panneau « Calques » passé devant', true);
+    }
   }
 
   // ---------------------------------------------------------------- Langues de traduction (D-36)
@@ -4287,9 +4356,17 @@ try {
     await status('à jour');
     const help = await page.getAttribute(`${card} .label:has-text("Recevoir les préversions")`, 'title');
     await page.click(`${card} .switch`);
-    await status('^Préversion 0\\.7\\.7-beta\\.1 disponible$');
+    await status('^Préversion 0\\.7\\.8-beta\\.1 disponible$');
     await page.waitForSelector('.update-pill');
     const pill = (await page.textContent('.update-pill')).trim();
+    // Pastille (D-175) : fenêtre « installer et redémarrer », installation lancée à l'accord.
+    await page.click('.update-pill');
+    await page.waitForSelector('.dialog');
+    const askTitle = (await page.textContent('.dialog h2, .dialog .dialog-title')).trim();
+    const stayed = (await page.$('.settings-nav')) !== null;
+    await page.click('.dialog .btn--primary');
+    await page.waitForFunction(() => window.__revelInstalled === true);
+    check('mise à jour : la pastille demande d\'installer et de redémarrer, puis installe', /Installer Revel 0\.7\.8-beta\.1 et redémarrer/.test(askTitle) && stayed, askTitle);
     const saved = await page.evaluate(() => window.__revelSettings?.prereleases === true);
     if (shots) await page.screenshot({ path: `${shots}/reglages-preversions.png` });
     await page.click(`${card} .switch`);
@@ -4298,7 +4375,7 @@ try {
     const off = await page.evaluate(() => window.__revelSettings?.prereleases === false);
     await page.evaluate(() => { window.__revelUpdates = false; });
     check('réglages : préversions demandées puis retirées (enregistrées, recherche relancée, « Préversion » dans la barre)',
-      !!help && pill === 'Préversion 0.7.7-beta.1' && saved && pillGone && off, pill);
+      !!help && pill === 'Préversion 0.7.8-beta.1' && saved && pillGone && off, pill);
   }
 
   // Réglages › Assistants IA (4.2, serveur simulé) : activation, port, clé, configurations.

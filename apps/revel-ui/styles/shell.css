@@ -377,3 +377,7 @@
 .preview-stage.is-comp { align-items: center; overflow: auto; padding: var(--s-6); }
 .preview-comp { position: relative; flex: none; margin: auto; border-radius: var(--radius-md); box-shadow: var(--shadow-dialog); overflow: hidden; }
 .preview-frame--comp { position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: none; }
+
+/* Réglages de Revel : rouage, à droite des vues (D-175). */
+.view-tab--icon { padding: 0 var(--s-2); }
+.view-tab--icon svg.icon { width: 16px; height: 16px; }

@@ -1687,6 +1687,7 @@ fn deduce_props(site: &mut Site, globals: &HashSet<String>, notes: &mut Vec<Stri
         }
         for (_, p, kind) in &found {
             c.props.push(PropDef {
+                collection: None,
                 name: p.clone(),
                 label: humanize(p),
                 kind: *kind,
@@ -3516,6 +3517,7 @@ fn layout_fields_from_pages(site: &mut Site, notes: &mut Vec<String>) {
         };
         let default = l.props.remove(&name);
         l.fields.push(PropDef {
+            collection: None,
             name: name.clone(),
             label: humanize(&name),
             kind,

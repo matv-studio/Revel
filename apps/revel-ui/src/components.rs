@@ -14,12 +14,13 @@ use revel_model::{Component, Node, PropDef, PropKind, Variant, VariantKind};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub(crate) const KINDS: [PropKind; 5] = [
+pub(crate) const KINDS: [PropKind; 6] = [
     PropKind::Text,
     PropKind::Image,
     PropKind::Link,
     PropKind::Switch,
     PropKind::List,
+    PropKind::Entry,
 ];
 
 pub(crate) fn kind_key(k: PropKind) -> &'static str {
@@ -29,6 +30,7 @@ pub(crate) fn kind_key(k: PropKind) -> &'static str {
         PropKind::Link => "prop-kind-link",
         PropKind::Switch => "prop-kind-switch",
         PropKind::List => "prop-kind-list",
+        PropKind::Entry => "prop-kind-entry",
     }
 }
 
@@ -39,6 +41,7 @@ pub(crate) fn kind_icon(k: PropKind) -> AnyView {
         PropKind::Link => icons::link(),
         PropKind::Switch => icons::eye(),
         PropKind::List => icons::list(),
+        PropKind::Entry => icons::database(),
     }
 }
 
@@ -49,6 +52,7 @@ pub(crate) fn kind_icon_fn(k: PropKind) -> fn() -> AnyView {
         PropKind::Link => icons::link,
         PropKind::Switch => icons::eye,
         PropKind::List => icons::list,
+        PropKind::Entry => icons::database,
     }
 }
 
@@ -60,6 +64,7 @@ fn base_name(k: PropKind) -> &'static str {
         PropKind::Link => "lien",
         PropKind::Switch => "visible",
         PropKind::List => "liste",
+        PropKind::Entry => "contenu",
     }
 }
 
@@ -515,6 +520,80 @@ fn prop_value_row(
     list: Option<ListBind>,
     parent: Option<(PropDef, bool)>,
 ) -> AnyView {
+    // Propriété « Contenu » (D-174) : collection du composant, puis contenu choisi pour cette
+    // utilisation (ou celui de la liste qui l'entoure).
+    if p.kind == PropKind::Entry {
+        let cols = crate::blocks::collections(ed);
+        let col = p.collection.clone().unwrap_or_default();
+        let col_label = {
+            let col = col.clone();
+            move || {
+                cols.with(|cs| {
+                    cs.iter()
+                        .find(|c| c.id == col)
+                        .map(|c| {
+                            c.label
+                                .clone()
+                                .unwrap_or_else(|| crate::site::capitalize(&c.id))
+                        })
+                        .unwrap_or_else(|| col.clone())
+                })
+            }
+        };
+        let chosen = arg
+            .as_deref()
+            .and_then(revel_edit::collection::entry_slug)
+            .map(|(_, s)| s);
+        // Liste de la même collection autour de l'utilisation : son contenu.
+        let item = list
+            .as_ref()
+            .filter(|((c, _), _)| *c == col)
+            .map(|((_, item), _)| item.clone());
+        let from_list = item.is_some() && arg.as_deref().map(str::trim) == item.as_deref();
+        let current = if from_list {
+            "@list".to_string()
+        } else {
+            chosen.map(|s| format!("slug:{s}")).unwrap_or_default()
+        };
+        let pname = StoredValue::new(p.name.clone());
+        let def = StoredValue::new(p.clone());
+        let item = StoredValue::new(item);
+        let (c1, c2) = (current.clone(), col.clone());
+        return view! {
+            <div class="prop-entry" data-prop=p.name.clone()>
+                <div class="style-row">
+                    <span class="style-label"><span class="style-label-text">{ui.t("prop-entry-collection")}</span></span>
+                    <div class="style-control"><span class="prop-entry-name" title=ui.t("prop-entry-collection-fixed")>{icons::database()}<span>{col_label}</span></span></div>
+                </div>
+                <div class="style-row">
+                    <span class="style-label" title=ui.t("prop-entry-content-help")><span class="style-label-text">{p.label().to_string()}</span></span>
+                    <div class="style-control"><div class="select">
+                        <select class="input prop-entry-select" aria-label=p.label().to_string()
+                            on:change=move |e| {
+                                let v = event_target_value(&e);
+                                let expr = if v == "@list" {
+                                    item.get_value()
+                                } else {
+                                    v.strip_prefix("slug:").and_then(|s| def.with_value(|d| d.entry_expr(Some(s))))
+                                };
+                                set(pname.get_value(), expr);
+                            }>
+                            <option value="" selected=c1.is_empty()>{ui.t("prop-entry-first")}</option>
+                            {item.with_value(Option::is_some).then(|| view! {
+                                <option value="@list" selected=c1 == "@list">{ui.t("prop-entry-list")}</option>
+                            })}
+                            {move || entries_of(cols, &c2).into_iter().map(|(s, t)| {
+                                let v = format!("slug:{s}");
+                                let on = v == current;
+                                view! { <option value=v selected=on>{t}</option> }
+                            }).collect_view()}
+                        </select>
+                    </div></div>
+                </div>
+            </div>
+        }
+        .into_any();
+    }
     let name = StoredValue::new(p.name.clone());
     let label = p.label().to_string();
     let overridden = arg.is_some();
@@ -779,7 +858,7 @@ pub fn props_section(ui: Ui, ed: Ed, holder: Holder) -> AnyView {
         let items = KINDS
             .into_iter()
             // Gabarit : valeurs réglées dans les réglages d'une page (pas de liste).
-            .filter(|k| !(layout && *k == PropKind::List))
+            .filter(|k| !(layout && matches!(*k, PropKind::List | PropKind::Entry)))
             .map(|k| {
                 CtxItem::new(ui.now(kind_key(k), &[]), move || {
                     let Some(mut list) = props.get_untracked() else {
@@ -833,7 +912,51 @@ pub fn props_section(ui: Ui, ed: Ed, holder: Holder) -> AnyView {
                             ed.apply(ui, cmd, false);
                         }
                     };
-                    let default_view = if kind == PropKind::Switch {
+                    let default_view = if kind == PropKind::Entry {
+                        let cols = crate::blocks::collections(ed);
+                        let col = p.collection.clone().unwrap_or_default();
+                        let col2 = col.clone();
+                        let slug = p.default.as_ref().and_then(|d| d.as_str()).unwrap_or_default().to_string();
+                        view! {
+                            <div class="style-row" data-row="prop-collection">
+                                <span class="style-label" title=ui.t("prop-entry-collection-help")><span class="style-label-text">{ui.t("prop-entry-collection")}</span></span>
+                                <div class="style-control"><div class="select">
+                                    <select class="input prop-entry-collection" aria-label=ui.t("prop-entry-collection")
+                                        on:change=move |e| {
+                                            let v = event_target_value(&e);
+                                            set_prop(Box::new(move |p| {
+                                                p.collection = (!v.is_empty()).then(|| v.clone());
+                                                p.default = None;
+                                            }));
+                                        }>
+                                        <option value="" selected=col.is_empty()>{ui.t("prop-entry-choose")}</option>
+                                        {move || cols.with(|cs| cs.iter().filter(|c| !c.id.contains('+')).map(|c| {
+                                            let on = c.id == col;
+                                            view! { <option value=c.id.clone() selected=on>{c.label.clone().unwrap_or_else(|| crate::site::capitalize(&c.id))}</option> }
+                                        }).collect_view())}
+                                    </select>
+                                </div></div>
+                            </div>
+                            {(!col2.is_empty()).then(|| view! {
+                                <div class="style-row" data-row="prop-entry">
+                                    <span class="style-label" title=ui.t("prop-entry-default-help")><span class="style-label-text">{ui.t("prop-entry-content")}</span></span>
+                                    <div class="style-control"><div class="select">
+                                        <select class="input prop-entry-default" aria-label=ui.t("prop-entry-content")
+                                            on:change=move |e| {
+                                                let v = event_target_value(&e);
+                                                set_prop(Box::new(move |p| p.default = (!v.is_empty()).then(|| Value::String(v.clone()))));
+                                            }>
+                                            <option value="" selected=slug.is_empty()>{ui.t("prop-entry-first")}</option>
+                                            {move || entries_of(cols, &col2).into_iter().map(|(s, t)| {
+                                                let on = s == slug;
+                                                view! { <option value=s selected=on>{t}</option> }
+                                            }).collect_view()}
+                                        </select>
+                                    </div></div>
+                                </div>
+                            })}
+                        }.into_any()
+                    } else if kind == PropKind::Switch {
                         let on = default_bool(p);
                         view! {
                             <label class="view-line">
@@ -890,6 +1013,7 @@ pub(crate) fn new_prop(ui: Ui, props: &[PropDef], k: PropKind, default: Option<V
         n += 1;
     }
     PropDef {
+        collection: None,
         name,
         label: Some(label),
         kind: k,
@@ -1788,4 +1912,40 @@ mod list_tests {
         assert_eq!(list_literal("item.data.tags"), None);
         assert_eq!(list_literal("[x, 'y']"), None);
     }
+}
+
+/// Contenus d'une collection : identifiant (champ `slug`, sinon nom du fichier) et titre (D-174).
+pub(crate) fn entries_of(
+    cols: RwSignal<Vec<revel_protocol::CmsCollection>>,
+    collection: &str,
+) -> Vec<(String, String)> {
+    cols.with(|cs| {
+        cs.iter()
+            .find(|c| c.id == collection)
+            .map(|c| {
+                c.entries
+                    .iter()
+                    .map(|e| {
+                        let text = |k: &str| {
+                            e.data
+                                .get(k)
+                                .and_then(|v| v.as_str())
+                                .filter(|s| !s.is_empty())
+                                .map(str::to_string)
+                        };
+                        let slug = text("slug").unwrap_or_else(|| {
+                            e.file
+                                .rsplit_once('.')
+                                .map_or(e.file.as_str(), |(a, _)| a)
+                                .to_string()
+                        });
+                        let title = text("title")
+                            .or_else(|| text("name"))
+                            .unwrap_or_else(|| slug.clone());
+                        (slug, title)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
 }

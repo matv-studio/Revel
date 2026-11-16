@@ -249,21 +249,11 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
             };
             parts.push(view! { <crate::items::ItemsList at=t links=true/> }.into_any());
         }
-        if let Some(v) = attr(attrs, "data-revel-slider") {
-            parts.push(slider_options(
-                ui,
-                ed,
-                at.clone(),
-                v.value.clone().unwrap_or_default(),
-            ));
-            // Diapositives de la piste, réglées ici (D-123).
-            if let Some(track) = with_attr(children, "data-revel-track") {
-                let t = Target {
-                    owner: at.owner.clone(),
-                    node: track,
-                };
-                parts.push(view! { <crate::items::ItemsList at=t/> }.into_any());
-            }
+        // Carrousel (D-174) : fonction, images, affichage, commandes, défilement.
+        if attr(attrs, "data-revel-slider").is_some()
+            && let Some(v) = crate::carousel::settings(ui, ed, &at, &node)
+        {
+            parts.push(v);
         }
         // Liste de collection : son conteneur (une seule boucle dedans).
         let loops: Vec<&Node> = children
@@ -541,7 +531,7 @@ fn text_of(p: Preset) -> &'static str {
 /// Choix d'icône (D-125) : onglets (flèches, interface, contact, médias, objets, création) et
 /// onglet des icônes importées (fichiers SVG des médias du site) avec « Importer ».
 #[component]
-fn IconPicker(at: Target, current: String) -> impl IntoView {
+pub(crate) fn IconPicker(at: Target, current: String) -> impl IntoView {
     const CUSTOM: &str = "icons-custom";
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
@@ -2463,103 +2453,6 @@ fn links_box(own: Option<&str>, children: &[Node]) -> Option<String> {
     })
 }
 
-/// Identifiant du premier élément descendant qui porte l'attribut `name`.
-fn with_attr(nodes: &[Node], name: &str) -> Option<String> {
-    nodes.iter().find_map(|n| match n {
-        Node::Element {
-            id,
-            attrs,
-            children,
-            ..
-        } => {
-            if attr(attrs, name).is_some() {
-                id.clone()
-            } else {
-                with_attr(children, name)
-            }
-        }
-        _ => revel_model::ids::child_lists(n)
-            .into_iter()
-            .find_map(|l| with_attr(l, name)),
-    })
-}
-
-/// Carrousel et diaporama : lecture automatique (secondes, vide : à la main) et boucle, écrits
-/// dans `data-revel-slider` (`autoplay=5 loop`).
-fn slider_options(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
-    let at = StoredValue::new(at);
-    let opts: Vec<String> = value.split_whitespace().map(str::to_string).collect();
-    let autoplay = opts
-        .iter()
-        .find_map(|o| o.strip_prefix("autoplay="))
-        .unwrap_or_default()
-        .to_string();
-    let looped = opts.iter().any(|o| o == "loop");
-    let write = move |autoplay: Option<String>, looped: Option<bool>| {
-        let cur = ed.doc.with_untracked(|d| {
-            d.as_ref()
-                .and_then(|d| revel_edit::address::node(d, &at.get_value()).ok())
-                .and_then(|n| match n {
-                    Node::Element { attrs, .. } => {
-                        attr(attrs, "data-revel-slider").and_then(|a| a.value.clone())
-                    }
-                    _ => None,
-                })
-                .unwrap_or_default()
-        });
-        let mut parts: Vec<String> = cur
-            .split_whitespace()
-            .filter(|o| {
-                !(autoplay.is_some() && o.starts_with("autoplay="))
-                    && !(looped.is_some() && *o == "loop")
-            })
-            .map(str::to_string)
-            .collect();
-        if let Some(a) = autoplay.filter(|a| a.parse::<f64>().is_ok_and(|n| n > 0.0)) {
-            parts.push(format!("autoplay={a}"));
-        }
-        if looped == Some(true) {
-            parts.push("loop".into());
-        }
-        ed.apply(
-            ui,
-            Command::SetAttr {
-                at: at.get_value(),
-                name: "data-revel-slider".into(),
-                value: Some(parts.join(" ")),
-            },
-            false,
-        );
-    };
-    view! {
-        <div class="insp-group slider-settings">
-            <p class="panel-title">{ui.t("slider-title")}</p>
-            <div class="style-row">
-                <span class="style-label" title=ui.t("slider-autoplay-help")><span class="style-label-text">{ui.t("slider-autoplay")}</span></span>
-                <div class="style-control">
-                    <div class="nbox has-units">
-                        <input class="nbox-input" type="text" inputmode="decimal" spellcheck="false"
-                            prop:value=autoplay aria-label=ui.t("slider-autoplay")
-                            on:change=move |e| {
-                                let v = event_target_value(&e).trim().replace(',', ".");
-                                write(Some(v.trim_end_matches('s').trim().to_string()), None);
-                            }/>
-                        <span class="nbox-suffix" aria-hidden="true">"s"</span>
-                    </div>
-                </div>
-            </div>
-            <label class="view-line">
-                <span>{ui.t("slider-loop")}</span>
-                <span class="switch">
-                    <input type="checkbox" prop:checked=looped on:change=move |e| write(None, Some(event_target_checked(&e)))/>
-                    <span class="switch-track"></span>
-                </span>
-            </label>
-        </div>
-    }
-    .into_any()
-}
-
 // ------------------------------------------------------------------ animation Lottie
 
 const LOTTIE_PLAY: &[(&str, &str)] = &[
@@ -2778,6 +2671,31 @@ fn list_fields(c: Option<&CmsCollection>) -> Vec<(String, String, Option<String>
             .collect()
     })
     .unwrap_or_default()
+}
+
+/// Champs « liste d'images » du contenu auquel l'élément peut se relier (galerie d'un projet) :
+/// expression et nom affiché (D-174).
+pub(crate) fn image_list_fields(ed: Ed, at: &Target) -> Vec<(String, String)> {
+    let Some((col, prefix, _)) = ed.doc.with_untracked(|d| binding_context(d.as_ref()?, at)) else {
+        return Vec::new();
+    };
+    collections(ed).with_untracked(|cs| {
+        cs.iter()
+            .find(|c| c.id == col)
+            .map(|c| {
+                c.fields
+                    .iter()
+                    .filter(|f| f.list && matches!(f.kind.as_deref(), Some("image")))
+                    .map(|f| {
+                        (
+                            format!("{prefix}{}", f.name),
+                            f.label.clone().unwrap_or_else(|| f.name.clone()),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
 }
 
 /// Source d'une liste : une collection, ou un champ du contenu qui l'entoure.
@@ -3926,6 +3844,17 @@ fn visibility_of(d: &Site, at: &Target) -> Option<(Target, String)> {
 fn binding_context(d: &Site, at: &Target) -> Option<(String, String, String)> {
     if let Some((q, item)) = enclosing_list(d, at) {
         return Some((q.key(), format!("{item}.data."), format!("{item}.url")));
+    }
+    // Composant qui a une propriété « Contenu » (D-174) : champs de sa collection.
+    if let revel_edit::Owner::Component(cid) = &at.owner
+        && let Some(p) = d.component(cid).and_then(|c| {
+            c.props
+                .iter()
+                .find(|p| p.kind == revel_model::PropKind::Entry)
+        })
+        && let Some(col) = p.collection.clone()
+    {
+        return Some((col, format!("{}.data.", p.name), format!("{}.url", p.name)));
     }
     template_collection(d, at).map(|c| (c, String::new(), "page.url".into()))
 }

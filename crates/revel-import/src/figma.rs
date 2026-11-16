@@ -1172,6 +1172,7 @@ fn components(
         c.name = Some(name);
         c.props = (1..=k)
             .map(|i| PropDef {
+                collection: None,
                 name: format!("texte{i}"),
                 label: Some(format!("Texte {i}")),
                 kind: PropKind::Text,

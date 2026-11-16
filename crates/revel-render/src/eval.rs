@@ -1045,6 +1045,17 @@ impl<'a> Builder<'a> {
                                 };
                                 (v, o)
                             }
+                            // Propriété « Contenu » (D-174) : contenu par défaut de sa collection.
+                            None if p.kind == revel_model::PropKind::Entry => {
+                                let slug = p.default.as_ref().and_then(|d| d.as_str());
+                                let v = match p.entry_expr(slug) {
+                                    Some(e) => {
+                                        self.eval(scope, &e, &ctx).unwrap_or(Value::UNDEFINED)
+                                    }
+                                    None => Value::UNDEFINED,
+                                };
+                                (v, None)
+                            }
                             None => (prop_default(p), here),
                         };
                         if let Some(o) = origin.filter(|_| self.editor.is_some()) {

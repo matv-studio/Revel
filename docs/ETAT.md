@@ -6,8 +6,26 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 16/11/2026 (D-172, après la 0.7.5). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 16/11/2026 (version 0.7.7 : D-172, D-173 ; refonte des outils demandée). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 16/11/2026 (après-midi) : versions 0.7.6 et 0.7.7, logo, refonte demandée
+
+- 0.7.6 (`b6a997a`, D-172) livrée sans vérification préalable à la demande de l'utilisateur, Windows d'abord ;
+  publiée par lui. Corrections de la CI ensuite (mise en forme, essais). 0.7.7 (`aedecb4`, D-173) : carrousel
+  dont les diapositives sont des images responsives (flèches, compteur), glisser à la souris.
+- Logo de Revel remplacé (fichier fourni par l'utilisateur) : `apps/revel-app/app-icon.png`, `icons/`
+  (png, ico, icns produits avec rsvg-convert et Pillow), marque de l'interface (`icons::logo`). Après la 0.7.7.
+- Piège : un flux « Installateurs » lancé à la main est resté 30 min en attente sans tâche ; annulé et relancé.
+- Piège : le dépôt nu d'un essai créé par `git init --bare` peut avoir une autre branche par défaut que le
+  site (`HEAD` introuvable) ; l'essai pose `HEAD` sur la branche reçue.
+- Refonte demandée par l'utilisateur (à faire, propositions à valider sur une toile Design) : un outil = une
+  ligne dans les calques (icône de l'outil, diapositives seules dépliables, clic droit « Décomposer ») ;
+  panneau de l'outil (images listées, ajout et retrait, flèches / compteur / points à activer, icônes
+  remplaçables, image manquante montrée par une icône) ; composant relié au CMS (éléments « champ CMS » dans le
+  composant, contenu choisi sur l'instance) ; site Alunites Groupe reconstruit dans Revel avec composants et
+  outils, sans classes de maquette. Références : Slider de Webflow (Mask, Slides, flèches, Slide Nav, réglages
+  dans le panneau), Slideshow et Carousel de Framer (flèches, points, glisser en options du composant).
 
 ## Travail du 16/11/2026 : outils regroupés, « Sauvegarde », retour au CMS, outils des gabarits (D-172)
 

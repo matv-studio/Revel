@@ -1039,9 +1039,9 @@ pub fn Styles() -> impl IntoView {
             // en bas (onglet Réglages fondu dans Styles).
             // (Élément ou image : sous les classes, qui restent tout en haut.)
             {move || (kind.get() != 3).then(|| if is_use.get() {
-                view! { <crate::inspector::ContentSettings/><crate::textfield::SelectedTexts/> }.into_any()
+                view! { <crate::inspector::ContentSettings/><crate::textfield::SelectedTexts/><crate::textfield::CmsFields/> }.into_any()
             } else {
-                view! { <crate::textfield::SelectedTexts/><crate::inspector::ContentSettings/> }.into_any()
+                view! { <crate::textfield::SelectedTexts/><crate::textfield::CmsFields/><crate::inspector::ContentSettings/> }.into_any()
             })}
             {move || match kind.get() {
                 0 => view! { <div class="inspector-empty">{icons::empty_tip(ui.tx("editor-no-selection", &[]), ui.tx("inspector-none", &[]))}</div> }.into_any(),
@@ -1144,6 +1144,7 @@ pub fn Styles() -> impl IntoView {
                         </div>
                     </div>
                     <crate::textfield::SelectedTexts/>
+                    <crate::textfield::CmsFields/>
                     <crate::inspector::ContentSettings/>
                     // Sans classe ni balise choisie : la première valeur crée la classe.
                     <PartContent sx/>

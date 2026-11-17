@@ -3912,6 +3912,7 @@ use-cms-fields = Campos del CMS
 use-cms-fields-help = Valores leídos del elemento elegido: elija otro en «Propiedades» o sustituya un valor solo en esta instancia
 cms-field-override = Sustituir en esta instancia
 cms-field-reset = Volver al valor del CMS
+cms-open-entry = Editar este contenido en el CMS
 
 seo-favicon-light = Claro
 seo-favicon-light-help = Icono para un navegador en modo claro (SVG o PNG)

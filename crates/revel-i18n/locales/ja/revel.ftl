@@ -3912,6 +3912,7 @@ use-cms-fields = CMS フィールド
 use-cms-fields-help = 選んだ項目から読み込んだ値：「プロパティ」で別の項目を選ぶか、このインスタンスだけ値を上書き
 cms-field-override = このインスタンスで上書き
 cms-field-reset = CMS の値に戻す
+cms-open-entry = このコンテンツを CMS で編集
 
 seo-favicon-light = ライト
 seo-favicon-light-help = ライトモードのブラウザ用アイコン（SVG または PNG）

@@ -3912,6 +3912,7 @@ use-cms-fields = CMS-velden
 use-cms-fields-help = Waarden uit het gekozen item: kies een ander item bij “Eigenschappen” of overschrijf een waarde alleen voor deze instantie
 cms-field-override = Overschrijven voor deze instantie
 cms-field-reset = CMS-waarde weer gebruiken
+cms-open-entry = Deze inhoud in het CMS bewerken
 
 seo-favicon-light = Licht
 seo-favicon-light-help = Pictogram voor een browser in lichte modus (SVG of PNG)

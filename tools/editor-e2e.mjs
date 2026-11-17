@@ -926,12 +926,12 @@ try {
     await until(async () => (await page.locator('.layers .layer', { hasText: 'Carte e2e' }).count()) > 0);
     await page.locator('.layers .layer', { hasText: 'Carte e2e' }).first().click();
     await page.waitForSelector('.dock-panel[data-panel="styles"] .cms-fields');
-    const folded = !(await page.$eval('.cms-fields', (d) => d.open));
-    await page.click('.cms-fields-head');
+    // Dépliés d'emblée depuis D-184 (maquette validée), avec le bouton vers la fiche du CMS.
+    const shown = (await page.$eval('.cms-fields', (d) => d.open)) && !!(await page.$('.cms-fields [data-action="cms-open-entry"]'));
     const fields = await page.$$eval('.cms-field', (l) => l.map((e) => [e.dataset.field, e.querySelector('textarea').readOnly, e.querySelector('textarea').value]));
     const freeHidden = (await page.$$eval('.dock-panel[data-panel="styles"] .text-fields .text-field', (l) => l.length)) === 0;
-    check('champs CMS : repliés, un champ par valeur lue (sortie répétée une fois), grisés, absents des textes libres',
-      folded && fields.length === 1 && fields[0][1] === true && fields[0][2] === title && !!title && freeHidden, JSON.stringify(fields));
+    check('champs CMS : montrés, un champ par valeur lue (sortie répétée une fois), grisés, absents des textes libres',
+      shown && fields.length === 1 && fields[0][1] === true && fields[0][2] === title && !!title && freeHidden, JSON.stringify(fields));
     await page.click('.cms-field .cms-field-override');
     await page.fill('.cms-field textarea', 'Remplacé e2e');
     await page.press('.cms-field textarea', 'Enter');
@@ -3495,27 +3495,27 @@ try {
   if (t2 && siteDir) {
     const file = path.join(siteDir, t2.slot.binding.source.folder, t2.slot.binding.source.file + '.md');
     const before = fs.readFileSync(file, 'utf8');
+    // Double-clic (D-182, D-184) : plus de saisie sur place ; menu des actions, fichier inchangé.
     await page.mouse.dblclick(t2.px, t2.py);
-    f = await waitFrame(() => !!document.querySelector('[data-rv-edit]'), 'mode édition (lié)');
-    await page.keyboard.press('Control+a');
-    await page.keyboard.type('Titre essai');
-    await page.keyboard.press('Enter');
-    let after = before;
-    for (let i = 0; i < 50 && after === before; i++) {
-      await page.waitForTimeout(100);
-      after = fs.readFileSync(file, 'utf8');
-    }
-    f = await waitFrame(() => document.body.textContent.includes('Titre essai'), 'texte lié enregistré');
-    const changed = after.split('\n').filter((l, i) => l !== before.split('\n')[i]);
-    check('textes : seule la ligne du titre change dans le fichier du contenu', changed.length === 1 && changed[0].includes('Titre essai'), changed.join(' | '));
-    await page.click('.editor-toolbar .btn-undo');
-    f = await waitFrame(() => !document.body.textContent.includes('Titre essai'), 'annulation du texte lié');
-    let restored = false;
-    for (let i = 0; i < 50 && !restored; i++) {
-      restored = fs.readFileSync(file, 'utf8') === before;
-      if (!restored) await page.waitForTimeout(100);
-    }
-    check('textes : annulé, fichier identique octet pour octet', restored);
+    await page.waitForSelector('.ctx-menu');
+    const cmsLabels = await page.$$eval('.ctx-menu .menu-label', (ls) => ls.map((l) => l.textContent.trim()));
+    const noEdit = !(await frameOf().evaluate(() => !!document.querySelector('[data-rv-edit]')));
+    check('texte du CMS : double-clic sans saisie sur place, menu des actions', noEdit && cmsLabels.includes('Modifier ce contenu dans le CMS'), cmsLabels.join(' | '));
+    check('texte du CMS : fichier du contenu inchangé', fs.readFileSync(file, 'utf8') === before);
+    await page.keyboard.press('Escape');
+    // Panneau Styles : le texte est un champ CMS en lecture seule, plus un champ « Texte » libre.
+    await page.mouse.click(t2.px, t2.py);
+    const roField = await page.waitForSelector('.cms-fields .cms-field textarea.is-readonly', { timeout: 8000 }).then(() => true).catch(() => false);
+    const freeValues = await page.$$eval('.text-fields textarea', (l) => l.map((t) => t.value.trim()));
+    check('texte du CMS : champ en lecture seule dans le panneau', roField && !freeValues.includes(t2.text.trim()), freeValues.join(' | '));
+    // « Modifier ce contenu dans le CMS » : la fiche du contenu, puis retour à l'éditeur.
+    await page.mouse.dblclick(t2.px, t2.py);
+    await page.waitForSelector('.ctx-menu');
+    await page.click('.ctx-menu .menu-item:has-text("Modifier ce contenu dans le CMS")');
+    const openedCms = await page.waitForSelector(`.cms-item[data-entry^="${t2.slot.binding.source.file}"]`, { timeout: 15000 }).then(() => true).catch(() => false);
+    check('texte du CMS : contenu ouvert dans le CMS', openedCms);
+    await page.click('.view-tab[data-view="view-editor"]');
+    f = await waitFrame(() => document.readyState === 'complete' && !!document.querySelector('[data-rv]'), 'retour à l\'éditeur');
 
     // Modification hors de Revel (comme un enregistrement de Pages CMS) : page rechargée.
     await page.waitForTimeout(2600);

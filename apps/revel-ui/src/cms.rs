@@ -494,11 +494,13 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         e.prevent_default();
     });
     on_cleanup(move || on_key.remove());
+    // Fiche demandée par une autre vue dans une autre collection : ouverte après le changement.
+    let asked = StoredValue::new(None::<String>);
     Effect::new(move |prev: Option<Option<String>>| {
         let now = current.get();
         // Collection changée (pas à la première lecture : une fiche demandée reste ouverte).
         if prev.is_some_and(|p| p != now) {
-            open.set(None);
+            open.set(asked.try_update_value(|a| a.take()).flatten());
             sel_field.set(None);
             query.set(String::new());
             sort.set(None);
@@ -642,9 +644,20 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
         let Some((id, file)) = ui.goto_entry.get() else {
             return;
         };
-        if cols.with(|c| c.as_ref().is_some_and(|c| c.iter().any(|c| c.id == id))) {
+        // Par l'identifiant de la collection, ou par son dossier (demande venue de l'éditeur).
+        let found = cols.with(|c| {
+            c.as_ref().and_then(|c| {
+                c.iter()
+                    .find(|c| c.id == id || c.folder.trim_matches('/') == id.trim_matches('/'))
+                    .map(|c| c.id.clone())
+            })
+        });
+        if let Some(id) = found {
             ui.goto_entry.set(None);
             fields_mode.set(false);
+            if current.with_untracked(|c| c.as_deref() != Some(id.as_str())) {
+                asked.set_value(Some(file.clone()));
+            }
             current.set(Some(id));
             open.set(Some(file));
         }

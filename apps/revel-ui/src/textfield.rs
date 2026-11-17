@@ -76,25 +76,34 @@ type UseCtx = Option<(
     std::collections::BTreeMap<String, String>,
 )>;
 
+fn use_in(d: &revel_model::Site, sel: &str) -> UseCtx {
+    let at = crate::editor::target_of(d, sel)?;
+    let revel_model::Node::Use {
+        component, args, ..
+    } = revel_edit::address::node(d, &at).ok()?
+    else {
+        return None;
+    };
+    let c = d.components.iter().find(|c| &c.id == component)?;
+    c.props
+        .iter()
+        .any(|p| p.kind == revel_model::PropKind::Entry)
+        .then(|| (at, c.clone(), args.clone()))
+}
+
 fn use_ctx(ed: Ed) -> Memo<UseCtx> {
     Memo::new(move |_| {
         let sel = ed.selected.with(|s| s.as_ref().map(|s| s.id.clone()))?;
-        ed.doc.with(|d| {
-            let d = d.as_ref()?;
-            let at = crate::editor::target_of(d, &sel)?;
-            let revel_model::Node::Use {
-                component, args, ..
-            } = revel_edit::address::node(d, &at).ok()?
-            else {
-                return None;
-            };
-            let c = d.components.iter().find(|c| &c.id == component)?;
-            c.props
-                .iter()
-                .any(|p| p.kind == revel_model::PropKind::Entry)
-                .then(|| (at, c.clone(), args.clone()))
-        })
+        ed.doc.with(|d| use_in(d.as_ref()?, &sel))
     })
+}
+
+/// La même, lue une fois (hors du panneau).
+fn use_now(ed: Ed) -> UseCtx {
+    let sel = ed
+        .selected
+        .with_untracked(|s| s.as_ref().map(|s| s.id.clone()))?;
+    ed.doc.with_untracked(|d| use_in(d.as_ref()?, &sel))
 }
 
 /// Texte lu dans le contenu choisi par l'utilisation (ou remplacé sur elle).
@@ -120,6 +129,11 @@ fn is_cms(u: &UseCtx, item: &TextItem) -> bool {
             revel_edit::canvas::Source::Entry { .. } | revel_edit::canvas::Source::EntryItem { .. }
         )
     });
+    // Texte lu dans un contenu, où qu'il soit (carte d'une liste, page d'une collection) : champ
+    // CMS en lecture seule, jamais modifié depuis le panneau Styles (D-182, D-184).
+    if entry {
+        return true;
+    }
     u.as_ref().is_some_and(|(_, c, _)| {
         matches!(&parent.owner, revel_edit::Owner::Component(id) if *id == c.id)
             && (entry
@@ -246,9 +260,11 @@ pub fn SelectedTexts() -> impl IntoView {
 }
 
 thread_local! {
+    /// Collections du CMS déjà lues (libellés des champs), pour le menu du double-clic.
+    static CMS_COLS: std::cell::RefCell<Vec<revel_protocol::CmsCollection>> = const { std::cell::RefCell::new(Vec::new()) };
     /// « Champs CMS » dépliés : gardé quand le panneau se refait (remplacement, autre contenu,
     /// autre utilisation).
-    static CMS_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static CMS_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
 }
 
 /// Champs du contenu d'une utilisation de composant relié au CMS (D-179) : repliés, grisés ;
@@ -296,10 +312,16 @@ pub fn CmsFields() -> impl IntoView {
         }
     };
     let editing = RwSignal::new(None::<usize>);
+    let cols = crate::blocks::collections(ed);
+    Effect::new(move |_| cols.with(|c| CMS_COLS.with(|k| *k.borrow_mut() = c.clone())));
     let cms_view = move || {
         let list = cms.get();
+        // Collection du premier champ : les champs d'un autre contenu portent le nom de la leur.
+        let main = list.iter().find_map(|i| entry_of(&i.slot)).map(|(f, _)| f);
         (!list.is_empty()).then(|| {
             let n = list.len();
+            // Contenu lu par ces champs (le premier) : ouvert dans le CMS.
+            let entry = list.iter().find_map(|i| entry_of(&i.slot));
             view! {
                 <details class="cms-fields" prop:open=CMS_OPEN.get()
                     on:toggle=move |e| {
@@ -329,10 +351,21 @@ pub fn CmsFields() -> impl IntoView {
                                     revel_edit::overrides::override_props(c).contains(p) && revel_edit::overrides::reads_entry(c, e)
                                 })
                         }));
-                        let label = revel_edit::overrides::field_label(&expr);
+                        let label = match entry_of(&item.slot) {
+                            Some((folder, _)) => {
+                                let (c, f) = cols.with(|cs| crate::blocks::cms_names(cs, &folder, &expr));
+                                if main.as_deref() == Some(folder.as_str()) { f } else { format!("{c} › {f}") }
+                            }
+                            None => revel_edit::overrides::field_label(&expr),
+                        };
                         let (label1, label2) = (label.clone(), label.clone());
                         let item = StoredValue::new(item);
-                        let open = move || overridden || editing.get() == Some(i);
+                        let asked = StoredValue::new(expr.clone());
+                        let open = move || {
+                            overridden
+                                || editing.get() == Some(i)
+                                || (can && ed.cms_edit.with(|e| asked.with_value(|a| e.as_deref() == Some(a.as_str()))))
+                        };
                         let text = item.with_value(|i| i.text.clone());
                         view! {
                             <div class="text-field cms-field" class:is-overridden=overridden data-field=label1>
@@ -367,6 +400,7 @@ pub fn CmsFields() -> impl IntoView {
                                         }
                                         let v = event_target_value(&e);
                                         editing.set(None);
+                                        ed.cms_edit.set(None);
                                         item.with_value(|it| if v != it.text { set_override(it, Some(v.clone())) });
                                     }
                                     on:keydown=move |e: leptos::ev::KeyboardEvent| {
@@ -374,17 +408,117 @@ pub fn CmsFields() -> impl IntoView {
                                             e.prevent_default();
                                             let v = event_target_value(&e);
                                             editing.set(None);
+                                            ed.cms_edit.set(None);
                                             item.with_value(|it| if v != it.text { set_override(it, Some(v.clone())) });
                                         }
                                     }></textarea>
                             </div>
                         }
                     }).collect_view()}
+                    {entry.map(|(folder, file)| view! {
+                        <button type="button" class="btn btn--small cms-fields-open" data-action="cms-open-entry"
+                            on:click=move |_| open_entry(ui, &folder, &file)>
+                            {icons::database()}<span>{ui.t("cms-open-entry")}</span>
+                        </button>
+                    })}
                 </details>
             }
         })
     };
     view! { {cms_view} }
+}
+
+/// Contenu du CMS (dossier de la collection, fichier) lu par un emplacement de texte.
+fn entry_of(slot: &Slot) -> Option<(String, String)> {
+    let Slot::Expr {
+        binding: Some(b), ..
+    } = slot
+    else {
+        return None;
+    };
+    match &b.source {
+        Source::Entry { folder, file } | Source::EntryItem { folder, file } => {
+            Some((folder.clone(), file.clone()))
+        }
+        _ => None,
+    }
+}
+
+/// Ouvre un contenu dans l'onglet CMS.
+fn open_entry(ui: Ui, folder: &str, file: &str) {
+    ui.goto_entry
+        .set(Some((folder.to_string(), file.to_string())));
+    ui.tab(crate::Tab::Cms);
+}
+
+/// Double-clic dans le canevas sur un texte lu dans un contenu du CMS (D-182, D-184) : menu des
+/// actions à la place de la saisie sur place. `pos` : position dans la fenêtre ; `component`,
+/// `node` : composant de l'utilisation pointée et son élément sous le pointeur.
+pub fn cms_text_menu(
+    ui: Ui,
+    ed: Ed,
+    dock: crate::dock::Dock,
+    slot: &Slot,
+    pos: (f64, f64),
+    component: Option<String>,
+    node: Option<(String, String)>,
+) {
+    use crate::ctxmenu::CtxItem;
+    let Slot::Expr { expr, .. } = slot else {
+        return;
+    };
+    let Some((folder, file)) = entry_of(slot) else {
+        return;
+    };
+    let (collection, field) =
+        CMS_COLS.with(|k| crate::blocks::cms_names(&k.borrow(), &folder, expr));
+    let head = format!("{collection} › {field}");
+    let mut items = vec![
+        CtxItem::new(head, || {})
+            .icon(icons::database)
+            .disabled(true),
+    ];
+    // Remplaçable : utilisation sélectionnée d'un composant qui lit ce champ dans son contenu.
+    let can = {
+        let u = use_now(ed);
+        u.as_ref().is_some_and(|(_, c, _)| {
+            component.as_deref() == Some(c.id.as_str())
+                && (revel_edit::overrides::reads_entry(c, expr)
+                    || revel_edit::overrides::split(expr).is_some_and(|(p, e)| {
+                        revel_edit::overrides::override_props(c).contains(p)
+                            && revel_edit::overrides::reads_entry(c, e)
+                    }))
+        })
+    };
+    if can {
+        let expr = expr.clone();
+        items.push(
+            CtxItem::new(ui.now("cms-field-override", &[]), move || {
+                dock.layout.update(|l| l.open(crate::dock::PanelId::Styles));
+                CMS_OPEN.set(true);
+                ed.cms_edit.set(Some(expr.clone()));
+            })
+            .icon(icons::edit)
+            .sep(),
+        );
+    }
+    let mut open = CtxItem::new(ui.now("cms-open-entry", &[]), move || {
+        open_entry(ui, &folder, &file)
+    })
+    .icon(icons::database);
+    if !can {
+        open = open.sep();
+    }
+    items.push(open);
+    if let Some(c) = component {
+        items.push(
+            CtxItem::new(ui.now("component-edit", &[]), move || {
+                ed.open_comp(&c, node.clone())
+            })
+            .icon(icons::edit),
+        );
+    }
+    crate::ctxmenu::open_at(ui, pos.0, pos.1, items, true);
 }
 
 /// Texte mis en forme d'un élément (D-72), modifié d'un bloc dans le panneau : gras (Ctrl+B),

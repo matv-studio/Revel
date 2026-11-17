@@ -71,7 +71,33 @@ pub(crate) fn collections(ed: Ed) -> RwSignal<Vec<CmsCollection>> {
     cols
 }
 
-fn label_of(c: &CmsCollection) -> String {
+/// Noms lisibles d'un champ lu dans un contenu (D-184) : collection (par son dossier) et champ
+/// (libellé du schéma), sinon le nom du champ mis en forme.
+pub(crate) fn cms_names(cols: &[CmsCollection], folder: &str, expr: &str) -> (String, String) {
+    let col = cols
+        .iter()
+        .find(|c| !c.id.contains('+') && c.folder.trim_matches('/') == folder.trim_matches('/'));
+    let head = revel_edit::overrides::split(expr)
+        .map(|(_, e)| e)
+        .unwrap_or(expr);
+    let head = head.split('|').next().unwrap_or("").trim();
+    let name = head.rsplit('.').next().unwrap_or(head);
+    let field = col
+        .and_then(|c| c.fields.iter().find(|f| f.name == name))
+        .and_then(|f| f.label.clone())
+        .unwrap_or_else(|| revel_edit::overrides::field_label(expr));
+    let collection = col.map(label_of).unwrap_or_else(|| {
+        let last = folder
+            .trim_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or(folder);
+        crate::names::humanize(last)
+    });
+    (collection, field)
+}
+
+pub(crate) fn label_of(c: &CmsCollection) -> String {
     c.label
         .clone()
         .unwrap_or_else(|| crate::site::capitalize(&c.id))

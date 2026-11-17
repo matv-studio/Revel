@@ -95,7 +95,7 @@ await run('a-composant', async ({ page, frameOf }) => {
       ${row('Texte', '<textarea class="input" rows="2" style="height:46px;resize:none;padding-top:5px" placeholder="Films de marque et contenus pour les réseaux."></textarea>')}
       ${row('Logo', `<span class="mq-thumb">${I.img}</span><span class="mq-fake">logo-films.svg</span>`, true)}
       ${row('Lien', `<span class="mq-fake">${I.page}<span>Agence</span><span class="end">${I.chev}</span></span>`)}
-      ${row('Couleur', `<span class="mq-fake"><span class="mq-sw" style="background:#ff5a3c"></span>#FF5A3C</span>`, true)}
+      ${row('Couleur', `<span class="mq-fake"><span class="mq-sw" style="background:#ff5a3c"></span><span>Accent</span><span class="end">${I.chev}</span></span>`, true)}
       <label class="view-line prop-row"><span class="prop-label">Badge</span><span class="switch"><input type="checkbox" checked><span class="switch-track"></span></span></label>`;
   }, [I]);
   await shot(page, 'a-composant');
@@ -112,16 +112,19 @@ await run('b-texte-cms', async ({ page, frameOf }) => {
   await page.keyboard.press('Escape'); await page.waitForTimeout(500);
   await page.frameLocator('iframe.canvas-frame').locator(s).first().click(); await page.waitForTimeout(700);
   const r = await rectOf(page, frameOf, s);
-  const ro = (l, v) => `<div class="field"><span class="label mq-line">${I.db.replace('width="16" height="16"', 'width="12" height="12"')}${l}</span><span class="mq-fake" style="color:var(--text-muted);background:transparent">${v}</span></div>`;
-  await setPanel(page, null, `<div class="insp-group"><p class="panel-title">Contenu</p><span class="mq-fake" style="flex:none">${I.db}<span>Liste · Projets</span></span></div>
-    <div class="insp-group"><p class="panel-title">Champs CMS</p>${ro('Client', 'Caisse d’Épargne Rhône-Alpes')}${ro('Titre', '1,8 millions d’impressions pour un rapp…')}${ro('Expertises', 'Identité & stratégie, Digital & activation')}
-    <button class="btn btn--small" type="button" style="width:100%;justify-content:center">${I.pen}<span>Modifier ce contenu dans le CMS</span></button></div>`);
+  const dbs = I.db.replace('width="16" height="16"', 'width="12" height="12"');
+  const ro = (l, v) => `<div class="field"><span class="label mq-line">${dbs}${l}</span><span class="field-line"><span class="mq-fake" style="color:var(--text-muted);background:transparent">${v}</span><button class="icon-btn icon-btn--small" type="button">${I.pen}</button></span></div>`;
+  const ov = (l, v) => `<div class="field"><span class="label mq-sub"><span class="mq-line">${dbs}<span class="mq-set">${l}</span></span><span style="color:var(--text-faint)">${I.reset}</span></span><span class="field-line"><input class="input" value="${v}"></span></div>`;
+  await setPanel(page, null, `<div class="insp-group"><p class="panel-title">Contenu</p><span class="mq-fake" style="flex:none">${I.db}<span>Projets › 1,8 millions d’impressions…</span><span class="end">${I.chev}</span></span></div>
+    <div class="insp-group"><p class="panel-title">Champs CMS</p>${ro('Client', 'Caisse d’Épargne Rhône-Alpes')}${ov('Titre', 'Un rapport d’activité qui se lit')}${ro('Expertises', 'Identité & stratégie, Digital & activation')}
+    <button class="btn btn--small" type="button" style="width:100%;justify-content:center">${I.db}<span>Modifier ce contenu dans le CMS</span></button></div>`);
   const txt = await frameOf().evaluate((s) => document.querySelector(s).textContent.trim().replace(/\s+/g, ' '), s);
   await mark(page, r, `${I.db.replace('width="16" height="16"', 'width="12" height="12"')} Projets <i>›</i> Titre`, 'var(--text-muted)');
   await page.evaluate(([r, I, txt]) => {
     const p = document.createElement('div'); p.className = 'mq-pop'; p.style.left = r.x + 'px'; p.style.top = (r.y + r.h + 8) + 'px';
     p.innerHTML = `<div class="h">${I.db}<span>Champ CMS · Projets › Titre</span></div><div class="v">« ${txt.slice(0, 60)}… »</div>
-      <button class="btn btn--small">${I.pen}<span>Modifier ce contenu dans le CMS</span></button>
+      <button class="btn btn--small">${I.pen}<span>Remplacer sur cette utilisation</span></button>
+      <button class="btn btn--small">${I.db}<span>Modifier ce contenu dans le CMS</span></button>
       <button class="btn btn--small">${I.pen}<span>Modifier le composant</span></button>`;
     document.body.append(p);
   }, [r, I, txt]);
@@ -186,7 +189,8 @@ await run('e-entete-pied', async ({ page, frameOf }) => {
     const a = document.querySelector('.instance-actions'); if (a) a.innerHTML = '<span class="mq-pill">Tout le site</span>';
     document.querySelectorAll('.styles > .text-fields').forEach((e) => e.remove());
     document.querySelector('.content-settings').innerHTML = `<div class="insp-group"><p class="panel-title">En-tête</p>
-      <label class="view-line prop-row"><span class="prop-label">Montré sur cette page</span><span class="switch"><input type="checkbox" checked><span class="switch-track"></span></span></label></div>`;
+      <label class="view-line prop-row"><span class="prop-label">Montré sur cette page</span><span class="switch"><input type="checkbox" checked><span class="switch-track"></span></span></label>
+      <label class="field"><span class="label">Variante sur cette page</span><div class="select"><select class="input"><option>Transparente</option><option>Principale</option><option>Compacte</option></select></div></label></div>`;
     const st = document.querySelector('.editor-status'); if (st) st.innerHTML = st.innerHTML.replace(/Gabarit [^<]*/, 'En-tête · tout le site').replace(/Composant [^<]*/, 'En-tête · tout le site');
   }, [I]);
   await shot(page, 'e-entete-pied');

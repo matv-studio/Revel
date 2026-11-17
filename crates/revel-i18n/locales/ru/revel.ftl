@@ -4016,6 +4016,7 @@ use-cms-fields = Поля CMS
 use-cms-fields-help = Значения из выбранной записи: выберите другую в «Свойствах» или замените значение только в этом экземпляре
 cms-field-override = Заменить в этом экземпляре
 cms-field-reset = Вернуть значение из CMS
+cms-open-entry = Изменить этот материал в CMS
 
 seo-favicon-light = Светлая
 seo-favicon-light-help = Значок для браузера в светлой теме (SVG или PNG)

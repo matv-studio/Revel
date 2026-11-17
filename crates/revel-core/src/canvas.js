@@ -1638,6 +1638,16 @@
   // modifié sur place comme ailleurs (la donnée change, pas le composant).
   const dataOf = (sl) => !!sl && sl.slot === "expr" && !!sl.binding && !!sl.binding.source &&
     sl.binding.source.kind !== "prop" && !sl.transformed;
+  // Texte lu dans un contenu du CMS (D-182, D-184) : jamais modifié sur place, le double-clic
+  // demande à l'interface quoi faire (remplacer sur l'utilisation, ouvrir le contenu, le composant).
+  const cmsOf = (sl) => !!sl && sl.slot === "expr" && !!sl.binding && !!sl.binding.source &&
+    (sl.binding.source.kind === "entry" || sl.binding.source.kind === "entry_item");
+  const askCms = (n, e, p) => {
+    const inner = targetOf(e.target);
+    post({ type: "cms_text", slot: slots[n], x: e.clientX, y: e.clientY,
+      component: p && p.inst ? p.inst.component : null,
+      node: inner ? inner.getAttribute("data-rv") : null, tag: inner ? inner.tagName.toLowerCase() : "" });
+  };
   // Cadrage sans perte (D-180), comme `revel_model::Crop::style` : `x y zoom [arrondi]`.
   const CROP_PROPS = ["object-fit", "object-position", "scale", "transform-origin", "clip-path"];
   const applyCrop = (el, v) => {
@@ -1672,6 +1682,7 @@
       post({ type: "crop", id: im.getAttribute("data-rv") });
       return;
     }
+    if (n !== null && cmsOf(slots[n])) { askCms(n, e, p); return; }
     if (p && p.inst) {
       // Texte d'une propriété de cette utilisation : modifié sur place (valeur de l'utilisation).
       if (n !== null && (propOf(slots[n], p.inst) || dataOf(slots[n]))) { startEdit(n, e.clientX, e.clientY); return; }

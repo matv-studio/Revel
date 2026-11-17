@@ -3912,6 +3912,7 @@ use-cms-fields = CMS fields
 use-cms-fields-help = Values read from the chosen item: pick another item in “Properties”, or override a value for this instance only
 cms-field-override = Override for this instance
 cms-field-reset = Use the CMS value again
+cms-open-entry = Edit this item in the CMS
 
 seo-favicon-light = Light
 seo-favicon-light-help = Icon for a browser in light mode (SVG or PNG)

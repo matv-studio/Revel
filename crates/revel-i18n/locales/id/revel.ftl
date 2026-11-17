@@ -3912,6 +3912,7 @@ use-cms-fields = Kolom CMS
 use-cms-fields-help = Nilai dibaca dari item yang dipilih: pilih item lain di “Properti”, atau ganti nilai untuk instans ini saja
 cms-field-override = Ganti untuk instans ini
 cms-field-reset = Pakai lagi nilai CMS
+cms-open-entry = Edit konten ini di CMS
 
 seo-favicon-light = Terang
 seo-favicon-light-help = Ikon untuk peramban dalam mode terang (SVG atau PNG)

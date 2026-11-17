@@ -9,6 +9,36 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 17/11/2026 (nuit, suite) : lot 2, premier sujet codé — texte relié au CMS (D-184)
+
+- Réponses de l'utilisateur (22h05) consignées dans D-184 : menu d'état seulement avec les classes ; couleur de
+  propriété prise dans les couleurs du site ; icône de remplacement par champ CMS ; tout le lot à coder.
+  Proposé et en attente : « Variante sur cette page » pour l'en-tête (maquette `7-e-entete-pied`).
+- **Fait** (sujet B des maquettes) :
+  - canevas (`canvas.js`, `cmsOf`, `askCms`) : double-clic sur un texte lu dans un contenu (`entry`,
+    `entry_item`) → message `cms_text`, plus de saisie sur place ; les autres données du site (nom, menus) et
+    les propriétés d'une utilisation se modifient toujours sur place ;
+  - interface : `FromCanvas::CmsText` (`editor.rs`), `textfield::cms_text_menu` (menu : « collection › champ »,
+    « Remplacer pour cette utilisation » si le composant lit le champ dans sa propriété Contenu, « Modifier ce
+    contenu dans le CMS », « Modifier le composant »), `Ed::cms_edit` (champ ouvert à la saisie dans le panneau) ;
+  - panneau Styles : tout texte lu dans un contenu passe sous « Champs CMS » (lecture seule, dépliés), pour toute
+    sélection et plus seulement une utilisation à propriété Contenu ; libellés du schéma
+    (`blocks::cms_names`), « Collection › Champ » pour un champ d'un autre contenu ; bouton « Modifier ce contenu
+    dans le CMS » ; champ remplacé en bleu ;
+  - CMS : `ui.goto_entry` accepte le dossier de la collection ; la fiche demandée reste ouverte quand la
+    collection change (`asked` dans `cms.rs`).
+  - Clé `cms-open-entry` dans les 15 langues.
+- Essais : bloc « texte du CMS » de `tools/editor-e2e.mjs` (remplace la saisie sur place d'un texte lié, D-19) ;
+  bloc D-179 adapté (champs montrés d'emblée).
+- **Reste du lot 2** (maquettes validées, rien de codé) : A propriétés de composant (type Couleur pris dans les
+  couleurs du site, menu Variante limité aux variantes créées et au survol) ; C outil « Champ CMS » ; D liste de
+  collection Automatique / Choix manuel (réunit « Tous / Choisis » et « mis en avant », convertit les listes
+  écrites dans le code) ; E outils En-tête et Pied, gabarits retirés de l'interface ; F branches Si / Sinon dans
+  les calques et le canevas ; site Alunites Groupe (cartes de marque en propriétés, collection Marques
+  supprimée : `<dossier Revel du PC>\Sites\alunites-groupe`) ; version 0.7.10 ; CI « Équivalence » rouge.
+- Environnement de cette session : `/home/claude/sp` (`verify.sh`, `run-e2e-ci.sh`, `reset.sh`, `sshd/`),
+  cobaye figé dans `/home/claude/cobaye-0dd004c`. Le PC est relié (`device_bash`, dossier `Revel`).
+
 ## Travail du 17/11/2026 (nuit) : maquettes du lot 2 (D-182, règle D-183) — en attente de l'utilisateur
 
 - Chat du projet claude.ai « Apps interne » (compte GitHub Alunites). Rien n'est codé : les maquettes ont été

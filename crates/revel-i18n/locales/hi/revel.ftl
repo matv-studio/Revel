@@ -3912,6 +3912,7 @@ use-cms-fields = CMS फ़ील्ड
 use-cms-fields-help = चुने गए आइटम से पढ़े गए मान: “गुण” में दूसरा आइटम चुनें या केवल इस उपयोग के लिए मान बदलें
 cms-field-override = इस उपयोग के लिए बदलें
 cms-field-reset = CMS का मान फिर से लें
+cms-open-entry = इस सामग्री को CMS में संपादित करें
 
 seo-favicon-light = हल्का
 seo-favicon-light-help = हल्के मोड वाले ब्राउज़र के लिए आइकन (SVG या PNG)

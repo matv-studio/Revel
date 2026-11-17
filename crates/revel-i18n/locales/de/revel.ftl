@@ -3912,6 +3912,7 @@ use-cms-fields = CMS-Felder
 use-cms-fields-help = Werte aus dem gewählten Eintrag: anderen Eintrag unter „Eigenschaften“ wählen oder einen Wert nur für diese Instanz überschreiben
 cms-field-override = Für diese Instanz überschreiben
 cms-field-reset = CMS-Wert wieder verwenden
+cms-open-entry = Diesen Inhalt im CMS bearbeiten
 
 seo-favicon-light = Hell
 seo-favicon-light-help = Symbol für einen Browser im hellen Modus (SVG oder PNG)

@@ -233,6 +233,20 @@ enum FromCanvas {
     Crop {
         id: String,
     },
+    /// Double-clic sur un texte lu dans un contenu du CMS (D-182, D-184) : menu des actions,
+    /// rien n'est modifié sur place. `component` : composant de l'utilisation pointée ; `node`,
+    /// `tag` : élément du composant sous le pointeur.
+    CmsText {
+        slot: revel_edit::canvas::Slot,
+        x: f64,
+        y: f64,
+        #[serde(default)]
+        component: Option<String>,
+        #[serde(default)]
+        node: Option<String>,
+        #[serde(default)]
+        tag: String,
+    },
     /// Canevas des composants : hauteur du composant dans ce cadre.
     Stage {
         h: f64,
@@ -540,6 +554,9 @@ pub struct Ed {
     pub reveal_tick: RwSignal<u32>,
     /// Image en cours de recadrage (D-180) : élément `img` dont le cadrage s'écrit.
     pub crop: RwSignal<Option<revel_edit::Target>>,
+    /// Champ CMS à remplacer sur l'utilisation sélectionnée (expression lue), demandé depuis le
+    /// canevas : son champ du panneau s'ouvre à la saisie (D-184).
+    pub cms_edit: RwSignal<Option<String>>,
     /// Défilement du canevas, rétabli après un rechargement.
     pub scroll: RwSignal<(f64, f64)>,
     /// Défilement suivi en continu (règles).
@@ -2982,6 +2999,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         forced: RwSignal::new(Vec::new()),
         reveal_tick: RwSignal::new(0),
         crop: RwSignal::new(None),
+        cms_edit: RwSignal::new(None),
         scroll: RwSignal::new((0.0, 0.0)),
         live_scroll: RwSignal::new((0.0, 0.0)),
         vars: RwSignal::new(Vec::new()),
@@ -3264,6 +3282,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 | FromCanvas::Text { .. }
                 | FromCanvas::TextHtml { .. }
                 | FromCanvas::Crop { .. }
+                | FromCanvas::CmsText { .. }
                 | FromCanvas::RichText { .. } => ed.activate_key(&from_bp),
                 FromCanvas::Ready { .. }
                 | FromCanvas::Refreshed { .. }
@@ -3489,6 +3508,28 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                     dock.layout.update(|l| l.open(crate::dock::PanelId::Styles));
                     ed.crop.set(Some(at));
                 }
+            }
+            FromCanvas::CmsText {
+                slot,
+                x,
+                y,
+                component,
+                node,
+                tag,
+                ..
+            } => {
+                // Position dans le cadre -> dans la fenêtre.
+                let r = from_frame.get_bounding_client_rect();
+                let s = ed.scale();
+                crate::textfield::cms_text_menu(
+                    ui,
+                    ed,
+                    dock,
+                    &slot,
+                    (r.left() + x * s, r.top() + y * s),
+                    component,
+                    node.map(|n| (n, tag)),
+                );
             }
             FromCanvas::SpacingFocus { prop } => {
                 dock.layout.update(|l| l.open(crate::dock::PanelId::Styles));

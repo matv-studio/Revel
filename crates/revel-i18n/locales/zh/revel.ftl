@@ -3912,6 +3912,7 @@ use-cms-fields = CMS 字段
 use-cms-fields-help = 读取自所选条目的值：在“属性”中选择其他条目，或仅在此实例中覆盖某个值
 cms-field-override = 在此实例中覆盖
 cms-field-reset = 恢复 CMS 的值
+cms-open-entry = 在 CMS 中编辑此内容
 
 seo-favicon-light = 浅色
 seo-favicon-light-help = 浏览器浅色模式下的图标（SVG 或 PNG）

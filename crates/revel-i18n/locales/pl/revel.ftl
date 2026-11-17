@@ -4020,6 +4020,7 @@ use-cms-fields = Pola CMS
 use-cms-fields-help = Wartości z wybranego elementu: wybierz inny w „Właściwościach” lub zastąp wartość tylko w tym użyciu
 cms-field-override = Zastąp w tym użyciu
 cms-field-reset = Przywróć wartość z CMS
+cms-open-entry = Edytuj tę treść w CMS
 
 seo-favicon-light = Jasna
 seo-favicon-light-help = Ikona dla przeglądarki w trybie jasnym (SVG lub PNG)

@@ -3912,6 +3912,7 @@ use-cms-fields = CMS alanları
 use-cms-fields-help = Seçilen öğeden okunan değerler: “Özellikler”de başka öğe seçin veya değeri yalnızca bu kullanımda değiştirin
 cms-field-override = Bu kullanımda değiştir
 cms-field-reset = CMS değerine dön
+cms-open-entry = Bu içeriği CMS’te düzenle
 
 seo-favicon-light = Açık
 seo-favicon-light-help = Açık temadaki tarayıcı için simge (SVG veya PNG)

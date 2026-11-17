@@ -3912,6 +3912,7 @@ use-cms-fields = CMS 필드
 use-cms-fields-help = 선택한 항목에서 읽은 값: “속성”에서 다른 항목을 고르거나 이 인스턴스에서만 값을 덮어쓰기
 cms-field-override = 이 인스턴스에서 덮어쓰기
 cms-field-reset = CMS 값으로 되돌리기
+cms-open-entry = CMS에서 이 콘텐츠 편집
 
 seo-favicon-light = 라이트
 seo-favicon-light-help = 라이트 모드 브라우저용 아이콘(SVG 또는 PNG)

@@ -2531,3 +2531,20 @@ Toute fonction d'interface nouvelle ou refaite est d'abord montrée en maquette 
 scénarios d'usage deviennent les essais de bout en bout. Pourquoi : D-179 à D-181 ont livré des outils
 (gabarits, conditions, cartes reliées au CMS) conformes à mon interprétation et non à sa demande. S'applique
 dès le lot 2 (D-182). Règle écrite dans `docs/ETAT.md` (« Reprise » et « Exigences permanentes »).
+
+**D-184 — 17/11/2026 22h — prise (maquettes du lot 2 validées, réponses de l'utilisateur ; complète D-182).**
+Maquettes : `tools/maquettes/lot2.mjs` (scènes A à F). Ordre de codage : tout le lot, sans arrêt entre les sujets.
+- **Menu d'état** : seulement avec les classes activées (inchangé depuis D-181).
+- **Propriété « Couleur »** d'un composant : la valeur est une couleur du site (Paramètres › Couleurs), choisie
+  dans leur liste ; aucune couleur libre. Pourquoi : une seule source des couleurs, celle du site.
+- **Texte relié au CMS** : plus de saisie sur place au double-clic. Bulle « Champ CMS · collection › champ » avec
+  « Remplacer sur cette utilisation », « Modifier ce contenu dans le CMS », « Modifier le composant ». Dans le
+  panneau, chaque champ CMS est en lecture seule, avec une icône de modification qui le remplace sur
+  l'utilisation (libellé bleu, retour à la valeur du contenu). Dans une liste, le remplacement n'est pas proposé
+  (la liste fournit le contenu de chaque carte).
+- **En-tête et pied** : interrupteur « Montré sur cette page » ; pas d'en-têtes multiples. Proposé à
+  l'utilisateur, en attente : « Variante sur cette page » (la variante du composant de l'en-tête choisie par
+  page, par exemple transparente sur une page à grande image), au lieu d'un second en-tête.
+- **Liste de collection** : « Contenus : Tous / Choisis » et « Contenus mis en avant » de la 0.7.9 sont réunis
+  dans « Automatique / Choix manuel ».
+- En suspens : réponse sur « Variante sur cette page ».

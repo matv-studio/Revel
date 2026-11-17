@@ -451,7 +451,6 @@ pub fn instance_settings(
                     {rows}
                 </div>
             })}
-            <crate::textfield::CmsFields/>
         </div>
     }
     .into_any()

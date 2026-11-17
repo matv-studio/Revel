@@ -970,7 +970,9 @@
 .cms-fields .cms-field { margin-top: var(--s-2); }
 .cms-field .text-field-head { justify-content: space-between; }
 .cms-field .text-field-input.is-readonly { color: var(--text-faint); background: transparent; cursor: default; }
-.cms-field.is-overridden .style-label-text::after { content: " •"; color: var(--focus); }
+/* Champ remplacé sur l'utilisation : réglé ici (bleu, code de Webflow). */
+.cms-field.is-overridden .style-label-text { color: var(--set-text); background: var(--set-bg); border-radius: 3px; padding: 0 4px; margin-left: -4px; }
+.cms-fields-open { width: 100%; justify-content: center; margin-top: var(--s-2); }
 
 /* Affichage conditionnel (D-179) : menus, branche montrée, code replié. */
 .cond-tool .segmented { width: 100%; }

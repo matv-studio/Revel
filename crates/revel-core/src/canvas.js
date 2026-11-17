@@ -1638,6 +1638,23 @@
   // modifié sur place comme ailleurs (la donnée change, pas le composant).
   const dataOf = (sl) => !!sl && sl.slot === "expr" && !!sl.binding && !!sl.binding.source &&
     sl.binding.source.kind !== "prop" && !sl.transformed;
+  // Cadrage sans perte (D-180), comme `revel_model::Crop::style` : `x y zoom [arrondi]`.
+  const CROP_PROPS = ["object-fit", "object-position", "scale", "transform-origin", "clip-path"];
+  const applyCrop = (el, v) => {
+    for (const p of CROP_PROPS) el.style.removeProperty(p);
+    const n = (v || "").trim().split(/\s+/).map((x) => parseFloat(x));
+    if (n.length < 2 || n.some((x) => !isFinite(x))) return;
+    const x = Math.min(100, Math.max(0, n[0])), y = Math.min(100, Math.max(0, n[1]));
+    const z = Math.min(8, Math.max(1, n[2] || 1)), r = Math.max(0, n[3] || 0);
+    el.style.setProperty("object-fit", "cover");
+    el.style.setProperty("object-position", x + "% " + y + "%");
+    if (z > 1.0001) {
+      const k = 1 - 1 / z;
+      el.style.setProperty("scale", String(z));
+      el.style.setProperty("transform-origin", x + "% " + y + "%");
+      el.style.setProperty("clip-path", "inset(" + y * k + "% " + (100 - x) * k + "% " + (100 - y) * k + "% " + x * k + "%" + (r > 0 ? " round " + r / z + "px" : "") + ")");
+    }
+  };
   document.addEventListener("dblclick", (e) => {
     if (inEdit(e.target) || onBar(e)) return;
     block(e);
@@ -1648,6 +1665,13 @@
     }
     const n = slotAt(e.clientX, e.clientY);
     const p = pick(e.target);
+    // Image (hors utilisation de composant) : sélectionnée, fenêtre de recadrage (D-180).
+    const im = e.target && e.target.closest ? e.target.closest("img[data-rv]") : null;
+    if (im && !(p && p.inst)) {
+      select(im, true, null);
+      post({ type: "crop", id: im.getAttribute("data-rv") });
+      return;
+    }
     if (p && p.inst) {
       // Texte d'une propriété de cette utilisation : modifié sur place (valeur de l'utilisation).
       if (n !== null && (propOf(slots[n], p.inst) || dataOf(slots[n]))) { startEdit(n, e.clientX, e.clientY); return; }
@@ -2251,6 +2275,8 @@
             for (const n of c.remove || []) el.removeAttribute(n);
             // Modèle 3D : réglages relus sur place (caméra, rendu…), sans recharger le fichier.
             const names = [...Object.keys(c.set || {}), ...(c.remove || [])];
+            // Cadrage d'une image (D-180) : style recalculé sur place (même calcul que le site).
+            if (names.includes("data-revel-crop")) applyCrop(el, el.getAttribute("data-revel-crop"));
             if (el.__rvModel && window.RevelModel && names.some((n) => n.startsWith("data-model"))) window.RevelModel.update(el);
             // Animation Lottie : relue avec ses nouveaux réglages (fichier, lecture, boucle).
             const lottie = names.some((n) => n.startsWith("data-lottie"));

@@ -684,7 +684,8 @@ fn Seo(site: SiteSummary) -> impl IntoView {
     let set = move |f: &dyn Fn(&mut revel_model::SeoSettings)| {
         let mut v = seo();
         f(&mut v);
-        s.apply.run(revel_edit::Command::SetSeoSettings { seo: v });
+        s.apply
+            .run(revel_edit::Command::SetSeoSettings { seo: Box::new(v) });
     };
     let readable_share = move || {
         s.doc.with(|d| {
@@ -738,12 +739,22 @@ fn Seo(site: SiteSummary) -> impl IntoView {
                         Callback::new(move |v: String| set(&|x| x.share_image = some(&v)))))}
                     {color_row(ui, "seo-theme-color", "seo-theme-color-help", Signal::derive(move || seo().theme_color.unwrap_or_default()),
                         Callback::new(move |v: String| set(&|x| x.theme_color = some(&v))))}
-                    {image_row(ui, "seo-favicon", "seo-favicon-help", Signal::derive(move || seo().favicon.unwrap_or_default()),
-                        Callback::new(move |v: String| set(&|x| x.favicon = some(&v))))}
-                    {image_row(ui, "seo-favicon-png", "seo-favicon-png-help", Signal::derive(move || seo().favicon_png.unwrap_or_default()),
-                        Callback::new(move |v: String| set(&|x| x.favicon_png = some(&v))))}
-                    {image_row(ui, "seo-touch-icon", "seo-touch-icon-help", Signal::derive(move || seo().touch_icon.unwrap_or_default()),
-                        Callback::new(move |v: String| set(&|x| x.touch_icon = some(&v))))}
+                    // Icône du site : thème clair et thème sombre sur une ligne (D-180).
+                    {icon_pair_row(ui, "seo-favicon", "seo-favicon-help",
+                        Signal::derive(move || seo().favicon.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.favicon = some(&v))),
+                        Signal::derive(move || seo().favicon_dark.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.favicon_dark = some(&v))))}
+                    {icon_pair_row(ui, "seo-favicon-png", "seo-favicon-png-help",
+                        Signal::derive(move || seo().favicon_png.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.favicon_png = some(&v))),
+                        Signal::derive(move || seo().favicon_png_dark.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.favicon_png_dark = some(&v))))}
+                    {icon_pair_row(ui, "seo-touch-icon", "seo-touch-icon-help",
+                        Signal::derive(move || seo().touch_icon.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.touch_icon = some(&v))),
+                        Signal::derive(move || seo().touch_icon_dark.unwrap_or_default()),
+                        Callback::new(move |v: String| set(&|x| x.touch_icon_dark = some(&v))))}
                 </div>
             </div>
             // Organisation : titre et « + » tant que rien n'est réglé ; « Retirer » efface tout.
@@ -841,6 +852,62 @@ fn image_row(
                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                     on:click=move |_| on_change.run(String::new())>{icons::close()}</button>
             })}
+        </span>
+    }
+}
+
+/// Icône du site, thèmes clair et sombre côte à côte (D-180) : vignette (choix parmi les médias),
+/// nom du fichier, retrait.
+fn icon_pair_row(
+    ui: Ui,
+    label: &'static str,
+    help: &'static str,
+    light: Signal<String>,
+    on_light: Callback<String>,
+    dark: Signal<String>,
+    on_dark: Callback<String>,
+) -> impl IntoView {
+    let base = crate::library::canvas_base(ui, &ui.site_path().unwrap_or_default());
+    let one = move |key: &'static str,
+                    help: &'static str,
+                    value: Signal<String>,
+                    on_change: Callback<String>| {
+        let thumb = move || {
+            let v = value.get();
+            (!v.trim().is_empty())
+                .then(|| base.get().map(|b| crate::library::thumb_src(&b, v.trim())))
+                .flatten()
+        };
+        let name = move || {
+            let v = value.get();
+            v.rsplit('/').next().unwrap_or_default().to_string()
+        };
+        view! {
+            <span class="icon-pair__item" data-theme-icon=key title=move || format!("{}\n{}", ui.tx(help, &[]), value.get())>
+                <button type="button" class="image-row__thumb" class:is-dark=key == "seo-favicon-dark"
+                    aria-label=ui.t(key)
+                    on:click=move |_| crate::library::pick_media(ui, true, None, move |u| on_change.run(u))>
+                    {move || match thumb() {
+                        Some(src) => view! { <img src=src alt=""/> }.into_any(),
+                        None => icons::image(),
+                    }}
+                </button>
+                <span class="icon-pair__text">
+                    <span class="icon-pair__label">{ui.t(key)}</span>
+                    <span class="icon-pair__file muted">{name}</span>
+                </span>
+                {move || (!value.get().is_empty()).then(|| view! {
+                    <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
+                        on:click=move |_| on_change.run(String::new())>{icons::close()}</button>
+                })}
+            </span>
+        }
+    };
+    view! {
+        <span class="label" title=ui.t(help)>{ui.t(label)}</span>
+        <span class="field-line icon-pair" data-icons=label>
+            {one("seo-favicon-light", "seo-favicon-light-help", light, on_light)}
+            {one("seo-favicon-dark", "seo-favicon-dark-help", dark, on_dark)}
         </span>
     }
 }

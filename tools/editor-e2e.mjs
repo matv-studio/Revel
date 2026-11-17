@@ -1003,6 +1003,72 @@ try {
     await page.click('.dock-tab[data-panel="layers"]');
   }
 
+  // D-180 : recadrage sans perte d'une image (double-clic dans le canevas), cadrage écrit dans
+  // `data-revel-crop` et rendu sur place, réglages dans Styles ; annulé ensuite.
+  {
+    const until = async (fn, ms = 10000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        try { if (await fn()) return true; } catch { /* cadre rechargé */ }
+        await page.waitForTimeout(100);
+      }
+      return false;
+    };
+    const doc0 = JSON.stringify((await invoke('edit_open')).site);
+    // Image ajoutée en tête de la page (retirée par l'annulation).
+    const srcImg = await frameOf().evaluate(() => [...document.querySelectorAll('img')].map((i) => i.getAttribute('src')).find((u) => u && u.startsWith('/') && !u.endsWith('.svg')));
+    await invoke('edit_apply', { command: { cmd: 'insert', parent: { owner: { kind: 'page', id: 'index' }, branch: 'children' }, index: 0,
+      node: { node: 'element', id: 'xime2e00', tag: 'img', attrs: [{ name: 'src', value: srcImg }, { name: 'alt', value: '' }, { name: 'width', value: '480' }, { name: 'height', value: '270' }] } }, coalesce: false });
+    await until(async () => (await frameOf().evaluate(() => !!document.querySelector('img[data-rv="xime2e00"]'))), 15000);
+    const ids = ['xime2e00'];
+    let id = null;
+    for (const cand of ids.slice(0, 8)) {
+      await frameOf().evaluate((c) => document.querySelector(`img[data-rv="${c}"]`).scrollIntoView({ block: 'center' }), cand);
+      await page.waitForTimeout(150);
+      await page.frameLocator('iframe.canvas-frame').locator(`img[data-rv="${cand}"]`).first().dblclick({ force: true });
+      if (await until(async () => !!(await page.$('.crop-dialog')), 2500)) { id = cand; break; }
+    }
+    check('recadrage : double-clic sur une image du canevas, fenêtre ouverte', !!id, ids.slice(0, 8).join(','));
+    if (id) {
+      await page.locator('[data-role="crop-zoom"]').fill('150');
+      await page.fill('[data-role="crop-x"]', '30');
+      await page.press('[data-role="crop-x"]', 'Tab');
+      if (shots) {
+        for (const t of ['dark', 'light']) {
+          await page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), t);
+          await page.waitForTimeout(250);
+          await page.screenshot({ path: `${shots}/recadrage-${t}.png` });
+        }
+        await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+      }
+      await page.click('[data-action="crop-apply"]');
+      const attrOf = async () => {
+        let v = null;
+        const walk = (nodes) => { for (const n of nodes || []) { if (n.id === id) v = (n.attrs || []).find((a) => a.name === 'data-revel-crop')?.value ?? null; for (const k of ['children', 'then', 'otherwise', 'empty']) walk(n[k]); } };
+        const site = (await invoke('edit_open')).site;
+        for (const o of [...site.pages, ...site.layouts, ...site.components]) walk(o.body);
+        return v;
+      };
+      const written = await until(async () => (await attrOf()) === '30 50 1.5');
+      const shown = await until(() => frameOf().evaluate((c) => {
+        const st = document.querySelector(`img[data-rv="${c}"]`).style;
+        return st.scale === '1.5' && /30% 50%/.test(st.objectPosition) && /inset/.test(st.clipPath);
+      }, id));
+      const panel = await until(async () => (await page.inputValue('[data-role="crop-panel-x"]')) === '30');
+      check('recadrage : cadrage écrit (zoom 150 %, point 30 % 50 %), rendu dans le canevas, repris dans Styles', written && shown && panel, String(await attrOf()));
+      // Zoom réglé depuis Styles.
+      await page.locator('[data-role="crop-zoom-panel"]').fill('200');
+      await page.locator('[data-role="crop-zoom-panel"]').dispatchEvent('change');
+      const zoom2 = await until(async () => (await attrOf()) === '30 50 2');
+      check('recadrage : zoom réglé dans Styles', zoom2, String(await attrOf()));
+    }
+    for (let i = 0; i < 6 && JSON.stringify((await invoke('edit_open')).site) !== doc0; i++) await invoke('edit_undo');
+    check('recadrage : annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === doc0);
+    // Haut de la page (en-tête de nouveau affiché) pour la suite.
+    await frameOf().evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(600);
+  }
+
   // Lien : nouvel onglet (target + rel). Le lien est dans le composant de l'en-tête : un clic
   // sélectionne l'utilisation ; « Modifier » ouvre le canevas du composant, où le lien se
   // sélectionne directement.
@@ -2603,6 +2669,14 @@ try {
       // Couleurs du site et mode sombre (D-115) : couleur ajoutée, mode sombre activé, valeur
       // sombre réglée ; aperçu sombre du canevas ; tout retiré.
       {
+        // Icônes du site, PNG et d'écran d'accueil : clair et sombre sur une ligne (D-180).
+        {
+          await page.click('.settings-nav-part[data-part="seo"]').catch(() => {});
+          const pairs = await page.$$eval('.icon-pair', (l) => l.map((e) => e.dataset.icons + ':' + e.querySelectorAll('.icon-pair__item').length));
+          check('réglages : icônes claire et sombre côte à côte (site, PNG, écran d\'accueil)',
+            pairs.join(',') === 'seo-favicon:2,seo-favicon-png:2,seo-touch-icon:2', pairs.join(','));
+          if (shots) await page.locator('.icon-pair').first().scrollIntoViewIfNeeded().then(() => page.screenshot({ path: `${shots}/reglages-icones.png` })).catch(() => {});
+        }
         const docC = JSON.stringify((await invoke('edit_open')).site);
         const rootOf = async (media) => ((await invoke('edit_open')).site.stylesheet.items
           .find((i) => i.item === 'rule' && i.selector === ':root' && (i.media || null) === media) || { decls: [] }).decls;

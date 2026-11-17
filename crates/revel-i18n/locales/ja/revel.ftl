@@ -3912,3 +3912,19 @@ use-cms-fields = CMS フィールド
 use-cms-fields-help = 選んだ項目から読み込んだ値：「プロパティ」で別の項目を選ぶか、このインスタンスだけ値を上書き
 cms-field-override = このインスタンスで上書き
 cms-field-reset = CMS の値に戻す
+
+seo-favicon-light = ライト
+seo-favicon-light-help = ライトモードのブラウザ用アイコン（SVG または PNG）
+seo-favicon-dark = ダーク
+seo-favicon-dark-help = ダークモードのブラウザ用アイコン（SVG または PNG）。未設定ならライト用を使用
+
+crop-title = 画像をトリミング
+crop-frame-help = ドラッグで位置調整、ホイールでズーム
+crop-zoom = ズーム
+crop-zoom-help = 枠内での画像の拡大率（ファイルは変更されません）
+crop-position = フォーカス位置
+crop-position-help = トリミングの中心に保つ位置（0〜100%）
+crop-reset = リセット
+crop-reset-help = 画像全体、中央、ズームなし
+crop-apply = 適用
+crop-thumb-help = ダブルクリック：トリミング（ズームと位置、ファイルは変更なし）

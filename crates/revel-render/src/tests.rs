@@ -1512,6 +1512,17 @@ fn partage_et_navigateur_du_site() {
     let h = file(&out, "actu/index.html");
     assert_eq!(h.matches("og:title").count(), 1, "{h}");
     assert!(h.contains("Autre titre"));
+    // Icônes des thèmes clair et sombre (D-180) : choisies par le navigateur selon son thème.
+    s.settings.seo.favicon_dark = Some("/media/icone-sombre.png".into());
+    s.settings.seo.touch_icon = Some("/media/ecran.png".into());
+    s.settings.seo.touch_icon_dark = Some("/media/ecran-sombre.png".into());
+    let out = build(&input(&s, vec![])).unwrap();
+    let h = file(&out, "actu/index.html");
+    assert!(
+        h.contains(r#"<link rel="icon" href="/media/icone.svg" type="image/svg+xml" media="(prefers-color-scheme: light)"><link rel="icon" href="/media/icone-sombre.png" type="image/png" media="(prefers-color-scheme: dark)">"#)
+            && h.contains(r#"<link rel="apple-touch-icon" href="/media/ecran.png" media="(prefers-color-scheme: light)"><link rel="apple-touch-icon" href="/media/ecran-sombre.png" media="(prefers-color-scheme: dark)">"#),
+        "{h}"
+    );
 }
 
 /// En-tête écrit à la main (gabarit, code ajouté d'une page) : réglages du site et de la page,
@@ -2156,5 +2167,28 @@ fn contenu_d_une_utilisation_relie() {
         ed.slots.iter().any(|x| matches!(x, Slot::Expr { binding: Some(Binding { source: Source::Prop { node, name, .. }, .. }), .. } if node == "u3" && name == "titre")),
         "{:?}",
         ed.slots
+    );
+}
+
+/// Cadrage sans perte (D-180) : style produit, ajouté au style écrit ; attribut gardé pour le
+/// canevas seulement.
+#[test]
+fn cadrage_d_une_image_produit() {
+    let mut s = site();
+    s.pages[0].body = parse(
+        r#"<img src="/a.jpg" alt="" data-revel-crop="25 60 2"><img src="/b.jpg" alt="" style="width:10px" data-revel-crop="50 50">"#,
+    );
+    let inp = input(&s, vec![]);
+    let out = build(&inp).unwrap();
+    let home = file(&out, "index.html");
+    assert!(home.contains(r#"<img src="/a.jpg" alt="" style="object-fit:cover;object-position:25% 60%;scale:2;transform-origin:25% 60%;clip-path:inset(30% 37.5% 20% 12.5%)">"#), "{home}");
+    assert!(home.contains(r#"<img src="/b.jpg" alt="" style="width:10px;object-fit:cover;object-position:50% 50%">"#), "{home}");
+    let ed = render_editor(&inp, "/", &EditorOptions::default())
+        .unwrap()
+        .unwrap();
+    assert!(
+        ed.html.contains(r#"data-revel-crop="25 60 2""#),
+        "{}",
+        ed.html
     );
 }

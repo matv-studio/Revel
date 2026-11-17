@@ -287,7 +287,7 @@ pub enum Command {
         redirects: Vec<revel_model::Redirect>,
     },
     /// Référencement du site (plan du site, `robots.txt`).
-    SetSeoSettings { seo: revel_model::SeoSettings },
+    SetSeoSettings { seo: Box<revel_model::SeoSettings> },
     /// Formulaires du site (5.8) : adresse de réception, objet, message après l'envoi.
     SetFormSettings { forms: revel_model::FormSettings },
     /// Transition entre les pages (6.4) : `fade`, `slide` ; `None` : aucune.
@@ -1365,7 +1365,7 @@ pub fn apply(site: &mut Site, cmd: &Command) -> Result<Command, EditError> {
             })
         }
         Command::SetSeoSettings { seo } => Ok(Command::SetSeoSettings {
-            seo: std::mem::replace(&mut site.settings.seo, seo.clone()),
+            seo: Box::new(std::mem::replace(&mut site.settings.seo, (**seo).clone())),
         }),
         Command::SetPageTransition { transition } => {
             if transition

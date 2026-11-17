@@ -14,6 +14,7 @@ mod cms;
 mod cmsfields;
 mod cmsschema;
 mod components;
+mod crop;
 mod ctxmenu;
 mod dialog;
 mod dock;

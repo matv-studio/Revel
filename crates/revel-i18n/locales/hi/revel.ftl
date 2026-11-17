@@ -3912,3 +3912,19 @@ use-cms-fields = CMS फ़ील्ड
 use-cms-fields-help = चुने गए आइटम से पढ़े गए मान: “गुण” में दूसरा आइटम चुनें या केवल इस उपयोग के लिए मान बदलें
 cms-field-override = इस उपयोग के लिए बदलें
 cms-field-reset = CMS का मान फिर से लें
+
+seo-favicon-light = हल्का
+seo-favicon-light-help = हल्के मोड वाले ब्राउज़र के लिए आइकन (SVG या PNG)
+seo-favicon-dark = गहरा
+seo-favicon-dark-help = गहरे मोड वाले ब्राउज़र के लिए आइकन (SVG या PNG); न होने पर हल्का आइकन हर जगह
+
+crop-title = चित्र क्रॉप करें
+crop-frame-help = चित्र रखने के लिए खींचें; ज़ूम के लिए व्हील
+crop-zoom = ज़ूम
+crop-zoom-help = अपने बॉक्स में चित्र का आवर्धन; फ़ाइल नहीं बदलती
+crop-position = फ़ोकल बिंदु
+crop-position-help = क्रॉप के बीच में रखा गया बिंदु (0 से 100%)
+crop-reset = रीसेट
+crop-reset-help = पूरा चित्र, बीच में, बिना ज़ूम
+crop-apply = लागू करें
+crop-thumb-help = डबल-क्लिक: क्रॉप (ज़ूम और स्थिति, फ़ाइल नहीं बदलती)

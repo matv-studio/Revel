@@ -3912,3 +3912,19 @@ use-cms-fields = CMS alanları
 use-cms-fields-help = Seçilen öğeden okunan değerler: “Özellikler”de başka öğe seçin veya değeri yalnızca bu kullanımda değiştirin
 cms-field-override = Bu kullanımda değiştir
 cms-field-reset = CMS değerine dön
+
+seo-favicon-light = Açık
+seo-favicon-light-help = Açık temadaki tarayıcı için simge (SVG veya PNG)
+seo-favicon-dark = Koyu
+seo-favicon-dark-help = Koyu temadaki tarayıcı için simge (SVG veya PNG); yoksa her yerde açık simge kullanılır
+
+crop-title = Görseli kırp
+crop-frame-help = Görseli yerleştirmek için sürükleyin; yakınlaştırmak için tekerlek
+crop-zoom = Yakınlaştırma
+crop-zoom-help = Görselin kutusu içindeki büyütmesi; dosya değişmez
+crop-position = Odak noktası
+crop-position-help = Kırpmanın ortasında tutulan görsel noktası (%0–100)
+crop-reset = Sıfırla
+crop-reset-help = Tüm görsel, ortalanmış, yakınlaştırmasız
+crop-apply = Uygula
+crop-thumb-help = Çift tık: kırp (yakınlaştırma ve konum, dosya değişmez)

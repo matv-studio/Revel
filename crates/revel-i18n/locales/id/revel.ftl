@@ -3912,3 +3912,19 @@ use-cms-fields = Kolom CMS
 use-cms-fields-help = Nilai dibaca dari item yang dipilih: pilih item lain di “Properti”, atau ganti nilai untuk instans ini saja
 cms-field-override = Ganti untuk instans ini
 cms-field-reset = Pakai lagi nilai CMS
+
+seo-favicon-light = Terang
+seo-favicon-light-help = Ikon untuk peramban dalam mode terang (SVG atau PNG)
+seo-favicon-dark = Gelap
+seo-favicon-dark-help = Ikon untuk peramban dalam mode gelap (SVG atau PNG); tanpa itu, ikon terang dipakai di mana saja
+
+crop-title = Pangkas gambar
+crop-frame-help = Seret untuk menempatkan gambar; gulir untuk zoom
+crop-zoom = Zoom
+crop-zoom-help = Pembesaran gambar dalam kotaknya; berkas tidak diubah
+crop-position = Titik fokus
+crop-position-help = Titik gambar yang dijaga di tengah potongan (0–100%)
+crop-reset = Atur ulang
+crop-reset-help = Seluruh gambar, di tengah, tanpa zoom
+crop-apply = Terapkan
+crop-thumb-help = Klik ganda: pangkas (zoom dan posisi, berkas tidak berubah)

@@ -3912,3 +3912,19 @@ use-cms-fields = CMS fields
 use-cms-fields-help = Values read from the chosen item: pick another item in “Properties”, or override a value for this instance only
 cms-field-override = Override for this instance
 cms-field-reset = Use the CMS value again
+
+seo-favicon-light = Light
+seo-favicon-light-help = Icon for a browser in light mode (SVG or PNG)
+seo-favicon-dark = Dark
+seo-favicon-dark-help = Icon for a browser in dark mode (SVG or PNG); without it, the light icon is used everywhere
+
+crop-title = Crop image
+crop-frame-help = Drag to place the image; scroll to zoom
+crop-zoom = Zoom
+crop-zoom-help = Image magnification within its box; the file is not changed
+crop-position = Focal point
+crop-position-help = Point of the image kept at the centre of the crop (0 to 100%)
+crop-reset = Reset
+crop-reset-help = Whole image, centred, no zoom
+crop-apply = Apply
+crop-thumb-help = Double-click: crop (zoom and position, file unchanged)

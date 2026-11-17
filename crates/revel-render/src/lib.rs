@@ -1132,6 +1132,10 @@ fn escape_attr_value(v: &str) -> String {
 /// Référencement écrit par Revel quand le gabarit ne l'écrit pas (comme Webflow) : description,
 /// adresse officielle, aperçu de partage (Open Graph, X) tirés des paramètres de la page et du
 /// site.
+/// Icônes des thèmes clair et sombre du navigateur (D-180).
+const LIGHT: &str = " media=\"(prefers-color-scheme: light)\"";
+const DARK: &str = " media=\"(prefers-color-scheme: dark)\"";
+
 fn seo_meta(site: &Site, j: &Job, html: String) -> String {
     let lower = html.to_ascii_lowercase();
     let Some(head_end) = lower.find("</head") else {
@@ -1322,31 +1326,73 @@ fn seo_meta(site: &Site, j: &Job, html: String) -> String {
         );
     }
     if !has("rel=\"icon\"") {
-        if let Some(i) = opt(&cfg.favicon) {
-            let kind = if i.ends_with(".svg") {
+        let kind = |i: &str| {
+            if i.ends_with(".svg") {
                 "image/svg+xml"
             } else {
                 "image/png"
-            };
+            }
+        };
+        // Icône du thème sombre (D-180) : après celle du thème clair (la dernière qui convient
+        // l'emporte), réservée par `media` aux navigateurs en thème sombre.
+        let dark = opt(&cfg.favicon_dark);
+        if let Some(i) = opt(&cfg.favicon) {
+            let media = if dark.is_some() { LIGHT } else { "" };
             add(
                 true,
-                format!("<link rel=\"icon\" href=\"{}\" type=\"{kind}\">", e(&i)),
+                format!(
+                    "<link rel=\"icon\" href=\"{}\" type=\"{}\"{media}>",
+                    e(&i),
+                    kind(&i)
+                ),
             );
         }
+        if let Some(i) = dark {
+            add(
+                true,
+                format!(
+                    "<link rel=\"icon\" href=\"{}\" type=\"{}\"{DARK}>",
+                    e(&i),
+                    kind(&i)
+                ),
+            );
+        }
+        let png_dark = opt(&cfg.favicon_png_dark);
         if let Some(i) = opt(&cfg.favicon_png) {
             add(
                 true,
                 format!(
-                    "<link rel=\"icon\" href=\"{}\" type=\"image/png\" sizes=\"192x192\">",
+                    "<link rel=\"icon\" href=\"{}\" type=\"image/png\" sizes=\"192x192\"{}>",
+                    e(&i),
+                    if png_dark.is_some() { LIGHT } else { "" }
+                ),
+            );
+        }
+        if let Some(i) = png_dark {
+            add(
+                true,
+                format!(
+                    "<link rel=\"icon\" href=\"{}\" type=\"image/png\" sizes=\"192x192\"{DARK}>",
                     e(&i)
                 ),
             );
         }
     }
+    let touch_dark = opt(&cfg.touch_icon_dark);
     if let Some(i) = opt(&cfg.touch_icon) {
         add(
             !has("apple-touch-icon"),
-            format!("<link rel=\"apple-touch-icon\" href=\"{}\">", e(&i)),
+            format!(
+                "<link rel=\"apple-touch-icon\" href=\"{}\"{}>",
+                e(&i),
+                if touch_dark.is_some() { LIGHT } else { "" }
+            ),
+        );
+    }
+    if let Some(i) = touch_dark {
+        add(
+            !has("apple-touch-icon"),
+            format!("<link rel=\"apple-touch-icon\" href=\"{}\"{DARK}>", e(&i)),
         );
     }
     // Flux RSS du site.

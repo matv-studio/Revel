@@ -202,6 +202,11 @@ pub fn component() -> AnyView {
     svg(r#"<path d="M8 1.5 14.5 8 8 14.5 1.5 8z"/><path d="M8 5 11 8 8 11 5 8z"/>"#)
 }
 
+/// Recadrer une image (D-180).
+pub fn crop() -> AnyView {
+    svg(r#"<path d="M4.5 1.5V11a.5.5 0 0 0 .5.5h9.5"/><path d="M1.5 4.5H11a.5.5 0 0 1 .5.5v9.5"/>"#)
+}
+
 /// Image (calques).
 pub fn image() -> AnyView {
     svg(

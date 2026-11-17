@@ -1596,6 +1596,14 @@ button.site-facts__item:hover .muted { color: var(--text); text-decoration: unde
   box-shadow: inset 0 0 0 1px var(--line); }
 .image-row__thumb img { width: 100%; height: 100%; object-fit: contain; }
 .image-row__thumb:hover { box-shadow: inset 0 0 0 1px var(--text-faint); }
+/* Icône du site, thèmes clair et sombre (D-180) : deux choix côte à côte. */
+.icon-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.icon-pair__item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.icon-pair__text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.icon-pair__label { font-size: var(--text-sm); }
+.icon-pair__file { font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.image-row__thumb.is-dark { background: #16171b; }
+.image-row__thumb:not(.is-dark) img { background: #fff; }
 /* Couleur d'un réglage : pastille (choix natif caché dessous) et valeur. */
 .color-row__swatch { position: relative; flex: none; width: 32px; height: 32px; border-radius: var(--radius-sm); cursor: default;
   background: linear-gradient(var(--swatch), var(--swatch)), conic-gradient(#ccc 25%, #fff 0 50%, #ccc 0 75%, #fff 0) 0 0 / 8px 8px;
@@ -1738,3 +1746,34 @@ button.site-facts__item:hover .muted { color: var(--text); text-decoration: unde
 .input-with-btn { display: flex; gap: 6px; align-items: center; }
 .input-with-btn > .input { flex: 1; min-width: 0; }
 .publish-folders-read.is-busy svg { animation: gh-spin 1s linear infinite; }
+
+/* Recadrage sans perte d'une image (D-180) : cadre de la boîte de l'image, glisser pour placer,
+   molette ou réglette pour le zoom. */
+.crop-dialog { width: auto; min-width: 420px; max-width: calc(100vw - 48px); }
+.crop-dialog .dialog-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-md); }
+.crop-stage { display: grid; place-items: center; padding: 16px; border-radius: var(--radius-md, 8px);
+  background: conic-gradient(var(--surface-active) 25%, var(--surface-hover) 0 50%, var(--surface-active) 0 75%, var(--surface-hover) 0) 0 0 / 16px 16px; }
+.crop-frame { position: relative; overflow: hidden; cursor: grab; touch-action: none; box-shadow: 0 0 0 1px var(--line), var(--shadow-dialog); }
+.crop-frame:active { cursor: grabbing; }
+.crop-frame img { user-select: none; pointer-events: none; }
+.crop-grid { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity var(--fast) var(--ease);
+  background:
+    linear-gradient(to right, transparent calc(33.33% - .5px), rgba(255,255,255,.6) 0 calc(33.33% + .5px), transparent 0 calc(66.66% - .5px), rgba(255,255,255,.6) 0 calc(66.66% + .5px), transparent 0),
+    linear-gradient(to bottom, transparent calc(33.33% - .5px), rgba(255,255,255,.6) 0 calc(33.33% + .5px), transparent 0 calc(66.66% - .5px), rgba(255,255,255,.6) 0 calc(66.66% + .5px), transparent 0); }
+.crop-frame:hover .crop-grid, .crop-frame:active .crop-grid { opacity: 1; }
+.crop-controls { display: grid; gap: 8px; }
+.crop-row { display: grid; grid-template-columns: 88px 1fr auto; align-items: center; gap: 12px; }
+.crop-value { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: var(--text-sm); }
+.crop-xy { display: flex; gap: 12px; grid-column: 2 / 4; }
+.crop-num { display: flex; align-items: center; gap: 6px; }
+.crop-num .input { width: 72px; }
+.crop-dialog .dialog-actions { align-items: center; }
+.crop-spacer { flex: 1; }
+/* Cadrage dans le panneau Styles : vignette, zoom, point de cadrage. */
+.crop-field { display: grid; grid-template-columns: 40px 1fr; gap: 8px; align-items: center; }
+.crop-thumb { width: 40px; height: 40px; padding: 0; border: 0; border-radius: var(--radius-sm); overflow: hidden; cursor: default;
+  background: var(--surface-hover); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--text-muted); }
+.crop-thumb img { width: 100%; height: 100%; display: block; }
+.crop-thumb:hover { box-shadow: inset 0 0 0 1px var(--text-faint); }
+.crop-field__zoom { display: flex; align-items: center; gap: 8px; }
+.crop-field__zoom .range { flex: 1; min-width: 0; }

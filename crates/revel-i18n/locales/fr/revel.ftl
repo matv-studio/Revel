@@ -3915,3 +3915,19 @@ use-cms-fields = Champs CMS
 use-cms-fields-help = Valeurs lues dans le contenu choisi : changez de contenu dans « Propriétés », ou remplacez une valeur pour cette utilisation seulement
 cms-field-override = Remplacer pour cette utilisation
 cms-field-reset = Reprendre la valeur du CMS
+
+seo-favicon-light = Clair
+seo-favicon-light-help = Icône pour un navigateur en thème clair (SVG ou PNG)
+seo-favicon-dark = Sombre
+seo-favicon-dark-help = Icône pour un navigateur en thème sombre (SVG ou PNG) ; sans elle, l’icône claire sert partout
+
+crop-title = Recadrer l’image
+crop-frame-help = Glisser pour placer l’image ; molette pour zoomer
+crop-zoom = Zoom
+crop-zoom-help = Agrandissement de l’image dans sa boîte ; le fichier n’est pas modifié
+crop-position = Point de cadrage
+crop-position-help = Point de l’image gardé au centre du cadrage (0 à 100 %)
+crop-reset = Réinitialiser
+crop-reset-help = Image entière, centrée, sans zoom
+crop-apply = Appliquer
+crop-thumb-help = Double-clic : recadrer (zoom et position, sans modifier le fichier)

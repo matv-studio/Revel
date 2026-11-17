@@ -3912,3 +3912,19 @@ use-cms-fields = CMS 필드
 use-cms-fields-help = 선택한 항목에서 읽은 값: “속성”에서 다른 항목을 고르거나 이 인스턴스에서만 값을 덮어쓰기
 cms-field-override = 이 인스턴스에서 덮어쓰기
 cms-field-reset = CMS 값으로 되돌리기
+
+seo-favicon-light = 라이트
+seo-favicon-light-help = 라이트 모드 브라우저용 아이콘(SVG 또는 PNG)
+seo-favicon-dark = 다크
+seo-favicon-dark-help = 다크 모드 브라우저용 아이콘(SVG 또는 PNG). 없으면 라이트 아이콘을 사용
+
+crop-title = 이미지 자르기
+crop-frame-help = 드래그해 위치 조정, 휠로 확대
+crop-zoom = 확대
+crop-zoom-help = 상자 안에서 이미지 확대 비율(파일은 바뀌지 않음)
+crop-position = 초점
+crop-position-help = 자르기 중앙에 유지할 위치(0~100%)
+crop-reset = 초기화
+crop-reset-help = 전체 이미지, 가운데, 확대 없음
+crop-apply = 적용
+crop-thumb-help = 더블클릭: 자르기(확대와 위치, 파일은 그대로)

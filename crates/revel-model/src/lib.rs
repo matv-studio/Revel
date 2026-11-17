@@ -555,12 +555,21 @@ pub struct SeoSettings {
     /// Icône du site (SVG ou PNG).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub favicon: Option<String>,
+    /// Icône du site pour un navigateur en thème sombre (D-180) ; `favicon` sert au thème clair.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favicon_dark: Option<String>,
     /// Icône PNG de repli (192 px).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub favicon_png: Option<String>,
+    /// Icône PNG de repli pour un navigateur en thème sombre (D-180).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favicon_png_dark: Option<String>,
     /// Icône des écrans d'accueil (Apple, 180 px).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub touch_icon: Option<String>,
+    /// Icône des écrans d'accueil en thème sombre (D-180).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub touch_icon_dark: Option<String>,
     /// Fiche de l'organisation (données structurées schema.org de chaque page).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub organization: Option<Organization>,
@@ -1222,6 +1231,89 @@ pub const SCHEME_ONLY_ATTR: &str = "data-revel-scheme-only";
 /// ([`PART_ATTR`]) réglées depuis l'élément ; « Décomposer » le retire. Écrit dans le canevas
 /// seulement.
 pub const WIDGET_ATTR: &str = "data-revel-widget";
+
+/// Cadrage sans perte d'une image (D-180) : `x y zoom [arrondi]` — point de cadrage en % (0 à
+/// 100), zoom (1 = aucun), arrondi des coins en px (facultatif). Le fichier n'est pas modifié ;
+/// le site produit reçoit le style correspondant (`crop_style`).
+pub const CROP_ATTR: &str = "data-revel-crop";
+
+/// Cadrage lu dans `data-revel-crop` : (x %, y %, zoom, arrondi px).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Crop {
+    pub x: f64,
+    pub y: f64,
+    pub zoom: f64,
+    pub radius: f64,
+}
+
+impl Crop {
+    pub fn parse(v: &str) -> Option<Crop> {
+        let n: Vec<f64> = v
+            .split_whitespace()
+            .map(|p| p.trim_end_matches('%').parse::<f64>())
+            .collect::<Result<_, _>>()
+            .ok()?;
+        let (x, y) = (*n.first()?, *n.get(1)?);
+        let zoom = n.get(2).copied().unwrap_or(1.0);
+        let radius = n.get(3).copied().unwrap_or(0.0);
+        [x, y, zoom, radius]
+            .iter()
+            .all(|v| v.is_finite())
+            .then_some(Crop {
+                x: x.clamp(0.0, 100.0),
+                y: y.clamp(0.0, 100.0),
+                zoom: zoom.clamp(1.0, 8.0),
+                radius: radius.max(0.0),
+            })
+    }
+
+    /// Valeur écrite (`35 60 1.4`, arrondi s'il y en a un).
+    pub fn value(&self) -> String {
+        let f = |v: f64| {
+            let s = format!("{:.2}", v);
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        };
+        let mut s = format!("{} {} {}", f(self.x), f(self.y), f(self.zoom));
+        if self.radius > 0.0 {
+            s.push(' ');
+            s.push_str(&f(self.radius));
+        }
+        s
+    }
+
+    /// Style du cadrage : image qui couvre sa boîte, point de cadrage ; zoom autour de ce point,
+    /// coupé à la boîte (`clip-path`, les coins arrondis gardés), sans changer la mise en page.
+    pub fn style(&self) -> String {
+        let f = |v: f64| {
+            let s = format!("{:.3}", v);
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        };
+        let (x, y) = (f(self.x), f(self.y));
+        let mut s = format!("object-fit:cover;object-position:{x}% {y}%");
+        if self.zoom > 1.0001 {
+            let k = 1.0 - 1.0 / self.zoom;
+            let (t, r, b, l) = (
+                self.y * k,
+                (100.0 - self.x) * k,
+                (100.0 - self.y) * k,
+                self.x * k,
+            );
+            s.push_str(&format!(
+                ";scale:{};transform-origin:{x}% {y}%;clip-path:inset({}% {}% {}% {}%",
+                f(self.zoom),
+                f(t),
+                f(r),
+                f(b),
+                f(l)
+            ));
+            if self.radius > 0.0 {
+                s.push_str(&format!(" round {}px", f(self.radius / self.zoom)));
+            }
+            s.push(')');
+        }
+        s
+    }
+}
 /// Attribut d'une partie d'un élément construit (bouton, pastille, piste…) : nom de la partie,
 /// lu par les styles propres de Revel ; ce qui n'en porte pas est du contenu (diapositive,
 /// panneau).
@@ -1443,6 +1535,23 @@ pub mod build {
 mod tests {
     use super::build::*;
     use super::*;
+
+    /// Cadrage d'une image (D-180) : valeur lue, écrite, style produit.
+    #[test]
+    fn cadrage_d_une_image() {
+        let c = Crop::parse("25 60 2 12").unwrap();
+        assert_eq!(c.value(), "25 60 2 12");
+        assert_eq!(
+            c.style(),
+            "object-fit:cover;object-position:25% 60%;scale:2;transform-origin:25% 60%;clip-path:inset(30% 37.5% 20% 12.5% round 6px)"
+        );
+        assert_eq!(
+            Crop::parse("50 50").unwrap().style(),
+            "object-fit:cover;object-position:50% 50%"
+        );
+        assert_eq!(Crop::parse("120 -4 0.5").unwrap().value(), "100 0 1");
+        assert!(Crop::parse("x").is_none() && Crop::parse("10").is_none());
+    }
 
     /// Vue seule d'un gabarit (D-179) : identifiant avec dossier (`layouts/base`) compris.
     #[test]

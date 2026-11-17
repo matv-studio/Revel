@@ -208,7 +208,20 @@ pub fn ItemsList(
                         <div class="items-row" role="listitem" class:is-on=on data-item=id.clone()>
                             <button class="items-main" on:click=move |_| select(&it.get_value())
                                 title=it.with_value(|i| i.name.clone())>
-                                <span class="items-thumb">
+                                <span class="items-thumb" title=ui.t("crop-thumb-help")
+                                    on:dblclick={ let id = id.clone(); move |e: leptos::ev::MouseEvent| {
+                                        // Image de l'élément : fenêtre de recadrage (D-180).
+                                        e.stop_propagation();
+                                        let img = ed.doc.with_untracked(|d| {
+                                            let d = d.as_ref()?;
+                                            let n = revel_edit::address::node(d, &target(&id)).ok()?;
+                                            crate::crop::img_in(n)
+                                        });
+                                        if let Some(img) = img {
+                                            let t = target(&img);
+                                            ed.crop.set(Some(t));
+                                        }
+                                    } }>
                                     {move || match it.with_value(|i| i.src.clone()) {
                                         Some(src) => view! { <img alt="" src=crate::library::thumb_src(&base(), &src)/> }.into_any(),
                                         None if links => icons::link(),

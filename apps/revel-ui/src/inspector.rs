@@ -406,6 +406,10 @@ fn element_content(
         .and_then(|a| a.value.clone())
         .unwrap_or_default();
     let alt_empty = alt.trim().is_empty();
+    let crop_at = at.clone();
+    let crop_now = attr(&attrs, revel_model::CROP_ATTR)
+        .and_then(|a| a.value.as_deref())
+        .and_then(revel_model::Crop::parse);
     let (set_src, set_alt) = (set.clone(), set.clone());
     let at_pick = at.clone();
     let pick = move || {
@@ -551,6 +555,8 @@ fn element_content(
                 {is_img.then(|| view! {
                     <Field label=ui.t("inspector-alt") value=alt.clone() on_commit=move |v| set_alt("alt", v)/>
                 })}
+                // Cadrage sans perte (D-180) : vignette (double-clic : recadrer), zoom, point.
+                {is_img.then(|| crop_field(ui, ed, crop_at.clone(), src.clone(), crop_now))}
             </div>
         })}
     }
@@ -1269,3 +1275,60 @@ const MANAGED: &[&str] = &[
     "data-revel-cart-empty",
     "data-revel-cart-field",
 ];
+
+/// Cadrage d'une image dans Styles (D-180) : vignette cadrée (double-clic : fenêtre de
+/// recadrage), zoom, point de cadrage X et Y en %.
+fn crop_field(ui: Ui, ed: Ed, at: Target, src: String, now: Option<revel_model::Crop>) -> AnyView {
+    let c = now.unwrap_or(revel_model::Crop {
+        x: 50.0,
+        y: 50.0,
+        zoom: 1.0,
+        radius: 0.0,
+    });
+    let at = StoredValue::new(at);
+    let base = ed.base.get_untracked().unwrap_or_default();
+    let thumb = (!src.contains("{{") && !src.trim().is_empty())
+        .then(|| crate::library::thumb_src(&base, src.trim()));
+    let set = move |f: &dyn Fn(&mut revel_model::Crop)| {
+        let mut n = at.with_value(|a| crate::crop::crop_of(ed, a));
+        f(&mut n);
+        at.with_value(|a| crate::crop::set_crop(ui, ed, a, Some(n)));
+    };
+    let open = move || at.with_value(|a| ed.crop.set(Some(a.clone())));
+    let pct = |v: f64| format!("{}", v.round() as i64);
+    view! {
+        <div class="field crop-field" data-role="crop-field">
+            <button type="button" class="crop-thumb" title=ui.t("crop-thumb-help") aria-label=ui.t("crop-title")
+                on:dblclick=move |_| open()>
+                {match thumb {
+                    Some(t) => view! { <img src=t alt="" style=c.style()/> }.into_any(),
+                    None => icons::image(),
+                }}
+            </button>
+            <div class="stack">
+                <span class="crop-field__zoom" title=ui.t("crop-zoom-help")>
+                    <span class="label">{ui.t("crop-zoom")}</span>
+                    <input class="range" type="range" min="100" max="400" step="1" data-role="crop-zoom-panel" aria-label=ui.t("crop-zoom")
+                        prop:value=pct(c.zoom * 100.0)
+                        on:change=move |e| { if let Ok(v) = event_target_value(&e).parse::<f64>() { set(&|n| n.zoom = (v / 100.0).clamp(1.0, 4.0)) } }/>
+                    <span class="crop-value">{format!("{} %", pct(c.zoom * 100.0))}</span>
+                    <button type="button" class="icon-btn icon-btn--small" data-action="crop-open" title=ui.t("crop-title") aria-label=ui.t("crop-title")
+                        on:click=move |_| open()>{icons::crop()}</button>
+                </span>
+                <span class="crop-xy" title=ui.t("crop-position-help")>
+                    {[(0usize, "X", c.x), (1, "Y", c.y)].into_iter().map(|(i, n, v)| view! {
+                        <label class="crop-num"><span class="muted">{n}</span>
+                            <input class="input input--mono" type="number" min="0" max="100" step="1" aria-label=format!("{} {n}", ui.tx("crop-position", &[]))
+                                data-role=format!("crop-panel-{}", n.to_lowercase()) prop:value=pct(v)
+                                on:change=move |e| { if let Ok(v) = event_target_value(&e).parse::<f64>() {
+                                    let v = v.clamp(0.0, 100.0);
+                                    set(&|c| if i == 0 { c.x = v } else { c.y = v })
+                                } }/>
+                            <span class="muted">"%"</span></label>
+                    }).collect_view()}
+                </span>
+            </div>
+        </div>
+    }
+    .into_any()
+}

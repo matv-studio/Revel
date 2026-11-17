@@ -229,6 +229,10 @@ enum FromCanvas {
         id: String,
         html: String,
     },
+    /// Double-clic sur une image : fenêtre de recadrage (D-180).
+    Crop {
+        id: String,
+    },
     /// Canevas des composants : hauteur du composant dans ce cadre.
     Stage {
         h: f64,
@@ -534,6 +538,8 @@ pub struct Ed {
     pub forced: RwSignal<Vec<(String, bool)>>,
     /// Ligne de la sélection redemandée dans les calques (touche « . », D-179).
     pub reveal_tick: RwSignal<u32>,
+    /// Image en cours de recadrage (D-180) : élément `img` dont le cadrage s'écrit.
+    pub crop: RwSignal<Option<revel_edit::Target>>,
     /// Défilement du canevas, rétabli après un rechargement.
     pub scroll: RwSignal<(f64, f64)>,
     /// Défilement suivi en continu (règles).
@@ -2975,6 +2981,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         load: RwSignal::new(0),
         forced: RwSignal::new(Vec::new()),
         reveal_tick: RwSignal::new(0),
+        crop: RwSignal::new(None),
         scroll: RwSignal::new((0.0, 0.0)),
         live_scroll: RwSignal::new((0.0, 0.0)),
         vars: RwSignal::new(Vec::new()),
@@ -3256,6 +3263,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 | FromCanvas::Context { .. }
                 | FromCanvas::Text { .. }
                 | FromCanvas::TextHtml { .. }
+                | FromCanvas::Crop { .. }
                 | FromCanvas::RichText { .. } => ed.activate_key(&from_bp),
                 FromCanvas::Ready { .. }
                 | FromCanvas::Refreshed { .. }
@@ -3473,6 +3481,15 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 }
             }
             FromCanvas::Texts { id, items } => ed.texts.set((id, items)),
+            FromCanvas::Crop { id } => {
+                let at = ed
+                    .doc
+                    .with_untracked(|d| d.as_ref().and_then(|d| target_of(d, &id)));
+                if let Some(at) = at {
+                    dock.layout.update(|l| l.open(crate::dock::PanelId::Styles));
+                    ed.crop.set(Some(at));
+                }
+            }
             FromCanvas::SpacingFocus { prop } => {
                 dock.layout.update(|l| l.open(crate::dock::PanelId::Styles));
                 focus_style_field(prop);
@@ -3675,6 +3692,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
     view! {
         <section class="editor">
             <crate::palette::Palette/>
+            <crate::crop::CropDialog/>
             <Toolbar/>
             <crate::dock::Workspace panel=panel_view>
                 <crate::canvas::CanvasArea failed=failed/>

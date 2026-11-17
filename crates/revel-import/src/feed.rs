@@ -69,6 +69,8 @@ pub struct Plan {
     pub unchanged: usize,
     /// Articles déjà repris depuis un autre flux (même titre).
     pub duplicates: usize,
+    /// Contenus écrits à la main remplacés par leur version du flux (même titre, D-180).
+    pub replaced: usize,
 }
 
 /// Titre comparé pour les doublons : lettres et chiffres, en minuscules.
@@ -494,6 +496,37 @@ pub fn plan(feed: &Feed, existing: &[Existing], source: &str) -> Plan {
             }
             None => {
                 let t = same_title(&it.title);
+                // Même contenu déjà écrit dans le site, sans flux (copie faite à la main) : la
+                // version du flux le remplace (D-180), même fichier, donc même adresse.
+                let local = (!t.is_empty())
+                    .then(|| {
+                        existing.iter().find(|e| {
+                            e.data
+                                .get("guid")
+                                .and_then(Value::as_str)
+                                .is_none_or(str::is_empty)
+                                && e.data.get("title").and_then(Value::as_str).map(same_title)
+                                    == Some(t.clone())
+                                && !out.update.iter().any(|u| u.0 == e.file)
+                        })
+                    })
+                    .flatten();
+                if let Some(e) = local {
+                    let mut data = e.data.as_object().cloned().unwrap_or_default();
+                    for k in FIELDS {
+                        if let Some(v) = fresh.get(k) {
+                            data.insert(k.into(), v.clone());
+                        }
+                    }
+                    let body = if body.is_empty() {
+                        e.body.trim().to_string()
+                    } else {
+                        body
+                    };
+                    out.update.push((e.file.clone(), Value::Object(data), body));
+                    out.replaced += 1;
+                    continue;
+                }
                 if !t.is_empty() && !titles.insert(t) {
                     out.duplicates += 1;
                     continue;
@@ -683,5 +716,26 @@ mod tests {
         let p = plan(&f, &existing, "nord");
         assert_eq!((p.create.len(), p.duplicates), (1, 1));
         assert_eq!(p.create[0].0, "note-sans-image");
+    }
+
+    /// Copie écrite à la main (sans identifiant de flux, même titre) : remplacée par la version
+    /// du flux, même fichier ; ses autres champs gardés (D-180).
+    #[test]
+    fn copie_locale_remplacee_par_le_flux() {
+        let f = parse(RSS, None).unwrap();
+        let existing = vec![Existing {
+            file: "maison-jardin-alunites".into(),
+            data: json!({ "title": "Maison & Jardin !", "source": "alunites", "blocs": [1] }),
+            body: "ancien".into(),
+        }];
+        let p = plan(&f, &existing, "nord");
+        assert_eq!(
+            (p.create.len(), p.update.len(), p.replaced, p.duplicates),
+            (1, 1, 1, 0)
+        );
+        let (file, data, _) = &p.update[0];
+        assert_eq!(file, "maison-jardin-alunites");
+        assert_eq!(data["source"], "nord");
+        assert!(data.get("guid").is_some() && data["blocs"] == json!([1]));
     }
 }

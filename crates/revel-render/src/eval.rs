@@ -778,10 +778,18 @@ impl<'a> Builder<'a> {
                 if neutralize {
                     out.push_str(" type=\"text/plain\" data-rv-script");
                 }
+                // Cadrage sans perte d'une image (D-180) : style ajouté à celui de l'élément.
+                let mut crop_left = attrs
+                    .iter()
+                    .find(|a| a.name == revel_model::CROP_ATTR && a.when.is_none())
+                    .and_then(|a| a.value.as_deref())
+                    .and_then(revel_model::Crop::parse)
+                    .map(|c| c.style());
                 for a in attrs {
                     if a.name == revel_model::LAYER_NAME_ATTR
                         || ((a.name == revel_model::SLOT_ATTR
-                            || a.name == revel_model::WIDGET_ATTR)
+                            || a.name == revel_model::WIDGET_ATTR
+                            || a.name == revel_model::CROP_ATTR)
                             && self.editor.is_none())
                     {
                         continue;
@@ -789,6 +797,25 @@ impl<'a> Builder<'a> {
                     if let Some(w) = &a.when
                         && !self.eval(scope, w, ctx)?.is_true()
                     {
+                        continue;
+                    }
+                    if a.name.eq_ignore_ascii_case("style")
+                        && let Some(c) = crop_left.take()
+                    {
+                        out.push_str(" style=\"");
+                        if let Some(v) = &a.value {
+                            if v.contains("{{") || v.contains("{%") {
+                                let nodes = self.template_nodes(v)?;
+                                self.nodes(&nodes, scope, out, Mode::Attr, ctx, &At::NONE)?;
+                            } else {
+                                out.push_str(&escape_attr(v));
+                            }
+                            if !v.trim().is_empty() && !v.trim_end().ends_with(';') {
+                                out.push(';');
+                            }
+                        }
+                        out.push_str(&escape_attr(&c));
+                        out.push('"');
                         continue;
                     }
                     out.push(' ');
@@ -807,6 +834,11 @@ impl<'a> Builder<'a> {
                         }
                         out.push('"');
                     }
+                }
+                if let Some(c) = crop_left {
+                    out.push_str(" style=\"");
+                    out.push_str(&escape_attr(&c));
+                    out.push('"');
                 }
                 // XML : élément vide écrit `<x/>`.
                 if mode == Mode::Xml && children.is_empty() {

@@ -6,8 +6,28 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 17/11/2026 (version 0.7.8 en préparation : D-174 à D-178 ; D-179 après). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 17/11/2026 (après-midi) : D-180 (recadrage sans perte, icônes claire et sombre), 0.7.9
+
+- Fait (voir D-180) :
+  - `revel_model::Crop` (`CROP_ATTR`, `parse`, `value`, `style`) ;
+  - rendu dans `revel-render/src/eval.rs` (style ajouté, attribut retiré du site) ;
+  - canevas : `applyCrop` dans `canvas.js` ;
+  - interface : `apps/revel-ui/src/crop.rs` (`CropDialog`, `set_crop`, `img_in`), `inspector.rs`
+    (`crop_field`), `items.rs` (double-clic sur la vignette) ;
+  - icônes : `site.rs::icon_pair_row`, champs `*_dark` de `SeoSettings`, rendu `revel-render/src/lib.rs`
+    (`LIGHT`, `DARK`) ;
+  - flux : `revel_import::feed::plan` (`replaced`).
+- Pièges :
+  - les attributs changés sont posés sur place dans le canevas (message `attrs`) sans nouveau rendu : un
+    style calculé au rendu doit aussi l'être en JS ;
+  - dans l'essai, une image d'une utilisation de composant ouvre le canevas du composant ; l'essai ajoute sa
+    propre image à la page.
+- Essais : `revel-model` `cadrage_d_une_image`, `revel-render` `cadrage_d_une_image_produit` et icônes dans
+  le test SEO, `revel-import` `copie_locale_remplacee_par_le_flux` ; e2e : bloc « D-180 » (recadrage) et
+  icônes dans Paramètres.
 
 ## Travail du 17/11/2026 (midi) : D-179 (champs CMS, gabarits, conditions, touche « . », flux sans https)
 

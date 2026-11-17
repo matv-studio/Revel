@@ -3912,3 +3912,19 @@ use-cms-fields = CMS-velden
 use-cms-fields-help = Waarden uit het gekozen item: kies een ander item bij “Eigenschappen” of overschrijf een waarde alleen voor deze instantie
 cms-field-override = Overschrijven voor deze instantie
 cms-field-reset = CMS-waarde weer gebruiken
+
+seo-favicon-light = Licht
+seo-favicon-light-help = Pictogram voor een browser in lichte modus (SVG of PNG)
+seo-favicon-dark = Donker
+seo-favicon-dark-help = Pictogram voor een browser in donkere modus (SVG of PNG); zonder dit wordt overal het lichte gebruikt
+
+crop-title = Afbeelding bijsnijden
+crop-frame-help = Sleep om de afbeelding te plaatsen; scroll om te zoomen
+crop-zoom = Zoom
+crop-zoom-help = Vergroting van de afbeelding in haar vak; het bestand verandert niet
+crop-position = Focuspunt
+crop-position-help = Punt van de afbeelding dat in het midden blijft (0 tot 100%)
+crop-reset = Herstellen
+crop-reset-help = Hele afbeelding, gecentreerd, zonder zoom
+crop-apply = Toepassen
+crop-thumb-help = Dubbelklik: bijsnijden (zoom en positie, bestand ongewijzigd)

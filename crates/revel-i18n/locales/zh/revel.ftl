@@ -3912,3 +3912,19 @@ use-cms-fields = CMS 字段
 use-cms-fields-help = 读取自所选条目的值：在“属性”中选择其他条目，或仅在此实例中覆盖某个值
 cms-field-override = 在此实例中覆盖
 cms-field-reset = 恢复 CMS 的值
+
+seo-favicon-light = 浅色
+seo-favicon-light-help = 浏览器浅色模式下的图标（SVG 或 PNG）
+seo-favicon-dark = 深色
+seo-favicon-dark-help = 浏览器深色模式下的图标（SVG 或 PNG）；未设置时处处使用浅色图标
+
+crop-title = 裁剪图片
+crop-frame-help = 拖动以放置图片；滚轮缩放
+crop-zoom = 缩放
+crop-zoom-help = 图片在其框内的放大倍数；不修改文件
+crop-position = 焦点
+crop-position-help = 保持在裁剪中心的图片位置（0–100%）
+crop-reset = 重置
+crop-reset-help = 完整图片，居中，不缩放
+crop-apply = 应用
+crop-thumb-help = 双击：裁剪（缩放和位置，不修改文件）

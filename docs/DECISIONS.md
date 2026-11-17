@@ -2435,3 +2435,39 @@ gardée, avec sa couleur ; en-tête et pied dans le gabarit, à rendre accessibl
 - En suspens : remplacement des images d'un contenu (seuls les textes) ; libellé d'un élément de liste (« Mot »
   au lieu du nom du champ) ; contenus repris d'un flux qui reçoivent encore une page locale ; Superficiel doit
   republier son site Webflow pour que l'adresse du flux réponde (404 le 17/11).
+
+**D-180 — 17/11/2026 — prise (demandes de l'utilisateur : recadrer une image par double-clic dans le canevas
+ou sur sa vignette, zoom et position dans Styles pour les outils ; icônes du site claire et sombre sur une
+ligne, pour l'icône du site, l'icône PNG et l'icône d'écran d'accueil ; flux des marques et doublons ;
+construction 0.7.9).** Réponse de l'utilisateur : « cadrage sans perte ».
+- **Recadrage sans perte** : attribut `data-revel-crop="x y zoom [arrondi]"` (point de cadrage en %, zoom 1
+  à 4, arrondi des coins en px). Le fichier n'est pas modifié. Le site produit reçoit un style écrit sur
+  l'image (`revel_model::Crop::style`) :
+  - `object-fit: cover` et `object-position` ;
+  - zoom par `scale` autour du point de cadrage ;
+  - `clip-path: inset(…)`, calculé pour couper l'image à sa boîte sans changer la mise en page, coins
+    arrondis gardés.
+  Ce calcul fonctionne dans tous les navigateurs : `object-view-box` n'existe pas dans Firefox ni dans
+  Safari (vérifié sur caniuse). Le style s'ajoute à un `style` écrit. L'attribut ne reste que dans le canevas.
+- **Fenêtre de recadrage** :
+  - ouverture : double-clic sur une image dans le canevas (hors utilisation de composant : le double-clic y
+    ouvre toujours le composant), double-clic sur la vignette du panneau Styles, ou sur celle d'un élément
+    d'outil (carrousel, défilement…) ;
+  - réglage : glisser pour placer, molette ou réglette pour le zoom, X et Y en % ;
+  - « Réinitialiser » rend l'image entière, centrée et sans zoom (l'attribut est retiré).
+  - Panneau Styles d'une image : vignette cadrée, zoom, X et Y.
+  - Canevas : style recalculé sur place quand l'attribut change.
+- **Icônes du site** (Paramètres › Référencement) : icône du site, icône PNG et icône d'écran d'accueil ont
+  chacune deux choix sur une ligne, Clair et Sombre (`favicon_dark`, `favicon_png_dark`, `touch_icon_dark`).
+  - Rendu : `<link … media="(prefers-color-scheme: light|dark)">`, la sombre après la claire.
+  - Chrome lit `media` pour l'icône (annonce Blink). iOS ne change pas l'icône d'écran d'accueil selon le
+    thème : la claire y reste.
+  - `Command::SetSeoSettings` porte désormais ses réglages dans une `Box` (taille de la commande).
+- **Flux** : un contenu écrit à la main, sans identifiant de flux et avec le même titre qu'un article du flux,
+  est remplacé par la version du flux. Même fichier, donc même adresse ; ses autres champs sont gardés.
+  Auparavant la version du flux était ignorée comme doublon.
+- **Version 0.7.9**.
+- En suspens :
+  - recadrage d'une image `Node::Image` (gabarits Eleventy) et d'une image dans une utilisation de composant
+    (faite dans le canevas du composant) ;
+  - aperçu en direct dans le canevas pendant le réglage (la fenêtre a son propre aperçu).

@@ -4696,6 +4696,38 @@ fn value_binding(ui: Ui, ed: Ed, at: &Target, node: &Node, var: String) -> Optio
 /// champ (et ses sous-champs), champs du contenu (liste, modèle de collection), propriétés du
 /// composant ouvert. (expression, libellé).
 /// `at` est dans une boucle (liste de collection, de valeurs…) du même propriétaire.
+/// Boucles sur une collection qui entourent l'endroit (marque d'un projet :
+/// `{% for m in collections.marques | by_slugs(…) %}`) : (variable, collection) (D-179).
+fn enclosing_collection_loops(d: &Site, at: &Target) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut cur = at.clone();
+    for _ in 0..64 {
+        let Ok((parent, _)) = revel_edit::address::locate(d, &cur) else {
+            break;
+        };
+        let Some(node) = parent.node else {
+            break;
+        };
+        cur = Target {
+            owner: at.owner.clone(),
+            node,
+        };
+        if let Ok(Node::Each { expr, item, .. }) = revel_edit::address::node(d, &cur)
+            && let Some(rest) = expr.trim().strip_prefix("collections.")
+        {
+            let col: String = rest
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+                .collect();
+            let item = item.trim();
+            if !col.is_empty() && revel_model::valid_prop_name(item) {
+                out.push((item.to_string(), col));
+            }
+        }
+    }
+    out
+}
+
 fn in_loop(d: &Site, at: &Target) -> bool {
     let mut cur = at.clone();
     for _ in 0..64 {
@@ -4729,7 +4761,7 @@ pub fn condition_fields_with(
     cols: RwSignal<Vec<CmsCollection>>,
 ) -> Option<Signal<Vec<(String, String)>>> {
     // Endroit : liste de valeurs (variable, collection, champ), contenu relié, propriétés.
-    let (values, content, props) = ed.doc.with_untracked(|d| {
+    let (values, content, props, loops) = ed.doc.with_untracked(|d| {
         let d = d.as_ref()?;
         let values = enclosing_values_at(d, at).map(|(var, field, each)| {
             let col = binding_context(d, &each)
@@ -4773,6 +4805,7 @@ pub fn condition_fields_with(
         };
         // Informations du site (« Informations du site › Fax »).
         props.extend(crate::siteinfo::condition_fields(ed));
+        let loops = enclosing_collection_loops(d, at);
         // Dans une liste : premier ou dernier élément (`loop.first`, `loop.last`).
         if in_loop(d, at) {
             let ui = expect_context::<Ui>();
@@ -4785,9 +4818,9 @@ pub fn condition_fields_with(
                 .into_iter()
                 .map(|v| (format!("env.{v}"), format!("Environnement › {v}"))),
         );
-        Some((values, content, props))
+        Some((values, content, props, loops))
     })?;
-    if values.is_none() && content.is_none() && props.is_empty() {
+    if values.is_none() && content.is_none() && props.is_empty() && loops.is_empty() {
         return None;
     }
     let label = |f: &revel_protocol::CmsField| f.label.clone().unwrap_or_else(|| f.name.clone());
@@ -4796,7 +4829,9 @@ pub fn condition_fields_with(
         let mut out: Vec<(String, String)> = Vec::new();
         // Endroit lié à une collection : rien tant que les collections ne sont pas chargées, pour
         // que ses champs viennent toujours en premier.
-        if (content.is_some() || values.as_ref().is_some_and(|(_, c)| c.is_some()))
+        if (content.is_some()
+            || !loops.is_empty()
+            || values.as_ref().is_some_and(|(_, c)| c.is_some()))
             && cols.with(Vec::is_empty)
         {
             return out;
@@ -4826,6 +4861,22 @@ pub fn condition_fields_with(
                 }
                 // Le contenu a une page (« a une page » : rempli).
                 out.push((url.clone(), url_label.clone()));
+            }
+            // Contenus d'une autre collection lus en boucle (marque d'un projet) : leurs champs,
+            // « Marques › Logo ».
+            for (var, col) in &loops {
+                if let Some(c) = cs.iter().find(|c| c.id == *col) {
+                    let name = c
+                        .label
+                        .clone()
+                        .unwrap_or_else(|| crate::site::capitalize(&c.id));
+                    for f in &c.fields {
+                        out.push((
+                            format!("{var}.data.{}", f.name),
+                            format!("{name} › {}", label(f)),
+                        ));
+                    }
+                }
             }
         });
         out.extend(props.iter().cloned());

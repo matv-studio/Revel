@@ -1432,6 +1432,9 @@ pub fn flatten_with(
     // Règle d'une utilisation de composant selon l'endroit (`.intro .bouton`) : classe ajoutée à
     // ces utilisations (posée sur la racine du composant), règle sur la classe combinée.
     let mut resolved: HashSet<usize> = HashSet::new();
+    // Même sélecteur sous une autre requête média : même classe (une seule classe ajoutée aux
+    // utilisations ; une seconde écrasait la première, D-179).
+    let mut by_sel: HashMap<String, String> = HashMap::new();
     for (ri, r) in rules.iter().enumerate() {
         if r.problem
             && !r.root
@@ -1441,8 +1444,12 @@ pub fn flatten_with(
             && r.shape.as_ref().is_some_and(|s| {
                 s.state.is_none() && s.pseudo.is_none() && s.outer.is_none() && s.extra.is_empty()
             })
-            && let Some((sel, adds)) = instance_class(site, &r.sel, &mut used_names)
+            && let Some((sel, adds)) = match by_sel.get(&r.sel) {
+                Some(done) => Some((done.clone(), Vec::new())),
+                None => instance_class(site, &r.sel, &mut used_names),
+            }
         {
+            by_sel.insert(r.sel.clone(), sel.clone());
             let mut done = false;
             for it in final_items.iter_mut() {
                 if let StyleItem::Rule(fr) = it

@@ -163,15 +163,25 @@ pub fn ContentSettings() -> impl IntoView {
                     element_content(ui, ed, apply, at, tag, attrs, anchors).into_any()
                 }
                 Node::Image(img) => image(ui, ed, apply, at, img).into_any(),
-                Node::If { cond, .. } => {
-                    // Champ du contenu (liste, modèle) : condition choisie dans une liste ;
-                    // l'expression reste modifiable dessous.
+                Node::If { id, cond, otherwise, .. } => {
+                    // Affichage selon une condition (D-179) : réglée par des menus (champ, test,
+                    // valeur) ; le code reste dans un volet replié pour les cas écrits à la main.
                     let readable = crate::blocks::readable_condition(ui, ed, at.clone(), cond.clone());
+                    let has_else = !otherwise.is_empty();
+                    let show = id.map(|id| condition_preview(ui, ed, id, has_else));
                     view! {
-                        <div class="stack">
+                        <div class="stack cond-tool">
+                            <p class="tool-head" title=ui.t("cond-tool-help")>
+                                <span class="tool-icon">{crate::icons::branch()}</span>
+                                <span>{ui.t("cond-tool")}</span>
+                            </p>
                             {readable}
-                            <Field label=ui.t("inspector-condition") value=cond mono=true
-                                on_commit=move |v| apply(Command::SetLogic { at: at.clone(), cond: Some(v), expr: None, item: None })/>
+                            {show}
+                            <details class="cond-code">
+                                <summary title=ui.t("cond-code-help")>{ui.t("cond-code")}</summary>
+                                <Field label=ui.t("inspector-condition") value=cond mono=true
+                                    on_commit=move |v| apply(Command::SetLogic { at: at.clone(), cond: Some(v), expr: None, item: None })/>
+                            </details>
                         </div>
                     }.into_any()
                 }
@@ -193,6 +203,56 @@ pub fn ContentSettings() -> impl IntoView {
             {in_component}
         </div>
     }
+}
+
+/// Branche montrée dans le canevas (D-179) : selon la condition, « Si » ou « Sinon », pour
+/// sélectionner et modifier les éléments d'une branche que la page n'affiche pas. Rien n'est
+/// écrit dans le site.
+fn condition_preview(ui: Ui, ed: Ed, id: String, has_else: bool) -> AnyView {
+    let id = StoredValue::new(id);
+    let cur = move || {
+        ed.forced.with(|f| {
+            f.iter()
+                .find(|(x, _)| id.with_value(|i| x == i))
+                .map(|(_, b)| *b)
+        })
+    };
+    let set = move |v: Option<bool>| {
+        ed.forced.update(|f| {
+            f.retain(|(x, _)| id.with_value(|i| x != i));
+            if let Some(b) = v {
+                f.push((id.get_value(), b));
+            }
+        });
+    };
+    let opts: Vec<(Option<bool>, &'static str, &'static str)> = if has_else {
+        vec![
+            (None, "cond-show-auto", "cond-show-auto-help"),
+            (Some(true), "cond-show-then", "cond-show-then-help"),
+            (Some(false), "cond-show-else", "cond-show-else-help"),
+        ]
+    } else {
+        vec![
+            (None, "cond-show-auto", "cond-show-auto-help"),
+            (Some(true), "cond-show-then", "cond-show-then-help"),
+        ]
+    };
+    view! {
+        <div class="style-row" data-row="cond-show">
+            <span class="style-label" title=ui.t("cond-show-help")><span class="style-label-text">{ui.t("cond-show")}</span></span>
+            <div class="style-control">
+                <div class="segmented" role="radiogroup" aria-label=ui.t("cond-show")>
+                    {opts.into_iter().map(|(v, label, help)| view! {
+                        <button type="button" class="seg" role="radio" data-value=format!("{v:?}")
+                            class:is-on=move || cur() == v
+                            title=ui.t(help)
+                            on:click=move |_| set(v)>{ui.t(label)}</button>
+                    }).collect_view()}
+                </div>
+            </div>
+        </div>
+    }
+    .into_any()
 }
 
 /// Paramètres avancés de l'élément (balise, identifiant, attributs), rubrique repliée en bas de
@@ -932,7 +992,40 @@ fn element_advanced(
                         None
                     };
                     let has_bound = bound.is_some();
+                    // Attribut posé selon une condition (D-179) : condition réglée par les menus.
+                    let when_editor = conditional.clone().and_then(|w| {
+                        let fields = crate::blocks::condition_fields(ed, &at)?;
+                        let (at_w, name_w) = (StoredValue::new(at.clone()), StoredValue::new(a.name.clone()));
+                        let set = move |c: Option<String>| {
+                            let (at_w, name_w) = (at_w.get_value(), name_w.get_value());
+                            let Some(c) = c else { return };
+                            let cmd = ed.doc.with_untracked(|d| {
+                                let d = d.as_ref()?;
+                                let Node::Element { attrs, .. } = revel_edit::address::node(d, &at_w).ok()? else {
+                                    return None;
+                                };
+                                let index = attrs.iter().position(|x| x.name == name_w)?;
+                                let mut attr = attrs[index].clone();
+                                attr.when = Some(c.clone());
+                                Some(Command::Batch {
+                                    commands: vec![
+                                        Command::RemoveAttrAt { at: at_w.clone(), index },
+                                        Command::InsertAttr { at: at_w.clone(), index, attr },
+                                    ],
+                                })
+                            });
+                            if let Some(cmd) = cmd {
+                                apply(cmd);
+                            }
+                        };
+                        Some(view! {
+                            <div class="attr-when" title=ui.t("attr-when-help")>
+                                {crate::visibility::condition_editor(ui, fields, Some(w), false, set)}
+                            </div>
+                        })
+                    });
                     view! {
+                        {when_editor}
                         <div class="attr-row" class:attr-row--bound=has_bound data-attr=attr_key>
                             <span class="attr-name" title={
                                 let tech = a.name.clone();

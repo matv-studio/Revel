@@ -574,6 +574,19 @@ impl Core {
         let raw = uri_path.split(['?', '#']).next().unwrap_or("/");
         let decoded = percent_decode(raw);
         let path = decoded.as_str();
+        // Branches de conditions montrées (D-179) : `rvif=<id>.1,<id>.0` (« Si », « Sinon »).
+        let forced: Vec<(String, bool)> = uri_path
+            .split_once('?')
+            .map(|(_, q)| q.split('#').next().unwrap_or(q))
+            .into_iter()
+            .flat_map(|q| q.split('&'))
+            .filter_map(|kv| kv.strip_prefix("rvif="))
+            .flat_map(|v| v.split(','))
+            .filter_map(|x| {
+                let (id, b) = x.rsplit_once('.')?;
+                (!id.is_empty()).then(|| (id.to_string(), b == "1"))
+            })
+            .collect();
         // Rien hors du site : ni `..`, ni chemin absolu de fichier.
         if !path.starts_with('/') || path.split(['/', '\\']).any(|s| s == "..") {
             return Ok(None);
@@ -690,12 +703,41 @@ impl Core {
                     &environment,
                     &EditorOptions {
                         scripts: preview && opts.scripts,
+                        forced: forced.clone(),
                     },
                 )?)
             })?;
             return Ok(page.map(|page| {
                 let html = hide_hidden(&if preview {
                     preview_component(&page.html)
+                } else {
+                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
+                });
+                CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
+            }));
+        }
+        // Gabarit vu seul (D-179) : `/__revel/layout/<id>/`.
+        if let Some(layout) = revel_model::layout_of(path) {
+            let rev = self.session_revision(&site);
+            let page = self.with_project(&site, |p| {
+                let hooks: Arc<dyn revel_render::AssetHooks> = if opts.responsive_images {
+                    pipeline.clone()
+                } else {
+                    Arc::new(revel_project::ProjectAssets::new(p))
+                };
+                Ok(p.render_layout_editor(
+                    layout,
+                    hooks,
+                    &environment,
+                    &EditorOptions {
+                        scripts: opts.scripts,
+                        forced: forced.clone(),
+                    },
+                )?)
+            })?;
+            return Ok(page.map(|page| {
+                let html = hide_hidden(&if preview {
+                    preview_page(&page.html)
                 } else {
                     html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
                 });
@@ -722,6 +764,7 @@ impl Core {
                     &environment,
                     &EditorOptions {
                         scripts: opts.scripts,
+                        forced: forced.clone(),
                     },
                 )?)
             })?;
@@ -750,6 +793,7 @@ impl Core {
                     &environment,
                     &EditorOptions {
                         scripts: opts.scripts,
+                        forced: forced.clone(),
                     },
                 )?)
             })?;

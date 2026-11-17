@@ -437,6 +437,49 @@ pub fn template_ref(d: &Site, id: &str) -> Option<EditorPageInfo> {
     })
 }
 
+/// Gabarit `id` vu seul (D-179) : en-tête, pied de page… sans contenu de page.
+pub fn layout_ref(d: &Site, id: &str) -> Option<EditorPageInfo> {
+    d.layout(id)?;
+    let name = crate::pagetree::label_of(id);
+    let title = use_context::<Ui>()
+        .map(|ui| ui.now("layouts-page", &[("name", name.clone())]))
+        .unwrap_or(name);
+    Some(EditorPageInfo {
+        url: revel_model::layout_page(id),
+        title: title.clone(),
+        page: None,
+        collection: None,
+        layout: Some(id.to_string()),
+        file: None,
+        draft: false,
+        name: Some(title),
+        seo: None,
+    })
+}
+
+thread_local! {
+    /// Zone sous la souris (D-179) : `canvas`, ou le panneau (`layers`, `assets`, `components`…).
+    static HOVER_ZONE: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// Zone sous la souris, lue sur l'élément survolé (le cadre du canevas pour la page).
+fn hover_zone(el: &web_sys::Element) -> String {
+    if el.tag_name() == "IFRAME"
+        || el
+            .closest(".canvas-area, .canvas-stage")
+            .ok()
+            .flatten()
+            .is_some()
+    {
+        return "canvas".into();
+    }
+    el.closest(".dock-panel[data-panel]")
+        .ok()
+        .flatten()
+        .and_then(|p| p.get_attribute("data-panel"))
+        .unwrap_or_default()
+}
+
 /// État de l'éditeur, partagé par ses panneaux.
 #[derive(Clone, Copy)]
 pub struct Ed {
@@ -486,6 +529,11 @@ pub struct Ed {
     pub col_labels: RwSignal<std::collections::HashMap<String, String>>,
     /// Numéro de chargement du canevas (incrémenté pour le recharger).
     pub load: RwSignal<u64>,
+    /// Branches de conditions montrées dans le canevas quelle que soit leur condition (D-179) :
+    /// (identifiant de la condition, `true` : « Si », `false` : « Sinon »).
+    pub forced: RwSignal<Vec<(String, bool)>>,
+    /// Ligne de la sélection redemandée dans les calques (touche « . », D-179).
+    pub reveal_tick: RwSignal<u32>,
     /// Défilement du canevas, rétabli après un rechargement.
     pub scroll: RwSignal<(f64, f64)>,
     /// Défilement suivi en continu (règles).
@@ -815,8 +863,16 @@ impl Ed {
         {
             return Some(p);
         }
+        if let Some(id) = revel_model::layout_of(url) {
+            return self.doc.with(|d| layout_ref(d.as_ref()?, id));
+        }
         let id = revel_model::template_of(url)?;
         self.doc.with(|d| template_ref(d.as_ref()?, id))
+    }
+
+    /// Page affichée : gabarit vu seul (D-179).
+    pub fn layout_view(self) -> Option<String> {
+        revel_model::layout_of(&self.page.get()).map(str::to_string)
     }
 
     /// [`Ed::page_ref`] sans suivi.
@@ -833,11 +889,22 @@ impl Ed {
     pub fn src(self) -> Option<String> {
         let base = self.base.get()?;
         let page = self.localized(&self.page.get());
+        let forced = self.forced.with(|f| {
+            f.iter()
+                .map(|(id, on)| format!("{id}.{}", u8::from(*on)))
+                .collect::<Vec<_>>()
+                .join(",")
+        });
         Some(format!(
-            "{}{}?rv={}",
+            "{}{}?rv={}{}",
             base,
             page.trim_start_matches('/'),
-            self.load.get()
+            self.load.get(),
+            if forced.is_empty() {
+                String::new()
+            } else {
+                format!("&rvif={forced}")
+            }
         ))
     }
 
@@ -1143,6 +1210,7 @@ impl Ed {
             "zoom-100" => self.zoom_to(Some(1.0)),
             "zoom-fit" => self.zoom_to(None),
             "zoom-sel" => self.zoom_selection(),
+            "reveal" => return self.reveal_here(),
             "zoom-in" => self.zoom_step(1),
             "zoom-out" => self.zoom_step(-1),
             _ => return false,
@@ -2111,6 +2179,74 @@ impl Ed {
         self.post(serde_json::json!({ "type": "measure", "id": id, "reveal": true, "band": band }));
     }
 
+    /// Sélection montrée là où se trouve la souris (D-179) : canevas (vue déplacée, zoom gardé),
+    /// calques (chemin déplié, ligne amenée à l'écran), médias (média de l'élément), composants
+    /// (composant utilisé). `false` sans sélection.
+    pub fn reveal_here(self) -> bool {
+        let Some(sel) = self.selected.get_untracked() else {
+            return false;
+        };
+        let zone = HOVER_ZONE.with(|z| z.borrow().clone());
+        let flash = |sel: &str| {
+            let Ok(Some(el)) = document().query_selector(sel) else {
+                return false;
+            };
+            let opts = web_sys::ScrollIntoViewOptions::new();
+            opts.set_block(web_sys::ScrollLogicalPosition::Center);
+            el.scroll_into_view_with_scroll_into_view_options(&opts);
+            let _ = el.class_list().add_1("is-flash");
+            let el2 = el.clone();
+            set_timeout(
+                move || {
+                    let _ = el2.class_list().remove_1("is-flash");
+                },
+                std::time::Duration::from_millis(1200),
+            );
+            true
+        };
+        let node = self.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let at = target_of(d, &sel.id)?;
+            revel_edit::address::node(d, &at).ok().cloned()
+        });
+        match zone.as_str() {
+            "layers" => {
+                self.reveal_tick.update(|n| *n += 1);
+                return true;
+            }
+            "assets" => {
+                let url = match &node {
+                    Some(revel_model::Node::Image(i)) => revel_edit::canvas::literal(&i.src),
+                    Some(revel_model::Node::Element { attrs, .. }) => attrs
+                        .iter()
+                        .find(|a| matches!(a.name.as_str(), "src" | "poster" | "data-src"))
+                        .and_then(|a| a.value.clone()),
+                    _ => None,
+                };
+                if let Some(u) = url
+                    && flash(&format!(
+                        ".dock-panel[data-panel=\"assets\"] [data-url=\"{}\"]",
+                        u.replace('"', "\\\"")
+                    ))
+                {
+                    return true;
+                }
+            }
+            "components" => {
+                if let Some(revel_model::Node::Use { component, .. }) = &node
+                    && flash(&format!(
+                        ".dock-panel[data-panel=\"components\"] [data-component=\"{component}\"]"
+                    ))
+                {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        self.select_and_reveal(&sel.id);
+        true
+    }
+
     /// Vue déplacée (sans zoom) pour montrer un rectangle de l'écran actif, s'il sort de la zone.
     fn reveal_rect(self, r: Rect) {
         let (aw, ah) = self.area.get_untracked();
@@ -2837,6 +2973,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         previews: RwSignal::new(std::collections::HashMap::new()),
         col_labels: RwSignal::new(std::collections::HashMap::new()),
         load: RwSignal::new(0),
+        forced: RwSignal::new(Vec::new()),
+        reveal_tick: RwSignal::new(0),
         scroll: RwSignal::new((0.0, 0.0)),
         live_scroll: RwSignal::new((0.0, 0.0)),
         vars: RwSignal::new(Vec::new()),
@@ -3414,6 +3552,16 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             e.prevent_default();
         }
     });
+    // Zone sous la souris (touche « . », D-179).
+    let on_over = window_event_listener(ev::pointerover, move |e: web_sys::PointerEvent| {
+        if let Some(el) = e
+            .target()
+            .and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok())
+        {
+            let z = hover_zone(&el);
+            HOVER_ZONE.with(|h| *h.borrow_mut() = z);
+        }
+    });
     let on_keyup = window_event_listener(ev::keyup, move |e: web_sys::KeyboardEvent| {
         if e.key() == " " {
             ed.space.set(false);
@@ -3429,6 +3577,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         }
     });
     on_cleanup(move || {
+        on_over.remove();
         on_message.remove();
         on_key.remove();
         on_keyup.remove();

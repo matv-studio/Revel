@@ -257,6 +257,38 @@ pub fn site_variables(site: &Site) -> HashSet<String> {
         .collect()
 }
 
+/// Variables posées par un style relié sur un élément (pages, gabarits, composants).
+pub fn bound_style_variables(site: &Site) -> HashSet<String> {
+    let mut out = HashSet::new();
+    let mut take = |nodes: &[revel_model::Node]| {
+        revel_model::ids::walk(nodes, &mut |n| {
+            if let revel_model::Node::Element { attrs, .. } = n
+                && let Some(v) = attrs
+                    .iter()
+                    .find(|a| a.name == "style")
+                    .and_then(|a| a.value.as_deref())
+                && let Some(decls) = crate::attrbind::style_decls(v)
+            {
+                for d in decls.iter().filter(|d| d.bound.is_some()) {
+                    if let Some(name) = d.prop.strip_prefix("--") {
+                        out.insert(name.to_string());
+                    }
+                }
+            }
+        });
+    };
+    for p in &site.pages {
+        take(&p.body);
+    }
+    for l in &site.layouts {
+        take(&l.body);
+    }
+    for c in &site.components {
+        take(&c.body);
+    }
+    out
+}
+
 /// Valeur d'une variable du site : couleur ou taille.
 pub fn site_value(v: &str) -> bool {
     revel_style::values::color::Rgba::parse(v.trim()).is_some() || is_size(v)
@@ -492,7 +524,10 @@ pub fn audit(site: &Site) -> Vec<Issue> {
         return out;
     };
     let roots = variant_roots(site);
-    let vars = site_variables(site);
+    let mut vars = site_variables(site);
+    // Variables posées par un style relié d'un élément (`--marque: {{ marque.data.couleur }}`,
+    // couleur d'un champ du CMS, D-179) : connues des règles qui les lisent.
+    vars.extend(bound_style_variables(site));
     let bps = if site.breakpoints.is_empty() {
         Breakpoint::defaults()
     } else {

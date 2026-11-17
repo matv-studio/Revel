@@ -23,11 +23,10 @@ fn bound_help(item: &TextItem) -> Option<&'static str> {
     }
 }
 
-#[component]
-pub fn SelectedTexts() -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let ed = expect_context::<Ed>();
-    let items = Memo::new(move |_| {
+/// Textes de la sélection montrés dans le panneau (sans les propriétés de l'utilisation, ni
+/// les textes d'un outil fermé).
+fn selection_texts(ed: Ed) -> Memo<Vec<TextItem>> {
+    Memo::new(move |_| {
         let sel = ed.selected.with(|s| s.as_ref().map(|s| s.id.clone()));
         // Outil fermé : ses textes se règlent dans son panneau, avec leur nom (D-174, D-176).
         let tool = sel.as_ref().is_some_and(|id| {
@@ -49,13 +48,17 @@ pub fn SelectedTexts() -> impl IntoView {
                 items
                     .iter()
                     .filter(|t| {
+                        // Sauf un champ du contenu remplacé sur l'utilisation (`p or champ`) :
+                        // dans « Champs CMS » (D-179).
                         !matches!(&t.slot, revel_edit::canvas::Slot::Expr {
+                            expr,
                             binding: Some(revel_edit::canvas::Binding {
-                                source: revel_edit::canvas::Source::Prop { node, .. },
+                                source: revel_edit::canvas::Source::Prop { node, name, .. },
                                 ..
                             }),
                             ..
-                        } if Some(node) == sel.as_ref())
+                        } if Some(node) == sel.as_ref()
+                            && revel_edit::overrides::split(expr).is_none_or(|(p, _)| p != name))
                     })
                     .cloned()
                     .collect()
@@ -63,6 +66,85 @@ pub fn SelectedTexts() -> impl IntoView {
                 Vec::new()
             }
         })
+    })
+}
+
+/// Utilisation sélectionnée d'un composant relié à un contenu (D-179) : cible, composant, valeurs.
+type UseCtx = Option<(
+    revel_edit::Target,
+    revel_model::Component,
+    std::collections::BTreeMap<String, String>,
+)>;
+
+fn use_ctx(ed: Ed) -> Memo<UseCtx> {
+    Memo::new(move |_| {
+        let sel = ed.selected.with(|s| s.as_ref().map(|s| s.id.clone()))?;
+        ed.doc.with(|d| {
+            let d = d.as_ref()?;
+            let at = crate::editor::target_of(d, &sel)?;
+            let revel_model::Node::Use {
+                component, args, ..
+            } = revel_edit::address::node(d, &at).ok()?
+            else {
+                return None;
+            };
+            let c = d.components.iter().find(|c| &c.id == component)?;
+            c.props
+                .iter()
+                .any(|p| p.kind == revel_model::PropKind::Entry)
+                .then(|| (at, c.clone(), args.clone()))
+        })
+    })
+}
+
+/// Texte lu dans le contenu choisi par l'utilisation (ou remplacé sur elle).
+/// Même emplacement dans le composant (sortie dans une boucle).
+fn same_place(a: &Slot, b: &Slot) -> bool {
+    matches!((a, b), (Slot::Expr { parent: p1, index: i1, .. }, Slot::Expr { parent: p2, index: i2, .. }) if p1 == p2 && i1 == i2)
+}
+
+fn is_cms(u: &UseCtx, item: &TextItem) -> bool {
+    let Slot::Expr {
+        parent,
+        expr,
+        binding,
+        ..
+    } = &item.slot
+    else {
+        return false;
+    };
+    // Autre contenu lu dans le composant (marque d'un projet…) : du CMS aussi.
+    let entry = binding.as_ref().is_some_and(|b| {
+        matches!(
+            b.source,
+            revel_edit::canvas::Source::Entry { .. } | revel_edit::canvas::Source::EntryItem { .. }
+        )
+    });
+    u.as_ref().is_some_and(|(_, c, _)| {
+        matches!(&parent.owner, revel_edit::Owner::Component(id) if *id == c.id)
+            && (entry
+                || revel_edit::overrides::reads_entry(c, expr)
+                || revel_edit::overrides::split(expr).is_some_and(|(p, e)| {
+                    revel_edit::overrides::override_props(c).contains(p)
+                        && revel_edit::overrides::reads_entry(c, e)
+                }))
+    })
+}
+
+#[component]
+pub fn SelectedTexts() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let items = selection_texts(ed);
+    let use_ctx = use_ctx(ed);
+    // Textes lus dans le contenu de l'utilisation : sous « Champs CMS » (D-179).
+    let free = Memo::new(move |_| {
+        let u = use_ctx.get();
+        items
+            .get()
+            .into_iter()
+            .filter(|i| !is_cms(&u, i))
+            .collect::<Vec<_>>()
     });
     let commit = move |item: &TextItem, v: String| {
         if v == item.text {
@@ -89,9 +171,9 @@ pub fn SelectedTexts() -> impl IntoView {
         }
     };
     view! {
-        <Show when=move || items.with(|i| !i.is_empty())>
+        <Show when=move || free.with(|i| !i.is_empty())>
             <section class="text-fields" aria-label=ui.t("text-field")>
-                <For each=move || items.get().into_iter().enumerate()
+                <For each=move || free.get().into_iter().enumerate()
                     key=|(i, it)| (*i, it.text.clone(), it.rich)
                     let:entry>
                     {
@@ -161,6 +243,148 @@ pub fn SelectedTexts() -> impl IntoView {
             </section>
         </Show>
     }
+}
+
+thread_local! {
+    /// « Champs CMS » dépliés : gardé quand le panneau se refait (remplacement, autre contenu,
+    /// autre utilisation).
+    static CMS_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Champs du contenu d'une utilisation de composant relié au CMS (D-179) : repliés, grisés ;
+/// chacun se remplace sur cette utilisation (icône crayon) et se rend au contenu.
+#[component]
+pub fn CmsFields() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    let ed = expect_context::<Ed>();
+    let items = selection_texts(ed);
+    let use_ctx = use_ctx(ed);
+    // Un champ par expression : sortie répétée (numéro…) montrée une fois, éléments d'une liste
+    // (mots-clés) réunis.
+    let cms = Memo::new(move |_| {
+        let u = use_ctx.get();
+        let mut out: Vec<TextItem> = Vec::new();
+        for i in items.get().into_iter().filter(|i| is_cms(&u, i)) {
+            let key = |t: &TextItem| match &t.slot {
+                Slot::Expr { expr, .. } => expr.clone(),
+                _ => String::new(),
+            };
+            match out.iter_mut().find(|o| key(o) == key(&i)) {
+                Some(o) if same_place(&o.slot, &i.slot) => {
+                    o.text.push_str(", ");
+                    o.text.push_str(&i.text);
+                }
+                Some(_) => {}
+                None => out.push(i),
+            }
+        }
+        out
+    });
+    // Remplacement d'un champ du contenu sur cette utilisation (`None` : rendu au contenu).
+    let set_override = move |item: &TextItem, v: Option<String>| {
+        let Slot::Expr { parent, index, .. } = &item.slot else {
+            return;
+        };
+        let Some(at) = use_ctx.with_untracked(|u| u.as_ref().map(|(at, _, _)| at.clone())) else {
+            return;
+        };
+        let cmd = ed.doc.with_untracked(|d| {
+            revel_edit::overrides::set_override(d.as_ref()?, parent, *index, &at, v.as_deref()).ok()
+        });
+        if let Some(cmd) = cmd {
+            ed.apply(ui, cmd, false);
+        }
+    };
+    let editing = RwSignal::new(None::<usize>);
+    let cms_view = move || {
+        let list = cms.get();
+        (!list.is_empty()).then(|| {
+            let n = list.len();
+            view! {
+                <details class="cms-fields" prop:open=CMS_OPEN.get()
+                    on:toggle=move |e| {
+                        use wasm_bindgen::JsCast;
+                        if let Some(d) = e.target().and_then(|t| t.dyn_into::<web_sys::HtmlDetailsElement>().ok()) {
+                            CMS_OPEN.set(d.open());
+                        }
+                    }>
+                    <summary class="cms-fields-head" title=ui.t("use-cms-fields-help")>
+                        {icons::database()}
+                        <span>{ui.t("use-cms-fields")}</span>
+                        <span class="muted">{n}</span>
+                    </summary>
+                    {list.into_iter().enumerate().map(|(i, item)| {
+                        let expr = match &item.slot { Slot::Expr { expr, .. } => expr.clone(), _ => String::new() };
+                        let over = revel_edit::overrides::split(&expr)
+                            .map(|(p, _)| p.to_string())
+                            .filter(|p| use_ctx.with(|u| u.as_ref().is_some_and(|(_, c, args)| {
+                                revel_edit::overrides::override_props(c).contains(p) && args.contains_key(p)
+                            })));
+                        let overridden = over.is_some();
+                        // Remplaçable : texte lu dans le contenu choisi par l'utilisation.
+                        let can = overridden || use_ctx.with(|u| u.as_ref().is_some_and(|(_, c, _)| {
+                            revel_edit::overrides::reads_entry(c, &expr)
+                                // Déjà remplaçable (remplacé ailleurs, ou rendu au contenu ici).
+                                || revel_edit::overrides::split(&expr).is_some_and(|(p, e)| {
+                                    revel_edit::overrides::override_props(c).contains(p) && revel_edit::overrides::reads_entry(c, e)
+                                })
+                        }));
+                        let label = revel_edit::overrides::field_label(&expr);
+                        let (label1, label2) = (label.clone(), label.clone());
+                        let item = StoredValue::new(item);
+                        let open = move || overridden || editing.get() == Some(i);
+                        let text = item.with_value(|i| i.text.clone());
+                        view! {
+                            <div class="text-field cms-field" class:is-overridden=overridden data-field=label1>
+                                <span class="text-field-head">
+                                    <span class="style-label"><span class="style-label-text">{label2}</span></span>
+                                    {if overridden {
+                                        view! {
+                                            <button type="button" class="icon-btn icon-btn--small cms-field-reset"
+                                                title=ui.t("cms-field-reset") aria-label=ui.t("cms-field-reset")
+                                                on:click=move |_| { editing.set(None); item.with_value(|it| set_override(it, None)) }>{icons::reset()}</button>
+                                        }.into_any()
+                                    } else if !can {
+                                        ().into_any()
+                                    } else {
+                                        view! {
+                                            <button type="button" class="icon-btn icon-btn--small cms-field-override"
+                                                class:is-on=move || editing.get() == Some(i)
+                                                title=ui.t("cms-field-override") aria-label=ui.t("cms-field-override")
+                                                on:click=move |_| editing.update(|e| *e = if *e == Some(i) { None } else { Some(i) })>{icons::edit()}</button>
+                                        }.into_any()
+                                    }}
+                                </span>
+                                <textarea class="input text-field-input" rows="1" spellcheck="true"
+                                    aria-label=label
+                                    prop:readOnly=move || !open()
+                                    class:is-readonly=move || !open()
+                                    prop:value=text
+                                    on:change=move |e| {
+                                        // Champ déjà remplacé par Entrée (panneau refait) : rien.
+                                        if editing.is_disposed() || item.is_disposed() || use_ctx.try_with_untracked(|_| ()).is_none() {
+                                            return;
+                                        }
+                                        let v = event_target_value(&e);
+                                        editing.set(None);
+                                        item.with_value(|it| if v != it.text { set_override(it, Some(v.clone())) });
+                                    }
+                                    on:keydown=move |e: leptos::ev::KeyboardEvent| {
+                                        if e.key() == "Enter" && !e.shift_key() {
+                                            e.prevent_default();
+                                            let v = event_target_value(&e);
+                                            editing.set(None);
+                                            item.with_value(|it| if v != it.text { set_override(it, Some(v.clone())) });
+                                        }
+                                    }></textarea>
+                            </div>
+                        }
+                    }).collect_view()}
+                </details>
+            }
+        })
+    };
+    view! { {cms_view} }
 }
 
 /// Texte mis en forme d'un élément (D-72), modifié d'un bloc dans le panneau : gras (Ctrl+B),

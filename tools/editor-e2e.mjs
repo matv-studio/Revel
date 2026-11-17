@@ -891,6 +891,118 @@ try {
   }
   await page.click('.dock-tab[data-panel="layers"]');
 
+  // D-179 : champs CMS d'une utilisation reliée à un contenu (repliés, grisés, remplacés sur
+  // l'utilisation puis rendus), touche « . » du pavé numérique, gabarit partagé ouvert depuis
+  // Pages, branche d'une condition montrée dans le canevas ; tout annulé ensuite.
+  {
+    const until = async (fn, ms = 10000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        try { if (await fn()) return true; } catch { /* cadre rechargé */ }
+        await page.waitForTimeout(100);
+      }
+      return false;
+    };
+    const doc0 = JSON.stringify((await invoke('edit_open')).site);
+    const slug = 'animation-reseau-apres-vente';
+    const component = {
+      id: 'carte-e2e', name: 'Carte e2e',
+      props: [{ name: 'projet', label: 'Projet', type: 'entry', collection: 'projets' }],
+      body: [{ node: 'element', id: 'xce2e000', tag: 'article', attrs: [{ name: 'class', value: 'carte-e2e' }], children: [
+        { node: 'element', id: 'xce2e001', tag: 'h3', attrs: [], children: [{ node: 'out', expr: 'projet.data.title' }] },
+        { node: 'element', id: 'xce2e002', tag: 'p', attrs: [], children: [{ node: 'out', expr: 'projet.data.title' }] },
+      ] }],
+    };
+    await invoke('edit_apply', { command: { cmd: 'add_component', component }, coalesce: false });
+    await invoke('edit_apply', { command: { cmd: 'insert', parent: { owner: { kind: 'page', id: 'index' }, branch: 'children' }, index: 0,
+      node: { node: 'use', id: 'xue2e000', component: 'carte-e2e', args: { projet: `collections.projets | by_slug("${slug}")` } } }, coalesce: false });
+    const texts = () => frameOf().evaluate(() => [...document.querySelectorAll('.carte-e2e h3, .carte-e2e p')].map((e) => e.textContent.trim()));
+    await until(async () => (await texts()).filter(Boolean).length === 2, 15000);
+    const title = (await texts())[0];
+    await page.click('.dock-tab[data-panel="layers"]');
+    await until(async () => (await page.locator('.layers .layer', { hasText: 'Carte e2e' }).count()) > 0);
+    await page.locator('.layers .layer', { hasText: 'Carte e2e' }).first().click();
+    await page.waitForSelector('.dock-panel[data-panel="styles"] .cms-fields');
+    const folded = !(await page.$eval('.cms-fields', (d) => d.open));
+    await page.click('.cms-fields-head');
+    const fields = await page.$$eval('.cms-field', (l) => l.map((e) => [e.dataset.field, e.querySelector('textarea').readOnly, e.querySelector('textarea').value]));
+    const freeHidden = (await page.$$eval('.dock-panel[data-panel="styles"] .text-fields .text-field', (l) => l.length)) === 0;
+    check('champs CMS : repliés, un champ par valeur lue (sortie répétée une fois), grisés, absents des textes libres',
+      folded && fields.length === 1 && fields[0][1] === true && fields[0][2] === title && !!title && freeHidden, JSON.stringify(fields));
+    await page.click('.cms-field .cms-field-override');
+    await page.fill('.cms-field textarea', 'Remplacé e2e');
+    await page.press('.cms-field textarea', 'Enter');
+    const replaced = await until(async () => (await texts()).every((t) => t === 'Remplacé e2e'));
+    await page.waitForSelector('.cms-field.is-overridden');
+    const entryKept = (await invoke('edit_open')).site.components.find((c) => c.id === 'carte-e2e').props.length === 2;
+    check('champs CMS : valeur remplacée sur l\'utilisation (toutes ses sorties), contenu inchangé', replaced && entryKept);
+    if (shots) {
+      for (const t of ['dark', 'light']) {
+        await page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), t);
+        await page.waitForTimeout(300);
+        await page.locator('.dock-panel[data-panel="styles"]').screenshot({ path: `${shots}/champs-cms-${t}.png` });
+      }
+      await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+    }
+    await page.click('.cms-field .cms-field-reset');
+    const back = await until(async () => (await texts()).every((t) => t === title));
+    await page.waitForSelector('.cms-field:not(.is-overridden)');
+    check('champs CMS : rendu au contenu, de nouveau remplaçable', back && !!(await page.$('.cms-field .cms-field-override')));
+    // Touche « . » : calque sélectionné amené à l'écran (souris sur les calques), élément
+    // amené à l'écran dans le canevas (souris sur le canevas).
+    await page.evaluate(() => {
+      const sc = [...document.querySelectorAll('.dock-panel[data-panel="layers"] *')].find((e) => e.scrollHeight > e.clientHeight + 40);
+      if (sc) sc.scrollTop = sc.scrollHeight;
+    });
+    await page.hover('.dock-panel[data-panel="layers"]');
+    await page.keyboard.press('NumpadDecimal');
+    const layerSeen = await until(() => page.$eval('.layers .layer.is-selected', (e) => {
+      const r = e.getBoundingClientRect();
+      const box = e.closest('.dock-panel').getBoundingClientRect();
+      return r.top >= box.top && r.bottom <= box.bottom;
+    }));
+    await frameOf().evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.hover('iframe.canvas-frame');
+    await page.keyboard.press('NumpadDecimal');
+    const canvasSeen = await until(() => frameOf().evaluate(() => {
+      const r = document.querySelector('.carte-e2e').getBoundingClientRect();
+      return r.bottom > 0 && r.top < innerHeight;
+    }));
+    check('touche « . » : calque puis élément amenés à l\'écran selon la souris', layerSeen && canvasSeen);
+    for (let i = 0; i < 8 && JSON.stringify((await invoke('edit_open')).site) !== doc0; i++) await invoke('edit_undo');
+    await until(async () => (await frameOf().evaluate(() => document.querySelectorAll('.carte-e2e').length)) === 0);
+    check('champs CMS : essai annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === doc0);
+    // Gabarit partagé (en-tête et pied de toutes les pages) ouvert depuis Pages › Gabarits.
+    await page.click('.dock-tab[data-panel="pages"]');
+    await page.waitForSelector('.layouts-tree .layout-row');
+    const layouts = await page.$$eval('.layouts-tree .layout-row', (l) => l.map((e) => e.dataset.layout));
+    await page.click('.layouts-tree .layout-row[data-layout="layouts/base"]');
+    const inLayout = await until(() => /\/__revel\/layout\/layouts\/base\//.test(frameOf()?.url() || '')
+      && frameOf().evaluate(() => !!document.querySelector('header') && !!document.querySelector('[data-rv]')));
+    check('gabarits : gabarit partagé listé sous Pages (pas les modèles de collection), ouvert seul dans le canevas',
+      layouts.includes('layouts/base') && !layouts.includes('layouts/project') && inLayout, layouts.join(','));
+    if (shots) await page.screenshot({ path: `${shots}/gabarit.png` });
+    // Condition : outil lisible, branche « Si » / « Sinon » montrée dans le canevas.
+    await page.click('.dock-tab[data-panel="layers"]');
+    const cond = page.locator('.layers .layer', { hasText: 'Condition' }).first();
+    if (await cond.count()) {
+      await cond.click();
+      await page.waitForSelector('.cond-tool [data-row="cond-show"]');
+      const btns = page.locator('.cond-tool [data-row="cond-show"] button');
+      await btns.nth(2).click();
+      const forced = await until(() => /[?&]rvif=[^&]+\.0/.test(frameOf()?.url() || ''));
+      if (shots) await page.screenshot({ path: `${shots}/condition.png` });
+      await btns.nth(0).click();
+      const auto = await until(() => !/rvif=/.test(frameOf()?.url() || ''));
+      check('condition : outil (lisible, code replié), branche « Sinon » montrée puis rendue à la page',
+        forced && auto && !(await page.$eval('.cond-tool .cond-code', (d) => d.open)));
+    } else check('condition : présente dans le gabarit', false);
+    await page.click('.dock-tab[data-panel="pages"]');
+    await page.click('.pages .page-row[data-url="/"]');
+    await until(() => !/__revel\/layout/.test(frameOf()?.url() || '') && frameOf().evaluate(() => !!document.querySelector('[data-rv]')));
+    await page.click('.dock-tab[data-panel="layers"]');
+  }
+
   // Lien : nouvel onglet (target + rel). Le lien est dans le composant de l'en-tête : un clic
   // sélectionne l'utilisation ; « Modifier » ouvre le canevas du composant, où le lien se
   // sélectionne directement.
@@ -3509,6 +3621,12 @@ try {
       const feedUrl = `http://127.0.0.1:${server.address().port}/feed.xml`;
       await page.click('.cms-feed-btn');
       await page.fill('[data-role="feed-source"]', 'Nord');
+      // Adresse sans `https://` (donnée par Webflow) : complétée (D-179).
+      await page.fill('[data-role="feed-url"]', 'nord.invalid/feed.xml');
+      await page.click('[data-action="feed-sync"]');
+      const completed = await page.waitForFunction(() => document.querySelector('[data-role="feed-url"]')?.value === 'https://nord.invalid/feed.xml', null, { timeout: 8000 }).then(() => true).catch(() => false);
+      await page.waitForFunction(() => !document.querySelector('[data-action="feed-sync"]')?.disabled, null, { timeout: 30000 }).catch(() => {});
+      check('CMS : adresse de flux sans https:// complétée', completed, await page.inputValue('[data-role="feed-url"]'));
       await page.fill('[data-role="feed-url"]', feedUrl);
       await page.click('[data-action="feed-sync"]');
       const lac = path.join(dir, 'maison-du-lac.md');
@@ -3534,7 +3652,7 @@ try {
       await page.waitForFunction(() => /0 ajoutés/.test(document.querySelector('[data-role="feed-report"]')?.textContent || ''), null, { timeout: 15000 });
       check('CMS : nouvelle reprise du flux sans doublon', fs.readFileSync(lac, 'utf8') === before && fs.readdirSync(dir).length === list0.split(',').length + 2);
       await page.keyboard.press('Escape');
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         await page.keyboard.press('Control+z');
         await page.waitForTimeout(400);
       }

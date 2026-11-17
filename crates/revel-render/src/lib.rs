@@ -234,6 +234,39 @@ struct Prepared<'s> {
 pub struct EditorOptions {
     /// Exécuter les scripts du site dans le canevas (sinon `type="text/plain"`).
     pub scripts: bool,
+    /// Branches de conditions montrées dans le canevas quelle que soit leur condition (D-179) :
+    /// (identifiant de la condition, `true` : « Si », `false` : « Sinon »).
+    pub forced: Vec<(String, bool)>,
+}
+
+/// Conditions `forced` remplacées par `true` ou `false` (branche montrée dans le canevas).
+pub fn force_branches(site: &mut Site, forced: &[(String, bool)]) {
+    if forced.is_empty() {
+        return;
+    }
+    fn walk(nodes: &mut [Node], forced: &[(String, bool)]) {
+        for n in nodes {
+            if let Node::If {
+                id: Some(id), cond, ..
+            } = n
+                && let Some((_, on)) = forced.iter().find(|(f, _)| f == id)
+            {
+                *cond = if *on { "true".into() } else { "false".into() };
+            }
+            for l in revel_model::ids::child_lists_mut(n) {
+                walk(l, forced);
+            }
+        }
+    }
+    for p in &mut site.pages {
+        walk(&mut p.body, forced);
+    }
+    for l in &mut site.layouts {
+        walk(&mut l.body, forced);
+    }
+    for c in &mut site.components {
+        walk(&mut c.body, forced);
+    }
 }
 
 /// Page rendue pour l'éditeur : HTML avec repères (`data-rv`, `<!--rv:N-->`) et liste des repères.

@@ -222,9 +222,16 @@ fn code_ajoute() {
     );
     assert!(site_js < page_js);
     // Pas dans le canevas de l'éditeur (scripts arrêtés).
-    let e = render_editor(&input(&s, vec![]), "/", &EditorOptions { scripts: false })
-        .unwrap()
-        .unwrap();
+    let e = render_editor(
+        &input(&s, vec![]),
+        "/",
+        &EditorOptions {
+            scripts: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .unwrap();
     assert!(!e.html.contains("track("), "{}", e.html);
 }
 
@@ -268,9 +275,16 @@ fn rendu_pour_l_editeur() {
     ];
     let inp = input(&s, entries.clone());
     let built = build(&inp).unwrap();
-    let ed = render_editor(&inp, "/", &EditorOptions { scripts: true })
-        .unwrap()
-        .unwrap();
+    let ed = render_editor(
+        &inp,
+        "/",
+        &EditorOptions {
+            scripts: true,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .unwrap();
     // Sans les repères : la page générée, octet pour octet.
     assert_eq!(strip_editor_marks(&ed.html), file(&built, "index.html"));
     assert!(
@@ -626,9 +640,16 @@ fn proprietes_de_composant() {
     );
     // Éditeur : texte d'une propriété relié à l'utilisation ; utilisation repérée avec son
     // composant.
-    let ed = render_editor(&inp, "/", &EditorOptions { scripts: false })
-        .unwrap()
-        .unwrap();
+    let ed = render_editor(
+        &inp,
+        "/",
+        &EditorOptions {
+            scripts: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .unwrap();
     let props: Vec<(String, String)> = ed
         .slots
         .iter()
@@ -1209,9 +1230,16 @@ fn calques_masques_et_noms() {
     assert!(
         !home.contains("secret") && !home.contains("a.jpg") && !home.contains("data-revel-name")
     );
-    let e = render_editor(&input(&s, vec![]), "/", &EditorOptions { scripts: false })
-        .unwrap()
-        .unwrap();
+    let e = render_editor(
+        &input(&s, vec![]),
+        "/",
+        &EditorOptions {
+            scripts: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .unwrap();
     assert!(
         e.html.contains("data-revel-hidden") && e.html.contains("secret"),
         "{}",
@@ -2015,9 +2043,16 @@ fn emplacement_de_composant() {
         "{home}"
     );
     // Éditeur : contenu propre repéré dans la page, emplacement marqué rempli.
-    let ed = render_editor(&inp, "/", &EditorOptions { scripts: false })
-        .unwrap()
-        .unwrap();
+    let ed = render_editor(
+        &inp,
+        "/",
+        &EditorOptions {
+            scripts: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .unwrap();
     assert!(ed.html.contains("data-rv-slot-filled"), "{}", ed.html);
     assert_eq!(ed.html.matches("data-rv-slot-filled").count(), 1);
     let blocks: Vec<String> = ed
@@ -2037,5 +2072,89 @@ fn emplacement_de_composant() {
             .matches("data-revel-slot")
             .count(),
         0
+    );
+}
+
+/// Propriété « Contenu » d'une utilisation choisie par filtre (`by_slug`) ou laissée au contenu
+/// par défaut (D-179) : textes du composant reliés au contenu (champs CMS du panneau).
+#[test]
+fn contenu_d_une_utilisation_relie() {
+    use revel_edit::canvas::{Binding, Slot, Source};
+    let mut s = site();
+    let mut carte = Component::new(
+        "carte",
+        parse(r#"<article><h3>{{ projet.data.title }}</h3></article>"#),
+    );
+    carte.props = vec![revel_model::PropDef {
+        collection: Some("projets".into()),
+        name: "projet".into(),
+        label: None,
+        kind: revel_model::PropKind::Entry,
+        default: Some(json!("b")),
+    }];
+    s.components.push(carte);
+    let use_ = |id: &str, args: &[(&str, &str)]| Node::Use {
+        id: Some(id.into()),
+        component: "carte".into(),
+        args: args
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+        variant: None,
+        attrs: Vec::new(),
+        children: vec![],
+    };
+    s.pages[0].body.push(use_(
+        "u1",
+        &[("projet", r#"collections.projets | by_slug("a")"#)],
+    ));
+    s.pages[0].body.push(use_("u2", &[]));
+    s.pages[0].body.push(use_(
+        "u3",
+        &[
+            ("projet", r#"collections.projets | by_slug("a")"#),
+            ("titre", "\"Libre\""),
+        ],
+    ));
+    s.components
+        .last_mut()
+        .unwrap()
+        .props
+        .push(revel_model::PropDef {
+            collection: None,
+            name: "titre".into(),
+            label: None,
+            kind: revel_model::PropKind::Text,
+            default: None,
+        });
+    s.components.last_mut().unwrap().body =
+        parse(r#"<article><h3>{{ titre or projet.data.title }}</h3></article>"#);
+    s.ensure_ids();
+    let entries = vec![
+        entry(
+            "a",
+            json!({"slug": "a", "title": "A", "date": "2026-01-01"}),
+        ),
+        entry(
+            "b",
+            json!({"slug": "b", "title": "B", "date": "2026-02-01"}),
+        ),
+    ];
+    let inp = input(&s, entries);
+    let ed = render_editor(&inp, "/", &EditorOptions::default())
+        .unwrap()
+        .unwrap();
+    for f in ["a", "b"] {
+        assert!(
+            ed.slots.iter().any(|x| matches!(x, Slot::Expr { expr, binding: Some(Binding { source: Source::Entry { file, .. }, .. }), .. } if expr == "titre or projet.data.title" && file == f)),
+            "{f} {:?}",
+            ed.slots
+        );
+    }
+    // Remplacé sur l'utilisation : relié à sa propriété.
+    assert!(
+        ed.slots.iter().any(|x| matches!(x, Slot::Expr { binding: Some(Binding { source: Source::Prop { node, name, .. }, .. }), .. } if node == "u3" && name == "titre")),
+        "{:?}",
+        ed.slots
     );
 }

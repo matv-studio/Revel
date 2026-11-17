@@ -720,7 +720,10 @@ fn main() -> Result<()> {
                     &url,
                     hooks,
                     "production",
-                    &revel_render::EditorOptions { scripts },
+                    &revel_render::EditorOptions {
+                        scripts,
+                        ..Default::default()
+                    },
                 )?
                 .with_context(|| format!("aucune page HTML à l'adresse {url}"))?;
             if slots {

@@ -265,6 +265,28 @@ pub fn template_page(collection: &str) -> String {
     format!("{TEMPLATE_PAGE}{collection}/")
 }
 
+/// Adresse interne d'un gabarit vu seul dans l'éditeur (en-tête, pied de page… sans contenu de
+/// page, D-179) : `/__revel/layout/<id>/`.
+pub const LAYOUT_PAGE: &str = "/__revel/layout/";
+
+/// Adresse du gabarit `id` vu seul dans l'éditeur.
+pub fn layout_page(id: &str) -> String {
+    format!("{LAYOUT_PAGE}{id}/")
+}
+
+/// Gabarit dont `url` est la vue seule.
+pub fn layout_of(url: &str) -> Option<&str> {
+    let id = url
+        .strip_prefix(LAYOUT_PAGE)?
+        .split(['?', '#'])
+        .next()?
+        .trim_end_matches('/');
+    (!id.is_empty()).then_some(id)
+}
+
+/// Identifiant réservé de la page fictive qui montre un gabarit seul (jamais écrite).
+pub const LAYOUT_VIEW_PAGE: &str = "__revel-layout";
+
 /// Collection dont `url` est le modèle des pages.
 pub fn template_of(url: &str) -> Option<&str> {
     let id = url
@@ -1421,6 +1443,17 @@ pub mod build {
 mod tests {
     use super::build::*;
     use super::*;
+
+    /// Vue seule d'un gabarit (D-179) : identifiant avec dossier (`layouts/base`) compris.
+    #[test]
+    fn adresse_de_la_vue_d_un_gabarit() {
+        for id in ["site", "layouts/base"] {
+            assert_eq!(layout_of(&layout_page(id)), Some(id));
+            assert_eq!(layout_of(&(layout_page(id) + "?rv=1")), Some(id));
+        }
+        assert_eq!(layout_of(LAYOUT_PAGE), None);
+        assert_eq!(layout_of("/agence/"), None);
+    }
 
     #[test]
     fn aller_retour_json() {

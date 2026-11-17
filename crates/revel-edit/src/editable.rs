@@ -267,6 +267,15 @@ impl Ctx {
     /// adresse pour un plan, nombre de valeurs ou de contenus.
     fn bound_ok(&self, name: &str, e: &str) -> bool {
         let e = e.trim();
+        // Repli sur une autre valeur reliée (`link or url` : adresse d'origine, sinon la page du
+        // contenu, D-179).
+        if let Some((x, y)) = e.split_once(" or ")
+            && !x.contains('(')
+            && self.bound_ok(name, x)
+            && (self.bound_ok(name, y) || crate::canvas::literal(y.trim()).is_some())
+        {
+            return true;
+        }
         // Étiquettes d'un élément filtré : valeurs d'un champ liste (`x | join(' ')`).
         if name == "data-revel-tags"
             && let Some((h, t)) = e.split_once('|')
@@ -478,7 +487,14 @@ impl Audit<'_> {
                                     .and_then(|x| x.strip_suffix("}}"))
                                     .is_some_and(|x| x.trim() == w.trim())
                             }) && (ctx.field(w) || ctx.prop(w, None) || ctx.site_value(w));
-                        if !locale_current && !same_field {
+                        // Valeur écrite, posée selon une condition réglable (`target="_blank"` si
+                        // l'adresse d'origine est remplie, D-179) : condition du panneau Attributs.
+                        let readable = a
+                            .value
+                            .as_deref()
+                            .is_none_or(|v| !v.contains("{{") && !v.contains("{%"))
+                            && ctx.condition(w);
+                        if !locale_current && !same_field && !readable {
                             self.push(id, Kind::Attribute, format!("{} si {w}", a.name));
                         }
                     }

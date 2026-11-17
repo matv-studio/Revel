@@ -39,10 +39,17 @@ fn render(s: &Site) -> Vec<String> {
         now: chrono::Utc::now(),
     };
     vec![
-        revel_render::render_editor(&input, "/", &revel_render::EditorOptions { scripts: false })
-            .unwrap()
-            .unwrap()
-            .html,
+        revel_render::render_editor(
+            &input,
+            "/",
+            &revel_render::EditorOptions {
+                scripts: false,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .unwrap()
+        .html,
     ]
 }
 
@@ -240,7 +247,7 @@ fn classe_d_une_image() {
 fn utilisation_de_composant_selon_l_endroit() {
     let mut s = site(
         "<header class=\"intro\"><x-use-placeholder></x-use-placeholder></header><footer></footer>",
-        ".bouton { padding: 4px; }\n.intro .bouton { margin-top: 40px; }",
+        ".bouton { padding: 4px; }\n.intro .bouton { margin-top: 40px; }\n@media (max-width: 767px) { .intro .bouton { margin-top: 20px; } }",
     );
     let comp: revel_model::Component = serde_json::from_value(serde_json::json!({
         "id": "bouton", "name": "Bouton",
@@ -270,8 +277,14 @@ fn utilisation_de_composant_selon_l_endroit() {
         out.contains(".bouton.bouton--intro { margin-top: 40px; }"),
         "{out}"
     );
+    // Même règle sous une requête média : même classe, une seule fois sur l'utilisation (D-179).
+    assert!(
+        out.contains("@media (max-width: 767px) {\n  .bouton.bouton--intro { margin-top: 20px; }"),
+        "{out}"
+    );
     let html = page_html(&s);
     assert_eq!(html.matches("bouton bouton--intro").count(), 1, "{html}");
+    assert!(!html.contains("bouton--intro-2"), "{html}");
 }
 
 /// Classe calculée (`dot--{{ source }}`) : le morceau écrit n'est pas une classe, les classes

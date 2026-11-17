@@ -79,7 +79,10 @@ impl Core {
                 url,
                 hooks,
                 "production",
-                &revel_render::EditorOptions { scripts: false },
+                &revel_render::EditorOptions {
+                    scripts: false,
+                    ..Default::default()
+                },
             )?
             .map(|page| revel_render::strip_editor_marks(&page.html)))
         })

@@ -42,10 +42,16 @@ in this order, and keep this structure when you edit an existing site:\n\
 1. Foundations first. Before any page, set the site's colors, text sizes, spacings and fonts as site variables \
 (Settings › Colors and Sizes) and read them everywhere; never repeat a literal color or size in several classes. \
 Give the dark values when the site has a dark theme.\n\
-2. Components for everything that repeats. Buttons, cards, section headings, navigation, footer, any block used \
-twice or more is ONE component with properties (text, image, link, switch, list, content) and variants for its \
-alternate looks (outline button, reversed card, hover). Never copy the same structure twice: when you are about \
-to build a second similar block, make the component first, then place its uses.\n\
+2. Components for everything that repeats. Every button and text link, every card, page and section headings \
+(eyebrow, title with its accent word, intro text), navigation links, any block used twice or more with the same \
+structure is ONE component with properties (text, image, link, switch, list, content) and variants for its \
+alternate looks (outline button, reversed card, long title, hover); its own color can come from a content field \
+through a bound style variable (`style=\"--accent: {{ brand.data.color }}\"`, rules read `var(--accent)`). Never \
+copy the same structure twice: when you are about to build a second similar block, make the component first, then \
+place its uses. Header and footer shared by every page go in the site layout (written once, edited from \
+Pages › Layouts); make them components too when another layout or page needs them. A component bound to a \
+collection item (content property) reads its texts, images and links from the item: never type those values in \
+the use, choose the item; a value that must differ on one use is overridden there (CMS fields of the use).\n\
 3. Content in the CMS when it has its own pages, is listed in several places or will be edited by someone who \
 does not design (projects, articles, products, team, brands): a collection with typed fields, shown by \
 collection lists; its card is a component with a content property bound to the collection, so one design \

@@ -8,6 +8,46 @@ use leptos::task::spawn_local;
 use revel_edit::Command;
 use revel_model::FeedSource;
 
+/// Adresse d'un flux complétée : `superficiel.film/works/rss.xml` →
+/// `https://superficiel.film/works/rss.xml` ; `//hote/…` → `https://hote/…`.
+pub fn feed_url(u: &str) -> String {
+    let u = u.trim();
+    if u.is_empty() || u.contains("://") {
+        return u.to_string();
+    }
+    if let Some(rest) = u.strip_prefix("//") {
+        return format!("https://{rest}");
+    }
+    let host = u.split(['/', '?', '#']).next().unwrap_or("");
+    let looks_like_host = host.contains('.')
+        && !host.starts_with('.')
+        && !u.contains(char::is_whitespace)
+        && host
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | ':'));
+    if looks_like_host {
+        format!("https://{u}")
+    } else {
+        u.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn adresse_de_flux_completee() {
+        use super::feed_url;
+        assert_eq!(
+            feed_url(" superficiel.film/works/rss.xml "),
+            "https://superficiel.film/works/rss.xml"
+        );
+        assert_eq!(feed_url("http://a.fr/rss"), "http://a.fr/rss");
+        assert_eq!(feed_url("//a.fr/rss"), "https://a.fr/rss");
+        assert_eq!(feed_url("pas une adresse"), "pas une adresse");
+        assert_eq!(feed_url("localhost/rss"), "localhost/rss");
+    }
+}
+
 /// État du menu des flux, gardé par la vue CMS : l'en-tête de la collection est redessiné à
 /// chaque relecture des contenus, le menu ouvert et son bilan restent.
 #[derive(Clone, Copy)]
@@ -128,7 +168,7 @@ pub fn FeedButton(
         let old = sources.get_untracked();
         let mut all: Vec<FeedSource> = old.iter().filter(|f| f.collection != id).cloned().collect();
         for (src, u) in r {
-            let u = u.trim().to_string();
+            let u = feed_url(u);
             if u.is_empty() {
                 continue;
             }
@@ -149,6 +189,16 @@ pub fn FeedButton(
         let (Some(p), Some(id)) = (path.try_get_value(), collection.get_untracked()) else {
             return;
         };
+        // Adresse sans `https://` (copiée depuis la barre d'adresse ou un réglage de Webflow) :
+        // complétée, et montrée complétée dans le champ (D-179).
+        rows.update(|r| {
+            for (_, u) in r.iter_mut() {
+                let full = feed_url(u);
+                if *u != full {
+                    *u = full;
+                }
+            }
+        });
         let r = rows.get_untracked();
         if r.iter().any(|(_, u)| {
             let u = u.trim();

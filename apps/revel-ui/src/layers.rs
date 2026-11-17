@@ -551,7 +551,8 @@ fn tree(doc: &Site, page: &revel_protocol::EditorPageInfo) -> (Vec<Row>, Vec<Var
         vars: Vec::new(),
         within: Vec::new(),
         inner: inner.clone(),
-        markdown: fixed.is_none(),
+        // Contenu d'une collection : son texte ; gabarit vu seul : contenu de la page.
+        markdown: fixed.is_none() && page.collection.is_some(),
         rows: Vec::new(),
         vis: Vec::new(),
         stack: Vec::new(),
@@ -1074,6 +1075,8 @@ pub fn Layers() -> impl IntoView {
     });
     // Sélection venue du canevas : ouvrir le chemin jusqu'à l'élément.
     Effect::new(move |_| {
+        // Touche « . » souris sur les calques : chemin rouvert, ligne ramenée (D-179).
+        ed.reveal_tick.track();
         let Some(sel) = ed.selected.get() else {
             return;
         };

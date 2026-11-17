@@ -25,6 +25,7 @@ pub mod layer;
 pub mod linkmap;
 pub mod locale;
 pub mod make;
+pub mod overrides;
 pub mod readable;
 pub mod ready;
 pub mod siteinfo;

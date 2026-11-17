@@ -959,3 +959,23 @@
 .classes-off .style-target-label, .classes-off .selector-box, .classes-off .target-count,
 .classes-off .chip--new, .classes-off .dock-tab[data-panel="classes"],
 .classes-off [data-panel-item="classes"] { display: none; }
+
+/* Champs du contenu d'une utilisation de composant (D-179) : repliés, grisés, remplaçables. */
+.cms-fields { margin-top: var(--s-2); border-top: var(--border) solid var(--line); padding-top: var(--s-2); }
+.cms-fields-head { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-medium); list-style: none; }
+.cms-fields-head::-webkit-details-marker { display: none; }
+.cms-fields-head::before { content: ""; width: 0; height: 0; border-left: 4px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .15s; }
+.cms-fields[open] > .cms-fields-head::before { transform: rotate(90deg); }
+.cms-fields-head svg.icon { width: 12px; height: 12px; color: var(--text-faint); }
+.cms-fields .cms-field { margin-top: var(--s-2); }
+.cms-field .text-field-head { justify-content: space-between; }
+.cms-field .text-field-input.is-readonly { color: var(--text-faint); background: transparent; cursor: default; }
+.cms-field.is-overridden .style-label-text::after { content: " •"; color: var(--focus); }
+
+/* Affichage conditionnel (D-179) : menus, branche montrée, code replié. */
+.cond-tool .segmented { width: 100%; }
+.cond-tool .segmented button { flex: 1; }
+.cond-code > summary { cursor: pointer; font-size: var(--text-xs); color: var(--text-faint); list-style: none; }
+.cond-code > summary::-webkit-details-marker { display: none; }
+.cond-code[open] > summary { margin-bottom: var(--s-2); }
+.attr-when { margin: var(--s-1) 0 2px; }

@@ -9,30 +9,26 @@ use crate::site::DocSession;
 use crate::{Ui, icons};
 use leptos::prelude::*;
 use revel_edit::Command;
-use revel_edit::style::{find_rule, style_command};
+use revel_edit::style::{find_rule, remove_root_var, root_rule, root_vars, style_command};
 use revel_model::{Site, StyleItem};
 use revel_style::values::color::Rgba;
 
 /// Requête média du mode sombre.
 pub const DARK: &str = "(prefers-color-scheme: dark)";
 
-/// Couleurs du site : (variable, valeur claire, valeur sombre).
+/// Couleurs du site : (variable, valeur claire, valeur sombre). Toutes les règles `:root` sont
+/// lues (D-179).
 fn colors(d: &Site) -> Vec<(String, String, Option<String>)> {
-    let light = find_rule(d, ":root", &None);
-    let dark = find_rule(d, ":root", &Some(DARK.into()));
-    let Some(light) = light else {
-        return Vec::new();
-    };
-    light
-        .decls
-        .iter()
-        .filter(|x| x.prop.starts_with("--") && Rgba::parse(&x.value).is_some())
+    let dark = root_vars(d, &Some(DARK.into()));
+    root_vars(d, &None)
+        .into_iter()
+        .filter(|x| Rgba::parse(&x.value).is_some())
         .map(|x| {
             let dv = dark
-                .as_ref()
-                .and_then(|r| r.decls.iter().rev().find(|y| y.prop == x.prop))
+                .iter()
+                .find(|y| y.prop == x.prop)
                 .map(|y| y.value.clone());
-            (x.prop.clone(), x.value.clone(), dv)
+            (x.prop, x.value, dv)
         })
         .collect()
 }
@@ -72,7 +68,7 @@ pub fn SiteColors(s: DocSession) -> impl IntoView {
         let cmd = s.doc.with_untracked(|d| {
             let d = d.as_ref()?;
             style_command(
-                find_rule(d, ":root", &media),
+                root_rule(d, &media, &var),
                 ":root".into(),
                 media.clone(),
                 vec![(var, value)],
@@ -197,22 +193,7 @@ pub fn SiteColors(s: DocSession) -> impl IntoView {
                         };
                         [None, Some(DARK.to_string())]
                             .into_iter()
-                            .filter_map(|m| {
-                                let rule = find_rule(d, ":root", &m)?;
-                                // Dernière déclaration de la règle : règle retirée (pas de `:root {}` vide).
-                                if rule.decls.iter().all(|x| x.prop == v2) {
-                                    return rule
-                                        .id
-                                        .clone()
-                                        .map(|rule| Command::RemoveRule { rule });
-                                }
-                                style_command(
-                                    Some(rule),
-                                    ":root".into(),
-                                    m.clone(),
-                                    vec![(v2.clone(), None)],
-                                )
-                            })
+                            .flat_map(|m| remove_root_var(d, &m, &v2))
                             .collect()
                     });
                     if !cmds.is_empty() {

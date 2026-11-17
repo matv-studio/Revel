@@ -2387,3 +2387,51 @@ remis en forme, médias lourds.**
   de formes voisines ; scripts du site qui visaient une construction refaite (une erreur de script peut
   arrêter le reste du script : à vérifier après import) ; **templates** :
   ils s'appuient sur les classes visibles, à revoir avec le mode simple (tâche du rework des templates).
+
+**D-179 — 17/11/2026 — prise (demandes de l'utilisateur : composants reliés au CMS dont les champs ne se
+saisissent pas à la main ; en-tête, pied, cartes, en-têtes de page et boutons en composants ; couleurs des
+marques introuvables ; conditions illisibles et non sélectionnables ; raccourci « . » du pavé numérique ; flux
+RSS de Webflow sans `https://`).** Réponses de l'utilisateur : champs CMS « masqués, sous un menu déroulant
+"Champs CMS", visibles grisés une fois dépliés, avec une icône pour remplacer la valeur » ; collection Marques
+gardée, avec sa couleur ; en-tête et pied dans le gabarit, à rendre accessible ; « . » amène à l'écran sans zoom.
+- **Champs CMS d'une utilisation** (Styles, sous « Propriétés ») : les textes lus dans le contenu choisi
+  (propriété « Contenu », ou contenu relié) ne sont plus dans les textes libres ; groupe replié « Champs CMS »
+  (état gardé pendant la session), champs grisés en lecture seule, un par valeur lue (sortie répétée montrée
+  une fois, éléments d'une liste réunis). Icône crayon : valeur remplacée **sur cette utilisation** — une
+  propriété texte sans défaut est ajoutée au composant, chaque sortie du champ devient `{{ p or champ }}`, la
+  valeur est écrite sur l'utilisation (`overrides::set_override`). Icône retour : valeur rendue au contenu.
+  Ces propriétés de remplacement ne figurent pas dans « Propriétés ». Le rendu relie désormais au contenu les
+  textes d'une utilisation dont le contenu est choisi par filtre (`collections.x | by_slug("…")`) ou laissé au
+  contenu par défaut, et relie `p or champ` au remplacement s'il est écrit, sinon au champ.
+- **Gabarits** : section « Gabarits » sous l'arbre des pages (gabarits partagés, hors modèles de collection,
+  avec le nombre de pages) ; un clic ouvre le gabarit seul dans le canevas (`/__revel/layout/<id>/`, page
+  fictive sans contenu), où en-tête et pied se sélectionnent et se modifient pour toutes les pages.
+  Identifiant avec dossier (`layouts/base`) accepté. Recommandation suivie (pratique des outils du domaine :
+  Webflow, Framer) : en-tête et pied dans le gabarit, et composants s'ils servent ailleurs.
+- **Conditions** : panneau « Affichage conditionnel » lisible (menus nommés, info-bulles), le code replié sous
+  « Code ». Commande « Aperçu » Auto / Si / Sinon : force la branche montrée dans le canevas (`rvif=<id>.1`,
+  `EditorOptions::forced`, rien n'est écrit dans le site) pour sélectionner les éléments de la branche cachée ;
+  remise à Auto en changeant de page. Attributs conditionnels (`when`) réglés par le même éditeur de condition ;
+  champs d'une boucle de collection englobante proposés (« Collection › Champ »).
+- **Couleurs du site** : toutes les règles `:root` lues (la dernière valeur l'emporte), modification dans la
+  règle qui déclare la variable ; les couleurs des marques déclarées dans un second bloc apparaissent.
+- **Touche « . » du pavé numérique** (raccourci réglable « Amener à l'écran ») : selon la zone sous la souris,
+  calque sélectionné (Calques), média (Médias), composant (Composants), sinon élément amené à l'écran dans le
+  canevas, sans zoom.
+- **Flux RSS** : adresse sans schéma complétée en `https://` (et montrée complétée). Le champ `source` des
+  contenus repris, s'il est une référence Pages CMS vers une collection (Marques), reçoit le slug du contenu
+  correspondant (par slug ou titre). Cartes : lien `{{ item.data.link or item.url }}`, nouvel onglet quand le
+  lien est externe.
+- **Règle des assistants (MCP)** : tout bouton, lien texte, carte, titre de section, lien de navigation et bloc
+  répété devient un composant ; couleur propre à une utilisation par variable de style reliée ; en-tête et pied
+  dans le gabarit ; composants reliés : choisir le contenu, remplacer au besoin sur l'utilisation.
+- **Corrections** : aplatissement — une classe d'utilisation n'écrase plus la première quand le même sélecteur
+  existe sous une autre requête média ; audit — `x or y` (deux valeurs reliées, ou y littéral), attributs
+  conditionnels et variables de style reliées acceptés ; i18n — clé `cms-fields` en double (essai ajouté :
+  aucune clé en double).
+- **Site Alunites** (hors dépôt, `post.py`) : carte d'accueil d'une marque, en-tête de page, bouton d'action,
+  lien texte et lien de section en composants ; couleur de chaque marque dans la collection Marques ; rendu
+  identique au pixel sur sept pages à 1440 et 390 px, audit 0.
+- En suspens : remplacement des images d'un contenu (seuls les textes) ; libellé d'un élément de liste (« Mot »
+  au lieu du nom du champ) ; contenus repris d'un flux qui reçoivent encore une page locale ; Superficiel doit
+  republier son site Webflow pour que l'adresse du flux réponde (404 le 17/11).

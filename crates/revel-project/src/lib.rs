@@ -644,7 +644,8 @@ impl Project {
         environment: &str,
         opts: &EditorOptions,
     ) -> Result<Option<EditorPage>, ProjectError> {
-        let site = self.site_with_data()?;
+        let mut site = self.site_with_data()?;
+        revel_render::force_branches(&mut site, &opts.forced);
         let input = BuildInput {
             site: &site,
             entries: self.load_entries()?,
@@ -655,6 +656,45 @@ impl Project {
             now: chrono::Utc::now(),
         };
         Ok(revel_render::render_editor(&input, url, opts)?)
+    }
+
+    /// Gabarit `layout` vu seul (D-179) : page fictive à l'adresse
+    /// [`revel_model::layout_page`], sans contenu, rendue avec ce gabarit.
+    pub fn render_layout_editor(
+        &self,
+        layout: &str,
+        hooks: Arc<dyn AssetHooks>,
+        environment: &str,
+        opts: &EditorOptions,
+    ) -> Result<Option<EditorPage>, ProjectError> {
+        let mut site = self.site_with_data()?;
+        revel_render::force_branches(&mut site, &opts.forced);
+        if site.layout(layout).is_none() {
+            return Ok(None);
+        }
+        let url = revel_model::layout_page(layout);
+        let mut page: revel_model::Page = serde_json::from_value(serde_json::json!({
+            "id": revel_model::LAYOUT_VIEW_PAGE,
+            "path": url,
+            "layout": layout,
+        }))
+        .map_err(|e| ProjectError::Parse {
+            path: url.clone(),
+            msg: e.to_string(),
+        })?;
+        page.name = Some(layout.to_string());
+        site.pages.retain(|p| p.id != revel_model::LAYOUT_VIEW_PAGE);
+        site.pages.push(page);
+        let input = BuildInput {
+            site: &site,
+            entries: self.load_entries()?,
+            locales: self.load_locales()?,
+            environment: environment.to_string(),
+            version: self.version_tag(&site),
+            hooks,
+            now: chrono::Utc::now(),
+        };
+        Ok(revel_render::render_editor(&input, &url, opts)?)
     }
 
     /// HTML des contenus (corps et champs qui contiennent du balisage) : texte riche que les
@@ -711,9 +751,14 @@ impl Project {
         let mut out = Vec::new();
         for u in urls {
             if fixed.contains(u.as_str()) {
-                if let Some(page) =
-                    revel_render::render_editor(&input, &u, &EditorOptions { scripts: false })?
-                {
+                if let Some(page) = revel_render::render_editor(
+                    &input,
+                    &u,
+                    &EditorOptions {
+                        scripts: false,
+                        ..Default::default()
+                    },
+                )? {
                     out.push(page.html);
                 }
                 continue;
@@ -729,9 +774,14 @@ impl Project {
                 continue;
             }
             *n += 1;
-            if let Some(page) =
-                revel_render::render_editor(&input, &u, &EditorOptions { scripts: false })?
-            {
+            if let Some(page) = revel_render::render_editor(
+                &input,
+                &u,
+                &EditorOptions {
+                    scripts: false,
+                    ..Default::default()
+                },
+            )? {
                 out.push(page.html);
             }
         }
@@ -750,7 +800,10 @@ impl Project {
                 "/",
                 Arc::new(revel_render::PlainAssets),
                 "production",
-                &EditorOptions { scripts: false },
+                &EditorOptions {
+                    scripts: false,
+                    ..Default::default()
+                },
             )? {
                 out.push(page.html);
             }
@@ -772,6 +825,7 @@ impl Project {
         opts: &EditorOptions,
     ) -> Result<Option<EditorPage>, ProjectError> {
         let mut site = self.site_with_data()?;
+        revel_render::force_branches(&mut site, &opts.forced);
         if site.component(component).is_none() {
             return Ok(None);
         }
@@ -848,7 +902,8 @@ impl Project {
         environment: &str,
         opts: &EditorOptions,
     ) -> Result<Option<EditorPage>, ProjectError> {
-        let site = self.site_with_data()?;
+        let mut site = self.site_with_data()?;
+        revel_render::force_branches(&mut site, &opts.forced);
         let Some(col) = site
             .collections
             .iter()
@@ -912,7 +967,10 @@ impl Project {
             now: chrono::Utc::now(),
         };
         let out = revel_render::build(&input)?;
-        let opts = EditorOptions { scripts: true };
+        let opts = EditorOptions {
+            scripts: true,
+            ..Default::default()
+        };
         let mut pages = 0;
         let mut diffs = Vec::new();
         for f in &out.files {

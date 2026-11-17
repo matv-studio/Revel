@@ -875,12 +875,26 @@ impl<'a> Builder<'a> {
                             minijinja::value::ValueKind::String
                                 | minijinja::value::ValueKind::Number
                         );
-                        let (binding, transformed) = match source_path(expr) {
-                            Some((head, segs, transformed)) if simple => (
+                        let path_origin = |e: &str| match source_path(e) {
+                            Some((head, segs, transformed)) => (
                                 scope.origin(&head).and_then(|o| o.extend(&segs)),
                                 transformed,
                             ),
-                            _ => (None, false),
+                            None => (None, false),
+                        };
+                        let (binding, transformed) = if !simple {
+                            (None, false)
+                        } else if let Some((p, e)) = source_path(expr)
+                            .is_none()
+                            .then(|| revel_edit::overrides::split(expr))
+                            .flatten()
+                        {
+                            // Champ remplaçable (`p or champ`, D-179) : relié au remplacement
+                            // s'il est écrit, sinon au champ du contenu.
+                            let set = self.eval(scope, p, ctx).is_ok_and(|v| v.is_true());
+                            path_origin(if set { p } else { e })
+                        } else {
+                            path_origin(expr)
                         };
                         let slot = Slot::Expr {
                             parent,
@@ -1041,7 +1055,9 @@ impl<'a> Builder<'a> {
                                 let o = if revel_edit::canvas::literal(e).is_some() {
                                     here
                                 } else {
+                                    // Contenu choisi par filtre (`by_slug`) : retrouvé par sa valeur.
                                     self.origin_of(scope, e)
+                                        .or_else(|| self.origin_of_value(&v))
                                 };
                                 (v, o)
                             }
@@ -1054,7 +1070,8 @@ impl<'a> Builder<'a> {
                                     }
                                     None => Value::UNDEFINED,
                                 };
-                                (v, None)
+                                let o = self.origin_of_value(&v);
+                                (v, o)
                             }
                             None => (prop_default(p), here),
                         };

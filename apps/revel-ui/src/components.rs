@@ -315,9 +315,12 @@ pub fn instance_settings(
         })
         .unwrap_or_default();
     let lang = ed.lang();
+    // Propriétés qui remplacent un champ du contenu : réglées dans « Champs CMS » (D-179).
+    let overrides = revel_edit::overrides::override_props(&c);
     let rows = c
         .props
         .iter()
+        .filter(|p| !overrides.contains(&p.name))
         .map(|p| {
             let arg = args.get(&p.name).cloned();
             // Autre langue : texte de la propriété traduit (valeur de l'utilisation, sinon
@@ -359,7 +362,7 @@ pub fn instance_settings(
             prop_value_row(ui, ed, p.clone(), arg, set, bind, parent)
         })
         .collect_view();
-    let has_props = !c.props.is_empty();
+    let has_props = c.props.iter().any(|p| !overrides.contains(&p.name));
     // Variante choisie pour cette utilisation (variantes personnalisées du composant).
     let customs: Vec<Variant> = c
         .variants
@@ -460,6 +463,7 @@ pub fn instance_settings(
                     {rows}
                 </div>
             })}
+            <crate::textfield::CmsFields/>
         </div>
     }
     .into_any()

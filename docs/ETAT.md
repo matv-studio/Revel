@@ -6,8 +6,34 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 17/11/2026 (version 0.7.8 en préparation : D-174 à D-178). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 17/11/2026 (version 0.7.8 en préparation : D-174 à D-178 ; D-179 après). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 17/11/2026 (midi) : D-179 (champs CMS, gabarits, conditions, touche « . », flux sans https)
+
+- Demandes (17/11) : champs CMS d'une utilisation repliés, grisés et remplaçables ; en-tête et pied dans un
+  gabarit accessible ; cartes, en-têtes de page et boutons en composants (règle MCP) ; couleurs de marques
+  introuvables ; conditions lisibles et branches sélectionnables ; « . » du pavé numérique ; adresse de flux
+  Webflow sans `https://` refusée.
+- Fait (voir D-179) :
+  - « Champs CMS » : `apps/revel-ui/src/textfield.rs` (`CmsFields`, état replié `CMS_OPEN`),
+    `crates/revel-edit/src/overrides.rs` (`set_override` remplace toutes les sorties du champ) ; rendu
+    (`revel-render/src/eval.rs`) : origine des arguments choisis par `by_slug`, `p or champ` relié au
+    remplacement s'il est écrit.
+  - Gabarits : `pagetree.rs` (`LayoutList`), `revel_model::layout_page/layout_of` (identifiants avec dossier),
+    `Project::render_layout_editor`, route `/__revel/layout/<id>/` du canevas.
+  - Conditions : `inspector.rs` (`.cond-tool`, `condition_preview`, paramètre `rvif=`),
+    `revel_render::force_branches`.
+  - Couleurs : `revel_edit::style::root_vars/root_rule/remove_root_var`. Touche « . » : `keys.rs` (`reveal`),
+    `Ed::reveal_here`. Flux : `feeds.rs::feed_url`, `revel_core::reference_source`.
+- Pièges : une clé i18n en double est ignorée sans erreur (essai `aucune_cle_en_double`) ; l'évènement
+  `change` d'un champ arrive après Entrée alors que le panneau a été refait (signal disposé → `unreachable`
+  en wasm) : vérifier `is_disposed` avant d'agir.
+- Essais : `revel-render` `contenu_d_une_utilisation_relie`, `revel-edit` `overrides`, `revel-model`
+  `adresse_de_la_vue_d_un_gabarit` ; e2e : bloc « D-179 » avant « Lien : nouvel onglet », adresse de flux
+  complétée dans « Flux relié à la collection ».
+- En suspens : voir D-179 (images d'un contenu non remplaçables, libellé des éléments de liste, pages locales
+  des contenus repris d'un flux).
 
 ## Travail du 17/11/2026 (matin) : D-177 et D-178 (mode simple, import remis en forme, médias lourds)
 

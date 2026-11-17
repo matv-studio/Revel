@@ -1267,7 +1267,8 @@ impl Core {
                     continue;
                 }
             };
-            let plan = revel_import::feed::plan(&feed, &existing, &src.source);
+            let source = reference_source(&p, &folder, &src.source);
+            let plan = revel_import::feed::plan(&feed, &existing, &source);
             report.items += feed.items.len();
             report.created += plan.create.len();
             report.updated += plan.update.len();
@@ -1485,6 +1486,48 @@ fn summarize(p: &revel_project::Project) -> Result<SiteSummary> {
             .map(|r| (r.from.clone(), r.to.clone()))
             .collect(),
     })
+}
+
+/// Origine d'un flux écrite dans les contenus (D-179) : quand le champ `source` de la collection
+/// est une référence à une autre collection (marques), le nom donné au flux (« Superficiel »)
+/// devient l'identifiant du contenu visé (`superficiel`), reconnu par son identifiant ou son
+/// titre ; sinon le nom tel quel.
+fn reference_source(p: &revel_project::Project, folder: &str, source: &str) -> String {
+    let name = source.trim();
+    if name.is_empty() {
+        return String::new();
+    }
+    let config = pagescms::load(&p.dir);
+    let target = config
+        .collections
+        .iter()
+        .find(|c| c.path.trim_end_matches('/') == folder.trim_end_matches('/'))
+        .and_then(|c| c.fields.iter().find(|f| f.name == "source"))
+        .filter(|f| f.kind.as_deref() == Some("reference"))
+        .and_then(|f| f.options.get("collection").and_then(|v| v.as_str()))
+        .and_then(|id| config.collections.iter().find(|c| c.name == id))
+        .map(|c| c.path.trim_end_matches('/').to_string());
+    let Some(target) = target else {
+        return name.to_string();
+    };
+    let key = revel_model::slugify(name);
+    p.load_entries()
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter(|e| e.folder.trim_end_matches('/') == target)
+        .find_map(|e| {
+            let slug = e
+                .data
+                .get("slug")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| e.file_stem.clone());
+            let title = e.data.get("title").and_then(|v| v.as_str()).unwrap_or("");
+            (revel_model::slugify(&slug) == key || revel_model::slugify(title) == key)
+                .then_some(slug)
+        })
+        .unwrap_or_else(|| name.to_string())
 }
 
 /// Site importé reconstruit dans la forme de l'interface (calques, listes de collection,

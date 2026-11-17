@@ -212,6 +212,69 @@ pub fn find_rule(site: &Site, selector: &str, media: &Option<String>) -> Option<
         })
 }
 
+/// Variables de `:root` pour une requête média (`None` : de base), toutes règles `:root`
+/// réunies (un site importé en a souvent plusieurs) : ordre de première apparition, dernière
+/// valeur gagnante, comme dans le navigateur (D-179).
+pub fn root_vars(site: &Site, media: &Option<String>) -> Vec<Decl> {
+    let mut out: Vec<Decl> = Vec::new();
+    for r in site
+        .style_rules()
+        .filter(|r| r.selector.trim() == ":root" && &r.media == media)
+    {
+        for d in r.decls.iter().filter(|d| d.prop.starts_with("--")) {
+            match out.iter_mut().find(|x| x.prop == d.prop) {
+                Some(x) => *x = d.clone(),
+                None => out.push(d.clone()),
+            }
+        }
+    }
+    out
+}
+
+/// Règle `:root` où régler la variable `var` : la dernière qui la déclare, sinon la dernière
+/// règle `:root` de cette requête média (D-179).
+pub fn root_rule(site: &Site, media: &Option<String>, var: &str) -> Option<StyleRule> {
+    site.stylesheet
+        .as_ref()?
+        .items
+        .iter()
+        .rev()
+        .find_map(|i| match i {
+            StyleItem::Rule(r)
+                if r.selector.trim() == ":root"
+                    && &r.media == media
+                    && r.decls.iter().any(|d| d.prop == var) =>
+            {
+                Some(r.clone())
+            }
+            _ => None,
+        })
+        .or_else(|| find_rule(site, ":root", media))
+}
+
+/// Commandes qui retirent la variable `var` de toutes les règles `:root` de cette requête
+/// média (règle vidée : retirée).
+pub fn remove_root_var(site: &Site, media: &Option<String>, var: &str) -> Vec<crate::Command> {
+    site.style_rules()
+        .filter(|r| {
+            r.selector.trim() == ":root"
+                && &r.media == media
+                && r.decls.iter().any(|d| d.prop == var)
+        })
+        .filter_map(|r| {
+            if r.decls.iter().all(|d| d.prop == var) {
+                return r.id.clone().map(|rule| crate::Command::RemoveRule { rule });
+            }
+            style_command(
+                Some(r.clone()),
+                ":root".into(),
+                media.clone(),
+                vec![(var.to_string(), None)],
+            )
+        })
+        .collect()
+}
+
 /// Commande qui règle des propriétés (`None` ou vide : retirée) dans la règle `rule` (sélecteur
 /// complet `selector`, média `media`), créée si elle n'existe pas ; raccourcis (`margin`…)
 /// respectés. `None` si rien ne change.
@@ -358,5 +421,53 @@ mod value_class_tests {
         );
         assert!(value_class("a {{ x | upper }}").is_none());
         assert!(value_class("a{% if x %} b{% endif %}").is_none());
+    }
+}
+
+#[cfg(test)]
+mod root_tests {
+    use super::*;
+
+    /// Plusieurs règles `:root` (site importé) : variables réunies, dernière valeur gagnante ;
+    /// réglage dans la règle qui déclare la variable ; retrait de toutes (D-179).
+    #[test]
+    fn variables_de_plusieurs_regles_root() {
+        let mut site = Site::new("t", "fr");
+        site.stylesheet = Some(revel_model::Stylesheet {
+            url: "/s.css".into(),
+            source: None,
+            items: revel_style::parse(
+                ":root { --marque: #f4684d; --texte: #111111; }\n.a { color: red; }\n:root { --or: #d9a520; --texte: #222222; }",
+            )
+            .unwrap(),
+        });
+        site.ensure_ids();
+        let vars: Vec<(String, String)> = root_vars(&site, &None)
+            .into_iter()
+            .map(|d| (d.prop, d.value))
+            .collect();
+        assert_eq!(
+            vars,
+            [
+                ("--marque".to_string(), "#f4684d".to_string()),
+                ("--texte".to_string(), "#222222".to_string()),
+                ("--or".to_string(), "#d9a520".to_string()),
+            ]
+        );
+        let first = root_rule(&site, &None, "--marque").unwrap();
+        assert!(first.decls.iter().any(|d| d.prop == "--marque"));
+        let cmd = style_command(
+            Some(first),
+            ":root".into(),
+            None,
+            vec![("--marque".into(), Some("#000000".into()))],
+        )
+        .unwrap();
+        crate::apply(&mut site, &cmd).unwrap();
+        assert_eq!(root_vars(&site, &None)[0].value, "#000000");
+        let cmds = remove_root_var(&site, &None, "--texte");
+        assert_eq!(cmds.len(), 2);
+        crate::apply(&mut site, &crate::Command::Batch { commands: cmds }).unwrap();
+        assert!(root_vars(&site, &None).iter().all(|d| d.prop != "--texte"));
     }
 }

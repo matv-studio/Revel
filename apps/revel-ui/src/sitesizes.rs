@@ -7,7 +7,7 @@ use crate::site::DocSession;
 use crate::{Ui, icons};
 use leptos::prelude::*;
 use revel_edit::Command;
-use revel_edit::style::{find_rule, style_command};
+use revel_edit::style::style_command;
 use revel_model::Site;
 use revel_style::values::color::Rgba;
 
@@ -38,12 +38,10 @@ pub fn is_size(v: &str) -> bool {
 
 /// Tailles du site : (nom sans `--`, valeur).
 fn sizes(d: &Site) -> Vec<(String, String)> {
-    let Some(root) = find_rule(d, ":root", &None) else {
-        return Vec::new();
-    };
-    root.decls
-        .iter()
-        .filter_map(|x| Some((x.prop.strip_prefix("--")?.to_string(), x.value.clone())))
+    // Toutes les règles `:root` réunies (D-179).
+    revel_edit::style::root_vars(d, &None)
+        .into_iter()
+        .filter_map(|x| Some((x.prop.strip_prefix("--")?.to_string(), x.value)))
         .filter(|(_, v)| is_size(v))
         .collect()
 }
@@ -99,11 +97,16 @@ pub fn SiteSizes(s: DocSession) -> impl IntoView {
     let set = move |name: String, value: Option<String>| {
         let cmd = s.doc.with_untracked(|d| {
             let d = d.as_ref()?;
+            let var = format!("--{name}");
+            if value.is_none() {
+                let cmds = revel_edit::style::remove_root_var(d, &None, &var);
+                return (!cmds.is_empty()).then_some(Command::Batch { commands: cmds });
+            }
             style_command(
-                find_rule(d, ":root", &None),
+                revel_edit::style::root_rule(d, &None, &var),
                 ":root".into(),
                 None,
-                vec![(format!("--{name}"), value)],
+                vec![(var, value)],
             )
         });
         if let Some(c) = cmd {

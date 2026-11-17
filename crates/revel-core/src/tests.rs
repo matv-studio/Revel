@@ -286,6 +286,102 @@ fn session_edition_enregistre_et_annule() {
     assert!(!again.state.can_undo);
 }
 
+/// Gabarit vu seul dans l'éditeur (D-179) : en-tête et pied de page sans contenu de page, repères
+/// de l'éditeur sur les éléments du gabarit ; gabarit absent : introuvable ; page jamais listée.
+#[test]
+fn canevas_d_un_gabarit_seul() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.layouts.push(revel_model::Layout {
+            id: "site".into(),
+            parent: None,
+            props: Default::default(),
+            fields: Vec::new(),
+            body: vec![
+                Node::Html {
+                    html: "<!doctype html>".into(),
+                },
+                el("header", &[("class", "entete")], vec![text("Marque")]),
+                Node::Slot,
+                el("footer", &[("class", "pied")], vec![text("Mentions")]),
+            ],
+        });
+        p.site.pages[0].layout = Some("site".into());
+        p.site.ensure_ids();
+        p.save().unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    c.canvas_open(&site, canvas::CanvasOptions::default())
+        .unwrap();
+    let page = c.canvas_respond(&revel_model::layout_page("site"));
+    assert_eq!(page.status, 200);
+    let html = String::from_utf8(page.body).unwrap();
+    assert!(
+        html.contains("class=\"entete\"") && html.contains("class=\"pied\""),
+        "{html}"
+    );
+    assert!(!html.contains("Accueil"), "{html}");
+    assert!(html.contains("data-rv="), "{html}");
+    assert_eq!(
+        c.canvas_respond(&revel_model::layout_page("absent")).status,
+        404
+    );
+    assert!(
+        c.edit_pages(&site)
+            .unwrap()
+            .iter()
+            .all(|p| !p.url.starts_with("/__revel/"))
+    );
+    // Rien n'est écrit : le site garde sa seule page.
+    assert_eq!(
+        revel_project::Project::open(&site)
+            .unwrap()
+            .site
+            .pages
+            .len(),
+        1
+    );
+}
+
+/// Branche « Sinon » d'une condition montrée dans le canevas sur demande (D-179), sans rien
+/// changer au site.
+#[test]
+fn canevas_branche_de_condition_forcee() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    {
+        let mut p = revel_project::Project::open(&site).unwrap();
+        p.site.pages[0].body.push(Node::If {
+            id: Some("cond1".into()),
+            cond: "evenement".into(),
+            then: vec![el("span", &[("class", "si")], vec![text("Event")])],
+            otherwise: vec![el("span", &[("class", "sinon")], vec![text("Groupe")])],
+        });
+        p.site.ensure_ids();
+        p.save().unwrap();
+    }
+    c.edit_open(&site).unwrap();
+    c.canvas_open(&site, canvas::CanvasOptions::default())
+        .unwrap();
+    let html = |u: &str| String::from_utf8(c.canvas_respond(u).body).unwrap();
+    let normal = html("/?rv=1");
+    assert!(
+        normal.contains("class=\"sinon\"") && !normal.contains("class=\"si\""),
+        "{normal}"
+    );
+    let forced = html("/?rv=1&rvif=cond1.1");
+    assert!(
+        forced.contains("class=\"si\"") && !forced.contains("class=\"sinon\""),
+        "{forced}"
+    );
+    let p = revel_project::Project::open(&site).unwrap();
+    assert!(matches!(&p.site.pages[0].body[2], Node::If { cond, .. } if cond == "evenement"));
+}
+
 #[test]
 fn canevas_d_un_composant_seul() {
     let d = tempfile::tempdir().unwrap();
@@ -3578,4 +3674,46 @@ fn modele_partage_catalogue() {
     assert_eq!(c.template_catalog("tester/cat").unwrap().len(), 2);
     revel_git::github::override_api(None);
     crate::sharing::override_raw(None);
+}
+
+/// Flux relié à une collection dont la « source » est une référence (D-179) : le nom donné au
+/// flux devient l'identifiant de la marque visée.
+#[test]
+fn origine_d_un_flux_vers_la_marque() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let site = sample_site(d.path(), &c);
+    std::fs::create_dir_all(site.join("content/marques")).unwrap();
+    std::fs::write(
+        site.join("content/marques/superficiel.md"),
+        "---\ntitle: Superficiel\nslug: superficiel\n---\n",
+    )
+    .unwrap();
+    std::fs::write(
+        site.join(".pages.yml"),
+        "content:\n  - name: marques\n    type: collection\n    path: content/marques\n    fields:\n      - name: title\n        type: string\n  - name: projets\n    type: collection\n    path: content/projets\n    fields:\n      - name: title\n        type: string\n      - name: source\n        type: reference\n        options:\n          collection: marques\n          value: \"{slug}\"\n          label: \"{title}\"\n",
+    )
+    .unwrap();
+    let mut p = revel_project::Project::open(&site).unwrap();
+    for (id, folder) in [
+        ("marques", "content/marques"),
+        ("projets", "content/projets"),
+    ] {
+        p.site
+            .collections
+            .push(serde_json::from_value(serde_json::json!({"id": id, "folder": folder})).unwrap());
+    }
+    assert_eq!(
+        super::reference_source(&p, "content/projets", "Superficiel"),
+        "superficiel"
+    );
+    assert_eq!(
+        super::reference_source(&p, "content/projets", "Autre studio"),
+        "Autre studio"
+    );
+    // Champ qui n'est pas une référence : le nom tel quel.
+    assert_eq!(
+        super::reference_source(&p, "content/marques", "Superficiel"),
+        "Superficiel"
+    );
 }

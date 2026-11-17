@@ -231,6 +231,20 @@ mod tests {
         }
     }
 
+    /// Clé écrite deux fois : la seconde serait ignorée.
+    #[test]
+    fn aucune_cle_en_double() {
+        for (code, src) in LOCALES {
+            let k = keys(src);
+            let dup: Vec<_> = k
+                .windows(2)
+                .filter(|w| w[0] == w[1])
+                .map(|w| &w[0])
+                .collect();
+            assert!(dup.is_empty(), "{code} : clés en double {dup:?}");
+        }
+    }
+
     #[test]
     fn les_fichiers_fluent_sont_valides() {
         for (code, src) in LOCALES {

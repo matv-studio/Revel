@@ -43,6 +43,8 @@ pub const ACTIONS: &[Action] = &[
     a("zoom-fit", "editor-zoom-fit-short", &["Shift+1", "Ctrl+1"]),
     a("zoom-100", "editor-zoom-100", &["Shift+0", "Ctrl+0"]),
     a("zoom-sel", "editor-zoom-selection", &["Shift+2", "Ctrl+2"]),
+    // Sélection montrée là où se trouve la souris : canevas, calques, médias, composants (D-179).
+    a("reveal", "keys-reveal", &["NumpadDecimal"]),
     a("zoom-in", "keys-zoom-in", &["Ctrl+="]),
     a("zoom-out", "keys-zoom-out", &["Ctrl+-"]),
     a("rulers", "editor-rulers", &["Ctrl+R"]),
@@ -94,6 +96,10 @@ impl Combo {
         if self.ctrl != k.ctrl || self.shift != k.shift || self.alt != k.alt {
             return false;
         }
+        // Point du pavé numérique (`.` ou `,` selon la langue du clavier) : par touche physique.
+        if self.key == "numpaddecimal" {
+            return k.code == "NumpadDecimal";
+        }
         let digit = k
             .code
             .strip_prefix("Digit")
@@ -142,6 +148,14 @@ impl Combo {
         ) {
             return None;
         }
+        if k.code == "NumpadDecimal" {
+            return Some(Combo {
+                ctrl: k.ctrl,
+                shift: k.shift,
+                alt: k.alt,
+                key: "numpaddecimal".into(),
+            });
+        }
         let digit = k
             .code
             .strip_prefix("Digit")
@@ -173,6 +187,7 @@ fn key_name(k: &str) -> String {
         "enter" => "Enter".into(),
         "tab" => "Tab".into(),
         " " => "Space".into(),
+        "numpaddecimal" => "NumpadDecimal".into(),
         k if k.chars().count() == 1 => k.to_uppercase(),
         k => {
             let mut c = k.chars();
@@ -258,6 +273,7 @@ pub fn display_combo(ui: Ui, b: &str) -> String {
         parts.push("Alt".into());
     }
     parts.push(match c.key.as_str() {
+        "numpaddecimal" => ui.now("keys-numpad-decimal", &[]),
         "arrowup" => "↑".into(),
         "arrowdown" => "↓".into(),
         "arrowleft" => "←".into(),
@@ -328,5 +344,16 @@ mod tests {
         let rec = Combo::of(&key("π", "KeyP", false, false, true)).unwrap();
         assert_eq!(rec.write(), "Alt+P");
         assert!(Combo::of(&key("Shift", "ShiftLeft", false, true, false)).is_none());
+        // Point du pavé numérique, « . » ou « , » selon le clavier (D-179).
+        let dot = Combo::parse("NumpadDecimal").unwrap();
+        assert!(dot.matches(&key(",", "NumpadDecimal", false, false, false)));
+        assert!(dot.matches(&key(".", "NumpadDecimal", false, false, false)));
+        assert!(!dot.matches(&key(".", "Period", false, false, false)));
+        assert_eq!(
+            Combo::of(&key(",", "NumpadDecimal", false, false, false))
+                .unwrap()
+                .write(),
+            "NumpadDecimal"
+        );
     }
 }

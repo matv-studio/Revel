@@ -27,11 +27,17 @@ fn page_html(s: &Site) -> String {
         hooks: Arc::new(revel_render::PlainAssets),
         now: chrono::Utc::now(),
     };
-    let h =
-        revel_render::render_editor(&input, "/", &revel_render::EditorOptions { scripts: false })
-            .unwrap()
-            .unwrap()
-            .html;
+    let h = revel_render::render_editor(
+        &input,
+        "/",
+        &revel_render::EditorOptions {
+            scripts: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .unwrap()
+    .html;
     // Guillemets d'un texte : écrits tels quels ou en entité selon qu'il est écrit dans la page
     // ou lu d'une propriété ; le texte montré est le même.
     let h = revel_render::strip_editor_marks(&h).replace("&quot;", "\"");

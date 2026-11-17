@@ -1597,7 +1597,7 @@ button.site-facts__item:hover .muted { color: var(--text); text-decoration: unde
 .image-row__thumb img { width: 100%; height: 100%; object-fit: contain; }
 .image-row__thumb:hover { box-shadow: inset 0 0 0 1px var(--text-faint); }
 /* Icône du site, thèmes clair et sombre (D-180) : deux choix côte à côte. */
-.icon-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field-line.icon-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .icon-pair__item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .icon-pair__text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
 .icon-pair__label { font-size: var(--text-sm); }

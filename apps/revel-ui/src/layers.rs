@@ -292,6 +292,8 @@ impl<'a> Builder<'a> {
                 // Élément construit fermé : ses parties sans ligne, ses images non plus.
                 Node::Element { .. } if self.chrome && revel_model::is_part(n) => Vis::Through,
                 Node::Image(_) if self.chrome => Vis::Hide,
+                // Dessin d'une icône d'une partie : pas de ligne.
+                Node::Html { .. } if self.chrome => Vis::Hide,
                 Node::Element { tag, attrs, .. } => {
                     let t = tag.to_ascii_lowercase();
                     if t == "html" {
@@ -373,7 +375,8 @@ impl<'a> Builder<'a> {
                     // Racine ou partie d'un élément construit fermé : ses enfants sont des parties
                     // (ou un contenu qu'il accueille) ; un contenu ordinaire sort de ce mode.
                     let was = self.chrome;
-                    self.chrome = revel_model::is_widget(n) || (was && revel_model::is_part(n));
+                    self.chrome = revel_model::is_widget(n)
+                        || (was && (revel_model::is_part(n) || revel_model::is_item(n)));
                     self.list(children, owner, of(Branch::Children), &k, &anc, slot_level);
                     self.chrome = was;
                 }

@@ -249,6 +249,22 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
             };
             parts.push(view! { <crate::items::ItemsList at=t links=true/> }.into_any());
         }
+        // Accordéon et barre de navigation (D-176), textes des parties des autres outils fermés.
+        if let Some(v) = crate::tools::accordion(ui, ed, &at, &node) {
+            parts.push(v);
+        }
+        if let Some(v) = crate::tools::navbar(ui, ed, &at, &node) {
+            parts.insert(0, v);
+        }
+        if let Some(v) = crate::tools::texts(ui, ed, &at, &node) {
+            parts.push(v);
+        }
+        if let Some(v) = crate::tools::locales(ui, ed, &at, &node) {
+            parts.push(v);
+        }
+        if let Some(v) = crate::tools::video_player(ui, ed, &at, &node) {
+            parts.push(v);
+        }
         // Carrousel (D-174) : fonction, images, affichage, commandes, défilement.
         if attr(attrs, "data-revel-slider").is_some()
             && let Some(v) = crate::carousel::settings(ui, ed, &at, &node)
@@ -266,6 +282,7 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
             },
         ] = loops.as_slice()
             && revel_edit::siteinfo::menu_of(expr).is_none()
+            && expr.trim() != "locales"
         {
             parts.push(collection_list(
                 ui,
@@ -531,11 +548,23 @@ fn text_of(p: Preset) -> &'static str {
 /// Choix d'icône (D-125) : onglets (flèches, interface, contact, médias, objets, création) et
 /// onglet des icônes importées (fichiers SVG des médias du site) avec « Importer ».
 #[component]
-pub(crate) fn IconPicker(at: Target, current: String) -> impl IntoView {
+pub(crate) fn IconPicker(
+    at: Target,
+    current: String,
+    /// Autres icônes changées en même temps (la même dans chaque volet d'un accordéon).
+    #[prop(optional)]
+    also: Vec<Target>,
+) -> impl IntoView {
     const CUSTOM: &str = "icons-custom";
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
     let at = StoredValue::new(at);
+    let also = StoredValue::new(also);
+    let all = move || {
+        let mut l = vec![at.get_value()];
+        l.extend(also.get_value());
+        l
+    };
     let current = StoredValue::new(current);
     // Onglet ouvert : celui de l'icône en place, sinon le premier.
     let first = current.with_value(|c| {
@@ -552,8 +581,11 @@ pub(crate) fn IconPicker(at: Target, current: String) -> impl IntoView {
     let tab = RwSignal::new(first);
     let choose = move |name: &'static str, path: &'static str| {
         let cmd = ed.doc.with_untracked(|d| {
-            d.as_ref().map(|d| {
-                revel_edit::icons::set_icon(d, &at.get_value(), name, "0 0 24 24", path, true)
+            d.as_ref().map(|d| Command::Batch {
+                commands: all()
+                    .iter()
+                    .map(|at| revel_edit::icons::set_icon(d, at, name, "0 0 24 24", path, true))
+                    .collect(),
             })
         });
         if let Some(c) = cmd {
@@ -590,15 +622,20 @@ pub(crate) fn IconPicker(at: Target, current: String) -> impl IntoView {
                 return;
             };
             let cmd = ed.doc.with_untracked(|d| {
-                d.as_ref().map(|d| {
-                    revel_edit::icons::set_icon(
-                        d,
-                        &at.get_value(),
-                        &format!("file:{url}"),
-                        &vb,
-                        &inner,
-                        false,
-                    )
+                d.as_ref().map(|d| Command::Batch {
+                    commands: all()
+                        .iter()
+                        .map(|at| {
+                            revel_edit::icons::set_icon(
+                                d,
+                                at,
+                                &format!("file:{url}"),
+                                &vb,
+                                &inner,
+                                false,
+                            )
+                        })
+                        .collect(),
                 })
             });
             if let Some(c) = cmd {
@@ -1460,7 +1497,7 @@ fn tabs_options(ui: Ui, ed: Ed, at: Target, value: String) -> AnyView {
                         on:click=move |_| put("sound", None)>{icons::close()}</button>
                 })}
             </div>
-            <crate::items::TabsList at=at.get_value()/>
+            {crate::tools::tabs(ui, ed, at.get_value(), opts.get_value())}
         </div>
     }
     .into_any()

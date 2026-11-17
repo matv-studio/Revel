@@ -202,15 +202,33 @@ B [data-revel-part=dots]{display:flex;gap:8px}B [data-revel-part=dots] button{wi
 border-radius:50%;background-color:currentColor;opacity:.3;cursor:pointer}B [data-revel-part=dots] button.is-active{opacity:1}",
     ),
     (
+        "accordion-group",
+        // D-176 : volets `details`, titre avec icône d'ouverture (à droite, ou à gauche avec
+        // `data-revel-icon="start"`), qui tourne de `--rv-turn` quand le volet est ouvert.
+        "B>details{border-bottom:1px solid color-mix(in srgb,currentColor 30%,transparent)}\
+B [data-revel-part=summary]{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;\
+font-weight:600;cursor:pointer;list-style:none}B [data-revel-part=summary]::-webkit-details-marker{display:none}\
+B [data-revel-part=summary] svg{width:18px;height:18px;flex:none;transition:transform .2s}\
+B details[open]>[data-revel-part=summary] svg{transform:rotate(var(--rv-turn,180deg))}\
+B[data-revel-icon=start] [data-revel-part=summary]{flex-direction:row-reverse;justify-content:flex-end}\
+B details>:not([data-revel-part]){padding-bottom:14px}B details>:not([data-revel-part]):empty{min-height:24px}\
+B [hidden]{display:none}",
+    ),
+    (
         "navbar",
+        // Menu replié derrière son bouton sur téléphone (767 px) ; `data-revel-collapse` :
+        // `tablet` (991 px), `small` (479 px), `always`, `never` (D-176).
         "B{position:relative;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 24px}\
 B>a{font-weight:700;color:inherit;text-decoration:none}\
 B [data-revel-part=menu]{display:flex;align-items:center;gap:24px}B [data-revel-part=menu] a{color:inherit;text-decoration:none}\
 B [data-revel-part=toggle]{display:none;padding:8px 12px;border:1px solid currentColor;border-radius:6px;background:none;\
 color:inherit;font:inherit;cursor:pointer}\
-@media (max-width:767px){B [data-revel-part=toggle]{display:block}B [data-revel-part=menu]{display:none;position:absolute;\
-top:100%;left:0;right:0;flex-direction:column;align-items:flex-start;gap:16px;padding:16px 24px 24px;background-color:inherit}\
-B.is-open [data-revel-part=menu]{display:flex}}",
+B [data-revel-part=toggle]:has(svg){padding:6px;border:0}B [data-revel-part=toggle] svg{display:block;width:24px;height:24px}\
+B>a img{display:block;height:32px;width:auto}\
+@media (max-width:991px){B[data-revel-collapse=tablet] [data-revel-part=toggle]{display:block}B[data-revel-collapse=tablet] [data-revel-part=menu]{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;align-items:flex-start;gap:16px;padding:16px 24px 24px;background-color:inherit}B[data-revel-collapse=tablet].is-open [data-revel-part=menu]{display:flex}}\
+@media (max-width:767px){B:not([data-revel-collapse]) [data-revel-part=toggle]{display:block}B:not([data-revel-collapse]) [data-revel-part=menu]{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;align-items:flex-start;gap:16px;padding:16px 24px 24px;background-color:inherit}B:not([data-revel-collapse]).is-open [data-revel-part=menu]{display:flex}}\
+@media (max-width:479px){B[data-revel-collapse=small] [data-revel-part=toggle]{display:block}B[data-revel-collapse=small] [data-revel-part=menu]{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;align-items:flex-start;gap:16px;padding:16px 24px 24px;background-color:inherit}B[data-revel-collapse=small].is-open [data-revel-part=menu]{display:flex}}\
+B[data-revel-collapse=always] [data-revel-part=toggle]{display:block}B[data-revel-collapse=always] [data-revel-part=menu]{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;align-items:flex-start;gap:16px;padding:16px 24px 24px;background-color:inherit}B[data-revel-collapse=always].is-open [data-revel-part=menu]{display:flex}",
     ),
     (
         "locales",
@@ -240,11 +258,12 @@ fn base_css(kind: &str, rules: &str) -> String {
         let rule = &rest[..=end];
         if let Some(open) = rule.find('{') {
             let sel = rule[..open].replace('B', &root);
-            // Partie ajoutée (`::before`, `::after`) : hors de `:where()`, qui ne l'accepte pas.
-            let (sel, pseudo) = ["::before", "::after"]
-                .iter()
-                .find_map(|p| sel.strip_suffix(p).map(|s| (s.to_string(), *p)))
-                .unwrap_or((sel, ""));
+            // Partie ajoutée (`::before`, `::after`, `::-webkit-…`) : hors de `:where()`, qui ne
+            // l'accepte pas.
+            let (sel, pseudo) = match sel.rfind("::") {
+                Some(i) if !sel[i..].contains(',') => (sel[..i].to_string(), sel[i..].to_string()),
+                _ => (sel, String::new()),
+            };
             out.push_str(&format!(":where({sel}){pseudo}{}", &rule[open..]));
         }
         rest = &rest[end + 1..];
@@ -315,9 +334,9 @@ mod tests {
             BASES.iter().find(|(k, _)| *k == "navbar").unwrap().1,
         );
         assert!(css.starts_with(":where([data-revel-base=\"navbar\"]){position:relative"));
-        assert!(css.contains("@media (max-width:767px){:where([data-revel-base=\"navbar\"] [data-revel-part=toggle]){display:block}"));
+        assert!(css.contains("@media (max-width:767px){:where([data-revel-base=\"navbar\"]:not([data-revel-collapse]) [data-revel-part=toggle]){display:block}"));
         assert!(css.contains(
-            ":where([data-revel-base=\"navbar\"].is-open [data-revel-part=menu]){display:flex}}"
+            ":where([data-revel-base=\"navbar\"]:not([data-revel-collapse]).is-open [data-revel-part=menu]){display:flex}}"
         ));
         // Chaque nature : des règles bien formées, rien hors de `:where`.
         for (kind, rules) in BASES {

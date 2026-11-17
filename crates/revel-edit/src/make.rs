@@ -365,6 +365,7 @@ impl Preset {
                 | Preset::LocaleSwitch
                 | Preset::Model
                 | Preset::Toc
+                | Preset::Clock
         )
     }
 
@@ -410,8 +411,17 @@ impl Preset {
                                 },
                             );
                         }
-                        // Contenu accueilli (diapositive, panneau) : calque ordinaire.
-                        Some(Role::Content) => {}
+                        // Contenu accueilli (diapositive, panneau) ou élément répété : calque
+                        // ordinaire.
+                        Some(Role::Item) if widget => attrs.insert(
+                            0,
+                            Attr {
+                                name: revel_model::ITEM_ATTR.into(),
+                                value: None,
+                                when: None,
+                            },
+                        ),
+                        Some(Role::Content | Role::Item) => {}
                         // Élément sans nom dans une partie (dessin d'un bouton…) : partie aussi.
                         _ if widget && !root && (in_part || role.is_none()) => {
                             part = true;
@@ -505,7 +515,7 @@ impl Preset {
             Preset::Clock => el(
                 id(),
                 "p",
-                vec![attr("data-revel-clock", "time")],
+                vec![attr("class", "horloge"), attr("data-revel-clock", "time")],
                 vec![txt("12:00")],
             ),
             Preset::Pixels => el(
@@ -756,25 +766,56 @@ impl Preset {
                     )],
                 )
             }
-            Preset::Accordion => el(
-                id(),
-                "details",
-                vec![attr("class", "accordeon")],
-                vec![
-                    el(
-                        id(),
-                        "summary",
-                        vec![attr("class", "accordeon__titre")],
-                        vec![txt(text)],
-                    ),
-                    el(
-                        id(),
-                        "div",
-                        vec![attr("class", "accordeon__contenu")],
-                        vec![el(id(), "p", vec![], vec![txt(text)])],
-                    ),
-                ],
-            ),
+            // Accordéon (D-176) : groupe fermé de volets `details` ; chaque volet a son titre
+            // (texte et icône d'ouverture) et son contenu, calques ordinaires.
+            Preset::Accordion => {
+                // `text` : « Question|Réponse ».
+                let (title, body) = text.split_once('|').unwrap_or((text, text));
+                let rows: Vec<Node> = (1..=3)
+                    .map(|n| {
+                        el(
+                            id(),
+                            "details",
+                            vec![attr("class", "accordeon__volet")],
+                            vec![
+                                el(
+                                    id(),
+                                    "summary",
+                                    vec![attr("class", "accordeon__titre")],
+                                    vec![
+                                        el(
+                                            id(),
+                                            "span",
+                                            vec![attr("class", "accordeon__nom")],
+                                            vec![txt(&format!("{title} {n}"))],
+                                        ),
+                                        icon_node(id(), "chevron-bas"),
+                                    ],
+                                ),
+                                el(
+                                    id(),
+                                    "div",
+                                    vec![attr("class", "accordeon__contenu")],
+                                    vec![el(id(), "p", vec![], vec![txt(body)])],
+                                ),
+                            ],
+                        )
+                    })
+                    .collect();
+                el(
+                    id(),
+                    "div",
+                    vec![
+                        attr("class", "accordeons"),
+                        Attr {
+                            name: "data-revel-accordion".into(),
+                            value: None,
+                            when: None,
+                        },
+                    ],
+                    rows,
+                )
+            }
             Preset::Lottie => el(
                 id(),
                 "div",
@@ -1192,9 +1233,10 @@ impl Preset {
                                 attr("class", "barre-nav__bouton"),
                                 attr("type", "button"),
                                 attr("aria-expanded", "false"),
+                                attr("aria-label", get(1, "Menu")),
                                 attr("data-revel-on", "click class:is-open parent"),
                             ],
-                            vec![txt(get(1, "Menu"))],
+                            vec![icon_node(id(), "menu")],
                         ),
                         el(id(), "div", vec![attr("class", "barre-nav__menu")], links),
                     ],
@@ -1296,6 +1338,9 @@ enum Role {
     Part(&'static str),
     /// Contenu accueilli (diapositive, panneau, lien du menu) : calque ordinaire.
     Content,
+    /// Élément répété de l'outil (volet d'un accordéon) : calque ordinaire, dont les parties
+    /// restent des parties de l'outil.
+    Item,
 }
 
 fn role_of(class: &str) -> Option<Role> {
@@ -1324,12 +1369,16 @@ fn role_of(class: &str) -> Option<Role> {
         "onglets__liste" => Part("tablist"),
         "onglet" => Part("tab"),
         "onglets__panneau" => Content,
+        "horloge" => Base("clock"),
         "sommaire" => Base("toc"),
         "sommaire__liste" => Part("list"),
         "sommaire__element" => Part("item"),
         "sommaire__lien" => Part("link"),
         "accordeon" => Base("accordion"),
+        "accordeons" => Base("accordion-group"),
+        "accordeon__volet" => Item,
         "accordeon__titre" => Part("summary"),
+        "accordeon__nom" => Part("name"),
         "accordeon__contenu" => Content,
         "interrupteur" => Base("switch"),
         "interrupteur__libelle" => Part("label"),

@@ -1215,6 +1215,15 @@ pub fn is_part(n: &Node) -> bool {
     matches!(n, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == PART_ATTR))
 }
 
+/// Attribut d'un élément répété d'un élément construit (volet d'un accordéon, D-176) : calque
+/// ordinaire, dont les parties restent celles de l'élément construit.
+pub const ITEM_ATTR: &str = "data-revel-item";
+
+/// Élément répété d'un élément construit ([`ITEM_ATTR`]).
+pub fn is_item(n: &Node) -> bool {
+    matches!(n, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == ITEM_ATTR))
+}
+
 /// `{{ content | safe }}` (ou `{{ content }}`) d'un gabarit -> emplacement de la page : la page
 /// apparaît dans les calques à cet endroit.
 pub fn content_to_slot(nodes: &mut [Node]) {

@@ -6,8 +6,28 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 16/11/2026 (version 0.7.8 : D-174, D-175). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 17/11/2026 (version 0.7.8 en préparation : D-174 à D-176 ; pas publiée tant que tous les outils ne sont pas revus). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 17/11/2026 (nuit) : outils restants revus (D-176)
+
+- Consigne de l'utilisateur (16/11, 23h36) : pas de 0.7.8 tant que tous les outils ne sont pas revus. Le
+  brouillon « Revel v0.7.8 » construit sur `2738644` est périmé (à remplacer par une nouvelle construction).
+  Le site livré le soir du 16/11 a été remis dans son état d'avant (il demandait la 0.7.8).
+- Fait (D-176) : `toolparts.rs` (liste des parties, textes nommés), `tools.rs` (onglets, accordéon, barre de
+  navigation, sélecteur de langue, lecteur vidéo, textes des parties), accordéon en groupe fermé de volets,
+  `tabs::move_tab`, `start=<n>` des onglets, `data-revel-collapse` de la barre de navigation, `data-revel-item`.
+- État par élément du panneau « Ajouter » : carrousel, onglets, accordéon, barre de navigation, sommaire,
+  filtres de liste, vidéo et lecteur, défilement, interrupteur, bandeau cookies, barre de progression,
+  sélecteur de langue, horloge : une ligne dans les calques (icône de l'outil), réglages au panneau, pas de
+  champ « Texte » générique. Toile de pixels, liste de collection, formulaire, panier : panneaux déjà en place,
+  inchangés.
+- Piège : dans `view!`, `>=` ou `<=` dans un attribut sans accolades ferme la balise (le reste devient du
+  texte) ; `collect::<Vec<_>>()` aussi. Mettre l'expression entre accolades.
+- Piège : `Command::RemoveAttr` sur un attribut absent fait échouer tout le lot ; ne retirer que ce qui est
+  posé.
+- Essai rapide d'un bloc des essais de l'éditeur : l'extraire dans un script à part (préambule : ouvrir le site,
+  `frameOf`, `waitFrame`, `check`) ; un passage complet prend 25 minutes.
 
 ## Travail du 16/11/2026 (soir) : version 0.7.8, carrousel en outil fermé, composant relié au CMS (D-174, D-175)
 

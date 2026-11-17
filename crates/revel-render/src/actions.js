@@ -383,7 +383,9 @@
         pick((Math.max(cur, 0) + d + btns.length) % btns.length);
       });
     }
+    // `start=<n>` : onglet ouvert au départ (le premier par défaut).
     var start = 0;
+    opts.forEach(function (o) { if (o.indexOf("start=") === 0) start = Math.max(0, Math.min(btns.length - 1, (parseInt(o.slice(6), 10) || 1) - 1)); });
     for (var a = 0; a < btns.length; a++) if (btns[a].classList.contains("is-active")) { start = a; break; }
     if (btns.length) pick(start);
   }

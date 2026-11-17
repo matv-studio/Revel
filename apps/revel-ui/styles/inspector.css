@@ -930,3 +930,24 @@
 .prop-entry-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prop-entry .select, .prop-def .select { min-width: 0; width: 100%; }
 .prop-entry select.input, .prop-def select.input { width: 100%; text-overflow: ellipsis; }
+
+/* Parties d'un outil (D-176) : ligne renommée sur place, second champ (valeur, lien). */
+.parts-row { gap: 4px; padding-right: 2px; }
+.parts-pick { flex: none; border: 0; cursor: pointer; }
+.parts-name, .parts-extra {
+  flex: 1; min-width: 0; height: 24px; padding: 0 6px;
+  border: var(--border) solid transparent; border-radius: var(--radius-sm);
+  background: none; color: var(--text); font-size: var(--text-sm); text-overflow: ellipsis;
+}
+.parts-extra { flex: 0 1 38%; color: var(--text-muted); font-size: var(--text-xs); }
+.parts-name:hover, .parts-extra:hover { border-color: var(--line); }
+.parts-name:focus, .parts-extra:focus { border-color: var(--focus); background: var(--surface); outline: none; }
+.tool-head { display: flex; align-items: center; gap: 6px; }
+.tool-head svg.icon { color: var(--text-muted); }
+.tool-icon { border: 1px solid var(--line-strong); background: var(--surface-raised); color: var(--text); }
+.tool-icon.is-on { background: var(--surface-active); }
+.accordion-settings .select, .navbar-settings .select, .locales-settings .select { min-width: 0; }
+.accordion-settings select.input, .locales-settings select.input { width: 100%; text-overflow: ellipsis; }
+/* Fonction d'un outil : les choix se partagent la largeur, sans dépasser. */
+.tool-function .segmented { display: flex; width: 100%; }
+.tool-function .segmented > button { flex: 1; min-width: 0; padding: 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

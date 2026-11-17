@@ -2267,3 +2267,35 @@ mise à jour en un clic, élément ajouté montré dans les calques.**
 - Panneaux : un groupe retiré d'une colonne rend sa hauteur aux autres (`Layout::fill`, aussi à la relecture de
   la disposition enregistrée).
 
+**D-176 — 17/11/2026 — prise (demande de l'utilisateur : « on ne passe pas en 0.7.8 tant que tous les outils ne
+sont pas revus » ; tableau « Les autres outils » validé sur la toile Design).** **Panneaux des outils fermés :
+onglets, accordéon, barre de navigation, textes nommés.**
+- **Règle commune** : un outil fermé (`data-revel-widget`) ne montre plus le champ « Texte » générique ; ses
+  textes se règlent dans son panneau, dans la liste de ses parties ou dans un groupe « Textes » où chaque texte
+  porte le nom de sa partie (bouton, libellé, titre…). Chaque outil fermé porte son icône sur sa ligne des
+  calques (défilement, interrupteur, bandeau cookies, progression, langues, modèle 3D, horloge compris).
+- **Liste des parties** (`apps/revel-ui/src/toolparts.rs`, `PartsList`) : une ligne par partie répétée,
+  renommée sur place (le texte de la partie, dans la langue en cours), montée, descendue, retirée ; « Ajouter »
+  copie la dernière ; second champ facultatif (attribut).
+- **Onglets** : liste des onglets (un onglet se déplace avec ses panneaux, `tabs::move_tab`), « Ouvert au
+  départ » (`start=<n>` dans `data-revel-tabs`, lu par le script).
+- **Accordéon** : l'élément ajouté est un groupe fermé (`data-revel-accordion`, nature `accordion-group`) de
+  trois volets `details` (titre avec icône, contenu en calque ordinaire). Panneau : volets listés, « Ouvert au
+  départ », « Un seul ouvert à la fois » (attribut `name` des volets), icône d'ouverture (la même partout,
+  remplaçable) et son côté (`data-revel-icon="start"`). Les `details` seuls déjà en place (blocs FAQ) gardent
+  leurs réglages.
+- **Barre de navigation** : marque (texte, ou logo choisi dans les médias), « Menu replié » (`data-revel-collapse` :
+  tablette 991 px, téléphone 767 px par défaut, petit téléphone 479 px, toujours, jamais), bouton du menu en
+  icône remplaçable (`aria-label` pour les lecteurs d'écran).
+- **Sélecteur de langue** : réglage « Afficher » (nom ou code de la langue) à la place de « Liste de
+  collection ». **Horloge** : outil fermé nommé « Horloge ». **Vidéo** : les choix de « Fonction » se partagent
+  la largeur du panneau ; **lecteur vidéo** : image de couverture, icône du bouton de lecture (remplaçable) et
+  nom du bouton réglés au panneau.
+- Élément répété d'un outil (`data-revel-item`, volet d'un accordéon) : calque ordinaire dont les parties
+  restent celles de l'outil (cachées des calques, stylées par la nature de l'outil).
+- Références comparées : réglages « Tabs settings » de Webflow (ajout, retrait, onglet par défaut), réglages
+  « Navbar settings » de Webflow (largeur à laquelle le bouton du menu apparaît), accordéons de Framer (éléments
+  listés, un seul ouvert, ouvert par défaut, icône chevron ou plus).
+- En suspens : montrer le menu ouvert dans le canevas (Webflow : « Open menu : Show ») ; filtres de liste :
+  ordre des boutons.
+

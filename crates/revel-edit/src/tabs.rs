@@ -181,6 +181,35 @@ pub fn remove_tab(site: &Site, box_at: &Target, i: usize) -> Option<crate::comma
     Some(Command::Batch { commands })
 }
 
+/// Onglet `i` déplacé d'un rang (`dir` : -1 ou 1) avec ses panneaux, chacun à la place de
+/// celui de l'onglet voisin (D-176).
+pub fn move_tab(
+    site: &Site,
+    box_at: &Target,
+    i: usize,
+    dir: i32,
+) -> Option<crate::command::Command> {
+    use crate::command::Command;
+    let m = map(site, box_at);
+    let j = usize::try_from(i as i32 + dir).ok()?;
+    if m.repeated || i >= m.tabs.len() || j >= m.tabs.len() {
+        return None;
+    }
+    let step = |from: &Target, to: &Target| {
+        let (parent, index) = crate::address::locate(site, to).ok()?;
+        Some(Command::Move {
+            at: from.clone(),
+            to: parent,
+            index,
+        })
+    };
+    let mut commands = vec![step(&m.tabs[i], &m.tabs[j])?];
+    for (a, b) in m.panels_of(i).iter().zip(m.panels_of(j).iter()) {
+        commands.push(step(a, b)?);
+    }
+    Some(Command::Batch { commands })
+}
+
 /// Onglet ou panneau qui est `at` ou le contient : (onglet ?, rang).
 pub fn place_of(site: &Site, m: &TabsMap, at: &Target) -> Option<(bool, usize)> {
     let mut cur = at.clone();

@@ -29,20 +29,15 @@ pub fn SelectedTexts() -> impl IntoView {
     let ed = expect_context::<Ed>();
     let items = Memo::new(move |_| {
         let sel = ed.selected.with(|s| s.as_ref().map(|s| s.id.clone()));
-        // Carrousel fermé : son titre se règle avec ses commandes (D-174), pas ici.
+        // Outil fermé : ses textes se règlent dans son panneau, avec leur nom (D-174, D-176).
         let tool = sel.as_ref().is_some_and(|id| {
             ed.doc.with(|d| {
                 d.as_ref()
                     .and_then(|d| {
                         let at = crate::editor::target_of(d, id)?;
-                        match revel_edit::address::node(d, &at).ok()? {
-                            revel_model::Node::Element { attrs, .. } => Some(
-                                ["data-revel-slider", "data-revel-widget"]
-                                    .iter()
-                                    .all(|n| attrs.iter().any(|a| a.name == *n)),
-                            ),
-                            _ => None,
-                        }
+                        revel_edit::address::node(d, &at)
+                            .ok()
+                            .map(crate::tools::is_closed_tool)
                     })
                     .unwrap_or(false)
             })

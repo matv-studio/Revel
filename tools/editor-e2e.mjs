@@ -726,6 +726,90 @@ try {
     for (let i = 0; i < 100 && await state().catch(() => null); i++) await page.waitForTimeout(100);
     check('carrousel : tout annulé', (await state().catch(() => null)) === null);
   }
+  // Outils fermés (D-176) : onglets, accordéon, barre de navigation réglés dans leur panneau
+  // (lignes renommées sur place, ordre, départ), sans champ « Texte » ; tout annulé ensuite.
+  {
+    const STY = '.dock-panel[data-panel="styles"]';
+    const undo = async (n) => { for (let i = 0; i < n; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(250); } };
+    const insert = async (item, sel) => {
+      const known = await frameOf().evaluate((sel) => [...document.querySelectorAll(sel)].map((e) => e.getAttribute('data-rv')), sel);
+      await page.click('.dock-tab[data-panel="insert"]');
+      await page.dblclick(`.insert-item[data-item="${item}"]`);
+      for (let i = 0; i < 100; i++) {
+        const id = await frameOf().evaluate(([sel, known]) => [...document.querySelectorAll(sel)].map((e) => e.getAttribute('data-rv')).find((x) => !known.includes(x)) || null, [sel, known]).catch(() => null);
+        if (id) return id;
+        await page.waitForTimeout(100);
+      }
+      throw new Error('outil : ' + item + ' inséré');
+    };
+    const inTool = (id, fn, arg) => frameOf().$eval(`[data-rv="${id}"]`, fn, arg);
+    const toolIs = async (id, fn, what) => { for (let i = 0; i < 100; i++) { const v = await inTool(id, fn).catch(() => null); if (v) return v; await page.waitForTimeout(100); } throw new Error('outil : ' + what); };
+    const rename = async (sel, text) => { await page.fill(sel, text); await page.locator(sel).blur(); };
+    // Onglets : renommer, déplacer, onglet ouvert au départ.
+    {
+      const id = await insert('insert-tabs', '[data-revel-tabs]');
+      await page.waitForSelector(`${STY} .parts-list[data-list="items-tabs"] .parts-row >> nth=1`);
+      const noText = (await page.$(`${STY} .text-fields`)) === null;
+      let steps = 1;
+      await rename(`${STY} .parts-list[data-list="items-tabs"] .parts-row >> nth=0 >> .parts-name`, 'Tarifs');
+      await toolIs(id, (e) => e.querySelector('[data-revel-tab]').textContent.trim() === 'Tarifs', 'onglet renommé'); steps++;
+      await page.hover(`${STY} .parts-list[data-list="items-tabs"] .parts-row >> nth=0`);
+      await page.click(`${STY} .parts-list[data-list="items-tabs"] .parts-row >> nth=0 >> .items-actions .icon-btn >> nth=1`);
+      await toolIs(id, (e) => { const t = [...e.querySelectorAll('[data-revel-tab]')].map((x) => x.textContent.trim()); return t[1] === 'Tarifs' && e.querySelectorAll('[data-revel-panel]').length === 2; }, 'onglet déplacé'); steps++;
+      await page.selectOption(`${STY} [data-row="tabs-start"] select`, '2');
+      await toolIs(id, (e) => /(^| )start=2( |$)/.test(e.getAttribute('data-revel-tabs')), 'onglet de départ'); steps++;
+      check('onglets : renommé dans la liste, déplacé avec son panneau, onglet ouvert au départ, pas de champ « Texte »', noText);
+      await undo(steps);
+    }
+    // Accordéon : trois volets, renommer, un seul ouvert, ouvert au départ, ajouter.
+    {
+      const id = await insert('insert-accordion', '[data-revel-accordion]');
+      await page.waitForSelector(`${STY} .accordion-settings .parts-row >> nth=2`);
+      const noText = (await page.$(`${STY} .text-fields`)) === null;
+      let steps = 1;
+      await rename(`${STY} .accordion-settings .parts-row >> nth=0 >> .parts-name`, 'Livraison');
+      await toolIs(id, (e) => e.querySelector('summary').textContent.trim() === 'Livraison', 'volet renommé'); steps++;
+      await page.click(`${STY} .accordion-settings [data-row="accordion-single"] .switch`);
+      await toolIs(id, (e) => [...e.querySelectorAll(':scope > details')].every((d) => d.getAttribute('name')), 'un seul ouvert'); steps++;
+      await page.selectOption(`${STY} .accordion-settings [data-row="accordion-start"] select`, '2');
+      await toolIs(id, (e) => { const d = [...e.querySelectorAll(':scope > details')]; return d[1].hasAttribute('open') && !d[0].hasAttribute('open'); }, 'volet ouvert au départ'); steps++;
+      await page.click(`${STY} .accordion-settings [data-action="accordion-add"]`);
+      await toolIs(id, (e) => e.querySelectorAll(':scope > details').length === 4, 'volet ajouté'); steps++;
+      const icon = await inTool(id, (e) => e.querySelectorAll('summary svg[data-icon="chevron-bas"]').length);
+      await page.click('.dock-tab[data-panel="layers"]');
+      await page.waitForSelector('.layers .layer.is-selected .layer-tool');
+      check('accordéon : volets listés (renommé, ajouté), un seul ouvert à la fois, volet ouvert au départ, icône dans chaque titre',
+        noText && icon === 4, `${icon} icônes`);
+      await undo(steps);
+    }
+    // Barre de navigation : marque, largeur de repli, bouton du menu en icône.
+    {
+      const id = await insert('insert-navbar', 'nav[data-revel-base="navbar"]');
+      await page.waitForSelector(`${STY} .navbar-settings [data-row="navbar-brand"] input`);
+      const noText = (await page.$(`${STY} .text-fields`)) === null;
+      let steps = 1;
+      await rename(`${STY} .navbar-settings [data-row="navbar-brand"] input`, 'Atelier');
+      await toolIs(id, (e) => e.querySelector(':scope > a').textContent.trim() === 'Atelier', 'marque renommée'); steps++;
+      await page.selectOption(`${STY} .navbar-settings [data-row="navbar-collapse"] select`, 'tablet');
+      await toolIs(id, (e) => e.getAttribute('data-revel-collapse') === 'tablet', 'repli sur tablette'); steps++;
+      const toggle = await inTool(id, (e) => { const b = e.querySelector('[data-revel-part="toggle"]'); return !!b.querySelector('svg[data-icon="menu"]') && !!b.getAttribute('aria-label') && !b.textContent.trim(); });
+      check('barre de navigation : marque réglée au panneau, menu replié sur tablette, bouton du menu en icône', noText && toggle);
+      await undo(steps);
+    }
+    // Lecteur vidéo : couverture, icône et nom du bouton réglés au panneau.
+    {
+      await page.click('.dock-tab[data-panel="insert"]');
+      await page.dblclick('.insert-item[data-item="insert-video"]');
+      await page.waitForSelector(`${STY} .tool-function [data-fn="fn-video-player"]`);
+      await page.click(`${STY} .tool-function [data-fn="fn-video-player"]`);
+      await page.waitForSelector(`${STY} .player-settings [data-row="player-label"] input`);
+      const rows = await page.$$eval(`${STY} .player-settings .style-row`, (l) => l.map((r) => r.dataset.row).join(','));
+      await rename(`${STY} .player-settings [data-row="player-label"] input`, 'Voir le film');
+      const f2 = await waitFrame(() => !!document.querySelector('[data-revel-base="video-player"] [aria-label="Voir le film"]'), 'nom du bouton de lecture');
+      check('lecteur vidéo : couverture, icône et nom du bouton au panneau', !!f2 && rows === 'player-cover,player-icon,player-label', rows);
+      await undo(3);
+    }
+  }
   await page.click('.dock-tab[data-panel="layers"]');
 
   // Lien : nouvel onglet (target + rel). Le lien est dans le composant de l'en-tête : un clic
@@ -1482,7 +1566,7 @@ try {
       await page.waitForFunction(() => !document.querySelector('.insp-group[data-role="picker"]'));
       check('rôle : choisi (attribut posé), réglages du rôle à la place du choix', panelSet);
       await addIn('accordion');
-      const accIn = await untilE(async () => (await frame.locator('details[data-revel-base="accordion"] > summary[data-revel-part="summary"]').count()) === 1);
+      const accIn = await untilE(async () => (await frame.locator('[data-revel-base="accordion-group"][data-revel-accordion] > details > summary[data-revel-part="summary"]').count()) === 3);
       check('éléments : onglets (deux boutons, deux panneaux), accordéon', tabsIn && accIn);
       // Élément construit fermé (D-159) : un clic sur une partie (bouton d'onglet) choisit
       // l'élément ; « Décomposer » retire la fermeture.

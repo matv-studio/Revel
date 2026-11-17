@@ -61,6 +61,8 @@ mod styles;
 mod sync;
 mod templates;
 mod textfield;
+mod toolparts;
+mod tools;
 mod variables;
 mod versions;
 mod visibility;

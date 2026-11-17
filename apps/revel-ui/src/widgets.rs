@@ -27,19 +27,6 @@ pub fn decompose(ui: Ui, ed: Ed, at: Target) {
     );
 }
 
-/// Bouton « Décomposer » en tête des réglages d'un élément construit fermé.
-pub fn decompose_button(ui: Ui, ed: Ed, at: &Target) -> AnyView {
-    let at = StoredValue::new(at.clone());
-    view! {
-        <button type="button" class="btn btn--small widget-decompose" data-action="decompose"
-            title=ui.t("widget-decompose-help")
-            on:click=move |_| decompose(ui, ed, at.get_value())>
-            {crate::icons::unlink()}<span>{ui.t("widget-decompose")}</span>
-        </button>
-    }
-    .into_any()
-}
-
 /// Premier descendant (élément) qui porte l'attribut `name` : (identifiant, valeur).
 fn find_attr(n: &revel_model::Node, name: &str) -> Option<(String, String)> {
     use revel_model::Node;
@@ -256,33 +243,6 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
         .value
         .clone()
         .unwrap_or_default();
-    // Boutons : (identifiant, texte, valeur).
-    let buttons: Vec<(String, String, String)> = children
-        .iter()
-        .filter_map(|c| match c {
-            Node::Element {
-                id: Some(id),
-                attrs,
-                children,
-                ..
-            } => {
-                let v = attrs.iter().find(|a| a.name == "data-revel-filter")?;
-                let text = children
-                    .iter()
-                    .filter_map(|k| match k {
-                        Node::Text { text } => Some(text.as_str()),
-                        _ => None,
-                    })
-                    .collect::<String>();
-                Some((
-                    id.clone(),
-                    text.trim().to_string(),
-                    v.value.clone().unwrap_or_default(),
-                ))
-            }
-            _ => None,
-        })
-        .collect();
     let owner = at.owner.clone();
     let root = StoredValue::new(at.clone());
     let template = StoredValue::new(children.iter().rev().find_map(|c| match c {
@@ -292,47 +252,6 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
         _ => None,
     }));
     let count = children.len();
-    let set_value = move |id: String, v: String| {
-        ed.apply(
-            ui,
-            Command::SetAttr {
-                at: Target {
-                    owner: root.get_value().owner,
-                    node: id,
-                },
-                name: "data-revel-filter".into(),
-                value: Some(v.trim().to_string()),
-            },
-            false,
-        );
-    };
-    let set_text = move |id: String, v: String| {
-        let at = Target {
-            owner: root.get_value().owner,
-            node: id,
-        };
-        ed.apply(
-            ui,
-            Command::Replace {
-                parent: revel_edit::Parent::of(&at, revel_edit::Branch::Children),
-                index: 0,
-                node: Node::Text { text: v },
-            },
-            false,
-        );
-    };
-    let remove = move |id: String| {
-        ed.apply(
-            ui,
-            Command::Remove {
-                at: Target {
-                    owner: root.get_value().owner,
-                    node: id,
-                },
-            },
-            false,
-        );
-    };
     let add = move || {
         let Some(mut n) = template.get_value() else {
             return;
@@ -390,29 +309,52 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
             false,
         );
     };
+    // Boutons relus dans le document : la liste suit les modifications.
+    let parts = Signal::derive(move || {
+        ed.doc.with(|d| {
+            match d
+                .as_ref()
+                .and_then(|d| revel_edit::address::node(d, &root.get_value()).ok())
+            {
+                Some(Node::Element { children, .. }) => children
+                    .iter()
+                    .filter_map(|c| match c {
+                        Node::Element {
+                            id: Some(id),
+                            tag,
+                            attrs,
+                            children,
+                        } => {
+                            let v = attrs.iter().find(|a| a.name == "data-revel-filter")?;
+                            let text = children
+                                .iter()
+                                .filter_map(|k| match k {
+                                    Node::Text { text } => Some(text.as_str()),
+                                    _ => None,
+                                })
+                                .collect::<String>();
+                            Some(crate::toolparts::Part {
+                                id: id.clone(),
+                                tag: tag.clone(),
+                                label: id.clone(),
+                                name: text.trim().to_string(),
+                                extra: Some(v.value.clone().unwrap_or_default()),
+                            })
+                        }
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            }
+        })
+    });
     Some(
         view! {
             <div class="insp-group" data-role="filters">
-                <div class="panel-title-line">
-                    <p class="panel-title" title=ui.t("filters-role-help")>{ui.t("filters-role")}</p>
-                    <button type="button" class="icon-btn icon-btn--small" data-action="filter-add"
-                        title=ui.t("filters-add") aria-label=ui.t("filters-add") on:click=move |_| add()>{crate::icons::plus()}</button>
-                </div>
-                {buttons.into_iter().enumerate().map(|(i, (id, text, value))| {
-                    let (i1, i2, i3) = (id.clone(), id.clone(), id.clone());
-                    let tag = value.clone();
-                    view! {
-                        <div class="filter-line" data-filter=tag>
-                            <input class="input" aria-label=ui.t("filters-text") title=ui.t("filters-text") prop:value=text
-                                on:change=move |e| set_text(i1.clone(), event_target_value(&e))/>
-                            <input class="input input--mono" aria-label=ui.t("filters-value") title=ui.t("filters-value-help")
-                                placeholder=ui.t("filters-all") prop:value=value
-                                on:change=move |e| set_value(i2.clone(), event_target_value(&e))/>
-                            <button type="button" class="icon-btn icon-btn--small" title=ui.t("filters-remove") aria-label=ui.t("filters-remove")
-                                disabled=i == 0 on:click=move |_| remove(i3.clone())>{crate::icons::close()}</button>
-                        </div>
-                    }
-                }).collect_view()}
+                <p class="panel-title tool-head" title=ui.t("filters-role-help")>{crate::icons::filter()}<span>{ui.t("filters-role")}</span></p>
+                <crate::toolparts::PartsList owner=owner.clone() title="filters-buttons" add_key="filters-add"
+                    parts=parts icon=crate::icons::filter extra=("data-revel-filter", "filters-value")
+                    on_add=Callback::new(move |_| add())/>
                 <label class="field">
                     <span class="label" title=ui.t("filters-param-help")>{ui.t("filters-param")}</span>
                     <input class="input input--mono" spellcheck="false" prop:value=param

@@ -646,6 +646,10 @@ pub fn ChecksView(
     view! {
         <div class="checks">
             {KINDS.iter().filter_map(|(kind, key, id)| {
+                // Médias lourds : signalés seulement si le réglage le demande (D-178).
+                if *kind == CheckKind::HeavyImage && !ui.settings.with_untracked(|s| s.warn_heavy_media) {
+                    return None;
+                }
                 let items: Vec<SiteCheck> = checks.iter().filter(|c| c.kind == *kind).cloned().collect();
                 (!items.is_empty()).then(|| {
                     let n = items.len();

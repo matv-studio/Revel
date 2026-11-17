@@ -137,6 +137,66 @@ try {
     check('GitHub : synchronisation de toutes les copies, bilan', /1 mis à jour/.test(note), note);
     await gh.close();
   }
+  // Mode simple (D-178) : classes non montrées, le réglage d'un élément qui partage ses classes
+  // reste à lui ; médias lourds non signalés à la publication quand le réglage est coupé ;
+  // classes activées dans les réglages de Revel, regroupement proposé au retour dans l'éditeur.
+  {
+    const p = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    p.on('pageerror', (e) => errors.push(e.message));
+    await p.addInitScript(mock);
+    await p.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&simple=1&checks=1&noheavy=1&bridge=${encodeURIComponent(bridge)}`);
+    await p.waitForSelector('.site-card');
+    await p.click('.site-open');
+    await p.waitForSelector('iframe.canvas-frame');
+    const frame = () => p.frames().find((f) => f.url().includes('rv='));
+    for (let i = 0; i < 300; i++) { const f = frame(); if (f) { try { if (await f.evaluate(() => document.readyState === 'complete' && !!document.querySelector('[data-rv]'))) break; } catch {} } await p.waitForTimeout(100); }
+    await p.waitForTimeout(500);
+    const hidden = await p.evaluate(() => ['.dock-tab[data-panel="classes"]', '.selector-box', '.style-target-label'].every((s) => [...document.querySelectorAll(s)].every((e) => getComputedStyle(e).display === 'none')));
+    // Titre ajouté, réglé, dupliqué : le second réglage ne touche que la copie (classe à elle).
+    await p.frameLocator('iframe.canvas-frame').locator('h1, h2').first().click();
+    const known = await frame().$$eval('h2', (l) => l.map((e) => e.getAttribute('data-rv')));
+    await p.click('.dock-tab[data-panel="insert"]');
+    await p.dblclick('.insert-item[data-item="insert-heading"]');
+    let id = null;
+    for (let i = 0; i < 100 && !id; i++) { id = await frame().$$eval('h2', (l, known) => l.map((e) => e.getAttribute('data-rv')).find((x) => !known.includes(x)) || null, known).catch(() => null); if (!id) await p.waitForTimeout(100); }
+    const setSize = async (v) => { const n = p.locator('.styles [data-prop="font-size"] .nbox-input').first(); await n.click(); await n.fill(v); await n.press('Enter'); await p.waitForTimeout(600); };
+    // Un élément dessiné plusieurs fois (liste, composant) compte une fois.
+    const pair = () => frame().$$eval('h2', (l, known) => { const seen = new Map(); for (const e of l) { const id = e.getAttribute('data-rv'); if (!known.includes(id) && !seen.has(id)) seen.set(id, [getComputedStyle(e).fontSize, e.classList.length]); } return [...seen.values()]; }, known).catch(() => []);
+    await setSize('40');
+    await p.frameLocator('iframe.canvas-frame').locator(`[data-rv="${id}"]`).click();
+    await p.keyboard.press('Control+d');
+    for (let i = 0; i < 100 && (await pair()).length !== 2; i++) await p.waitForTimeout(100);
+    await p.waitForTimeout(400);
+    const before = await pair();
+    await setSize('20');
+    const after = await pair();
+    check('mode simple : classes non montrées, réglage d\'un élément qui partage ses classes gardé pour lui (classe à lui)',
+      hidden && before.length === 2 && before.every((x) => x[0] === '40px') && after.map((x) => x[0]).sort().join() === '20px,40px'
+        && after.some((x) => x[1] === before[0][1] + 1), JSON.stringify([before, after]));
+    if (shots) await p.screenshot({ path: `${shots}/mode-simple.png` });
+    for (let i = 0; i < 10 && (await pair()).length > 0; i++) { await p.click('.editor-toolbar .btn-undo'); await p.waitForTimeout(350); }
+    const gone = (await pair()).length === 0;
+    await p.click('.pub-btn');
+    await p.waitForSelector('.pub-pop .pub-dest');
+    await p.click('.pub-foot .btn--primary');
+    await p.waitForSelector('.check-group');
+    const groups = await p.$$eval('.check-group', (l) => l.map((e) => e.dataset.check));
+    check('médias lourds : non signalés à la publication quand le réglage est coupé (ajouts du mode simple annulés)',
+      gone && groups.length === 3 && !groups.includes('heavy-image'), groups.join(','));
+    await p.keyboard.press('Escape');
+    await p.click('.view-tab--icon');
+    await p.waitForSelector('.settings-classes');
+    const off = await p.$eval('.settings-classes', (e) => !e.checked) && await p.$eval('.settings-heavy', (e) => !e.checked);
+    if (shots) await p.screenshot({ path: `${shots}/reglages-classes.png` });
+    await p.locator('.settings-classes').evaluate((e) => e.click());
+    await p.click('.view-tab[data-view="view-editor"]');
+    // Regroupement proposé seulement si le site a des classes de mêmes valeurs.
+    const ask = await p.waitForSelector('.overlay', { timeout: 5000 }).then(() => true).catch(() => false);
+    const tab = await p.evaluate(() => getComputedStyle(document.querySelector('.dock-tab[data-panel="classes"], [data-panel-item="classes"]') || document.body).display !== 'none');
+    if (ask) await p.keyboard.press('Escape');
+    check('réglages de Revel : classes et médias lourds coupés ; classes activées, panneau Classes de retour', off && tab, `proposition : ${ask}`);
+    await p.close();
+  }
   // Import (étape 7), une boîte pour toutes les sources : dossier de pages HTML examiné puis
   // importé (bilan dans la boîte) ; export Webflow et contenus de son CMS (CSV ou API) ; site
   // lu depuis un lien (avancement, annulation) ; dépôt Git copié (site à construire signalé,
@@ -793,7 +853,25 @@ try {
       await page.selectOption(`${STY} .navbar-settings [data-row="navbar-collapse"] select`, 'tablet');
       await toolIs(id, (e) => e.getAttribute('data-revel-collapse') === 'tablet', 'repli sur tablette'); steps++;
       const toggle = await inTool(id, (e) => { const b = e.querySelector('[data-revel-part="toggle"]'); return !!b.querySelector('svg[data-icon="menu"]') && !!b.getAttribute('aria-label') && !b.textContent.trim(); });
+      // Menu montré ouvert dans le canevas, sans rien écrire dans le site.
+      await page.click(`${STY} .navbar-settings [data-row="navbar-open"] .switch`);
+      await toolIs(id, (e) => e.classList.contains('is-open'), 'menu montré ouvert');
+      await page.click(`${STY} .navbar-settings [data-row="navbar-open"] .switch`);
+      await toolIs(id, (e) => !e.classList.contains('is-open'), 'menu refermé');
       check('barre de navigation : marque réglée au panneau, menu replié sur tablette, bouton du menu en icône', noText && toggle);
+      await undo(steps);
+    }
+    // Filtres de liste : boutons listés (texte, valeur), ordre.
+    {
+      const id = await insert('insert-filters', '[data-revel-filters]');
+      await page.waitForSelector(`${STY} .parts-list[data-list="filters-buttons"] .parts-row >> nth=2`);
+      let steps = 1;
+      await rename(`${STY} .parts-list[data-list="filters-buttons"] .parts-row >> nth=1 >> .parts-extra`, 'films');
+      await toolIs(id, (e) => e.querySelectorAll('[data-revel-filter]')[1].getAttribute('data-revel-filter') === 'films', 'valeur du filtre'); steps++;
+      await page.hover(`${STY} .parts-list[data-list="filters-buttons"] .parts-row >> nth=1`);
+      await page.click(`${STY} .parts-list[data-list="filters-buttons"] .parts-row >> nth=1 >> .items-actions .icon-btn >> nth=1`);
+      await toolIs(id, (e) => e.querySelectorAll('[data-revel-filter]')[2].getAttribute('data-revel-filter') === 'films', 'filtre déplacé'); steps++;
+      check('filtres de liste : valeur réglée dans la liste, bouton déplacé', true);
       await undo(steps);
     }
     // Lecteur vidéo : couverture, icône et nom du bouton réglés au panneau.
@@ -806,7 +884,8 @@ try {
       const rows = await page.$$eval(`${STY} .player-settings .style-row`, (l) => l.map((r) => r.dataset.row).join(','));
       await rename(`${STY} .player-settings [data-row="player-label"] input`, 'Voir le film');
       const f2 = await waitFrame(() => !!document.querySelector('[data-revel-base="video-player"] [aria-label="Voir le film"]'), 'nom du bouton de lecture');
-      check('lecteur vidéo : couverture, icône et nom du bouton au panneau', !!f2 && rows === 'player-cover,player-icon,player-label', rows);
+      const cover = (await page.$(`${STY} .insp-group[data-role="widget-image"]`)) !== null;
+      check('lecteur vidéo : couverture, icône et nom du bouton au panneau', !!f2 && cover && rows === 'player-icon,player-label', rows);
       await undo(3);
     }
   }
@@ -1573,10 +1652,16 @@ try {
       {
         await frame.locator('[data-revel-tabs] [data-revel-tab]').first().click();
         await page.click('.dock-tab[data-panel="styles"]');
-        await page.waitForSelector('.styles .widget-decompose');
+        await page.waitForSelector('.styles .style-layerbar-name');
         const rootPick = await page.$eval('.editor-status .node-crumb.is-on', (e) => e.dataset.tech);
         const closedRow = await page.$eval('.styles .style-layerbar-name', (e) => e.textContent.trim());
-        await page.click('.styles .widget-decompose');
+        // « Décomposer » : au clic droit sur la ligne des calques, plus dans le panneau Styles (D-177).
+        const noButton = (await page.$('.styles .widget-decompose')) === null;
+        const classesLabel = (await page.textContent('.styles .style-target-label')).trim();
+        await page.click('.dock-tab[data-panel="layers"]');
+        await page.click('.layers .layer.is-selected', { button: 'right' });
+        await page.click('.ctx-menu .menu-item:has-text("Décomposer")');
+        check('panneau Styles : pas de bouton « Décomposer », champ des classes nommé', noButton && classesLabel === 'Classes', classesLabel);
         const opened = await untilE(async () => (await frame.locator('[data-revel-tabs][data-revel-widget]').count()) === 0
           && (await frame.locator('[data-revel-tabs]').count()) === 1);
         check('élément fermé : clic sur une partie = l\'élément entier (Onglets), Décomposer',

@@ -2299,3 +2299,91 @@ onglets, accordéon, barre de navigation, textes nommés.**
 - En suspens : montrer le menu ouvert dans le canevas (Webflow : « Open menu : Show ») ; filtres de liste :
   ordre des boutons.
 
+**D-177 — 17/11/2026 — prise (demandes de l'utilisateur : « continue sur TOUS les outils qui n'ont pas encore
+été revus », « retire le bouton Décomposer du panneau style », « rajoute un petit Classes au-dessus du champ »,
+règles de construction du MCP « comme un professionnel du métier »).** **Revue des outils restants, panneau
+Styles allégé, règles du MCP.**
+- **Panneau Styles** : plus de bouton « Décomposer » (il reste au clic droit, dans les calques et le canevas) ;
+  le champ des classes porte un libellé « Classes ».
+- **Défilement** : les éléments ajoutés sont des images vides (icône d'image du canevas), plus de texte
+  « Élément 1 ». **Filtres de liste** : boutons dans la liste commune des parties (texte, valeur, ordre).
+  **Bandeau cookies** : textes des boutons nommés « Accepter » et « Refuser ». **Barre de navigation** :
+  « Montrer le menu » ouvre le menu dans le canevas le temps du réglage (message `tool-preview` du canevas,
+  rien n'est écrit dans le site). **Blocs « Formulaire » et « Panier »** : les réglages du formulaire et du
+  panier sont montrés sur le bloc. **Code intégré** : nommé dans les calques.
+- Outils relus sans changement de réglages (panneau jugé complet face à Webflow et Framer) : barre de
+  progression (ce qu'elle suit ; épaisseur et couleur par Taille et Couleur du texte), sommaire (niveaux de
+  titres, zone), horloge, toile de pixels, Lottie, modèle 3D, liste de collection, vidéo, grille, colonnes,
+  bouton « Ajouter au panier », interrupteur.
+- **Règles du MCP** (`crates/revel-mcp/src/tools.rs`, `INSTRUCTIONS`) : partie « Work like a professional web
+  designer » (ordre de travail : variables du site, composants pour tout ce qui se répète, CMS pour les
+  contenus qui ont leurs pages ou servent sur plusieurs pages, outils de Revel jamais refaits à la main,
+  calques propres, points de rupture, accessibilité, vérification finale) ; propriété « Contenu » des
+  composants et réglages des outils (carrousel, accordéon, onglets, barre de navigation) décrits.
+- En suspens, à décider par l'utilisateur : appliquer ces règles à l'import (variables, composants et classes
+  détectés automatiquement) ; mode simple sans classes visibles (comme Framer) avec un réglage pour les montrer.
+
+
+**D-178 — 17/11/2026 — prise (demandes de l'utilisateur : « on passe en mode simple par défaut, et activer les
+classes dans les settings », « re-analyse un site sans classes pour les ajouter de façon logique », « pour
+l'import, ajoute les variables, composants, couleurs et taille de site », « même incertain il est préférable
+d'utiliser un outil de Revel facilement modifiable », « ajoute le rework de l'import dans la 0.7.8 », « un
+setting pour désactiver le warning de publication quand un media dépasse 20 MB »).** **Mode simple, import
+remis en forme, médias lourds.**
+- **Mode simple par défaut** (réglages de Revel › Général › « Classes », coupé) : le champ des classes, le
+  compteur d'éléments et le panneau « Classes » ne sont pas montrés. Le modèle ne change pas (une règle par
+  classe) ; un élément réglé qui partage toutes ses classes avec d'autres reçoit une classe à lui (les autres ne
+  bougent pas) ; un élément seul sur ses classes les garde. Pourquoi : les classes en double venaient du réglage
+  d'éléments qui partageaient une classe sans que l'utilisateur le voie ; Framer ne montre pas de classes.
+- **Classes activées** : à l'activation du réglage, le site ouvert (et ceux ouverts ensuite dans la session)
+  reçoit une fois la proposition de regrouper les classes de mêmes valeurs (`revel_edit::classes::organize` :
+  une seule classe gardée, renommée sans numéro quand le nom est libre) ; le panneau Classes garde le bouton
+  « Regrouper » avec le nombre de classes concernées. Jamais proposé à la simple ouverture d'un site.
+- **Import remis en forme** (`revel_import::refine`, appelé par `rebuild_for_ui` après la mise à plat des
+  styles, pour tous les imports ; commande `revel refine <dossier>` pour un site déjà importé) :
+  1. *Outils reconnus* : accordéon (`details` qui se suivent, blocs en-tête + panneau nommés `accordion`,
+     `faq`…, `aria-expanded`, listes `dl`), onglets (rôles `tab` et `tabpanel`, composants de Webflow et de
+     Bootstrap, noms `tabs`), carrousel (Swiper, Slick, Splide, Glide, Flickity, Owl, Embla, Keen, Webflow,
+     noms `carousel`/`slider`, piste `scroll-snap-type` ou `overflow-x` sans nom), barre de navigation
+     (`header`, `nav` ou bloc nommé avec marque, liens et bouton de menu). L'outil est celui du panneau
+     « Ajouter » (même forme), avec le contenu d'origine (textes, liens, diapositives, panneaux et leurs
+     classes). L'outil garde l'allure du site : classes de la racine, des volets, des en-têtes, des onglets, de
+     leur liste, des panneaux, du menu, de ses liens et du bouton de menu gardées ; attribut `data-revel-own`
+     sur la racine, qui coupe l'allure propre de Revel (`toolcss` : règles `:not([data-revel-own])`, bordures,
+     remplissages, graisses) et laisse ses règles de fonctionnement. Ce que le site faisait lui-même par ses
+     styles est retiré de la feuille, l'outil s'en charge : état caché des panneaux (`display: none`,
+     `max-height: 0`…), `display` du menu et du bouton de menu ; l'allure du menu ouvert du site
+     (`.menu.open`) devient celle du menu replié ; la classe d'état de l'onglet choisi est renommée
+     `is-active` (posée par l'outil). Repli du menu : le plus petit de ceux de l'outil qui couvre celui du
+     site. Classes des bibliothèques de carrousel retirées ; flèches, points et icônes sont ceux de Revel.
+     Garde-fou : rien n'est refait si du contenu ne serait pas repris (texte ou média hors des parties, sous-
+     menus) ; la construction est laissée et nommée dans le bilan. `revel import --no-tools`, `revel refine
+     --no-tools` ou `REVEL_NO_TOOLS=1` : étape passée.
+  2. *Classes regroupées* (même fonction que le bouton « Regrouper »).
+  3. *Composants* : éléments de même forme (balises, classes, attributs) répétés au moins trois fois, ou deux
+     fois à partir de huit éléments ; ce qui change devient une propriété (texte, lien, image, autres attributs
+     en texte) avec la valeur de chaque utilisation ; une liste d'éléments répétés n'est pas un composant, ses
+     éléments le sont ; un bloc répété deux fois ne compte que sur deux pages ; douze composants au plus (ceux
+     qui retirent le plus de répétitions), un bloc avant ses parties ; pas de composant dans un composant ni
+     dans un outil pour l'instant. Passe sautée si le site a déjà des composants (Eleventy, Framer).
+  4. *Variables du site* : couleurs employées au moins deux fois (seize au plus) écrites dans `:root` et lues
+     par `var()`, nommées par leur rôle (`--texte`, `--fond` : couleurs de `body`) ou leur teinte (`--bleu`,
+     `--gris-clair`) ; tailles de texte employées au moins trois fois (`--texte-18`, `--texte-fluide-48`) ;
+     largeur maximale la plus employée (`--largeur-site`). Une couleur déjà écrite dans `:root` est reprise.
+  Les passes 2 à 4 ne changent pas le rendu : page produite identique avant et après (essais), styles calculés
+  comparés sur le site de référence dans la CI (étape « Import HTML statique », `revel refine --no-tools`).
+  Bilan ajouté à celui de l'import.
+- **Regroupement des classes, correction** : deux classes de mêmes valeurs ne sont regroupées que si leurs
+  règles sont du même côté (avant ou après) de chaque autre classe des mêmes éléments qui règle une même
+  famille de propriétés (`classes::RuleOrder`). Sans cela le regroupement changeait la règle qui l'emporte
+  (constaté sur le site de référence : un en-tête passait de `block` à `flex`).
+- **Médias lourds** (réglages de Revel › Général › « Signaler les médias lourds », activé par défaut) : coupé,
+  le contrôle « images de plus de 1 Mo » n'est plus fait avant la publication (ni montré, ni compté dans les
+  points qui arrêtent la publication). Le code n'a pas de seuil à 20 Mo ; la limite de taille par fichier d'un
+  hébergeur (25 Mio Cloudflare Pages, 100 Mio GitHub Pages) reste bloquante, le fichier serait refusé.
+- En suspens : case « Refaire avec les outils de Revel » dans la fenêtre d'import (aujourd'hui toujours fait
+  dans l'interface) ; composants imbriqués ; collections du CMS déduites des listes de cartes ; espacements en
+  variables ; éléments facultatifs d'un composant (propriété « affiché ou masqué ») pour réunir les cartes
+  de formes voisines ; scripts du site qui visaient une construction refaite (une erreur de script peut
+  arrêter le reste du script : à vérifier après import) ; **templates** :
+  ils s'appuient sur les classes visibles, à revoir avec le mode simple (tâche du rework des templates).

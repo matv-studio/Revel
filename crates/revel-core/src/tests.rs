@@ -2655,6 +2655,135 @@ fn depot_git_de_pages_html_importe() {
     assert!(css.contains("color: red"), "{css}");
 }
 
+/// Import remis en forme (D-178), comme depuis l'interface : accordéon, onglets, carrousel et
+/// barre de navigation refaits avec les outils de Revel, cartes devenues un composant, couleurs
+/// et tailles devenues des variables du site ; le site se construit et garde son contenu.
+#[test]
+fn import_remis_en_forme() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let src = d.path().join("atelier");
+    std::fs::create_dir_all(&src).unwrap();
+    let card = |n: u32, t: &str| {
+        format!(
+            r#"<article class="card"><img src="/img/p{n}.jpg" alt="{t}"><div class="card__body"><h3 class="card__title">{t}</h3><a class="card__link" href="/projets/p{n}/">Voir</a></div></article>"#
+        )
+    };
+    let page = |body: &str| {
+        format!(
+            r##"<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Atelier</title><link rel="stylesheet" href="/style.css"></head><body>
+<header class="site-header"><div class="site-header__inner"><a class="logo" href="/">Atelier Nord</a>
+<nav><ul class="nav-links"><li><a href="/offres.html">Offres</a></li><li><a href="/#projets">Projets</a></li></ul></nav>
+<button class="burger" aria-label="Ouvrir le menu"><span></span><span></span><span></span></button></div></header>
+<main>{body}</main></body></html>"##
+        )
+    };
+    std::fs::write(
+        src.join("index.html"),
+        page(&format!(
+            r##"<section class="cards">{}{}{}</section>
+<div class="tabs"><div class="tabs__list" role="tablist"><button class="tabs__btn" role="tab" aria-selected="true">Conseil</button><button class="tabs__btn" role="tab">Design</button></div>
+<div class="tabs__panel" role="tabpanel"><p>Cadrage du projet.</p></div><div class="tabs__panel" role="tabpanel" hidden><p>Maquettes testées.</p></div></div>
+<div class="swiper"><div class="swiper-wrapper"><div class="swiper-slide"><blockquote class="quote">Parfait.</blockquote></div><div class="swiper-slide"><blockquote class="quote">Rapide.</blockquote></div></div><button class="swiper-button-next" aria-label="Suivant"></button></div>
+<div class="faq"><div class="faq-item"><button class="faq-question" aria-expanded="false">Combien de temps ?</button><div class="faq-answer"><p>Six semaines.</p></div></div>
+<div class="faq-item"><button class="faq-question" aria-expanded="false">À distance ?</button><div class="faq-answer"><p>Oui.</p></div></div></div>"##,
+            card(1, "Maison Brune"),
+            card(2, "Polaris"),
+            card(3, "Kōdo")
+        )),
+    )
+    .unwrap();
+    std::fs::write(
+        src.join("offres.html"),
+        page(r#"<h1>Offres</h1><details><summary>Tarifs</summary><p>Sur devis.</p></details><details><summary>Délais</summary><p>Dix jours.</p></details>"#),
+    )
+    .unwrap();
+    std::fs::write(
+        src.join("style.css"),
+        "body { color: #1c1b19; background: #faf7f2; }\n.site-header__inner { display: flex; padding: 14px 24px; }\n\
+.nav-links { display: flex; gap: 28px; }\n.burger { display: none; }\n\
+@media (max-width: 860px) { .burger { display: block; } .nav-links { display: none; } .nav-links.open { display: flex; background: #faf7f2; } }\n\
+.card { border: 1px solid #e3ddd2; }\n.card__title { font-size: 20px; color: #b4532a; }\n.card__link { color: #b4532a; font-size: 15px; }\n\
+.tabs__btn { font-size: 15px; }\n.tabs__panel { border: 1px solid #e3ddd2; font-size: 15px; }\n\
+.faq-question { font-size: 20px; }\n.faq-answer { display: none; font-size: 15px; }\n.quote { font-size: 20px; }\n",
+    )
+    .unwrap();
+    let r = c
+        .import_site(
+            &src,
+            &revel_protocol::ImportOptions {
+                lang: "fr".into(),
+                ..Default::default()
+            },
+            |_| {},
+        )
+        .unwrap();
+    let bilan = r.warnings.join("\n");
+    assert!(bilan.contains("site remis en forme"), "{bilan}");
+    for mot in [
+        "accordéons",
+        "onglets",
+        "carrousel",
+        "barre de navigation",
+        "Card ×3",
+    ] {
+        assert!(bilan.contains(mot), "{mot} : {bilan}");
+    }
+    let doc = c.edit_open(&src).unwrap();
+    let json = serde_json::to_string(&doc.site).unwrap();
+    for base in ["navbar", "tabs", "carousel", "accordion-group"] {
+        assert!(
+            json.contains(&format!(r#""name":"data-revel-base","value":"{base}""#)),
+            "{base}"
+        );
+    }
+    assert_eq!(doc.site.components.len(), 1);
+    assert_eq!(doc.site.components[0].id, "card");
+    assert!(revel_edit::editable::audit(&doc.site).is_empty());
+    let out = d.path().join("out");
+    revel_project::Project::open(&src)
+        .unwrap()
+        .build(
+            &out,
+            &revel_project::BuildOptions {
+                environment: "production".into(),
+                images: false,
+                progress: None,
+            },
+        )
+        .unwrap();
+    let index = std::fs::read_to_string(out.join("index.html")).unwrap();
+    for texte in [
+        "Maison Brune",
+        "Kōdo",
+        "Cadrage du projet.",
+        "Maquettes testées.",
+        "Rapide.",
+        "Six semaines.",
+        "Atelier Nord",
+    ] {
+        assert!(index.contains(texte), "{texte}\n{index}");
+    }
+    assert!(
+        index.contains("data-revel-tab") && index.contains("data-revel-track"),
+        "{index}"
+    );
+    let offres = std::fs::read_to_string(out.join("offres.html")).unwrap();
+    assert!(
+        offres.contains("<details") && offres.contains("Dix jours."),
+        "{offres}"
+    );
+    let css = std::fs::read_to_string(out.join("style.css"))
+        .or_else(|_| std::fs::read_to_string(out.join("css/site.css")))
+        .unwrap();
+    assert!(
+        css.contains("--texte:") && css.contains("--fond:") && css.contains("var(--orange)"),
+        "{css}"
+    );
+    // État replié du site retiré : l'outil montre et cache le panneau.
+    assert!(!css.contains("display: none"), "{css}");
+}
+
 /// Copie abandonnée : retirée ; site à construire : signalé, pas importé.
 #[test]
 fn copie_abandonnee_et_site_a_construire() {

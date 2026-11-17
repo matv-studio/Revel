@@ -545,6 +545,26 @@ impl Sx {
             }
             return;
         }
+        // Mode simple (D-178) : combinaison de classes partagée avec un autre élément ; la
+        // valeur va dans une classe propre à l'élément (créée ici).
+        if !self.ui.settings.with_untracked(|s| s.classes)
+            && self.scope.get_untracked().is_none()
+            && let Some((at, node)) = self.ed.selected_node()
+        {
+            let classes = super::classes_of(&node);
+            let sel = self.selector.get_untracked();
+            let own = super::candidates(&classes)
+                .last()
+                .is_some_and(|c| *c == sel)
+                && self.ed.doc.with_untracked(|d| {
+                    d.as_ref()
+                        .is_some_and(|d| super::combination_shared(d, &at, &classes))
+                });
+            if own {
+                self.ed.set_props(self.ui, at, node, list);
+                return;
+            }
+        }
         let cmd = style_command(
             self.rule.get_untracked(),
             self.full_selector_now(),

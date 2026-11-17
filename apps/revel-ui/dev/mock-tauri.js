@@ -3,7 +3,7 @@
 (() => {
   const params = new URLSearchParams(location.hash.slice(1));
   const state = {
-    settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null, ...(params.get("scope") ? { accent_scope: params.get("scope") } : {}), reveal_inserted: !!params.get("reveal") },
+    settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null, ...(params.get("scope") ? { accent_scope: params.get("scope") } : {}), reveal_inserted: !!params.get("reveal"), classes: !params.get("simple"), warn_heavy_media: !params.get("noheavy") },
     // `update=1` : une version plus récente est proposée (Réglages › Mises à jour).
     update: params.get("update") ? { enabled: true, available: { version: "0.7.0", notes: "Version d’essai de la simulation." } } : null,
     recents: params.get("empty") ? [] : [
@@ -475,7 +475,8 @@
         await wait(80);
         // Contrôles (5.4) : `checks=1` : points à vérifier ; publication arrêtée sauf « quand même ».
         if (params.get("checks") && !args.skipChecks) {
-          ch.onmessage({ event: "checks", checks: [
+          // `noheavy=1` : réglage « médias lourds » coupé, le point n'est pas signalé (D-178).
+          const found = [
             { kind: "broken_link", page: "/agence/", target: "/equipe/ancienne-page/", size: 0 },
             { kind: "broken_link", page: "/", target: "/offres/tournage-drone/", size: 0 },
             { kind: "heavy_image", page: "/project/wattr/", target: "/media/projets/wattr-cover.png", size: 3_480_000 },
@@ -483,8 +484,9 @@
             { kind: "missing_alt", page: "/agence/", target: "/media/agence/bureau.jpg", size: 0 },
             { kind: "missing_alt", page: "/agence/", target: "/media/agence/plateau.jpg", size: 0 },
             { kind: "no_title", page: "/mentions-legales/", target: "", size: 0 },
-          ] });
-          if (!args.dryRun) { const f = { key: "error-publish-checks", args: [["count", "7"]] }; ch.onmessage({ event: "failed", ...f }); throw f; }
+          ].filter((c) => !(params.get("noheavy") && c.kind === "heavy_image"));
+          ch.onmessage({ event: "checks", checks: found });
+          if (!args.dryRun) { const f = { key: "error-publish-checks", args: [["count", String(found.length)]] }; ch.onmessage({ event: "failed", ...f }); throw f; }
         }
         if (fail && (!params.get("failon") || params.get("failon") === args.profileId)) { const f = { key: "error-sftp-" + fail, args: [["host", "ftp.cluster000.hosting.ovh.net"], ["detail", "connection refused"]] }; ch.onmessage({ event: "failed", ...f }); throw f; }
         ch.onmessage({ event: "connected", server_key: "x" });

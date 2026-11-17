@@ -374,6 +374,11 @@ pub fn accordion(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
 
 // ------------------------------------------------------------------ barre de navigation
 
+thread_local! {
+    /// Barre de navigation dont le menu est montré ouvert dans le canevas (session en cours).
+    static MENU_SHOWN: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
 /// Barre de navigation : marque (texte ou logo), bouton du menu sur téléphone (icône ou texte).
 pub fn navbar(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let Node::Element {
@@ -508,6 +513,32 @@ pub fn navbar(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
             false,
         )
     });
+    // Menu montré ouvert dans le canevas (comme « Open menu » de Webflow) : le temps du réglage,
+    // sans rien écrire dans le site.
+    let id = at.node.clone();
+    let shown = MENU_SHOWN.with(|m| m.borrow().as_deref() == Some(id.as_str()));
+    let preview = {
+        let id = id.clone();
+        move |on: bool| {
+            ed.post(
+                serde_json::json!({ "type": "tool-preview", "id": id, "cls": "is-open", "on": on }),
+            );
+        }
+    };
+    if shown {
+        preview(true);
+    }
+    {
+        let preview = preview.clone();
+        on_cleanup(move || preview(false));
+    }
+    let open_row = {
+        let id = id.clone();
+        switch_row(ui, "navbar-open", shown, move |on| {
+            MENU_SHOWN.with(|m| *m.borrow_mut() = on.then(|| id.clone()));
+            preview(on);
+        })
+    };
     Some(
         view! {
             <div class="insp-group navbar-settings" data-tool="navbar">
@@ -515,6 +546,7 @@ pub fn navbar(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                 {brand_row}
                 {collapse_row}
                 {toggle_row}
+                {open_row}
             </div>
         }
         .into_any(),
@@ -525,7 +557,7 @@ pub fn navbar(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
 
 /// Parties d'un outil qui portent un texte écrit (hors contenus accueillis) : identifiant,
 /// nature de la partie, balise.
-fn text_parts(n: &Node, root: bool, out: &mut Vec<(String, String, String)>) {
+fn text_parts(n: &Node, root: bool, out: &mut Vec<(String, String, String, String)>) {
     let Node::Element {
         id,
         tag,
@@ -545,7 +577,12 @@ fn text_parts(n: &Node, root: bool, out: &mut Vec<(String, String, String)>) {
             .iter()
             .any(|c| matches!(c, Node::Text { text } if !text.trim().is_empty()))
     {
-        out.push((id.clone(), part.clone(), tag.to_ascii_lowercase()));
+        out.push((
+            id.clone(),
+            part.clone(),
+            tag.to_ascii_lowercase(),
+            attr_of(attrs, "data-revel-consent-choice").unwrap_or_default(),
+        ));
     }
     for c in children {
         text_parts(c, false, out);
@@ -576,8 +613,10 @@ pub fn texts(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     }
     let rows = parts
         .into_iter()
-        .map(|(id, part, tag)| {
+        .map(|(id, part, tag, choice)| {
             let key = match (part.as_str(), tag.as_str()) {
+                _ if choice == "accept" => "tooltext-accept",
+                _ if choice == "refuse" => "tooltext-refuse",
                 ("label", _) | (_, "label") => "tooltext-label",
                 ("title", _) | ("summary", _) => "tooltext-title",
                 ("state", _) => "tooltext-state",
@@ -701,7 +740,7 @@ fn attr_holder(n: &Node, name: &str) -> Option<(String, String)> {
     children.iter().find_map(|c| attr_holder(c, name))
 }
 
-/// Lecteur vidéo : image de couverture, icône du bouton de lecture, nom du bouton.
+/// Lecteur vidéo : icône du bouton de lecture, nom du bouton (la couverture est son image).
 pub fn video_player(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     let Node::Element { attrs, .. } = node else {
         return None;
@@ -714,30 +753,6 @@ pub fn video_player(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView>
         owner: owner.get_value(),
         node: id.to_string(),
     };
-    let cover = revel_edit::make::first_image(node).cloned();
-    let cover_row = cover.map(|img| {
-        let has = revel_edit::canvas::literal(&img.src).is_some_and(|s| !s.is_empty());
-        let img = StoredValue::new(img);
-        let pick = move |_| {
-            crate::library::pick_image(ui, crate::library::media_shelf(ed), move |url: String| {
-                let mut i = img.get_value();
-                i.src = revel_edit::canvas::quote(&url);
-                if let Some(id) = i.id.clone() {
-                    ed.apply(ui, Command::SetImage { at: target(&id), image: i }, false);
-                }
-            });
-        };
-        view! {
-            <div class="style-row" data-row="player-cover">
-                <span class="style-label" title=ui.t("player-cover-help")><span class="style-label-text">{ui.t("player-cover")}</span></span>
-                <div class="style-control">
-                    <button type="button" class="btn btn--small player-cover-pick" on:click=pick>
-                        {icons::image()}<span>{ui.t(if has { "items-replace" } else { "navbar-logo-choose" })}</span>
-                    </button>
-                </div>
-            </div>
-        }
-    });
     let picker = RwSignal::new(false);
     let icon_row = svg_of(node).map(|(id, name)| {
         let shown = if name.is_empty() { "lecture".to_string() } else { name.clone() };
@@ -770,11 +785,38 @@ pub fn video_player(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView>
     Some(
         view! {
             <div class="insp-group player-settings" data-tool="video-player">
-                {cover_row}
                 {icon_row}
                 {label_row}
             </div>
         }
         .into_any(),
     )
+}
+
+// ------------------------------------------------------------------ blocs qui portent un outil
+
+/// Premier descendant qui vérifie `test` (pas l'élément lui-même) : identifiant et nœud.
+pub fn inner_tool<'a>(
+    n: &'a Node,
+    test: &dyn Fn(&str, &[Attr]) -> bool,
+) -> Option<(String, &'a Node)> {
+    let Node::Element { children, .. } = n else {
+        return None;
+    };
+    for c in children {
+        if let Node::Element {
+            id: Some(id),
+            tag,
+            attrs,
+            ..
+        } = c
+            && test(tag, attrs)
+        {
+            return Some((id.clone(), c));
+        }
+        if let Some(found) = inner_tool(c, test) {
+            return Some(found);
+        }
+    }
+    None
 }

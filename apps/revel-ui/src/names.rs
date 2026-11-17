@@ -156,6 +156,7 @@ const BASE_NAMES: &[(&str, &str)] = &[
     ("accordion", "insert-accordion"),
     ("accordion-group", "insert-accordion"),
     ("clock", "insert-clock"),
+    ("embed", "insert-embed"),
     ("toc", "insert-toc"),
     ("switch", "insert-switch"),
     ("consent", "insert-consent"),

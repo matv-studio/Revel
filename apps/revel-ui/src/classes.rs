@@ -249,6 +249,16 @@ pub fn Classes() -> impl IntoView {
             .with(|d| d.as_ref().map(|d| revel_edit::styleaudit::audit(d).len()))
             .unwrap_or(0)
     });
+    // Classes de mêmes valeurs (D-178) : ce que « Regrouper » réunit.
+    let same = Memo::new(move |_| {
+        ed.doc
+            .with(|d| {
+                d.as_ref()
+                    .and_then(revel_edit::classes::organize)
+                    .map(|(_, n)| n)
+            })
+            .unwrap_or(0)
+    });
     let open = RwSignal::new(None::<String>);
     let all = Memo::new(move |_| {
         ed.doc
@@ -385,6 +395,11 @@ pub fn Classes() -> impl IntoView {
                     class:is-on=move || unused_only.get() aria-pressed=move || unused_only.get().to_string()
                     title=ui.t("classes-unused-filter") aria-label=ui.t("classes-unused-filter")
                     on:click=move |_| unused_only.update(|v| *v = !*v)>{icons::filter()}</button>
+                <button class="icon-btn icon-btn--small" data-action="organize"
+                    title=move || ui.tx("classes-organize", &[("count", same.get().to_string())])
+                    aria-label=move || ui.tx("classes-organize", &[("count", same.get().to_string())])
+                    disabled=move || same.get() == 0
+                    on:click=move |_| organize(ui, ed)>{icons::collapse()}</button>
                 <button class="icon-btn icon-btn--small" data-action="flatten"
                     title=move || ui.tx("classes-flatten", &[("count", written.get().to_string())])
                     aria-label=move || ui.tx("classes-flatten", &[("count", written.get().to_string())])
@@ -409,4 +424,54 @@ mod tests {
         assert_eq!(suggest_name(".Bouton Principal "), "bouton-principal");
         assert_eq!(suggest_name("Élément_ok"), "element_ok");
     }
+}
+
+/// Classes de mêmes valeurs réunies en une (D-178), en une modification annulable.
+pub fn organize(ui: Ui, ed: Ed) {
+    let cmd = ed
+        .doc
+        .with_untracked(|d| d.as_ref().and_then(revel_edit::classes::organize));
+    if let Some((cmd, _)) = cmd {
+        ed.apply(ui, cmd, false);
+    }
+}
+
+thread_local! {
+    /// Sites pour lesquels le regroupement a déjà été proposé (session en cours).
+    static ASKED: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Classes activées pendant la session : le regroupement n'est proposé qu'après ce geste
+    /// (jamais à la simple ouverture d'un site).
+    static ARMED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Le réglage « Classes » vient d'être activé : les sites ouverts ensuite (et celui ouvert)
+/// reçoivent la proposition de regroupement.
+pub fn arm() {
+    ARMED.with(|a| a.set(true));
+}
+
+/// Classes activées (réglage) sur un site construit sans elles : propose une fois de regrouper
+/// les classes de mêmes valeurs (D-178).
+pub fn offer_organize(ui: Ui, ed: Ed) {
+    if !ARMED.with(std::cell::Cell::get) || !ui.settings.with_untracked(|s| s.classes) {
+        return;
+    }
+    let Some(n) = ed.doc.with_untracked(|d| {
+        d.as_ref()
+            .and_then(revel_edit::classes::organize)
+            .map(|(_, n)| n)
+    }) else {
+        return;
+    };
+    let path = ed.path.get_value();
+    if ASKED.with(|a| a.borrow().contains(&path)) {
+        return;
+    }
+    ASKED.with(|a| a.borrow_mut().push(path));
+    ui.ask.set(Some(crate::dialog::Ask::confirm(
+        ui.now("classes-organize-ask", &[("count", n.to_string())]),
+        None,
+        ui.now("classes-organize-do", &[]),
+        move || organize(ui, ed),
+    )));
 }

@@ -1035,6 +1035,14 @@ pub struct AppSettings {
     /// Élément ajouté montré dans les calques : le panneau « Calques » passe devant (D-175).
     #[serde(default = "yes")]
     pub reveal_inserted: bool,
+    /// Classes montrées (champ des classes du panneau Styles, panneau « Classes ») ; sans elles
+    /// (par défaut, D-178), chaque élément se règle seul, comme dans Framer.
+    #[serde(default)]
+    pub classes: bool,
+    /// Publication : fichiers lourds signalés (images et médias volumineux, limite par fichier
+    /// de l'hébergeur) ; désactivable (D-178).
+    #[serde(default = "yes")]
+    pub warn_heavy_media: bool,
 }
 
 fn default_catalogs() -> Vec<String> {
@@ -1076,6 +1084,8 @@ impl Default for AppSettings {
             variant_link_end: default_link_end(),
             template_catalogs: default_catalogs(),
             reveal_inserted: true,
+            classes: false,
+            warn_heavy_media: true,
         }
     }
 }

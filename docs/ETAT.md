@@ -6,8 +6,38 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 17/11/2026 (version 0.7.8 en préparation : D-174 à D-176 ; pas publiée tant que tous les outils ne sont pas revus). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 17/11/2026 (version 0.7.8 en préparation : D-174 à D-178). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## Travail du 17/11/2026 (matin) : D-177 et D-178 (mode simple, import remis en forme, médias lourds)
+
+- Demandes (17/11) : revue de tous les outils avant la 0.7.8, bouton « Décomposer » retiré du panneau Styles,
+  libellé « Classes », règles du MCP « webdesigner professionnel », mode simple par défaut, classes activées
+  dans les réglages, import remis en forme dans la 0.7.8, réglage pour ne plus signaler les médias lourds.
+- Fait : D-177 (outils restants, panneau Styles, règles du MCP) et D-178 (voir `docs/DECISIONS.md`).
+  - Réglages de Revel › Général : « Classes » (coupé par défaut, `AppSettings.classes`), « Signaler les médias
+    lourds » (`warn_heavy_media`, activé par défaut ; coupé : contrôle « images de plus de 1 Mo » non fait,
+    filtré dans `Core::deploy`). Pas de seuil à 20 Mo dans le code.
+  - Mode simple : `html.classes-off` cache le champ des classes, le compteur, le panneau Classes
+    (`inspector.css`) ; `Ed::set_props` et `styles/ctx.rs` : élément qui partage toutes ses classes → classe à
+    lui (`styles::combination_shared`).
+  - Regroupement des classes : `revel_edit::classes::organize`, bouton « Regrouper » du panneau Classes,
+    proposé une fois quand le réglage vient d'être activé (`classes::arm`, jamais à l'ouverture d'un site).
+  - Import : `crates/revel-import/src/refine/` (`tools.rs`, `components.rs`, `variables.rs`, `tests.rs`),
+    appelé par `revel_core::rebuild_for_ui` après la mise à plat ; `revel refine <dossier> [--no-tools]
+    [--dry-run]`, `revel import --no-tools`, `REVEL_NO_TOOLS=1`. Sauté avec `REVEL_NO_FLATTEN` (étape
+    « Import HTML statique » de la CI : structure comparée avant).
+- Méthode : les modèles des outils viennent de `Preset::node` (même forme que le panneau « Ajouter ») ; le
+  contenu d'origine est déplacé dedans. Garde-fou « poids du contenu » (`tools::weight` : caractères de texte
+  et médias) : la construction n'est refaite que si le poids des parties reprises égale celui de la racine.
+- Pièges : un texte lu d'une propriété écrit les guillemets en entité (`&quot;`), le texte écrit dans la page
+  non : comparer les pages après remplacement ; la piste d'un carrousel sans nom est la racine elle-même
+  (pas de contrôle « hors de la piste ») ; `std::env::set_var` est interdit (`unsafe_code = forbid`) : option
+  passée en paramètre (`rebuild_for_ui_with`).
+- Essais : `cargo test -p revel-import refine` (11 essais) ; essais de l'éditeur : bloc « Mode simple (D-178) »
+  (page à part, `simple=1&checks=1&noheavy=1`), au début du script.
+- En suspens : voir D-178 (case dans la fenêtre d'import, composants imbriqués, collections déduites,
+  templates à revoir avec le mode simple).
 
 ## Travail du 17/11/2026 (nuit) : outils restants revus (D-176)
 

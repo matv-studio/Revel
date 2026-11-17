@@ -392,6 +392,10 @@ fn apply_settings(s: &AppSettings) {
         _ => root.remove_attribute("data-theme"),
     };
     let _ = root.set_attribute("lang", &s.lang);
+    // Mode simple (D-178) : champ et panneau des classes masqués.
+    let _ = root
+        .class_list()
+        .toggle_with_force("classes-off", !s.classes);
     // Étendue de l'accent : seulement avec une couleur d'accent (`standard` : règles de base).
     let _ = match (s.accent.is_some(), s.accent_scope.as_str()) {
         (true, scope @ ("minimal" | "full")) => root.set_attribute("data-accent-scope", scope),

@@ -248,6 +248,16 @@ jobs:
             --save captures-ecarts \
             --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/project/wattr/ \
             | tee -a "$GITHUB_STEP_SUMMARY"
+          # Site remis en forme (D-178) : composants, variables du site et classes regroupées ne
+          # changent pas le rendu (outils non refaits ici : ils prennent l'allure de Revel).
+          cp -r import-html import-html-forme
+          $REVEL refine import-html-forme --no-tools | tee -a "$GITHUB_STEP_SUMMARY"
+          $REVEL build import-html-forme --out import-html-forme-out --no-images
+          # Sans la page d'un projet avec vidéo : la marge de sa figure dépend du moment où la
+          # vidéo donne sa taille (écart d'un passage à l'autre, sur le même site).
+          node tools/compare-styles.mjs import-html-out import-html-forme-out --jobs 4 --widths 1280,375 --ignore-vars \
+            --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/ \
+            | tee -a "$GITHUB_STEP_SUMMARY"
       # Import WordPress (7.6) : fichier d'export de référence des thèmes WordPress (articles,
       # pages, menus, codes courts, médias de WordPress.com), sans téléchargement des images.
       - name: Import WordPress

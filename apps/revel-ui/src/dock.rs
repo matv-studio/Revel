@@ -1268,7 +1268,7 @@ pub fn PanelsMenu() -> impl IntoView {
                 {PanelId::ALL.into_iter().map(|p| {
                     let open = move || dock.layout.with(|l| l.group_of(p).is_some());
                     view! {
-                        <button class="menu-item menu-item--check" class:is-on=open role="menuitemcheckbox"
+                        <button class="menu-item menu-item--check" class:is-on=open role="menuitemcheckbox" data-panel-item=p.name()
                             aria-checked=move || open().to_string()
                             on:click=move |_| dock.layout.update(|l| if l.group_of(p).is_some() { l.close(p) } else { l.open(p) })>
                             <span class="menu-check">{move || open().then(icons::check)}</span>

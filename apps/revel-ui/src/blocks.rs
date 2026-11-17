@@ -157,6 +157,44 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         if let Some(v) = form_settings(ui, ed, &at, &lower, attrs) {
             parts.push(v);
         }
+        // Bloc « Formulaire » ou « Panier » (D-177) : les réglages de l'outil qu'il porte sont
+        // montrés sur le bloc, sans avoir à chercher l'élément dans les calques.
+        let block = attr(attrs, "class")
+            .and_then(|a| a.value.clone())
+            .unwrap_or_default();
+        if block.split_whitespace().any(|c| c == "bloc-formulaire")
+            && let Some((id, Node::Element { attrs: fa, .. })) =
+                crate::tools::inner_tool(&node, &|t, a| {
+                    t == "form" && attr(a, "data-revel-form").is_some()
+                })
+            && let Some(v) = form_settings(
+                ui,
+                ed,
+                &Target {
+                    owner: at.owner.clone(),
+                    node: id,
+                },
+                "form",
+                fa,
+            )
+        {
+            parts.push(v);
+        }
+        if block.split_whitespace().any(|c| c == "bloc-panier")
+            && let Some((id, Node::Element { attrs: ca, .. })) =
+                crate::tools::inner_tool(&node, &|_, a| attr(a, "data-revel-cart").is_some())
+            && let Some(v) = cart_settings(
+                ui,
+                ed,
+                &Target {
+                    owner: at.owner.clone(),
+                    node: id,
+                },
+                ca,
+            )
+        {
+            parts.push(v);
+        }
         // Panier (D-129) : monnaie du panier ; produit et prix d'un bouton d'achat ; compteur.
         if let Some(v) = cart_settings(ui, ed, &at, attrs) {
             parts.push(v);
@@ -325,10 +363,15 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         // Images de ses parties (couverture d'un lecteur) ; celles d'une image révélée ont
         // leurs propres réglages.
         let reveal = matches!(&node, Node::Element { attrs, .. } if attr(attrs, "data-revel-reveal").is_some());
-        if !reveal && let Some(v) = crate::widgets::images_settings(ui, ed, &at, &node) {
+        // Carrousel et défilement : leurs images sont dans leur liste (un clic choisit l'image).
+        let listed = matches!(&node, Node::Element { attrs, .. }
+            if attr(attrs, "data-revel-slider").is_some() || attr(attrs, "data-revel-loop").is_some());
+        if !reveal
+            && !listed
+            && let Some(v) = crate::widgets::images_settings(ui, ed, &at, &node)
+        {
             parts.push(v);
         }
-        parts.push(crate::widgets::decompose_button(ui, ed, &at));
     }
     (!parts.is_empty()).then(|| parts.into_iter().collect_view().into_any())
 }

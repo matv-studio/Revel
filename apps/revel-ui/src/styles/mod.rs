@@ -733,6 +733,40 @@ pub(crate) fn tag_label_key(tag: &str) -> &'static str {
 }
 
 /// Sélecteurs proposés : chaque classe, puis la combinaison de toutes (classe combinée).
+/// Mode simple (D-178) : la combinaison de classes de l'élément `at` est aussi portée par un
+/// autre élément du site (une règle écrite pour elle les toucherait tous les deux).
+pub(crate) fn combination_shared(
+    d: &revel_model::Site,
+    at: &revel_edit::Target,
+    classes: &[String],
+) -> bool {
+    if classes.is_empty() {
+        return false;
+    }
+    let mut others = 0usize;
+    let mut look = |nodes: &[Node]| {
+        revel_model::ids::walk(nodes, &mut |n| {
+            if revel_model::ids::node_id(n) == Some(at.node.as_str()) {
+                return;
+            }
+            let own = classes_of(n);
+            if classes.iter().all(|c| own.contains(c)) {
+                others += 1;
+            }
+        });
+    };
+    for p in &d.pages {
+        look(&p.body);
+    }
+    for l in &d.layouts {
+        look(&l.body);
+    }
+    for c in &d.components {
+        look(&c.body);
+    }
+    others > 0
+}
+
 pub(crate) fn candidates(classes: &[String]) -> Vec<String> {
     let mut v: Vec<String> = classes.iter().map(|c| format!(".{c}")).collect();
     if classes.len() > 1 {
@@ -988,6 +1022,7 @@ pub fn Styles() -> impl IntoView {
                     <div class="style-target">
                         // Classes de l'élément (pastilles, comme le champ de sélecteur de Webflow) :
                         // clic = classe réglée ; × = retirée de l'élément ; champ = nouvelle classe.
+                        <span class="label style-target-label" title=ui.t("styles-classes-help")>{ui.t("inspector-classes")}</span>
                         <div class="selector-box" role="listbox" aria-label=ui.t("styles-selector")>
                             {move || {
                                 let list = classes.get();
@@ -1068,7 +1103,7 @@ pub fn Styles() -> impl IntoView {
                             <StateMenu sx/>
                             <span class="target-where muted" title=move || format!("{} — {}", sx.full_selector(), bp_full().unwrap_or_default())>
                                 {move || bp_label().unwrap_or_default()}
-                                {move || ed.count.get().filter(|(s, _)| *s == selector.get()).map(|(_, n)| format!(" · {}", ui.tx("styles-count", &[("count", n.to_string())])))}
+                                <span class="target-count">{move || ed.count.get().filter(|(s, _)| *s == selector.get()).map(|(_, n)| format!(" · {}", ui.tx("styles-count", &[("count", n.to_string())])))}</span>
                             </span>
                             // Variante du composant ouvert : styles écrits pour elle.
                             {move || sx.scope.get().map(|(_, _, _, name)| view! {

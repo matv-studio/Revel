@@ -13,7 +13,7 @@ use crate::address::{Owner, Target};
 use crate::command::Command;
 use revel_model::ids::OwnerKind;
 use revel_model::{Node, Site, StyleItem};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Élément qui porte une classe.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -514,6 +514,227 @@ pub fn remove_commands(site: &Site, name: &str) -> Result<Vec<Command>, EditErro
     Ok(out)
 }
 
+/// Classe « simple » : toutes ses règles la visent seule (`.carte`, `.carte:hover`), sans autre
+/// classe ni élément autour. Renvoie sa signature : état, requête média et valeurs de chaque
+/// règle, triés (deux classes de même signature donnent le même rendu).
+fn signature(site: &Site, info: &ClassInfo) -> Option<Vec<(String, String, String)>> {
+    let mut sig = Vec::new();
+    for r in site.style_rules() {
+        let Some(id) = &r.id else { continue };
+        if !info.rules.contains(id) {
+            continue;
+        }
+        let rest = r.selector.strip_prefix(&format!(".{}", info.name))?;
+        if rest.contains([' ', '>', '+', '~', ',', '.']) {
+            return None;
+        }
+        let decls = r
+            .decls
+            .iter()
+            .map(|d| {
+                format!(
+                    "{}:{}{}",
+                    d.prop,
+                    d.value,
+                    if d.important { "!" } else { "" }
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        sig.push((rest.to_string(), r.media.clone().unwrap_or_default(), decls));
+    }
+    sig.sort();
+    (!sig.is_empty()).then_some(sig)
+}
+
+/// Commandes qui remplacent la classe `from` par `into` sur les éléments et retirent ses règles
+/// (les deux classes ont les mêmes valeurs).
+fn merge_commands(site: &Site, from: &ClassInfo, into: &str) -> Result<Vec<Command>, EditError> {
+    let mut out = Vec::new();
+    let swap = |v: &str| {
+        let mut seen: Vec<&str> = Vec::new();
+        let replaced = replace_token(v, &from.name, into, false);
+        // Liste écrite : pas deux fois la même classe.
+        if !replaced.contains('{') {
+            for w in replaced.split_whitespace() {
+                if !seen.contains(&w) {
+                    seen.push(w);
+                }
+            }
+            return seen.join(" ");
+        }
+        replaced
+    };
+    for u in &from.uses {
+        match crate::address::node(site, &u.at)? {
+            Node::Image(img) => {
+                let v = img
+                    .class
+                    .as_deref()
+                    .and_then(crate::canvas::literal)
+                    .unwrap_or_default();
+                let mut image = img.clone();
+                image.class = Some(quoted(&swap(&v)));
+                out.push(Command::SetImage {
+                    at: u.at.clone(),
+                    image,
+                });
+            }
+            Node::Element { attrs, .. } | Node::Use { attrs, .. } => {
+                let v = attrs
+                    .iter()
+                    .find(|a| a.name == "class")
+                    .and_then(|a| a.value.clone())
+                    .unwrap_or_default();
+                out.push(Command::SetAttr {
+                    at: u.at.clone(),
+                    name: "class".into(),
+                    value: Some(swap(&v)),
+                });
+            }
+            _ => {}
+        }
+    }
+    for id in &from.rules {
+        out.push(Command::RemoveRule { rule: id.clone() });
+    }
+    Ok(out)
+}
+
+/// Classes regroupées (D-178) : les classes de mêmes valeurs deviennent une seule classe, nommée
+/// d'après leur nom commun sans numéro (`titre-2`, `titre-5` → `titre`) quand ce nom est libre.
+/// Renvoie la commande (annulable d'un coup) et le nombre de classes retirées ; `None` : rien à
+/// regrouper.
+pub fn organize(site: &Site) -> Option<(Command, usize)> {
+    let all = inventory(site);
+    let mut groups: BTreeMap<Vec<(String, String, String)>, Vec<&ClassInfo>> = BTreeMap::new();
+    for c in &all {
+        if c.uses.is_empty() {
+            continue;
+        }
+        if let Some(sig) = signature(site, c) {
+            groups.entry(sig).or_default().push(c);
+        }
+    }
+    let base_of = |name: &str| {
+        let t = name.trim_end_matches(|c: char| c.is_ascii_digit());
+        if t.len() < name.len() && t.ends_with('-') {
+            t.trim_end_matches('-').to_string()
+        } else {
+            name.to_string()
+        }
+    };
+    let mut taken: Vec<String> = all.iter().map(|c| c.name.clone()).collect();
+    let mut commands = Vec::new();
+    let mut removed = 0;
+    let order = RuleOrder::new(site, &all);
+    for group in groups.values().filter(|g| g.len() > 1) {
+        let keep = group[0];
+        let mut merged = false;
+        for other in &group[1..] {
+            // Rang des règles : regrouper ne doit pas changer laquelle l'emporte sur les autres
+            // classes des mêmes éléments.
+            if !order.same_cascade(site, other, keep) {
+                continue;
+            }
+            commands.extend(merge_commands(site, other, &keep.name).ok()?);
+            taken.retain(|n| n != &other.name);
+            removed += 1;
+            merged = true;
+        }
+        // Nom sans numéro, s'il n'est pas celui d'une autre classe.
+        let base = base_of(&keep.name);
+        if merged
+            && base != keep.name
+            && valid_name(&base)
+            && !is_state(&base)
+            && !taken.contains(&base)
+        {
+            commands.push(Command::RenameClass {
+                from: keep.name.clone(),
+                to: base.clone(),
+            });
+            taken.retain(|n| n != &keep.name);
+            taken.push(base);
+        }
+    }
+    (removed > 0).then_some((Command::Batch { commands }, removed))
+}
+
+/// Rang et propriétés des règles de chaque classe, pour savoir si deux classes de mêmes valeurs
+/// l'emportent de la même façon sur les autres classes d'un élément.
+struct RuleOrder {
+    /// Par classe : premier et dernier rang de ses règles, familles de propriétés réglées.
+    by_class: BTreeMap<String, (usize, usize, BTreeSet<String>)>,
+}
+
+impl RuleOrder {
+    fn new(site: &Site, all: &[ClassInfo]) -> Self {
+        let rank: BTreeMap<&str, (usize, &revel_model::StyleRule)> = site
+            .style_rules()
+            .enumerate()
+            .filter_map(|(i, r)| Some((r.id.as_deref()?, (i, r))))
+            .collect();
+        let mut by_class = BTreeMap::new();
+        for c in all {
+            let mut span: Option<(usize, usize)> = None;
+            let mut props = BTreeSet::new();
+            for id in &c.rules {
+                let Some((i, r)) = rank.get(id.as_str()) else {
+                    continue;
+                };
+                span = Some(span.map_or((*i, *i), |(a, b)| (a.min(*i), b.max(*i))));
+                // Famille : `margin-top` et `margin` se disputent la même valeur.
+                props.extend(
+                    r.decls
+                        .iter()
+                        .map(|d| d.prop.split('-').next().unwrap_or(&d.prop).to_string()),
+                );
+            }
+            if let Some((a, b)) = span {
+                by_class.insert(c.name.clone(), (a, b, props));
+            }
+        }
+        Self { by_class }
+    }
+
+    /// Les éléments qui portent `from` gardent le même rendu avec les règles de `into` à la
+    /// place : chaque autre classe qu'ils portent et qui règle une même propriété est du même
+    /// côté (avant ou après) des deux.
+    fn same_cascade(&self, site: &Site, from: &ClassInfo, into: &ClassInfo) -> bool {
+        let (Some(f), Some(t)) = (self.by_class.get(&from.name), self.by_class.get(&into.name))
+        else {
+            return false;
+        };
+        from.uses.iter().all(|u| {
+            let Ok(Node::Element { attrs, .. }) = crate::address::node(site, &u.at) else {
+                // Utilisation de composant, classe écrite ailleurs : pas de regroupement.
+                return false;
+            };
+            let Some(list) = attrs
+                .iter()
+                .find(|a| a.name == "class")
+                .and_then(|a| a.value.as_deref())
+            else {
+                return false;
+            };
+            list.split_whitespace()
+                .filter(|c| *c != from.name && *c != into.name)
+                .all(|c| {
+                    let Some(o) = self.by_class.get(c) else {
+                        return true;
+                    };
+                    if o.2.is_disjoint(&f.2) {
+                        return true;
+                    }
+                    let before = |x: &(usize, usize, BTreeSet<String>)| x.1 < o.0;
+                    let after = |x: &(usize, usize, BTreeSet<String>)| x.0 > o.1;
+                    (before(f) && before(t)) || (after(f) && after(t))
+                })
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -582,6 +803,119 @@ mod tests {
             ],
         });
         s
+    }
+
+    /// Classes de mêmes valeurs regroupées sous un nom sans numéro ; une classe entourée d'autres
+    /// Regrouper ne change pas le rendu : une classe dont les règles sont de l'autre côté d'une
+    /// classe du même élément (qui règle la même propriété) reste à part.
+    #[test]
+    fn regroupement_garde_la_cascade() {
+        use revel_model::Decl;
+        let mut s = Site::new("t", "fr");
+        let mut p: revel_model::Page =
+            serde_json::from_value(serde_json::json!({"id": "index", "path": "/", "body": []}))
+                .unwrap();
+        // `boite-2` vient après `pile` : l'élément est en `flex` ; avec `boite-1` (avant
+        // `pile`), il passerait en `block`.
+        p.body = vec![el("a1", "boite-2 pile", None), el("a2", "boite-1", None)];
+        s.pages.push(p);
+        let rule = |id: &str, sel: &str, prop: &str, value: &str| {
+            StyleItem::Rule(StyleRule {
+                id: Some(id.into()),
+                selector: sel.into(),
+                media: None,
+                decls: vec![Decl {
+                    prop: prop.into(),
+                    value: value.into(),
+                    important: false,
+                }],
+            })
+        };
+        s.stylesheet = Some(Stylesheet {
+            url: "/s.css".into(),
+            source: None,
+            items: vec![
+                rule("r1", ".boite-1", "display", "flex"),
+                rule("r2", ".pile", "display", "block"),
+                rule("r3", ".boite-2", "display", "flex"),
+            ],
+        });
+        assert!(organize(&s).is_none());
+        // Autre propriété sur la classe voisine : plus de conflit, regroupées.
+        if let Some(StyleItem::Rule(r)) = s.stylesheet.as_mut().map(|x| &mut x.items[1]) {
+            r.decls[0].prop = "color".into();
+        }
+        assert_eq!(organize(&s).map(|(_, n)| n), Some(1));
+    }
+
+    /// sélecteurs ou de valeurs différentes reste à part ; annulable d'un coup (D-178).
+    #[test]
+    fn classes_regroupees() {
+        use revel_model::Decl;
+        let mut s = Site::new("t", "fr");
+        let mut p: revel_model::Page =
+            serde_json::from_value(serde_json::json!({"id": "index", "path": "/", "body": []}))
+                .unwrap();
+        p.body = vec![
+            el("a1", "titre-2", None),
+            el("a2", "titre-5 marge", None),
+            el("a3", "titre-7", None),
+            el("a4", "texte-1", None),
+        ];
+        s.pages.push(p);
+        let rule = |id: &str, sel: &str, media: Option<&str>, value: &str| {
+            StyleItem::Rule(StyleRule {
+                id: Some(id.into()),
+                selector: sel.into(),
+                media: media.map(str::to_string),
+                decls: vec![Decl {
+                    prop: "font-size".into(),
+                    value: value.into(),
+                    important: false,
+                }],
+            })
+        };
+        s.stylesheet = Some(Stylesheet {
+            url: "/s.css".into(),
+            source: None,
+            items: vec![
+                rule("r1", ".titre-2", None, "40px"),
+                rule("r2", ".titre-2:hover", None, "41px"),
+                rule("r3", ".titre-5", None, "40px"),
+                rule("r4", ".titre-5:hover", None, "41px"),
+                // Mêmes valeurs de base, mais pas le même survol : à part.
+                rule("r5", ".titre-7", None, "40px"),
+                rule("r6", ".texte-1", None, "16px"),
+                rule("r7", ".marge", Some("(max-width: 600px)"), "12px"),
+            ],
+        });
+        let before = serde_json::to_string(&s).unwrap();
+        let (cmd, removed) = organize(&s).expect("classes à regrouper");
+        assert_eq!(removed, 1);
+        let undo = crate::apply(&mut s, &cmd).unwrap();
+        let classes = |s: &Site, id: &str| match crate::address::node(
+            s,
+            &Target {
+                owner: Owner::Page("index".into()),
+                node: id.into(),
+            },
+        )
+        .unwrap()
+        {
+            Node::Element { attrs, .. } => attrs[0].value.clone().unwrap(),
+            _ => String::new(),
+        };
+        assert_eq!(classes(&s, "a1"), "titre");
+        assert_eq!(classes(&s, "a2"), "titre marge");
+        assert_eq!(classes(&s, "a3"), "titre-7");
+        let sels: Vec<&str> = s.style_rules().map(|r| r.selector.as_str()).collect();
+        assert_eq!(
+            sels,
+            vec![".titre", ".titre:hover", ".titre-7", ".texte-1", ".marge"]
+        );
+        assert!(organize(&s).is_none());
+        crate::apply(&mut s, &undo).unwrap();
+        assert_eq!(serde_json::to_string(&s).unwrap(), before);
     }
 
     #[test]

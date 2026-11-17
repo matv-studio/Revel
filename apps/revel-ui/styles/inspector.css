@@ -951,3 +951,11 @@
 /* Fonction d'un outil : les choix se partagent la largeur, sans dépasser. */
 .tool-function .segmented { display: flex; width: 100%; }
 .tool-function .segmented > button { flex: 1; min-width: 0; padding: 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Libellé du champ des classes (D-177). */
+.style-target-label { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: -2px; }
+
+/* Mode simple (D-178) : classes masquées, chaque élément se règle seul. */
+.classes-off .style-target-label, .classes-off .selector-box, .classes-off .target-count,
+.classes-off .chip--new, .classes-off .dock-tab[data-panel="classes"],
+.classes-off [data-panel-item="classes"] { display: none; }

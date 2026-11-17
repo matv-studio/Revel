@@ -350,6 +350,26 @@ fn General() -> impl IntoView {
                         </Show>
                         <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
                     </div>
+                    <span class="label" title=ui.t("settings-classes-help")>{ui.t("settings-classes")}</span>
+                    <label class="switch">
+                        <input type="checkbox" class="settings-classes"
+                            prop:checked=move || ui.settings.with(|s| s.classes)
+                            aria-label=ui.t("settings-classes")
+                            on:change=move |e| {
+                                let on = event_target_checked(&e);
+                                if on { crate::classes::arm(); }
+                                update(ui, &|s| s.classes = on)
+                            }/>
+                        <span class="switch-track"></span>
+                    </label>
+                    <span class="label" title=ui.t("settings-heavy-help")>{ui.t("settings-heavy")}</span>
+                    <label class="switch">
+                        <input type="checkbox" class="settings-heavy"
+                            prop:checked=move || ui.settings.with(|s| s.warn_heavy_media)
+                            aria-label=ui.t("settings-heavy")
+                            on:change=move |e| { let on = event_target_checked(&e); update(ui, &|s| s.warn_heavy_media = on) }/>
+                        <span class="switch-track"></span>
+                    </label>
                     <span class="label" title=ui.t("settings-reveal-help")>{ui.t("settings-reveal")}</span>
                     <label class="switch">
                         <input type="checkbox" class="settings-reveal"

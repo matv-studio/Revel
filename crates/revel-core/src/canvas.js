@@ -1994,6 +1994,16 @@
   // sinon celui du système, différemment selon le moteur).
   let scheme = null;
   let stateOpened = null;
+  let toolPreview = null;
+  const applyToolPreview = () => {
+    for (const e of document.querySelectorAll("[data-rv-tool-preview]")) {
+      e.classList.remove(e.getAttribute("data-rv-tool-preview"));
+      e.removeAttribute("data-rv-tool-preview");
+    }
+    if (!toolPreview || !toolPreview.cls) return;
+    const e = findId(toolPreview.id).el;
+    if (e) { e.classList.add(toolPreview.cls); e.setAttribute("data-rv-tool-preview", toolPreview.cls); }
+  };
   const SCHEME_RE = /\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)/g;
   const applyScheme = () => {
     const walk = (rules) => {
@@ -2167,6 +2177,7 @@
       if (window.RevelModel) window.RevelModel.refresh();
       if (window.RevelMview) window.RevelMview.refresh();
       markEmpty();
+      applyToolPreview();
       for (const path of new Set(sheets)) reloadSheet(path);
       // Sélection retrouvée par son identifiant (l'interface la confirme sur `refreshed`).
       hovered = null;
@@ -2311,6 +2322,13 @@
         sendComputed();
         break;
       }
+      case "tool-preview":
+        // État d'un outil montré le temps de son réglage (menu d'une barre de navigation ouvert) :
+        // classe posée dans le canevas seulement, rien n'est écrit dans le site.
+        toolPreview = m.on ? { id: String(m.id || ""), cls: String(m.cls || "") } : null;
+        applyToolPreview();
+        redraw();
+        break;
       case "scheme":
         scheme = m.value === "dark" || m.value === "light" ? m.value : null;
         applyScheme();

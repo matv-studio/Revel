@@ -212,7 +212,7 @@ pub fn ItemsList(
                                     {move || match it.with_value(|i| i.src.clone()) {
                                         Some(src) => view! { <img alt="" src=crate::library::thumb_src(&base(), &src)/> }.into_any(),
                                         None if links => icons::link(),
-                                        None if grid => icons::image(),
+                                        None if grid || has_img => icons::image(),
                                         None => icons::box_(),
                                     }}
                                 </span>

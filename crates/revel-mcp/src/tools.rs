@@ -36,6 +36,32 @@ with `set_attribute`, the same values as the Interactions panel) and the site se
 built; rebuild anything it lists with the forms below. Content that exists in the CMS (titles, dates, clients, \
 covers, videos of projects or articles) is read from it with a collection list and fields, never retyped in the \
 layers; elements that belong together (an item and its media) are linked by a setting, never by their position.\n\
+\n\
+WORK LIKE A PROFESSIONAL WEB DESIGNER. Build the site the way a designer who will maintain it for years would, \
+in this order, and keep this structure when you edit an existing site:\n\
+1. Foundations first. Before any page, set the site's colors, text sizes, spacings and fonts as site variables \
+(Settings › Colors and Sizes) and read them everywhere; never repeat a literal color or size in several classes. \
+Give the dark values when the site has a dark theme.\n\
+2. Components for everything that repeats. Buttons, cards, section headings, navigation, footer, any block used \
+twice or more is ONE component with properties (text, image, link, switch, list, content) and variants for its \
+alternate looks (outline button, reversed card, hover). Never copy the same structure twice: when you are about \
+to build a second similar block, make the component first, then place its uses.\n\
+3. Content in the CMS when it has its own pages, is listed in several places or will be edited by someone who \
+does not design (projects, articles, products, team, brands): a collection with typed fields, shown by \
+collection lists; its card is a component with a content property bound to the collection, so one design \
+serves every entry.\n\
+4. Revel's tools, never hand-made equivalents. Carousel and gallery, tabs, accordion, navbar, ticker, video \
+player, table of contents, list filters, forms, language switch, cookie banner come from `insert_preset`; set \
+them through their attributes (the settings of their panel) and leave them closed (`data-revel-widget`): do not \
+rebuild their inner structure with plain elements, do not write their script.\n\
+5. Clean layers. Semantic tags (`header`, `nav`, `main`, `section`, `footer`; one `h1` per page, headings in \
+order), one short readable class per role, no wrapper without a purpose, no class that repeats another one's \
+values, names the user understands in the Layers panel.\n\
+6. Responsive by breakpoints: the largest screen first, then only what changes on smaller ones; fluid sizes \
+with `clamp()`.\n\
+7. Accessibility and search: every image has an alternative text, every page a title and a description, links \
+are links and buttons are buttons, tools keep their accessible names.\n\
+8. Finish with `check_site` (no issue left) and `get_site_map` (no broken link, no orphan page).\n\n\
 - Site variables: colors and sizes are CSS variables of `:root` with readable names (`--corail`, `--titre-l`, \
 `--espace-section`; Settings › Colors and Sizes), fluid sizes as `clamp(min, fluid, max)`; classes read them \
 (`font-size: var(--titre-l)`). Rename one everywhere with `apply_commands` `{\"cmd\": \"rename_variable\", \"from\": \"step-3\", \"to\": \"titre-l\"}`.\n\
@@ -48,8 +74,9 @@ for sections, grids, buttons, images, video, video player (YouTube/Vimeo/file wi
 - CMS collections are for content that has its own pages (projects, articles, products: each entry is a page \
 built from the collection's template) and the lists that show those pages (cards of the latest projects, read from \
 the entries' fields). Fixed blocks of a page, even repeated (services, tools, team members, rankings, logos, stats), \
-are NOT collections: make a component whose properties hold the content (defaults stored in the component) and place \
-one use per item, each with its own property values (`args`). Content that differs in structure from one use to the \
+are NOT collections when they live on one page only: make a component whose properties hold the content (defaults stored in the component) and place \
+one use per item, each with its own property values (`args`); when the same items appear on several pages (brands, team), \
+make a collection and a component with a content property. Content that differs in structure from one use to the \
 other (a card's list of tools, a service's points) goes in the component's slot: an element of the component with the \
 `data-revel-slot` attribute; each use gives its own nodes as its `children` (`{\"node\": \"use\", \"component\": \"toolset\", \
 \"args\": {…}, \"children\": [ uses of the \"tool\" component … ]}`), otherwise the slot's own content shows.\n\
@@ -89,8 +116,22 @@ href=\"{{ lien.url }}\">{{ lien.label }}</a>{% endfor %}`; set them with `apply_
 `{\"cmd\": \"set_global\", \"path\": [\"site\", \"email\"], \"value\": \"…\"}`.\n\
 - Server files (`.htaccess`, `robots.txt`) are text pages edited as text in the page settings; they may contain \
 `{{ site.url }}`, `{% if env.staging %}…{% endif %}` (publishing environment) and `{% for e in collections.<id> %}…{% endfor %}`.\n\
-- Components: repeated blocks become components with properties (text, image, link, visibility, list) that each \
-use sets, and a slot (`data-revel-slot`) for per-use content; variants for alternate looks.\n\
+- Components: repeated blocks become components with properties (text, image, link, visibility, list, content) that each \
+use sets, and a slot (`data-revel-slot`) for per-use content; variants for alternate looks (a custom variant puts the \
+class `is-<id>` on the component's root: `.card.is-reversed .card__media`). Content property: `{\"name\": \"project\", \
+\"label\": \"Project\", \"type\": \"entry\", \"collection\": \"projects\"}`; the component's elements read the entry's \
+fields (`{{ project.data.title }}`, `href=\"{{ project.url }}\"`, images bound to `project.data.cover`); each use \
+chooses its entry: `\"args\": {\"project\": \"collections.projects | by_slug(\\\"my-project\\\")\"}`, or the item of the \
+collection list around it (`\"args\": {\"project\": \"item\"}`); without a value the first entry shows.\n\
+- Settings of the tools (attributes, the same as their panel). Carousel (`insert_preset` carousel): images in the \
+`data-revel-track` part, or an `{% for image in <list field> %}` inside it; `data-revel-layout=\"mosaic\"` for a grid with \
+a « +N » button (`data-revel-slider=\"more=6\"`); `data-revel-controls=\"bottom|top|sides\"`; title, arrows, counter and \
+dots are parts shown or hidden with the `hidden` attribute; inline variables `--rv-show` (slides visible), `--rv-gap`, \
+`--rv-ratio`, `--rv-radius`, `--rv-cols`; options `autoplay=5 loop drag=off`. Accordion (`insert_preset` accordion): a \
+`data-revel-accordion` group of `<details>` panels; the same `name` on every panel opens one at a time, `open` on the panel \
+open at start, `data-revel-icon=\"start\"` puts the icon before the title. Tabs: `start=<n>` in `data-revel-tabs` opens the \
+n-th tab first. Navbar: `data-revel-collapse=\"tablet|small|always|never\"` (phones by default) sets when the links fold \
+behind the menu button.\n\
 - Behaviour without code: `data-revel-on` on the triggering element, `<trigger> <action> <target>` separated by \
 `;`: trigger click|hover|scroll:<px>|view|load, action toggle|show|hide|class:<name>|play|dismiss|more|random:<ms>|spin:<deg>, \
 target self|parent|next|body|.<class>|closest:.<class> (enclosing element)|#<id> (e.g. `click class:is-active #menu; scroll:40 class:is-active self`, styled with the Active state); \

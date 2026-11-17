@@ -907,7 +907,11 @@ impl Core {
         // Contrôles (5.4) : une publication s'arrête s'il y a des points à vérifier (sauf
         // « Publier quand même ») ; une vérification les signale et continue.
         if checks {
-            let found = tokio::task::block_in_place(|| checks::check_site(&out));
+            let mut found = tokio::task::block_in_place(|| checks::check_site(&out));
+            // Médias lourds : signalés seulement si le réglage le demande (D-178).
+            if !self.settings().warn_heavy_media {
+                found.retain(|c| c.kind != revel_protocol::CheckKind::HeavyImage);
+            }
             if !found.is_empty() {
                 let n = found.len();
                 on_event(DeployEvent::Checks { checks: found });
@@ -1488,6 +1492,13 @@ fn summarize(p: &revel_project::Project) -> Result<SiteSummary> {
 /// Rend une ligne du bilan (points restants), ou l'erreur si la reconstruction échoue (site
 /// importé gardé tel quel).
 pub fn rebuild_for_ui(p: &mut revel_project::Project) -> Option<String> {
+    // `REVEL_NO_TOOLS` : constructions du site laissées telles quelles (comparaison du rendu).
+    rebuild_for_ui_with(p, std::env::var_os("REVEL_NO_TOOLS").is_none())
+}
+
+/// [`rebuild_for_ui`] ; `tools` : constructions reconnues (accordéon, onglets, carrousel, barre de
+/// navigation) refaites avec les outils de Revel (D-178).
+pub fn rebuild_for_ui_with(p: &mut revel_project::Project, tools: bool) -> Option<String> {
     let markup = rebuild_markup(p);
     // Styles mis à plat après la structure (classes des éléments rebâtis, D-157) ;
     // `REVEL_NO_FLATTEN` : styles tels qu'importés (comparaison du rendu dans les essais).
@@ -1495,13 +1506,34 @@ pub fn rebuild_for_ui(p: &mut revel_project::Project) -> Option<String> {
         None
     } else {
         match flatten::flatten_project(p) {
-            Ok(r) => flatten::summary(&r),
+            // Site remis dans la forme d'un site construit dans Revel (D-178) : après la mise à
+            // plat, quand chaque élément porte ses styles sur ses classes.
+            // `REVEL_NO_REFINE` : site laissé tel qu'importé et mis à plat (comparaison du rendu).
+            Ok(r) if std::env::var_os("REVEL_NO_REFINE").is_some() => flatten::summary(&r),
+            Ok(r) => join(flatten::summary(&r), refine_project(p, tools)),
             Err(e) => Some(format!("mise à plat des styles impossible : {e}")),
         }
     };
-    match (markup, styles) {
+    join(markup, styles)
+}
+
+fn join(a: Option<String>, b: Option<String>) -> Option<String> {
+    match (a, b) {
         (Some(a), Some(b)) => Some(format!("{a} ; {b}")),
         (a, b) => a.or(b),
+    }
+}
+
+/// Outils reconnus, composants, variables du site, classes regroupées
+/// ([`revel_import::refine`]) : site enregistré, bilan en une phrase.
+pub fn refine_project(p: &mut revel_project::Project, tools: bool) -> Option<String> {
+    let mut site = p.site.clone();
+    let report = revel_import::refine::refine(&mut site, &revel_import::refine::Options { tools });
+    let summary = revel_import::refine::summary(&report)?;
+    p.site = site;
+    match p.save() {
+        Ok(()) => Some(summary),
+        Err(e) => Some(format!("remise en forme non enregistrée : {e}")),
     }
 }
 

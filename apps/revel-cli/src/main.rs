@@ -37,6 +37,17 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Remet un site dans la forme d'un site construit dans Revel (D-178) : constructions
+    /// reconnues refaites avec les outils (`--no-tools` : laissées), éléments répétés devenus des
+    /// composants, couleurs et tailles répétées devenues des variables, classes de mêmes valeurs
+    /// regroupées ; `--dry-run` : bilan sans enregistrer.
+    Refine {
+        dir: PathBuf,
+        #[arg(long)]
+        no_tools: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Reconstruit un site dans la forme de l'interface (données et calculs écrits, listes de
     /// collection et propriétés de composants gardées) ; `--dry-run` : relevé avant et après.
     Rebuild {
@@ -81,6 +92,10 @@ enum Command {
         /// Langue du site si ses pages n'en déclarent pas.
         #[arg(long, default_value = "en")]
         lang: String,
+        /// Laisse les constructions du site (accordéons, onglets, carrousels, barre de
+        /// navigation) telles quelles, sans les refaire avec les outils de Revel.
+        #[arg(long)]
+        no_tools: bool,
     },
     /// Lit un site publié (Framer, Webflow, tout site) et l'importe dans un nouveau dossier de
     /// `parent` (7.4) ; `--raw` : lecture seule (copie du site, sans import).
@@ -276,6 +291,26 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Command::Refine {
+            dir,
+            no_tools,
+            dry_run,
+        } => {
+            let mut p = Project::open(&dir)?;
+            let summary = if dry_run {
+                let report = revel_import::refine::refine(
+                    &mut p.site,
+                    &revel_import::refine::Options { tools: !no_tools },
+                );
+                revel_import::refine::summary(&report)
+            } else {
+                revel_core::refine_project(&mut p, !no_tools)
+            };
+            println!(
+                "{}",
+                summary.unwrap_or_else(|| "rien à remettre en forme".into())
+            );
+        }
         Command::Flatten { dir, dry_run } => {
             let mut p = Project::open(&dir)?;
             let before = revel_edit::styleaudit::audit(&p.site).len();
@@ -379,6 +414,7 @@ fn main() -> Result<()> {
             dry_run,
             no_rebuild,
             lang,
+            no_tools,
         } => match revel_import::detect(&dir) {
             revel_import::SiteKind::Eleventy => {
                 anyhow::bail!("projet Eleventy : utiliser `revel import-eleventy`")
@@ -409,7 +445,12 @@ fn main() -> Result<()> {
                 }
                 if !dry_run {
                     let mut p = Project::create(&dir, site)?;
-                    if !no_rebuild && let Some(w) = revel_core::rebuild_for_ui(&mut p) {
+                    if !no_rebuild
+                        && let Some(w) = revel_core::rebuild_for_ui_with(
+                            &mut p,
+                            !no_tools && std::env::var_os("REVEL_NO_TOOLS").is_none(),
+                        )
+                    {
                         println!("! {w}");
                     }
                     println!("{}", dir.join(revel_project::SITE_FILE).display());

@@ -114,11 +114,14 @@ transition:width .45s cubic-bezier(.33,1,.68,1)}",
     ),
     (
         "tabs",
-        "B [data-revel-part=tablist]{display:flex;flex-wrap:wrap;gap:4px;\
+        // `data-revel-own` (D-178) : outil repris d'un site importé, qui garde l'allure donnée
+        // par ses classes ; l'allure de Revel ne s'ajoute pas.
+        "B:not([data-revel-own]) [data-revel-part=tablist]{display:flex;flex-wrap:wrap;gap:4px;\
 border-bottom:1px solid color-mix(in srgb,currentColor 30%,transparent)}\
-B [data-revel-part=tab]{padding:10px 16px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;\
-background:none;color:inherit;font:inherit;cursor:pointer}B [data-revel-part=tab].is-active{border-bottom-color:currentColor}\
-B>[data-revel-panel]{padding:16px 0}",
+B [data-revel-part=tab]{cursor:pointer}\
+B:not([data-revel-own]) [data-revel-part=tab]{padding:10px 16px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;\
+background:none;color:inherit;font:inherit}B:not([data-revel-own]) [data-revel-part=tab].is-active{border-bottom-color:currentColor}\
+B:not([data-revel-own])>[data-revel-panel]{padding:16px 0}",
     ),
     (
         "accordion",
@@ -156,7 +159,8 @@ border-radius:50%;background-color:rgba(0,0,0,.6);transform:translate(-50%,-50%)
     ),
     (
         "ticker",
-        "B{display:flex;align-items:center;gap:48px;overflow:hidden}B>*{flex:none;white-space:nowrap}",
+        "B{display:flex;align-items:center;gap:48px;overflow:hidden}B>*{flex:none;white-space:nowrap}\
+B>img,B>picture>img{width:auto;height:48px;min-width:96px;object-fit:contain}",
     ),
     (
         "carousel",
@@ -169,7 +173,7 @@ B [data-revel-part=track]>*{flex:none;min-width:0;counter-increment:rv-slide}\
 B [data-revel-part=track]>*,B [data-revel-part=track]>picture>img{width:calc((100% - var(--rv-gap) * (var(--rv-show) - 1)) / var(--rv-show))}\
 B [data-revel-part=track]>img,B [data-revel-part=track]>picture>img{height:auto;aspect-ratio:var(--rv-ratio,4 / 3);object-fit:cover}\
 B [data-revel-part=track]>*,B [data-revel-part=track]>picture>img,B .rv-more-tile{border-radius:var(--rv-radius,0)}\
-B [data-revel-part=track]>div{min-height:240px}\
+B:not([data-revel-own]) [data-revel-part=track]>div{min-height:240px}\
 B [data-revel-part=controls]{display:flex;align-items:center;justify-content:flex-end;gap:12px}\
 B [data-revel-part=title]{order:-2;margin:0 auto 0 0}\
 B [data-revel-part=count]{order:-1;margin:0;font-variant-numeric:tabular-nums}\
@@ -205,21 +209,23 @@ border-radius:50%;background-color:currentColor;opacity:.3;cursor:pointer}B [dat
         "accordion-group",
         // D-176 : volets `details`, titre avec icône d'ouverture (à droite, ou à gauche avec
         // `data-revel-icon="start"`), qui tourne de `--rv-turn` quand le volet est ouvert.
-        "B>details{border-bottom:1px solid color-mix(in srgb,currentColor 30%,transparent)}\
-B [data-revel-part=summary]{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;\
-font-weight:600;cursor:pointer;list-style:none}B [data-revel-part=summary]::-webkit-details-marker{display:none}\
+        "B:not([data-revel-own])>details{border-bottom:1px solid color-mix(in srgb,currentColor 30%,transparent)}\
+B [data-revel-part=summary]{display:flex;align-items:center;justify-content:space-between;gap:16px;\
+cursor:pointer;list-style:none}B:not([data-revel-own]) [data-revel-part=summary]{padding:14px 0;font-weight:600}\
+B [data-revel-part=summary]::-webkit-details-marker{display:none}\
 B [data-revel-part=summary] svg{width:18px;height:18px;flex:none;transition:transform .2s}\
 B details[open]>[data-revel-part=summary] svg{transform:rotate(var(--rv-turn,180deg))}\
 B[data-revel-icon=start] [data-revel-part=summary]{flex-direction:row-reverse;justify-content:flex-end}\
-B details>:not([data-revel-part]){padding-bottom:14px}B details>:not([data-revel-part]):empty{min-height:24px}\
+B:not([data-revel-own]) details>:not([data-revel-part]){padding-bottom:14px}B details>:not([data-revel-part]):empty{min-height:24px}\
 B [hidden]{display:none}",
     ),
     (
         "navbar",
         // Menu replié derrière son bouton sur téléphone (767 px) ; `data-revel-collapse` :
         // `tablet` (991 px), `small` (479 px), `always`, `never` (D-176).
-        "B{position:relative;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 24px}\
-B>a{font-weight:700;color:inherit;text-decoration:none}\
+        "B{position:relative;display:flex;align-items:center;justify-content:space-between;gap:24px}\
+B:not([data-revel-own]){padding:16px 24px}B:not([data-revel-own])>a{font-weight:700}\
+B>a{color:inherit;text-decoration:none}\
 B [data-revel-part=menu]{display:flex;align-items:center;gap:24px}B [data-revel-part=menu] a{color:inherit;text-decoration:none}\
 B [data-revel-part=toggle]{display:none;padding:8px 12px;border:1px solid currentColor;border-radius:6px;background:none;\
 color:inherit;font:inherit;cursor:pointer}\

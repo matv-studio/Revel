@@ -1542,9 +1542,17 @@ impl Ed {
             .then(|| crate::styles::tag_selector(&node))
             .flatten()
             .filter(|(t, _)| *t == cur);
-        let (sel, state) = if cands.contains(&cur) || tag.is_some() {
+        // Mode simple (D-178) : l'élément se règle seul ; si sa combinaison de classes est aussi
+        // celle d'un autre élément, une classe propre lui est ajoutée et la règle écrite pour elle.
+        let own = !ui.settings.with_untracked(|s| s.classes)
+            && tag.is_none()
+            && self.doc.with_untracked(|d| {
+                d.as_ref()
+                    .is_some_and(|d| crate::styles::combination_shared(d, &at, &classes))
+            });
+        let (sel, state) = if !own && (cands.contains(&cur) || tag.is_some()) {
             (cur, self.style_state.get_untracked())
-        } else if let Some(c) = cands.last() {
+        } else if let Some(c) = cands.last().filter(|_| !own) {
             (c.clone(), String::new())
         } else {
             // Élément sans classe : classe créée d'après sa nature, réglée avec la taille.
@@ -1557,11 +1565,15 @@ impl Ed {
             else {
                 return release();
             };
-            let Some(set_class) =
-                crate::styles::class_command(at, &node, std::slice::from_ref(&name))
-            else {
+            // Classe ajoutée à celles de l'élément : la règle porte leur combinaison (elle
+            // l'emporte sur les règles de ses classes partagées).
+            let mut all = classes.clone();
+            all.push(name.clone());
+            let Some(set_class) = crate::styles::class_command(at, &node, &all) else {
                 return release();
             };
+            let name: String =
+                all.iter().map(|c| format!(".{c}")).collect::<String>()[1..].to_string();
             let decls: Vec<revel_model::Decl> = list
                 .into_iter()
                 .filter_map(|(prop, value)| {
@@ -2868,6 +2880,27 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         ed.post(serde_json::json!({ "type": "ui-colors", "comp": c }));
     });
     let dock = crate::dock::Dock::provide();
+    // Classes affichées sur un site construit sans elles : regroupement proposé une fois, quand
+    // le document est là (D-178).
+    Effect::new(move |_| {
+        if ui.settings.with(|s| s.classes) && ed.doc.with(Option::is_some) {
+            crate::classes::offer_organize(ui, ed);
+        }
+    });
+    // Mode simple (D-178) : le panneau « Classes » n'est pas montré ; s'il était devant, « Styles »
+    // prend sa place.
+    Effect::new(move |_| {
+        if !ui.settings.with(|s| s.classes) {
+            dock.layout.update(|l| {
+                let front = l
+                    .groups()
+                    .any(|g| g.active == crate::dock::PanelId::Classes);
+                if front {
+                    l.activate(crate::dock::PanelId::Styles);
+                }
+            });
+        }
+    });
     // Élément ajouté : « Calques » passe devant dans son groupe (réglage, D-175).
     Effect::new(move |prev: Option<u32>| {
         let n = ui.show_layers.get();

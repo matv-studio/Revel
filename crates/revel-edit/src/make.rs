@@ -1076,14 +1076,16 @@ impl Preset {
                 )
             }
             Preset::Ticker => {
+                // Images vides (D-177) : l'icône d'image du canevas, pas de texte « Élément 1 ».
+                let _ = text;
                 let items = (1..=4)
-                    .map(|n| {
-                        el(
-                            id(),
-                            "div",
-                            vec![attr("class", "defilement__element")],
-                            vec![txt(&format!("{text} {n}"))],
-                        )
+                    .map(|_| {
+                        Node::Image(revel_model::ImageNode {
+                            id: id(),
+                            src: "\"\"".into(),
+                            alt: Some("\"\"".into()),
+                            ..Default::default()
+                        })
                     })
                     .collect();
                 el(
@@ -1359,7 +1361,7 @@ fn role_of(class: &str) -> Option<Role> {
         "modele-3d__commandes" => Part("controls"),
         "modele-3d__bouton" => Part("button"),
         "scene-marmoset" => Base("mview"),
-        "code-html" => Content,
+        "code-html" => Base("embed"),
         "liste-collection" => Base("collection"),
         "liste-collection__element" => Content,
         "revele" => Base("reveal"),

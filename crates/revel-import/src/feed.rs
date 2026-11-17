@@ -435,6 +435,9 @@ pub fn item_data(it: &FeedItem, source: &str) -> Map<String, Value> {
     };
     put("title", &it.title);
     put("date", &it.date);
+    // Date lue dans le flux, gardée à part : une date corrigée à la main dans le CMS (différente
+    // de celle-ci) n'est plus écrasée par les reprises suivantes (D-181).
+    put("feed_date", &it.date);
     put("summary", &it.summary);
     put("image", &it.image);
     put("author", &it.author);
@@ -448,8 +451,17 @@ pub fn item_data(it: &FeedItem, source: &str) -> Map<String, Value> {
 }
 
 /// Champs que le flux écrit (retirés d'un contenu existant quand l'article ne les donne plus).
-pub const FIELDS: [&str; 9] = [
-    "title", "date", "summary", "image", "author", "link", "guid", "source", "tags",
+pub const FIELDS: [&str; 10] = [
+    "title",
+    "date",
+    "feed_date",
+    "summary",
+    "image",
+    "author",
+    "link",
+    "guid",
+    "source",
+    "tags",
 ];
 
 /// Contenus à créer ou mettre à jour pour que la collection reprenne les articles du flux
@@ -477,7 +489,14 @@ pub fn plan(feed: &Feed, existing: &[Existing], source: &str) -> Plan {
         match found {
             Some(e) => {
                 let mut data = e.data.as_object().cloned().unwrap_or_default();
+                let edited_date = match (data.get("date"), data.get("feed_date")) {
+                    (Some(d), Some(f)) => d != f,
+                    _ => false,
+                };
                 for k in FIELDS {
+                    if k == "date" && edited_date {
+                        continue;
+                    }
                     match fresh.get(k) {
                         Some(v) => {
                             data.insert(k.into(), v.clone());
@@ -576,22 +595,246 @@ fn unique_stem(base: &str, taken: &mut HashSet<String>) -> String {
 
 /// Lit le flux à une adresse (pages HTML refusées : l'adresse doit être celle du flux).
 pub fn fetch(fetch: &dyn Fetch, url: &str) -> Result<Feed, String> {
-    let u = Url::parse(url.trim()).map_err(|e| format!("{url} : {e}"))?;
+    // Adresse écrite sans « https:// » : complétée.
+    let full = match url.trim() {
+        t if t.contains("://") => t.to_string(),
+        t => format!("https://{}", t.trim_start_matches('/')),
+    };
+    let u = Url::parse(&full).map_err(|e| format!("{url} : {e}"))?;
     if !matches!(u.scheme(), "http" | "https") {
         return Err(format!("{url} : adresse http ou https attendue"));
     }
+    // Adresse donnée, puis la même avec ou sans « www. » (D-181) ; une page HTML qui annonce son
+    // flux (`<link rel="alternate">`) y mène.
+    let mut tried: Vec<Url> = Vec::new();
+    let mut queue = vec![u.clone()];
+    if let Some(alt) = www_twin(&u) {
+        queue.push(alt);
+    }
+    let mut last = String::new();
+    while let Some(c) = queue.pop().filter(|_| tried.len() < 6) {
+        if tried.contains(&c) {
+            continue;
+        }
+        tried.push(c.clone());
+        match get_feed(fetch, &c) {
+            Ok(Got::Feed(f)) => return Ok(f),
+            Ok(Got::Announced(next)) => queue.push(next),
+            Err(e) => {
+                if last.is_empty() {
+                    last = e;
+                }
+            }
+        }
+    }
+    // Pas de flux (site non republié, RSS coupé) : les pages de la collection sont lues à la place.
+    match from_pages(fetch, &u) {
+        Some(f) if !f.items.is_empty() => Ok(f),
+        _ => Err(if last.is_empty() {
+            "aucun flux à cette adresse".into()
+        } else {
+            last
+        }),
+    }
+}
+
+enum Got {
+    Feed(Feed),
+    /// Page HTML qui annonce son flux.
+    Announced(Url),
+}
+
+fn get_feed(fetch: &dyn Fetch, u: &Url) -> Result<Got, String> {
     let r = fetch.get_with(
-        &u,
+        u,
         &[(
             "Accept",
             "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.1",
         )],
     )?;
     if !(200..300).contains(&r.status) {
-        return Err(format!("{url} : réponse {}", r.status));
+        return Err(format!("aucun flux à cette adresse (réponse {})", r.status));
     }
     let text = String::from_utf8_lossy(&r.body);
-    parse(&text, Some(&r.url))
+    match parse(&text, Some(&r.url)) {
+        Ok(f) => Ok(Got::Feed(f)),
+        Err(e) => announced(&text, &r.url).map(Got::Announced).ok_or(e),
+    }
+}
+
+/// Même adresse avec ou sans « www. ».
+fn www_twin(u: &Url) -> Option<Url> {
+    let host = u.host_str()?;
+    let other = match host.strip_prefix("www.") {
+        Some(h) => h.to_string(),
+        None if host.matches('.').count() == 1 => format!("www.{host}"),
+        None => return None,
+    };
+    let mut t = u.clone();
+    t.set_host(Some(&other)).ok()?;
+    Some(t)
+}
+
+/// Flux annoncé par une page (`<link rel="alternate" type="application/rss+xml" href>`).
+fn announced(html: &str, base: &Url) -> Option<Url> {
+    let doc = dom_query::Document::from(html);
+    doc.select("link[rel=alternate]")
+        .iter()
+        .find(|l| {
+            l.attr("type")
+                .is_some_and(|t| t.contains("rss") || t.contains("atom"))
+        })
+        .and_then(|l| l.attr("href"))
+        .and_then(|h| base.join(&h).ok())
+}
+
+/// Collection lue dans ses pages (D-181), quand le site n'a pas de flux à l'adresse donnée :
+/// `https://site/projects/rss.xml` → pages `https://site/projects/<nom>` liées depuis l'accueil et
+/// les pages qu'il lie ; titre, résumé, image et date lus dans chaque page (balises de partage,
+/// données structurées). Soixante pages au plus.
+fn from_pages(fetch: &dyn Fetch, feed: &Url) -> Option<Feed> {
+    let mut segs: Vec<&str> = feed.path().split('/').filter(|s| !s.is_empty()).collect();
+    if segs.last().is_some_and(|l| l.contains('.')) {
+        segs.pop();
+    }
+    let prefix = format!("/{}/", segs.join("/"));
+    if prefix == "//" {
+        return None;
+    }
+    let ok = |u: &Url| fetch.get(u).ok().filter(|r| (200..300).contains(&r.status));
+    let mut home = feed.clone();
+    home.set_path("/");
+    home.set_query(None);
+    let first = ok(&home).or_else(|| www_twin(&home).and_then(|t| ok(&t)))?;
+    let base = first.url.clone();
+    let links = |html: &str, base: &Url| -> Vec<Url> {
+        dom_query::Document::from(html)
+            .select("a[href]")
+            .iter()
+            .filter_map(|a| a.attr("href"))
+            .filter_map(|h| base.join(&h).ok())
+            .filter(|l| l.host_str() == base.host_str())
+            .map(|mut l| {
+                l.set_fragment(None);
+                l.set_query(None);
+                l
+            })
+            .collect()
+    };
+    let is_item = |l: &Url| {
+        l.path()
+            .strip_prefix(prefix.as_str())
+            .is_some_and(|rest| !rest.trim_end_matches('/').is_empty() && !rest.contains('.'))
+    };
+    let home_html = String::from_utf8_lossy(&first.body).to_string();
+    let mut items: Vec<Url> = Vec::new();
+    let mut listings: Vec<Url> = Vec::new();
+    for l in links(&home_html, &base) {
+        if is_item(&l) {
+            if !items.contains(&l) {
+                items.push(l);
+            }
+        } else if l.path() != "/" && !listings.contains(&l) && l.path().matches('/').count() <= 2 {
+            listings.push(l);
+        }
+    }
+    for l in listings.iter().take(12) {
+        if let Some(r) = ok(l) {
+            for i in links(&String::from_utf8_lossy(&r.body), &r.url) {
+                if is_item(&i) && !items.contains(&i) {
+                    items.push(i);
+                }
+            }
+        }
+    }
+    let mut out = Feed::default();
+    for u in items.into_iter().take(60) {
+        let Some(r) = ok(&u) else { continue };
+        let html = String::from_utf8_lossy(&r.body).to_string();
+        let doc = dom_query::Document::from(html.as_str());
+        let meta = |sel: &str| {
+            doc.select(sel)
+                .iter()
+                .next()
+                .and_then(|m| m.attr("content"))
+                .map(|c| c.trim().to_string())
+                .filter(|c| !c.is_empty())
+        };
+        let h1 = doc
+            .select("h1")
+            .iter()
+            .next()
+            .map(|h| h.text().split_whitespace().collect::<Vec<_>>().join(" "))
+            .unwrap_or_default();
+        // Titre de partage (sans la fin « | Nom du site », retirée plus bas) ; vide ou réduit à
+        // cette fin : titre de la page.
+        let title = meta("meta[property='og:title']")
+            .filter(|t| !t.starts_with('|'))
+            .or_else(|| (!h1.is_empty()).then(|| h1.clone()))
+            .or_else(|| {
+                doc.select("title")
+                    .iter()
+                    .next()
+                    .map(|h| h.text().trim().to_string())
+            })
+            .unwrap_or_default();
+        if title.is_empty() {
+            continue;
+        }
+        let date = meta("meta[property='article:published_time']")
+            .or_else(|| {
+                doc.select("time[datetime]")
+                    .iter()
+                    .next()
+                    .and_then(|t| t.attr("datetime"))
+                    .map(|d| d.to_string())
+            })
+            .or_else(|| {
+                html.split("\"datePublished\"")
+                    .nth(1)
+                    .and_then(|r| r.split('"').nth(1))
+                    .map(str::to_string)
+            })
+            .and_then(|d| iso_date(&d))
+            .unwrap_or_default();
+        let summary = meta("meta[property='og:description']")
+            .or_else(|| meta("meta[name=description]"))
+            .unwrap_or_default();
+        let image = meta("meta[property='og:image']")
+            .and_then(|i| r.url.join(&i).ok())
+            .map(|i| i.to_string())
+            .unwrap_or_default();
+        let link = r.url.to_string();
+        out.items.push(FeedItem {
+            guid: link.clone(),
+            link,
+            title,
+            date,
+            summary,
+            image,
+            ..Default::default()
+        });
+    }
+    // Fin de titre partagée par la plupart des pages (« … | Nom du site ») : retirée.
+    if out.items.len() > 1 {
+        let tail = |t: &str| t.rfind(" | ").map(|i| t[i..].to_string());
+        if let Some(first) = out.items.iter().find_map(|i| tail(&i.title)) {
+            let n = out
+                .items
+                .iter()
+                .filter(|i| i.title.ends_with(first.as_str()))
+                .count();
+            if n * 2 > out.items.len() {
+                for i in &mut out.items {
+                    if i.title.ends_with(first.as_str()) && i.title.len() > first.len() {
+                        let n = i.title.len() - first.len();
+                        i.title.truncate(n);
+                    }
+                }
+            }
+        }
+    }
+    Some(out)
 }
 
 #[cfg(test)]
@@ -737,5 +980,72 @@ mod tests {
         assert_eq!(file, "maison-jardin-alunites");
         assert_eq!(data["source"], "nord");
         assert!(data.get("guid").is_some() && data["blocs"] == json!([1]));
+    }
+
+    /// Date corrigée à la main dans le CMS : gardée aux reprises suivantes (D-181).
+    #[test]
+    fn date_corrigee_gardee() {
+        let f = parse(RSS, None).unwrap();
+        let mut data = Value::Object(item_data(&f.items[0], "nord"));
+        let p = plan(
+            &f,
+            &[Existing {
+                file: "a".into(),
+                data: data.clone(),
+                body: f.items[0].content.trim().into(),
+            }],
+            "nord",
+        );
+        assert_eq!((p.update.len(), p.unchanged), (0, 1));
+        data["date"] = json!("2025-06-01");
+        let p = plan(
+            &f,
+            &[Existing {
+                file: "a".into(),
+                data,
+                body: f.items[0].content.trim().into(),
+            }],
+            "nord",
+        );
+        assert_eq!((p.update.len(), p.unchanged), (0, 1), "{:?}", p.update);
+    }
+
+    /// Sans flux à l'adresse : pages de la collection lues (liens de l'accueil, balises de partage).
+    #[test]
+    fn collection_lue_dans_ses_pages() {
+        struct Site;
+        impl Fetch for Site {
+            fn get(&self, url: &Url) -> Result<crate::crawl::Fetched, String> {
+                let (status, body) = match (url.host_str().unwrap_or(""), url.path()) {
+                    ("www.ex.fr", "/") => (200, r#"<a href="/projets">Projets</a>"#.to_string()),
+                    ("www.ex.fr", "/projets") => (200, r#"<a href="/projects/un">Un</a><a href="/projects/deux#x">Deux</a>"#.to_string()),
+                    ("www.ex.fr", "/projects/un") => (200, r#"<meta property="og:title" content="Projet un"><meta property="og:image" content="/i.jpg"><meta property="og:description" content="Résumé"><time datetime="2025-03-04T10:00:00Z"></time>"#.to_string()),
+                    ("www.ex.fr", "/projects/deux") => (200, "<h1>Projet deux</h1>".to_string()),
+                    _ => (404, "<html>introuvable</html>".to_string()),
+                };
+                Ok(crate::crawl::Fetched {
+                    status,
+                    url: url.clone(),
+                    content_type: "text/html".into(),
+                    body: body.into_bytes(),
+                })
+            }
+        }
+        let f = fetch(&Site, "https://ex.fr/projects/rss.xml").unwrap();
+        assert_eq!(f.items.len(), 2);
+        assert_eq!(
+            (
+                f.items[0].title.as_str(),
+                f.items[0].date.as_str(),
+                f.items[0].image.as_str()
+            ),
+            ("Projet un", "2025-03-04", "https://www.ex.fr/i.jpg")
+        );
+        assert_eq!(f.items[1].guid, "https://www.ex.fr/projects/deux");
+        assert!(
+            fetch(&Site, "https://ex.fr/rien/rss.xml")
+                .unwrap_err()
+                .contains("404")
+        );
     }
 }

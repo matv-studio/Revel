@@ -689,7 +689,7 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .cms-feed-count { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--radius-full); background: var(--set-text); color: var(--bg); font-size: var(--text-xs); font-weight: var(--weight-strong); }
 .cms-feed-report { display: flex; flex-direction: column; gap: var(--s-1); }
 .cms-feed-report .muted { margin-left: 4px; }
-.cms-feed-error { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cms-feed-error { overflow-wrap: anywhere; }
 .cms-feed-error { font-size: var(--text-sm); color: var(--danger-text); }
 .cms-feed-report .status--ok { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
 .cms-feed-actions { display: flex; align-items: center; gap: var(--s-2); }

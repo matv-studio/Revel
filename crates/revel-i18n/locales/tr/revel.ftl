@@ -3928,3 +3928,5 @@ crop-reset = Sıfırla
 crop-reset-help = Tüm görsel, ortalanmış, yakınlaştırmasız
 crop-apply = Uygula
 crop-thumb-help = Çift tık: kırp (yakınlaştırma ve konum, dosya değişmez)
+settings-editor-options = Seçenekler
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

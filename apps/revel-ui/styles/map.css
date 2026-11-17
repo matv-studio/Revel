@@ -94,6 +94,7 @@
 }
 .map-node--menu, .map-node--component, .map-node--layout { background: color-mix(in srgb, var(--map-node) 80%, var(--bg)); }
 .map-node--missing { border-color: color-mix(in srgb, var(--danger-text) 60%, transparent); border-style: dashed; background: color-mix(in srgb, var(--danger-text) 8%, var(--map-node)); }
+.map-node--old { border-style: dashed; opacity: .7; }
 .map-node--missing .map-node-icon { background: color-mix(in srgb, var(--danger-text) 18%, transparent); color: var(--danger-text); }
 .map-node--collection { height: 84px; }
 .map-node--entry, .map-node--external { min-height: 32px; height: 32px; padding: 4px 10px; border-radius: var(--radius-lg); }

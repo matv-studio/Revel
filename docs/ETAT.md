@@ -9,6 +9,15 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 17/11/2026 (soir) : D-181, lot 1 des retours sur la 0.7.9
+
+- Fait (voir D-181) : flux lus même sans RSS (`feed.rs` : `www_twin`, `announced`, `from_pages`, `feed_date`),
+  plan du site (`sitemap.rs::redirect_sources`), barre du calque avec les actions du composant
+  (`styles/mod.rs`), options de l'éditeur (`settings.rs::EditorOptions`), images de l'installateur.
+- Piège : un texte relié au CMS modifié dans le canevas change la donnée du contenu, pas le composant
+  (l'utilisateur a cru retirer un texte du composant) : à revoir dans le lot 2.
+- Reste : lot 2 (refonte des composants, outil « Champ CMS », en-tête et pied en outils, conditions).
+
 ## Travail du 17/11/2026 (après-midi) : D-180 (recadrage sans perte, icônes claire et sombre), 0.7.9
 
 - Fait (voir D-180) :

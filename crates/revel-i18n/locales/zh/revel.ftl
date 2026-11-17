@@ -3928,3 +3928,5 @@ crop-reset = 重置
 crop-reset-help = 完整图片，居中，不缩放
 crop-apply = 应用
 crop-thumb-help = 双击：裁剪（缩放和位置，不修改文件）
+settings-editor-options = 选项
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

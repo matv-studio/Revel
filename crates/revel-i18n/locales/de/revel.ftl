@@ -3928,3 +3928,5 @@ crop-reset = Zurücksetzen
 crop-reset-help = Ganzes Bild, zentriert, ohne Zoom
 crop-apply = Anwenden
 crop-thumb-help = Doppelklick: zuschneiden (Zoom und Position, Datei unverändert)
+settings-editor-options = Optionen
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

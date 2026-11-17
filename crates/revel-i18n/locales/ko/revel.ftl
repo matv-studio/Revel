@@ -3928,3 +3928,5 @@ crop-reset = 초기화
 crop-reset-help = 전체 이미지, 가운데, 확대 없음
 crop-apply = 적용
 crop-thumb-help = 더블클릭: 자르기(확대와 위치, 파일은 그대로)
+settings-editor-options = 옵션
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

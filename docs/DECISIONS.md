@@ -2471,3 +2471,34 @@ construction 0.7.9).** Réponse de l'utilisateur : « cadrage sans perte ».
   - recadrage d'une image `Node::Image` (gabarits Eleventy) et d'une image dans une utilisation de composant
     (faite dans le canevas du composant) ;
   - aperçu en direct dans le canevas pendant le réglage (la fenêtre a son propre aperçu).
+
+**D-181 — 17/11/2026 soir — prise (retours de l'utilisateur sur la 0.7.9 : flux espècehumaine refusé, dates
+des flux, « 61 adresses sans page », panneau Styles surchargé, logo de l'installateur).** Lot 1 (corrections) ;
+le lot 2 (composants façon Framer, outil « Champ CMS », outils En-tête et Pied à la place des gabarits, outil
+Conditions complet) est décidé après questions à l'utilisateur.
+- **Flux, lecture universelle** (`revel_import::feed::fetch`) :
+  - adresse sans schéma complétée ; essai avec et sans « www. » ; flux annoncé par une page
+    (`<link rel="alternate">`) suivi ;
+  - sans flux (réponse 404 : RSS non publié), la collection est lue dans ses pages : liens de l'accueil et
+    des pages qu'il lie vers `/<collection>/<nom>`, titre, résumé, image et date pris dans les balises de
+    partage de chaque page (60 pages au plus) ; fin de titre commune (« | Nom du site ») retirée ;
+  - commande `revel feed-read <adresse>` pour vérifier une source.
+- **Date d'un contenu repris** : la date du flux est aussi gardée dans `feed_date` ; une date corrigée à la
+  main (différente de `feed_date`) n'est plus écrasée. Constat : Webflow écrit dans `pubDate` la date de
+  création de l'élément (13/08/2024 pour les cinq projets de Superficiel), Revel la lisait correctement.
+- **Plan du site** : une ancienne adresse redirigée n'est plus comptée ni dessinée comme une adresse sans page
+  (nœud discret « ancienne adresse », lien vers elle non cassé).
+- **Panneau Styles** : « Modifier le composant », « Détacher » et la pastille du composant passent en icônes à
+  droite du nom (barre du calque) ; le rôle « Filtres de liste » n'est plus proposé sur une utilisation de
+  composant ; le menu d'état n'est montré qu'avec les classes activées (seul moyen de régler un survol ou un
+  pseudo-élément d'une classe ; le retirer aussi là supprimerait cette fonction) ; propriété « Contenu » d'une
+  carte dans une liste de collection : verrouillée (la liste fournit le contenu).
+- **Réglages de Revel** : « Classes », « Signaler les médias lourds » et « Montrer l'élément ajouté dans les
+  calques » dans un panneau « Options » de la partie Éditeur.
+- **Installateur Windows** : images de l'assistant (`windows/installer-*.bmp`) refaites avec le logo actuel.
+- **Site Alunites** (retouché sur place, `patch181.py`, le site n'est plus régénéré) : couleurs réunies (18
+  variables retirées, `--trait-fort` ajoutée), icônes des prix nettes et grises hors survol, lueur de la
+  couleur du prix au survol, rail des fiches sous la barre de navigation (code ajouté du site : dépend de
+  l'état de la barre), carte d'accueil d'une marque sans numéro ni puce et sans variante « Accueil ».
+- En suspens : lot 2 ; traduction de `prop-entry-list-help` (anglais hors français) ; essai e2e du plan du site
+  pour les anciennes adresses.

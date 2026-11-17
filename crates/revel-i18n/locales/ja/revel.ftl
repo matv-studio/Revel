@@ -3928,3 +3928,5 @@ crop-reset = リセット
 crop-reset-help = 画像全体、中央、ズームなし
 crop-apply = 適用
 crop-thumb-help = ダブルクリック：トリミング（ズームと位置、ファイルは変更なし）
+settings-editor-options = オプション
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

@@ -186,6 +186,9 @@ try {
     await p.keyboard.press('Escape');
     await p.click('.view-tab--icon');
     await p.waitForSelector('.settings-classes');
+    // Options de l'éditeur dans leur propre panneau (D-181).
+    const inEditor = await p.$$eval('.settings-card[data-section="editor-options"] :is(.settings-classes, .settings-heavy, .settings-reveal)', (l) => l.length);
+    check('réglages de Revel : classes, médias lourds et calques dans « Éditeur › Options »', inEditor === 3, String(inEditor));
     const off = await p.$eval('.settings-classes', (e) => !e.checked) && await p.$eval('.settings-heavy', (e) => !e.checked);
     if (shots) await p.screenshot({ path: `${shots}/reglages-classes.png` });
     await p.locator('.settings-classes').evaluate((e) => e.click());
@@ -1073,8 +1076,8 @@ try {
   // sélectionne l'utilisation ; « Modifier » ouvre le canevas du composant, où le lien se
   // sélectionne directement.
   await page.frameLocator('iframe.canvas-frame').locator('header nav a', { hasText: 'Agence' }).first().click();
-  await page.waitForSelector('.dock-panel[data-panel="styles"] .instance-name');
-  check('composant : un clic sélectionne l\'utilisation entière', (await page.textContent('.dock-panel[data-panel="styles"] .instance-name')).trim() === 'Header');
+  await page.waitForSelector('.dock-panel[data-panel="styles"] .style-layerbar .instance-actions');
+  check('composant : un clic sélectionne l\'utilisation entière', (await page.textContent('.dock-panel[data-panel="styles"] .style-layerbar-name')).trim() === 'Header');
   // Styles propres à une utilisation (comme Framer) : Position réglée sur cette utilisation
   // seule, par une classe posée sur la racine du composant ; annulée ensuite.
   {
@@ -1108,7 +1111,7 @@ try {
     }
     check('composant : position réglée sur l\'utilisation seule (classe propre), annulée', has && set && undone, `${has} ${set} ${undone}`);
   }
-  await page.click('.dock-panel[data-panel="styles"] .instance-actions .btn >> nth=0');
+  await page.click('.dock-panel[data-panel="styles"] [data-action="component-edit"]');
   await page.waitForSelector('.comp-bar');
   await page.waitForSelector('iframe.canvas-frame[data-key="@"]');
   await page.waitForTimeout(800);
@@ -1618,11 +1621,11 @@ try {
       await page.keyboard.press('Enter');
       await untilC(async () => !!(await comp()));
       await page.click('.dock-tab[data-panel="styles"]');
-      await page.waitForSelector('.instance-name');
+      await page.waitForSelector('.style-layerbar .instance-actions');
       const made = await comp();
       check('composants : créé à partir de la sélection, son utilisation sélectionnée',
         made && made.name === 'Bouton pause' && made.body[0].tag === 'button' && (await usesOf()) === 1
-          && (await page.textContent('.instance-name')).trim() === 'Bouton pause');
+          && (await page.textContent('.style-layerbar-name')).trim() === 'Bouton pause');
       await frame.locator('.hero__pause').dblclick();
       await page.waitForSelector('.iso-bar');
       await page.click('.bind-row[data-bind="component-bind-text"] .bind-btn');

@@ -979,3 +979,8 @@
 .cond-code > summary::-webkit-details-marker { display: none; }
 .cond-code[open] > summary { margin-bottom: var(--s-2); }
 .attr-when { margin: var(--s-1) 0 2px; }
+
+/* Utilisation d'un composant : actions à droite du nom, dans la barre du calque (D-181). */
+.style-layerbar .instance-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.style-layerbar .instance-actions { flex-wrap: nowrap; }
+.style-layerbar .instance-head { padding: 0 5px; width: auto; }

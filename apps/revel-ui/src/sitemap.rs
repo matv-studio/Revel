@@ -85,6 +85,15 @@ struct Edge {
     kind: EdgeKind,
 }
 
+/// Anciennes adresses redirigées (D-181) : nœuds « introuvables » d'où part une redirection.
+fn redirect_sources(map: &lm::LinkMap) -> std::collections::HashSet<String> {
+    map.links
+        .iter()
+        .filter(|l| matches!(l.via, LinkVia::Redirect { .. }))
+        .map(|l| l.from.clone())
+        .collect()
+}
+
 fn edges_of(map: &LinkMap) -> Vec<Edge> {
     let mut out: Vec<Edge> = Vec::new();
     let mut at: HashMap<(String, String), usize> = HashMap::new();
@@ -103,8 +112,13 @@ fn edges_of(map: &LinkMap) -> Vec<Edge> {
             }
         }
     }
+    let old = redirect_sources(map);
     for e in &mut out {
-        let to = map.node(&e.to).map(|n| n.kind);
+        // Lien vers une ancienne adresse redirigée : pas un lien cassé.
+        let to = map
+            .node(&e.to)
+            .map(|n| n.kind)
+            .filter(|k| !(*k == NodeKind::Missing && old.contains(&e.to)));
         let vias: Vec<&LinkVia> = e.links.iter().map(|&i| &map.links[i].via).collect();
         e.kind = if vias.iter().all(|v| matches!(v, LinkVia::Redirect { .. })) {
             EdgeKind::Redirect
@@ -1628,12 +1642,14 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
         let orph = orphans.get();
         let drop = drop_on.get();
         let p = pos.get();
+        let old = map.with(redirect_sources);
         map.get()
             .nodes
             .into_iter()
             .filter_map(|n| {
                 let (x, y) = *p.get(&n.key)?;
                 let key = n.key.clone();
+                let is_old = old.contains(&key);
                 let on = sel == Some(Picked::Node(key.clone()));
                 let dim = f.as_ref().is_some_and(|f| !f.contains(&key))
                     || m.as_ref().is_some_and(|m| !m.contains(&key));
@@ -1647,6 +1663,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                     NodeKind::Layout => icons::template(),
                     NodeKind::Component => icons::component(),
                     NodeKind::Menu => icons::menu(),
+                    NodeKind::Missing if is_old => icons::arrow_right(),
                     NodeKind::Missing => icons::warning(),
                     NodeKind::External => icons::globe(),
                     NodeKind::Media => match lm::platform(&n.key).map(|p| p.2) {
@@ -1662,6 +1679,7 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                     NodeKind::Layout => "layout",
                     NodeKind::Component => "component",
                     NodeKind::Menu => "menu",
+                    NodeKind::Missing if is_old => "old",
                     NodeKind::Missing => "missing",
                     NodeKind::External => "external",
                     NodeKind::Media => "media",
@@ -1782,10 +1800,12 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
     let counts = move || {
         map.with(|m| {
             let pages = m.nodes.iter().filter(|n| n.kind == NodeKind::Page).count();
+            // Une ancienne adresse redirigée n'est pas une erreur (D-181).
+            let old = redirect_sources(m);
             let broken = m
                 .nodes
                 .iter()
-                .filter(|n| n.kind == NodeKind::Missing)
+                .filter(|n| n.kind == NodeKind::Missing && !old.contains(&n.key))
                 .count();
             (pages, broken, orphans.with(|o| o.len()))
         })

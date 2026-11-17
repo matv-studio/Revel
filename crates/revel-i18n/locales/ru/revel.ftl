@@ -4032,3 +4032,5 @@ crop-reset = Сбросить
 crop-reset-help = Всё изображение, по центру, без масштаба
 crop-apply = Применить
 crop-thumb-help = Двойной щелчок: обрезать (масштаб и положение, файл не меняется)
+settings-editor-options = Параметры
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

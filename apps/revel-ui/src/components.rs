@@ -443,18 +443,6 @@ pub fn instance_settings(
     });
     view! {
         <div class="stack instance">
-            // Composant utilisé (pastille verte) et ses actions sur une ligne ; le nom du calque est
-            // dans la barre du haut (D-124).
-            <div class="instance-actions">
-                <span class="instance-head" title=ui.t("component-of")>
-                    <span class="instance-icon">{icons::component()}</span>
-                    <span class="instance-name">{crate::names::component_name(&c)}</span>
-                </span>
-                <button class="btn btn--small" on:click=move |_| open_component(ed, &at.get_value())>
-                    {icons::edit()}{ui.t("component-edit")}</button>
-                <button class="btn btn--small" title=ui.t("component-detach-help")
-                    on:click=move |_| detach(ui, ed, at.get_value())>{icons::unlink()}{ui.t("component-detach")}</button>
-            </div>
             {variant_row}
             {slot_row}
             {has_props.then(|| view! {
@@ -572,7 +560,11 @@ fn prop_value_row(
                 <div class="style-row">
                     <span class="style-label" title=ui.t("prop-entry-content-help")><span class="style-label-text">{p.label().to_string()}</span></span>
                     <div class="style-control"><div class="select">
+                        // Carte d'une liste de collection : la liste fournit le contenu de chaque
+                        // carte ; rien à choisir ici (D-181).
                         <select class="input prop-entry-select" aria-label=p.label().to_string()
+                            prop:disabled=from_list
+                            title=if from_list { ui.tx("prop-entry-list-help", &[]) } else { String::new() }
                             on:change=move |e| {
                                 let v = event_target_value(&e);
                                 let expr = if v == "@list" {

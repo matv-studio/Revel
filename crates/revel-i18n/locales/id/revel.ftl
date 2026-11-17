@@ -3928,3 +3928,5 @@ crop-reset = Atur ulang
 crop-reset-help = Seluruh gambar, di tengah, tanpa zoom
 crop-apply = Terapkan
 crop-thumb-help = Klik ganda: pangkas (zoom dan posisi, berkas tidak berubah)
+settings-editor-options = Opsi
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

@@ -1035,7 +1035,13 @@ fn filter_settings(ui: Ui, ed: Ed, at: &Target, attrs: &[Attr]) -> Option<AnyVie
     })?;
     // Sans rôle : proposé aux éléments d'une liste quand la page a des filtres (les boutons et le
     // groupe viennent de l'élément « Filtres de liste » du panneau Ajouter).
-    if role.is_empty() && !(has_group && in_list) {
+    // (Pas sur une utilisation de composant : le rôle se règle sur un élément, D-181.)
+    let is_use = ed.doc.with_untracked(|d| {
+        d.as_ref()
+            .and_then(|d| revel_edit::address::node(d, at).ok())
+            .is_some_and(|n| matches!(n, Node::Use { .. }))
+    });
+    if role.is_empty() && (is_use || !(has_group && in_list)) {
         return None;
     }
     let names = [

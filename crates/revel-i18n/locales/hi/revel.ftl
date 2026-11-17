@@ -3928,3 +3928,5 @@ crop-reset = रीसेट
 crop-reset-help = पूरा चित्र, बीच में, बिना ज़ूम
 crop-apply = लागू करें
 crop-thumb-help = डबल-क्लिक: क्रॉप (ज़ूम और स्थिति, फ़ाइल नहीं बदलती)
+settings-editor-options = विकल्प
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

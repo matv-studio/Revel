@@ -50,6 +50,8 @@ enum Command {
     },
     /// Reconstruit un site dans la forme de l'interface (données et calculs écrits, listes de
     /// collection et propriétés de composants gardées) ; `--dry-run` : relevé avant et après.
+    /// Lit un flux RSS ou Atom (ou, sans flux, les pages de la collection) et liste ses articles.
+    FeedRead { url: String },
     Rebuild {
         dir: PathBuf,
         #[arg(long)]
@@ -288,6 +290,21 @@ fn main() -> Result<()> {
                         i.node.as_deref().unwrap_or("-"),
                         i.detail
                     );
+                }
+            }
+        }
+        Command::FeedRead { url } => {
+            let http = revel_import::crawl::Http::new();
+            match revel_import::feed::fetch(&http, &url) {
+                Ok(f) => {
+                    for i in &f.items {
+                        println!("{}\t{}\t{}\t{}", i.date, i.title, i.link, i.image);
+                    }
+                    println!("{} articles", f.items.len());
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(1);
                 }
             }
         }

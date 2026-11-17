@@ -104,7 +104,7 @@ pub fn Settings() -> impl IntoView {
                         </div>
                     </section>
                 }.into_any())}
-                {part("editor", view! { <crate::prefs::EditorPrefs/> }.into_any())}
+                {part("editor", view! { <crate::prefs::EditorPrefs/><EditorOptions/> }.into_any())}
                 {part("colors", view! { <crate::prefs::UiColors/> }.into_any())}
                 {part("shortcuts", view! { <crate::prefs::Shortcuts/> }.into_any())}
                 {part("translate", view! { <TranslatePacks/> }.into_any())}
@@ -350,6 +350,20 @@ fn General() -> impl IntoView {
                         </Show>
                         <button type="button" class="btn btn--small" on:click=change>{ui.t("new-site-change")}</button>
                     </div>
+                </div>
+        </section>
+    }
+}
+
+/// Options de l'éditeur (D-181) : classes, médias lourds signalés, élément ajouté montré dans les
+/// calques.
+#[component]
+fn EditorOptions() -> impl IntoView {
+    let ui = expect_context::<Ui>();
+    view! {
+        <section class="section settings-card" data-section="editor-options">
+            <h2>{ui.t("settings-editor-options")}</h2>
+            <div class="form-grid">
                     <span class="label" title=ui.t("settings-classes-help")>{ui.t("settings-classes")}</span>
                     <label class="switch">
                         <input type="checkbox" class="settings-classes"
@@ -378,7 +392,7 @@ fn General() -> impl IntoView {
                             on:change=move |e| { let on = event_target_checked(&e); update(ui, &|s| s.reveal_inserted = on) }/>
                         <span class="switch-track"></span>
                     </label>
-                </div>
+            </div>
         </section>
     }
 }

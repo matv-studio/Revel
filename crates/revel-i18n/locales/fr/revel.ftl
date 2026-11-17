@@ -3931,3 +3931,5 @@ crop-reset = Réinitialiser
 crop-reset-help = Image entière, centrée, sans zoom
 crop-apply = Appliquer
 crop-thumb-help = Double-clic : recadrer (zoom et position, sans modifier le fichier)
+settings-editor-options = Options
+prop-entry-list-help = Carte d’une liste de collection : la liste fournit le contenu de chaque carte. Pour choisir un contenu précis, placer la carte hors de la liste.

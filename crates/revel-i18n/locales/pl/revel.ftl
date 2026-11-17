@@ -4036,3 +4036,5 @@ crop-reset = Resetuj
 crop-reset-help = Cały obraz, wyśrodkowany, bez powiększenia
 crop-apply = Zastosuj
 crop-thumb-help = Dwuklik: przytnij (powiększenie i położenie, plik bez zmian)
+settings-editor-options = Opcje
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

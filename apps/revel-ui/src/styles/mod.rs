@@ -989,9 +989,37 @@ pub fn Styles() -> impl IntoView {
             .unwrap_or_default();
         let hidden = revel_model::is_hidden(&n);
         let at = StoredValue::new(at);
+        let is_use_node = matches!(n, Node::Use { .. });
+        let comp_name = match &n {
+            Node::Use { component, .. } => ed
+                .doc
+                .with_untracked(|d| {
+                    d.as_ref()?
+                        .component(component)
+                        .map(crate::names::component_name)
+                })
+                .unwrap_or_default(),
+            _ => String::new(),
+        };
         Some(view! {
             <div class="style-layerbar" class:is-hidden=hidden>
                 <span class="style-layerbar-name" title=name.clone()>{name.clone()}</span>
+                // Utilisation d'un composant (D-181) : composant, « Modifier » et « Détacher » à
+                // droite du nom.
+                {is_use_node.then(|| view! {
+                    <span class="instance-actions">
+                        <button class="icon-btn icon-btn--small instance-head" data-action="component-show"
+                            title=format!("{} : {}", ui.tx("component-of", &[]), comp_name.clone()) aria-label=ui.t("component-of")
+                            on:click=move |_| crate::components::open_component(ed, &at.get_value())>
+                            <span class="instance-icon">{icons::component()}</span></button>
+                        <button class="icon-btn icon-btn--small" data-action="component-edit"
+                            title=ui.t("component-edit") aria-label=ui.t("component-edit")
+                            on:click=move |_| crate::components::open_component(ed, &at.get_value())>{icons::edit()}</button>
+                        <button class="icon-btn icon-btn--small" data-action="component-detach"
+                            title=format!("{} — {}", ui.tx("component-detach", &[]), ui.tx("component-detach-help", &[])) aria-label=ui.t("component-detach")
+                            on:click=move |_| crate::components::detach(ui, ed, at.get_value())>{icons::unlink()}</button>
+                    </span>
+                })}
                 <button class="icon-btn icon-btn--small style-hide" class:is-on=hidden
                     aria-pressed=hidden.to_string()
                     title=move || format!("{} ({})", ui.tx(if hidden { "style-show" } else { "style-hide" }, &[]), ui.tx("key-hide", &[]))
@@ -1100,7 +1128,8 @@ pub fn Styles() -> impl IntoView {
                                 choose_sel=Callback::new(move |sel: String| selector.set(sel))/>
                         </div>
                         <div class="target-meta">
-                            <StateMenu sx/>
+                            // Menu d'état : seulement avec les classes activées (D-181).
+                            <Show when=move || ui.settings.with(|s| s.classes)><StateMenu sx/></Show>
                             <span class="target-where muted" title=move || format!("{} — {}", sx.full_selector(), bp_full().unwrap_or_default())>
                                 {move || bp_label().unwrap_or_default()}
                                 <span class="target-count">{move || ed.count.get().filter(|(s, _)| *s == selector.get()).map(|(_, n)| format!(" · {}", ui.tx("styles-count", &[("count", n.to_string())])))}</span>

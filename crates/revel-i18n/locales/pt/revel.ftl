@@ -3928,3 +3928,5 @@ crop-reset = Repor
 crop-reset-help = Imagem inteira, centrada, sem zoom
 crop-apply = Aplicar
 crop-thumb-help = Duplo clique: recortar (zoom e posição, ficheiro inalterado)
+settings-editor-options = Opções
+prop-entry-list-help = Card in a collection list: the list provides each card’s content. To pick a specific item, place the card outside the list.

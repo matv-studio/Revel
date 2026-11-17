@@ -595,6 +595,8 @@ lire `docs/ETAT.md` sur https://github.com/matv-studio/Revel (dépôt public).
   supposition. Sources en fin de réponse.
 - En fin de travail : le résultat en quelques lignes, les captures, une suite possible ; pas de récit des étapes.
 
+**Maquette avant code** : aucune fonction d'interface n'est codée avant que l'utilisateur ait vu et validé sa maquette (détail dans « Exigences permanentes »).
+
 **Produit** : voir « Exigences permanentes de l'utilisateur » plus bas. En bref : tout site 100 % éditable depuis
 l'interface ; « quand tu te heurtes à une limite, tu crées l'outil » (pour l'utilisateur et pour un LLM par le
 MCP) ; ergonomie primordiale ; aucune phrase d'explication visible (info-bulles) ; code couleur de Webflow ;
@@ -755,6 +757,11 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
   `docs/DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/HEBERGEURS.md`.
 
 ## Exigences permanentes de l'utilisateur (interface)
+- **Maquette avant code** (règle du 17/11/2026) : pour toute fonction ou tout outil nouveau, ou refait, de
+  l'interface, montrer d'abord à l'utilisateur une maquette (capture du panneau ou de l'écran prévu, avec ses
+  réglages et leurs noms) et attendre sa correction ou son accord ; rien n'est codé avant. Ses scénarios
+  d'usage (« je pose une carte, je change son titre, les autres ne bougent pas ») deviennent les essais de
+  bout en bout de la fonction. Un sujet par lot, un lot par chat si le sujet est gros.
 - Niveau Webflow, Framer, Figma pour des personnes non techniques ; code couleur de Webflow (bleu réglé ici ou
   propre à la langue, orange hérité, vert composants), étendu à tout élément qu'il rend plus lisible.
 - Peu de texte : **aucune phrase d'explication visible** dans une fenêtre, un panneau, une liste ou des réglages

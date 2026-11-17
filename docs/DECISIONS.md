@@ -2525,3 +2525,9 @@ Objectif : composants « au plus près de Framer », sans code visible. Version 
 - **Menu d'état** : en attente de la réponse de l'utilisateur pour le mode « Classes ».
 - À traiter aussi : CI rouge de `abeb1e4` (capture de l'accueil du site cobaye, trois essais, styles
   identiques) ; traductions de `prop-entry-list-help`.
+
+**D-183 — 17/11/2026 — prise (demande de l'utilisateur : « Maquette avant code, rajoute ceci aux règles de Revel »).**
+Toute fonction d'interface nouvelle ou refaite est d'abord montrée en maquette et validée par l'utilisateur ; ses
+scénarios d'usage deviennent les essais de bout en bout. Pourquoi : D-179 à D-181 ont livré des outils
+(gabarits, conditions, cartes reliées au CMS) conformes à mon interprétation et non à sa demande. S'applique
+dès le lot 2 (D-182). Règle écrite dans `docs/ETAT.md` (« Reprise » et « Exigences permanentes »).

@@ -2502,3 +2502,26 @@ Conditions complet) est décidé après questions à l'utilisateur.
   l'état de la barre), carte d'accueil d'une marque sans numéro ni puce et sans variante « Accueil ».
 - En suspens : lot 2 ; traduction de `prop-entry-list-help` (anglais hors français) ; essai e2e du plan du site
   pour les anciennes adresses.
+
+**D-182 — 17/11/2026 20h50 — prise, à coder (lot 2 des retours sur la 0.7.9 ; réponses de l'utilisateur).**
+Objectif : composants « au plus près de Framer », sans code visible. Version 0.7.10 construite après ce lot.
+- **Composants** :
+  - propriétés simples (texte, image, lien, couleur, interrupteur) réglées par utilisation ;
+  - un texte du composant se modifie dans le composant, jamais dans une donnée : le double-clic dans le
+    canevas sur un texte relié au CMS ne doit plus changer le contenu sans le dire ;
+  - variantes : seulement celles créées par l'utilisateur, plus le survol.
+- **Cartes de marque** (site Alunites) : textes, logo, lien et couleur en propriétés de chaque carte ; la
+  collection « Marques » est supprimée (« pas logique dans la création d'un site »). À revoir avec elle : le
+  champ « source » des projets et des articles (référence vers Marques), les filtres par marque, le pied.
+- **Outil « Champ CMS »** : élément posé dans un composant ou une page, réglé par deux menus (collection,
+  champ), pour un texte, une image ou un lien ; plus aucune expression `{{ … }}` montrée dans le panneau.
+- **Liste de collection** : réglage de ce qui est montré — automatique (tri, nombre, filtre) ou choix manuel des
+  contenus, dans l'ordre voulu. La carte d'une liste reste une seule carte modèle.
+- **En-tête et pied** : une seule zone commune à tout le site (outils « En-tête » et « Pied »), modifiable
+  depuis n'importe quelle page ; les gabarits disparaissent de l'interface (section « Gabarits » de Pages et
+  vue du gabarit de D-179 retirées).
+- **Conditions** : la branche montrée (Si ou Sinon) est indiquée dans le canevas et dans les calques ; les
+  deux branches se modifient ; tout est réglable dans Styles.
+- **Menu d'état** : en attente de la réponse de l'utilisateur pour le mode « Classes ».
+- À traiter aussi : CI rouge de `abeb1e4` (capture de l'accueil du site cobaye, trois essais, styles
+  identiques) ; traductions de `prop-entry-list-help`.

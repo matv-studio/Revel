@@ -9,6 +9,44 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 17/11/2026 (nuit) : maquettes du lot 2 (D-182, règle D-183) — en attente de l'utilisateur
+
+- Chat du projet claude.ai « Apps interne » (compte GitHub Alunites). Rien n'est codé : les maquettes ont été
+  envoyées à l'utilisateur dans les deux thèmes, le code attend sa correction ou son accord.
+- Méthode des maquettes : l'interface réelle (simulateur Tauri + pont du canevas sur une copie du cobaye), dont
+  les panneaux sont retouchés dans la page avant la capture. Scripts : `tools/maquettes/base.mjs` (ouverture de
+  l'éditeur), `tools/maquettes/lot2.mjs <dark|light> [scènes]`, `tools/maquettes/reset.sh` (site d'essai remis à
+  neuf, pont relancé). Chemins écrits pour `/home/claude/sp` ; captures dans `/home/claude/sp/shots`.
+- Scènes proposées :
+  - A. utilisation d'un composant : menu « Variante » (celles créées + Survol), propriétés Texte, Image
+    (vignette), Lien (page choisie), Couleur (nouveau type), interrupteur ; libellé bleu et retour à la valeur
+    par défaut quand l'utilisation règle la propriété ;
+  - B. double-clic sur un texte relié au CMS : plus de saisie sur place ; bulle « Champ CMS · Projets › Titre »
+    avec « Modifier ce contenu dans le CMS » et « Modifier le composant » ; dans le panneau, champs CMS en
+    lecture seule ;
+  - C. outil « Champ CMS » : menus Collection et Champ, « Affiché en » (Texte, Image, Lien), « Si le champ est
+    vide » ; une ligne « Champ CMS · Projets › Titre » dans les calques ;
+  - D. liste de collection : « Contenus » Automatique (tri, ordre, nombre, filtres) ou Choix manuel (contenus
+    choisis, ordre au glisser), « Modifier la carte » ;
+  - E. « En-tête » et « Pied » : calques et repère du canevas marqués « Tout le site », interrupteur « Montré
+    sur cette page », section « Gabarits » de Pages retirée ;
+  - F. conditions : branches « Si » et « Sinon » sous la condition dans les calques, branche montrée marquée,
+    l'autre estompée ; repère du canevas avec Si / Sinon ; « Code » retiré du panneau.
+- Constats sur la 0.7.9 : la liste de collection a déjà « Contenus : Tous / Choisis » et « Contenus mis en
+  avant » (à réunir dans le choix Automatique / Choix manuel) ; une liste écrite dans le code montre
+  « Liste parcourue : collections.projets | limit(6) » en clair ; le double-clic sur un titre de carte ouvre la
+  saisie sur place du champ du CMS (capture `b0-actuel`).
+- Questions posées à l'utilisateur : menu d'état en mode « Classes » (resté en suspens dans D-182) ; pages qui
+  ne montrent pas l'en-tête ou le pied (interrupteur par page proposé) ; couleur comme type de propriété.
+- Pièges de cette session :
+  - `trunk build` : wasm-bindgen tué faute de mémoire (fichier .wasm de 208 Mo même avec
+    `CARGO_PROFILE_DEV_DEBUG=0`) ; réussi avec `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
+    CARGO_PROFILE_DEV_STRIP=true CARGO_PROFILE_DEV_OPT_LEVEL=1 trunk build` (32 Mo, 7 min) ;
+  - le repère de sélection du canevas est dessiné dans le cadre du canevas, pas dans la page de l'interface ;
+  - un composant posé en tête de page passe sous l'en-tête fixe du cobaye (clic intercepté) : lui donner une
+    marge haute.
+- CI : `5b6b1ee` en échec sur « Équivalence avec Eleventy (site cobaye) », comme `abeb1e4` (à traiter, D-182).
+
 ## Travail du 17/11/2026 (soir) : D-181, lot 1 des retours sur la 0.7.9
 
 - Fait (voir D-181) : flux lus même sans RSS (`feed.rs` : `www_twin`, `announced`, `from_pages`, `feed_date`),

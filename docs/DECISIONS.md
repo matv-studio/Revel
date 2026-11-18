@@ -2610,3 +2610,17 @@ Maquettes : `tools/maquettes/lot2.mjs` (scènes A à F). Ordre de codage : tout 
   (une condition dans une liste peut rendre les deux) ; envoyé au canevas (`#rv-branches`) puis à
   l'interface (`ready`, `refreshed`). Rien n'est deviné côté interface.
 - En suspens : retrait de « Code » du panneau de condition (montré dans la maquette), non fait.
+
+**D-188 — 18/11/2026 14h37 — prise (demande de l'utilisateur pour la 0.8 : vue d'ouverture et barre de l'éditeur).**
+- Vue d'ouverture : canevas libre éteint par défaut (page ajustée à la zone). Réglages › Éditeur › Options :
+  « Ouvrir en canevas libre » (`start_free`), « Ouvrir avec tous les écrans » (`start_side`, qui entraîne le
+  canevas libre : l'autre interrupteur est alors coché et verrouillé). L'état de la dernière séance n'est
+  plus gardé (préférences locales `free` et `side` abandonnées) : les boutons de la barre valent pour la
+  séance. Pourquoi : un état d'ouverture prévisible, réglé à un seul endroit.
+- Barre : à gauche page, langue affichée, thème du site (ordre inversé) ; au milieu de la barre (grille à
+  trois zones, centrage exact quelle que soit la largeur des côtés) écrans, canevas libre, tous les écrans,
+  gestion des écrans ; à droite règle, zoom, volets, aide, annuler, rétablir.
+- Codé sans maquette préalable (écart à D-183) : disposition dictée bouton par bouton par l'utilisateur ;
+  captures envoyées pour accord.
+- Les essais de bout en bout gardent le canevas libre à l'ouverture (simulateur : `start_free` actif sauf
+  paramètre `fitted`) ; la page d'essai du mode simple vérifie l'ouverture par défaut.

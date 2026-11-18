@@ -1,6 +1,6 @@
 /* Revel — éditeur visuel (étape 2).
 
-   ┌ editor-toolbar : page · points de rupture · zoom · scripts ······ annuler rétablir ┐
+   ┌ editor-toolbar : page langue thème ··· écrans (au milieu) ··· règle zoom volets aide annuler rétablir ┐
    │ canvas-area : cadre du canevas centré, à la largeur du point de rupture          │
    └ editor-status : élément sélectionné · propriétaire ··················· largeur ┘ */
 
@@ -12,7 +12,9 @@
 }
 
 .editor-toolbar {
-  display: flex;
+  /* Trois zones : le groupe des écrans reste au milieu de la barre quelle que soit la largeur des côtés. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
@@ -58,6 +60,8 @@
 .bp-width:empty { display: none; }
 .editor-scripts { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--text-sm); white-space: nowrap; }
 .toolbar-spacer { flex: 1; }
+.toolbar-side, .toolbar-center { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.toolbar-side--end { justify-content: flex-end; }
 
 /* Zone du canevas : la vue se déplace et se zoome (transform du cadre), sans barres de défilement. */
 .canvas-area {
@@ -325,6 +329,8 @@ button.layer-mark:hover { color: var(--text); background: var(--surface-active);
 .bp-num .input { width: 72px; height: var(--control-sm); text-align: right; }
 /* Affichage : règles, guides de colonnes. */
 .view-menu .bp-pop { width: 248px; }
+/* Le bouton garde sa largeur d'icône (la largeur minimale des menus vaut pour leur contenu). */
+.editor-toolbar .view-menu { min-width: 0; }
 .view-line { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: 28px; font-size: var(--text-sm); }
 .view-num { width: 72px; text-align: right; }
 .view-guides { display: flex; flex-direction: column; gap: var(--s-1); padding-left: var(--s-2); border-left: var(--border) solid var(--line); transition: opacity var(--fast) var(--ease); }

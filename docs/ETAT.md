@@ -16,10 +16,11 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   `lib.rs` : `EditorPage.branches`), `revel-core` (`canvas.rs` : `#rv-branches`, `canvas.js`), interface
   (`editor.rs` : `Ed::branches`, `layers.rs` : `mark_branches`). Clé `layers-branch-shown` (15 langues).
   Essai de bout en bout ajouté au bloc « condition » (415 essais).
-- **Demande du 18/11 14h37 pour la 0.8** (à faire) : canevas libre éteint par défaut ; Réglages › Éditeur :
-  démarrer en « Canevas libre », en « Tous les écrans » ; barre : à droite règle, zoom, volets, aide,
-  annuler, rétablir ; à gauche thème du site et langue intervertis ; écrans, canevas libre, tous les
-  écrans et gestion des écrans centrés.
+- **Fait aussi (D-188, demande de 14h37)** : canevas libre éteint à l'ouverture ; Réglages › Éditeur ›
+  Options : « Ouvrir en canevas libre », « Ouvrir avec tous les écrans » (`start_free`, `start_side` dans
+  `AppSettings`) ; barre en trois zones (`.toolbar-side`, `.toolbar-center`) : page, langue, thème du site /
+  écrans au milieu / règle, zoom, volets, aide, annuler, rétablir. Simulateur : paramètre `fitted` (ouverture
+  par défaut), `allscreens`. 417 essais de bout en bout.
 - **Reste du lot 2** : C (outil « Champ CMS »), D (liste Automatique / Choix manuel), E (En-tête / Pied),
   cartes de marque en propriétés ; date corrigée dans le CMS après accord ; 0.8.0.
 

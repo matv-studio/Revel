@@ -144,10 +144,23 @@ try {
     const p = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     p.on('pageerror', (e) => errors.push(e.message));
     await p.addInitScript(mock);
-    await p.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&simple=1&checks=1&noheavy=1&bridge=${encodeURIComponent(bridge)}`);
+    await p.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&simple=1&checks=1&noheavy=1&fitted=1&bridge=${encodeURIComponent(bridge)}`);
     await p.waitForSelector('.site-card');
     await p.click('.site-open');
     await p.waitForSelector('iframe.canvas-frame');
+    // Vue d'ouverture (D-188) : canevas libre éteint par défaut ; barre : écrans au milieu, à droite
+    // règle, zoom, volets, aide, annuler, rétablir.
+    {
+      const bar = await p.evaluate(() => {
+        const x = (s) => { const e = document.querySelector('.editor-toolbar ' + s); return e ? e.getBoundingClientRect().left : -1; };
+        const t = document.querySelector('.editor-toolbar').getBoundingClientRect(), c = document.querySelector('.toolbar-center').getBoundingClientRect();
+        return { free: document.querySelector('.free-toggle').classList.contains('is-on'), side: document.querySelector('.side-toggle').classList.contains('is-on'),
+          off: Math.abs((c.left + c.right) / 2 - (t.left + t.right) / 2), xs: ['.toolbar-center', '.view-menu', '.editor-zoom', '.panels-menu', '.shortcuts', '.btn-undo', '.btn-redo'].map(x) };
+      });
+      check('éditeur : ouvert sans canevas libre par défaut ; barre : écrans au milieu, puis règle, zoom, volets, aide, annuler, rétablir',
+        !bar.free && !bar.side && bar.off <= 1 && bar.xs.every((v, i) => v >= 0 && (i === 0 || v > bar.xs[i - 1])), JSON.stringify(bar));
+      await p.click('.free-toggle');
+    }
     const frame = () => p.frames().find((f) => f.url().includes('rv='));
     for (let i = 0; i < 300; i++) { const f = frame(); if (f) { try { if (await f.evaluate(() => document.readyState === 'complete' && !!document.querySelector('[data-rv]'))) break; } catch {} } await p.waitForTimeout(100); }
     await p.waitForTimeout(500);
@@ -189,6 +202,22 @@ try {
     // Options de l'éditeur dans leur propre panneau (D-181).
     const inEditor = await p.$$eval('.settings-card[data-section="editor-options"] :is(.settings-classes, .settings-heavy, .settings-reveal)', (l) => l.length);
     check('réglages de Revel : classes, médias lourds et calques dans « Éditeur › Options »', inEditor === 3, String(inEditor));
+    // Vue d'ouverture (D-188) : « tous les écrans » entraîne le canevas libre (coché, verrouillé).
+    {
+      const st = () => p.evaluate(() => [window.__revelSettings?.start_free, window.__revelSettings?.start_side, document.querySelector('.settings-start-free').checked, document.querySelector('.settings-start-free').disabled]);
+      await p.click('label.switch:has(.settings-start-side)');
+      await p.waitForFunction(() => window.__revelSettings?.start_side === true);
+      const a = await st();
+      await p.click('label.switch:has(.settings-start-side)');
+      await p.waitForFunction(() => window.__revelSettings?.start_side === false);
+      await p.click('label.switch:has(.settings-start-free)');
+      await p.waitForFunction(() => window.__revelSettings?.start_free === true);
+      const b = await st();
+      await p.click('label.switch:has(.settings-start-free)');
+      await p.waitForFunction(() => window.__revelSettings?.start_free === false);
+      check('réglages de Revel : ouvrir en canevas libre, avec tous les écrans (qui entraîne le canevas libre)',
+        a[1] === true && a[2] && a[3] && b[0] === true && b[1] === false && b[2] && !b[3], JSON.stringify([a, b]));
+    }
     const off = await p.$eval('.settings-classes', (e) => !e.checked) && await p.$eval('.settings-heavy', (e) => !e.checked);
     if (shots) await p.screenshot({ path: `${shots}/reglages-classes.png` });
     await p.locator('.settings-classes').evaluate((e) => e.click());

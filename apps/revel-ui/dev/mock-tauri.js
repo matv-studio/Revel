@@ -3,7 +3,7 @@
 (() => {
   const params = new URLSearchParams(location.hash.slice(1));
   const state = {
-    settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null, ...(params.get("scope") ? { accent_scope: params.get("scope") } : {}), reveal_inserted: !!params.get("reveal"), classes: !params.get("simple"), warn_heavy_media: !params.get("noheavy") },
+    settings: { lang: params.get("lang") || "fr", theme: params.get("theme") || "dark", accent: params.get("accent") ? "#" + params.get("accent") : null, ...(params.get("scope") ? { accent_scope: params.get("scope") } : {}), reveal_inserted: !!params.get("reveal"), classes: !params.get("simple"), warn_heavy_media: !params.get("noheavy"), start_free: !params.get("fitted"), start_side: !!params.get("allscreens") },
     // `update=1` : une version plus récente est proposée (Réglages › Mises à jour).
     update: params.get("update") ? { enabled: true, available: { version: "0.7.0", notes: "Version d’essai de la simulation." } } : null,
     recents: params.get("empty") ? [] : [

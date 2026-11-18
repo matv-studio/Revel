@@ -775,7 +775,6 @@ impl Ed {
             return;
         }
         self.free.set(on);
-        crate::pref_set("free", if on { "1" } else { "0" });
         if !on {
             if self.side.get_untracked() {
                 self.set_side(false);
@@ -798,7 +797,6 @@ impl Ed {
         self.side.set(on);
         self.zoom.set(None);
         self.frame_h.set(None);
-        crate::pref_set("side", if on { "1" } else { "0" });
     }
 
     /// Vue côte à côte : écran affiché ou masqué (au moins un reste affiché ; l'écran choisi
@@ -3033,8 +3031,9 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         variant: RwSignal::new(String::new()),
         comp_hs: RwSignal::new(std::collections::HashMap::new()),
         locale: ui.locale,
-        side: RwSignal::new(crate::pref_get("side").as_deref() == Some("1")),
-        free: RwSignal::new(crate::pref_get("free").as_deref() != Some("0")),
+        // Vue d'ouverture : réglages de l'éditeur (D-188), non l'état de la dernière séance.
+        side: RwSignal::new(ui.settings.with_untracked(|s| s.start_side)),
+        free: RwSignal::new(ui.settings.with_untracked(|s| s.start_free || s.start_side)),
         frame_h: RwSignal::new(None),
         frame_w: RwSignal::new(None),
         hidden_bps: RwSignal::new(
@@ -3940,14 +3939,18 @@ fn Toolbar() -> impl IntoView {
     view! {
         <crate::help::Help open=help_open/>
         <div class="editor-toolbar">
+            <div class="toolbar-side">
             <crate::pagetree::PageContext/>
-            // Mode sombre du site, à gauche de la langue : deux façons de voir le même contenu.
+            <LocaleSwitch/>
+            // Mode sombre du site, à droite de la langue : deux façons de voir le même contenu.
             <Show when=move || ed.has_schemes()>
                 <button class="tool-toggle scheme-toggle" class:is-on=move || ed.dark.get() aria-pressed=move || ed.dark.get().to_string()
                     title=ui.t("editor-dark-help") aria-label=ui.t("editor-dark")
                     on:click=move |_| { ed.dark.update(|d| *d = !*d); ed.post_scheme(); }>{icons::moon()}</button>
             </Show>
-            <LocaleSwitch/>
+            </div>
+            // Écrans, canevas libre, tous les écrans, gestion des écrans : au milieu de la barre.
+            <div class="toolbar-center">
             <div class="segmented" role="group" aria-label=ui.t("editor-breakpoints")>
                 {move || breakpoints().into_iter().map(|b| {
                     let id = b.id.clone();
@@ -3976,6 +3979,9 @@ fn Toolbar() -> impl IntoView {
                 title=ui.t("editor-side-help") aria-label=ui.t("editor-side")
                 on:click=move |_| ed.set_side(!ed.side.get_untracked())>{icons::screens()}</button>
             <BreakpointMenu/>
+            </div>
+            <div class="toolbar-side toolbar-side--end">
+            <ViewMenu/>
             <div class="select editor-zoom" title=ui.t("editor-zoom-help")>
                 <select class="input" aria-label=ui.t("editor-zoom")
                     on:change=move |e| {
@@ -3993,8 +3999,6 @@ fn Toolbar() -> impl IntoView {
                     })}
                 </select>
             </div>
-            <ViewMenu/>
-            <div class="toolbar-spacer"></div>
             <crate::dock::PanelsMenu/>
             <details class="bp-menu shortcuts">
                 <summary class="icon-btn" title=ui.t("help-menu") aria-label=ui.t("help-menu")>"?"</summary>
@@ -4057,6 +4061,7 @@ fn Toolbar() -> impl IntoView {
                 prop:disabled=move || !can_undo() on:click=move |_| ed.undo(ui)>{icons::undo()}</button>
             <button class="icon-btn btn-redo" title=ui.t("editor-redo") aria-label=ui.t("editor-redo")
                 prop:disabled=move || !can_redo() on:click=move |_| ed.redo(ui)>{icons::redo()}</button>
+            </div>
         </div>
     }
 }
@@ -4096,7 +4101,7 @@ fn ViewMenu() -> impl IntoView {
         <details class="bp-menu view-menu pop-menu">
             <summary class="tool-toggle" class:is-on=move || ed.rulers.get() || ed.guides.get().on
                 title=ui.t("editor-view") aria-label=ui.t("editor-view")>{icons::ruler()}</summary>
-            <div class="bp-pop">
+            <div class="bp-pop bp-pop--right">
                 <label class="view-line" title=move || ui.tx("key-rulers", &[])>
                     <span>{ui.t("editor-rulers")}</span>
                     <span class="switch">

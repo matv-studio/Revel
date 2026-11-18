@@ -1043,6 +1043,12 @@ pub struct AppSettings {
     /// de l'hébergeur) ; désactivable (D-178).
     #[serde(default = "yes")]
     pub warn_heavy_media: bool,
+    /// Éditeur ouvert en « Canevas libre » (D-188) ; sans lui (par défaut), page ajustée à la zone.
+    #[serde(default)]
+    pub start_free: bool,
+    /// Éditeur ouvert en « Tous les écrans » (D-188), qui entraîne le canevas libre.
+    #[serde(default)]
+    pub start_side: bool,
 }
 
 fn default_catalogs() -> Vec<String> {
@@ -1086,6 +1092,8 @@ impl Default for AppSettings {
             reveal_inserted: true,
             classes: false,
             warn_heavy_media: true,
+            start_free: false,
+            start_side: false,
         }
     }
 }

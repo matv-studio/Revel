@@ -392,6 +392,24 @@ fn EditorOptions() -> impl IntoView {
                             on:change=move |e| { let on = event_target_checked(&e); update(ui, &|s| s.reveal_inserted = on) }/>
                         <span class="switch-track"></span>
                     </label>
+                    // Vue d'ouverture de l'éditeur (D-188) ; « Tous les écrans » entraîne le canevas libre.
+                    <span class="label" title=ui.t("settings-start-free-help")>{ui.t("settings-start-free")}</span>
+                    <label class="switch">
+                        <input type="checkbox" class="settings-start-free"
+                            prop:checked=move || ui.settings.with(|s| s.start_free || s.start_side)
+                            prop:disabled=move || ui.settings.with(|s| s.start_side)
+                            aria-label=ui.t("settings-start-free")
+                            on:change=move |e| { let on = event_target_checked(&e); update(ui, &|s| s.start_free = on) }/>
+                        <span class="switch-track"></span>
+                    </label>
+                    <span class="label" title=ui.t("settings-start-side-help")>{ui.t("settings-start-side")}</span>
+                    <label class="switch">
+                        <input type="checkbox" class="settings-start-side"
+                            prop:checked=move || ui.settings.with(|s| s.start_side)
+                            aria-label=ui.t("settings-start-side")
+                            on:change=move |e| { let on = event_target_checked(&e); update(ui, &|s| s.start_side = on) }/>
+                        <span class="switch-track"></span>
+                    </label>
             </div>
         </section>
     }

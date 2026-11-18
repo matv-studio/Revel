@@ -34,8 +34,13 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   pont pendant qu'il est ouvert n'y paraît pas (essais : poser la redirection avant d'ouvrir le plan).
 - **Couleurs du site** : nombre d'utilisations étendu aux attributs et aux propriétés « Couleur » (`sitecolors.rs`).
 - **Flux** : date corrigée à la main gardée dès la première reprise (`feed.rs`).
-- CI : « Import HTML statique » échoue par moments sur la capture de l'accueil à 1280 px (238 822 pixels, à
-  partir de y = 39, styles identiques) : même défaut que `abeb1e4`, non élucidé ; relancer les tâches en échec.
+- CI rouge depuis `abeb1e4`, élucidée : les captures comparées par `tools/compare-styles.mjs` différaient par
+  l'image d'une vidéo (accueil dès y = 39, `/showreel/` dès y = 2178, styles calculés identiques). Les vidéos
+  du cobaye viennent de Vimeo : selon la charge et le réseau, une capture montre l'affiche et l'autre la
+  première image. Corrigé : un écart qui tient après la seconde capture est repris avec les vidéos couvertes
+  d'un aplat ; s'il disparaît, il est compté « dû à l'image d'une vidéo » et non signalé (place et taille des
+  vidéos toujours comparées). Autre échec passager vu une fois sur `10f4c10` : essais de l'éditeur, panneau
+  Variables (`waitForFunction` 30 s après « expression invalide refusée ») ; passé à la relance.
 - **Reste du lot 2** : C outil « Champ CMS » ; D liste de collection Automatique / Choix manuel ; E outils
   En-tête et Pied ; F branches Si / Sinon dans les calques et le canevas ; cartes de marque du site en
   propriétés et collection Marques supprimée ; compte des utilisations d'une couleur (D-185).

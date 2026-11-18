@@ -243,20 +243,23 @@ for (const motion of ['no-preference', 'reduce']) for (const w of widths) for (c
 const total = queue.length;
 let compared = 0;
 const diffs = [];
-let shotsCompared = 0, noiseMax = 0, noisePixels = 0, retakes = 0;
+let shotsCompared = 0, noiseMax = 0, noisePixels = 0, retakes = 0, videoOnly = 0;
 
 // Propriétés qui découlent des dimensions (changent dès qu'un descendant change de taille).
 const SIZE = new Set(['height', 'block-size', 'width', 'inline-size', 'perspective-origin', 'transform-origin',
   'grid-template-rows', 'grid-template-columns']);
 
-async function open(base, { motion, w, p }) {
+async function open(base, { motion, w, p }, maskVideos = false) {
   const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: motion });
   const page = await ctx.newPage();
   await page.goto(base + p, { waitUntil: 'load' });
   await settle(page);
   const hashes = await page.evaluate(computedStyles, { detail: undefined, skip });
+  // `maskVideos` : cadre des vidéos couvert d'un aplat (l'image montrée par une vidéo dépend du
+  // moment où elle est décodée, pas du site).
   const shot = shots && motion === 'no-preference'
-    ? await page.screenshot({ fullPage: true, animations: 'disabled' })
+    ? await page.screenshot({ fullPage: true, animations: 'disabled',
+      ...(maskVideos ? { mask: [page.locator('video')], maskColor: '#808080' } : {}) })
     : null;
   return { ctx, page, hashes, shot };
 }
@@ -285,6 +288,17 @@ async function worker() {
           await B2.ctx.close();
           [sa, sb] = [A2.shot, B2.shot];
           d = await shotDiff(sa, sb);
+        }
+        if (failed(d) && !d.size) {
+          // Écart qui tient encore : s'il disparaît quand les vidéos sont couvertes, il vient de
+          // l'image qu'une vidéo montrait à l'instant de la capture (affiche ou première image,
+          // selon la charge de la machine), pas du site. La place et la taille des vidéos restent
+          // comparées (aplat de même cadre), comme tous les styles calculés.
+          const [A3, B3] = [await open(urlA, job, true), await open(urlB, job, true)];
+          await A3.ctx.close();
+          await B3.ctx.close();
+          const dm = await shotDiff(A3.shot, B3.shot);
+          if (!failed(dm)) { videoOnly++; d = dm; }
         }
         if (failed(d)) {
           diffs.push({ ...job, what: d.size ? `capture : dimensions ${d.size}` : `capture : ${d.over} pixels au-delà de la tolérance (écart max ${d.max}, à partir de y = ${d.top})` });
@@ -335,7 +349,7 @@ srvB?.close();
 console.log(`${total} combinaisons (${pages.length} pages × ${widths.length} largeurs × 2 préférences de mouvement), ` +
   `${compared} styles calculés comparés (éléments et pseudo-éléments)` +
   (shots ? `, ${shotsCompared} paires de captures (bruit toléré : écart max ${noiseMax}/255, ` +
-    `au plus ${noisePixels} pixel(s) au-delà de ${tolerance}, ${retakes} paire(s) reprise(s))` : '') +
+    `au plus ${noisePixels} pixel(s) au-delà de ${tolerance}, ${retakes} paire(s) reprise(s), ${videoOnly} écart(s) dû(s) à l'image d'une vidéo)` : '') +
   ` : ${diffs.length} écart(s).`);
 for (const d of diffs.slice(0, 30)) console.log(`- ${d.p} à ${d.w} px (${d.motion}) : ${d.what}`);
 process.exit(diffs.length ? 1 : 0);

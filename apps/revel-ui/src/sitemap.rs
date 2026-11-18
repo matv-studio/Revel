@@ -592,6 +592,9 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
     let show_shared = RwSignal::new(false);
     let show_external = RwSignal::new(false);
     let show_media = RwSignal::new(false);
+    // Anciennes adresses redirigées (D-185) : un groupe à part, masqué à l'ouverture (un site
+    // repris en compte des dizaines, qui écrasent le plan des pages).
+    let show_redirects = RwSignal::new(false);
     let query = RwSignal::new(String::new());
     // Contenus des collections (adresse, titre), et identifiant de leur collection dans le CMS.
     let cms_id = Memo::new(move |_| {
@@ -721,11 +724,12 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
         let shared = show_shared.get();
         let ext = show_external.get();
         let media = show_media.get();
+        let old = (!show_redirects.get()).then(|| redirect_sources(&m));
         m.nodes.retain(|n| match n.kind {
             NodeKind::Menu | NodeKind::Component | NodeKind::Layout => shared,
             NodeKind::External => ext,
             NodeKind::Media => media,
-            _ => true,
+            _ => old.as_ref().is_none_or(|o| !o.contains(&n.key)),
         });
         let keep: HashSet<String> = m.nodes.iter().map(|n| n.key.clone()).collect();
         m.links
@@ -869,14 +873,19 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
     // Vue : déplacement et zoom.
     let view_t = RwSignal::new((40.0f64, 40.0f64, 1.0f64));
     let stage = NodeRef::<leptos::html::Div>::new();
+    // Lus après un délai (cadrage à la suite d'un groupe montré) : la vue peut avoir été quittée
+    // entre-temps, d'où les lectures qui tolèrent un signal libéré.
     let stage_rect = move || {
         stage
-            .get_untracked()
+            .try_get_untracked()
+            .flatten()
             .map(|el| el.get_bounding_client_rect())
     };
     let fit = move || {
         let Some(r) = stage_rect() else { return };
-        let (x0, y0, x1, y1) = bounds.get_untracked();
+        let Some((x0, y0, x1, y1)) = bounds.try_get_untracked() else {
+            return;
+        };
         let pad = 48.0;
         let (w, h) = ((x1 - x0).max(1.0), (y1 - y0).max(1.0));
         let k = ((r.width() - 2.0 * pad) / w)
@@ -1828,6 +1837,15 @@ pub fn SiteMap(site: SiteSummary) -> impl IntoView {
                         title=ui.t("map-external-help") on:click=move |_| show_group(show_external)>{icons::globe()}{ui.t("map-external")}</button>
                     <button class:is-on=move || show_media.get() aria-pressed=move || show_media.get().to_string()
                         title=ui.t("map-media-help") on:click=move |_| show_group(show_media)>{icons::video()}{ui.t("map-media")}</button>
+                    {move || {
+                        let n = full.with(|m| redirect_sources(m).len());
+                        (n > 0).then(|| view! {
+                            <button class:is-on=move || show_redirects.get() aria-pressed=move || show_redirects.get().to_string() data-group="redirects"
+                                title=ui.t("map-redirects-help") on:click=move |_| show_group(show_redirects)>
+                                {icons::arrow_right()}{ui.t("map-redirects")}<span class="map-filter-count">{n}</span>
+                            </button>
+                        })
+                    }}
                 </div>
                 <span class="map-counts muted small">
                     {move || {

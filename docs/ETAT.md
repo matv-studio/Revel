@@ -27,7 +27,15 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
 - Méthode pour vérifier ce site ici : archive sans `media` déposée dans `_echanges\_tmp-claude` (à supprimer
   par l'utilisateur), reprise par `device_stage_files`, servie par `revel canvas-serve` (les pages se lisent
   à `http://127.0.0.1:<port>/<adresse>/`), images extérieures remplacées par une image d'essai.
-- Version suivante : **0.8.0**. À y mettre aussi : plan du site et redirections (D-185, maquette d'abord).
+- Version suivante : **0.8.0**.
+- **Plan du site** : groupe « Redirections » (anciennes adresses masquées à l'ouverture, `show_redirects` dans
+  `sitemap.rs`) ; cadrage différé tolérant à une vue quittée (`fit` lisait un signal libéré : panique « unreachable »
+  si on changeait de vue dans les 80 ms). Le plan lit le site à son ouverture : une commande passée par le
+  pont pendant qu'il est ouvert n'y paraît pas (essais : poser la redirection avant d'ouvrir le plan).
+- **Couleurs du site** : nombre d'utilisations étendu aux attributs et aux propriétés « Couleur » (`sitecolors.rs`).
+- **Flux** : date corrigée à la main gardée dès la première reprise (`feed.rs`).
+- CI : « Import HTML statique » échoue par moments sur la capture de l'accueil à 1280 px (238 822 pixels, à
+  partir de y = 39, styles identiques) : même défaut que `abeb1e4`, non élucidé ; relancer les tâches en échec.
 - **Reste du lot 2** : C outil « Champ CMS » ; D liste de collection Automatique / Choix manuel ; E outils
   En-tête et Pied ; F branches Si / Sinon dans les calques et le canevas ; cartes de marque du site en
   propriétés et collection Marques supprimée ; compte des utilisations d'une couleur (D-185).

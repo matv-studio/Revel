@@ -33,13 +33,32 @@ pub(crate) fn colors(d: &Site) -> Vec<(String, String, Option<String>)> {
         .collect()
 }
 
-/// Nombre d'utilisations d'une variable dans les styles.
+/// Nombre d'utilisations d'une couleur du site : styles, attributs des pages, gabarits et
+/// composants (`style="color: var(--x)"`), propriétés « Couleur » des composants (valeur par
+/// défaut, valeur d'une utilisation). Une couleur lue par un attribut relié à un champ
+/// (`var(--{{ champ }})`) n'est pas comptée : son nom vient du contenu (D-185).
 fn uses(d: &Site, var: &str) -> usize {
     let needle = format!("var({var}");
-    d.style_rules()
+    let rules = d
+        .style_rules()
         .flat_map(|r| r.decls.iter())
         .filter(|x| x.value.contains(&needle))
-        .count()
+        .count();
+    let name = var.trim_start_matches("--");
+    let defaults = d
+        .components
+        .iter()
+        .flat_map(|c| c.props.iter())
+        .filter(|p| {
+            p.kind == revel_model::PropKind::Color
+                && p.default.as_ref().and_then(|v| v.as_str()) == Some(name)
+        })
+        .count();
+    // Arbres des pages, gabarits et composants, lus comme texte : `var(--x` dans un attribut,
+    // `"x"` comme valeur d'une utilisation.
+    let trees = serde_json::to_string(&(&d.pages, &d.layouts, &d.components)).unwrap_or_default();
+    let arg = serde_json::to_string(&format!("\"{name}\"")).unwrap_or_default();
+    rules + defaults + trees.matches(&needle).count() + trees.matches(&arg).count()
 }
 
 /// Nom lisible d'une variable (`--texte-doux` → « texte doux »).

@@ -2561,15 +2561,17 @@ Maquettes : `tools/maquettes/lot2.mjs` (scènes A à F). Ordre de codage : tout 
 - **Variantes** : le panneau d'une utilisation ne propose déjà que les variantes créées (constaté dans le code
   de la 0.7.9) ; rien à changer là. Le survol et l'appui restent proposés dans le composant ouvert.
 - **Version** : la version qui suit le lot 2 est la **0.8.0**, pas la 0.7.10 (demande du 18/11).
-- **Plan du site et redirections** (demande du 18/11, pour la 0.8.0) : le plan doit comprendre les liens qui
-  passent par une redirection (le site Alunites Groupe en a 61, des anciennes adresses `/project/…`,
-  `/agence/` vers les nouvelles). Deux voies données par l'utilisateur : un bouton « Redirections » dans la
-  barre des groupes du plan (à côté de « Parties communes », « Autres sites », « Médias et réseaux »), ou
-  reprendre dans le site les anciennes adresses connues de Google. Maquette à montrer avant le code (D-183).
-- **Défaut relevé sur le site Alunites Groupe** : Paramètres › Couleurs compte « 0 utilisation » pour une
-  couleur lue seulement par un attribut relié (`var(--{{ marque.data.slug }})`) ; `--alunites` a ainsi été
-  supprimée et la lueur de la carte est devenue grise. À corriger : compter aussi les attributs, et prévenir
-  quand une couleur porte le nom d'une valeur de champ.
+- **Plan du site et redirections** (demande du 18/11, pour la 0.8.0) : le plan lisait déjà les redirections
+  (D-181), mais montrait chaque ancienne adresse comme un nœud : le site Alunites Groupe en a 61, le plan
+  s'ouvrait à 17 %. Fait : groupe « Redirections » dans la barre des groupes (à côté de « Médias et réseaux »,
+  avec leur nombre), masqué à l'ouverture comme les autres ; présent seulement si le site a des redirections.
+  Pourquoi un groupe et pas un changement d'adresses : même geste que les groupes existants, et les adresses
+  du site restent celles choisies. Non fait, à décider : reprendre dans le site les anciennes adresses
+  connues de Google (autre voie donnée par l'utilisateur).
+- **Couleurs du site, nombre d'utilisations** : Paramètres › Couleurs ne comptait que les styles ; `--alunites`,
+  lue seulement par un attribut, a été supprimée sur le site Alunites Groupe (lueur de la carte devenue grise).
+  Fait : les attributs des pages, gabarits et composants et les propriétés « Couleur » sont comptés. Reste : une
+  couleur dont le nom vient d'un champ (`var(--{{ marque.data.slug }})`) n'est pas comptée.
 - **Dates des flux** (réponse de l'utilisateur, 18/11 10h23) : une date corrigée à la main dans le CMS est
   gardée malgré les reprises suivantes. Le mécanisme existait depuis D-181 (`feed_date`) ; ajouté : un contenu
   repris par la 0.7.9, sans `feed_date`, garde aussi sa date dès la première reprise si elle diffère de celle du

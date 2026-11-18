@@ -2813,6 +2813,22 @@ try {
     {
       const docM = await invoke('edit_open');
       const doc0 = JSON.stringify(docM.site);
+      // Anciennes adresses redirigées (D-185) : un groupe « Redirections », masqué à l'ouverture.
+      // La redirection est posée avant d'ouvrir le plan (il lit le site à son ouverture).
+      await invoke('edit_apply', { command: { cmd: 'set_redirects', redirects: [{ from: '/ancienne-e2e/', to: '/contact/' }] }, coalesce: false });
+      await page.click('.view-tab[data-view="view-map"]');
+      await page.waitForSelector('.map-node[data-node="page:index"]');
+      {
+        const btn = await page.waitForSelector('.map-filters [data-group="redirects"]', { timeout: 10000 }).catch(() => null);
+        const oldNode = '.map-node[data-node="missing:/ancienne-e2e/"]';
+        const hiddenFirst = !!btn && (await btn.getAttribute('aria-pressed')) === 'false' && !(await page.$(oldNode));
+        if (btn) await btn.click();
+        const shownAfter = await page.waitForSelector(oldNode, { timeout: 8000 }).then(() => true).catch(() => false);
+        check('plan du site : anciennes adresses redirigées masquées, montrées par « Redirections »', hiddenFirst && shownAfter);
+        await invoke('edit_undo');
+        await page.click('.view-tab[data-view="view-editor"]');
+        await page.waitForSelector('iframe.canvas-frame');
+      }
       await page.click('.view-tab[data-view="view-map"]');
       await page.waitForSelector('.map-node[data-node="page:index"]');
       await page.waitForTimeout(400);

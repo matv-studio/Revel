@@ -167,6 +167,9 @@ pub fn ContentSettings() -> impl IntoView {
                     // Affichage selon une condition (D-179) : réglée par des menus (champ, test,
                     // valeur) ; le code reste dans un volet replié pour les cas écrits à la main.
                     let readable = crate::blocks::readable_condition(ui, ed, at.clone(), cond.clone());
+                    // Condition lue par les menus : pas de code (maquette F, D-182) ; écrite autrement,
+                    // le volet « Code » reste pour la modifier.
+                    let code = !(readable.is_some() && revel_edit::visibility::read(&cond).is_some());
                     let has_else = !otherwise.is_empty();
                     let show = id.map(|id| condition_preview(ui, ed, id, has_else));
                     view! {
@@ -177,14 +180,19 @@ pub fn ContentSettings() -> impl IntoView {
                             </p>
                             {readable}
                             {show}
-                            <details class="cond-code">
-                                <summary title=ui.t("cond-code-help")>{ui.t("cond-code")}</summary>
-                                <Field label=ui.t("inspector-condition") value=cond mono=true
-                                    on_commit=move |v| apply(Command::SetLogic { at: at.clone(), cond: Some(v), expr: None, item: None })/>
-                            </details>
+                            {code.then(|| view! {
+                                <details class="cond-code">
+                                    <summary title=ui.t("cond-code-help")>{ui.t("cond-code")}</summary>
+                                    <Field label=ui.t("inspector-condition") value=cond mono=true
+                                        on_commit=move |v| apply(Command::SetLogic { at: at.clone(), cond: Some(v), expr: None, item: None })/>
+                                </details>
+                            })}
                         </div>
                     }.into_any()
                 }
+                // Liste de collection lisible : réglée par ses menus (« Liste de collection »), sans
+                // expression montrée (D-182).
+                Node::Each { expr, .. } if revel_edit::collection::Query::parse(&expr).is_some() => ().into_any(),
                 Node::Each { expr, item, .. } => {
                     let (a1, a2) = (at.clone(), at.clone());
                     view! {

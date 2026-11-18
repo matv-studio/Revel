@@ -470,3 +470,7 @@ kbd {
 .bound-style > .btn { align-self: flex-start; }
 .bound-decl-fallback { padding-left: 4px; }
 .palette-item.is-cur .palette-hint { color: var(--text-muted); }
+
+/* Zone du site (en-tête, pied) : pastille « Tout le site » (calques, panneau). */
+.layer-badge { flex: none; margin-left: auto; padding: 1px 6px; border-radius: 999px; font-size: var(--text-xs); font-weight: 400; color: var(--set-text); background: var(--set-bg); white-space: nowrap; }
+.zone-tool .tool-head { display: flex; align-items: center; gap: 6px; }

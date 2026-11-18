@@ -1049,16 +1049,38 @@ try {
     for (let i = 0; i < 16 && JSON.stringify((await invoke('edit_open')).site) !== doc0; i++) await invoke('edit_undo');
     await until(async () => (await frameOf().evaluate(() => document.querySelectorAll('.carte-e2e').length)) === 0);
     check('champs CMS : essai annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === doc0);
-    // Gabarit partagé (en-tête et pied de toutes les pages) ouvert depuis Pages › Gabarits.
-    await page.click('.dock-tab[data-panel="pages"]');
-    await page.waitForSelector('.layouts-tree .layout-row');
-    const layouts = await page.$$eval('.layouts-tree .layout-row', (l) => l.map((e) => e.dataset.layout));
-    await page.click('.layouts-tree .layout-row[data-layout="layouts/base"]');
-    const inLayout = await until(() => /\/__revel\/layout\/layouts\/base\//.test(frameOf()?.url() || '')
-      && frameOf().evaluate(() => !!document.querySelector('header') && !!document.querySelector('[data-rv]')));
-    check('gabarits : gabarit partagé listé sous Pages (pas les modèles de collection), ouvert seul dans le canevas',
-      layouts.includes('layouts/base') && !layouts.includes('layouts/project') && inLayout, layouts.join(','));
-    if (shots) await page.screenshot({ path: `${shots}/gabarit.png` });
+    // En-tête du site (D-182) : zone du gabarit nommée dans les calques de n'importe quelle page,
+    // masquée puis remontrée sur cette page ; outil « En-tête » : la zone existante est sélectionnée ;
+    // plus de section « Gabarits » dans Pages.
+    {
+      await page.click('.dock-tab[data-panel="pages"]');
+      const noSection = (await page.$$('.layouts-tree')).length === 0;
+      await page.click('.dock-tab[data-panel="layers"]');
+      const row = page.locator('.layers .layer:has(.layer-badge)', { hasText: 'En-tête' }).first();
+      await row.waitFor();
+      await row.click();
+      await page.waitForSelector('.zone-tool[data-zone="header"] .zone-shown');
+      const site0 = JSON.stringify((await invoke('edit_open')).site);
+      const headers = () => frameOf().evaluate(() => document.querySelectorAll('header').length).catch(() => -1);
+      const n0 = await headers();
+      const wasShown = await page.$eval('.zone-tool .zone-shown', (i) => i.checked) && n0 > 0;
+      await page.click('.zone-tool label.view-line');
+      const hiddenHere = await until(async () => {
+        const s = (await invoke('edit_open')).site;
+        return s.pages.some((p) => p.props?.sans_entete === true) && s.layouts.some((l) => (l.fields || []).some((f) => f.name === 'sans_entete'))
+          && (await headers()) === n0 - 1;
+      });
+      await invoke('edit_undo');
+      const restored = await until(async () => JSON.stringify((await invoke('edit_open')).site) === site0 && (await headers()) === n0);
+      await page.click('.dock-tab[data-panel="insert"]');
+      await page.dblclick('.insert-item[data-item="zone-header"]');
+      await page.click('.dock-tab[data-panel="layers"]');
+      const selected = await until(async () => (await page.$$eval('.layers .layer.is-selected', (l) => l.map((e) => e.textContent))).some((t) => /En-tête/.test(t)));
+      const untouched = JSON.stringify((await invoke('edit_open')).site) === site0;
+      check('zones du site : en-tête nommé dans les calques, masqué puis remontré sur la page, outil « En-tête » qui sélectionne la zone, section Gabarits retirée',
+        noSection && wasShown && hiddenHere && restored && selected && untouched, JSON.stringify({ noSection, wasShown, hiddenHere, restored, selected, untouched }));
+      if (shots) await page.screenshot({ path: `${shots}/zone-entete.png` });
+    }
     // Condition : outil lisible, branche « Si » / « Sinon » montrée dans le canevas.
     await page.click('.dock-tab[data-panel="layers"]');
     const cond = page.locator('.layers .layer', { hasText: 'Condition' }).first();
@@ -1091,7 +1113,7 @@ try {
       await btns.nth(0).click();
       const auto = await until(() => !/rvif=/.test(frameOf()?.url() || ''));
       check('condition : outil (lisible, code replié), branche « Sinon » montrée puis rendue à la page',
-        forced && auto && !(await page.$eval('.cond-tool .cond-code', (d) => d.open)));
+        forced && auto && (await page.$$eval('.cond-tool .cond-code', (l) => l.every((d) => !d.open))));
     } else check('condition : présente dans le gabarit', false);
     await page.click('.dock-tab[data-panel="pages"]');
     await page.click('.pages .page-row[data-url="/"]');
@@ -1834,6 +1856,24 @@ try {
       check('éléments : liste de collection à deux collections (+ Autre collection)', multi, others2[0]);
       await page.click('.list-also .prop-chip .chip-x');
       check('éléments : seconde collection retirée', await untilE(async () => !(await pageJson()).includes(' + collections.')));
+      // Automatique ou choix manuel (D-182) : réglages automatiques masqués, contenu choisi puis retour.
+      {
+        await page.click('.collection-list [data-mode="pick"]');
+        const hiddenAuto = await untilE(async () => page.$eval('.collection-list .list-auto', (e) => getComputedStyle(e).display === 'none'));
+        await page.waitForFunction(() => document.querySelectorAll('.collection-list .pick-add select option').length > 1);
+        const first = await page.$eval('.collection-list .pick-add select option:nth-child(2)', (o) => o.value);
+        const exprBefore = await pageJson();
+        await page.selectOption('.collection-list .pick-add select', first);
+        await page.waitForSelector('.collection-list .list-picks .pick-item');
+        const picked = await untilE(async () => (await pageJson()) !== exprBefore && (await pageJson()).includes(first));
+        const manual = await page.$eval('.collection-list [data-mode="pick"]', (b) => b.classList.contains('is-on'));
+        await page.click('.collection-list [data-mode="auto"]');
+        const back = await untilE(async () => (await pageJson()) === exprBefore);
+        const shownAuto = await page.$eval('.collection-list .list-auto', (e) => getComputedStyle(e).display !== 'none');
+        check('éléments : liste de collection en choix manuel (réglages automatiques masqués, contenu choisi) puis automatique', hiddenAuto && picked && manual && back && shownAuto, JSON.stringify({ hiddenAuto, picked, manual, back, shownAuto }));
+        // Historique rendu (l'essai d'annulation complète plus bas ne dispose que de 50 retours).
+        for (let i = 0; i < 2; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(400); }
+      }
       await frame.locator('[data-revel-base="collection"] article h3').first().click();
       await page.waitForSelector('[data-bound="block-bound-text-label"] select');
       await page.waitForFunction(() => document.querySelectorAll('[data-bound="block-bound-text-label"] select option').length > 2);
@@ -1844,6 +1884,32 @@ try {
       const rebound = await untilE(async () => (await pageJson()).includes(`"expr":"item.data.${other}"`));
       check('éléments : texte d\'un élément de la liste relié à un champ du contenu', boundTitle === 'title' && rebound, `${boundTitle} -> ${other}`);
       if (shots) await page.screenshot({ path: `${shots}/editeur-liste-collection.png` });
+      // Outil « Champ CMS » (D-182) : collection et champ en menus, aucune expression ; affiché en
+      // image puis en texte ; champ vide : élément masqué (condition) puis gardé ; outil posé relié.
+      {
+        const tool = '.cms-field-tool';
+        await page.waitForSelector(`${tool} [data-bound="cms-field-collection"] select`);
+        const noCode = !(await page.$eval(tool, (e) => e.textContent)).includes('{{');
+        const layer = await untilE(async () => (await page.$$eval('.layers .layer.is-selected', (l) => l.map((e) => e.textContent))).some((t) => /Champ CMS/.test(t) && /›/.test(t)));
+        await page.selectOption(`${tool} [data-bound="cms-field-empty"] select`, 'hide');
+        const hidden = await untilE(async () => (await pageJson()).includes(`"cond":"item.data.${other}"`));
+        await page.waitForFunction((t) => document.querySelector(`${t} [data-bound="cms-field-empty"] select`)?.value === 'hide', tool);
+        await page.selectOption(`${tool} [data-bound="cms-field-empty"] select`, 'keep');
+        const kept = await untilE(async () => !(await pageJson()).includes(`"cond":"item.data.${other}"`));
+        await page.click(`${tool} [data-as="link"]`);
+        const asLink = await untilE(async () => /"tag":"a","attrs":\[[^\]]*"href","value":"\{\{ item\.url \}\}"/.test(await pageJson()));
+        await page.waitForSelector(`${tool} [data-as="link"].is-on`);
+        await page.click('.editor-toolbar .btn-undo');
+        await page.waitForSelector(`${tool} [data-as="text"].is-on`);
+        await page.click('.dock-tab[data-panel="insert"]');
+        const before = (await pageJson()).split('"expr":"item.data.').length;
+        await page.dblclick('.insert-item[data-item="insert-cms-field"]');
+        const added = await untilE(async () => (await pageJson()).split('"expr":"item.data.').length === before + 1);
+        check('éléments : outil « Champ CMS » (menus sans expression, calque nommé, champ vide masqué puis gardé, affiché en lien, outil posé relié)',
+          noCode && layer && hidden && kept && asLink && added, JSON.stringify({ noCode, layer, hidden, kept, asLink, added }));
+        if (added) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(400); }
+        for (let i = 0; i < 2; i++) { await page.click('.editor-toolbar .btn-undo'); await page.waitForTimeout(400); }
+      }
       // Grille : élément et ses règles de style.
       await page.click('.dock-tab[data-panel="layers"]');
       await page.click('.layers .layer[data-tech*="section.intro-agency"] .layer-label');

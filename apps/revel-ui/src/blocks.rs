@@ -106,6 +106,10 @@ pub(crate) fn label_of(c: &CmsCollection) -> String {
 /// Réglages propres à l'élément sélectionné (en plus des réglages communs).
 pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView> {
     let mut parts: Vec<AnyView> = Vec::new();
+    // Zone du site (en-tête, pied) : montrée ou non sur la page affichée (D-182).
+    if let Some(v) = zone_settings(ui, ed, &at) {
+        parts.push(v);
+    }
     // Outil à plusieurs fonctions (D-172) : la fonction se choisit ici, pas dans « Ajouter ».
     if let Some(v) = tool_function(ui, ed, &at, &node) {
         parts.push(v);
@@ -3152,8 +3156,9 @@ fn picks_editor(
     view! {
         <ul class="pick-list list-picks">
             {list.into_iter().enumerate().map(|(i, slug)| {
-                let title = entries.with_untracked(|es| es.iter().find(|e| e.slug == slug).map(|e| e.title.clone()));
-                let missing = title.is_none();
+                // Contenu introuvable (supprimé) : marqué une fois les contenus lus.
+                let slug3 = slug.clone();
+                let missing = move || entries.with(|es| !es.is_empty() && !es.iter().any(|e| e.slug == slug3));
                 let shift = move |d: isize| {
                     let mut all = picked.get_value();
                     let j = i as isize + d;
@@ -3411,22 +3416,20 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                     </select>
                 </div>
             </div>
-            <label class="field" class:is-hidden=nested>
+            <div class="field" class:is-hidden=nested data-list="mode">
                 <span class="label">{ui.t("block-list-items")}</span>
-                <div class="select">
-                    <select class="input" on:change=move |e| {
-                        let on = event_target_value(&e) == "pick";
-                        picking.set(on);
-                        if !on {
-                            set_pick(Vec::new());
-                        }
-                    }>
-                        <option value="all" prop:selected=move || !picking.get()>{ui.t("block-list-items-all")}</option>
-                        <option value="pick" prop:selected=move || picking.get()>{ui.t("block-list-items-pick")}</option>
-                    </select>
+                // Automatique (tri, nombre, filtre) ou choix manuel des contenus, dans l'ordre voulu (D-182).
+                <div class="segmented list-mode" role="radiogroup">
+                    <button type="button" role="radio" data-mode="auto" class:is-on=move || !picking.get()
+                        aria-checked=move || (!picking.get()).to_string()
+                        on:click=move |_| { if picking.get_untracked() { picking.set(false); set_pick(Vec::new()); } }>{ui.t("block-list-items-all")}</button>
+                    <button type="button" role="radio" data-mode="pick" class:is-on=move || picking.get()
+                        aria-checked=move || picking.get().to_string()
+                        on:click=move |_| picking.set(true)>{ui.t("block-list-items-pick")}</button>
                 </div>
-            </label>
+            </div>
             {pick_view}
+            <div class="stack list-auto" class:is-hidden=move || picking.get()>
             <label class="field" class:is-hidden=nested title=ui.t("block-list-first-help")>
                 <span class="label">{ui.t("block-list-first")}</span>
                 <div class="select">
@@ -3625,6 +3628,7 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
                     </span>
                 </label>
             })}
+            </div>
         </div>
     }
     .into_any()
@@ -3971,6 +3975,320 @@ fn binding_context(d: &Site, at: &Target) -> Option<(String, String, String)> {
     template_collection(d, at).map(|c| (c, String::new(), "page.url".into()))
 }
 
+/// Zone du site (D-182) : en-tête (`false`) ou pied (`true`) d'un gabarit — élément `header` ou
+/// `footer`, ou utilisation d'un composant dont la racine l'est.
+pub(crate) fn zone_of(d: &Site, at: &Target) -> Option<bool> {
+    if !matches!(at.owner, revel_edit::Owner::Layout(_)) {
+        return None;
+    }
+    let tag = match revel_edit::address::node(d, at).ok()? {
+        Node::Element { tag, .. } => tag.clone(),
+        Node::Use { component, .. } => {
+            d.component(component)?.body.iter().find_map(|n| match n {
+                Node::Element { tag, .. } => Some(tag.clone()),
+                _ => None,
+            })?
+        }
+        _ => return None,
+    };
+    match tag.to_ascii_lowercase().as_str() {
+        "header" => Some(false),
+        "footer" => Some(true),
+        _ => None,
+    }
+}
+
+/// Clé de la page qui masque la zone (propriété du gabarit, interrupteur éteint par défaut).
+fn zone_key(footer: bool) -> &'static str {
+    if footer { "sans_pied" } else { "sans_entete" }
+}
+
+/// Gabarits de la page affichée, du sien à ses parents.
+fn page_layouts(d: &Site, layout: Option<String>) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = layout;
+    while let Some(id) = cur {
+        if out.contains(&id) {
+            break;
+        }
+        cur = d.layout(&id).and_then(|l| l.parent.clone());
+        out.push(id);
+    }
+    out
+}
+
+/// Outil « En-tête » ou « Pied » : zone déjà là (son identifiant, à sélectionner), sinon l'endroit
+/// où la poser dans le gabarit de la page (début ou fin de `body`).
+pub(crate) fn zone_place(
+    ed: Ed,
+    footer: bool,
+) -> Option<Result<String, (revel_edit::Parent, usize)>> {
+    let info = ed.page_ref_untracked(&ed.page.get_untracked())?;
+    ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let layout = info
+            .page
+            .as_ref()
+            .and_then(|id| d.pages.iter().find(|p| p.id == *id))
+            .and_then(|p| p.layout.clone())
+            .or(info.layout.clone());
+        let layouts = page_layouts(d, layout);
+        for lid in &layouts {
+            let owner = revel_edit::Owner::Layout(lid.clone());
+            let mut found = None;
+            revel_model::ids::walk(&d.layout(lid)?.body, &mut |n| {
+                let id = match n {
+                    Node::Element { id, .. } | Node::Use { id, .. } => id.clone(),
+                    _ => None,
+                };
+                if found.is_none()
+                    && let Some(id) = id
+                    && zone_of(
+                        d,
+                        &Target {
+                            owner: owner.clone(),
+                            node: id.clone(),
+                        },
+                    ) == Some(footer)
+                {
+                    found = Some(id);
+                }
+            });
+            if let Some(id) = found {
+                return Some(Ok(id));
+            }
+        }
+        // Gabarit le plus haut qui a un `body`, sinon celui de la page.
+        for lid in layouts.iter().rev() {
+            let mut body = None;
+            revel_model::ids::walk(&d.layout(lid)?.body, &mut |n| {
+                if let Node::Element {
+                    id: Some(id),
+                    tag,
+                    children,
+                    ..
+                } = n
+                    && tag.eq_ignore_ascii_case("body")
+                    && body.is_none()
+                {
+                    body = Some((id.clone(), children.len()));
+                }
+            });
+            if let Some((id, n)) = body {
+                return Some(Err((
+                    revel_edit::Parent {
+                        owner: revel_edit::Owner::Layout(lid.clone()),
+                        node: Some(id),
+                        branch: Default::default(),
+                    },
+                    if footer { n } else { 0 },
+                )));
+            }
+        }
+        let lid = layouts.first()?;
+        let n = d.layout(lid)?.body.len();
+        Some(Err((
+            revel_edit::Parent {
+                owner: revel_edit::Owner::Layout(lid.clone()),
+                node: None,
+                branch: Default::default(),
+            },
+            if footer { n } else { 0 },
+        )))
+    })
+}
+
+/// Réglage d'une zone du site : « Montré sur cette page ». Éteint : la page reçoit la valeur qui
+/// masque la zone ; la première fois, le gabarit reçoit l'interrupteur et la zone sa condition.
+fn zone_settings(ui: Ui, ed: Ed, at: &Target) -> Option<AnyView> {
+    let footer = ed.doc.with_untracked(|d| zone_of(d.as_ref()?, at))?;
+    let key = zone_key(footer);
+    // Page du site (pas un modèle ni un gabarit vu seul).
+    let page = ed.page_ref_untracked(&ed.page.get_untracked())?.page?;
+    let shown = ed.doc.with_untracked(|d| {
+        let p = d.as_ref()?.pages.iter().find(|p| p.id == page)?;
+        Some(p.props.get(key).and_then(serde_json::Value::as_bool) != Some(true))
+    })?;
+    let at = StoredValue::new(at.clone());
+    let page = StoredValue::new(page);
+    let name = if footer { "zone-footer" } else { "zone-header" };
+    let toggle = move |on: bool| {
+        let at = at.get_value();
+        let cmd = ed.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let mut commands = Vec::new();
+            if !on {
+                let revel_edit::Owner::Layout(lid) = &at.owner else {
+                    return None;
+                };
+                let l = d.layout(lid)?;
+                if !revel_edit::editable::layout_fields(d, Some(lid))
+                    .iter()
+                    .any(|f| f.name == key)
+                {
+                    let mut fields = l.fields.clone();
+                    fields.push(revel_model::PropDef {
+                        name: key.into(),
+                        label: Some(ui.now(
+                            if footer {
+                                "zone-hide-footer"
+                            } else {
+                                "zone-hide-header"
+                            },
+                            &[],
+                        )),
+                        kind: revel_model::PropKind::Switch,
+                        default: None,
+                        collection: None,
+                    });
+                    commands.push(Command::SetLayoutFields {
+                        id: lid.clone(),
+                        fields,
+                    });
+                }
+                let cond = format!("not {key}");
+                let wrapped = visibility_of(d, &at).is_some_and(|(_, c)| c.trim() == cond);
+                if !wrapped {
+                    let node = revel_edit::address::node(d, &at).ok()?.clone();
+                    let (parent, index) = revel_edit::address::locate(d, &at).ok()?;
+                    commands.push(Command::Replace {
+                        parent,
+                        index,
+                        node: Node::If {
+                            id: Some(revel_model::ids::fresh(&d.node_ids())),
+                            cond,
+                            then: vec![node],
+                            otherwise: Vec::new(),
+                        },
+                    });
+                }
+            }
+            commands.push(Command::SetPageProp {
+                page: page.get_value(),
+                key: key.into(),
+                value: (!on).then_some(serde_json::Value::Bool(true)),
+            });
+            Some(Command::Batch { commands })
+        });
+        if let Some(cmd) = cmd {
+            ed.apply(ui, cmd, false);
+        }
+    };
+    Some(
+        view! {
+            <div class="insp-group zone-tool" data-zone=if footer { "footer" } else { "header" }>
+                <p class="panel-title tool-head">
+                    <span class="tool-icon">{icons::template()}</span><span>{ui.t(name)}</span>
+                    <span class="layer-badge" title=ui.t("zone-site-help")>{ui.t("zone-site")}</span>
+                </p>
+                <label class="view-line">
+                    <span>{ui.t("zone-shown")}</span>
+                    <span class="switch">
+                        <input type="checkbox" class="zone-shown" prop:checked=shown on:change=move |e| toggle(event_target_checked(&e))/>
+                        <span class="switch-track"></span>
+                    </span>
+                </label>
+            </div>
+        }
+        .into_any(),
+    )
+}
+
+/// Élément « Champ CMS » (D-182) : son seul contenu est un champ lu dans une collection (texte)
+/// ou son image en vient. Noms lisibles de la collection et du champ, pour les calques.
+pub(crate) fn cms_label(d: &Site, cols: &[CmsCollection], at: &Target) -> Option<(String, String)> {
+    let expr = match revel_edit::address::node(d, at).ok()? {
+        Node::Element { children, .. } => match children.as_slice() {
+            [Node::Out { expr }] => expr.trim().trim_start_matches('(').to_string(),
+            _ => return None,
+        },
+        Node::Image(img) if revel_edit::canvas::literal(&img.src).is_none() => {
+            img.src.trim().to_string()
+        }
+        _ => return None,
+    };
+    let mut ctxs: Vec<(String, String)> = binding_context(d, at)
+        .map(|(c, p, _)| (c, p))
+        .into_iter()
+        .collect();
+    ctxs.extend(
+        enclosing_collection_loops(d, at)
+            .into_iter()
+            .map(|(v, c)| (c, format!("{v}.data."))),
+    );
+    let (col, prefix) = ctxs
+        .into_iter()
+        .filter(|(_, p)| expr.starts_with(p.as_str()))
+        .max_by_key(|(_, p)| p.len())?;
+    let name: String = expr[prefix.len()..]
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+    if name.is_empty() {
+        return None;
+    }
+    let c = cols.iter().find(|c| c.id == col);
+    let field = c
+        .and_then(|c| c.fields.iter().find(|f| f.name == name))
+        .and_then(|f| f.label.clone())
+        .unwrap_or_else(|| revel_edit::overrides::field_label(&name));
+    let collection = c
+        .map(label_of)
+        .unwrap_or_else(|| crate::site::capitalize(&col));
+    Some((collection, field))
+}
+
+/// Élément « Champ CMS » prêt à poser dans `parent` : texte relié au premier champ de texte de
+/// la collection lisible à cet endroit (titre de préférence). `None` hors d'un tel endroit ou
+/// avant le chargement des collections : l'outil pose alors un texte écrit.
+pub(crate) fn cms_field_node(ed: Ed, parent: &revel_edit::Parent) -> Option<Node> {
+    let (col, prefix, id) = ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let node = parent.node.clone()?;
+        let at = Target {
+            owner: parent.owner.clone(),
+            node,
+        };
+        // L'endroit visé : le parent lui-même peut être la liste.
+        let ctx = match revel_edit::address::node(d, &at) {
+            Ok(Node::Each { expr, item, .. }) => {
+                Query::parse(expr).map(|q| (q.key(), format!("{}.data.", item.trim())))
+            }
+            _ => None,
+        }
+        .or_else(|| binding_context(d, &at).map(|(c, p, _)| (c, p)))?;
+        Some((ctx.0, ctx.1, revel_model::ids::fresh(&d.node_ids())))
+    })?;
+    let field = d_fields(ed, &col)?;
+    Some(Node::Element {
+        id: Some(id),
+        tag: "p".into(),
+        attrs: Vec::new(),
+        children: vec![Node::Out {
+            expr: format!("{prefix}{field}"),
+        }],
+    })
+}
+
+/// Premier champ de texte d'une collection (schéma du site), « title » de préférence.
+fn d_fields(ed: Ed, col: &str) -> Option<String> {
+    let _ = ed;
+    let cols = crate::textfield::cached_cols();
+    let c = cols.iter().find(|c| c.id == col)?;
+    let texts: Vec<&revel_protocol::CmsField> = c
+        .fields
+        .iter()
+        .filter(|f| {
+            !f.list && !f.hidden && matches!(f.kind.as_deref(), Some("string" | "text") | None)
+        })
+        .collect();
+    texts
+        .iter()
+        .find(|f| f.name == "title")
+        .or(texts.first())
+        .map(|f| f.name.clone())
+}
+
 /// Collection dont le modèle de page est le gabarit propriétaire de `at`.
 pub(crate) fn template_collection(d: &Site, at: &Target) -> Option<String> {
     let revel_edit::Owner::Layout(lid) = &at.owner else {
@@ -4003,9 +4321,71 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
         let main = value_binding(ui, ed, at, node, var);
         return main;
     }
-    let (collection_id, prefix, url_expr) = ed
-        .doc
-        .with_untracked(|d| binding_context(d.as_ref()?, at))?;
+    // Collections lisibles ici (D-182, outil « Champ CMS ») : celle de l'endroit (liste, contenu
+    // du composant, modèle de pages), puis celles des listes qui l'entourent.
+    let ctxs: Vec<(String, String, String)> = ed.doc.with_untracked(|d| {
+        let Some(d) = d.as_ref() else {
+            return Vec::new();
+        };
+        let mut out: Vec<(String, String, String)> = binding_context(d, at).into_iter().collect();
+        for (var, col) in enclosing_collection_loops(d, at) {
+            let prefix = format!("{var}.data.");
+            if !out.iter().any(|c| c.1 == prefix) {
+                out.push((col, prefix, format!("{var}.url")));
+            }
+        }
+        out
+    });
+    if ctxs.is_empty() {
+        return None;
+    }
+    // Collection de la valeur déjà reliée (préfixe le plus long), sinon celle de l'endroit.
+    let exprs: Vec<String> = match node {
+        Node::Element {
+            attrs, children, ..
+        } => children
+            .iter()
+            .filter_map(|c| match c {
+                Node::Out { expr } => Some(expr.trim().trim_start_matches('(').to_string()),
+                _ => None,
+            })
+            .chain(
+                attr(attrs, "href")
+                    .and_then(|a| a.value.clone())
+                    .and_then(|h| h.split_once("{{").map(|(_, r)| r.trim().to_string())),
+            )
+            .collect(),
+        Node::Image(img) => vec![img.src.trim().to_string()],
+        _ => Vec::new(),
+    };
+    let cur = ctxs
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| !c.1.is_empty() && exprs.iter().any(|e| e.starts_with(&c.1) || *e == c.2))
+        .max_by_key(|(_, c)| c.1.len())
+        .map_or(0, |(i, _)| i);
+    let pick = RwSignal::new(cur);
+    let (at, node) = (at.clone(), node.clone());
+    let ctxs = StoredValue::new(ctxs);
+    Some(
+        (move || {
+            let ctx = ctxs.with_value(|c| c[pick.get().min(c.len() - 1)].clone());
+            bindings_in(ui, ed, &at, &node, ctx, ctxs, pick)
+        })
+        .into_any(),
+    )
+}
+
+/// Réglages « Champ CMS » d'un élément pour une collection lisible à son endroit.
+fn bindings_in(
+    ui: Ui,
+    ed: Ed,
+    at: &Target,
+    node: &Node,
+    (collection_id, prefix, url_expr): (String, String, String),
+    ctxs: StoredValue<Vec<(String, String, String)>>,
+    pick: RwSignal<usize>,
+) -> Option<AnyView> {
     let is_field = |f: &str| {
         !f.is_empty()
             && f.chars()
@@ -4343,12 +4723,13 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
         .doc
         .with_untracked(|d| d.as_ref().and_then(|d| visibility_of(d, &at.get_value())));
     let vis_cond = vis.as_ref().map(|(_, c)| c.clone());
-    let vis_target = StoredValue::new(vis.map(|(t, _)| t));
     let set_vis = move |cond: Option<String>| {
         let at = at.get_value();
         let cmd = ed.doc.with_untracked(|d| {
             let d = d.as_ref()?;
-            match (vis_target.get_value(), cond) {
+            // Enveloppe relue à chaque fois : le panneau n'est pas refait quand elle change.
+            let target = visibility_of(d, &at).map(|(t, _)| t);
+            match (target, cond) {
                 // Condition changée.
                 (Some(t), Some(c)) => Some(Command::SetLogic {
                     at: t,
@@ -4391,13 +4772,161 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     };
     let cond_fields =
         condition_fields(ed, &at.get_value()).unwrap_or_else(|| Signal::derive(Vec::new));
+    // Champ principal de l'élément (texte, image, sinon lien) : sa condition « rempli ».
+    let main_field = slots
+        .iter()
+        .filter(|(s, _)| *s != Slot::Bg)
+        .filter_map(|(_, c)| c.clone())
+        .map(|c| {
+            ["count:", "read:", "join:"]
+                .iter()
+                .find_map(|p| c.strip_prefix(p).map(str::to_string))
+                .unwrap_or(c)
+        })
+        .find(|c| c != "@url" && is_field(c));
+    let hide_cond = StoredValue::new(main_field.map(|f| format!("{}{f}", prefix.get_value())));
+    let mode = match (&vis_cond, hide_cond.get_value()) {
+        (None, _) => "keep",
+        (Some(c), Some(h)) if c.trim() == h => "hide",
+        _ => "cond",
+    };
+    let custom = RwSignal::new(mode == "cond");
+    let vis_cond = StoredValue::new(vis_cond);
+    // Affiché en texte, en image ou en lien : élément sans autre élément dedans.
+    let shape: Option<&'static str> = match node {
+        Node::Image(_) => Some("image"),
+        Node::Element { tag, children, .. }
+            if children
+                .iter()
+                .all(|c| matches!(c, Node::Text { .. } | Node::Out { .. })) =>
+        {
+            let leaf = text.with_value(Option::is_some) || children.is_empty();
+            leaf.then_some(if tag.eq_ignore_ascii_case("a") {
+                "link"
+            } else {
+                "text"
+            })
+        }
+        _ => None,
+    };
+    let set_shape = move |to: &'static str| {
+        let at = at.get_value();
+        let cmd = ed.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let old = revel_edit::address::node(d, &at).ok()?.clone();
+            let (parent, index) = revel_edit::address::locate(d, &at).ok()?;
+            let (id, class, kids) = match &old {
+                Node::Element {
+                    id,
+                    attrs,
+                    children,
+                    ..
+                } => (
+                    id.clone(),
+                    attr(attrs, "class").and_then(|a| a.value.clone()),
+                    children.clone(),
+                ),
+                Node::Image(i) => (i.id.clone(), i.class.clone(), Vec::new()),
+                _ => return None,
+            };
+            let kids = if kids.is_empty() {
+                vec![Node::Text {
+                    text: ui.now("block-bound-text", &[]),
+                }]
+            } else {
+                kids
+            };
+            let mut attrs: Vec<Attr> = class
+                .clone()
+                .map(|c| Attr {
+                    name: "class".into(),
+                    value: Some(c),
+                    when: None,
+                })
+                .into_iter()
+                .collect();
+            let node = match to {
+                "image" => {
+                    let first = cols.with_untracked(|cs| {
+                        cs.iter()
+                            .find(|c| collection.with_value(|id| c.id == *id))
+                            .and_then(|c| {
+                                c.fields.iter().find(|f| {
+                                    !f.list && matches!(f.kind.as_deref(), Some("image" | "file"))
+                                })
+                            })
+                            .map(|f| f.name.clone())
+                    });
+                    Node::Image(revel_model::ImageNode {
+                        id,
+                        src: first.map_or_else(
+                            || "\"\"".to_string(),
+                            |f| format!("{}{f}", prefix.get_value()),
+                        ),
+                        class,
+                        ..Default::default()
+                    })
+                }
+                "link" => {
+                    attrs.push(Attr {
+                        name: "href".into(),
+                        value: Some(format!("{{{{ {} }}}}", url_expr.get_value())),
+                        when: None,
+                    });
+                    Node::Element {
+                        id,
+                        tag: "a".into(),
+                        attrs,
+                        children: kids,
+                    }
+                }
+                _ => Node::Element {
+                    id,
+                    tag: "p".into(),
+                    attrs,
+                    children: kids,
+                },
+            };
+            Some(Command::Replace {
+                parent,
+                index,
+                node,
+            })
+        });
+        if let Some(cmd) = cmd {
+            ed.apply(ui, cmd, false);
+        }
+    };
     let text_extra = text
         .with_value(|t| t.clone())
         .filter(|t| !t.field.is_empty() && t.raw.is_none());
     Some(
         view! {
-            <div class="insp-group">
-                <p class="panel-title">{ui.t("block-bound")}</p>
+            <div class="insp-group cms-field-tool">
+                <p class="panel-title tool-head"><span class="tool-icon">{icons::database()}</span><span>{ui.t("insert-cms-field")}</span></p>
+                <label class="field" data-bound="cms-field-collection">
+                    <span class="label">{ui.t("cms-field-collection")}</span>
+                    <div class="select">
+                        <select class="input" on:change=move |e| { if let Ok(i) = event_target_value(&e).parse::<usize>() { pick.set(i) } }>
+                            {move || ctxs.with_value(|c| c.clone()).into_iter().enumerate().map(|(i, (col, _, _))| {
+                                let name = cols.with(|cs| cs.iter().find(|c| c.id == col).map(label_of))
+                                    .unwrap_or_else(|| crate::site::capitalize(&col));
+                                view! { <option value=i.to_string() prop:selected={i == pick.get_untracked()}>{name}</option> }
+                            }).collect_view()}
+                        </select>
+                    </div>
+                </label>
+                {shape.map(|cur| view! {
+                    <div class="field" data-bound="cms-field-as">
+                        <span class="label">{ui.t("cms-field-as")}</span>
+                        <div class="segmented" role="radiogroup">
+                            {[("text", "block-bound-text-label"), ("image", "block-bound-image"), ("link", "block-bound-link")].into_iter().map(|(v, k)| view! {
+                                <button type="button" role="radio" data-as=v class:is-on={cur == v} aria-checked={(cur == v).to_string()}
+                                    on:click=move |_| { if cur != v { set_shape(v) } }>{ui.t(k)}</button>
+                            }).collect_view()}
+                        </div>
+                    </div>
+                })}
                 {slots.into_iter().map(|(slot, cur)| {
                     let key = match slot {
                         Slot::Text => "block-bound-text-label",
@@ -4410,7 +4939,7 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                     let cur3 = cur.clone();
                     view! {
                         <label class="field" data-bound=key>
-                            <span class="label">{ui.t(key)}</span>
+                            <span class="label">{ui.t(if shape.is_some() && matches!(slot, Slot::Text | Slot::Src) { "cms-field-field" } else { key })}</span>
                             <div class="select">
                                 <select class="input" on:change=move |e| set(slot, event_target_value(&e))>
                                     <option value="" prop:selected=cur.is_empty()>{ui.t(if slot == Slot::Text { "block-bound-written" } else { "block-bound-none" })}</option>
@@ -4422,7 +4951,8 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                                         let known = cur2.is_empty() || cur2 == "@url" || list.iter().any(|(n, _)| *n == cur2);
                                         let extra = (!known).then(|| {
                                             let c = cur2.clone();
-                                            view! { <option value=c.clone() prop:selected=true>{c.clone()}</option> }
+                                            // Valeur d'une autre forme : nommée, jamais montrée en expression.
+                                            view! { <option value=c.clone() prop:selected=true>{revel_edit::overrides::field_label(&c)}</option> }
                                         });
                                         view! {
                                             {extra}
@@ -4578,10 +5108,30 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
                         </div>
                     }
                 })}
-                <div class="field" data-bound="block-bound-visibility">
-                    <span class="label">{ui.t("block-bound-visibility")}</span>
-                    {crate::visibility::condition_editor(ui, cond_fields, vis_cond, true, set_vis)}
-                </div>
+                // Champ vide : élément gardé, masqué (affichage selon ce champ), ou selon une autre
+                // condition (réglage complet dessous).
+                <label class="field" data-bound="cms-field-empty">
+                    <span class="label">{ui.t("cms-field-empty")}</span>
+                    <div class="select">
+                        <select class="input" on:change=move |e| { match event_target_value(&e).as_str() {
+                            "keep" => { custom.set(false); set_vis(None) }
+                            "hide" => { custom.set(false); if let Some(c) = hide_cond.get_value() { set_vis(Some(c)) } }
+                            _ => custom.set(true),
+                        } }>
+                            <option value="keep" prop:selected={mode == "keep"}>{ui.t("cms-field-empty-keep")}</option>
+                            {hide_cond.with_value(Option::is_some).then(|| view! {
+                                <option value="hide" prop:selected={mode == "hide"}>{ui.t("cms-field-empty-hide")}</option>
+                            })}
+                            <option value="cond" prop:selected={mode == "cond"}>{ui.t("cms-field-empty-cond")}</option>
+                        </select>
+                    </div>
+                </label>
+                <Show when=move || custom.get()>
+                    <div class="field" data-bound="block-bound-visibility">
+                        <span class="label">{ui.t("block-bound-visibility")}</span>
+                        {crate::visibility::condition_editor(ui, cond_fields, vis_cond.get_value(), true, set_vis)}
+                    </div>
+                </Show>
             </div>
         }
         .into_any(),

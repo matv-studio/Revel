@@ -636,6 +636,33 @@ fn groups() -> Vec<(&'static str, Vec<Item>)> {
                     true,
                 ),
                 item(
+                    Preset::SiteHeader,
+                    "zone-header",
+                    "insert-help-zone",
+                    "zone-header",
+                    icons::template,
+                    "header",
+                    false,
+                ),
+                item(
+                    Preset::SiteFooter,
+                    "zone-footer",
+                    "insert-help-zone",
+                    "zone-footer",
+                    icons::template,
+                    "footer",
+                    false,
+                ),
+                item(
+                    Preset::CmsField,
+                    "insert-cms-field",
+                    "insert-help-cms-field",
+                    "insert-cms-field",
+                    icons::database,
+                    "p",
+                    false,
+                ),
+                item(
                     Preset::LocaleSwitch,
                     "insert-locale-switch",
                     "insert-help-locale-switch",
@@ -971,7 +998,45 @@ fn insert_at(ui: Ui, ed: Ed, preset: Preset, text_key: &str, parent: Parent, ind
     } else {
         ui.now(text_key, &[])
     };
+    // En-tête, pied (D-182) : une seule zone pour tout le site, dans le gabarit de la page ; déjà là,
+    // elle est sélectionnée.
+    if matches!(preset, Preset::SiteHeader | Preset::SiteFooter) {
+        let footer = preset == Preset::SiteFooter;
+        match crate::blocks::zone_place(ed, footer) {
+            Some(Ok(id)) => ed.select_and_reveal(&id),
+            Some(Err((parent, index))) => {
+                show_in_layers(ui);
+                ed.apply(
+                    ui,
+                    Command::InsertPreset {
+                        parent,
+                        index,
+                        preset,
+                        text,
+                    },
+                    false,
+                );
+            }
+            None => ui.fail(revel_protocol::Failure::new("insert-no-place")),
+        }
+        return;
+    }
     show_in_layers(ui);
+    // Champ CMS (D-182) : relié d'emblée au premier champ de texte lisible à cet endroit.
+    if preset == Preset::CmsField
+        && let Some(node) = crate::blocks::cms_field_node(ed, &parent)
+    {
+        ed.apply(
+            ui,
+            Command::Insert {
+                parent,
+                index,
+                node,
+            },
+            false,
+        );
+        return;
+    }
     ed.apply(
         ui,
         Command::InsertPreset {

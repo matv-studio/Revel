@@ -185,6 +185,11 @@ pub enum Preset {
     Accordion,
     /// Liste de collection : un élément par contenu.
     CollectionList,
+    /// En-tête et pied du site (D-182) : une zone commune à toutes les pages, posée dans le gabarit.
+    SiteHeader,
+    SiteFooter,
+    /// Champ CMS (D-182) : texte, image ou lien lu dans un champ du contenu de l'endroit.
+    CmsField,
     /// Sélecteur de langue : un lien par langue du site vers la même page (3.8).
     LocaleSwitch,
     /// Blocs prêts à l'emploi (sections complètes, [`crate::ready`]).
@@ -270,7 +275,7 @@ impl Preset {
         })
     }
 
-    pub const ALL: [Preset; 46] = [
+    pub const ALL: [Preset; 49] = [
         Preset::Section,
         Preset::Container,
         Preset::Heading,
@@ -289,6 +294,9 @@ impl Preset {
         Preset::Tabs,
         Preset::Accordion,
         Preset::CollectionList,
+        Preset::CmsField,
+        Preset::SiteHeader,
+        Preset::SiteFooter,
         Preset::LocaleSwitch,
         Preset::BlockHero,
         Preset::BlockFeatures,
@@ -531,6 +539,19 @@ impl Preset {
             Preset::Container => el(id(), "div", vec![], vec![]),
             Preset::Heading => el(id(), "h2", vec![], vec![txt(text)]),
             Preset::Paragraph => el(id(), "p", vec![], vec![txt(text)]),
+            Preset::CmsField => el(id(), "p", vec![], vec![txt(text)]),
+            Preset::SiteHeader => el(
+                id(),
+                "header",
+                vec![attr("class", "site-entete")],
+                vec![el(id(), "p", vec![], vec![txt(text)])],
+            ),
+            Preset::SiteFooter => el(
+                id(),
+                "footer",
+                vec![attr("class", "site-pied")],
+                vec![el(id(), "p", vec![], vec![txt(text)])],
+            ),
             Preset::Link => el(id(), "a", vec![attr("href", "#")], vec![txt(text)]),
             Preset::Button => el(
                 id(),

@@ -263,6 +263,8 @@
     const base = plainLabel(el, inst);
     const id = inst ? inst.node : el.getAttribute && el.getAttribute("data-rv");
     const b = id ? branchNames[id] : "";
+    // Zone du site (en-tête, pied) : nom entier donné par l'interface.
+    if (b && b[0] === "=") return b.slice(1);
     return b ? base + " \u00B7 " + b : base;
   };
   const plainLabel = (el, inst) => {

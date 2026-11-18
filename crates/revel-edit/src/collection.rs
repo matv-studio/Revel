@@ -309,7 +309,8 @@ impl Query {
             offset,
             ..Default::default()
         };
-        for f in filters {
+        let last = filters.len().saturating_sub(1);
+        for (fi, f) in filters.iter().enumerate() {
             let (name, args) = f.split_once('(')?;
             let args = args.strip_suffix(')')?;
             let args = split_top(args, ',');
@@ -395,6 +396,12 @@ impl Query {
                         }
                         q.exclude_current = true;
                     }
+                }
+                // Nombre maximal écrit en filtre (`| limit(6)`, listes écrites à la main, D-189) :
+                // en dernier seulement, pour garder le sens (tranche de la liste finale).
+                "limit" if fi == last && q.limit.is_none() && q.offset == 0 && args.len() == 1 => {
+                    let n = args[0].trim().parse::<usize>().ok().filter(|n| *n > 0)?;
+                    q.limit = Some(n);
                 }
                 "sort" if q.sort.is_none() && q.first.is_none() => {
                     let mut path = None;
@@ -546,6 +553,20 @@ mod tests {
             neighbor_link("collections.a | getNextCollectionItem(page, true)"),
             None
         );
+    }
+
+    #[test]
+    fn nombre_ecrit_en_filtre() {
+        let q = Query::parse("collections.projets | limit(6)").unwrap();
+        assert_eq!((q.collection.as_str(), q.limit), ("projets", Some(6)));
+        // Rendu sous la forme de Revel : même liste.
+        assert_eq!(Query::parse(&q.to_expr()), Some(q));
+        // Pas en dernier, ou nombre invalide : liste laissée telle quelle.
+        assert!(
+            Query::parse("collections.projets | limit(6) | sort(attribute=\"date\")").is_none()
+        );
+        assert!(Query::parse("collections.projets | limit(0)").is_none());
+        assert!(Query::parse("collections.projets | limit(n)").is_none());
     }
 
     #[test]

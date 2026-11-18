@@ -9,6 +9,22 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 18/11/2026 (soir) : fin du lot 2 côté application — C, D, E, date corrigée (D-189)
+
+- **Fait** : outil « Champ CMS » (`blocks.rs` : `item_bindings` → `bindings_in`, `cms_label`,
+  `cms_field_node` ; `insert.rs` ; `make.rs` : `Preset::CmsField`) ; liste Automatique / Choix manuel
+  (`collection_list`, `.list-mode`, `.list-auto`) ; zones En-tête / Pied (`blocks.rs` : `zone_of`,
+  `zone_place`, `zone_settings` ; `layers.rs` : pastille `.layer-badge` ; `canvas.js` : nom entier préfixé
+  `=` ; `Preset::SiteHeader`, `SiteFooter`) ; section Gabarits retirée (`pagetree.rs`) ; date corrigée
+  (`cms.rs`, `.cms-date-edit`, `fmt_day`).
+- **Pièges** : le panneau d'un élément n'est pas refait quand seule son enveloppe change (condition ajoutée) :
+  relire l'enveloppe au moment de l'action. `ed.page` est une adresse (`/agence/`), pas un identifiant :
+  `ed.page_ref_untracked(..).page`. Une classe CSS `cms-feed-date` existait déjà (liste des flux).
+- **Site** (PC, non publié) : projet « Animation du réseau après-vente » retiré.
+- **Reste** : 0.8.0 en brouillon ; après son installation : `passation/alunites-anciennes-adresses.py`, cartes
+  de marque en propriétés et retrait de la collection Marques (questions posées à l'utilisateur : champ
+  `source`, filtres par marque, pied) ; retrait de « Code » du panneau de condition (maquette F).
+
 ## Travail du 18/11/2026 (après-midi, suite) : lot 2, sujet F — branches d'une condition (D-187)
 
 - **Fait** : « Si » et « Sinon » dans les calques, branche rendue marquée (œil), l'autre estompée ; nom de

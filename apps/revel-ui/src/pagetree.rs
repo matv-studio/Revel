@@ -1021,108 +1021,6 @@ pub fn PageTree(
     }
 }
 
-/// Gabarits partagés par plusieurs pages (D-179) : en-tête, pied de page… ouverts seuls dans le
-/// canevas. Sans les modèles de collection (lignes des collections) ni les gabarits qui
-/// n'écrivent que le document (`html`, `head`, emplacement).
-pub(crate) fn shared_layouts(d: &revel_model::Site) -> Vec<(String, usize)> {
-    fn visible(nodes: &[revel_model::Node]) -> bool {
-        nodes.iter().any(|n| match n {
-            revel_model::Node::Element { tag, children, .. } => match tag.as_str() {
-                "html" | "body" => visible(children),
-                "head" | "meta" | "link" | "script" | "style" | "title" | "base" | "noscript" => {
-                    false
-                }
-                _ => true,
-            },
-            revel_model::Node::If {
-                then, otherwise, ..
-            } => visible(then) || visible(otherwise),
-            revel_model::Node::Use { .. } | revel_model::Node::Image(_) => true,
-            _ => false,
-        })
-    }
-    let templates: BTreeSet<&str> = d
-        .collections
-        .iter()
-        .filter_map(|c| c.layout.as_deref())
-        .collect();
-    // Pages qui passent par ce gabarit (directement ou par un gabarit enfant).
-    let uses = |id: &str| {
-        let through = |start: Option<&str>| {
-            let mut cur = start.map(str::to_string);
-            let mut seen = 0;
-            while let Some(l) = cur {
-                if l == id {
-                    return true;
-                }
-                seen += 1;
-                if seen > 16 {
-                    break;
-                }
-                cur = d.layout(&l).and_then(|x| x.parent.clone());
-            }
-            false
-        };
-        d.pages
-            .iter()
-            .filter(|p| !revel_edit::textfile::is_server_file(&p.path))
-            .filter(|p| through(p.layout.as_deref()))
-            .count()
-    };
-    d.layouts
-        .iter()
-        .filter(|l| !templates.contains(l.id.as_str()) && visible(&l.body))
-        .map(|l| (l.id.clone(), uses(&l.id)))
-        .collect()
-}
-
-/// Section « Gabarits » du panneau Pages (D-179).
-#[component]
-fn LayoutList(
-    q: RwSignal<String>,
-    #[prop(optional)] on_settings: Option<Callback<String>>,
-) -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let ed = expect_context::<Ed>();
-    let list = Memo::new(move |_| {
-        let q = q.get().to_lowercase();
-        ed.doc.with(|d| {
-            d.as_ref()
-                .map(shared_layouts)
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|(id, _)| q.is_empty() || label_of(id).to_lowercase().contains(&q))
-                .collect::<Vec<_>>()
-        })
-    });
-    view! {
-        <Show when=move || list.with(|l| !l.is_empty())>
-            <div class="page-tree layouts-tree" role="tree">
-                <div class="list-section-title" title=ui.t("layouts-help")>{ui.t("site-layouts")}</div>
-                {move || list.get().into_iter().map(|(id, n)| {
-                    let url = revel_model::layout_page(&id);
-                    let (u1, u2, id2) = (url.clone(), url.clone(), id.clone());
-                    view! {
-                        <button class="list-row page-row layout-row" style="--depth:0" role="treeitem" data-layout=id.clone()
-                            class:is-current=move || ed.page.get() == u1
-                            title=ui.now("layouts-row-help", &[("count", n.to_string())])
-                            on:click=move |_| open_page(ed, u2.clone())>
-                            <span class="list-chevron"></span>
-                            <span class="list-icon">{icons::template()}</span>
-                            <span class="list-label">{label_of(&id)}</span>
-                            <span class="list-meta muted">{n}</span>
-                            {on_settings.map(|cb| view! {
-                                <span class="row-action" role="button" title=ui.t("template-settings") aria-label=ui.t("template-settings")
-                                    on:click=move |e| { e.stop_propagation(); cb.run(format!("layout:{id2}")) }>{icons::settings()}</span>
-                            })}
-                        </button>
-                    }
-                }).collect_view()}
-            </div>
-        </Show>
-    }
-}
-
 /// Ligne d'une collection et ses contenus (racine de l'arbre des pages).
 #[allow(clippy::too_many_arguments)]
 fn collection_view(
@@ -1304,7 +1202,6 @@ pub fn Pages() -> impl IntoView {
                     <crate::panels::Search value=q key="pages-search"/>
                     <div class="list-scroll">
                         <PageTree q=q on_settings=on_settings creating_page=creating_page creating_folder=creating_folder/>
-                        <LayoutList q=q on_settings=on_settings/>
                     </div>
                     <footer class="panel-foot">
                         <span class="panel-foot-text muted">{move || ui.tx("pages-count", &[("count", ed.pages.with(|p| p.iter().filter(|p| p.page.is_some()).count()).to_string())])}</span>

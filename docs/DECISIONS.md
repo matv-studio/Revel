@@ -2624,3 +2624,37 @@ Maquettes : `tools/maquettes/lot2.mjs` (scènes A à F). Ordre de codage : tout 
   captures envoyées pour accord.
 - Les essais de bout en bout gardent le canevas libre à l'ouverture (simulateur : `start_free` actif sauf
   paramètre `fitted`) ; la page d'essai du mode simple vérifie l'ouverture par défaut.
+
+**D-189 — 18/11/2026 17h00 — prise (fin du lot 2 : sujets C, D, E ; maquette de la date validée ; projet retiré).**
+Réponses de l'utilisateur : maquette « date corrigée » validée ; projet « Animation du réseau après-vente »
+(Alunites) retiré du site ; finir le lot 2 ; adresses du site sans redirection.
+- **C — outil « Champ CMS »** : intégré au réglage existant « Relié au contenu » (pas de second mécanisme).
+  Panneau : Collection (collections lisibles à cet endroit : liste, contenu du composant, modèle de pages,
+  listes englobantes), Champ, « Affiché en » texte / image / lien (élément sans autre élément dedans, converti
+  en gardant identifiant et classe), « Si le champ est vide » : garder, masquer (condition sur le champ),
+  selon une condition (éditeur complet). Outil dans Ajouter › CMS : texte relié d'emblée au premier champ de
+  texte (titre de préférence) ; hors d'un endroit relié, texte écrit. Calques : « Champ CMS · Collection ›
+  Champ » ; une valeur lue seule est nommée par son champ, plus d'accolades. Écart à la maquette : le menu
+  Collection ne propose que les collections lisibles à l'endroit, pas toutes celles du site (une autre ne
+  donnerait aucune valeur).
+- **D — liste de collection** : « Contenus » en deux boutons, Automatique / Choix manuel (ancien menu « Tous /
+  Choisis ») ; en choix manuel les réglages automatiques (mis en premier, filtres, tri, nombre, début) sont
+  masqués. Une liste lisible par ses menus ne montre plus son expression (« Liste parcourue », « Nom de chaque
+  élément »). Listes écrites à la main : `| limit(n)` en dernier filtre est lu comme le nombre maximal (liste
+  « Projets » de l'accueil du cobaye) ; à la première modification, l'expression est réécrite sous la forme
+  de Revel (`(…)[:n]`, même liste). Les autres formes restent « liste calculée ».
+- **E — en-tête et pied** : zone = élément `header` / `footer` d'un gabarit, ou utilisation d'un composant
+  dont la racine l'est. Calques de toute page : « En-tête » / « Pied » avec la pastille « Tout le site » ;
+  repère du canevas « En-tête · tout le site ». Panneau : « Montré sur cette page » — éteint, la page reçoit
+  `sans_entete` / `sans_pied` ; la première fois, le gabarit reçoit l'interrupteur (propriété de gabarit
+  existante, D-96, visible aussi dans les réglages de la page) et la zone la condition `not sans_entete`.
+  Pas de variante par page (D-186). Outils « En-tête » et « Pied » (Ajouter › CMS) : zone existante
+  sélectionnée, sinon posée au début ou à la fin du `body` du gabarit. Section « Gabarits » du panneau Pages
+  retirée ; la vue d'un gabarit seul n'a plus d'entrée dans l'interface.
+- **Date corrigée d'un contenu de flux** : dans la fiche, libellé marqué, bouton de retour à la date du flux,
+  « Flux : <date> » sous le champ ; `feed_date` n'est pas montré comme champ.
+- **Site Alunites Groupe** : projet retiré (contenus FR et EN, médias, suggestions de 7 projets) ; son ancienne
+  adresse `/project/animation-reseau-apres-vente/` renvoie vers `/projets/`.
+- **Reportés après l'installation de la 0.8.0** (le site s'ouvre aujourd'hui avec la 0.7.9, qui ne lit ni la
+  propriété « Couleur » ni les nouvelles adresses) : cartes de marque en propriétés et retrait de la collection
+  « Marques » ; script des anciennes adresses.

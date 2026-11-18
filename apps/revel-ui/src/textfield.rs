@@ -428,6 +428,11 @@ pub fn CmsFields() -> impl IntoView {
     view! { {cms_view} }
 }
 
+/// Collections du site déjà chargées par le panneau (vide avant le premier chargement).
+pub(crate) fn cached_cols() -> Vec<revel_protocol::CmsCollection> {
+    CMS_COLS.with(|k| k.borrow().clone())
+}
+
 /// Contenu du CMS (dossier de la collection, fichier) lu par un emplacement de texte.
 fn entry_of(slot: &Slot) -> Option<(String, String)> {
     let Slot::Expr {

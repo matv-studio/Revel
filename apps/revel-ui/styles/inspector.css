@@ -993,3 +993,9 @@
 .prop-color-swatch { width: 18px; height: 18px; flex: none; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); }
 .prop-color-label { display: flex; align-items: center; justify-content: space-between; }
 .prop-label.is-set { color: var(--set-text); }
+
+/* Liste de collection : réglages automatiques masqués en choix manuel (D-182). */
+.list-auto { display: flex; flex-direction: column; gap: inherit; }
+.list-auto.is-hidden { display: none; }
+.list-mode { display: flex; width: 100%; }
+.list-mode button { flex: 1; white-space: nowrap; justify-content: center; }

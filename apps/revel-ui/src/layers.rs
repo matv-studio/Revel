@@ -858,7 +858,8 @@ pub fn label(ui: Ui, k: &Kind) -> String {
     match k {
         Kind::Element { tag, class } => crate::names::element_name(ui, tag, class),
         Kind::Text(t) => format!("« {t} »"),
-        Kind::Expr(e) => format!("{{{{ {e} }}}}"),
+        // Valeur lue (champ, propriété) : nommée, jamais montrée en expression (D-182).
+        Kind::Expr(e) => revel_edit::overrides::field_label(e),
         Kind::If(c) => ui.tx("layers-if", &[("cond", condition_name(c))]),
         Kind::Each { expr, .. } => ui.tx("layers-each", &[("list", list_label(expr))]),
         Kind::Branch(Branch::Then) => ui.tx("cond-show-then", &[]),
@@ -913,7 +914,7 @@ fn icon(k: &Kind, textual: bool, has_children: bool) -> AnyView {
         }
         Kind::Element { tag, .. } => crate::names::icon(tag),
         Kind::Text(_) => icons::text(),
-        Kind::Expr(_) => icons::braces(),
+        Kind::Expr(_) => icons::database(),
         Kind::If(_) | Kind::Branch(_) => icons::branch(),
         Kind::Each { .. } => icons::repeat(),
         Kind::Use(_) => icons::component(),
@@ -1009,6 +1010,7 @@ fn rename_input(
 pub fn Layers() -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
+    let cms_cols = crate::blocks::collections(ed);
     let opened = RwSignal::new(HashSet::<String>::new());
     let closed = RwSignal::new(HashSet::<String>::new());
     let drag = RwSignal::new(None::<Row>);
@@ -1078,12 +1080,32 @@ pub fn Layers() -> impl IntoView {
                 })
                 .map(|r| (r.key.as_str(), label(ui, &r.kind)))
                 .collect();
-            rows.iter()
+            let mut map: serde_json::Map<String, serde_json::Value> = rows
+                .iter()
                 .filter_map(|r| {
                     let name = names.get(r.ancestors.last()?.as_str())?;
                     Some((r.id.clone()?, serde_json::Value::from(name.clone())))
                 })
-                .collect()
+                .collect();
+            // Zones du site : nom entier (« En-tête · tout le site »).
+            ed.doc.with(|d| {
+                let Some(d) = d.as_ref() else { return };
+                for r in rows.iter().filter(|r| matches!(r.owner, Owner::Layout(_))) {
+                    let Some(id) = r.id.clone() else { continue };
+                    let at = revel_edit::Target {
+                        owner: r.owner.clone(),
+                        node: id.clone(),
+                    };
+                    if let Some(f) = crate::blocks::zone_of(d, &at) {
+                        let name = ui.now(if f { "zone-footer" } else { "zone-header" }, &[]);
+                        map.insert(
+                            id,
+                            format!("={name} · {}", ui.now("zone-site", &[]).to_lowercase()).into(),
+                        );
+                    }
+                }
+            });
+            map
         });
         ed.post(serde_json::json!({ "type": "branches", "map": map }));
     });
@@ -1475,7 +1497,29 @@ pub fn Layers() -> impl IntoView {
                         // Texte affiché : texte écrit, sinon texte rendu dans la page (données du
                         // site, contenu), envoyé par le canevas — jamais l'expression.
                         let inst = r.with_value(|r| all.with_untracked(|rows| use_of(rows, r)));
+                        // Zone du site (D-182) : « En-tête » ou « Pied », pour tout le site.
+                        let maybe_zone = r.with_value(|r| matches!(r.owner, Owner::Layout(_)))
+                            && matches!(&kind, Kind::Use(_) | Kind::Element { .. });
+                        let zone = Memo::new(move |_| {
+                            if !maybe_zone {
+                                return None;
+                            }
+                            let at = r.with_value(|r| Some(revel_edit::Target { owner: r.owner.clone(), node: r.id.clone()? }))?;
+                            ed.doc.with(|d| crate::blocks::zone_of(d.as_ref()?, &at))
+                        });
+                        // Champ CMS (D-182) : « Champ CMS · Collection › Champ ».
+                        let maybe_cms = bound || matches!(kind, Kind::Image(_));
+                        let cms = Memo::new(move |_| {
+                            if !maybe_cms {
+                                return None;
+                            }
+                            let at = r.with_value(|r| Some(revel_edit::Target { owner: r.owner.clone(), node: r.id.clone()? }))?;
+                            ed.doc.with(|d| cms_cols.with(|c| crate::blocks::cms_label(d.as_ref()?, c, &at)))
+                        });
                         let preview = move || {
+                            if let Some((c, f)) = cms.get() {
+                                return Some(format!("{c} › {f}"));
+                            }
                             r.with_value(|r| r.preview.clone()).or_else(|| {
                                 let id = r.with_value(|r| r.id.clone())?;
                                 if !bound {
@@ -1649,7 +1693,13 @@ pub fn Layers() -> impl IntoView {
                                                 }
                                             }>{
                                             // Liste de collection : nom suivi (libellés lus après coup).
-                                            move || r.with_value(|r| r.name.clone()).unwrap_or_else(|| label(ui, &k))
+                                            move || r.with_value(|r| r.name.clone()).unwrap_or_else(|| {
+                                                match zone.get() {
+                                                    Some(f) => ui.now(if f { "zone-footer" } else { "zone-header" }, &[]),
+                                                    None if cms.with(Option::is_some) => ui.now("insert-cms-field", &[]),
+                                                    None => label(ui, &k),
+                                                }
+                                            })
                                         }</span>
                                     }.into_any()
                                 }}
@@ -1657,6 +1707,7 @@ pub fn Layers() -> impl IntoView {
                                     <span class="layer-preview" class:is-bound=bound
                                         title=move || textual.then(|| ui.now("layers-edit-text", &[]))>{p}</span>
                                 })}
+                                {move || zone.get().map(|_| view! { <span class="layer-badge" title=ui.t("zone-site-help")>{ui.t("zone-site")}</span> })}
                                 <span class="layer-marks">
                                     {tool2.as_deref().and_then(crate::names::tool_icon).map(|i| view! { <span class="layer-mark layer-tool" title=ui.t("layers-tool")>{i}</span> })}
                                     {bound.then(|| view! { <span class="layer-mark" title=ui.t("layers-bound")>{icons::database()}</span> })}

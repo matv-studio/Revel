@@ -1743,7 +1743,11 @@ fn EntryForm(
             .flatten();
         // Date d'un contenu de flux corrigée à la main (D-186) : libellé marqué, retour à la date du
         // flux, date du flux rappelée sous le champ. Elle est gardée aux actualisations.
-        if f.name == "date" {
+        let from_feed = entry.with_untracked(|e| {
+            e.as_ref()
+                .is_some_and(|e| e.data.get("feed_date").is_some())
+        });
+        if f.name == "date" && from_feed {
             let feed = Signal::derive(move || {
                 entry.with(|e| {
                     e.as_ref()

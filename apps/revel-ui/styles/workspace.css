@@ -481,9 +481,6 @@
 input.colors-label { min-width: 0; }
 
 /* Gabarits partagés (D-179) : section du panneau Pages, sous les pages. */
-.layouts-tree { margin-top: var(--s-3); padding-top: var(--s-2); border-top: 1px solid var(--border); }
-.layouts-tree .list-section-title { padding: var(--s-1) var(--s-3); font-size: var(--text-xs); color: var(--text-faint); font-weight: var(--weight-medium); }
-.layouts-tree .layout-row .list-meta { display: block; opacity: 1; }
 
 /* Élément montré par la touche « . » (D-179) : repère bref. */
 .is-flash { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: var(--radius-sm, 4px); transition: outline-color .4s; }

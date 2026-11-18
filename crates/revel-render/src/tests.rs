@@ -1210,6 +1210,44 @@ fn contenus_en_brouillon_ecartes_de_la_generation() {
     assert!(!file(&out, "index.html").contains("Brouillon"));
 }
 
+/// Contenu sans la valeur que lit l'adresse de sa collection (contenu repris d'un flux, sans
+/// identifiant) : pas de page, ni à `/project//` ni, pour une adresse `/{{ slug }}/`, à `//`
+/// (refusé jusque-là) (D-186).
+#[test]
+fn contenu_sans_identifiant_sans_page() {
+    let entries = || {
+        vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "Avec page", "date": "2026-01-02"}),
+            ),
+            entry(
+                "flux",
+                json!({"title": "Repris d'un flux", "date": "2026-01-03"}),
+            ),
+        ]
+    };
+    for path in ["/project/{{ slug }}/", "/{{ slug }}/"] {
+        let mut s = site();
+        for c in s.collections.iter_mut() {
+            c.filter = None;
+            if c.path.is_some() {
+                c.path = Some(path.into());
+            }
+        }
+        let out = build(&input(&s, entries())).unwrap();
+        let paths: Vec<&str> = out.files.iter().map(|f| f.path.as_str()).collect();
+        let page = path.replace("{{ slug }}", "a")[1..].to_string() + "index.html";
+        assert!(paths.contains(&page.as_str()), "{path} : {paths:?}");
+        assert!(
+            !paths
+                .iter()
+                .any(|p| p.contains("//") || *p == "project/index.html"),
+            "{path} : {paths:?}"
+        );
+    }
+}
+
 /// Calque masqué : absent du site publié, gardé (marqué) dans l'éditeur ; nom de calque jamais
 /// écrit.
 #[test]
@@ -1406,7 +1444,7 @@ fn reconstruction_lien_actuel_theme_et_flux() {
         .map(|(i, slug)| Entry {
             folder: "content/actus".into(),
             file_stem: slug.to_string(),
-            data: json!({ "title": slug.to_uppercase(), "date": format!("2026-0{}-01", i + 1) }),
+            data: json!({ "slug": slug, "title": slug.to_uppercase(), "date": format!("2026-0{}-01", i + 1) }),
             body: String::new(),
         })
         .collect();

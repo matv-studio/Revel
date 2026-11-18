@@ -2013,14 +2013,26 @@ fn prepare<'s>(
                             for (k, v) in m {
                                 d.insert(k.clone(), crate::eval::from_json(v));
                             }
-                            eval::Scope::new(base_globals.clone(), d)
+                            d
                         }
-                        _ => scope.clone(),
+                        _ => data.clone(),
                     };
+                    // Nom du fichier du contenu, lisible dans l'adresse (`{{ fileSlug }}`, comme
+                    // dans les gabarits) : jusque-là vide, l'adresse devenait `/projet//`.
+                    let mut pdata = pscope;
+                    pdata
+                        .entry("fileSlug".into())
+                        .or_insert_with(|| Value::from(e.file_stem.clone()));
+                    let pscope = eval::Scope::new(base_globals.clone(), pdata);
                     Some(b.render_inline(&pscope, p, &format!("chemin de {}", col.id))?)
                 }
                 None => None,
             };
+            // Adresse à segment vide : le champ qu'elle lit n'a pas de valeur (contenu repris d'un
+            // flux, sans identifiant). Le contenu n'a pas de page ; il reste dans les listes, qui
+            // mènent à son lien d'origine. Sans cela `/actualites//` s'écrivait sur la page
+            // `/actualites/`, et `//` était refusé (D-186).
+            let url = url.filter(|u| !u.contains("//"));
             // Autre langue : adresse préfixée (`/en/projets/wattr/`).
             let url = url.map(|u| localized_url(b, u));
             let content = markdown(&e.body);

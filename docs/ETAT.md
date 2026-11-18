@@ -9,6 +9,19 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 18/11/2026 (après-midi) : D-186 — adresses du site, contenu sans identifiant, CI verte
+
+- CI entièrement réussie sur `63ff76e` (flux 44299703959), première verte depuis `886f14d`.
+- Réponses de l'utilisateur (D-186) : pas de « Variante sur cette page » pour l'en-tête ; le site Alunites
+  Groupe reprend ses anciennes adresses ; date corrigée d'un flux à montrer dans le CMS (maquette envoyée,
+  `maquette-date-flux-*.png`, en attente).
+- **Fait** : contenu sans identifiant sans page (`revel-render`, test) ; script
+  `passation/alunites-anciennes-adresses.py` sur le PC (45 redirections retirées, 16 gardées, liens de 4
+  contenus corrigés), essayé sur une copie puis généré ici : 26 projets sous `/project/`, 19 actualités à la
+  racine, plan du site de 104 adresses. **À lancer après l'installation de la 0.8.0**, pas avant.
+- **Reste du lot 2** : inchangé (C, D, E sans variante, F, cartes de marque en propriétés) ; puis date
+  corrigée dans le CMS après accord, et la 0.8.0.
+
 ## Travail du 18/11/2026 (matin) : lot 2, propriété « Couleur » (D-185) ; site Alunites Groupe corrigé
 
 - **Codé** : `PropKind::Color` (modèle), menu des couleurs du site dans le panneau d'une utilisation et dans la

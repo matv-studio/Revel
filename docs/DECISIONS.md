@@ -2580,3 +2580,23 @@ Maquettes : `tools/maquettes/lot2.mjs` (scènes A à F). Ordre de codage : tout 
   On », qui change à chaque republication.
 - En suspens : « Variante sur cette page » de l'en-tête (D-184) ; montrer dans la fiche du CMS qu'une date est
   corrigée à la main, avec retour à la date du flux (maquette d'abord).
+
+**D-186 — 18/11/2026 13h35 — prise (réponses de l'utilisateur ; complète D-184 et D-185).**
+- **En-tête et pied** : « Variante sur cette page » retirée (pas indispensable, « au plus clean »). Il reste
+  l'interrupteur « Montré sur cette page ».
+- **Anciennes adresses connues de Google** (site Alunites Groupe) : le site reprend ses anciennes adresses au
+  lieu de les rediriger. Projets à `/project/<identifiant>/`, actualités à `/<identifiant>/` : 45 des 61
+  redirections disparaissent ; 16 restent, pour des pages qui n'existent plus (8 projets retirés, 2
+  actualités, `/agence/`, 4 expertises, `/feed.xml`). Script prêt et essayé :
+  `passation/alunites-anciennes-adresses.py` (dossier Revel du PC), à lancer dans le dossier du site avec
+  Revel 0.8.0 ou plus. Non appliqué au site : la 0.7.9 refuse de générer avec ces adresses (voir le point
+  suivant), le site serait resté impubliable. Contrepartie à connaître : les adresses actuelles
+  (`/projets/<identifiant>/`, `/actualites/<identifiant>/`), en ligne depuis le 16/11, ne répondront plus,
+  sauf à ajouter leurs redirections.
+- **Contenu sans la valeur que lit l'adresse de sa collection** (contenu repris d'un flux : pas d'identifiant) :
+  il n'a pas de page. Jusque-là `/actualites//` s'écrivait sur la page `/actualites/` et `/{{ slug }}/`
+  donnait `//`, refusé (« chemin de page invalide »). Corrigé dans `revel-render` (`prepare`), test
+  `contenu_sans_identifiant_sans_page`. Avec lui : `{{ fileSlug }}` (nom du fichier du contenu) se lit dans
+  l'adresse d'une collection ; il y était vide (`/projet//`, masqué par un essai).
+- **Date corrigée à la main d'un contenu de flux** : à montrer dans la fiche du CMS (libellé bleu, retour à
+  la date du flux, date du flux rappelée). Maquette envoyée le 18/11, en attente d'accord (D-183).

@@ -972,7 +972,52 @@ try {
       return r.bottom > 0 && r.top < innerHeight;
     }));
     check('touche « . » : calque puis élément amenés à l\'écran selon la souris', layerSeen && canvasSeen);
-    for (let i = 0; i < 8 && JSON.stringify((await invoke('edit_open')).site) !== doc0; i++) await invoke('edit_undo');
+    // Propriété « Couleur » (D-184) : ajoutée dans le composant ouvert, sa valeur est une couleur
+    // du site choisie par l'utilisation, proposée au sélecteur de couleur du composant.
+    {
+      const compNow = async () => (await invoke('edit_open')).site.components.find((c) => c.id === 'carte-e2e');
+      await page.locator('.layers .layer', { hasText: 'Carte e2e' }).first().click();
+      await page.click('[data-action="component-edit"]');
+      await page.waitForSelector('.component-props-head button');
+      await page.click('.component-props-head button');
+      await page.waitForSelector('.ctx-menu');
+      await page.click('.ctx-menu .menu-item:has-text("Couleur")');
+      await until(async () => (await compNow()).props.some((p) => p.type === 'color'));
+      const cprop = (await compNow()).props.find((p) => p.type === 'color');
+      const rootStyle = ((await compNow()).body[0].attrs.find((a) => a.name === 'style') || {}).value || '';
+      const names = await page.$$eval(`.prop-def[data-prop="${cprop.name}"] select option`, (o) => o.map((x) => x.value).filter(Boolean));
+      check('propriété couleur : ajoutée avec une couleur du site par défaut, portée par l\'élément racine',
+        names.length > 1 && names.includes(cprop.default) && rootStyle.includes(`--${cprop.name}: var(--{{ ${cprop.name} }})`), `${cprop.default} | ${rootStyle}`);
+      await page.frameLocator('iframe.canvas-frame').locator('.carte-e2e h3').first().click();
+      await page.locator('.style-row[data-prop="color"] .color-swatch').click();
+      await page.waitForSelector('.cp-plane');
+      await page.click('.cp-swatch.is-var[title="Couleur"]');
+      const ruled = await until(async () => JSON.stringify((await invoke('edit_open')).site.stylesheet).includes(`var(--${cprop.name})`));
+      check('propriété couleur : proposée par le sélecteur de couleur du composant', ruled);
+      await page.keyboard.press('Escape');
+      await page.click('.comp-back');
+      await until(async () => (await page.locator('.layers .layer', { hasText: 'Carte e2e' }).count()) > 0);
+      await page.locator('.layers .layer', { hasText: 'Carte e2e' }).first().click();
+      await page.waitForSelector(`.prop-row[data-prop="${cprop.name}"] select`);
+      const other = names.find((n) => n !== cprop.default);
+      await page.selectOption(`.prop-row[data-prop="${cprop.name}"] select`, other);
+      const shown = await until(() => frameOf().evaluate(([n, v]) => {
+        const root = document.querySelector('.carte-e2e');
+        const want = getComputedStyle(document.documentElement).getPropertyValue('--' + v).trim();
+        return !!want && getComputedStyle(root).getPropertyValue('--' + n).trim() === want;
+      }, [cprop.name, other]));
+      await page.waitForSelector(`.prop-row[data-prop="${cprop.name}"] .is-set`);
+      check('propriété couleur : couleur du site choisie par l\'utilisation, appliquée dans le canevas', shown, other);
+      if (shots) {
+        for (const t of ['dark', 'light']) {
+          await page.evaluate((v) => document.documentElement.setAttribute('data-theme', v), t);
+          await page.waitForTimeout(300);
+          await page.locator('.dock-panel[data-panel="styles"]').screenshot({ path: `${shots}/propriete-couleur-${t}.png` });
+        }
+        await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+      }
+    }
+    for (let i = 0; i < 16 && JSON.stringify((await invoke('edit_open')).site) !== doc0; i++) await invoke('edit_undo');
     await until(async () => (await frameOf().evaluate(() => document.querySelectorAll('.carte-e2e').length)) === 0);
     check('champs CMS : essai annulé, document identique', JSON.stringify((await invoke('edit_open')).site) === doc0);
     // Gabarit partagé (en-tête et pied de toutes les pages) ouvert depuis Pages › Gabarits.

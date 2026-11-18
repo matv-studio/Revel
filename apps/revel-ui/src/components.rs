@@ -14,10 +14,11 @@ use revel_model::{Component, Node, PropDef, PropKind, Variant, VariantKind};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub(crate) const KINDS: [PropKind; 6] = [
+pub(crate) const KINDS: [PropKind; 7] = [
     PropKind::Text,
     PropKind::Image,
     PropKind::Link,
+    PropKind::Color,
     PropKind::Switch,
     PropKind::List,
     PropKind::Entry,
@@ -28,6 +29,7 @@ pub(crate) fn kind_key(k: PropKind) -> &'static str {
         PropKind::Text => "prop-kind-text",
         PropKind::Image => "prop-kind-image",
         PropKind::Link => "prop-kind-link",
+        PropKind::Color => "prop-kind-color",
         PropKind::Switch => "prop-kind-switch",
         PropKind::List => "prop-kind-list",
         PropKind::Entry => "prop-kind-entry",
@@ -39,6 +41,7 @@ pub(crate) fn kind_icon(k: PropKind) -> AnyView {
         PropKind::Text => icons::text(),
         PropKind::Image => icons::image(),
         PropKind::Link => icons::link(),
+        PropKind::Color => icons::palette(),
         PropKind::Switch => icons::eye(),
         PropKind::List => icons::list(),
         PropKind::Entry => icons::database(),
@@ -50,6 +53,7 @@ pub(crate) fn kind_icon_fn(k: PropKind) -> fn() -> AnyView {
         PropKind::Text => icons::text,
         PropKind::Image => icons::image,
         PropKind::Link => icons::link,
+        PropKind::Color => icons::palette,
         PropKind::Switch => icons::eye,
         PropKind::List => icons::list,
         PropKind::Entry => icons::database,
@@ -62,6 +66,7 @@ fn base_name(k: PropKind) -> &'static str {
         PropKind::Text => "texte",
         PropKind::Image => "image",
         PropKind::Link => "lien",
+        PropKind::Color => "couleur",
         PropKind::Switch => "visible",
         PropKind::List => "liste",
         PropKind::Entry => "contenu",
@@ -84,6 +89,99 @@ pub(crate) fn default_bool(p: &PropDef) -> bool {
         Some(Value::String(s)) => s == "true",
         _ => false,
     }
+}
+
+/// Couleurs du site proposées à une propriété « Couleur » (D-184) : (nom sans `--`, libellé,
+/// valeur claire).
+pub(crate) fn site_color_names(ed: Ed) -> Vec<(String, String, String)> {
+    ed.doc.with_untracked(|d| {
+        d.as_ref()
+            .map(|d| {
+                crate::sitecolors::colors(d)
+                    .into_iter()
+                    .map(|(var, light, _)| {
+                        (
+                            var.trim_start_matches("--").to_string(),
+                            crate::names::humanize(&var),
+                            light,
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// Menu d'une couleur du site, avec sa pastille ; `empty` : libellé du choix « aucune » (valeur
+/// par défaut du composant, ou pas de couleur).
+fn color_select(
+    ed: Ed,
+    current: String,
+    empty: String,
+    label: String,
+    on: impl Fn(Option<String>) + 'static,
+) -> AnyView {
+    let colors = site_color_names(ed);
+    let swatch = colors
+        .iter()
+        .find(|(n, _, _)| *n == current)
+        .map(|(_, _, v)| v.clone())
+        .unwrap_or_else(|| "transparent".into());
+    // Valeur écrite à la main (ancien site) : gardée dans la liste.
+    let unknown = (!current.is_empty() && !colors.iter().any(|(n, _, _)| *n == current))
+        .then(|| current.clone());
+    view! {
+        <span class="prop-color">
+            <span class="prop-color-swatch" style=format!("background:{swatch}")></span>
+            <span class="select">
+                <select class="input" aria-label=label
+                    on:change=move |e| {
+                        let v = event_target_value(&e);
+                        on((!v.is_empty()).then_some(v));
+                    }>
+                    <option value="" selected=current.is_empty()>{empty}</option>
+                    {unknown.map(|u| view! { <option value=u.clone() selected=true>{u.clone()}</option> })}
+                    {colors.into_iter().map(|(n, l, _)| {
+                        let on = n == current;
+                        view! { <option value=n selected=on>{l}</option> }
+                    }).collect_view()}
+                </select>
+            </span>
+        </span>
+    }
+    .into_any()
+}
+
+/// Commande qui fait porter à l'élément racine du composant la couleur choisie par chaque
+/// utilisation : `style="--<propriété>: var(--{{ <propriété> }})"`, lue par les styles du
+/// composant (`var(--<propriété>)`, proposée par le sélecteur de couleur).
+fn carry_color(c: &Component, prop: &str) -> Option<Command> {
+    let root = c.body.iter().find_map(|n| match n {
+        Node::Element { id, attrs, .. } => Some((id.clone(), attrs)),
+        _ => None,
+    })?;
+    let decl = format!("--{prop}: var(--{{{{ {prop} }}}})");
+    let old = root
+        .1
+        .iter()
+        .find(|a| a.name == "style")
+        .and_then(|a| a.value.clone())
+        .unwrap_or_default();
+    if old.contains(&format!("--{prop}:")) {
+        return None;
+    }
+    let value = match old.trim().trim_end_matches(';') {
+        "" => decl,
+        o => format!("{o}; {decl}"),
+    };
+    Some(Command::SetAttr {
+        at: revel_edit::Target {
+            owner: Owner::Component(c.id.clone()),
+            node: root.0?,
+        },
+        name: "style".into(),
+        value: Some(value),
+    })
 }
 
 fn component(ed: Ed, id: &str) -> Option<Component> {
@@ -779,6 +877,27 @@ fn prop_value_row(
         }
         .into_any();
     }
+    // Couleur du site (D-184) : choisie dans la liste des couleurs du site, jamais écrite.
+    if p.kind == PropKind::Color && arg.as_deref().is_none_or(|a| literal(a).is_some()) {
+        let current = arg.as_deref().and_then(literal).unwrap_or_default();
+        let dflt = site_color_names(ed)
+            .into_iter()
+            .find(|(n, _, _)| *n == default_text(&p))
+            .map(|(_, l, _)| l)
+            .unwrap_or_else(|| default_text(&p));
+        return view! {
+            <div class="prop-row" data-prop=p.name.clone()>
+                <div class="field">
+                    <span class="label prop-color-label">
+                        <span class="prop-label" class:is-set=overridden>{label.clone()}</span>
+                        {reset()}
+                    </span>
+                    {color_select(ed, current, dflt, label, move |v| set(name.get_value(), v.map(|v| quote(&v))))}
+                </div>
+            </div>
+        }
+        .into_any();
+    }
     // Propriété liste écrite à la main (D-139) : une ligne par valeur.
     if p.kind == PropKind::List
         && let Some(items) = arg.as_deref().map_or(Some(Vec::new()), list_literal)
@@ -865,7 +984,25 @@ pub fn props_section(ui: Ui, ed: Ed, holder: Holder) -> AnyView {
                             d.as_ref().and_then(|d| holder.with_value(|h| h.visible(d)))
                         })
                         .unwrap_or_else(|| list.clone());
-                    list.push(new_prop(ui, &visible, k, None));
+                    let mut prop = new_prop(ui, &visible, k, None);
+                    if k == PropKind::Color {
+                        prop.default = site_color_names(ed)
+                            .into_iter()
+                            .next()
+                            .map(|(n, _, _)| Value::String(n));
+                        let carry = holder.with_value(|h| match h {
+                            Holder::Component(id) => {
+                                component(ed, id).and_then(|c| carry_color(&c, &prop.name))
+                            }
+                            Holder::Layout(_) => None,
+                        });
+                        list.push(prop);
+                        let set = holder.with_value(|h| h.set(list));
+                        let commands = std::iter::once(set).chain(carry).collect();
+                        ed.apply(ui, Command::Batch { commands }, false);
+                        return;
+                    }
+                    list.push(prop);
                     write(list);
                 })
                 .icon(kind_icon_fn(k))
@@ -964,6 +1101,14 @@ pub fn props_section(ui: Ui, ed: Ed, holder: Holder) -> AnyView {
                                         }/>
                                     <span class="switch-track"></span>
                                 </span>
+                            </label>
+                        }.into_any()
+                    } else if kind == PropKind::Color {
+                        view! {
+                            <label class="field">
+                                <span class="label">{ui.t("component-prop-default")}</span>
+                                {color_select(ed, default_text(p), ui.now("prop-color-none", &[]), ui.now("component-prop-default", &[]),
+                                    move |v| set_prop(Box::new(move |p| p.default = v.clone().map(Value::String))))}
                             </label>
                         }.into_any()
                     } else {

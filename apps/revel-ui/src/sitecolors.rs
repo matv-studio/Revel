@@ -18,7 +18,7 @@ pub const DARK: &str = "(prefers-color-scheme: dark)";
 
 /// Couleurs du site : (variable, valeur claire, valeur sombre). Toutes les règles `:root` sont
 /// lues (D-179).
-fn colors(d: &Site) -> Vec<(String, String, Option<String>)> {
+pub(crate) fn colors(d: &Site) -> Vec<(String, String, Option<String>)> {
     let dark = root_vars(d, &Some(DARK.into()));
     root_vars(d, &None)
         .into_iter()

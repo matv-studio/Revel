@@ -179,8 +179,15 @@ try {
   const hb = await handle.boundingBox();
   await page.mouse.move(hb.x + hb.width / 2, hb.y + 200);
   await page.mouse.down();
-  await page.mouse.move(hb.x - 180, hb.y + 200, { steps: 6 });
+  // Déplacement lent : sur une machine chargée (CI), six pas d'un trait n'en donnaient qu'un
+  // au volet (420 → 451 au lieu de 600).
+  await page.mouse.move(hb.x - 90, hb.y + 200, { steps: 10 });
+  await page.waitForTimeout(80);
+  await page.mouse.move(hb.x - 180, hb.y + 200, { steps: 10 });
+  await page.waitForTimeout(80);
   await page.mouse.up();
+  // La largeur est prise au relâchement (D-131).
+  await page.waitForFunction((w) => document.querySelector('.cms-item').getBoundingClientRect().width > w + 100, w0, { timeout: 3000 }).catch(() => {});
   const w1 = await page.$eval('.cms-item', (e) => e.getBoundingClientRect().width);
   await page.dblclick('.cms-resize');
   const w2 = await page.$eval('.cms-item', (e) => e.getBoundingClientRect().width);

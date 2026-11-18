@@ -303,6 +303,8 @@ impl Ctx {
             || (name == "href" && crate::collection::neighbor_link(e).is_some())
             || (name == "href" && self.prop(e, Some(PropKind::Link)))
             || (matches!(name, "src" | "poster") && self.prop(e, Some(PropKind::Image)))
+            // Couleur du site choisie par l'utilisation, portée par une variable du style.
+            || (name == "style" && self.prop(e, Some(PropKind::Color)))
             || self.prop(e, Some(PropKind::Text))
             || written.is_some_and(|t| self.site_value(t) || self.field(t) || self.prop(t, None))
             || self.output(e)

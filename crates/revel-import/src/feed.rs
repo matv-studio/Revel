@@ -489,8 +489,13 @@ pub fn plan(feed: &Feed, existing: &[Existing], source: &str) -> Plan {
         match found {
             Some(e) => {
                 let mut data = e.data.as_object().cloned().unwrap_or_default();
+                // Date corrigée à la main dans le CMS : gardée à chaque reprise (demande du
+                // 18/11/2026). Elle diffère de la date du flux notée à la reprise précédente
+                // (`feed_date`) ; pour un contenu repris avant que cette date soit notée, elle
+                // diffère de celle que le flux donne maintenant.
                 let edited_date = match (data.get("date"), data.get("feed_date")) {
                     (Some(d), Some(f)) => d != f,
+                    (Some(d), None) => fresh.get("date").is_some_and(|f| d != f),
                     _ => false,
                 };
                 for k in FIELDS {
@@ -1008,6 +1013,29 @@ mod tests {
             "nord",
         );
         assert_eq!((p.update.len(), p.unchanged), (0, 1), "{:?}", p.update);
+    }
+
+    /// Contenu repris par une version qui ne notait pas la date du flux (0.7.9) puis corrigé à la
+    /// main : la date est gardée dès la première reprise, et la date du flux est notée.
+    #[test]
+    fn date_corrigee_gardee_sans_date_du_flux() {
+        let f = parse(RSS, None).unwrap();
+        let fresh = item_data(&f.items[0], "nord");
+        let mut data = fresh.clone();
+        data.remove("feed_date");
+        data.insert("date".into(), json!("2025-06-01"));
+        let p = plan(
+            &f,
+            &[Existing {
+                file: "a".into(),
+                data: Value::Object(data),
+                body: f.items[0].content.trim().into(),
+            }],
+            "nord",
+        );
+        assert_eq!(p.update.len(), 1);
+        assert_eq!(p.update[0].1["date"], "2025-06-01");
+        assert_eq!(p.update[0].1["feed_date"], fresh["feed_date"]);
     }
 
     /// Sans flux à l'adresse : pages de la collection lues (liens de l'accueil, balises de partage).

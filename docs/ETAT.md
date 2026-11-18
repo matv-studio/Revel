@@ -9,6 +9,29 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 18/11/2026 (matin) : lot 2, propriété « Couleur » (D-185) ; site Alunites Groupe corrigé
+
+- **Codé** : `PropKind::Color` (modèle), menu des couleurs du site dans le panneau d'une utilisation et dans la
+  valeur par défaut (`components.rs` : `site_color_names`, `color_select`, `carry_color`), propriété proposée
+  par le sélecteur de couleur du composant ouvert (`styles/color.rs`, `site_colors`), relevé (`editable.rs`),
+  clés `prop-kind-color` et `prop-color-none` (15 langues), bloc « propriété couleur » des essais de l'éditeur.
+- **CI** : l'échec répété depuis `abeb1e4` était l'essai « CMS : volet de la fiche élargi à la poignée » de
+  `tools/templates-e2e.mjs` (420 → 451 au lieu de 600 sur la CI : glisser trop rapide) ; glisser ralenti,
+  attente de la largeur après le relâchement.
+- **Site Alunites Groupe** (PC, `Sites\alunites-groupe`, fichiers modifiés à la main à la demande de
+  l'utilisateur, publication par lui) : filigranes 01 à 03 et point de couleur remis dans le composant
+  « Carte d'accueil d'une marque » (`house-card__num`, `house-card__dot`, disparus entre les publications du
+  17/11 13h50 et 18h07) ; numéro d'Alunites remis à 01 ; couleur `--alunites` remise ; cadre de l'actualité à
+  la une en 16:10 (règle `csgw4vfr`, une image en portrait donnait une carte de plus de 2 000 px) ; dates des 5
+  projets Superficiel alignées sur le flux republié. Doublons : aucun entre contenus Alunites et flux.
+- Méthode pour vérifier ce site ici : archive sans `media` déposée dans `_echanges\_tmp-claude` (à supprimer
+  par l'utilisateur), reprise par `device_stage_files`, servie par `revel canvas-serve` (les pages se lisent
+  à `http://127.0.0.1:<port>/<adresse>/`), images extérieures remplacées par une image d'essai.
+- Version suivante : **0.8.0**. À y mettre aussi : plan du site et redirections (D-185, maquette d'abord).
+- **Reste du lot 2** : C outil « Champ CMS » ; D liste de collection Automatique / Choix manuel ; E outils
+  En-tête et Pied ; F branches Si / Sinon dans les calques et le canevas ; cartes de marque du site en
+  propriétés et collection Marques supprimée ; compte des utilisations d'une couleur (D-185).
+
 ## Travail du 17/11/2026 (nuit, suite) : lot 2, premier sujet codé — texte relié au CMS (D-184)
 
 - Réponses de l'utilisateur (22h05) consignées dans D-184 : menu d'état seulement avec les classes ; couleur de

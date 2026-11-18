@@ -80,6 +80,28 @@ fn site_colors(sx: Sx) -> (Vec<(String, Rgba)>, Vec<Rgba>) {
         };
         let mut vars: Vec<(String, Rgba)> = Vec::new();
         let mut used: Vec<(String, Rgba, usize)> = Vec::new();
+        // Composant ouvert : ses propriétés « Couleur » (D-184), chacune une variable portée par
+        // l'élément racine ; montrées avec leur couleur par défaut.
+        let own: Vec<(String, String)> = sx
+            .ed
+            .comp
+            .with_untracked(|c| c.clone())
+            .and_then(|id| d.as_ref()?.component(&id).cloned())
+            .map(|c| {
+                c.props
+                    .iter()
+                    .filter(|p| p.kind == revel_model::PropKind::Color)
+                    .map(|p| {
+                        let dflt = p
+                            .default
+                            .as_ref()
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default();
+                        (format!("--{}", p.name), format!("--{dflt}"))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         for item in &sheet.items {
             let StyleItem::Rule(r) = item else { continue };
             for d in &r.decls {
@@ -117,6 +139,15 @@ fn site_colors(sx: Sx) -> (Vec<(String, Rgba)>, Vec<Rgba>) {
             }
         }
         used.sort_by_key(|e| std::cmp::Reverse(e.2));
+        // Propriétés « Couleur » du composant, en tête des variables.
+        let props: Vec<(String, Rgba)> = own
+            .into_iter()
+            .filter_map(|(name, dflt)| {
+                let c = vars.iter().find(|(n, _)| *n == dflt).map(|(_, c)| *c)?;
+                Some((name, c))
+            })
+            .collect();
+        let vars = props.into_iter().chain(vars).collect();
         (vars, used.into_iter().take(18).map(|(_, c, _)| c).collect())
     })
 }

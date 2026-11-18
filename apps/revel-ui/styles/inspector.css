@@ -986,3 +986,10 @@
 .style-layerbar .instance-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
 .style-layerbar .instance-actions { flex-wrap: nowrap; }
 .style-layerbar .instance-head { padding: 0 5px; width: auto; }
+
+/* Propriété « Couleur » d'un composant (D-184) : pastille et menu des couleurs du site. */
+.prop-color { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.prop-color .select { flex: 1; min-width: 0; }
+.prop-color-swatch { width: 18px; height: 18px; flex: none; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); }
+.prop-color-label { display: flex; align-items: center; justify-content: space-between; }
+.prop-label.is-set { color: var(--set-text); }

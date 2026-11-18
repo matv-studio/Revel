@@ -2548,3 +2548,33 @@ Maquettes : `tools/maquettes/lot2.mjs` (scènes A à F). Ordre de codage : tout 
 - **Liste de collection** : « Contenus : Tous / Choisis » et « Contenus mis en avant » de la 0.7.9 sont réunis
   dans « Automatique / Choix manuel ».
 - En suspens : réponse sur « Variante sur cette page ».
+
+**D-185 — 18/11/2026 — prise (lot 2, sujet A : propriété « Couleur » d'un composant ; demandes du 18/11).**
+- **Propriété « Couleur »** (`PropKind::Color`) : sa valeur est le nom d'une couleur du site (variable sans
+  `--`), choisie dans un menu à pastille, par défaut dans le composant et par utilisation ; jamais de couleur
+  libre (D-184). À la création, l'élément racine du composant reçoit `style="--<propriété>: var(--{{
+  <propriété> }})"` (commande groupée avec l'ajout) ; dans le composant ouvert, le sélecteur de couleur propose
+  la propriété en tête des couleurs du site et écrit `var(--<propriété>)` dans la classe. Pourquoi : la couleur
+  d'une utilisation doit atteindre des règles de classe communes à toutes les utilisations ; une variable sur
+  la racine le fait sans code visible et sans règle par utilisation (même principe que les variables de
+  composant de Framer). Le relevé admet cette valeur de `style` (`editable.rs`).
+- **Variantes** : le panneau d'une utilisation ne propose déjà que les variantes créées (constaté dans le code
+  de la 0.7.9) ; rien à changer là. Le survol et l'appui restent proposés dans le composant ouvert.
+- **Version** : la version qui suit le lot 2 est la **0.8.0**, pas la 0.7.10 (demande du 18/11).
+- **Plan du site et redirections** (demande du 18/11, pour la 0.8.0) : le plan doit comprendre les liens qui
+  passent par une redirection (le site Alunites Groupe en a 61, des anciennes adresses `/project/…`,
+  `/agence/` vers les nouvelles). Deux voies données par l'utilisateur : un bouton « Redirections » dans la
+  barre des groupes du plan (à côté de « Parties communes », « Autres sites », « Médias et réseaux »), ou
+  reprendre dans le site les anciennes adresses connues de Google. Maquette à montrer avant le code (D-183).
+- **Défaut relevé sur le site Alunites Groupe** : Paramètres › Couleurs compte « 0 utilisation » pour une
+  couleur lue seulement par un attribut relié (`var(--{{ marque.data.slug }})`) ; `--alunites` a ainsi été
+  supprimée et la lueur de la carte est devenue grise. À corriger : compter aussi les attributs, et prévenir
+  quand une couleur porte le nom d'une valeur de champ.
+- **Dates des flux** (réponse de l'utilisateur, 18/11 10h23) : une date corrigée à la main dans le CMS est
+  gardée malgré les reprises suivantes. Le mécanisme existait depuis D-181 (`feed_date`) ; ajouté : un contenu
+  repris par la 0.7.9, sans `feed_date`, garde aussi sa date dès la première reprise si elle diffère de celle du
+  flux (`feed.rs`). Contrepartie acceptée : pour ces contenus, une correction faite ensuite à la source ne
+  remonte plus tant que la date du CMS n'est pas remise à celle du flux. Rappel : Webflow publie « Published
+  On », qui change à chaque republication.
+- En suspens : « Variante sur cette page » de l'en-tête (D-184) ; montrer dans la fiche du CMS qu'une date est
+  corrigée à la main, avec retour à la date du flux (maquette d'abord).

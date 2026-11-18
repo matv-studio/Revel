@@ -934,6 +934,10 @@ pub enum PropKind {
     Link,
     /// Élément affiché ou masqué.
     Switch,
+    /// Couleur du site (D-184) : la valeur est le nom d'une couleur du site (sa variable sans
+    /// `--`) ; l'élément racine du composant la porte dans la variable `--<nom de la propriété>`,
+    /// que les styles du composant lisent.
+    Color,
     /// Liste parcourue dans le composant (valeurs d'un champ, adresses de contenus reliés) :
     /// chaque utilisation la relie à un champ liste de son contenu.
     List,

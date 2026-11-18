@@ -229,6 +229,7 @@ layers-delete = Supprimer
 layers-if = Condition · { $cond }
 layers-if-help = Affiché selon une condition ({ $cond }), sinon le contenu de « Sinon »
 layers-else = Sinon
+layers-branch-shown = Partie montrée dans le canevas
 layers-each = Liste · { $list }
 layers-each-help = Répété pour chaque élément de la liste ({ $item } dans { $list })
 layers-condition = Affiché sous condition : { $cond }

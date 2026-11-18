@@ -226,6 +226,7 @@ layers-delete = Elimina
 layers-if = Condizione · { $cond }
 layers-if-help = Mostrato in base a una condizione ({ $cond }), altrimenti il contenuto di «Altrimenti»
 layers-else = Altrimenti
+layers-branch-shown = Parte mostrata nella tela
 layers-each = Elenco · { $list }
 layers-each-help = Ripetuto per ogni voce dell’elenco ({ $item } in { $list })
 layers-condition = Mostrato se: { $cond }

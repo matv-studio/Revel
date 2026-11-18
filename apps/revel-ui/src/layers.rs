@@ -73,6 +73,8 @@ pub struct Row {
     pub hidden: bool,
     /// Calque dans un calque masqué (grisé aussi).
     pub dimmed: bool,
+    /// Branche d'une condition : montrée ou non par le canevas (`None` : pas encore connu).
+    pub shown: Option<bool>,
     /// Outil fermé (D-159, D-174) : sa nature (`data-revel-base`), icône de l'outil sur sa ligne.
     pub tool: Option<String>,
 }
@@ -342,6 +344,7 @@ impl<'a> Builder<'a> {
                 name: revel_model::layer_name(n).map(str::to_string),
                 hidden: revel_model::is_hidden(n),
                 dimmed: false,
+            shown: None,
                 tool: match n {
                     Node::Element { attrs, .. } if revel_model::is_widget(n) => attrs
                         .iter()
@@ -383,7 +386,13 @@ impl<'a> Builder<'a> {
                 Node::If {
                     then, otherwise, ..
                 } => {
-                    self.list(then, owner, of(Branch::Then), &k, &anc, slot_level);
+                    // Condition à deux branches (D-182) : « Si » et « Sinon » chacune sur sa ligne,
+                    // sous la condition ; celle que le canevas montre est marquée.
+                    if otherwise.is_empty() {
+                        self.list(then, owner, of(Branch::Then), &k, &anc, slot_level);
+                    } else {
+                        self.branch(Branch::Then, then, owner, &id, &k, &anc, slot_level);
+                    }
                     if !otherwise.is_empty() {
                         self.branch(
                             Branch::Otherwise,
@@ -479,6 +488,7 @@ impl<'a> Builder<'a> {
             name: None,
             hidden: false,
             dimmed: false,
+            shown: None,
             tool: None,
         });
         self.vis.push(Vis::Show);
@@ -487,6 +497,34 @@ impl<'a> Builder<'a> {
         let before = self.rows.len();
         self.list(nodes, owner, parent, &k, &anc, slot_level);
         self.rows[at].has_children = self.rows.len() > before;
+    }
+}
+
+/// Marque la branche montrée de chaque condition à deux branches et estompe l'autre.
+fn mark_branches(rows: &mut [Row], rendered: &[(String, bool, bool)]) {
+    let mut off: HashSet<String> = HashSet::new();
+    for r in rows.iter_mut() {
+        let Kind::Branch(b @ (Branch::Then | Branch::Otherwise)) = r.kind else {
+            continue;
+        };
+        let Some(seen) = r
+            .parent
+            .node
+            .as_ref()
+            .and_then(|id| rendered.iter().find(|x| &x.0 == id))
+        else {
+            continue;
+        };
+        let shown = if b == Branch::Then { seen.1 } else { seen.2 };
+        r.shown = Some(shown);
+        if !shown {
+            off.insert(r.key.clone());
+        }
+    }
+    for r in rows.iter_mut() {
+        if off.contains(&r.key) || r.ancestors.iter().any(|a| off.contains(a)) {
+            r.dimmed = true;
+        }
     }
 }
 
@@ -823,6 +861,7 @@ pub fn label(ui: Ui, k: &Kind) -> String {
         Kind::Expr(e) => format!("{{{{ {e} }}}}"),
         Kind::If(c) => ui.tx("layers-if", &[("cond", condition_name(c))]),
         Kind::Each { expr, .. } => ui.tx("layers-each", &[("list", list_label(expr))]),
+        Kind::Branch(Branch::Then) => ui.tx("cond-show-then", &[]),
         Kind::Branch(Branch::Otherwise) => ui.tx("layers-else", &[]),
         Kind::Branch(_) => ui.tx("layers-empty-list", &[]),
         Kind::Use(c) => c.rsplit('/').next().unwrap_or(c).to_string(),
@@ -1018,6 +1057,35 @@ pub fn Layers() -> impl IntoView {
             }
             ed.page_ref(&url).map(|p| rows(d, &p)).unwrap_or_default()
         })
+    });
+    // Branche que le canevas montre pour chaque condition : marquée ; l'autre estompée avec son
+    // contenu (elle se modifie en la montrant, réglage « Aperçu » de la condition).
+    let all = Memo::new(move |_| {
+        let mut rows = all.get();
+        ed.branches.with(|b| mark_branches(&mut rows, b));
+        rows
+    });
+    // Nom de la branche des éléments placés directement dans une branche, pour le repère de
+    // sélection du canevas ; renvoyé à chaque chargement du canevas (il l'oublie).
+    Effect::new(move |_| {
+        ed.branches.track();
+        let map: serde_json::Map<String, serde_json::Value> = all.with(|rows| {
+            let names: std::collections::HashMap<&str, String> = rows
+                .iter()
+                .filter(|r| {
+                    r.shown.is_some()
+                        || matches!(r.kind, Kind::Branch(Branch::Then | Branch::Otherwise))
+                })
+                .map(|r| (r.key.as_str(), label(ui, &r.kind)))
+                .collect();
+            rows.iter()
+                .filter_map(|r| {
+                    let name = names.get(r.ancestors.last()?.as_str())?;
+                    Some((r.id.clone()?, serde_json::Value::from(name.clone())))
+                })
+                .collect()
+        });
+        ed.post(serde_json::json!({ "type": "branches", "map": map }));
     });
     // Ouverture par défaut : toute la structure visible, sauf l'en-tête du document (`head`), les
     // composants et les niveaux profonds ; le reste s'ouvre à la demande ou à la sélection.
@@ -1378,7 +1446,7 @@ pub fn Layers() -> impl IntoView {
             </label>
             <div class="layers-tree" role="tree" tabindex="0" on:keydown=on_key>
                 <For each=move || visible.get()
-                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}{}{:?}{}{:?}{}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated, r.bound, r.condition, r.textual, r.name, r.hidden, r.dimmed) + r.tool.as_deref().unwrap_or(""))
+                    key=|(r, open)| (r.key.clone(), format!("{:?}{}{}{:?}{:?}{}{}{:?}{}{:?}{}{}", r.kind, r.has_children, open, r.id, r.preview, r.animated, r.bound, r.condition, r.textual, r.name, r.hidden, r.dimmed) + r.tool.as_deref().unwrap_or("") + &format!("{:?}", r.shown))
                     let:item>
                     {
                         let (r, open) = item;
@@ -1400,6 +1468,7 @@ pub fn Layers() -> impl IntoView {
                         let is_conditional = condition.is_some();
                         let hidden = r.with_value(|r| r.hidden);
                         let dimmed = r.with_value(|r| r.dimmed);
+                        let branch_shown = r.with_value(|r| r.shown) == Some(true);
                         let can_name = r.with_value(nameable);
                         let k_ren = key.clone();
                         let is_renaming = move || renaming.get().as_deref() == Some(k_ren.as_str());
@@ -1591,6 +1660,7 @@ pub fn Layers() -> impl IntoView {
                                 <span class="layer-marks">
                                     {tool2.as_deref().and_then(crate::names::tool_icon).map(|i| view! { <span class="layer-mark layer-tool" title=ui.t("layers-tool")>{i}</span> })}
                                     {bound.then(|| view! { <span class="layer-mark" title=ui.t("layers-bound")>{icons::database()}</span> })}
+                                    {branch_shown.then(|| view! { <span class="layer-mark layer-shown" title=ui.t("layers-branch-shown")>{icons::eye()}</span> })}
                                     {condition.map(|c| view! { <span class="layer-mark" title=ui.tx("layers-condition", &[("cond", c)])>{icons::branch()}</span> })}
                                     {animated.then(|| view! { <span class="layer-mark layer-anim" title=ui.t("layers-animated")>{icons::bolt()}</span> })}
                                     {hidden.then(|| view! {

@@ -226,6 +226,7 @@ layers-delete = Delete
 layers-if = Condition · { $cond }
 layers-if-help = Shown depending on a condition ({ $cond }), otherwise the content of “Else”
 layers-else = Else
+layers-branch-shown = Part shown on the canvas
 layers-each = List · { $list }
 layers-each-help = Repeated for each item of the list ({ $item } in { $list })
 layers-condition = Shown on condition: { $cond }

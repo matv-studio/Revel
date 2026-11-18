@@ -20,6 +20,11 @@
   const varsEl = document.getElementById("rv-vars");
   let vars = [];
   try { vars = JSON.parse(varsEl ? varsEl.textContent : "[]"); } catch (_) { vars = []; }
+  // Branches rendues de chaque condition (calques : branche montrée, D-182).
+  const branchesEl = document.getElementById("rv-branches");
+  let branches = [];
+  try { branches = JSON.parse(branchesEl ? branchesEl.textContent : "[]"); } catch (_) { branches = []; }
+  if (branchesEl) branchesEl.remove();
 
   // Calques masqués : cachés dès qu'ils le sont (attribut posé sur place, sans recharger) ; la
   // règle, posée ici, ne compte pas dans la signature de l'en-tête.
@@ -251,7 +256,16 @@
   // l'interface : message `labels`).
   let tagNames = null;
   let otherName = "";
+  // Élément placé directement dans une branche d'une condition à deux branches (D-182) : la
+  // branche est rappelée après son nom (« Bandeau · Sinon »). Envoyé par l'interface (`branches`).
+  let branchNames = {};
   const label = (el, inst) => {
+    const base = plainLabel(el, inst);
+    const id = inst ? inst.node : el.getAttribute && el.getAttribute("data-rv");
+    const b = id ? branchNames[id] : "";
+    return b ? base + " \u00B7 " + b : base;
+  };
+  const plainLabel = (el, inst) => {
     if (inst) return "\u25C6 " + instName(inst);
     const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).filter(Boolean) : [];
     if (cls.length) {
@@ -2187,8 +2201,10 @@
       const vEl = doc.getElementById("rv-vars");
       const nextSlots = JSON.parse(sEl ? sEl.textContent : "[]");
       const nextVars = JSON.parse(vEl ? vEl.textContent : "[]");
+      const bEl = doc.getElementById("rv-branches");
+      const nextBranches = JSON.parse(bEl ? bEl.textContent : "[]");
       if (sEl) rev = Number(sEl.getAttribute("data-rev")) || rev;
-      for (const x of [sEl, vEl, ...doc.querySelectorAll('script[src="/__revel/canvas.js"]')]) if (x) x.remove();
+      for (const x of [sEl, vEl, bEl, ...doc.querySelectorAll('script[src="/__revel/canvas.js"]')]) if (x) x.remove();
       // Liens de la page actuelle (à recharger) : feuilles du même site.
       const sheets = [...doc.head.querySelectorAll('link[rel~="stylesheet"]')]
         .map((l) => new URL(l.getAttribute("href") || "", location.href))
@@ -2196,6 +2212,7 @@
         .map((x) => x.pathname);
       slots = nextSlots;
       vars = nextVars;
+      branches = nextBranches;
       if (document.title !== doc.title) document.title = doc.title;
       for (const a of ["lang", "dir"]) {
         const v = doc.documentElement.getAttribute(a);
@@ -2222,7 +2239,7 @@
       selectedInst = again.inst;
       redraw();
       sendPreviews();
-      post({ type: "refreshed", vars, rev });
+      post({ type: "refreshed", vars, branches, rev });
     } catch (_) {
       location.reload();
       return;
@@ -2323,6 +2340,10 @@
         // Éléments de texte mis en forme modifiés d'un bloc (D-72).
         richIds = new Set(Array.isArray(m.ids) ? m.ids : []);
         if (!editing) sendTexts();
+        break;
+      case "branches":
+        branchNames = m.map || {};
+        redraw();
         break;
       case "labels":
         tagNames = m.tags || null;
@@ -2520,6 +2541,7 @@
     title: document.title,
     slots: slots.length,
     vars,
+    branches,
     rev,
     scroll: { x: window.scrollX, y: window.scrollY },
   });

@@ -1039,6 +1039,25 @@ try {
       const btns = page.locator('.cond-tool [data-row="cond-show"] button');
       await btns.nth(2).click();
       const forced = await until(() => /[?&]rvif=[^&]+\.0/.test(frameOf()?.url() || ''));
+      // Calques (D-182) : « Si » et « Sinon » sous la condition, la branche montrée marquée,
+      // l'autre estompée avec son contenu ; repère du canevas : nom de la branche.
+      const branches = () => page.evaluate(() => {
+        const l = [...document.querySelectorAll('.layers .layer')];
+        const i = l.findIndex((e) => /Condition/.test(e.textContent));
+        const d0 = Number(l[i].dataset.depth);
+        const out = {};
+        for (const e of l.slice(i + 1)) {
+          const d = Number(e.dataset.depth);
+          if (d <= d0) break;
+          const name = e.querySelector('.layer-label')?.textContent.trim();
+          if (d === d0 + 1 && (name === 'Si' || name === 'Sinon')) out[name] = { shown: !!e.querySelector('.layer-shown'), dim: e.classList.contains('is-hidden-layer') };
+        }
+        return out;
+      });
+      const elseShown = await until(async () => { const b = await branches(); return !!b.Si && !!b.Sinon && b.Sinon.shown && !b.Sinon.dim && b.Si.dim && !b.Si.shown; });
+      await btns.nth(1).click();
+      const thenShown = await until(async () => { const b = await branches(); return !!b.Si && b.Si.shown && !b.Si.dim && b.Sinon.dim && !b.Sinon.shown; });
+      check('condition : branches « Si » et « Sinon » dans les calques, celle du canevas marquée, l\'autre estompée', elseShown && thenShown, JSON.stringify(await branches()));
       if (shots) await page.screenshot({ path: `${shots}/condition.png` });
       await btns.nth(0).click();
       const auto = await until(() => !/rvif=/.test(frameOf()?.url() || ''));

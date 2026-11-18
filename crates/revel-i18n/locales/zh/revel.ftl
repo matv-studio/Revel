@@ -226,6 +226,7 @@ layers-delete = 删除
 layers-if = 条件 · { $cond }
 layers-if-help = 根据条件（{ $cond }）显示，否则显示“否则”的内容
 layers-else = 否则
+layers-branch-shown = 画布中显示的部分
 layers-each = 列表 · { $list }
 layers-each-help = 对列表中的每一项重复（{ $list } 中的 { $item }）
 layers-condition = 满足条件时显示：{ $cond }

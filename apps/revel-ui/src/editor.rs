@@ -68,6 +68,9 @@ enum FromCanvas {
         path: String,
         #[serde(default)]
         vars: Vec<revel_edit::canvas::VarValue>,
+        /// Branches rendues de chaque condition : (identifiant, « si », « sinon »).
+        #[serde(default)]
+        branches: Vec<(String, bool, bool)>,
         /// Révision du document rendu.
         #[serde(default)]
         rev: Option<u64>,
@@ -81,6 +84,8 @@ enum FromCanvas {
     Refreshed {
         #[serde(default)]
         vars: Vec<revel_edit::canvas::VarValue>,
+        #[serde(default)]
+        branches: Vec<(String, bool, bool)>,
         #[serde(default)]
         rev: Option<u64>,
     },
@@ -571,6 +576,8 @@ pub struct Ed {
     pub keep_selection: StoredValue<bool>,
     /// Valeurs des affectations `{% set %}` de la page affichée (relevées au rendu du canevas).
     pub vars: RwSignal<Vec<revel_edit::canvas::VarValue>>,
+    /// Branches rendues de chaque condition dans le canevas (calques : branche montrée).
+    pub branches: RwSignal<Vec<(String, bool, bool)>>,
     /// Guides de colonnes.
     pub guides: RwSignal<Guides>,
     /// Valeurs effectives des propriétés de style de l'élément sélectionné (canevas).
@@ -3003,6 +3010,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         scroll: RwSignal::new((0.0, 0.0)),
         live_scroll: RwSignal::new((0.0, 0.0)),
         vars: RwSignal::new(Vec::new()),
+        branches: RwSignal::new(Vec::new()),
         rulers: RwSignal::new(crate::pref_get("rulers").as_deref() == Some("1")),
         keep_selection: StoredValue::new(false),
         dark: RwSignal::new(
@@ -3300,7 +3308,12 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             }
         }
         match msg {
-            FromCanvas::Ready { path, vars, rev } => {
+            FromCanvas::Ready {
+                path,
+                vars,
+                branches,
+                rev,
+            } => {
                 // Navigation impossible dans le canevas : la page est celle demandée.
                 let _ = path;
                 // Page rendue avant la dernière modification : mise à jour sur place.
@@ -3315,6 +3328,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 ed.post_rich_hosts();
                 if active {
                     ed.vars.set(vars);
+                    ed.branches.set(branches);
                     ed.live_scroll.set((0.0, 0.0));
                     ed.post(
                         serde_json::json!({ "type": "watch", "props": crate::styles::watched() }),
@@ -3349,12 +3363,17 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 f.args.push(("error".into(), text.trim().to_string()));
                 ui.fail(f);
             }
-            FromCanvas::Refreshed { vars, rev } => {
+            FromCanvas::Refreshed {
+                vars,
+                branches,
+                rev,
+            } => {
                 if ed.stale(rev) {
                     post_to(&from_frame, serde_json::json!({ "type": "refresh" }));
                 }
                 if active {
                     ed.vars.set(vars);
+                    ed.branches.set(branches);
                 }
                 ed.post_rich_hosts();
                 ed.post_isolation();

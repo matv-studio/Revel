@@ -226,6 +226,7 @@ layers-delete = Excluir
 layers-if = Condição · { $cond }
 layers-if-help = Exibido conforme uma condição ({ $cond }); caso contrário, o conteúdo de “Senão”
 layers-else = Senão
+layers-branch-shown = Parte mostrada na tela
 layers-each = Lista · { $list }
 layers-each-help = Repetido para cada item da lista ({ $item } em { $list })
 layers-condition = Exibido sob condição: { $cond }

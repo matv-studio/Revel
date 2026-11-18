@@ -226,6 +226,7 @@ layers-delete = Verwijderen
 layers-if = Voorwaarde · { $cond }
 layers-if-help = Getoond afhankelijk van een voorwaarde ({ $cond }), anders de inhoud van ‘Anders’
 layers-else = Anders
+layers-branch-shown = Deel dat op het canvas wordt getoond
 layers-each = Lijst · { $list }
 layers-each-help = Herhaald voor elk item van de lijst ({ $item } in { $list })
 layers-condition = Getoond onder voorwaarde: { $cond }

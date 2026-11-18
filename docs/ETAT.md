@@ -9,6 +9,20 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 18/11/2026 (après-midi, suite) : lot 2, sujet F — branches d'une condition (D-187)
+
+- **Fait** : « Si » et « Sinon » dans les calques, branche rendue marquée (œil), l'autre estompée ; nom de
+  la branche dans le repère du canevas. Fichiers : `revel-render` (`eval.rs` : `Editor.branches`,
+  `lib.rs` : `EditorPage.branches`), `revel-core` (`canvas.rs` : `#rv-branches`, `canvas.js`), interface
+  (`editor.rs` : `Ed::branches`, `layers.rs` : `mark_branches`). Clé `layers-branch-shown` (15 langues).
+  Essai de bout en bout ajouté au bloc « condition » (415 essais).
+- **Demande du 18/11 14h37 pour la 0.8** (à faire) : canevas libre éteint par défaut ; Réglages › Éditeur :
+  démarrer en « Canevas libre », en « Tous les écrans » ; barre : à droite règle, zoom, volets, aide,
+  annuler, rétablir ; à gauche thème du site et langue intervertis ; écrans, canevas libre, tous les
+  écrans et gestion des écrans centrés.
+- **Reste du lot 2** : C (outil « Champ CMS »), D (liste Automatique / Choix manuel), E (En-tête / Pied),
+  cartes de marque en propriétés ; date corrigée dans le CMS après accord ; 0.8.0.
+
 ## Travail du 18/11/2026 (après-midi) : D-186 — adresses du site, contenu sans identifiant, CI verte
 
 - CI entièrement réussie sur `63ff76e` (flux 44299703959), première verte depuis `886f14d`.

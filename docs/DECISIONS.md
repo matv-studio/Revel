@@ -2600,3 +2600,13 @@ Maquettes : `tools/maquettes/lot2.mjs` (scènes A à F). Ordre de codage : tout 
   l'adresse d'une collection ; il y était vide (`/projet//`, masqué par un essai).
 - **Date corrigée à la main d'un contenu de flux** : à montrer dans la fiche du CMS (libellé bleu, retour à
   la date du flux, date du flux rappelée). Maquette envoyée le 18/11, en attente d'accord (D-183).
+
+**D-187 — 18/11/2026 — prise (lot 2, sujet F : branche montrée d'une condition).**
+- Calques : une condition qui a un « Sinon » montre deux lignes, « Si » et « Sinon » (avant : le contenu
+  du « Si » directement sous la condition, seul « Sinon » nommé). La branche rendue dans le canevas porte
+  un œil ; l'autre et son contenu sont estompés. Une condition sans « Sinon » reste telle quelle.
+- Canevas : le repère de sélection d'un élément placé dans une branche porte son nom (« Env badge · Si »).
+- Source de l'information : le rendu de l'éditeur note pour chaque condition la ou les branches rendues
+  (une condition dans une liste peut rendre les deux) ; envoyé au canevas (`#rv-branches`) puis à
+  l'interface (`ready`, `refreshed`). Rien n'est deviné côté interface.
+- En suspens : retrait de « Code » du panneau de condition (montré dans la maquette), non fait.

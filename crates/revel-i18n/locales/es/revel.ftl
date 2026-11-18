@@ -226,6 +226,7 @@ layers-delete = Eliminar
 layers-if = Condición · { $cond }
 layers-if-help = Se muestra según una condición ({ $cond }); si no, el contenido de «Si no»
 layers-else = Si no
+layers-branch-shown = Parte mostrada en el lienzo
 layers-each = Lista · { $list }
 layers-each-help = Se repite para cada elemento de la lista ({ $item } en { $list })
 layers-condition = Se muestra si: { $cond }

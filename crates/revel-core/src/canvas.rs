@@ -272,17 +272,25 @@ fn preview_page(html: &str) -> String {
     }
 }
 
-pub fn inject(html: &str, slots: &[Slot], vars: &[VarValue], rev: Option<u64>) -> String {
+pub fn inject(
+    html: &str,
+    slots: &[Slot],
+    vars: &[VarValue],
+    branches: &[(String, bool, bool)],
+    rev: Option<u64>,
+) -> String {
     // `</` échappé : la liste ne peut pas fermer l'élément <script>.
     let json = |v: String| v.replace("</", "<\\/");
     let slots = json(serde_json::to_string(slots).unwrap_or_else(|_| "[]".into()));
     let vars = json(serde_json::to_string(vars).unwrap_or_else(|_| "[]".into()));
+    let branches = json(serde_json::to_string(branches).unwrap_or_else(|_| "[]".into()));
     let rev = rev
         .map(|r| format!(" data-rev=\"{r}\""))
         .unwrap_or_default();
     let tail = format!(
         "<script type=\"application/json\" id=\"rv-slots\"{rev}>{slots}</script>\
          <script type=\"application/json\" id=\"rv-vars\">{vars}</script>\
+         <script type=\"application/json\" id=\"rv-branches\">{branches}</script>\
          <script src=\"{CANVAS_JS_URL}\"></script>"
     );
     match html.to_ascii_lowercase().rfind("</body") {
@@ -711,7 +719,13 @@ impl Core {
                 let html = hide_hidden(&if preview {
                     preview_component(&page.html)
                 } else {
-                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
+                    html_viewport_units(&inject(
+                        &page.html,
+                        &page.slots,
+                        &page.vars,
+                        &page.branches,
+                        rev,
+                    ))
                 });
                 CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
             }));
@@ -739,7 +753,13 @@ impl Core {
                 let html = hide_hidden(&if preview {
                     preview_page(&page.html)
                 } else {
-                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
+                    html_viewport_units(&inject(
+                        &page.html,
+                        &page.slots,
+                        &page.vars,
+                        &page.branches,
+                        rev,
+                    ))
                 });
                 CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
             }));
@@ -772,7 +792,13 @@ impl Core {
                 let html = hide_hidden(&if preview {
                     preview_page(&page.html)
                 } else {
-                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
+                    html_viewport_units(&inject(
+                        &page.html,
+                        &page.slots,
+                        &page.vars,
+                        &page.branches,
+                        rev,
+                    ))
                 });
                 CanvasResponse::ok("text/html; charset=utf-8", html.into_bytes())
             }));
@@ -801,7 +827,13 @@ impl Core {
                 let html = hide_hidden(&if preview {
                     preview_page(&page.html)
                 } else {
-                    html_viewport_units(&inject(&page.html, &page.slots, &page.vars, rev))
+                    html_viewport_units(&inject(
+                        &page.html,
+                        &page.slots,
+                        &page.vars,
+                        &page.branches,
+                        rev,
+                    ))
                 });
                 return Ok(Some(CanvasResponse::ok(
                     "text/html; charset=utf-8",
@@ -1035,7 +1067,7 @@ mod tests {
             node: "x</script>".into(),
             component: None,
         }];
-        let h = inject("<html><body><p>a</p></BODY></html>", &slots, &[], None);
+        let h = inject("<html><body><p>a</p></BODY></html>", &slots, &[], &[], None);
         assert!(
             h.starts_with("<html><body><p>a</p><script type=\"application/json\" id=\"rv-slots\">")
         );

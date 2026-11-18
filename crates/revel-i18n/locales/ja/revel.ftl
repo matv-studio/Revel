@@ -226,6 +226,7 @@ layers-delete = 削除
 layers-if = 条件 · { $cond }
 layers-if-help = 条件（{ $cond }）に応じて表示されます。それ以外の場合は「Else」の内容が表示されます
 layers-else = Else
+layers-branch-shown = キャンバスに表示されている部分
 layers-each = リスト · { $list }
 layers-each-help = リストの項目ごとに繰り返されます（{ $list }の{ $item }）
 layers-condition = 条件付きで表示：{ $cond }

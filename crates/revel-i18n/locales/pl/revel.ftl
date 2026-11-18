@@ -240,6 +240,7 @@ layers-delete = Usuń
 layers-if = Warunek · { $cond }
 layers-if-help = Wyświetlane zależnie od warunku ({ $cond }), w przeciwnym razie treść „Else”
 layers-else = Else
+layers-branch-shown = Część pokazana na płótnie
 layers-each = Lista · { $list }
 layers-each-help = Powtarzane dla każdego elementu listy ({ $item } w { $list })
 layers-condition = Wyświetlane pod warunkiem: { $cond }

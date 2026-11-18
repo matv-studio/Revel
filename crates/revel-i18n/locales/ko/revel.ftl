@@ -226,6 +226,7 @@ layers-delete = 삭제
 layers-if = 조건 · { $cond }
 layers-if-help = 조건({ $cond })에 따라 표시되며, 그렇지 않으면 “그 외” 콘텐츠가 표시됩니다
 layers-else = 그 외
+layers-branch-shown = 캔버스에 표시된 부분
 layers-each = 목록 · { $list }
 layers-each-help = 목록의 각 항목마다 반복됩니다({ $list }의 { $item })
 layers-condition = 조건에 따라 표시: { $cond }

@@ -276,6 +276,8 @@ pub struct EditorPage {
     pub slots: Vec<Slot>,
     /// Valeurs des affectations `{% set %}` de la page, de ses gabarits et de ses composants.
     pub vars: Vec<revel_edit::canvas::VarValue>,
+    /// Branches rendues de chaque condition : (identifiant, « si » rendu, « sinon » rendu).
+    pub branches: Vec<(String, bool, bool)>,
     pub warnings: Vec<String>,
 }
 
@@ -1737,6 +1739,7 @@ fn editor_page(
     b.editor = Some(eval::Editor {
         slots: Default::default(),
         vars: Default::default(),
+        branches: Default::default(),
         scripts: opts.scripts,
         entries: prepared.entries.clone(),
     });
@@ -1767,15 +1770,22 @@ fn editor_page(
     let html = toolcss::wire(html);
     let html = masonry::wire(html);
     warnings.extend(b.take_warnings());
-    let (slots, vars) = b
+    let (slots, vars, branches) = b
         .editor
         .take()
-        .map(|e| (e.slots.into_inner(), e.vars.into_inner()))
+        .map(|e| {
+            (
+                e.slots.into_inner(),
+                e.vars.into_inner(),
+                e.branches.into_inner(),
+            )
+        })
         .unwrap_or_default();
     Ok(Some(EditorPage {
         html,
         slots,
         vars,
+        branches,
         warnings,
     }))
 }

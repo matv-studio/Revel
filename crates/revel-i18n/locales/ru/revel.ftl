@@ -232,6 +232,7 @@ layers-delete = Удалить
 layers-if = Условие · { $cond }
 layers-if-help = Показывается при выполнении условия ({ $cond }), иначе показывается содержимое блока «Иначе»
 layers-else = Иначе
+layers-branch-shown = Часть, показанная на холсте
 layers-each = Список · { $list }
 layers-each-help = Повторяется для каждого элемента списка ({ $item } из { $list })
 layers-condition = Показывается при условии: { $cond }

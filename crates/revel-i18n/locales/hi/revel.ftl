@@ -226,6 +226,7 @@ layers-delete = हटाएँ
 layers-if = शर्त · { $cond }
 layers-if-help = शर्त ({ $cond }) के अनुसार दिखता है, अन्यथा “अन्यथा” की सामग्री दिखती है
 layers-else = अन्यथा
+layers-branch-shown = कैनवास पर दिखाया गया भाग
 layers-each = सूची · { $list }
 layers-each-help = सूची के हर आइटम के लिए दोहराया जाता है ({ $list } में { $item })
 layers-condition = शर्त पर दिखता है: { $cond }

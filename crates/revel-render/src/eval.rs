@@ -173,6 +173,9 @@ pub(crate) struct Editor {
     pub(crate) slots: RefCell<Vec<Slot>>,
     /// Valeurs des affectations `{% set %}` (panneau Variables), dans l'ordre d'exécution.
     pub(crate) vars: RefCell<Vec<VarValue>>,
+    /// Branches rendues de chaque condition (D-182) : (identifiant, « si » rendu, « sinon »
+    /// rendu) ; les deux pour une condition dans une liste dont les éléments diffèrent.
+    pub(crate) branches: RefCell<Vec<(String, bool, bool)>>,
     /// Scripts du site exécutés dans le canevas.
     pub(crate) scripts: bool,
     /// Éléments de collection : `fileSlug` -> (dossier, fichier, adresse).
@@ -950,7 +953,18 @@ impl<'a> Builder<'a> {
                 then,
                 otherwise,
             } => {
-                if self.eval(scope, cond, ctx)?.is_true() {
+                let on = self.eval(scope, cond, ctx)?.is_true();
+                if let (Some(e), Some(id)) = (self.editor.as_ref(), id.as_deref()) {
+                    let mut b = e.branches.borrow_mut();
+                    match b.iter_mut().find(|x| x.0 == id) {
+                        Some(x) => {
+                            x.1 |= on;
+                            x.2 |= !on;
+                        }
+                        None => b.push((id.to_string(), on, !on)),
+                    }
+                }
+                if on {
                     let inner = at.child(id.as_deref(), Branch::Then, true);
                     self.nodes(then, scope, out, mode, ctx, &inner)?;
                 } else {

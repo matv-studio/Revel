@@ -226,6 +226,7 @@ layers-delete = Hapus
 layers-if = Kondisi · { $cond }
 layers-if-help = Ditampilkan sesuai kondisi ({ $cond }), jika tidak, konten “Lainnya”
 layers-else = Lainnya
+layers-branch-shown = Bagian yang ditampilkan di kanvas
 layers-each = Daftar · { $list }
 layers-each-help = Diulang untuk setiap item dalam daftar ({ $item } di { $list })
 layers-condition = Ditampilkan jika: { $cond }

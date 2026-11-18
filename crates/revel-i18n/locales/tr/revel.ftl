@@ -226,6 +226,7 @@ layers-delete = Sil
 layers-if = Koşul · { $cond }
 layers-if-help = Bir koşula ({ $cond }) bağlı olarak gösterilir, aksi halde “Değilse” içeriği gösterilir
 layers-else = Değilse
+layers-branch-shown = Tuvalde gösterilen kısım
 layers-each = Liste · { $list }
 layers-each-help = Listenin her öğesi için tekrarlanır ({ $list } listesindeki { $item })
 layers-condition = Şu koşulda gösterilir: { $cond }

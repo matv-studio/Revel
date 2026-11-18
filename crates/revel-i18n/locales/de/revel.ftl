@@ -226,6 +226,7 @@ layers-delete = Löschen
 layers-if = Bedingung · { $cond }
 layers-if-help = Angezeigt je nach Bedingung ({ $cond }), sonst der Inhalt von „Sonst“
 layers-else = Sonst
+layers-branch-shown = Im Canvas gezeigter Teil
 layers-each = Liste · { $list }
 layers-each-help = Für jeden Eintrag der Liste wiederholt ({ $item } in { $list })
 layers-condition = Bedingt angezeigt: { $cond }

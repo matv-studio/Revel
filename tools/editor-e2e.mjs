@@ -2761,7 +2761,8 @@ try {
           const wait = async (v) => { for (let i = 0; i < 40 && (await scheme()) !== v; i++) await page.waitForTimeout(100); return (await scheme()) === v; };
           await page.click('.colors-default [data-scheme="dark"]');
           const set = await wait('dark');
-          const on = await page.$eval('.colors-default [data-scheme="dark"]', (b) => b.getAttribute('aria-checked') === 'true');
+          // Le bouton suit le document relu par l'interface : attendu (lu trop tôt sur une machine chargée).
+          const on = await page.waitForFunction(() => document.querySelector('.colors-default [data-scheme="dark"]')?.getAttribute('aria-checked') === 'true', null, { timeout: 8000 }).then(() => true).catch(() => false);
           if (shots) await page.locator('.settings-sub[data-sub="colors"]').screenshot({ path: `${shots}/parametres-couleurs-theme.png` });
           await page.click('.colors-default [data-scheme=""]');
           check('couleurs du site : thème par défaut sombre, puis celui de l\'appareil', set && on && (await wait('')));

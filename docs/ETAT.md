@@ -9,6 +9,17 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 18/11/2026 (nuit) : version 0.8.0
+
+- Lot 2 envoyé (`a743c9f`, CI verte), version 0.8.0 (`bc59d72`), étiquette `v0.8.0`, brouillon lancé
+  (« Installateurs »). **À publier par l'utilisateur.**
+- Ajouts de fin de lot : `| limit(n)` lu dans les listes écrites à la main ; expression masquée pour une liste
+  lisible ; volet « Code » retiré d'une condition lisible (maquette F).
+- Piège : `gh workflow run` passe par GraphQL (refusé) ; lancer par
+  `gh api -X POST repos/matv-studio/Revel/actions/workflows/<fichier>/dispatches -f ref=main -f "inputs[x]=y"`.
+- **Après installation de la 0.8.0 par l'utilisateur** : `passation/alunites-anciennes-adresses.py` (Revel
+  fermé), puis cartes de marque en propriétés et retrait de la collection Marques.
+
 ## Travail du 18/11/2026 (soir) : fin du lot 2 côté application — C, D, E, date corrigée (D-189)
 
 - **Fait** : outil « Champ CMS » (`blocks.rs` : `item_bindings` → `bindings_in`, `cms_label`,

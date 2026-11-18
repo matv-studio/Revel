@@ -1639,7 +1639,8 @@ fn EntryForm(
             .and_then(|e| e.data.as_object())
             .map(|m| {
                 m.keys()
-                    .filter(|k| !fields.iter().any(|f| &f.name == *k))
+                    // Date donnée par le flux : repère interne, montré sous le champ « date ».
+                    .filter(|k| !fields.iter().any(|f| &f.name == *k) && *k != "feed_date")
                     .map(|k| CmsField {
                         name: k.clone(),
                         ..Default::default()
@@ -1740,6 +1741,53 @@ fn EntryForm(
         let pins = (!undeclared)
             .then(use_context::<cmsfields::ColumnPins>)
             .flatten();
+        // Date d'un contenu de flux corrigée à la main (D-186) : libellé marqué, retour à la date du
+        // flux, date du flux rappelée sous le champ. Elle est gardée aux actualisations.
+        if f.name == "date" {
+            let feed = Signal::derive(move || {
+                entry.with(|e| {
+                    e.as_ref()
+                        .and_then(|e| e.data.get("feed_date"))
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+            });
+            let day = |s: &str| s.get(..10).unwrap_or(s).to_string();
+            let edited = Signal::derive(move || {
+                let cur = value.get().and_then(|v| v.as_str().map(day));
+                feed.get()
+                    .is_some_and(|f| cur.is_some_and(|c| c != day(&f)))
+            });
+            let back = view! {
+                {aside}
+                <Show when=move || edited.get()>
+                    <button type="button" class="icon-btn icon-btn--small cms-feed-reset"
+                        title=ui.t("cms-feed-date-reset") aria-label=ui.t("cms-feed-date-reset")
+                        on:click=move |_| if let Some(f) = feed.get_untracked() { set(key.get_value(), Some(Value::String(f))) }>{icons::reset()}</button>
+                </Show>
+            }
+            .into_any();
+            let line = cmsfields::field_row_pinned(
+                f,
+                value,
+                Callback::new(move |v| set(key.get_value(), v)),
+                cols,
+                Some(back),
+                pins,
+            );
+            return view! {
+                <div class="cms-date-edit" class:is-edited=move || edited.get()>
+                    {line}
+                    <Show when=move || edited.get()>
+                        <span class="cms-feed-note" title=ui.t("cms-feed-date-help")>
+                            {icons::rss()}
+                            {move || ui.tx("cms-feed-date", &[("date", feed.get().map(|f| crate::fmt_day(&ui.settings.with(|s| s.lang.clone()), &f)).unwrap_or_default())])}
+                        </span>
+                    </Show>
+                </div>
+            }
+            .into_any();
+        }
         cmsfields::field_row_pinned(
             f,
             value,

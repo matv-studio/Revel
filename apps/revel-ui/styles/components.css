@@ -671,6 +671,12 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 /* Valeur hors schéma : avertissement et ajout au schéma à droite du libellé. */
 .cms-field-head { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .cms-field-head .cms-label { flex: 1; }
+/* Date d'un contenu de flux corrigée à la main : libellé marqué, date du flux rappelée dessous. */
+.cms-date-edit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.cms-date-edit.is-edited .cms-label-text { color: var(--set-text); background: var(--set-bg); border-radius: 3px; padding: 0 4px; margin-left: -4px; }
+.cms-date-edit .cms-label { flex: 1; }
+.cms-feed-note { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-faint); }
+.cms-feed-note svg.icon { width: 12px; height: 12px; }
 .cms-warn { display: inline-flex; color: var(--warning-text); }
 .cms-warn svg.icon { width: 13px; height: 13px; }
 

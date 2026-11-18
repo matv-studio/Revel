@@ -144,6 +144,19 @@ pub fn fmt_datetime(lang: &str, rfc3339: &str) -> String {
         .unwrap_or_default()
 }
 
+/// Date (ISO, avec ou sans heure) en jour lisible selon la langue (« 9 nov. 2026 »).
+pub fn fmt_day(lang: &str, iso: &str) -> String {
+    let d = js_sys::Date::new(&JsValue::from_str(iso));
+    if d.get_time().is_nan() {
+        return iso.to_string();
+    }
+    let opts = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&opts, &"dateStyle".into(), &"medium".into());
+    d.to_locale_date_string(lang, &opts)
+        .as_string()
+        .unwrap_or_default()
+}
+
 /// Contexte partagé de l'interface.
 #[derive(Clone, Copy)]
 pub struct Ui {

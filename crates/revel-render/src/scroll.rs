@@ -1,6 +1,6 @@
 //! Défilement (D-110) : défilement doux du site et barres de progression.
 //!
-//! - **Défilement doux** (`settings.smooth_scroll`, comme Lenis) : la molette fixe une cible ;
+//! - **Défilement doux** (`settings.smooth_scroll`, comme Lenis ; sauf appareils Apple) : la molette fixe une cible ;
 //!   la page, ou le conteneur qui défile sous le pointeur (colonnes à défilement propre), glisse
 //!   vers elle image après image. Clavier, barre de défilement et toucher gardent leur
 //!   comportement ; un élément `data-revel-no-smooth` (carte, liste à défilement propre) est
@@ -27,6 +27,9 @@
 const SMOOTH: &str = concat!(
     "<style>html.rv-smooth,html.rv-smooth *{scroll-behavior:auto!important}</style>",
     "<script>(function(w,d){if(w.matchMedia&&matchMedia(\"(prefers-reduced-motion: reduce)\").matches)return;",
+    // Appareils Apple : pavé tactile et Magic Mouse donnent déjà un défilement amorti, et Chrome
+    // y envoie des pas entiers, indiscernables d'une molette (inertie ajoutée, sauts) : navigateur.
+    "var N=navigator,P=(N.userAgentData&&N.userAgentData.platform)||N.platform||\"\";if(/Mac|iPhone|iPad|iPod/i.test(P))return;",
     "d.documentElement.classList.add(\"rv-smooth\");var M=new Map(),run=false,prev=0,K=7.5;",
     "function max(e){return e.scrollHeight-e.clientHeight}",
     "function can(e,y){var o=getComputedStyle(e).overflowY;return(o===\"auto\"||o===\"scroll\")&&max(e)>1&&(y>0?e.scrollTop<max(e)-1:e.scrollTop>0)}",
@@ -127,6 +130,8 @@ mod tests {
         assert_eq!(wire(page.clone(), false, true), page);
         let out = wire(page.clone(), true, true);
         assert!(out.contains("prefers-reduced-motion") && out.contains("\"wheel\""));
+        // Appareils Apple : défilement du navigateur.
+        assert!(out.contains("Mac|iPhone|iPad|iPod"));
         assert!(!out.contains("--revel-progress"));
         assert_eq!(wire(page.clone(), true, false), page);
         let bar = "<html><head></head><body><div data-revel-progress=\"parent\"><div></div></div></body></html>"

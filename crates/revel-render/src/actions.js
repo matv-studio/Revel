@@ -451,7 +451,8 @@
   }
   // Carrousel et diaporama (`data-revel-slider`) : piste `data-revel-track` défilante (accroche
   // par diapositive), boutons `data-revel-prev` / `data-revel-next`, compteur `data-revel-count`,
-  // points `data-revel-dots` (créés ici) ; réglages `autoplay=<s>` et `loop`.
+  // points `data-revel-dots` (créés ici) ; réglages `autoplay=<s>`, `loop`, `fade[=<s>]` (fondu
+  // enchaîné) et `hold=off` (lecture non suspendue sous le pointeur).
   function slider(box) {
     var track = box.querySelector("[data-revel-track]");
     if (!track) return;
@@ -490,7 +491,22 @@
     };
     var slides = function () { return Array.prototype.map.call(track.children, boxOf); };
     var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Fondu enchaîné (`fade`) : diapositives superposées, la courante seule visible ; pas de
+    // défilement de la piste ni de glisser.
+    var fade = opts.fade !== undefined, at = 0;
+    if (fade) {
+      track.style.display = "grid";
+      track.style.overflow = "hidden";
+      Array.prototype.forEach.call(track.children, function (c, k) {
+        c.style.gridArea = "1 / 1";
+        c.style.transition = reduce ? "none" : "opacity " + (Number(opts.fade) || 1.2) + "s ease";
+        c.style.opacity = k ? "0" : "1";
+        if (k) c.setAttribute("aria-hidden", "true");
+      });
+      opts.drag = "off";
+    }
     var current = function () {
+      if (fade) return at;
       var s = slides(), left = track.scrollLeft, best = 0, d = Infinity;
       for (var i = 0; i < s.length; i++) {
         var x = Math.abs(s[i].offsetLeft - s[0].offsetLeft - left);
@@ -506,6 +522,15 @@
       if (!s.length) return;
       if (opts.loop !== undefined) i = (i + s.length) % s.length;
       i = Math.max(0, Math.min(s.length - 1, i));
+      if (fade) {
+        at = i;
+        Array.prototype.forEach.call(track.children, function (c, k) {
+          c.style.opacity = k === i ? "1" : "0";
+          if (k === i) c.removeAttribute("aria-hidden"); else c.setAttribute("aria-hidden", "true");
+        });
+        update();
+        return;
+      }
       track.scrollTo({ left: s[i].offsetLeft - s[0].offsetLeft, behavior: reduce ? "auto" : "smooth" });
     };
     var count = box.querySelector("[data-revel-count]");
@@ -590,8 +615,11 @@
     var secs = Number(opts.autoplay) || 0;
     if (secs > 0 && !reduce) {
       var held = false;
-      box.addEventListener("pointerenter", function () { held = true; });
-      box.addEventListener("pointerleave", function () { held = false; });
+      // `hold=off` : la lecture continue sous le pointeur (fond de page, Hero).
+      if (opts.hold !== "off") {
+        box.addEventListener("pointerenter", function () { held = true; });
+        box.addEventListener("pointerleave", function () { held = false; });
+      }
       box.addEventListener("focusin", function () { held = true; });
       box.addEventListener("focusout", function () { held = false; });
       setInterval(function () {
@@ -643,7 +671,8 @@
   }
   // Filtres de liste (`data-revel-filters="<paramètre>"`) : boutons `data-revel-filter="<valeur>"`
   // (vide : tout) ; éléments filtrés `data-revel-tags="a b"` de la page ; message
-  // `data-revel-filter-empty` sans résultat ; valeur gardée dans l'adresse (`?<paramètre>=`).
+  // `data-revel-filter-empty` sans résultat ; valeur gardée dans l'adresse (`?<paramètre>=`) ;
+  // bouton sans aucun élément correspondant masqué.
   function filters(group) {
     var param = (group.getAttribute("data-revel-filters") || "").trim();
     var buttons = group.querySelectorAll("[data-revel-filter]");
@@ -675,6 +704,15 @@
       (function (btn) {
         btn.addEventListener("click", function () { apply(btn.getAttribute("data-revel-filter") || "", true); });
       })(buttons[i]);
+    }
+    // Bouton dont la valeur ne correspond à aucun élément de la page : masqué.
+    var all = document.querySelectorAll("[data-revel-tags]");
+    for (var f = 0; f < buttons.length; f++) {
+      var v = buttons[f].getAttribute("data-revel-filter") || "";
+      if (!v) continue;
+      var any = false;
+      for (var j = 0; j < all.length && !any; j++) any = (" " + all[j].getAttribute("data-revel-tags") + " ").indexOf(" " + v + " ") >= 0;
+      if (!any) buttons[f].classList.add("rv-hide");
     }
     var empty0 = document.querySelectorAll("[data-revel-filter-empty]");
     for (var k = 0; k < empty0.length; k++) empty0[k].classList.add("rv-hide");

@@ -2658,3 +2658,24 @@ Réponses de l'utilisateur : maquette « date corrigée » validée ; projet « 
 - **Reportés après l'installation de la 0.8.0** (le site s'ouvre aujourd'hui avec la 0.7.9, qui ne lit ni la
   propriété « Couleur » ni les nouvelles adresses) : cartes de marque en propriétés et retrait de la collection
   « Marques » ; script des anciennes adresses.
+
+**D-190 — 19/11/2026 — prise (retours sur le site Alunites Groupe ; corrections de Revel pour la 0.8.1).**
+- **Saut du défilement sur Mac** (vidéo de l'utilisateur, Chrome) : le défilement doux de Revel croyait
+  reconnaître le pavé tactile à ses pas décimaux ; Chrome sur macOS envoie des pas entiers pour le pavé
+  tactile (source : Bugzilla 1235192, journaux comparés), donc le script ajoutait sa propre inertie à celle
+  du système, cible accumulée puis rattrapée d'un coup. Correction : sur les appareils Apple (Mac, iPhone,
+  iPad), défilement du navigateur, sans script. Les animations d'apparition (opacité, transformations) et le
+  bouton « Afficher plus » (liste manuelle) ne changent pas la hauteur de la page : hors de cause.
+- **Diaporama** : réglages `fade[=<s>]` (fondu enchaîné, diapositives superposées) et `hold=off` (lecture non
+  suspendue sous le pointeur, pour un fond de section). Réglages gardés par le panneau du carrousel (options
+  inconnues conservées) ; interrupteurs dans le panneau : à maquetter.
+- **Filtres de liste** : un bouton dont la valeur ne correspond à aucun élément de la page est masqué
+  (Cadence et Superficiel dans les actualités).
+- **Site** (script `passation/alunites-modifs-1911.py`, appliqué sur le PC, idempotent) : Hero d'accueil à
+  4 images en fondu (6 s), points, fondu vers la couleur de fond du thème sous le texte ; section « Cultiver
+  les différences » masquée (condition `false`, contenu gardé) ; page « Le Groupe » en brouillon, adresses
+  redirigées vers l'accueil, liens retirés (navigation, pied) ; « Alunites Event » (« Event » 2 pt plus petit)
+  dans la navigation et les filtres ; case « evenementiel » sur 7 projets et 4 articles (choix de
+  l'utilisateur) ; filtre « Alunites Event » et liste de la page Alunites Event limités à ces contenus ;
+  titres des cartes de projets et d'articles −2 pt, graisse 700 → 600 (carte « à la une » inchangée).
+- **Spams du formulaire** : en suspens (choix de l'utilisateur entre les protections proposées).

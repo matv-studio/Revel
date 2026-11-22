@@ -313,8 +313,37 @@ pub fn CmsFields() -> impl IntoView {
     };
     let editing = RwSignal::new(None::<usize>);
     let cols = crate::blocks::collections(ed);
-    Effect::new(move |_| cols.with(|c| CMS_COLS.with(|k| *k.borrow_mut() = c.clone())));
+    Effect::new(move |_| {
+        cols.with(|c| {
+            // Liste vide avant la lecture : la copie gardée reste.
+            if !c.is_empty() {
+                CMS_COLS.with(|k| *k.borrow_mut() = c.clone())
+            }
+        })
+    });
     let cms_view = move || {
+        // Utilisation d'un composant sans propriété « Contenu » (D-191) : ses champs se règlent
+        // dans sa section « Contenu ».
+        let plain_use = ed.selected.with(|sel| {
+            let id = sel.as_ref().map(|s| s.id.clone())?;
+            ed.doc.with(|d| {
+                let d = d.as_ref()?;
+                let at = crate::editor::target_of(d, &id)?;
+                match revel_edit::address::node(d, &at).ok()? {
+                    revel_model::Node::Use { component, .. } => {
+                        Some(d.component(component).is_none_or(|c| {
+                            !c.props
+                                .iter()
+                                .any(|p| p.kind == revel_model::PropKind::Entry)
+                        }))
+                    }
+                    _ => Some(false),
+                }
+            })
+        });
+        if plain_use == Some(true) {
+            return None;
+        }
         let list = cms.get();
         // Collection du premier champ : les champs d'un autre contenu portent le nom de la leur.
         let main = list.iter().find_map(|i| entry_of(&i.slot)).map(|(f, _)| f);
@@ -431,6 +460,20 @@ pub fn CmsFields() -> impl IntoView {
 /// Collections du site déjà chargées par le panneau (vide avant le premier chargement).
 pub(crate) fn cached_cols() -> Vec<revel_protocol::CmsCollection> {
     CMS_COLS.with(|k| k.borrow().clone())
+}
+
+/// Contenus du CMS lus par les textes de la sélection (dossier, fichier), sans répétition.
+pub(crate) fn selection_entries(ed: Ed) -> Memo<Vec<(String, String)>> {
+    let items = selection_texts(ed);
+    Memo::new(move |_| {
+        let mut out: Vec<(String, String)> = Vec::new();
+        for e in items.get().iter().filter_map(|i| entry_of(&i.slot)) {
+            if !out.contains(&e) {
+                out.push(e);
+            }
+        }
+        out
+    })
 }
 
 /// Contenu du CMS (dossier de la collection, fichier) lu par un emplacement de texte.

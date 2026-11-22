@@ -9,6 +9,25 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## Travail du 19 au 22/11/2026 : site Alunites (D-190), champs CMS dans un composant et anti-spam (D-191)
+
+- 0.8.0 publiée par l'utilisateur le 19/11.
+- **D-190** (`2ee1d8c`) : défilement natif sur Apple, diaporama `fade` / `hold=off`, filtres vides masqués ;
+  site modifié sur le PC par `passation/alunites-modifs-1911.py` (non publié : il lui faut la 0.8.1).
+- **D-191** : `revel-edit/src/entryprops.rs` (`convert`, tests) ; `revel-render` (`origin_of_entry_path`,
+  `forms.rs` : `script(key)`, `site_key`, `fnv`) ; interface : `components.rs` (`instance_settings` section
+  « Contenu », `bound_field`, `entry_prefix`, `arg_prefix`, `parse_prefix`, `convert_entry_props`,
+  `prop_filling`), `textfield.rs` (`selection_entries`, bloc « Champs CMS » masqué pour ces composants),
+  `layers.rs` (`.layer-preview.is-prop`), message d'information (`Failure` de clé `info-…`).
+- **Pièges** : `valid_prop_name` refuse `site`, `page` (noms de champ possibles : ne pas l'employer pour un
+  champ) ; le panneau est refait à chaque réglage et relit les collections (copie gardée :
+  `textfield::cached_cols`) ; `gh workflow run` refusé (GraphQL), passer par `gh api … /dispatches`.
+- **Essais** : PHP est disponible dans la session (`php -S`) pour essayer `revel-form.php`.
+- **Reste** : 0.8.1 en brouillon ; après son installation, ouvrir le site (conversion), puis cartes de
+  marque (déjà converties par la conversion : propriétés reliées à la collection Marques) et décision sur
+  la collection Marques ; script des anciennes adresses ; interrupteurs `fade` / `hold` du diaporama à
+  maquetter.
+
 ## Travail du 18/11/2026 (nuit) : version 0.8.0
 
 - Lot 2 envoyé (`a743c9f`, CI verte), version 0.8.0 (`bc59d72`), étiquette `v0.8.0`, brouillon lancé

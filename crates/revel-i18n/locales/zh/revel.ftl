@@ -3927,6 +3927,19 @@ carousel-scroll = 滚动
 carousel-drag = 鼠标拖动
 layers-tool = 工具：在样式面板中设置
 prop-kind-entry = 内容
+content-title = 内容
+content-source = 来源
+content-source-edit = 设置
+content-source-edit-help = 选中列表：集合、排序、数量、筛选
+content-source-list-help = 每张卡片接收列表中的一项内容
+content-none = 无
+prop-field-page = 内容的页面
+prop-write = 书写…
+prop-field-help = 此属性读取的内容字段
+prop-page = 页面
+info-components-converted = { $n ->
+   *[other] 已转换 { $n } 个组件
+ }：现在可从卡片将每个属性关联到字段。撤销（Ctrl+Z）可恢复原先的形式。
 prop-entry-collection = 集合
 prop-entry-collection-help = 组件元素读取其字段的集合。
 prop-entry-collection-fixed = 在组件中设置

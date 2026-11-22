@@ -14,14 +14,15 @@ use revel_model::{Component, Node, PropDef, PropKind, Variant, VariantKind};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub(crate) const KINDS: [PropKind; 7] = [
+/// Types proposés à la création. « Contenu » (collection fixée dans le composant) ne l'est plus
+/// (D-191) : une utilisation relie chaque propriété à un champ du contenu qu'elle choisit.
+pub(crate) const KINDS: [PropKind; 6] = [
     PropKind::Text,
     PropKind::Image,
     PropKind::Link,
     PropKind::Color,
     PropKind::Switch,
     PropKind::List,
-    PropKind::Entry,
 ];
 
 pub(crate) fn kind_key(k: PropKind) -> &'static str {
@@ -398,11 +399,73 @@ pub fn instance_settings(
             false,
         )
     };
-    // Utilisation dans une liste de collection : propriétés reliables aux champs du contenu.
+    // Source du contenu (D-191) : la liste de collection qui entoure l'utilisation ; sinon la
+    // collection et le contenu choisis ici (lus dans les valeurs reliées) ; sinon aucune.
     let list = ed.doc.with_untracked(|d| {
         crate::blocks::enclosing_list(d.as_ref()?, &at.get_value()).map(|(q, item)| (q.key(), item))
     });
-    let cols = list.as_ref().map(|_| crate::blocks::collections(ed));
+    let list_id = ed
+        .doc
+        .with_untracked(|d| crate::blocks::enclosing_list_id(d.as_ref()?, &at.get_value()));
+    let list_id = StoredValue::new(list_id);
+    let cols = crate::blocks::collections(ed);
+    // Collections déjà lues : montrées tout de suite (le panneau est refait à chaque réglage, la
+    // relecture arrive un instant après).
+    let cached = crate::textfield::cached_cols();
+    if !cached.is_empty() {
+        cols.set(cached);
+    }
+    let use_id = at.with_value(|a| a.node.clone());
+    let from_args = args.values().find_map(|a| {
+        let p = arg_prefix(a)?;
+        let (c, s) = parse_prefix(&p)?;
+        Some((c, s, p))
+    });
+    let picked = RwSignal::new(if list.is_some() {
+        None
+    } else {
+        from_args
+            .clone()
+            .map(|(c, s, _)| (c, s))
+            .or_else(|| PICKED.with(|k| k.borrow().get(&use_id).cloned()))
+    });
+    // Préfixe du contenu choisi, tel qu'il est écrit dans les valeurs.
+    let written_prefix = StoredValue::new(from_args.map(|(_, _, p)| p));
+    let prefix_of = move |pick: &(String, Option<String>)| {
+        written_prefix
+            .get_value()
+            .unwrap_or_else(|| entry_prefix(&pick.0, pick.1.as_deref()))
+    };
+    let list = StoredValue::new(list);
+    let use_id = StoredValue::new(use_id);
+    // Contenu montré en aperçu : celui de l'utilisation sélectionnée (carte d'une liste), sinon
+    // le contenu choisi, sinon le premier de la collection.
+    let sel_entries = crate::textfield::selection_entries(ed);
+    let sample: Sample = Signal::derive(move || {
+        let (col, slug) = match (list.get_value(), picked.get()) {
+            (Some((c, _)), _) => (c, None),
+            (None, Some((c, s))) => (c, s),
+            _ => return None,
+        };
+        let here = sel_entries.get();
+        cols.with(|cs| {
+            let c = cs.iter().find(|c| c.id == col)?;
+            let e = here
+                .iter()
+                .filter(|(folder, _)| *folder == c.folder)
+                .find_map(|(_, file)| c.entries.iter().find(|e| e.file == *file))
+                .or_else(|| match &slug {
+                    Some(s) => c.entries.iter().find(|e| entry_slug_of(e) == *s),
+                    None => c.entries.first(),
+                })?;
+            Some((
+                c.folder.clone(),
+                e.file.clone(),
+                e.data.clone(),
+                e.url.clone(),
+            ))
+        })
+    });
     // Propriétés de ce qui contient l'utilisation (composant ouvert, gabarit) : une valeur peut
     // en reprendre une (`titre`, `not masquer`).
     let parents: Vec<PropDef> = ed
@@ -415,12 +478,27 @@ pub fn instance_settings(
     let lang = ed.lang();
     // Propriétés qui remplacent un champ du contenu : réglées dans « Champs CMS » (D-179).
     let overrides = revel_edit::overrides::override_props(&c);
-    let rows = c
+    let shown_props: Vec<PropDef> = c
         .props
         .iter()
         .filter(|p| !overrides.contains(&p.name))
-        .map(|p| {
-            let arg = args.get(&p.name).cloned();
+        .cloned()
+        .collect();
+    let has_props = !shown_props.is_empty();
+    let shown_props = StoredValue::new(shown_props);
+    let args = StoredValue::new(args);
+    let parents = StoredValue::new(parents);
+    let rows = move || {
+        // Champs lisibles : ceux de la liste, sinon ceux du contenu choisi.
+        let bind: Option<ListBind> = list
+            .get_value()
+            .or_else(|| picked.get().map(|p| (p.0.clone(), prefix_of(&p))))
+            .map(|b| (b, cols, sample));
+        shown_props
+            .get_value()
+            .into_iter()
+            .map(|p| {
+            let arg = args.with_value(|a| a.get(&p.name).cloned());
             // Autre langue : texte de la propriété traduit (valeur de l'utilisation, sinon
             // valeur par défaut).
             if let Some(code) = lang.clone()
@@ -445,22 +523,183 @@ pub fn instance_settings(
                 }
                 .into_any();
             }
-            let bind = list.clone().zip(cols);
             let parent = arg.as_deref().and_then(|a| {
                 let a = a.trim();
                 let (neg, name) = match a.strip_prefix("not ") {
                     Some(x) => (true, x.trim()),
                     None => (false, a),
                 };
-                parents
-                    .iter()
-                    .find(|q| q.name == name && (!neg || q.kind == PropKind::Switch))
-                    .map(|q| (q.clone(), neg))
+                parents.with_value(|ps| {
+                    ps.iter()
+                        .find(|q| q.name == name && (!neg || q.kind == PropKind::Switch))
+                        .map(|q| (q.clone(), neg))
+                })
             });
-            prop_value_row(ui, ed, p.clone(), arg, set, bind, parent)
+            prop_value_row(ui, ed, p.clone(), arg, set, bind.clone(), parent)
         })
-        .collect_view();
-    let has_props = c.props.iter().any(|p| !overrides.contains(&p.name));
+        .collect_view()
+    };
+    // Collection choisie (hors d'une liste) : chaque propriété libre ou déjà reliée prend le
+    // champ de même nom ; « Aucune » rend les valeurs par défaut.
+    let set_collection = move |v: String| {
+        let new = (!v.is_empty()).then_some(v);
+        let old = picked.get_untracked().map(|p| prefix_of(&p));
+        let np = new.as_deref().map(|c| entry_prefix(c, None));
+        let mut commands = Vec::new();
+        for p in shown_props
+            .get_value()
+            .iter()
+            .filter(|p| p.kind != PropKind::Color)
+        {
+            let arg = args.with_value(|a| a.get(&p.name).cloned());
+            let was = old
+                .as_deref()
+                .is_some_and(|o| arg.as_deref().is_some_and(|a| a.contains(o)));
+            if !(arg.is_none() || was) {
+                continue;
+            }
+            let target = new.as_deref().zip(np.as_deref()).and_then(|(c, np)| {
+                cols.with_untracked(|cs| {
+                    let c = cs.iter().find(|x| x.id == c)?;
+                    let label = p.label().to_lowercase();
+                    c.fields
+                        .iter()
+                        .filter(|f| field_fits(p.kind, f))
+                        .find(|f| {
+                            f.name == p.name
+                                || f.label
+                                    .as_deref()
+                                    .is_some_and(|l| l.to_lowercase() == label)
+                        })
+                        .map(|f| format!("{np}.data.{}", f.name))
+                        .or_else(|| {
+                            (p.kind == PropKind::Link && p.name.starts_with("lien_page"))
+                                .then(|| format!("{np}.url"))
+                        })
+                })
+            });
+            if target != arg {
+                commands.push(Command::SetUseArg {
+                    at: at.get_value(),
+                    name: p.name.clone(),
+                    value: target,
+                });
+            }
+        }
+        PICKED.with(|k| {
+            let mut k = k.borrow_mut();
+            match &new {
+                Some(c) => k.insert(use_id.get_value(), (c.clone(), None)),
+                None => k.remove(&use_id.get_value()),
+            };
+        });
+        written_prefix.set_value(None);
+        picked.set(new.map(|c| (c, None)));
+        if !commands.is_empty() {
+            ed.apply(ui, Command::Batch { commands }, false);
+        }
+    };
+    // Contenu choisi : les valeurs reliées lisent le nouveau contenu.
+    let set_entry = move |v: String| {
+        let Some(pick) = picked.get_untracked() else {
+            return;
+        };
+        let slug = (!v.is_empty()).then_some(v);
+        let old = prefix_of(&pick);
+        let new = entry_prefix(&pick.0, slug.as_deref());
+        let commands: Vec<Command> = args.with_value(|a| {
+            a.iter()
+                .filter(|(_, x)| x.contains(old.as_str()))
+                .map(|(n, x)| Command::SetUseArg {
+                    at: at.get_value(),
+                    name: n.clone(),
+                    value: Some(x.replace(old.as_str(), &new)),
+                })
+                .collect()
+        });
+        PICKED.with(|k| {
+            k.borrow_mut()
+                .insert(use_id.get_value(), (pick.0.clone(), slug.clone()))
+        });
+        written_prefix.set_value(None);
+        picked.set(Some((pick.0, slug)));
+        if !commands.is_empty() {
+            ed.apply(ui, Command::Batch { commands }, false);
+        }
+    };
+    let col_label = move |id: &str| {
+        cols.with(|cs| {
+            cs.iter()
+                .find(|c| c.id == id)
+                .map(crate::blocks::label_of)
+                .unwrap_or_else(|| crate::site::capitalize(id))
+        })
+    };
+    let source = move || {
+        if let Some((col, _)) = list.get_value() {
+            let id = list_id.get_value();
+            return view! {
+                <div class="view-line content-source" data-source="list" title=ui.t("content-source-list-help")>
+                    <span class="prop-label">{ui.t("content-source")}</span>
+                    <span class="prop-chip prop-chip--field prop-chip--plain">{icons::repeat()}<span>{move || ui.tx("layers-each", &[("list", col_label(&col))])}</span></span>
+                    {id.map(|id| view! {
+                        <button type="button" class="link-btn" data-action="source-list" title=ui.t("content-source-edit-help")
+                            on:click=move |_| ed.select_and_reveal(&id)>{ui.t("content-source-edit")}</button>
+                    })}
+                </div>
+            }
+            .into_any();
+        }
+        let pick = picked.get();
+        let cur = pick.as_ref().map(|p| p.0.clone()).unwrap_or_default();
+        let slug = pick.as_ref().and_then(|p| p.1.clone()).unwrap_or_default();
+        let cur2 = cur.clone();
+        view! {
+            <label class="view-line content-source" data-source="collection">
+                <span class="prop-label">{ui.t("prop-entry-collection")}</span>
+                <span class="select prop-field">
+                    <select class="input content-collection" on:change=move |e| set_collection(event_target_value(&e))>
+                        <option value="" prop:selected=cur.is_empty()>{ui.t("content-none")}</option>
+                        {move || cols.with(|cs| cs.iter().filter(|c| !c.id.contains('+')).map(|c| {
+                            let on = c.id == cur;
+                            view! { <option value=c.id.clone() prop:selected=on>{crate::blocks::label_of(c)}</option> }
+                        }).collect_view())}
+                    </select>
+                </span>
+            </label>
+            {pick.is_some().then(|| view! {
+                <label class="view-line content-source" data-source="entry">
+                    <span class="prop-label">{ui.t("prop-entry-content")}</span>
+                    <span class="select prop-field">
+                        <select class="input content-entry" on:change=move |e| set_entry(event_target_value(&e))>
+                            <option value="" prop:selected=slug.is_empty()>{ui.t("prop-entry-first")}</option>
+                            {move || entries_of(cols, &cur2).into_iter().map(|(s, t)| {
+                                let on = s == slug;
+                                view! { <option value=s prop:selected=on>{t}</option> }
+                            }).collect_view()}
+                        </select>
+                    </span>
+                </label>
+            })}
+        }
+        .into_any()
+    };
+    // Section « Contenu » dès qu'une source existe ou peut être choisie (site à collections).
+    let content = move || list.with_value(Option::is_some) || cols.with(|c| !c.is_empty());
+    let open_cms = move || {
+        (list.with_value(Option::is_some) || picked.with(Option::is_some))
+            .then(|| sample.get())
+            .flatten()
+            .map(|(folder, file, _, _)| {
+                view! {
+                    <button type="button" class="btn btn--small cms-fields-open" data-action="cms-open-entry"
+                        on:click=move |_| {
+                            ui.goto_entry.set(Some((folder.clone(), file.clone())));
+                            ui.tab(crate::Tab::Cms);
+                        }>{icons::database()}<span>{ui.t("cms-open-entry")}</span></button>
+                }
+            })
+    };
     // Variante choisie pour cette utilisation (variantes personnalisées du composant).
     let customs: Vec<Variant> = c
         .variants
@@ -544,9 +783,18 @@ pub fn instance_settings(
             {variant_row}
             {slot_row}
             {has_props.then(|| view! {
-                <div class="insp-group">
-                    <p class="panel-title">{ui.t("component-props")}</p>
+                <div class="insp-group instance-content" class:has-source=content>
+                    {move || if content() {
+                        view! {
+                            <p class="panel-title tool-head"><span class="tool-icon">{icons::database()}</span><span>{ui.t("content-title")}</span></p>
+                            {source}
+                            <div class="content-sep"></div>
+                        }.into_any()
+                    } else {
+                        view! { <p class="panel-title">{ui.t("component-props")}</p> }.into_any()
+                    }}
                     {rows}
+                    {open_cms}
                 </div>
             })}
         </div>
@@ -554,36 +802,154 @@ pub fn instance_settings(
     .into_any()
 }
 
-/// Liste de collection qui contient une utilisation : (collection, variable d'élément) et
-/// collections du site (champs).
+/// Contenu lisible par une utilisation : (collection, variable de la liste ou contenu choisi),
+/// collections du site (champs), contenu montré en aperçu.
 type ListBind = (
     (String, String),
     RwSignal<Vec<revel_protocol::CmsCollection>>,
+    Sample,
 );
 
-/// Valeur d'une propriété reliée à un champ du contenu de la liste : champ, autre champ lu s'il
-/// est vide, écriture d'une date (`(item.data.a or item.data.b) | date("%d.%m.%Y")`).
+/// Valeur d'une propriété reliée à un champ du contenu (`item` : variable de la liste, ou contenu
+/// choisi entre parenthèses) : champ, autre champ lu s'il est vide, écriture d'une date
+/// (`(item.data.a or item.data.b) | date("%d.%m.%Y")`).
 fn bound_field(arg: &str, item: &str) -> Option<(String, Option<String>, Option<String>)> {
     let prefix = format!("{item}.data.");
     let field = |e: &str| {
         e.trim()
             .strip_prefix(prefix.as_str())
-            .filter(|f| revel_model::valid_prop_name(f))
+            // Nom de champ : tout identifiant (`site`, `page` ne sont réservés qu'aux propriétés).
+            .filter(|f| !f.is_empty() && f.chars().all(|c| c.is_alphanumeric() || c == '_'))
             .map(str::to_string)
     };
-    let a = arg.trim();
-    let (head, format) = match a.rsplit_once('|') {
-        Some((h, t)) => (h.trim(), Some(revel_edit::dates::format_of(t)?)),
-        None => (a, None),
+    let fields = |head: &str| -> Option<(String, Option<String>)> {
+        let head = head.trim();
+        if let Some(f) = field(head) {
+            return Some((f, None));
+        }
+        let inner = head.strip_prefix('(').and_then(|h| h.strip_suffix(')'))?;
+        let (x, y) = inner.split_once(" or ")?;
+        Some((field(x)?, Some(field(y)?)))
     };
-    let inner = head
-        .strip_prefix('(')
-        .and_then(|h| h.strip_suffix(')'))
-        .unwrap_or(head);
-    match inner.split(" or ").collect::<Vec<_>>().as_slice() {
-        [x] => Some((field(x)?, None, format)),
-        [x, y] => Some((field(x)?, Some(field(y)?), format)),
-        _ => None,
+    let a = arg.trim();
+    if let Some((f, fb)) = fields(a) {
+        return Some((f, fb, None));
+    }
+    // Le préfixe peut contenir `|` (`by_slug`) : l'écriture de la date est après le dernier.
+    let (h, t) = a.rsplit_once('|')?;
+    let (f, fb) = fields(h)?;
+    Some((f, fb, Some(revel_edit::dates::format_of(t)?)))
+}
+
+/// Contenu choisi par une utilisation hors d'une liste, tel qu'il s'écrit devant `.data.<champ>` :
+/// celui de l'identifiant `slug`, sinon le premier de la collection.
+fn entry_prefix(collection: &str, slug: Option<&str>) -> String {
+    match slug.filter(|s| !s.is_empty()) {
+        Some(s) => format!(
+            "(collections.{collection} | by_slug({}))",
+            Value::String(s.to_string())
+        ),
+        None => format!("((collections.{collection})[0])"),
+    }
+}
+
+/// Contenu lu par une valeur (`(…).data.titre`, `(…).url`, avec repli ou date) : le texte entre
+/// parenthèses, parenthèses comprises.
+fn arg_prefix(arg: &str) -> Option<String> {
+    let a = arg.trim();
+    if !a.starts_with('(') {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut end = None;
+    for (i, c) in a.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    end = Some(i);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let end = end?;
+    let rest = &a[end + 1..];
+    if rest.starts_with(".data.") || rest == ".url" {
+        return Some(a[..=end].to_string());
+    }
+    // Repli `((…).data.a or (…).data.b)` : le contenu est dedans.
+    arg_prefix(&a[1..end])
+}
+
+/// Collection et identifiant du contenu d'un préfixe (inverse de [`entry_prefix`]).
+fn parse_prefix(prefix: &str) -> Option<(String, Option<String>)> {
+    let mut e = prefix.trim();
+    if let Some(inner) = e.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+        e = inner.trim();
+    }
+    if let Some(head) = e.strip_suffix("[0]") {
+        let c = head
+            .trim()
+            .trim_start_matches('(')
+            .trim_end_matches(')')
+            .strip_prefix("collections.")?;
+        return c
+            .chars()
+            .all(|x| x.is_alphanumeric() || x == '_' || x == '-')
+            .then(|| (c.to_string(), None));
+    }
+    revel_edit::collection::entry_slug(e).map(|(c, s)| (c, Some(s)))
+}
+
+thread_local! {
+    /// Collection choisie pour une utilisation dont aucune propriété n'est encore reliée
+    /// (identifiant de l'utilisation → collection, contenu) : gardée le temps de la séance.
+    static PICKED: std::cell::RefCell<std::collections::HashMap<String, (String, Option<String>)>> = Default::default();
+}
+
+/// Identifiant d'un contenu : son champ `slug`, sinon le nom de son fichier.
+fn entry_slug_of(e: &revel_protocol::CmsEntry) -> String {
+    e.data
+        .get("slug")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            e.file
+                .rsplit_once('.')
+                .map_or(e.file.as_str(), |(a, _)| a)
+                .to_string()
+        })
+}
+
+/// Contenu montré en aperçu : dossier, fichier, champs, adresse de sa page.
+type Sample = Signal<Option<(String, String, Value, Option<String>)>>;
+
+/// Valeur d'un champ, courte, pour l'aperçu d'une ligne.
+fn preview_text(v: &Value) -> String {
+    match v {
+        Value::String(s) => s
+            .rsplit_once('/')
+            .filter(|_| s.starts_with('/') || s.starts_with("http"))
+            .map_or(s.as_str(), |(_, f)| f)
+            .to_string(),
+        Value::Bool(true) => "✓".into(),
+        Value::Bool(false) | Value::Null => "—".into(),
+        Value::Array(a) => a.iter().map(preview_text).collect::<Vec<_>>().join(", "),
+        other => other.to_string(),
+    }
+}
+
+/// Champs d'une collection qu'une propriété de ce type peut lire.
+fn field_fits(kind: PropKind, f: &revel_protocol::CmsField) -> bool {
+    let k = f.kind.as_deref();
+    match kind {
+        PropKind::List => f.list,
+        PropKind::Switch => !f.list && !matches!(k, Some("object" | "block")),
+        _ => !f.list && !matches!(k, Some("object" | "block" | "boolean")),
     }
 }
 
@@ -636,8 +1002,8 @@ fn prop_value_row(
         // Liste de la même collection autour de l'utilisation : son contenu.
         let item = list
             .as_ref()
-            .filter(|((c, _), _)| *c == col)
-            .map(|((_, item), _)| item.clone());
+            .filter(|((c, _), _, _)| *c == col)
+            .map(|((_, item), _, _)| item.clone());
         let from_list = item.is_some() && arg.as_deref().map(str::trim) == item.as_deref();
         let current = if from_list {
             "@list".to_string()
@@ -713,67 +1079,189 @@ fn prop_value_row(
         }
         .into_any();
     }
-    // Relié à un champ du contenu de la liste (`item.data.titre`), avec un autre champ lu s'il est
-    // vide (`(item.data.a or item.data.b)`) et l'écriture d'une date (`| date("%d.%m.%Y")`).
-    if let Some(((collection, item), cols)) = list.clone()
-        && p.kind != PropKind::Switch
-        && let Some((field, fallback, format)) = arg.as_deref().and_then(|a| bound_field(a, &item))
-    {
+    // Relié au contenu (D-191) : un champ (avec repli sur un autre et écriture d'une date) ou
+    // l'adresse de sa page. Un menu choisit le champ ; la valeur lue par l'utilisation
+    // sélectionnée est montrée à côté.
+    enum Bound {
+        Field(String, Option<String>, Option<String>),
+        Url,
+    }
+    let bound = list.as_ref().and_then(|((_, item), _, _)| {
+        let a = arg.as_deref()?;
+        if a.trim() == format!("{item}.url") {
+            return (p.kind != PropKind::List).then_some(Bound::Url);
+        }
+        bound_field(a, item).map(|(f, fb, fmt)| Bound::Field(f, fb, fmt))
+    });
+    if let (Some(b), Some(((collection, item), cols, sample))) = (bound, list.clone()) {
+        let kind = p.kind;
+        let (field, fallback, format) = match &b {
+            Bound::Field(f, fb, fmt) => (Some(f.clone()), fb.clone(), fmt.clone()),
+            Bound::Url => (None, None, None),
+        };
+        let current = match &b {
+            Bound::Url => "@url".to_string(),
+            Bound::Field(_, Some(_), _) => "@keep".to_string(),
+            Bound::Field(f, None, _) => format!("f:{f}"),
+        };
+        let col = StoredValue::new(collection);
         // Libellé d'un champ et sa nature (date : écriture choisie).
         let info = move |f: &str| {
             cols.with(|cs| {
                 cs.iter()
-                    .find(|c| c.id == collection)
+                    .find(|c| col.with_value(|id| c.id == *id))
                     .and_then(|c| c.fields.iter().find(|x| x.name == f))
                     .map(|x| {
                         (
-                            x.label.clone().unwrap_or_else(|| x.name.clone()),
+                            x.label
+                                .clone()
+                                .unwrap_or_else(|| revel_edit::overrides::field_label(&x.name)),
                             x.kind.clone(),
                         )
                     })
             })
-            .unwrap_or_else(|| (f.to_string(), None))
+            .unwrap_or_else(|| (revel_edit::overrides::field_label(f), None))
         };
-        let (main_label, main_kind) = info(&field);
-        let shown = match &fallback {
-            Some(fb) => ui.now(
+        let shown = match (&field, &fallback) {
+            (Some(f), Some(fb)) => Some(ui.now(
                 "component-field-fallback",
-                &[("field", main_label), ("other", info(fb).0)],
-            ),
-            None => main_label,
+                &[("field", info(f).0), ("other", info(fb).0)],
+            )),
+            _ => None,
         };
-        let date = format.is_some() || main_kind.as_deref().is_some_and(|k| k.starts_with("date"));
-        let tip = format!("{{{{ {} }}}}", arg.clone().unwrap_or_default());
-        let item2 = item.clone();
-        let (f2, fb2) = (field.clone(), fallback.clone());
-        let cur_fmt = format.clone().unwrap_or_default();
+        let field = StoredValue::new(field);
+        let date = Signal::derive(move || {
+            format.is_some()
+                || field.with_value(|f| {
+                    f.as_deref().is_some_and(|f| {
+                        info(f).1.as_deref().is_some_and(|k| k.starts_with("date"))
+                    })
+                })
+        });
+        let cur_fmt = StoredValue::new(
+            match &b {
+                Bound::Field(_, _, fmt) => fmt.clone(),
+                Bound::Url => None,
+            }
+            .unwrap_or_default(),
+        );
+        let item = StoredValue::new(item);
+        let fallback = StoredValue::new(fallback);
+        // Valeur lue par l'utilisation montrée.
+        let read = move || {
+            {
+                sample.with(|e| {
+                    let (_, _, data, url) = e.as_ref()?;
+                    match field.get_value() {
+                        Some(f) => data
+                            .get(&f)
+                            .filter(|v| !v.is_null() && v.as_str() != Some(""))
+                            .or_else(|| fallback.with_value(|fb| data.get(fb.as_deref()?)))
+                            .cloned(),
+                        None => url.clone().map(Value::String),
+                    }
+                })
+            }
+        };
+        let options = move || {
+            cols.with(|cs| {
+                cs.iter()
+                    .find(|c| col.with_value(|id| c.id == *id))
+                    .map(|c| {
+                        c.fields
+                            .iter()
+                            .filter(|f| {
+                                field_fits(kind, f)
+                                    || field.with_value(|x| x.as_deref() == Some(f.name.as_str()))
+                            })
+                            .map(|f| {
+                                (
+                                    f.name.clone(),
+                                    f.label.clone().unwrap_or_else(|| {
+                                        revel_edit::overrides::field_label(&f.name)
+                                    }),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
+            })
+        };
+        let current = StoredValue::new(current);
         let lang = ed.lang().unwrap_or_else(|| {
             ed.doc
                 .with_untracked(|d| d.as_ref().map(|d| d.default_locale.clone()))
                 .unwrap_or_else(|| ui.lang())
         });
+        let label2 = label.clone();
         return view! {
             <div class="prop-row prop-row--bound" data-prop=p.name.clone()>
                 <div class="view-line">
                     <span class="prop-label">{kind_icon(p.kind)}{label}</span>
-                    <span class="prop-chip prop-chip--field" title=tip>
-                        {icons::database()}<span>{shown}</span>
-                        <button class="chip-x" title=ui.t("component-unbind") aria-label=ui.t("component-unbind")
-                            on:click=move |_| set(name.get_value(), None)>{icons::close()}</button>
+                    <span class="select prop-field" class:has-preview=move || read().is_some()>
+                        <select class="input prop-field-select" aria-label=label2 title=ui.t("prop-field-help")
+                            on:change=move |e| {
+                                let v = event_target_value(&e);
+                                let item = item.get_value();
+                                match v.as_str() {
+                                    "@keep" => {}
+                                    "@url" => set(name.get_value(), Some(format!("{item}.url"))),
+                                    // Valeur écrite : celle lue à l'instant, modifiable ensuite.
+                                    "@write" => {
+                                        let v = match (kind, read()) {
+                                            (PropKind::Switch, v) => Some(v.is_some_and(|v| v != Value::Bool(false)).to_string()),
+                                            (PropKind::List, _) => None,
+                                            (_, Some(Value::String(t))) if !t.is_empty() => Some(quote(&t)),
+                                            _ => None,
+                                        };
+                                        set(name.get_value(), v);
+                                    }
+                                    other => if let Some(f) = other.strip_prefix("f:") {
+                                        set(name.get_value(), Some(bound_expr(&item, f, None, None)));
+                                    },
+                                }
+                            }>
+                            {shown.map(|t| view! { <option value="@keep" selected=true>{t}</option> })}
+                            {move || {
+                                let mut opts = options();
+                                // Champ relié absent du schéma : gardé dans le menu.
+                                if let Some(f) = field.get_value()
+                                    && !opts.iter().any(|(n, _)| *n == f)
+                                {
+                                    opts.insert(0, (f.clone(), revel_edit::overrides::field_label(&f)));
+                                }
+                                opts.into_iter().map(|(n, l)| {
+                                    let v = format!("f:{n}");
+                                    let on = current.with_value(|c| *c == v);
+                                    view! { <option value=v prop:selected=on>{l}</option> }
+                                }).collect_view()
+                            }}
+                            {(kind != PropKind::List && kind != PropKind::Switch).then(|| view! {
+                                <option value="@url" prop:selected=current.with_value(|c| c == "@url")>{ui.t("prop-field-page")}</option>
+                            })}
+                            <option value="@write">{ui.t("prop-write")}</option>
+                        </select>
+                        {move || read().map(|v| {
+                            let t = preview_text(&v);
+                            let tip = t.clone();
+                            view! { <span class="prop-preview" title=tip>{t}</span> }
+                        })}
                     </span>
                 </div>
-                {date.then(|| view! {
+                {move || date.get().then(|| view! {
                     <label class="field" data-bound="block-bound-date">
                         <span class="label">{ui.t("block-bound-date")}</span>
                         <div class="select">
                             <select class="input" on:change=move |e| {
                                 let v = event_target_value(&e);
                                 let fmt = (!v.is_empty()).then_some(v);
-                                set(name.get_value(), Some(bound_expr(&item2, &f2, fb2.as_deref(), fmt.as_deref())));
+                                if let Some(f) = field.get_value() {
+                                    set(name.get_value(), Some(bound_expr(&item.get_value(), &f, fallback.get_value().as_deref(), fmt.as_deref())));
+                                }
                             }>
-                                <option value="" prop:selected=cur_fmt.is_empty()>{ui.t("block-bound-date-raw")}</option>
+                                <option value="" prop:selected=cur_fmt.with_value(String::is_empty)>{ui.t("block-bound-date-raw")}</option>
                                 {revel_edit::dates::FORMATS.iter().map(|(f, _)| {
-                                    let on = revel_edit::dates::format_of(&cur_fmt).as_deref() == Some(*f);
+                                    let on = cur_fmt.with_value(|c| revel_edit::dates::format_of(c).as_deref() == Some(*f));
                                     view! { <option value=*f prop:selected=on>{revel_edit::dates::example(f, &lang)}</option> }
                                 }).collect_view()}
                             </select>
@@ -784,33 +1272,17 @@ fn prop_value_row(
         }
         .into_any();
     }
-    // Relié à l'adresse de la page du contenu (`item.url`).
-    if let Some(((_, item), _)) = list.clone()
-        && p.kind != PropKind::Switch
-        && p.kind != PropKind::List
-        && arg.as_deref().map(str::trim) == Some(format!("{item}.url").as_str())
-    {
-        return view! {
-            <div class="view-line prop-row" data-prop=p.name.clone()>
-                <span class="prop-label">{kind_icon(p.kind)}{label}</span>
-                <span class="prop-chip prop-chip--field" title=format!("{{{{ {item}.url }}}}")>
-                    {icons::link()}<span>{ui.t("component-field-url")}</span>
-                    <button class="chip-x" title=ui.t("component-unbind") aria-label=ui.t("component-unbind")
-                        on:click=move |_| set(name.get_value(), None)>{icons::close()}</button>
-                </span>
-            </div>
-        }
-        .into_any();
-    }
-    let can_bind = list.is_some() && p.kind != PropKind::Switch;
+    let can_bind = list.is_some();
+    // Source choisie, propriété ni reliée ni écrite : à relier.
+    let unbound = can_bind && arg.is_none() && p.kind != PropKind::Color;
     let field_menu = move |e: leptos::ev::MouseEvent| {
         use crate::ctxmenu::{CtxItem, open};
-        let Some(((collection, item), cols)) = list.clone() else {
+        let Some(((collection, item), cols, _)) = list.clone() else {
             return;
         };
         // Adresse de la page du contenu, puis ses champs.
         let mut items: Vec<CtxItem> = Vec::new();
-        if p.kind != PropKind::List {
+        if p.kind != PropKind::List && p.kind != PropKind::Switch {
             let expr = format!("{item}.url");
             items.push(
                 CtxItem::new(ui.now("component-field-url", &[]), move || {
@@ -826,10 +1298,7 @@ fn prop_value_row(
                     c.fields
                         .iter()
                         // Propriété liste : champs à plusieurs valeurs ; sinon une valeur.
-                        .filter(|f| {
-                            !matches!(f.kind.as_deref(), Some("object" | "block" | "boolean"))
-                                && f.list == (p.kind == PropKind::List)
-                        })
+                        .filter(|f| field_fits(p.kind, f))
                         .map(|f| {
                             let expr = format!("{item}.data.{}", f.name);
                             CtxItem::new(
@@ -864,6 +1333,10 @@ fn prop_value_row(
         return view! {
             <label class="view-line prop-row" data-prop=p.name.clone()>
                 <span class="prop-label">{kind_icon(p.kind)}{label}</span>
+                {can_bind.then(|| view! {
+                    <button type="button" class="icon-btn icon-btn--small bind-field" class:is-missing=unbound title=ui.t("component-bind-field") aria-label=ui.t("component-bind-field")
+                        on:click=field_menu.clone()>{icons::database()}</button>
+                })}
                 {reset()}
                 <span class="switch">
                     <input type="checkbox" prop:checked=on
@@ -908,8 +1381,8 @@ fn prop_value_row(
                 <div class="prop-list-head">
                     <span class="prop-label">{kind_icon(p.kind)}{label}</span>
                     {can_bind.then(|| view! {
-                        <button type="button" class="icon-btn icon-btn--small bind-field" title=ui.t("component-bind-field") aria-label=ui.t("component-bind-field")
-                            on:click=field_menu>{icons::database()}</button>
+                        <button type="button" class="icon-btn icon-btn--small bind-field" class:is-missing=unbound title=ui.t("component-bind-field") aria-label=ui.t("component-bind-field")
+                            on:click=field_menu.clone()>{icons::database()}</button>
                     })}
                     {reset()}
                 </div>
@@ -946,14 +1419,125 @@ fn prop_value_row(
                         {icons::image()}</button>
                 })}
                 {can_bind.then(|| view! {
-                    <button type="button" class="icon-btn icon-btn--small bind-field" title=ui.t("component-bind-field") aria-label=ui.t("component-bind-field")
-                        on:click=field_menu>{icons::database()}</button>
+                    <button type="button" class="icon-btn icon-btn--small bind-field" class:is-missing=unbound title=ui.t("component-bind-field") aria-label=ui.t("component-bind-field")
+                        on:click=field_menu.clone()>{icons::database()}</button>
                 })}
                 {reset()}
             </Field>
         </div>
     }
     .into_any()
+}
+
+/// À l'ouverture d'un site (D-191) : les composants à propriété « Contenu » sont convertis, en une
+/// étape annulable — une propriété par champ lu, chaque utilisation reliée à son contenu. Les
+/// valeurs par défaut viennent du premier contenu de chaque collection.
+pub fn convert_entry_props(ui: Ui, ed: Ed) {
+    let needed = ed.doc.with_untracked(|d| {
+        d.as_ref().is_some_and(|d| {
+            d.components
+                .iter()
+                .any(|c| c.props.iter().any(|p| p.kind == PropKind::Entry))
+        })
+    });
+    if !needed {
+        return;
+    }
+    let path = ed.path.get_value();
+    leptos::task::spawn_local(async move {
+        let Ok(cols) = crate::api::cms_collections(&path).await else {
+            return;
+        };
+        let schema: BTreeMap<String, revel_edit::entryprops::CollectionInfo> = cols
+            .iter()
+            .map(|c| {
+                let first = c.entries.first();
+                let fields = c
+                    .fields
+                    .iter()
+                    .map(|f| {
+                        (
+                            f.name.clone(),
+                            revel_edit::entryprops::FieldInfo {
+                                label: f.label.clone(),
+                                kind: f.kind.clone(),
+                                list: f.list,
+                                sample: first.and_then(|e| e.data.get(&f.name).cloned()),
+                                // Première valeur remplie parmi les contenus : nature du champ.
+                                example: c.entries.iter().find_map(|e| {
+                                    e.data
+                                        .get(&f.name)
+                                        .filter(|v| !v.is_null() && v.as_str() != Some(""))
+                                        .cloned()
+                                }),
+                            },
+                        )
+                    })
+                    .collect();
+                (
+                    c.id.clone(),
+                    revel_edit::entryprops::CollectionInfo {
+                        fields,
+                        url: first.and_then(|e| e.url.clone()),
+                    },
+                )
+            })
+            .collect();
+        let cmd = ed.doc.with_untracked(|d| {
+            revel_edit::entryprops::convert(d.as_ref()?, &schema, &ui.now("prop-page", &[]))
+        });
+        if let Some(cmd) = cmd {
+            let n = match &cmd {
+                Command::Batch { commands } => commands
+                    .iter()
+                    .filter(|c| matches!(c, Command::SetComponentProps { .. }))
+                    .count(),
+                _ => 0,
+            };
+            ed.apply(ui, cmd, false);
+            if n > 0 {
+                ui.fail(
+                    revel_protocol::Failure::new("info-components-converted")
+                        .arg("n", n.to_string()),
+                );
+            }
+        }
+    });
+}
+
+/// Propriété du composant ouvert (ou du gabarit) qui remplit l'élément `at` : son texte, son
+/// image ou son lien. Libellé de la propriété, pour les calques.
+pub(crate) fn prop_filling(d: &revel_model::Site, at: &Target) -> Option<String> {
+    let props = Holder::of(at)?.visible(d)?;
+    let named = |e: &str| {
+        let e = e.trim();
+        props
+            .iter()
+            .find(|p| p.name == e)
+            .map(|p| p.label().to_string())
+    };
+    let tpl = |v: &str| {
+        v.trim()
+            .strip_prefix("{{")
+            .and_then(|x| x.strip_suffix("}}"))
+            .and_then(named)
+    };
+    match revel_edit::address::node(d, at).ok()? {
+        Node::Element {
+            attrs, children, ..
+        } => match children.as_slice() {
+            [Node::Out { expr }] => named(expr),
+            _ => None,
+        }
+        .or_else(|| {
+            attrs
+                .iter()
+                .filter(|a| matches!(a.name.as_str(), "src" | "href"))
+                .find_map(|a| tpl(a.value.as_deref()?))
+        }),
+        Node::Image(img) => named(&img.src),
+        _ => None,
+    }
 }
 
 // ------------------------------------------------------------------ composant ouvert

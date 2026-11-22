@@ -17,6 +17,7 @@ pub mod collection;
 pub mod command;
 pub mod dates;
 pub mod editable;
+pub mod entryprops;
 pub mod history;
 pub mod hover;
 pub mod icons;

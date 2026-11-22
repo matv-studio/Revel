@@ -3927,6 +3927,19 @@ carousel-scroll = Gulir
 carousel-drag = Seret dengan mouse
 layers-tool = Alat: diatur dari panel Gaya
 prop-kind-entry = Konten
+content-title = Konten
+content-source = Sumber
+content-source-edit = Atur
+content-source-edit-help = Memilih daftar: koleksi, urutan, jumlah, filter
+content-source-list-help = Setiap kartu menerima satu konten dari daftar
+content-none = Tidak ada
+prop-field-page = Halaman konten
+prop-write = Tulis…
+prop-field-help = Bidang konten yang dibaca properti ini
+prop-page = Halaman
+info-components-converted = { $n ->
+   *[other] { $n } komponen dikonversi
+ }: setiap properti kini ditautkan ke bidang dari kartu. Urungkan (Ctrl+Z) mengembalikan bentuk lama.
 prop-entry-collection = Koleksi
 prop-entry-collection-help = Koleksi yang bidangnya dibaca elemen komponen.
 prop-entry-collection-fixed = Diatur di komponen

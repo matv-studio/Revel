@@ -3174,6 +3174,8 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
                 ed.state.set(Some(o.state));
                 ed.pages.set(p);
                 ed.base.set(Some(b));
+                // Composants reliés au CMS de l'ancienne forme : convertis (D-191).
+                crate::components::convert_entry_props(ui, ed);
             }
             (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
                 failed.set(true);

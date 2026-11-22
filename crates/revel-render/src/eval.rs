@@ -335,6 +335,39 @@ impl<'a> Builder<'a> {
         scope.origin(&head)?.extend(&segs)
     }
 
+    /// Origine d'un champ d'un contenu choisi par filtre (D-191) :
+    /// `(collections.c | by_slug("x")).data.titre`.
+    fn origin_of_entry_path(&self, scope: &Scope, expr: &str, ctx: &str) -> Option<Binding> {
+        self.editor.as_ref()?;
+        let e = expr.trim();
+        if !e.starts_with('(') {
+            return None;
+        }
+        let mut depth = 0usize;
+        let mut end = None;
+        for (i, c) in e.char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(i);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let end = end?;
+        let segs: Vec<Seg> = e[end + 1..]
+            .strip_prefix('.')?
+            .split('.')
+            .map(|k| revel_model::valid_prop_name(k).then(|| Seg::Key(k.to_string())))
+            .collect::<Option<_>>()?;
+        let v = self.eval(scope, &e[1..end], ctx).ok()?;
+        self.origin_of_value(&v)?.extend(&segs)
+    }
+
     /// Origine d'un élément de collection, retrouvé par son `fileSlug` et son adresse.
     fn entry_item(&self, item: &Value) -> Option<Binding> {
         let e = self.editor.as_ref()?;
@@ -1103,6 +1136,7 @@ impl<'a> Builder<'a> {
                                 } else {
                                     // Contenu choisi par filtre (`by_slug`) : retrouvé par sa valeur.
                                     self.origin_of(scope, e)
+                                        .or_else(|| self.origin_of_entry_path(scope, e, &ctx))
                                         .or_else(|| self.origin_of_value(&v))
                                 };
                                 (v, o)

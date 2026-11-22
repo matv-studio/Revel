@@ -4035,6 +4035,20 @@ carousel-scroll = Przewijanie
 carousel-drag = Przeciąganie myszą
 layers-tool = Narzędzie: ustawiane w panelu Style
 prop-kind-entry = Treść
+content-title = Treść
+content-source = Źródło
+content-source-edit = Ustaw
+content-source-edit-help = Zaznacza listę: kolekcja, kolejność, liczba, filtry
+content-source-list-help = Każda karta otrzymuje jedną treść z listy
+content-none = Brak
+prop-field-page = Strona treści
+prop-write = Wpisz…
+prop-field-help = Pole treści odczytywane przez tę właściwość
+prop-page = Strona
+info-components-converted = { $n ->
+    [one] Przekształcono 1 komponent
+   *[other] Przekształcono komponenty: { $n }
+ }: każdą właściwość łączy się teraz z polem z poziomu karty. Cofnij (Ctrl+Z) przywraca poprzednią postać.
 prop-entry-collection = Kolekcja
 prop-entry-collection-help = Kolekcja, której pola czytają elementy komponentu.
 prop-entry-collection-fixed = Ustawiona w komponencie

@@ -229,6 +229,93 @@ try {
     check('réglages de Revel : classes et médias lourds coupés ; classes activées, panneau Classes de retour', off && tab, `proposition : ${ask}`);
     await p.close();
   }
+  // Composants reliés au CMS (D-191) : à l'ouverture du site, la propriété « Contenu » d'un
+  // composant devient une propriété par champ lu (message, une étape d'annulation) ; l'utilisation
+  // règle sa source dans « Contenu » : collection, contenu, champ de chaque propriété, valeur écrite.
+  {
+    const wait = async (fn, ms = 12000) => { const end = Date.now() + ms; while (Date.now() < end) { try { if (await fn()) return true; } catch { /* rechargement */ } await new Promise((r) => setTimeout(r, 120)); } return false; };
+    const doc0 = JSON.stringify((await invoke('edit_open')).site);
+    const component = {
+      id: 'fiche-e2e', name: 'Fiche e2e',
+      props: [{ name: 'projet', label: 'Projet', type: 'entry', collection: 'projets' }],
+      body: [{ node: 'element', id: 'xfe2e000', tag: 'article', attrs: [{ name: 'class', value: 'fiche-e2e' }], children: [
+        { node: 'element', id: 'xfe2e001', tag: 'h3', attrs: [], children: [{ node: 'out', expr: 'projet.data.title' }] },
+        { node: 'element', id: 'xfe2e002', tag: 'a', attrs: [{ name: 'href', value: '{{ projet.url }}' }], children: [{ node: 'out', expr: 'projet.data.client' }] },
+      ] }],
+    };
+    await invoke('edit_apply', { command: { cmd: 'add_component', component }, coalesce: false });
+    await invoke('edit_apply', { command: { cmd: 'insert', parent: { owner: { kind: 'page', id: 'index' }, branch: 'children' }, index: 0,
+      node: { node: 'use', id: 'xfe2e0u0', component: 'fiche-e2e' } }, coalesce: false });
+    const steps0 = 2;
+    const p = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    p.on('pageerror', (e) => errors.push(e.message));
+    await p.addInitScript(mock);
+    await p.goto(`${ui.replace(/\/$/, '')}/#lang=fr&theme=dark&bridge=${encodeURIComponent(bridge)}`);
+    await p.waitForSelector('.site-card');
+    await p.click('.site-open');
+    await p.waitForSelector('iframe.canvas-frame');
+    const comp = async () => (await invoke('edit_open')).site.components.find((c) => c.id === 'fiche-e2e');
+    const args = async () => {
+      let out = null;
+      const walk = (ns) => { for (const n of ns || []) { if (n.id === 'xfe2e0u0') out = n.args || {}; for (const k of ['children', 'then', 'otherwise', 'empty']) walk(n[k]); } };
+      walk((await invoke('edit_open')).site.pages.find((x) => x.id === 'index').body);
+      return out;
+    };
+    const converted = await wait(async () => (await comp()).props.every((x) => x.type !== 'entry'));
+    const c1 = await comp();
+    const a1 = await args();
+    const told = await p.waitForSelector('.notice--info', { timeout: 5000 }).then(() => true).catch(() => false);
+    check('composants reliés au CMS : propriété « Contenu » convertie à l\'ouverture (une propriété par champ lu, utilisation reliée au premier contenu, message)',
+      converted && told && c1.props.map((x) => `${x.name}:${x.type}`).join(',') === 'title:text,lien_page:link,client:text'
+        && JSON.stringify(c1.body).includes('"expr":"title"') && !JSON.stringify(c1.body).includes('projet.')
+        && a1.title === '((collections.projets)[0]).data.title' && a1.lien_page === '((collections.projets)[0]).url',
+      JSON.stringify({ converted, told, props: c1.props.map((x) => `${x.name}:${x.type}`), a1 }));
+    await p.click('.notice .icon-btn');
+    // Section « Contenu » de l'utilisation : collection et contenu lus dans ses valeurs.
+    const fr = () => p.frames().find((f) => f.url().includes('rv='));
+    await wait(async () => !!(await fr().$('.fiche-e2e')));
+    await p.locator('.layers .layer', { hasText: 'Fiche e2e' }).first().click();
+    await p.waitForSelector('.instance-content .content-collection');
+    await p.waitForFunction(() => document.querySelector('.instance-content .content-collection')?.value === 'projets'
+      && document.querySelectorAll('.instance-content .content-entry option').length > 2);
+    const row = (n) => `.instance-content .prop-row[data-prop="${n}"]`;
+    const shown = await p.evaluate(([t, l]) => [document.querySelector(`${t} .prop-field-select`)?.value, document.querySelector(`${l} .prop-field-select`)?.value,
+      !!document.querySelector(`${t} .prop-preview`)?.textContent.trim(), !!document.querySelector('.instance-content [data-action="cms-open-entry"]'), !document.querySelector('.styles .cms-fields')],
+      [row('title'), row('lien_page')]);
+    // Autre contenu : toutes les valeurs reliées le lisent.
+    const second = await p.$eval('.instance-content .content-entry option:nth-child(3)', (o) => o.value);
+    await p.selectOption('.instance-content .content-entry', second);
+    const picked = await wait(async () => { const a = await args(); return a.title === `(collections.projets | by_slug("${second}")).data.title` && a.client.includes(`by_slug("${second}")`) && a.lien_page.endsWith('.url'); });
+    await p.waitForFunction((v) => document.querySelector('.instance-content .content-entry')?.value === v, second);
+    // Autre champ pour une propriété, puis valeur écrite.
+    await p.selectOption(`${row('client')} .prop-field-select`, 'f:title');
+    const refield = await wait(async () => (await args()).client === `(collections.projets | by_slug("${second}")).data.title`);
+    await p.waitForFunction((r) => document.querySelector(`${r} .prop-field-select`)?.value === 'f:title', row('client'));
+    await p.selectOption(`${row('client')} .prop-field-select`, '@write');
+    const written = await wait(async () => /^"/.test((await args()).client || ''));
+    await p.waitForSelector(`${row('client')} input`);
+    // Aucune collection : valeurs reliées rendues aux valeurs par défaut, valeur écrite gardée.
+    await p.selectOption('.instance-content .content-collection', '');
+    const none = await wait(async () => { const a = await args(); return !a.title && !a.lien_page && /^"/.test(a.client || ''); });
+    // Collection choisie de nouveau : propriétés libres reliées aux champs de même nom.
+    await p.waitForFunction(() => document.querySelector('.instance-content .content-collection')?.value === '');
+    await p.selectOption('.instance-content .content-collection', 'projets');
+    const again = await wait(async () => { const a = await args(); return a.title === '((collections.projets)[0]).data.title' && a.lien_page === '((collections.projets)[0]).url' && /^"/.test(a.client || ''); });
+    check('composants reliés au CMS : section « Contenu » (collection et contenu lus, champ et aperçu par propriété, autre contenu, autre champ, valeur écrite, aucune collection, collection de nouveau)',
+      shown[0] === 'f:title' && shown[1] === '@url' && shown[2] && shown[3] && shown[4] && picked && refield && written && none && again,
+      JSON.stringify({ shown, picked, refield, written, none, again, a: await args() }));
+    if (shots) await p.screenshot({ path: `${shots}/composant-contenu.png` });
+    // Composant ouvert : calques marqués de la propriété qui remplit l'élément ; plus de type « Contenu ».
+    await p.click('[data-action="component-edit"]');
+    await p.waitForSelector('.iso-bar');
+    for (let i = 0; i < 6; i++) { const c = await p.$$('.layers .layer [aria-expanded="false"]'); if (!c.length) break; for (const x of c) { try { await x.click({ timeout: 300 }); } catch { /* replié entre-temps */ } } }
+    const marks = await wait(async () => (await p.$$eval('.layers .layer-preview.is-prop', (l) => l.map((e) => e.textContent.trim()))).includes('Client'));
+    check('composants reliés au CMS : calques du composant marqués de la propriété qui remplit l\'élément', marks);
+    await p.close();
+    // Retour à l'état d'origine.
+    for (let i = 0; i < 30 && JSON.stringify((await invoke('edit_open')).site) !== doc0; i++) await invoke('edit_undo');
+    check('composants reliés au CMS : tout annulé, document d\'origine', JSON.stringify((await invoke('edit_open')).site) === doc0, String(steps0));
+  }
   // Import (étape 7), une boîte pour toutes les sources : dossier de pages HTML examiné puis
   // importé (bilan dans la boîte) ; export Webflow et contenus de son CMS (CSV ou API) ; site
   // lu depuis un lien (avancement, annulation) ; dépôt Git copié (site à construire signalé,

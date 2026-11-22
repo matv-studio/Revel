@@ -641,7 +641,9 @@ fn App() -> impl IntoView {
             <TopBar/>
             <main class="main">
                 <Show when=move || ui.error.get().is_some()>
-                    <div class="notice notice--error" role="alert">
+                    // Message d'information (clé `info-…`) ou d'échec.
+                    <div class="notice" class:notice--error=move || ui.error.with(|e| e.as_ref().is_none_or(|f| !f.key.starts_with("info-")))
+                        class:notice--info=move || ui.error.with(|e| e.as_ref().is_some_and(|f| f.key.starts_with("info-"))) role="alert">
                         <span>{move || ui.error.get().map(|f| ui.failure(&f))}</span>
                         <button class="icon-btn" title=ui.t("action-close") aria-label=ui.t("action-close") on:click=move |_| ui.error.set(None)>{icons::close()}</button>
                     </div>

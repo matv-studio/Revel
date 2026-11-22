@@ -2679,3 +2679,38 @@ Réponses de l'utilisateur : maquette « date corrigée » validée ; projet « 
   l'utilisateur) ; filtre « Alunites Event » et liste de la page Alunites Event limités à ces contenus ;
   titres des cartes de projets et d'articles −2 pt, graisse 700 → 600 (carte « à la une » inchangée).
 - **Spams du formulaire** : en suspens (choix de l'utilisateur entre les protections proposées).
+
+**D-191 — 22/11/2026 — prise (accord de l'utilisateur : champs CMS dans un composant, anti-spam ; pour la 0.8.1).**
+- **Champs CMS dans un composant** (maquettes avant / après validées le 22/11). Le composant ne connaît plus
+  de collection : il déclare des propriétés typées (texte, image, lien, oui / non, liste), avec valeur par
+  défaut. Chaque utilisation dit d'où viennent ses valeurs, dans une seule section « Contenu » :
+  - Source : la liste de collection qui l'entoure (pastille « Liste · Projets », « Régler » sélectionne la
+    liste) ; sinon menus « Collection » et « Contenu » ; sinon « Aucune » (valeurs écrites).
+  - Une ligne par propriété : menu du champ lu (ou « Page du contenu », ou « Écrire… ») et, à côté, la valeur
+    lue par l'utilisation sélectionnée. Collection choisie : chaque propriété libre prend le champ de même
+    nom ; les autres sont signalées (icône de liaison colorée).
+  - « Modifier ce contenu dans le CMS » ouvre le contenu montré.
+  - Forme écrite : `item.data.titre` dans une liste ; `(collections.c | by_slug("x")).data.titre` pour un
+    contenu choisi ; `((collections.c)[0]).data.titre` pour le premier. Collection et contenu se relisent
+    dans ces valeurs (rien d'autre n'est enregistré) ; une collection choisie sans aucune propriété reliée
+    n'est gardée que le temps de la séance.
+- **Conversion** des composants à propriété « Contenu » (D-174) : à l'ouverture du site dans l'éditeur, une
+  étape annulable, message d'information. Une propriété par champ lu (`projet.data.title` → `title`), une
+  pour l'adresse de la page (`lien_page`) ; nature d'après le CMS, sinon la valeur (liste, oui / non), sinon
+  l'usage (source d'image, adresse de lien) ; valeur par défaut : celle du premier contenu. Chaque
+  utilisation reçoit ses valeurs. Un composant qui lit son contenu autrement que par ses champs n'est pas
+  converti. Site généré identique avant et après (vérifié sur le site Alunites, 168 fichiers), hors le reste
+  d'import retiré (`data-revel-filter=""` sur une carte filtrée : l'ancien « Filtres de liste / Valeur »).
+  Le type « Contenu » n'est plus proposé à la création ; le rendu le lit toujours.
+- **Écarts aux maquettes**, signalés à l'utilisateur :
+  - pas de propriété « Filtres » en pastilles : les étiquettes de filtre suivent les propriétés que le
+    composant lit déjà (sur Alunites : Source et Événementiel) ;
+  - le lien d'une carte Alunites tient en deux propriétés (lien externe, page), le composant lisant les deux ;
+  - dans une liste, « Écrire… » vaut pour toutes les cartes (une seule utilisation) ; par carte seulement
+    hors d'une liste ;
+  - libellés des propriétés : ceux des champs du CMS (noms des champs quand le schéma n'en donne pas).
+- **Anti-spam des formulaires** : preuve d'un navigateur — durée écoulée depuis l'affichage (3 s au moins)
+  et valeur calculée par le script de la page avec une clé du site (FNV-1a, même calcul en PHP), vérifiées
+  par `revel-form.php` ; champ piège renommé `website_url` (ancien nom encore reconnu). Sans JavaScript, le
+  formulaire ne part plus (message). Essayé avec PHP : envoi direct refusé, envoi en moins de 3 s refusé,
+  envoi normal accepté. Pas de service tiers. En suspens : CAPTCHA si des envois à la main persistent.

@@ -3927,6 +3927,20 @@ carousel-scroll = Scrolling
 carousel-drag = Drag with the mouse
 layers-tool = Tool: set from the Styles panel
 prop-kind-entry = Content
+content-title = Content
+content-source = Source
+content-source-edit = Edit
+content-source-edit-help = Selects the list: collection, order, count, filters
+content-source-list-help = Each card receives one item of the list
+content-none = None
+prop-field-page = Page of the item
+prop-write = Write…
+prop-field-help = Content field read by this property
+prop-page = Page
+info-components-converted = { $n ->
+    [one] 1 component converted
+   *[other] { $n } components converted
+ }: each property is now linked to a field from the card. Undo (Ctrl+Z) restores the former shape.
 prop-entry-collection = Collection
 prop-entry-collection-help = Collection whose fields the component’s elements read.
 prop-entry-collection-fixed = Set in the component

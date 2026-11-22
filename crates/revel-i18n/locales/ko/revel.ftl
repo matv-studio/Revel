@@ -3927,6 +3927,19 @@ carousel-scroll = 스크롤
 carousel-drag = 마우스로 드래그
 layers-tool = 도구: 스타일 패널에서 설정
 prop-kind-entry = 콘텐츠
+content-title = 콘텐츠
+content-source = 소스
+content-source-edit = 설정
+content-source-edit-help = 목록을 선택합니다: 컬렉션, 정렬, 개수, 필터
+content-source-list-help = 각 카드는 목록의 콘텐츠 하나를 받습니다
+content-none = 없음
+prop-field-page = 콘텐츠 페이지
+prop-write = 직접 입력…
+prop-field-help = 이 속성이 읽는 콘텐츠 필드
+prop-page = 페이지
+info-components-converted = { $n ->
+   *[other] 구성 요소 { $n }개 변환됨
+ }: 이제 각 속성을 카드에서 필드에 연결합니다. 실행 취소(Ctrl+Z)로 이전 형태로 돌아갑니다.
 prop-entry-collection = 컬렉션
 prop-entry-collection-help = 컴포넌트 요소가 필드를 읽는 컬렉션.
 prop-entry-collection-fixed = 컴포넌트에서 설정

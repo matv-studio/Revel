@@ -3927,6 +3927,20 @@ carousel-scroll = Bildlauf
 carousel-drag = Mit der Maus ziehen
 layers-tool = Werkzeug: im Stile-Panel einstellen
 prop-kind-entry = Inhalt
+content-title = Inhalt
+content-source = Quelle
+content-source-edit = Einstellen
+content-source-edit-help = Wählt die Liste aus: Sammlung, Sortierung, Anzahl, Filter
+content-source-list-help = Jede Karte erhält einen Inhalt der Liste
+content-none = Keine
+prop-field-page = Seite des Inhalts
+prop-write = Schreiben…
+prop-field-help = Inhaltsfeld, das diese Eigenschaft liest
+prop-page = Seite
+info-components-converted = { $n ->
+    [one] 1 Komponente umgewandelt
+   *[other] { $n } Komponenten umgewandelt
+ }: Jede Eigenschaft wird nun von der Karte aus mit einem Feld verknüpft. Rückgängig (Strg+Z) stellt die alte Form wieder her.
 prop-entry-collection = Sammlung
 prop-entry-collection-help = Sammlung, deren Felder die Elemente der Komponente lesen.
 prop-entry-collection-fixed = In der Komponente eingestellt

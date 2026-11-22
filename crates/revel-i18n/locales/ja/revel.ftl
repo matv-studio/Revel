@@ -3927,6 +3927,19 @@ carousel-scroll = スクロール
 carousel-drag = マウスでドラッグ
 layers-tool = ツール：スタイルパネルで設定
 prop-kind-entry = コンテンツ
+content-title = コンテンツ
+content-source = ソース
+content-source-edit = 設定
+content-source-edit-help = リストを選択します: コレクション、並び順、件数、フィルター
+content-source-list-help = 各カードはリストのコンテンツを 1 件受け取ります
+content-none = なし
+prop-field-page = コンテンツのページ
+prop-write = 入力…
+prop-field-help = このプロパティが読み込むコンテンツのフィールド
+prop-page = ページ
+info-components-converted = { $n ->
+   *[other] { $n } 個のコンポーネントを変換しました
+ }: 各プロパティはカード側でフィールドに関連付けます。元に戻す（Ctrl+Z）で以前の形に戻ります。
 prop-entry-collection = コレクション
 prop-entry-collection-help = コンポーネントの要素が読むフィールドのコレクション。
 prop-entry-collection-fixed = コンポーネントで設定

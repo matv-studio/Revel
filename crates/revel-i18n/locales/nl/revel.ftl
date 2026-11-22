@@ -3927,6 +3927,20 @@ carousel-scroll = Scrollen
 carousel-drag = Slepen met de muis
 layers-tool = Tool: in te stellen via het paneel Stijlen
 prop-kind-entry = Inhoud
+content-title = Inhoud
+content-source = Bron
+content-source-edit = Instellen
+content-source-edit-help = Selecteert de lijst: collectie, volgorde, aantal, filters
+content-source-list-help = Elke kaart krijgt een item uit de lijst
+content-none = Geen
+prop-field-page = Pagina van het item
+prop-write = Schrijven…
+prop-field-help = Inhoudsveld dat deze eigenschap leest
+prop-page = Pagina
+info-components-converted = { $n ->
+    [one] 1 component omgezet
+   *[other] { $n } componenten omgezet
+ }: elke eigenschap wordt nu vanaf de kaart aan een veld gekoppeld. Ongedaan maken (Ctrl+Z) herstelt de oude vorm.
 prop-entry-collection = Collectie
 prop-entry-collection-help = Collectie waarvan de elementen van het component de velden lezen.
 prop-entry-collection-fixed = Ingesteld in het component

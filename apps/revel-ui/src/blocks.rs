@@ -3666,6 +3666,26 @@ pub(crate) fn enclosing_list(d: &Site, at: &Target) -> Option<(Query, String)> {
     None
 }
 
+/// Identifiant de la liste de collection la plus proche qui contient le nœud.
+pub(crate) fn enclosing_list_id(d: &Site, at: &Target) -> Option<String> {
+    let mut cur = at.clone();
+    for _ in 0..64 {
+        let (parent, _) = revel_edit::address::locate(d, &cur).ok()?;
+        let id = parent.node?;
+        let t = Target {
+            owner: at.owner.clone(),
+            node: id.clone(),
+        };
+        if matches!(revel_edit::address::node(d, &t), Ok(Node::Each { .. }))
+            && parent.branch == Branch::Children
+        {
+            return Some(id);
+        }
+        cur = t;
+    }
+    None
+}
+
 /// Liste des valeurs d'un champ (`item.data.tags`) la plus proche qui contient le nœud : nom de
 /// sa variable (chaque valeur).
 fn enclosing_values(d: &Site, at: &Target) -> Option<String> {

@@ -3927,6 +3927,20 @@ carousel-scroll = स्क्रॉल
 carousel-drag = माउस से खींचें
 layers-tool = टूल: स्टाइल पैनल से सेट करें
 prop-kind-entry = सामग्री
+content-title = सामग्री
+content-source = स्रोत
+content-source-edit = सेट करें
+content-source-edit-help = सूची चुनता है: संग्रह, क्रम, संख्या, फ़िल्टर
+content-source-list-help = हर कार्ड को सूची की एक सामग्री मिलती है
+content-none = कोई नहीं
+prop-field-page = सामग्री का पृष्ठ
+prop-write = लिखें…
+prop-field-help = इस गुण द्वारा पढ़ा गया सामग्री फ़ील्ड
+prop-page = पृष्ठ
+info-components-converted = { $n ->
+    [one] 1 घटक बदला गया
+   *[other] { $n } घटक बदले गए
+ }: अब हर गुण कार्ड से किसी फ़ील्ड से जुड़ता है। पूर्ववत करें (Ctrl+Z) पुराना रूप लौटाता है।
 prop-entry-collection = संग्रह
 prop-entry-collection-help = वह संग्रह जिसके फ़ील्ड घटक के तत्व पढ़ते हैं।
 prop-entry-collection-fixed = घटक में सेट

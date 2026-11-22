@@ -1516,9 +1516,21 @@ pub fn Layers() -> impl IntoView {
                             let at = r.with_value(|r| Some(revel_edit::Target { owner: r.owner.clone(), node: r.id.clone()? }))?;
                             ed.doc.with(|d| cms_cols.with(|c| crate::blocks::cms_label(d.as_ref()?, c, &at)))
                         });
+                        // Élément rempli par une propriété du composant ouvert (D-191) : son libellé.
+                        let in_holder = r.with_value(|r| !matches!(r.owner, Owner::Page(_)));
+                        let prop = Memo::new(move |_| {
+                            if !in_holder {
+                                return None;
+                            }
+                            let at = r.with_value(|r| Some(revel_edit::Target { owner: r.owner.clone(), node: r.id.clone()? }))?;
+                            ed.doc.with(|d| crate::components::prop_filling(d.as_ref()?, &at))
+                        });
                         let preview = move || {
                             if let Some((c, f)) = cms.get() {
                                 return Some(format!("{c} › {f}"));
+                            }
+                            if let Some(p) = prop.get() {
+                                return Some(p);
                             }
                             r.with_value(|r| r.preview.clone()).or_else(|| {
                                 let id = r.with_value(|r| r.id.clone())?;
@@ -1704,7 +1716,7 @@ pub fn Layers() -> impl IntoView {
                                     }.into_any()
                                 }}
                                 {move || preview().map(|p| view! {
-                                    <span class="layer-preview" class:is-bound=bound
+                                    <span class="layer-preview" class:is-prop=move || prop.with(Option::is_some) class:is-bound=bound
                                         title=move || textual.then(|| ui.now("layers-edit-text", &[]))>{p}</span>
                                 })}
                                 {move || zone.get().map(|_| view! { <span class="layer-badge" title=ui.t("zone-site-help")>{ui.t("zone-site")}</span> })}

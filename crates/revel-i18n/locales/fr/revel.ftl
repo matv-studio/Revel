@@ -3930,6 +3930,20 @@ carousel-scroll = Défilement
 carousel-drag = Glisser à la souris
 layers-tool = Outil : réglé depuis le panneau Styles
 prop-kind-entry = Contenu
+content-title = Contenu
+content-source = Source
+content-source-edit = Régler
+content-source-edit-help = Sélectionne la liste : collection, tri, nombre, filtres
+content-source-list-help = Chaque carte reçoit un contenu de la liste
+content-none = Aucune
+prop-field-page = Page du contenu
+prop-write = Écrire…
+prop-field-help = Champ du contenu lu par cette propriété
+prop-page = Page
+info-components-converted = { $n ->
+    [one] 1 composant converti
+   *[other] { $n } composants convertis
+ } : chaque propriété se relie maintenant à un champ depuis la carte. Annuler (Ctrl+Z) revient à l'ancienne forme.
 prop-entry-collection = Collection
 prop-entry-collection-help = Collection dont les éléments du composant lisent les champs.
 prop-entry-collection-fixed = Réglée dans le composant

@@ -3927,6 +3927,20 @@ carousel-scroll = Desplazamiento
 carousel-drag = Arrastrar con el ratón
 layers-tool = Herramienta: se ajusta en el panel Estilos
 prop-kind-entry = Contenido
+content-title = Contenido
+content-source = Origen
+content-source-edit = Ajustar
+content-source-edit-help = Selecciona la lista: colección, orden, número, filtros
+content-source-list-help = Cada tarjeta recibe un contenido de la lista
+content-none = Ninguna
+prop-field-page = Página del contenido
+prop-write = Escribir…
+prop-field-help = Campo del contenido leído por esta propiedad
+prop-page = Página
+info-components-converted = { $n ->
+    [one] 1 componente convertido
+   *[other] { $n } componentes convertidos
+ }: cada propiedad se vincula ahora a un campo desde la tarjeta. Deshacer (Ctrl+Z) vuelve a la forma anterior.
 prop-entry-collection = Colección
 prop-entry-collection-help = Colección cuyos campos leen los elementos del componente.
 prop-entry-collection-fixed = Definida en el componente

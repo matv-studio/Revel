@@ -249,6 +249,7 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 }
 .main > .notice { margin: var(--s-4) var(--s-8) 0; }
 .notice--error { background: var(--danger-bg); color: var(--danger-text); }
+.notice--info { background: var(--set-bg); color: var(--set-text); }
 .status { display: flex; align-items: center; gap: var(--s-2); }
 .status--ok svg { color: var(--success-text); }
 .empty {

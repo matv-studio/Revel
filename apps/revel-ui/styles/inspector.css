@@ -999,3 +999,22 @@
 .list-auto.is-hidden { display: none; }
 .list-mode { display: flex; width: 100%; }
 .list-mode button { flex: 1; white-space: nowrap; justify-content: center; }
+
+/* Section « Contenu » d'une utilisation de composant (D-191) : source, puis une ligne par
+   propriété (champ lu, valeur en aperçu). */
+.instance-content { display: flex; flex-direction: column; gap: 6px; }
+.instance-content .content-sep { height: 1px; background: var(--border); margin: 2px 0; }
+.instance-content .view-line { gap: 8px; }
+.instance-content .view-line > .prop-label { flex: 0 0 34%; }
+.prop-field { position: relative; flex: 1; min-width: 0; }
+.prop-field select.input { width: 100%; text-overflow: ellipsis; }
+.prop-field.has-preview select.input { padding-right: calc(40% + 30px); }
+.prop-preview { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); max-width: 40%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--text-faint); pointer-events: none; }
+.prop-chip--plain { padding-right: 8px; max-width: none; flex: 0 1 auto; min-width: 0; }
+.content-source .link-btn { margin-left: auto; font-size: var(--text-xs); white-space: nowrap; }
+.instance-content .cms-fields-open { margin-top: 4px; }
+.bind-field.is-missing { color: var(--set-text); }
+/* Calques : élément rempli par une propriété du composant. */
+.layer-preview.is-prop { color: var(--comp); font-style: normal; }
+.layer-preview.is-prop::before { content: "◆ "; font-size: .8em; }

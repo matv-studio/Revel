@@ -3927,6 +3927,20 @@ carousel-scroll = Kaydırma
 carousel-drag = Fareyle sürükle
 layers-tool = Araç: Stiller panelinden ayarlanır
 prop-kind-entry = İçerik
+content-title = İçerik
+content-source = Kaynak
+content-source-edit = Ayarla
+content-source-edit-help = Listeyi seçer: koleksiyon, sıralama, sayı, filtreler
+content-source-list-help = Her kart listeden bir içerik alır
+content-none = Yok
+prop-field-page = İçeriğin sayfası
+prop-write = Yaz…
+prop-field-help = Bu özelliğin okuduğu içerik alanı
+prop-page = Sayfa
+info-components-converted = { $n ->
+    [one] 1 bileşen dönüştürüldü
+   *[other] { $n } bileşen dönüştürüldü
+ }: her özellik artık karttan bir alana bağlanır. Geri al (Ctrl+Z) eski biçime döner.
 prop-entry-collection = Koleksiyon
 prop-entry-collection-help = Bileşen öğelerinin alanlarını okuduğu koleksiyon.
 prop-entry-collection-fixed = Bileşende ayarlanır

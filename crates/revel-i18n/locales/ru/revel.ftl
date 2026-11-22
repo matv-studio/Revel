@@ -4031,6 +4031,20 @@ carousel-scroll = Прокрутка
 carousel-drag = Перетаскивание мышью
 layers-tool = Инструмент: настраивается на панели «Стили»
 prop-kind-entry = Содержимое
+content-title = Содержимое
+content-source = Источник
+content-source-edit = Настроить
+content-source-edit-help = Выделяет список: коллекция, порядок, количество, фильтры
+content-source-list-help = Каждая карточка получает один элемент списка
+content-none = Нет
+prop-field-page = Страница элемента
+prop-write = Написать…
+prop-field-help = Поле содержимого, которое читает это свойство
+prop-page = Страница
+info-components-converted = { $n ->
+    [one] Преобразован 1 компонент
+   *[other] Преобразовано компонентов: { $n }
+ }: каждое свойство теперь связывается с полем из карточки. Отмена (Ctrl+Z) возвращает прежний вид.
 prop-entry-collection = Коллекция
 prop-entry-collection-help = Коллекция, поля которой читают элементы компонента.
 prop-entry-collection-fixed = Задаётся в компоненте

@@ -1092,7 +1092,7 @@ fn formulaires_du_site() {
         home.contains(r#"data-revel-form="contact" action="/revel-form.php" method="post""#),
         "{home}"
     );
-    assert!(home.contains("_revel_hp") && home.contains("document.addEventListener(\"submit\""));
+    assert!(home.contains("website_url") && home.contains("document.addEventListener(\"submit\""));
     let php = file(&out, "revel-form.php");
     assert!(
         php.contains("const RECIPIENT = 'contact@alunites.com';")

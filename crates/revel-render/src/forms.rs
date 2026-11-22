@@ -1,7 +1,8 @@
 //! Formulaires du site (5.8) reçus par l'hébergement, sans service extérieur : chaque
 //! `<form data-revel-form="nom">` envoie ses champs à `/revel-form.php`, produit à la génération,
 //! qui les transmet par courriel (fonction `mail()` de PHP) à l'adresse réglée dans
-//! Paramètres › Formulaires. Champ piège contre les robots, limite d'envois par adresse IP ;
+//! Paramètres › Formulaires. Contre les robots : champ piège, preuve d'un navigateur (durée et
+//! valeur calculée, D-191), limite d'envois par adresse IP ;
 //! envoi sans recharger la page quand JavaScript est disponible, page de confirmation sinon.
 
 use crate::OutputFile;
@@ -14,13 +15,48 @@ pub const HANDLER: &str = "revel-form.php";
 const MAX_PER_HOUR: u32 = 10;
 
 /// Envoi sans rechargement : réponse JSON du script, message dans `[data-revel-form-status]`.
-const SCRIPT: &str = r#"<script>document.addEventListener("submit",function(e){var f=e.target;if(!f.matches||!f.matches("form[data-revel-form]")||!window.fetch)return;e.preventDefault();var s=f.querySelector("[data-revel-form-status]");if(!s){s=document.createElement("p");s.setAttribute("role","status");s.setAttribute("data-revel-form-status","");f.appendChild(s)}var b=f.querySelector("[type=submit]");if(b)b.disabled=true;fetch(f.action,{method:"POST",body:new FormData(f),headers:{Accept:"application/json"}}).then(function(r){return r.json()}).then(function(d){s.textContent=d.message||"";if(d.ok){f.reset();f.classList.add("is-sent")}}).catch(function(){s.textContent=f.getAttribute("data-revel-error")||""}).then(function(){if(b)b.disabled=false})});</script>"#;
+/// Champ piège : nom banal et tentant pour un robot (D-191), hors de l'écran pour un visiteur.
+const TRAP: &str = "website_url";
+/// Durée minimale entre l'affichage de la page et l'envoi (D-191).
+const MIN_MS: u32 = 3000;
+
+/// Script des pages : envoi sans rechargement, et preuve d'un navigateur (D-191) — durée écoulée
+/// depuis l'affichage (`_revel_t`) et valeur calculée avec la clé du site (`_revel_k`), vérifiées
+/// par le script PHP. Sans `fetch`, l'envoi classique part avec ces deux champs.
+fn script(key: &str) -> String {
+    format!(
+        r#"<script>(function(){{var t0=Date.now(),K="{key}";function h(s){{for(var x=2166136261,i=0;i<s.length;i++){{x^=s.charCodeAt(i);x=Math.imul(x,16777619)>>>0}}return("0000000"+x.toString(16)).slice(-8)}}function set(f,n,v){{var i=f.querySelector('input[name="'+n+'"]');if(!i){{i=document.createElement("input");i.type="hidden";i.name=n;f.appendChild(i)}}i.value=v}}document.addEventListener("submit",function(e){{var f=e.target;if(!f.matches||!f.matches("form[data-revel-form]"))return;var t=String(Date.now()-t0);set(f,"_revel_t",t);set(f,"_revel_k",h(K+":"+t));if(!window.fetch)return;e.preventDefault();var s=f.querySelector("[data-revel-form-status]");if(!s){{s=document.createElement("p");s.setAttribute("role","status");s.setAttribute("data-revel-form-status","");f.appendChild(s)}}var b=f.querySelector("[type=submit]");if(b)b.disabled=true;fetch(f.action,{{method:"POST",body:new FormData(f),headers:{{Accept:"application/json"}}}}).then(function(r){{return r.json()}}).then(function(d){{s.textContent=d.message||"";if(d.ok){{f.reset();f.classList.add("is-sent")}}}}).catch(function(){{s.textContent=f.getAttribute("data-revel-error")||""}}).then(function(){{if(b)b.disabled=false}})}})}})();</script>"#
+    )
+}
+
+/// FNV-1a 32 bits en hexadécimal : même calcul que `hash('fnv1a32', …)` de PHP et que le script
+/// des pages.
+fn fnv(s: &str) -> String {
+    let mut x: u32 = 2_166_136_261;
+    for b in s.bytes() {
+        x ^= u32::from(b);
+        x = x.wrapping_mul(16_777_619);
+    }
+    format!("{x:08x}")
+}
+
+/// Clé du site partagée par ses pages et son script PHP : stable d'une génération à l'autre.
+/// Elle se lit dans la page ; elle écarte les envois qui n'exécutent pas son script.
+fn site_key(site: &Site) -> String {
+    fnv(&format!(
+        "revel:{}:{}",
+        site.name,
+        site.base_url.as_deref().unwrap_or_default()
+    ))
+}
 
 /// Messages du script selon la langue du site.
 struct Texts {
     ok: &'static str,
     invalid: &'static str,
     limit: &'static str,
+    fast: &'static str,
+    script: &'static str,
     fail: &'static str,
     subject: &'static str,
     network: &'static str,
@@ -32,6 +68,8 @@ fn texts(locale: &str) -> Texts {
             ok: "Merci, votre message a bien été envoyé.",
             invalid: "Merci de remplir le formulaire.",
             limit: "Trop de messages envoyés depuis votre connexion. Réessayez dans une heure.",
+            fast: "Envoi trop rapide. Patientez quelques secondes puis renvoyez le formulaire.",
+            script: "Ce formulaire a besoin de JavaScript. Activez-le, rechargez la page puis réessayez.",
             fail: "Le message n’a pas pu être envoyé. Réessayez plus tard.",
             subject: "Nouveau message depuis",
             network: "Le message n’a pas pu être envoyé. Vérifiez votre connexion.",
@@ -41,6 +79,8 @@ fn texts(locale: &str) -> Texts {
             ok: "Thank you, your message has been sent.",
             invalid: "Please fill in the form.",
             limit: "Too many messages sent from your connection. Please try again in an hour.",
+            fast: "Sent too quickly. Please wait a few seconds and send the form again.",
+            script: "This form needs JavaScript. Enable it, reload the page and try again.",
             fail: "The message could not be sent. Please try again later.",
             subject: "New message from",
             network: "The message could not be sent. Please check your connection.",
@@ -131,14 +171,14 @@ pub(crate) fn wire(site: &Site, html: String, scripts: bool) -> (String, usize) 
         out.push_str(&open);
         out.push('>');
         out.push_str(&format!(
-            "<input type=\"text\" name=\"_revel_hp\" value=\"\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\" style=\"position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden\"><input type=\"hidden\" name=\"_revel_form\" value=\"{}\">",
+            "<input type=\"text\" name=\"{TRAP}\" value=\"\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\" style=\"position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden\"><input type=\"hidden\" name=\"_revel_form\" value=\"{}\">",
             escape_attr(&name)
         ));
         rest = end + 1;
     }
     out.push_str(&html[rest..]);
     if count > 0 && scripts {
-        out = crate::insert_before(&out, "</body>", SCRIPT, true);
+        out = crate::insert_before(&out, "</body>", &script(&site_key(site)), true);
     }
     (out, count)
 }
@@ -241,6 +281,11 @@ const MSG_INVALID = {invalid};
 const MSG_LIMIT = {limit};
 const MSG_FAIL = {fail};
 const MAX_PER_HOUR = {max};
+const MSG_FAST = {fast};
+const MSG_SCRIPT = {script};
+const TRAP = {trap};
+const KEY = {key};
+const MIN_MS = {min_ms};
 
 header('Cache-Control: no-store');
 $json = stripos((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false;
@@ -270,9 +315,19 @@ function reply(int $code, bool $ok, string $message, bool $json)
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {{
     reply(405, false, MSG_INVALID, $json);
 }}
-// Champ piège : seuls les robots le remplissent.
-if (trim((string)($_POST['_revel_hp'] ?? '')) !== '') {{
+// Champ piège : seuls les robots le remplissent (ancien nom gardé pour les pages en cache).
+if (trim((string)($_POST[TRAP] ?? '')) !== '' || trim((string)($_POST['_revel_hp'] ?? '')) !== '') {{
     reply(200, true, MSG_OK, $json);
+}}
+// Preuve d'un navigateur : durée écoulée depuis l'affichage et valeur calculée par le script de
+// la page. Absentes ou fausses : envoi sans navigateur. Durée trop courte : envoi automatique.
+$t = (string)($_POST['_revel_t'] ?? '');
+$k = (string)($_POST['_revel_k'] ?? '');
+if ($t === '' || !ctype_digit($t) || strlen($t) > 12 || !hash_equals(hash('fnv1a32', KEY . ':' . $t), $k)) {{
+    reply(400, false, MSG_SCRIPT, $json);
+}}
+if ((int)$t < MIN_MS) {{
+    reply(429, false, MSG_FAST, $json);
 }}
 
 $cut = function (string $s, int $n): string {{
@@ -282,7 +337,7 @@ $fields = [];
 $email = '';
 foreach ($_POST as $k => $v) {{
     $k = (string)$k;
-    if (strpos($k, '_revel') === 0 || count($fields) >= 40) {{
+    if (strpos($k, '_revel') === 0 || $k === TRAP || count($fields) >= 40) {{
         continue;
     }}
     $v = is_array($v) ? implode(', ', array_map('strval', $v)) : (string)$v;
@@ -363,6 +418,11 @@ reply(200, true, MSG_OK, $json);
         limit = php_str(t.limit),
         fail = php_str(t.fail),
         max = MAX_PER_HOUR,
+        fast = php_str(t.fast),
+        script = php_str(t.script),
+        trap = php_str(TRAP),
+        key = php_str(&site_key(site)),
+        min_ms = MIN_MS,
     )
 }
 
@@ -408,12 +468,23 @@ mod tests {
         assert_eq!(n, 1);
         assert!(out.contains(r#"<form class="f" data-revel-form="contact" action="/revel-form.php" method="post" data-revel-error="#), "{out}");
         assert!(
-            out.contains(r#"name="_revel_hp""#)
+            out.contains(r#"name="website_url""#)
                 && out.contains(r#"name="_revel_form" value="contact""#)
         );
         assert!(out.contains(r#"<form action="/autre.php">"#));
-        assert!(out.contains("<script>document.addEventListener(\"submit\""));
-        assert_eq!(out.matches("_revel_hp").count(), 1);
+        assert!(out.contains("document.addEventListener(\"submit\""));
+        assert_eq!(out.matches("website_url").count(), 1);
+        // Preuve d'un navigateur (D-191) : même clé dans la page et dans le script PHP.
+        let key = site_key(&site());
+        assert!(
+            out.contains(&format!("K=\"{key}\""))
+                && handler(&site()).contains(&format!("const KEY = '{key}';"))
+        );
+        // Même calcul que `hash('fnv1a32', …)` de PHP (valeurs de référence).
+        assert_eq!(
+            (fnv(""), fnv("a"), fnv("foobar")),
+            ("811c9dc5".into(), "e40c292c".into(), "bf9cf968".into())
+        );
         // Canevas de l'éditeur : formulaire relié, sans script.
         let (out, _) = wire(&site(), html.to_string(), false);
         assert!(!out.contains("<script>"));

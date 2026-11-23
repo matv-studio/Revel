@@ -19,6 +19,14 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
 - **Audit demandé le 23/11** : parcours complet de l'interface en utilisateur venu de Framer, site d'essai
   employant presque tous les outils, comparaison avec Framer, rapport pour la 1.0 (à modifier, ajuster,
   remplacer, retirer). Aucune modification de Revel pendant l'audit.
+- **Audit fait (premier passage)** : rapport `docs/AUDIT-1.0.md`, relevés bruts et captures dans
+  `docs/captures/audit-1.0/`. Mené en mode sans classes (demande de l'utilisateur). Deux pannes bloquantes :
+  plantage de l'interface après une animation (aperçu différé de 350 ms, `interactions.rs`), composant créé
+  depuis une carte de liste sans propriété ni « Contenu ». En attente : les décisions du § 10 du rapport.
+  Non couvert : import, panier, Lottie et 3D avec fichiers, versions, publication réelle, assistants IA,
+  templates, traduction automatique, application de bureau réelle.
+- Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
+  `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 
 ## Travail du 19 au 22/11/2026 : site Alunites (D-190), champs CMS dans un composant et anti-spam (D-191)
 

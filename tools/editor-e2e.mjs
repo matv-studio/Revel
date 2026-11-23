@@ -1548,6 +1548,42 @@ try {
         await page.waitForTimeout(400);
       }
       check('interactions : action annulée, document identique', JSON.stringify((await invoke('edit_open')).site) === docA);
+      // Audit du 23/11/2026 (P1, P3) : l'aperçu part 350 ms après chaque écriture ; l'élément
+      // désélectionné entre-temps ne doit pas faire planter l'interface. Chaque modèle a son info-bulle.
+      {
+        let crashed = '';
+        const onErr = (e) => { crashed = e.message; };
+        page.on('pageerror', onErr);
+        await page.click('.anim-family[data-family="loop"] .anim-add');
+        f = await waitFrame(() => document.querySelector('section.hero')?.hasAttribute('data-revel-loop'), 'boucle ajoutée');
+        await page.click('.anim-family[data-family="loop"] .anim-remove');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(900);
+        await page.click('.dock-tab[data-panel="layers"]');
+        await page.click('.layers .layer[data-tech*="section.hero"]');
+        await page.click('.dock-tab[data-panel="interactions"]');
+        const alive = await page.locator('.anim-family[data-family="appear"] .anim-add').count();
+        page.off('pageerror', onErr);
+        check('interactions : désélection pendant l\'aperçu différé, interface toujours vivante', !crashed && alive === 1, crashed);
+        for (let i = 0; i < 4 && JSON.stringify((await invoke('edit_open')).site) !== docA; i++) {
+          await page.click('.editor-toolbar .btn-undo');
+          await page.waitForTimeout(400);
+        }
+        const raw = [];
+        for (const fam of ['appear', 'text', 'hover', 'press', 'loop', 'scroll', 'active']) {
+          await page.click(`.anim-family[data-family="${fam}"] .anim-add`);
+          await page.waitForSelector(`.anim-family[data-family="${fam}"] .anim-tile`);
+          raw.push(...(await page.$$eval(`.anim-family[data-family="${fam}"] .anim-tile`, (els) => els.map((e) => e.title).filter((t) => !t || t.startsWith('anim-d-')))));
+          await page.click(`.anim-family[data-family="${fam}"] .anim-remove`);
+          await page.waitForTimeout(500);
+        }
+        check('interactions : chaque modèle a une info-bulle traduite', raw.length === 0, raw.join(', '));
+        for (let i = 0; i < 20 && JSON.stringify((await invoke('edit_open')).site) !== docA; i++) {
+          await page.click('.editor-toolbar .btn-undo');
+          await page.waitForTimeout(300);
+        }
+        check('interactions : essais de l\'audit annulés, document identique', JSON.stringify((await invoke('edit_open')).site) === docA);
+      }
       // D-168 : dévoiler une image (apparition), suivre le curseur (survol, côté opposé), gouttes
       // (défilement), action « Afficher la suite d'une liste » ; tout annulé.
       {

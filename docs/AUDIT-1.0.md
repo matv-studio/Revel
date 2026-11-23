@@ -26,6 +26,9 @@ n'a été vérifié que sur l'éditeur, à la demande de l'utilisateur.
 
 ## 2. Pannes
 
+Corrigées le 23/11/2026 : **P1** (lecture tolérante de l'aperçu différé) et **P3** (trois info-bulles dans les
+quinze langues), avec trois essais de bout en bout.
+
 | # | Gr. | Constat | Où |
 | --- | --- | --- | --- |
 | P1 | **B** | Après un ajout, un changement ou un retrait d'animation, désélectionner dans les 350 ms fait planter toute l'interface (« reactive value … already disposed », puis plus aucun bouton ne répond). Cause : aperçu différé `set_timeout(preview, 350 ms)` qui lit un signal du panneau détruit (`interactions.rs` 1006, 1025, 967). | Interactions |
@@ -209,15 +212,14 @@ modification d'interface qui en découle passe par une maquette validée avant l
   calques qui la portent ; une classe de texte portée par plusieurs éléments devient un style de texte nommé ;
   les classes vidées sont retirées ; le site généré doit rester identique (même contrôle que pour D-191 :
   comparaison avant / après). Une étape annulable, proposée à l'ouverture d'un site à classes et dans les
-  Réglages. À étudier : le sens inverse, et ce que deviennent les règles qu'un calque seul ne sait pas porter
-  (sélecteurs composés, survol d'un parent).
-- **Templates** : trois voies pour les avoir dans les deux modèles.
-  - une seule source par template, convertie à la création du site selon le mode choisi. Contrepartie : dépend
-    de la qualité de la conversion ;
-  - deux versions de chaque template, entretenues à la main. Contrepartie : 27 templates à tenir en double ;
-  - templates refaits une fois dans le modèle par calque, le mode avec classes n'étant plus proposé à la
-    création. Contrepartie : plus de template « à classes ».
-  Choix à faire après les premiers essais de conversion.
+  Réglages. À étudier : ce que deviennent les règles qu'un calque seul ne sait pas porter (sélecteurs
+  composés, survol d'un parent).
+- **Sens inverse** (décision de l'utilisateur, 23/11) : pour passer d'un site par calque à un site à classes,
+  lire les valeurs de chaque calque, regrouper par type d'outil les calques aux valeurs identiques ou proches,
+  et en faire des classes (les valeurs proches sont ramenées à une même valeur). À cadrer à la maquette : le
+  seuil de « proche » et l'aperçu des regroupements avant validation.
+- **Templates** (décision de l'utilisateur, 23/11) : une seule source par template, convertie à la création
+  du site selon le mode choisi. Chaque template sert d'essai de la conversion, ajustée au fur et à mesure.
 - Réglages « écrits en code » des blocs et des sites Alunites : vus après la discussion de l'audit (décision de
   l'utilisateur).
 

@@ -2780,4 +2780,8 @@ catalogue par défaut `matv-studio/revel-templates` introuvable. À faire : doss
 `catalog.json` dans le dépôt Revel, lecteur acceptant un dossier d'un dépôt, catalogue par défaut sur ce
 dossier, seul « Vide » encore compilé, liste gardée en cache. En suspens : « Nouveau site » sans connexion ;
 « Vitrine » embarqué ou non (maquette).
+- Compléments du 23/11/2026, 19 h 56 (utilisateur) : conversion inverse (calques → classes) par regroupement,
+  par type d'outil, des valeurs identiques ou proches ; **une seule source par template**, convertie à la
+  création selon le mode (chaque template sert d'essai de la conversion) ; catalogue de Revel lu par défaut,
+  avec la possibilité d'ajouter un dépôt ; ordre des travaux lancé.
 

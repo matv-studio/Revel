@@ -39,6 +39,10 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   au § 10.1), templates dans un dossier du dépôt lus en ligne avant la prochaine version (**D-194**, § 10.6),
   ordre des travaux validé (§ 10.7). **En attente : la discussion de l'audit avec l'utilisateur, avant tout
   travail de code.**
+- **Travaux de l'audit commencés (23/11, 20 h)** : P1 corrigée (`interactions.rs` : l'aperçu différé tolère un
+  panneau détruit) et P3 (info-bulles `anim-d-appear-unveil`, `anim-d-hover-follow`, `anim-d-scroll-drops` dans
+  les 15 langues) ; 426 essais d'éditeur. Décisions complétées : conversion inverse par regroupement des
+  valeurs proches, une seule source par template.
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

@@ -1002,10 +1002,15 @@ fn FamilySection(f: Family, at: StoredValue<Target>) -> impl IntoView {
         )
     });
     let anim = Memo::new(move |_| value.get().map(|v| Anim::parse(&v)));
+    // Appelé en différé : le panneau peut avoir disparu entre-temps (élément désélectionné), d'où
+    // les lectures qui tolèrent un signal déjà détruit.
     let preview = move || {
-        if let Some(v) = value.get_untracked() {
-            ed.post(serde_json::json!({ "type": "animate", "id": at.get_value().node, "family": f.id(), "value": v }));
-        }
+        let (Some(Some(v)), Some(at)) = (value.try_get_untracked(), at.try_get_value()) else {
+            return;
+        };
+        ed.post(
+            serde_json::json!({ "type": "animate", "id": at.node, "family": f.id(), "value": v }),
+        );
     };
     let write = move |a: Option<Anim>| {
         let at = at.get_value();

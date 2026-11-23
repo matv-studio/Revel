@@ -2740,3 +2740,29 @@ Réponses de l'utilisateur : maquette « date corrigée » validée ; projet « 
   signés) ; la signature macOS (compte Apple Developer payant, D-09) ; la licence des autres apps internes.
 - Titulaire du droit d'auteur « MATV Studio » : confirmé par l'utilisateur le 23/11/2026.
 - Historique contrôlé le 23/11/2026 (233 commits) : aucune clé ni mot de passe (détail : `docs/AUDIT-1.0.md`, § 12).
+
+**D-193 — 23/11/2026 — prise (réponses de l'utilisateur au § 10 de l'audit, `docs/AUDIT-1.0.md`).**
+**Cap de la 1.0 : styles par calque, vocabulaire de Framer, volet d'insertion resserré.**
+- **Styles propres à chaque calque**, comme Framer (choix de l'utilisateur) : régler un élément ne change que
+  lui ; partage explicite par styles de texte nommés, couleurs du site et composants ; survol et appui libres
+  sur un calque ; noms de calques d'après le rôle ; cibles des Actions par calque. Le modèle par classes
+  devient le mode avancé (sites importés). Pourquoi : en mode sans classes, les styles restaient partagés par
+  classe sans que l'utilisateur le voie (un sous-titre réglé en changeait quatre ; survol d'un composant
+  débordant sur ses voisins).
+- **Composant créé depuis une carte de liste** (proposition de Claude, demandée « logique pour un utilisateur
+  ordinaire, avec du contrôle ») : une propriété par champ lu, créée d'office ; source « Liste » gardée dans
+  la liste ; Collection et Contenu à choisir ailleurs ; chaque propriété reste réglable ; une étape annulable.
+  Étend la conversion de D-191 à la création.
+- **Volet d'insertion** (confié à Claude) : premier niveau resserré, niches sous « Plus », « Colonnes »
+  retiré, champs de formulaire, liste déroulante et pastille de panier ajoutés ; tableau au § 10.3.
+- **Première publication** (choix de l'utilisateur) : état actuel gardé ; champ « Message de l'hébergeur »
+  supprimé ; bouton « Assistant » en trois étapes vers GitHub Pages ; info-bulle : hébergement payant possible,
+  pas nécessaire.
+- **Vocabulaire** (choix de l'utilisateur) : celui de Framer, traduit ; table au § 10.5 (Insérer, Pile, Cadre,
+  Texte, Accroche, Diaporama, Ticker, Variable, Effets, Style de texte, Bouton de thème…).
+- **Ordre** : pannes bloquantes, styles par calque, logique des outils, libellés.
+- Les coordonnées d'Alunites citées en exemple dans le dépôt sont gardées (voulu par l'utilisateur).
+- Toute modification d'interface issue de ces décisions passe par une maquette validée (D-183).
+- En suspens : passage des sites existants au modèle par calque ; réglages « écrits en code » des blocs ; mots
+  de la table à confirmer écran par écran ; signature macOS.
+

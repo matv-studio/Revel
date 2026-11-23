@@ -29,6 +29,12 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   serveur des assistants, glisser-déposer, mode avec classes : rapport § 11. Historique git contrôlé, aucun
   secret (§ 12) ; coordonnées de l'agence utilisées comme exemples à remplacer si elles sont réelles. Sur le PC,
   les fichiers temporaires vont dans `_obso\<date>\` (demande de l'utilisateur).
+- **Troisième passage et décisions (23/11, 17 h 40)** : imports par lien (dont un site Framer) et WordPress,
+  assistant IA en session réelle, traduction automatique (paquet « fr »), glisser d'un outil : rapport § 11.
+  **D-193** : cap de la 1.0 (styles par calque comme Framer, composant depuis une carte de liste, volet
+  d'insertion, première publication, vocabulaire de Framer, ordre des travaux) : rapport § 10.
+  **Prochaine étape** : traiter les résultats de l'audit dans l'ordre du § 10.6, en commençant par les pannes
+  P1 (plantage après une animation) et P2 (composant depuis une carte de liste) ; maquette avant tout écran.
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

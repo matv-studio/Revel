@@ -273,3 +273,37 @@ Format d'un relevé : [zone] constat — gravité (B bloquant, G gênant, M mine
 - Conséquence pour le mode sans classes : « Page actuelle » (lien du menu de la page affichée), « Focus clavier » et « survol d'un parent » n'y ont aucun équivalent — G.
 - Ajouter une classe à un élément crée une pastille combinée « bloc-bouton + bouton-accueil » sélectionnée, annoncée « 0 élément » alors que l'élément porte les deux classes — M — compte faux.
 - Panneau Classes : pas de menu contextuel sur une classe ; cliquer une classe ne montre pas ses éléments dans la page — M.
+
+# TROISIÈME PASSAGE (23/11/2026, 17 h 40) : fin de l'audit
+
+### Import par lien (`revel import-url`, f11)
+- Site local de 3 pages lu à son adresse : 3 pages, 4 fichiers, même résultat que l'import du dossier.
+- Site Framer publié (matv.framer.website) : importé en moins de deux minutes ; 3 composants reconnus avec propriétés (« Experience », « Primary », « Stats »), 465 classes renommées d'après les calques, 8 couleurs du site, 1 collection, menus au clic repris. Site régénéré comparé à l'original en ligne (captures f11-framer-orig / f11-framer-imp) : mise en page, images, défilement des logos fidèles ; **textes de la colonne de gauche nettement plus petits** dans l'import (nom, accroche, « About me », chiffres : environ 13 px contre 20 à 24 px) — G — écart de fidélité à corriger (échelle des tailles de texte de Framer).
+
+### Import WordPress (`revel import-wordpress`)
+- Export d'essai (1 page, 3 articles dont 1 brouillon, 1 catégorie) : collection « articles » (3 contenus, brouillon marqué `draft: true`), page « À propos », mise en page du modèle Blog (le thème n'est pas dans l'export : annoncé clairement), site généré avec plan du site. Fonctionne.
+
+### Assistant IA : session réelle avec le serveur (f12)
+- Séquence d'un assistant (initialize, liste des 31 outils, `get_site`, `insert_html`, `check_site`, `undo`) : fonctionne ; réponses lisibles (« Inserted (#…). Visible in Revel now; undo with the `undo` tool »).
+- `check_site` signale de lui-même le composant « Carte projet » (`item.data.image`) parmi ce que l'interface ne règle pas : même constat que la panne P2.
+- `get_page` demande un paramètre `url` (et non `page`) : message d'erreur brut « failed to deserialize parameters: missing field `url` » — M.
+- La collection s'y appelle aussi « projets_2 ».
+
+### Dialogue d'import et galerie de templates de l'interface (f13)
+- Import : 5 sources (Dossier, Lien, Dépôt Git, Figma, WordPress), chacune avec ses champs et une info-bulle qui dit où trouver l'information (jeton Figma, export WordPress) : clair.
+- Nouveau site › Plus : onglets Inclus | Catalogue | Ouvrir un fichier, catégories, vignettes.
+
+### Glisser un outil vers le canevas (f14)
+- Glisser « Titre » du volet Ajouter sur le bloc Avantages : posé à l'endroit visé (après le sous-titre, avant les cartes), sélectionné, annulable. Fonctionne.
+
+### Traduction automatique (f15) — paquet « fr » téléchargé (604 Mo, environ 26 s ici)
+- Par le cœur : 5 textes français → anglais en 1,6 s, hors ligne, mots à garder respectés (« Atelier Essai »).
+- Par l'interface : « Traduire automatiquement » s'active une fois la langue installée ; dialogue avec le décompte (65 textes de pages, 1 de données, 5 contenus) et « Mots à garder tels quels » ; 80 % traduits après 9 s ; traductions marquées à relire.
+- Site généré : `/en/` en `lang="en"`, liens entre langues (hreflang), titres et menu traduits (« Projects », « About ») ; restés en français au moment de la génération : « Accueil », « Voir » (traduction encore en cours ou textes de composant) — à vérifier.
+- Qualité : correcte pour un premier jet (« Further information » pour « En savoir plus », « Specific » pour « Précis ») : la relecture reste nécessaire, l'interface le prévoit.
+
+### Non essayé à la fin de l'audit
+- Import Figma (jeton personnel requis), import d'un dépôt Git à construire (téléchargement de Node.js), un assistant IA du commerce branché sur le serveur (la session a été tenue à la main), l'application de bureau installée sur un PC.
+
+## DÉCISIONS DE L'UTILISATEUR (23/11/2026, 17 h 32 et 17 h 36) sur le § 10 → D-193
+1. Styles propres à chaque calque, comme Framer. 2. Composant depuis une carte de liste : le plus logique pour un utilisateur ordinaire, en gardant le contrôle (proposition de Claude). 3. Outils du volet Ajouter : au choix de Claude, d'après la logique de Revel et Framer. 4. Publication : état actuel gardé ; champ « Message de l'hébergeur » supprimé ; bouton « Assistant » en trois étapes vers GitHub Pages ; info-bulle (i) : un hébergement payant est possible, pas nécessaire. 5. Vocabulaire standard / de Framer. 6. Ordre des travaux accepté. Coordonnées Alunites gardées dans le dépôt (voulu).

@@ -18,12 +18,11 @@ comparaison avec Framer. Aucune modification de Revel n'a été faite pendant l'
 | Vues CMS, Localisation, Plan du site, Paramètres (Général, Publication, Navigation, Sauvegarde), paramètres de page | inventaire complet |
 | Site d'essai « Atelier Essai » | 4 pages, en-tête et pied communs, 9 blocs et outils sur l'accueil, 10 médias, 2 composants (propriétés, variante de survol), collection de 9 champs et 5 contenus, modèle des pages, liste de collection, filtres, formulaire, seconde langue, point de rupture, aperçu, génération (22 fichiers) |
 
-Un second passage, le même jour, a couvert les zones laissées de côté (§ 11). Restent non essayés : le
-dialogue d'import de l'interface et les imports par lien, Figma, WordPress et dépôt Git ; un assistant IA
-réel branché sur le serveur ; la traduction automatique (environ 600 Mo à télécharger par langue) ; la galerie
-de templates de l'interface ; le glisser d'un outil du volet Ajouter vers le canevas ; l'application de
-bureau réelle (l'audit a tourné sur l'interface reliée au cœur de Revel par le pont d'essai, et sur la ligne
-de commande). Le thème clair n'a été vérifié que sur l'éditeur.
+Deux autres passages, le même jour, ont couvert les zones laissées de côté (§ 11). Restent non essayés :
+l'import Figma (jeton personnel requis), l'import d'un dépôt Git à construire, un assistant IA du commerce
+branché sur le serveur (la session a été tenue à la main), l'application de bureau installée (l'audit a tourné
+sur l'interface reliée au cœur de Revel par le pont d'essai, et sur la ligne de commande). Le thème clair
+n'a été vérifié que sur l'éditeur, à la demande de l'utilisateur.
 
 ## 2. Pannes
 
@@ -42,6 +41,8 @@ de commande). Le thème clair n'a été vérifié que sur l'éditeur.
 | P11 | G | Poignée de largeur sur l'image du bloc « Texte et image » : la largeur est écrite, l'image ne change pas (la mise en page du bloc l'emporte). À confirmer à la main. | Canevas |
 | P12 | M | Dialogue « Sauvegarder » : le champ Description n'a pas le curseur à l'ouverture. | Sauvegarde |
 | P13 | M | Mode avec classes : après l'ajout d'une classe, la pastille combinée annonce « 0 élément ». | Styles |
+| P14 | G | Import d'un site Framer par son adresse : textes de la colonne de gauche à environ 13 px au lieu de 20 à 24 px (captures `f11-framer-orig.png`, `f11-framer-imp.png`) ; mise en page et images fidèles. | Import |
+| P15 | M | Serveur des assistants : `get_page` sans son paramètre `url` répond « failed to deserialize parameters: missing field `url` ». | Assistants IA |
 
 ## 3. Le mode sans classes n'est pas tenu jusqu'au bout
 
@@ -185,16 +186,101 @@ Création de page en ligne ; fenêtre de choix d'image ; nuancier et couleurs du
 écran du composant, variantes et propriétés en un clic ; Champ CMS dans le modèle des pages ; tableau des
 contenus ; Localisation ; aperçu ; avertissements de la génération ; recherche rapide.
 
-## 10. Décisions à prendre
+## 10. Décisions (D-193, 23/11/2026)
 
-1. Mode sans classes : voie a, b ou c (§ 3). Elle commande les noms de calques, le survol, les Actions.
-2. Composant et CMS (P2) : propriétés créées à la création du composant, ou seulement à la demande.
-3. Volet Ajouter : quels outils restent au premier niveau (§ 7).
-4. Première publication : assistant, hébergeur proposé, ou état actuel.
-5. Vocabulaire : une liste de noms par objet (§ 5) à figer avant la 1.0.
-6. Ordre : pannes B (P1, P2), puis § 3, puis § 4, puis § 5 à 7.
+Prises par l'utilisateur ; les points 2, 3 et 5 lui ont été confiés à Claude, qui les propose ici. Toute
+modification d'interface qui en découle passe par une maquette validée avant le code (D-183).
 
-## 11. Second passage
+### 10.1 Styles propres à chaque calque (choix de l'utilisateur, modèle de Framer)
+
+- Un calque porte ses réglages ; régler un élément ne change que lui.
+- Le partage devient explicite, par trois moyens : **styles de texte** nommés (Titre, Sous-titre, Texte…,
+  réglés par point de rupture), **couleurs du site** (déjà là), **composants**.
+- Les blocs et outils posés n'apportent plus de classes partagées : leurs textes utilisent des styles de
+  texte du site, leurs boîtes ont leurs propres réglages.
+- Survol et appui : effets libres sur un calque (fond, couleur, ombre, échelle…), sans composant ; pour un
+  lien, état « page actuelle » réglé dans le style du lien.
+- Noms de calques d'après le rôle (« Titre », « Bouton », « Carte »), jamais d'après une classe.
+- Actions et Sommaire : cible choisie parmi les calques, par leur nom.
+- Le modèle par classes reste le mode avancé (Réglages › Éditeur), utile aux sites importés ; il n'est plus
+  le socle du mode par défaut.
+- En suspens : passage des sites existants (Alunites) d'un modèle à l'autre ; sort des réglages « écrits en
+  code » des blocs.
+
+### 10.2 Composant créé depuis une carte de liste (proposition)
+
+- À la création, chaque champ lu par la carte devient une propriété du composant, nommée comme le champ,
+  avec la valeur du premier contenu par défaut ; le lien vers la page du contenu devient une propriété.
+- L'utilisation restée dans la liste reçoit la source « Liste · Projets » : rien ne change à l'écran.
+- Posée ailleurs, l'utilisation montre « Contenu » : Collection, puis Contenu ; ses propriétés se
+  remplissent.
+- Contrôle gardé : chaque propriété peut lire un autre champ ou une valeur écrite ; l'opération est une
+  seule étape annulable, annoncée par un message.
+- C'est la règle de conversion de D-191, appliquée aussi à la création.
+
+### 10.3 Outils du volet d'insertion (proposition)
+
+| Groupe | Premier niveau | Sous « Plus » | Retiré |
+| --- | --- | --- | --- |
+| Mise en page | Section, Pile, Grille | | Colonnes (une Pile horizontale) |
+| Texte | Titre, Texte, Lien, Bouton | | |
+| Médias | Image, Vidéo, Icône | Lottie, Modèle 3D | |
+| Navigation | Barre de navigation, En-tête, Pied de page, Sélecteur de langue | Sommaire, Barre de progression | |
+| Interactifs | Diaporama, Ticker, Onglets, Accordéon | Bandeau cookies, Bouton de thème, Horloge, Toile de pixels | |
+| CMS | Liste de collection, Champ CMS, Filtres | | |
+| Formulaires | Formulaire, Champ, Zone de texte, Case, Choix, Liste déroulante | | |
+| Boutique | Ajouter au panier, Panier, Pastille de panier | | |
+| Sections prêtes | Accroche, Avantages, Texte et image, Appel à l'action, Témoignage, Questions, Coordonnées | | |
+| Code | | Code HTML | |
+
+Nouveaux : champs de formulaire, liste déroulante, pastille de panier. Le bouton d'insertion monte en tête
+de la barre d'outils.
+
+### 10.4 Première publication (choix de l'utilisateur)
+
+- L'état actuel est gardé : un hébergement se règle dans « Mettre en ligne ».
+- Le champ « Message de l'hébergeur » est supprimé. Contrepartie : serveur, identifiant et mot de passe se
+  saisissent à la main.
+- Un bouton « Assistant » guide en trois étapes vers GitHub Pages (compte relié, dépôt créé, site publié).
+- Une info-bulle (i) dit qu'un hébergement payant est possible, sans être nécessaire.
+
+### 10.5 Vocabulaire (choix de l'utilisateur : celui de Framer)
+
+| Framer | Revel aujourd'hui | Revel 1.0 |
+| --- | --- | --- |
+| Insert | Ajouter | Insérer |
+| Layers, Assets | Calques ; Composants, Médias | Calques ; Ressources (composants, médias, styles) |
+| Stack | Conteneur, Bloc, Flex, Colonnes | Pile |
+| Grid | Grille | Grille |
+| Frame | Bloc | Cadre |
+| Text | Paragraphe | Texte |
+| Section, Hero | Section ; En-tête de page | Section ; Accroche |
+| Navigation, Footer | Barre de navigation, En-tête ; Pied, Pied de page | Navigation, En-tête ; Pied de page |
+| Slideshow, Carousel | Carrousel | Diaporama |
+| Ticker | Défilement | Ticker |
+| Accordion | Accordéon, Volets, Dépliant | Accordéon, Volet |
+| Component, Variant | Composant, Variante | Composant, Variante |
+| Variable (de composant) | Propriété | Variable |
+| Effects | Interactions | Effets |
+| Appear, Hover, Press, Loop, Drag, Scroll | Apparition, Survol, Appui, Boucle, Glisser, Défilement | inchangés |
+| Text style, Color style | (classes) ; Couleurs du site | Style de texte ; Couleur |
+| Breakpoint | Point de rupture | Point de rupture |
+| Collection, Collection List | Collection, Liste de collection | inchangés |
+| Overlay | (absent) | Fenêtre |
+| Cookie Banner | Bandeau cookies | Bandeau cookies |
+| Theme toggle | Interrupteur | Bouton de thème |
+
+Framer n'a pas d'interface en français : les mots de droite traduisent ses notions ; le terme anglais est
+gardé là où il est d'usage (« Ticker »). Chaque mot est figé à la maquette de l'écran qui le porte.
+
+### 10.6 Ordre des travaux (accepté)
+
+1. Pannes bloquantes P1 et P2 (P2 suivant 10.2).
+2. Styles par calque (10.1), avec le survol, les noms de calques et les cibles par calque.
+3. Logique des outils (§ 4), volet d'insertion (10.3), publication (10.4).
+4. Libellés, rangement, réglages en double (§ 5 à 7) suivant le vocabulaire (10.5).
+
+## 11. Second et troisième passages
 
 | Zone | Essai | Résultat |
 | --- | --- | --- |
@@ -207,6 +293,12 @@ contenus ; Localisation ; aperçu ; avertissements de la génération ; recherch
 | Mettre en ligne | dialogue relevé | 6 hébergeurs, « Autre », message de l'hébergeur à coller : lisible (capture `f09-hebergement.png`) |
 | Assistants IA | serveur lancé, actions listées | 31 actions, clé exigée, description OpenAPI |
 | Glisser-déposer | déplacer, Alt+glisser | fonctionnent |
+| Import par lien | site local de 3 pages, puis un site Framer publié | fonctionne ; site Framer : 3 composants avec propriétés, 1 collection, 8 couleurs ; écart de taille des textes (P14) |
+| Import WordPress | export de 1 page et 3 articles | collection « articles », brouillon marqué, modèle Blog ; fonctionne |
+| Dialogue d'import, galerie de templates | relevés | 5 sources avec leurs champs et info-bulles ; galerie Inclus, Catalogue, fichier |
+| Glisser un outil vers le canevas | « Titre » glissé sur un bloc | posé à l'endroit visé |
+| Traduction automatique | langue « fr » téléchargée (604 Mo), 65 textes et 5 contenus traduits vers l'anglais | fonctionne hors ligne ; 5 textes en 1,6 s ; site `/en/` généré avec liens entre langues ; relecture prévue par l'interface (capture `f15-traduction.png`) |
+| Assistant IA | session réelle : lecture du site, pose de HTML, vérification, annulation | fonctionne ; `check_site` signale lui-même le composant de la panne P2 |
 | Mode avec classes | états, classe ajoutée, panneau Classes | états riches (Survol, Appui, Focus clavier, Page actuelle, survol d'un parent) ; le mode sans classes n'a pas d'équivalent pour « Page actuelle », « Focus clavier » et le survol d'un parent |
 
 Ajouts aux listes :
@@ -225,6 +317,7 @@ l'application OAuth. Auteurs des commits : deux adresses « noreply » de GitHub
 Hors secrets : `contact@alunites.com`, `site@alunites.com`, le domaine `alunites.com` et le numéro
 « +33 4 72 27 03 74 » servent d'exemples dans des tests, le simulateur et une info de l'interface
 (`inspector.rs:826`). À remplacer par des valeurs fictives s'il s'agit des vraies coordonnées.
+Décision de l'utilisateur (23/11) : ces coordonnées sont gardées (visibilité voulue pour Alunites).
 
 Contrôle fait par expressions régulières ; gitleaks n'a pas pu être installé dans la session. Un passage de
 gitleaks ou de l'analyse de secrets de GitHub confirmerait.

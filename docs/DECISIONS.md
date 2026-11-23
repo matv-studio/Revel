@@ -2765,4 +2765,19 @@ Réponses de l'utilisateur : maquette « date corrigée » validée ; projet « 
 - Toute modification d'interface issue de ces décisions passe par une maquette validée (D-183).
 - En suspens : passage des sites existants au modèle par calque ; réglages « écrits en code » des blocs ; mots
   de la table à confirmer écran par écran ; signature macOS.
+- Compléments du 23/11/2026, 17 h 59 (utilisateur) : un site à classes doit pouvoir être **converti** au modèle
+  par calque (règles reportées sur les calques, classes de texte partagées devenues styles de texte, site
+  généré identique, étape annulable) ; pour les templates, trois voies notées au § 10.1 du rapport (source
+  unique convertie, deux versions, ou refonte dans le seul modèle par calque), choix après les premiers essais
+  de conversion. Ordre des travaux validé. Réglages « écrits en code » d'Alunites : après la discussion de
+  l'audit.
+
+**D-194 — 23/11/2026 — prise (demande de l'utilisateur).** **Templates dans un dossier du dépôt Revel, lus en
+ligne, avant la prochaine version.** But : ajouter ou retirer un template sans publier une version. État : 27
+templates compilés dans l'application (`crates/revel-core/templates`, 1,4 Mo sur environ 50 Mo : gain de poids
+faible) ; lecteur de catalogue en ligne déjà présent (`catalog.json` d'un dépôt GitHub, `sharing.rs`) ;
+catalogue par défaut `matv-studio/revel-templates` introuvable. À faire : dossier `templates/` et son
+`catalog.json` dans le dépôt Revel, lecteur acceptant un dossier d'un dépôt, catalogue par défaut sur ce
+dossier, seul « Vide » encore compilé, liste gardée en cache. En suspens : « Nouveau site » sans connexion ;
+« Vitrine » embarqué ou non (maquette).
 

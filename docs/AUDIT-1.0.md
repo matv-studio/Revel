@@ -204,8 +204,22 @@ modification d'interface qui en découle passe par une maquette validée avant l
 - Actions et Sommaire : cible choisie parmi les calques, par leur nom.
 - Le modèle par classes reste le mode avancé (Réglages › Éditeur), utile aux sites importés ; il n'est plus
   le socle du mode par défaut.
-- En suspens : passage des sites existants (Alunites) d'un modèle à l'autre ; sort des réglages « écrits en
-  code » des blocs.
+- **Conversion d'un site à classes** (demande de l'utilisateur, 23/11) : un site construit ou importé avec des
+  classes doit pouvoir passer au modèle par calque. Principe : chaque règle de classe est reportée sur les
+  calques qui la portent ; une classe de texte portée par plusieurs éléments devient un style de texte nommé ;
+  les classes vidées sont retirées ; le site généré doit rester identique (même contrôle que pour D-191 :
+  comparaison avant / après). Une étape annulable, proposée à l'ouverture d'un site à classes et dans les
+  Réglages. À étudier : le sens inverse, et ce que deviennent les règles qu'un calque seul ne sait pas porter
+  (sélecteurs composés, survol d'un parent).
+- **Templates** : trois voies pour les avoir dans les deux modèles.
+  - une seule source par template, convertie à la création du site selon le mode choisi. Contrepartie : dépend
+    de la qualité de la conversion ;
+  - deux versions de chaque template, entretenues à la main. Contrepartie : 27 templates à tenir en double ;
+  - templates refaits une fois dans le modèle par calque, le mode avec classes n'étant plus proposé à la
+    création. Contrepartie : plus de template « à classes ».
+  Choix à faire après les premiers essais de conversion.
+- Réglages « écrits en code » des blocs et des sites Alunites : vus après la discussion de l'audit (décision de
+  l'utilisateur).
 
 ### 10.2 Composant créé depuis une carte de liste (proposition)
 
@@ -273,12 +287,35 @@ de la barre d'outils.
 Framer n'a pas d'interface en français : les mots de droite traduisent ses notions ; le terme anglais est
 gardé là où il est d'usage (« Ticker »). Chaque mot est figé à la maquette de l'écran qui le porte.
 
-### 10.6 Ordre des travaux (accepté)
+### 10.6 Dossier de templates dans le dépôt (demande de l'utilisateur, avant la prochaine version)
+
+But : ajouter ou retirer un template sans publier une version de Revel.
+
+État vérifié le 23/11 : les 27 templates et leur kit sont compilés dans l'application
+(`crates/revel-core/templates`, 1,4 Mo sur un exécutable d'environ 50 Mo : le gain de poids sera faible, le
+gain est dans la mise à jour sans version). Revel sait déjà lire un catalogue en ligne (`catalog.json` d'un
+dépôt GitHub, lu par raw.githubusercontent.com) ; le catalogue par défaut, `matv-studio/revel-templates`,
+n'existe pas ou n'est pas lisible aujourd'hui (« Introuvable » dans Réglages › Templates).
+
+À faire :
+- un dossier `templates/` à la racine du dépôt Revel, avec son `catalog.json` ; le lecteur de catalogue doit
+  accepter un dossier d'un dépôt (aujourd'hui : un dépôt entier) ;
+- le catalogue par défaut pointe sur ce dossier ; les templates ne sont plus compilés, sauf « Vide » (création
+  d'un site sans connexion) ;
+- liste gardée en cache sur l'ordinateur, pour rouvrir « Nouveau site » hors ligne.
+
+À décider à la maquette : ce que montre « Nouveau site » sans connexion ; si « Vitrine » reste embarqué.
+
+### 10.7 Ordre des travaux (validé par l'utilisateur)
 
 1. Pannes bloquantes P1 et P2 (P2 suivant 10.2).
-2. Styles par calque (10.1), avec le survol, les noms de calques et les cibles par calque.
+2. Styles par calque (10.1), avec le survol, les noms de calques, les cibles par calque et la conversion des
+   sites à classes.
 3. Logique des outils (§ 4), volet d'insertion (10.3), publication (10.4).
 4. Libellés, rangement, réglages en double (§ 5 à 7) suivant le vocabulaire (10.5).
+
+Avant la prochaine version, quel que soit l'avancement du reste : le dossier de templates (10.6).
+Avant de commencer : la discussion de l'audit avec l'utilisateur.
 
 ## 11. Second et troisième passages
 

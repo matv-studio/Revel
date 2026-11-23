@@ -35,6 +35,10 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   d'insertion, première publication, vocabulaire de Framer, ordre des travaux) : rapport § 10.
   **Prochaine étape** : traiter les résultats de l'audit dans l'ordre du § 10.6, en commençant par les pannes
   P1 (plantage après une animation) et P2 (composant depuis une carte de liste) ; maquette avant tout écran.
+- **Compléments du § 10 (23/11, 18 h)** : conversion d'un site à classes vers le modèle par calque (principe
+  au § 10.1), templates dans un dossier du dépôt lus en ligne avant la prochaine version (**D-194**, § 10.6),
+  ordre des travaux validé (§ 10.7). **En attente : la discussion de l'audit avec l'utilisateur, avant tout
+  travail de code.**
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

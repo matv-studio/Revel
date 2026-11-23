@@ -218,3 +218,58 @@ Format d'un relevé : [zone] constat — gravité (B bloquant, G gênant, M mine
 - Effets : Appear, Hover, Press, Loop, Drag, Scroll Animation / Transform / Speed / Variant ; Hover et Press s'appliquent à un calque seul, sans composant, et comprennent remplissage et ombre. (framer.com/updates/all-new-effects, academy)
 - Composants : variantes, états hover / pressed, variables d'instance (texte, liens, couleurs, images, visibilité, icônes), contrôle de variante sur l'utilisation. (academy « Component variants », « Component variables »)
 - CMS : champs booléen, couleur, lien, date, option (enum), référence et multi-référence, etc. (framer.com/developers/cms)
+
+# SECOND PASSAGE (23/11/2026, soir) : zones non couvertes au premier
+
+### Historique git : recherche de secrets (233 commits, toutes branches et étiquettes)
+- Motifs cherchés dans toutes les lignes ajoutées : clés privées (PEM, minisign), jetons GitHub / AWS / OpenAI / Anthropic / Slack / Google / Figma, JWT, adresses avec identifiants, affectations de mot de passe / secret / token, fichiers .env / .pem / .key / id_rsa. Résultat : aucun secret. Seules valeurs trouvées : jetons factices du simulateur (`mock-tauri.js`) et des tests MCP, exemple `x-access-token:abc@github.com`, noms de secrets GitHub cités dans `release.yml` (`${{ secrets.… }}`, sans valeur).
+- Auteurs des commits : deux adresses noreply GitHub (Alunites, matv-studio), aucune adresse réelle.
+- Identifiant de l'application OAuth « Revel » (`Ov23liuo9dnJsp95C633`) : présent, public par nature (device flow, pas de secret associé dans le dépôt).
+- Coordonnées de l'agence utilisées comme exemples (pas des secrets, mais contraires à la règle « jeux d'essai fictifs ») : `contact@alunites.com`, `site@alunites.com` (tests de revel-render, revel-translate, `tools/etat-public.py`), domaine `alunites.com` (tests, simulateur), numéro « +33 4 72 27 03 74 » montré comme exemple de lien Téléphone dans l'interface (`inspector.rs:826`) et dans `eval.rs`. À remplacer par des valeurs fictives si ce sont de vraies coordonnées.
+- gitleaks n'a pas pu être téléchargé dans la session (refusé) : contrôle fait par expressions régulières ; un passage de gitleaks ou de l'analyse de secrets de GitHub reste à faire côté utilisateur pour confirmer.
+
+### Glisser-déposer et poignées (f01)
+- Déplacer un élément en le glissant dans le canevas : fonctionne. Alt+glisser : copie. Annulation : une étape par geste.
+- Glisser un outil du volet Ajouter vers le canevas : non concluant dans l'essai automatisé (glisser natif du navigateur non simulé) — à essayer à la main.
+- Poignée de largeur sur l'image du bloc « Texte et image » : la règle `width: 377px` est écrite, la largeur affichée reste 448 px (la mise en page du bloc l'emporte) — G — geste sans effet visible, à vérifier à la main.
+
+### Lottie, modèle 3D, panier (f02, f03, shots/site-boutique*.png)
+- [Lottie] import du JSON dans les médias, choix par la fenêtre, rendu dans le canevas et sur le site : fonctionne.
+- [Modèle 3D] GLB importé, rendu sur le site avec ombre, boutons Recadrer et Plein écran : fonctionne.
+- [Panier] « Ajouter au panier » (produit et prix écrits) → ligne, quantité − / +, retrait, total, panier gardé au rechargement, formulaire de commande : fonctionne, sans erreur de script.
+- [Panier] aucun outil « pastille de panier » (nombre d'articles, lien vers le panier) à mettre dans l'en-tête : sur les autres pages rien n'indique le panier — G — manque.
+- [Panier] calques « Panier lignes », « Panier quantite », « Panier retirer », « Gras » : noms de classes (déjà relevé).
+
+### Import d'un site HTML (ligne de commande `revel import`, f04, f05)
+- Site d'essai de 3 pages (HTML + CSS + 3 images, un formulaire, un script) : importé en une commande ; en-tête et pied reconnus comme zones du site, barre de navigation refaite avec l'outil, 3 cartes devenues le composant « Card » avec 4 propriétés (Image, Alt, Titre, Texte), couleur devenue variable. Site régénéré : même hauteur de page, mêmes tailles, couleurs, grille ; seul écart mesuré : l'écart entre les liens du menu (24 px → 0), annoncé par le message « allure des pièces à vérifier ».
+- `revel import-check` annonce « 0/3 pages équivalentes » (il compare la structure, changée exprès par la remise en forme) — M — message alarmant pour un résultat fidèle à l'œil.
+- Calques du site importé : « A top », « Btn », « Hero », « Cards » (classes d'origine) ; un calque « Contenu de la page » vide en fin de page — M.
+- Adresses gardées telles quelles (`/contact.html`, `/pains.html`).
+- Non essayé : le dialogue d'import de l'interface (simulé ici), l'import par lien, Figma (jeton requis), WordPress, dépôt Git.
+
+### Templates (27 en ligne de commande ; f06)
+- 5 templates créés et générés sans erreur (agency, shop, restaurant, portfolio, blog) ; « shop » : 4 pages + 4 produits, panier, pastille flottante « Panier 0 », polices et images soignées (shots/f06-tpl-shop.png). Niveau visuel nettement au-dessus des blocs du volet Ajouter.
+- La pastille de panier du template « shop » n'existe pas comme outil du volet Ajouter (confirme le manque relevé).
+- Capture pleine page : sections « Nos pièces préférées » et image de l'atelier vides (probablement les animations d'apparition, non déclenchées sans défilement) — à vérifier à la main.
+- Non essayé : la galerie de templates de l'interface (« Nouveau site › Plus », catalogue GitHub : simulés ici).
+
+### Sauvegarde / versions (f07, f08) — essai réel par le pont
+- « Local » : première version créée d'office (20 fichiers), état « À jour » / « 1 changement », « Sauvegarder » avec description, liste des versions, détail par fichier, comparaison, « Restaurer » avec confirmation (une version « Restauration de … » est ajoutée, rien n'est perdu) : tout fonctionne ; le titre modifié est bien revenu.
+- Dialogue « Sauvegarder » : le champ Description n'a pas le curseur à l'ouverture (il reste sur le bouton) : taper n'écrit rien — M — panne mineure.
+- Détail d'une version : liste de fichiers techniques (`.gitignore`, `.pages.yml`, `site.revel.json`) et comparaison ligne à ligne du JSON du site : illisible pour un débutant — G — à remplacer par un résumé (« Accueil : 1 texte modifié ») ; Framer montre l'historique comme des états du site à rouvrir.
+- Auteur des versions : nom du compte git de la machine (« Claude » ici) tant que « Votre nom » n'est pas rempli.
+
+### Assistants IA, publication, hébergement (essais réels en ligne de commande ; f09)
+- [Serveur des assistants] `revel mcp --http` : 31 actions (lire le site, pages, styles, contenus ; poser du HTML ou un modèle, régler textes, attributs, styles, calques ; liens, vérification du site, templates, annuler / rétablir) ; clé exigée (401 sans clé) ; description OpenAPI servie. Non essayé : un assistant réel branché dessus.
+- [Publication SFTP] `revel deploy-sftp` vers un serveur d'essai local : aperçu (« 102 fichiers à envoyer, 0 à supprimer »), envoi complet, clé du serveur affichée « à conserver », second envoi limité au fichier changé : fonctionne.
+- [Mettre en ligne] dialogue : Hébergeur (OVHcloud, o2switch, Infomaniak, Hostinger, IONOS, GitHub Pages, Autre) + « Message de l'hébergeur » à coller (serveur, identifiant, mot de passe lus dans le courriel) : bonne idée, lisible. Écart avec Framer : pas de mise en ligne gratuite immédiate hors GitHub Pages (compte à relier) — décision 4 du rapport.
+- La ligne de commande de la session s'annonce « revel 0.8.0 » (binaire construit avant le passage du numéro à 0.8.1, même code).
+
+### Traduction automatique
+- Non essayée : chaque langue se télécharge depuis Hugging Face et pèse environ 600 Mo à télécharger, 300 Mo sur le disque (fr : 604 Mo ; de : 598 Mo ; es : 627 Mo ; it : 693 Mo) ; traduire français → anglais demande au moins le paquet « fr ». Téléchargement lourd, laissé à l'accord de l'utilisateur. Le poids est à afficher clairement avant le téléchargement (à vérifier dans Réglages › Traduction automatique).
+
+### Mode avec classes (f10)
+- Bouton d'état : Normal | Survol | Appui | Focus clavier | Page actuelle | Avant le contenu | Après le contenu | Survol de .bloc-actions / .bloc__inner / .bloc / .page (survol d'un parent). Régler le fond au survol écrit `.bloc-bouton:hover` : fonctionne (4 éléments concernés, annoncés).
+- Conséquence pour le mode sans classes : « Page actuelle » (lien du menu de la page affichée), « Focus clavier » et « survol d'un parent » n'y ont aucun équivalent — G.
+- Ajouter une classe à un élément crée une pastille combinée « bloc-bouton + bouton-accueil » sélectionnée, annoncée « 0 élément » alors que l'élément porte les deux classes — M — compte faux.
+- Panneau Classes : pas de menu contextuel sur une classe ; cliquer une classe ne montre pas ses éléments dans la page — M.

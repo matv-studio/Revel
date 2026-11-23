@@ -18,11 +18,12 @@ comparaison avec Framer. Aucune modification de Revel n'a été faite pendant l'
 | Vues CMS, Localisation, Plan du site, Paramètres (Général, Publication, Navigation, Sauvegarde), paramètres de page | inventaire complet |
 | Site d'essai « Atelier Essai » | 4 pages, en-tête et pied communs, 9 blocs et outils sur l'accueil, 10 médias, 2 composants (propriétés, variante de survol), collection de 9 champs et 5 contenus, modèle des pages, liste de collection, filtres, formulaire, seconde langue, point de rupture, aperçu, génération (22 fichiers) |
 
-Non couvert, à faire dans un second passage : import d'un site (dossier, lien, Figma, WordPress, Git), panier
-et commande, Lottie et modèle 3D avec de vrais fichiers, sauvegarde (versions Git), publication réelle,
-assistants IA, galerie de templates, traduction automatique, glisser-déposer fin dans le canevas, application
-de bureau réelle (l'audit a tourné sur l'interface reliée au cœur de Revel par le pont d'essai), mode avec
-classes au-delà de l'inventaire. Le thème clair n'a été vérifié que sur l'éditeur.
+Un second passage, le même jour, a couvert les zones laissées de côté (§ 11). Restent non essayés : le
+dialogue d'import de l'interface et les imports par lien, Figma, WordPress et dépôt Git ; un assistant IA
+réel branché sur le serveur ; la traduction automatique (environ 600 Mo à télécharger par langue) ; la galerie
+de templates de l'interface ; le glisser d'un outil du volet Ajouter vers le canevas ; l'application de
+bureau réelle (l'audit a tourné sur l'interface reliée au cœur de Revel par le pont d'essai, et sur la ligne
+de commande). Le thème clair n'a été vérifié que sur l'éditeur.
 
 ## 2. Pannes
 
@@ -38,6 +39,9 @@ classes au-delà de l'inventaire. Le thème clair n'a été vérifié que sur l'
 | P8 | M | Le panneau CMS de l'éditeur nomme la collection « projets_2 ». | Panneau CMS |
 | P9 | M | Menu « Tri » d'une liste : « Date » deux fois. Menu « Champ » : deux entrées « Temps de lecture de « … » indiscernables. | Liste, Champ CMS |
 | P10 | M | Clic droit sur un média : la fiche s'ouvre sous le menu ; Échap ne la ferme pas. | Médias |
+| P11 | G | Poignée de largeur sur l'image du bloc « Texte et image » : la largeur est écrite, l'image ne change pas (la mise en page du bloc l'emporte). À confirmer à la main. | Canevas |
+| P12 | M | Dialogue « Sauvegarder » : le champ Description n'a pas le curseur à l'ouverture. | Sauvegarde |
+| P13 | M | Mode avec classes : après l'ajout d'une classe, la pastille combinée annonce « 0 élément ». | Styles |
 
 ## 3. Le mode sans classes n'est pas tenu jusqu'au bout
 
@@ -189,3 +193,38 @@ contenus ; Localisation ; aperçu ; avertissements de la génération ; recherch
 4. Première publication : assistant, hébergeur proposé, ou état actuel.
 5. Vocabulaire : une liste de noms par objet (§ 5) à figer avant la 1.0.
 6. Ordre : pannes B (P1, P2), puis § 3, puis § 4, puis § 5 à 7.
+
+## 11. Second passage
+
+| Zone | Essai | Résultat |
+| --- | --- | --- |
+| Import HTML | site de 3 pages importé par `revel import`, rouvert dans l'éditeur, régénéré et comparé à l'original | fidèle (hauteur, tailles, couleurs, grille) ; en-tête et pied reconnus, barre de navigation refaite, 3 cartes devenues un composant à 4 propriétés ; seul écart : l'espace entre les liens du menu. `import-check` annonce pourtant « 0/3 pages équivalentes » ; calques nommés d'après les classes d'origine (« A top », « Btn ») |
+| Templates | 5 des 27 templates créés et générés | sans erreur ; niveau visuel au-dessus des blocs du volet Ajouter (capture `f06-tpl-shop.png`) |
+| Lottie, modèle 3D | fichiers importés, choisis, générés | fonctionnent dans le canevas et sur le site (capture `site-boutique.png`) |
+| Panier | ajout, quantités, retrait, total, rechargement | fonctionne ; pas d'outil « pastille de panier » pour l'en-tête (le template Boutique en a une) |
+| Sauvegarde | version créée, comparée, restaurée | fonctionne ; le détail montre des fichiers techniques et le JSON du site ligne à ligne (illisible pour un débutant) |
+| Publication SFTP | envoi vers un serveur d'essai local | aperçu, envoi de 102 fichiers, second envoi limité au fichier changé |
+| Mettre en ligne | dialogue relevé | 6 hébergeurs, « Autre », message de l'hébergeur à coller : lisible (capture `f09-hebergement.png`) |
+| Assistants IA | serveur lancé, actions listées | 31 actions, clé exigée, description OpenAPI |
+| Glisser-déposer | déplacer, Alt+glisser | fonctionnent |
+| Mode avec classes | états, classe ajoutée, panneau Classes | états riches (Survol, Appui, Focus clavier, Page actuelle, survol d'un parent) ; le mode sans classes n'a pas d'équivalent pour « Page actuelle », « Focus clavier » et le survol d'un parent |
+
+Ajouts aux listes :
+- § 3 (mode sans classes) : pas d'état « Page actuelle » pour le lien du menu de la page affichée.
+- § 4 : pastille de panier à offrir comme outil ; détail d'une version à résumer en clair.
+- § 5 : message de `import-check` à reformuler.
+
+## 12. Historique git : clés et mots de passe
+
+Recherche dans les lignes ajoutées par les 233 commits (toutes branches et étiquettes) : clés privées, jetons
+(GitHub, AWS, OpenAI, Anthropic, Slack, Google, Figma), JWT, adresses avec identifiants, affectations de mot
+de passe, fichiers `.env`, `.pem`, `.key`. **Aucun secret trouvé.** Seules valeurs relevées : jetons factices
+du simulateur et des tests, noms de secrets cités sans valeur dans `release.yml`, identifiant public de
+l'application OAuth. Auteurs des commits : deux adresses « noreply » de GitHub.
+
+Hors secrets : `contact@alunites.com`, `site@alunites.com`, le domaine `alunites.com` et le numéro
+« +33 4 72 27 03 74 » servent d'exemples dans des tests, le simulateur et une info de l'interface
+(`inspector.rs:826`). À remplacer par des valeurs fictives s'il s'agit des vraies coordonnées.
+
+Contrôle fait par expressions régulières ; gitleaks n'a pas pu être installé dans la session. Un passage de
+gitleaks ou de l'analyse de secrets de GitHub confirmerait.

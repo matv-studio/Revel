@@ -2737,5 +2737,6 @@ Réponses de l'utilisateur : maquette « date corrigée » validée ; projet « 
 - **En suspens** : l'étape SignPath du workflow `release.yml` (elle demande l'identifiant d'organisation, le
   projet et la politique de signature donnés par SignPath à l'acceptation ; elle s'insère entre la
   construction Windows et le calcul des signatures de mise à jour, qui doivent porter sur les fichiers
-  signés) ; la signature macOS (compte Apple Developer payant, D-09) ; le titulaire exact du droit d'auteur
-  si « MATV Studio » n'est pas la bonne entité ; la licence des autres apps internes.
+  signés) ; la signature macOS (compte Apple Developer payant, D-09) ; la licence des autres apps internes.
+- Titulaire du droit d'auteur « MATV Studio » : confirmé par l'utilisateur le 23/11/2026.
+- Historique contrôlé le 23/11/2026 (233 commits) : aucune clé ni mot de passe (détail : `docs/AUDIT-1.0.md`, § 12).

@@ -25,6 +25,10 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   depuis une carte de liste sans propriété ni « Contenu ». En attente : les décisions du § 10 du rapport.
   Non couvert : import, panier, Lottie et 3D avec fichiers, versions, publication réelle, assistants IA,
   templates, traduction automatique, application de bureau réelle.
+- **Second passage (23/11, soir)** : import HTML, templates, Lottie, 3D, panier, sauvegarde, publication SFTP,
+  serveur des assistants, glisser-déposer, mode avec classes : rapport § 11. Historique git contrôlé, aucun
+  secret (§ 12) ; coordonnées de l'agence utilisées comme exemples à remplacer si elles sont réelles. Sur le PC,
+  les fichiers temporaires vont dans `_obso\<date>\` (demande de l'utilisateur).
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

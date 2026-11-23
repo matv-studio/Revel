@@ -6,6 +6,7 @@ name = "revel-ui"
 version = "0.8.1"
 edition = "2024"
 publish = false
+license = "MIT"
 
 [dependencies]
 revel-protocol = { path = "../../crates/revel-protocol" }

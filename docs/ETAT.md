@@ -9,6 +9,17 @@ Produite par `tools/etat-public.py`, mise à jour en même temps que la note (r�
 Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
 
+## 23/11/2026 : licence MIT et politique de signature (D-192) ; audit d'interface avant la 1.0
+
+- **Revel est sous licence MIT** depuis ce commit : `LICENSE`, `license = "MIT"` dans les manifestes, README
+  (sections « Licence » et « Code signing policy »), `docs/CODE-SIGNING-POLICY.md`, `docs/LICENCES-TIERCES.md`.
+  D-08 close. Voie de signature Windows : SignPath Foundation (candidature, réglages et secrets : l'utilisateur).
+  Étape SignPath du workflow `release.yml` : à écrire après l'acceptation (identifiants donnés par SignPath).
+- Le brouillon 0.8.1 est construit sur `28b4a85`, avant la licence : la première version sous MIT sera la suivante.
+- **Audit demandé le 23/11** : parcours complet de l'interface en utilisateur venu de Framer, site d'essai
+  employant presque tous les outils, comparaison avec Framer, rapport pour la 1.0 (à modifier, ajuster,
+  remplacer, retirer). Aucune modification de Revel pendant l'audit.
+
 ## Travail du 19 au 22/11/2026 : site Alunites (D-190), champs CMS dans un composant et anti-spam (D-191)
 
 - 0.8.0 publiée par l'utilisateur le 19/11.
@@ -969,7 +980,7 @@ doit être ajoutée au simulateur (liste des commandes relayées au pont) et à 
 - Application OAuth « Revel » (matv-studio) : Client ID `Ov23liuo9dnJsp95C633`, device flow activé (vérifié).
 - Adresse du dépôt : https://github.com/matv-studio/Revel.git (copie du PC réglée sur cette adresse).
 
-## Dépôt `matv-studio/Revel` (public depuis le 14/10/2026, sans licence : tous droits réservés)
+## Dépôt `matv-studio/Revel` (public depuis le 14/10/2026 ; licence MIT depuis le 23/11/2026, D-192)
 - **Étape 2 terminée** : étiquettes `step-2` (075b76f, 0.2.1) puis `step-2.12` (27b4ec2, **0.2.2**), puis 2.13 et
   2.14 (corrections du 15/10/2026).
 - **Étape 3 terminée** (plan : `docs/ETAPE-3.md`, version **0.3.0**) : 3.1 contenus du CMS, 3.2 texte riche,
@@ -1415,7 +1426,7 @@ remise de la recréation).
   D-100 informations du site, D-101 ergonomie (rôles, onglets, conteneurs), D-102 7.10 terminée,
   D-103 plan du site nodal, D-104 paramètres réorganisés, D-105 calque masqué dans le canevas et champs de média,
   D-106 profil, retour au site, polices dans Général, listes des médias.
-- Ouvertes : D-07 identifiant d'application, D-08 licence, D-09 signature de code (options rappelées le
+- Ouvertes : D-07 identifiant d'application, D-09 signature de code (D-08 licence : close par D-192) (options rappelées le
   19/10/2026 : Azure Artifact Signing 9,99 USD/mois pour les organisations de l'UE, certificat OV 150 à 300 USD/an,
   Microsoft Store en MSIX, Apple Developer 99 USD/an ; SmartScreen avertit tant que la réputation n'est pas faite).
 

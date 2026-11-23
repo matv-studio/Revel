@@ -36,6 +36,8 @@
     "active": true,
     "targets": "all",
     "category": "DeveloperTool",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 MATV Studio",
     "shortDescription": "Visual website builder",
     "windows": {
       "nsis": {

@@ -280,5 +280,11 @@ module peut revenir seul à une étape tant que son interface publique n'a pas c
 
 ## Licence
 
-Aucune licence n'est encore choisie (décision D-08 ouverte) : le code est visible, mais tous les droits sont
-réservés ; il ne peut être ni copié, ni redistribué, ni modifié sans autorisation.
+Revel est un logiciel libre sous [licence MIT](LICENSE) : il peut être utilisé, copié, modifié et redistribué,
+y compris à des fins commerciales, à condition de conserver la mention de droit d'auteur et le texte de la
+licence. Les composants tiers gardent leurs propres licences : [docs/LICENCES-TIERCES.md](docs/LICENCES-TIERCES.md).
+
+## Code signing policy
+
+Signature des installateurs Windows, rôles de l'équipe et confidentialité :
+[Code signing policy](docs/CODE-SIGNING-POLICY.md).

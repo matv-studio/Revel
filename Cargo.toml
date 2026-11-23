@@ -10,6 +10,7 @@ version = "0.8.1"
 edition = "2024"
 rust-version = "1.99"
 authors = ["MATV Studio"]
+license = "MIT"
 publish = false
 repository = "https://github.com/matv-studio/revel"
 

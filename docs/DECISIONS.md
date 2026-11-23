@@ -1920,11 +1920,9 @@ glissent à la souris ; un élément `display:contents` n'a pas de boîte (CSSOM
 (`tauri.conf.json`). Il détermine les dossiers de données et les mises à jour : le changer après diffusion casse la continuité.
 Basé sur le domaine `revel-studio.app`, libre mais non enregistré.
 
-**D-08 — ouverte.** Licence du code : propriétaire, MIT/Apache-2.0, GPL… Le dépôt est public depuis le 14/10/2026
-(D-17) sans licence : tous droits réservés jusqu'à la décision. Une licence ouverte ne peut pas être retirée des
-versions déjà publiées sous cette licence.
+**D-08 — close le 23/11/2026 par D-192** (licence MIT).
 
-**D-09 — ouverte (étape 6).** Signature de code : certificat Windows (sinon avertissement SmartScreen), compte Apple Developer (sinon blocage Gatekeeper).
+**D-09 — ouverte (étape 6 ; voie Windows choisie le 23/11/2026 : SignPath Foundation, D-192).** Signature de code : certificat Windows (sinon avertissement SmartScreen), compte Apple Developer (sinon blocage Gatekeeper).
 - Préparé le 17/10/2026 (6.7) : la construction des installateurs signe dès que les secrets et variables du
   dépôt sont déclarés (`.github/workflows/release.yml`, étape « Signatures et mises à jour ») ; sans eux,
   installateurs non signés sous Windows et signés « ad hoc » sous macOS.
@@ -2714,3 +2712,30 @@ Réponses de l'utilisateur : maquette « date corrigée » validée ; projet « 
   par `revel-form.php` ; champ piège renommé `website_url` (ancien nom encore reconnu). Sans JavaScript, le
   formulaire ne part plus (message). Essayé avec PHP : envoi direct refusé, envoi en moins de 3 s refusé,
   envoi normal accepté. Pas de service tiers. En suspens : CAPTCHA si des envois à la main persistent.
+
+**D-192 — 23/11/2026 — prise (choix de l'utilisateur : « toutes mes apps en open source et signées »).**
+**Licence MIT et signature Windows par SignPath Foundation.** Clôt D-08.
+- **Licence** : MIT, titulaire « MATV Studio » (champ `authors` des manifestes), fichier `LICENSE` à la racine,
+  `license = "MIT"` dans tous les manifestes Cargo et dans le paquet Tauri. Elle vaut à partir de ce commit ;
+  les versions publiées avant (jusqu'à 0.8.0, et le brouillon 0.8.1 construit sur `28b4a85`) n'en portent pas.
+  Une licence ouverte ne se retire pas des versions qui la portent.
+- **Pourquoi MIT** : la plus simple des licences approuvées par l'OSI, compatible avec toutes les dépendances
+  (relevé : `docs/LICENCES-TIERCES.md` — 812 et 206 paquets Rust, tous sous licence OSI, aucun copyleft fort
+  imposé ; MPL-2.0 pour cinq paquets utilisés sans modification), et condition d'entrée du programme de
+  SignPath Foundation (licence OSI, pas de double licence commerciale, aucun composant propriétaire).
+- **Signature Windows** : SignPath Foundation (gratuit pour les projets libres ; éditeur affiché « SignPath
+  Foundation »). Conditions vérifiées sur signpath.org/terms le 23/11/2026 : projet publié et maintenu,
+  constructions par la CI depuis le dépôt public, double authentification de l'équipe, rôles déclarés,
+  page « Code signing policy » liée depuis l'accueil du dépôt, désinstallation, approbation manuelle de
+  chaque version, métadonnées produit identiques d'une version à l'autre. Page écrite :
+  `docs/CODE-SIGNING-POLICY.md` (en anglais, lue par SignPath), liée depuis le README.
+- **Confidentialité déclarée** : aucune télémétrie ; seule connexion non demandée, la vérification des mises
+  à jour au lancement (liste des versions sur GitHub, rien d'envoyé). À revoir si une fonction en ajoute.
+- **Reste à l'utilisateur** (réglages et secrets, hors de portée de Claude) : double authentification sur
+  GitHub, candidature sur signpath.org, installation de l'application GitHub de SignPath, déclaration des
+  identifiants et du jeton dans le dépôt.
+- **En suspens** : l'étape SignPath du workflow `release.yml` (elle demande l'identifiant d'organisation, le
+  projet et la politique de signature donnés par SignPath à l'acceptation ; elle s'insère entre la
+  construction Windows et le calcul des signatures de mise à jour, qui doivent porter sur les fichiers
+  signés) ; la signature macOS (compte Apple Developer payant, D-09) ; le titulaire exact du droit d'auteur
+  si « MATV Studio » n'est pas la bonne entité ; la licence des autres apps internes.

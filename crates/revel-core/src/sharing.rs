@@ -22,11 +22,17 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::path::{Component, Path};
+use std::sync::Mutex;
 
 /// Extension des fichiers de modèle.
 pub const EXT: &str = "revel-template";
-/// Catalogue proposé par défaut (dépôt GitHub public).
-pub const DEFAULT_CATALOG: &str = "matv-studio/revel-templates";
+/// Dépôt dont le dossier `templates/` fournit les modèles de Revel (D-194) : lu en ligne, gardé
+/// sur l'ordinateur ; un modèle s'ajoute ou se retire sans nouvelle version de Revel.
+pub const TEMPLATES_REPO: &str = "matv-studio/Revel";
+/// Dossier des modèles dans ce dépôt.
+pub const TEMPLATES_DIR: &str = "templates";
+/// Taille totale lue au plus pour les modèles de Revel (textes seuls).
+const TEMPLATES_MAX: u64 = 64 * 1024 * 1024;
 const FORMAT: u32 = 1;
 /// Taille au-delà de laquelle GitHub refuse un fichier.
 const GITHUB_MAX: u64 = 100 * 1024 * 1024;
@@ -525,7 +531,149 @@ pub struct CatalogEntry {
     pub updated: String,
 }
 
+/// État des modèles de Revel après une lecture du catalogue.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct TemplatesState {
+    /// Nombre de modèles disponibles.
+    pub count: usize,
+    /// Révision du catalogue chargé (vide : aucun).
+    pub revision: String,
+    /// Vrai si de nouveaux fichiers viennent d'être téléchargés.
+    pub updated: bool,
+    /// Vrai si le catalogue en ligne n'a pas pu être lu (modèles gardés, s'il y en a).
+    pub offline: bool,
+}
+
 impl Core {
+    /// Dossier où les modèles de Revel sont gardés sur l'ordinateur.
+    fn templates_cache(&self) -> std::path::PathBuf {
+        self.config_dir().join("templates")
+    }
+
+    /// Modèles en mémoire : ceux du dossier local (essais, développement), sinon ceux gardés sur
+    /// l'ordinateur. Sans effet s'ils sont déjà chargés.
+    pub fn templates_ready(&self) {
+        if crate::templates::is_empty() && crate::templates::local_dir().is_none() {
+            crate::templates::load_dir(&self.templates_cache());
+        }
+    }
+
+    fn templates_state(&self, updated: bool, offline: bool) -> TemplatesState {
+        let revision = std::fs::read(self.templates_cache().join(crate::templates::INDEX))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<crate::templates::Index>(&b).ok())
+            .map(|i| i.revision)
+            .unwrap_or_default();
+        TemplatesState {
+            count: crate::templates::ids().len(),
+            revision,
+            updated,
+            offline,
+        }
+    }
+
+    /// Lit le catalogue des modèles de Revel en ligne et télécharge ce qui a changé. Hors ligne ou
+    /// en cas d'échec : les modèles gardés restent en place (`offline`). Avec un dossier local
+    /// (`REVEL_TEMPLATES_DIR`, sources à côté du programme), rien n'est téléchargé.
+    pub fn templates_sync(&self) -> TemplatesState {
+        if crate::templates::local_dir().is_some() {
+            return TemplatesState {
+                count: crate::templates::ids().len(),
+                revision: "local".into(),
+                ..Default::default()
+            };
+        }
+        self.templates_ready();
+        match self.templates_fetch() {
+            Ok(updated) => self.templates_state(updated, false),
+            Err(_) => self.templates_state(false, true),
+        }
+    }
+
+    /// Vrai si de nouveaux fichiers ont été écrits.
+    pub(crate) fn templates_fetch(&self) -> Result<bool> {
+        use crate::templates as tpl;
+        let agent = crate::fonts::agent(30);
+        let url = |rel: &str| raw_url(TEMPLATES_REPO, &format!("{TEMPLATES_DIR}/{rel}"));
+        let index_bytes = get_bytes(&agent, &url(tpl::INDEX))?;
+        let index: tpl::Index = serde_json::from_slice(&index_bytes)
+            .map_err(|e| template_err("error-template-catalog", &e.to_string()))?;
+        let cache = self.templates_cache();
+        let kept = std::fs::read(cache.join(tpl::INDEX))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<tpl::Index>(&b).ok());
+        if kept.is_some_and(|k| k.revision == index.revision) && !tpl::is_empty() {
+            return Ok(false);
+        }
+        if !index.files.iter().all(|p| safe_rel(p)) {
+            return Err(template_err("error-template-catalog", tpl::INDEX));
+        }
+        // Adresses calculées ici : l'adresse de remplacement des essais est propre à ce fil.
+        let paths: Vec<(&String, String)> = index.files.iter().map(|p| (p, url(p))).collect();
+        // Téléchargement par petits lots en parallèle (quelques centaines de petits fichiers).
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let total = std::sync::atomic::AtomicU64::new(0);
+        let got: Mutex<Vec<(String, String)>> = Mutex::new(Vec::with_capacity(paths.len()));
+        let failed: Mutex<Option<CoreError>> = Mutex::new(None);
+        std::thread::scope(|sc| {
+            for _ in 0..8 {
+                sc.spawn(|| {
+                    let agent = crate::fonts::agent(30);
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some((rel, address)) = paths.get(i) else {
+                            break;
+                        };
+                        if failed.lock().unwrap().is_some() {
+                            break;
+                        }
+                        let res = get_bytes(&agent, address).and_then(|b| {
+                            let n = total
+                                .fetch_add(b.len() as u64, std::sync::atomic::Ordering::Relaxed);
+                            if n + b.len() as u64 > TEMPLATES_MAX {
+                                return Err(template_err("error-template-file", "trop lourd"));
+                            }
+                            String::from_utf8(b)
+                                .map_err(|e| template_err("error-template-file", &e.to_string()))
+                        });
+                        match res {
+                            Ok(text) => got.lock().unwrap().push(((*rel).clone(), text)),
+                            Err(e) => *failed.lock().unwrap() = Some(e),
+                        }
+                    }
+                });
+            }
+        });
+        if let Some(e) = failed.into_inner().unwrap() {
+            return Err(e);
+        }
+        let mut files = got.into_inner().unwrap();
+        files.sort();
+        // Jeu complet et conforme à l'index, sinon rien n'est remplacé.
+        if tpl::revision(&files) != index.revision {
+            return Err(template_err("error-template-catalog", "révision"));
+        }
+        let fresh = cache.with_extension("new");
+        let _ = std::fs::remove_dir_all(&fresh);
+        for (rel, text) in &files {
+            let f = fresh.join(rel);
+            if let Some(d) = f.parent() {
+                std::fs::create_dir_all(d)?;
+            }
+            std::fs::write(f, text)?;
+        }
+        std::fs::write(fresh.join(tpl::INDEX), &index_bytes)?;
+        let old = cache.with_extension("old");
+        let _ = std::fs::remove_dir_all(&old);
+        if cache.exists() {
+            std::fs::rename(&cache, &old)?;
+        }
+        std::fs::rename(&fresh, &cache)?;
+        let _ = std::fs::remove_dir_all(&old);
+        tpl::set_files(files);
+        Ok(true)
+    }
+
     /// Modèle tiré d'un site : `full` : tous les fichiers (catalogue) ; sinon fichier léger
     /// (images en attente en ligne, vidéos, sons et documents retirés). Fichiers de code
     /// laissés de côté (nombre rendu).

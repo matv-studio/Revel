@@ -306,7 +306,10 @@ n'existe pas ou n'est pas lisible aujourd'hui (« Introuvable » dans Réglages 
   d'un site sans connexion) ;
 - liste gardée en cache sur l'ordinateur, pour rouvrir « Nouveau site » hors ligne.
 
-À décider à la maquette : ce que montre « Nouveau site » sans connexion ; si « Vitrine » reste embarqué.
+Fait le 23/11 côté cœur (dossier, index, lecture en ligne, copie gardée, essais) ; le format écrit des modèles
+est gardé, donc leurs deux langues et le choix clair / sombre à la création.
+
+À valider à la maquette : ce que montre « Nouveau site » sans connexion ; « Vitrine » embarqué ou non.
 
 ### 10.7 Ordre des travaux (validé par l'utilisateur)
 

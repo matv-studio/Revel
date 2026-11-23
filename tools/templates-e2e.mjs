@@ -293,7 +293,12 @@ try {
   const meta = (await page.textContent('.new-site__chosen')).trim();
   const langHidden = !(await page.$('.new-site .site-bg'));
   check('templates : fichier ouvert dans la galerie, choisi, langue et couleurs du modèle', chosen === 'Boutique essai' && langHidden && /attente/.test(meta), meta.replace(/\s+/g, ' ').slice(0, 120));
-  await page.click('.new-site__source [data-source="catalog"]');
+  // D-194 : plus de catalogue par défaut (les modèles de Revel viennent de son propre dépôt) ;
+  // un catalogue s'ajoute par le « + » de la galerie.
+  await page.click('.new-site__add-catalog');
+  await page.fill('.new-site__catalog-input input', 'matv-studio/revel-templates');
+  await page.press('.new-site__catalog-input input', 'Enter');
+  if (!(await page.$('.template-card[data-template^="catalog:"]'))) await page.click('.new-site__source [data-source="catalog"]');
   await page.waitForSelector('.template-card[data-template^="catalog:"]');
   const catCards = await page.$$eval('.template-card[data-template^="catalog:"]', (c) => c.length);
   await page.click('.template-card[data-template$="#bistrot"]');

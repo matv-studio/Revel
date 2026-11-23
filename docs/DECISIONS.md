@@ -2780,6 +2780,24 @@ catalogue par défaut `matv-studio/revel-templates` introuvable. À faire : doss
 `catalog.json` dans le dépôt Revel, lecteur acceptant un dossier d'un dépôt, catalogue par défaut sur ce
 dossier, seul « Vide » encore compilé, liste gardée en cache. En suspens : « Nouveau site » sans connexion ;
 « Vitrine » embarqué ou non (maquette).
+- **Fait le 23/11/2026 (cœur, sans changement d'écran)** : dossier `templates/` à la racine du dépôt (les 27
+  modèles, `_kit/`, `photos.json`, `index.json`, `LISEZMOI.md`), `build.rs` supprimé : plus aucun modèle n'est
+  compilé (« Vide » est écrit par le code). Le format écrit des modèles est gardé (deux langues
+  `[[fr||en]]`, couleurs claires ou sombres au choix à la création) : c'est pourquoi le dossier est lu tel
+  quel plutôt que transformé en « paquets » de catalogue, qui n'ont qu'une langue. `index.json` liste les
+  fichiers et porte une révision (empreinte des chemins et des contenus) ; `revel templates-index templates`
+  le refait, un essai le contrôle. `Core::templates_sync` lit l'index en ligne
+  (`raw.githubusercontent.com/matv-studio/Revel/HEAD/templates/`), télécharge les fichiers par huit, vérifie
+  que le jeu reçu correspond à la révision, remplace la copie gardée dans le dossier de réglages
+  (`templates/`) d'un seul geste ; même révision : rien n'est téléchargé ; hors ligne ou jeu incomplet : la
+  copie gardée reste. Lecture lancée en arrière-plan au démarrage de l'application, et par `revel templates` /
+  `revel new`. Développement et essais : `REVEL_TEMPLATES_DIR`, sinon le dossier `templates/` des sources à
+  côté du programme. Catalogues ajoutés par l'utilisateur : mécanisme existant (Réglages › Templates, « + » de
+  « Nouveau site »), inchangé ; le catalogue par défaut `matv-studio/revel-templates`, introuvable, est retiré.
+  Reste : les écrans (onglet des modèles de Revel, état hors connexion) après validation de la maquette ;
+  conséquence à connaître : une version de Revel plus ancienne lit le même dossier `HEAD`, un modèle qui
+  demande une nouveauté du cœur doit donc attendre que la version qui la porte soit répandue (piste : champ
+  « version minimale » par modèle).
 - Compléments du 23/11/2026, 19 h 56 (utilisateur) : conversion inverse (calques → classes) par regroupement,
   par type d'outil, des valeurs identiques ou proches ; **une seule source par template**, convertie à la
   création selon le mode (chaque template sert d'essai de la conversion) ; catalogue de Revel lu par défaut,

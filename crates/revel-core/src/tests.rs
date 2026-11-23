@@ -3717,3 +3717,78 @@ fn origine_d_un_flux_vers_la_marque() {
         "Superficiel"
     );
 }
+
+/// Faux raw.githubusercontent.com qui sert le dossier `templates/` des sources ; `index` remplace
+/// son `index.json`.
+fn faux_catalogue_revel(index: Option<String>) -> String {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let dir = crate::templates::local_dir().unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut line = String::new();
+            let mut r = BufReader::new(stream.try_clone().unwrap());
+            let _ = r.read_line(&mut line);
+            let mut h = String::new();
+            while r.read_line(&mut h).is_ok_and(|n| n > 2) {
+                h.clear();
+            }
+            let path = line.split_whitespace().nth(1).unwrap_or("").to_string();
+            let rel = path.strip_prefix("/raw/matv-studio/Revel/HEAD/templates/");
+            let (status, out) = match rel {
+                Some("index.json") if index.is_some() => (200, index.clone().unwrap().into_bytes()),
+                Some(rel) => match std::fs::read(dir.join(rel)) {
+                    Ok(b) => (200, b),
+                    Err(_) => (404, b"404".to_vec()),
+                },
+                None => (404, b"404".to_vec()),
+            };
+            let _ = write!(
+                stream,
+                "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                out.len()
+            );
+            let _ = stream.write_all(&out);
+        }
+    });
+    format!("{base}/raw")
+}
+
+/// Modèles de Revel lus en ligne (D-194) : dossier téléchargé d'après son index, gardé sur
+/// l'ordinateur ; rien à refaire tant que la révision n'a pas changé ; un jeu qui ne correspond
+/// pas à son index n'est pas gardé.
+#[test]
+fn modeles_de_revel_lus_en_ligne() {
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    crate::sharing::override_raw(Some(faux_catalogue_revel(None)));
+    assert!(c.templates_fetch().unwrap(), "premier téléchargement");
+    let cache = d.path().join("config/templates");
+    assert!(cache.join("index.json").is_file());
+    assert!(cache.join("agency/template.json").is_file());
+    assert!(cache.join("_kit/base.css").is_file());
+    assert_eq!(
+        crate::templates::read_dir(&cache),
+        crate::templates::read_dir(&crate::templates::local_dir().unwrap()),
+        "copie identique au dossier des sources"
+    );
+    assert!(
+        !c.templates_fetch().unwrap(),
+        "même révision : rien à télécharger"
+    );
+    // Index annonçant une autre révision que celle des fichiers servis : refusé, copie gardée.
+    let mut index = crate::templates::index_of(&crate::templates::local_dir().unwrap());
+    index.revision = "0000000000000000".into();
+    crate::sharing::override_raw(Some(faux_catalogue_revel(Some(
+        serde_json::to_string(&index).unwrap(),
+    ))));
+    assert!(c.templates_fetch().is_err());
+    assert!(cache.join("agency/template.json").is_file());
+    // Hors ligne : erreur, copie gardée.
+    crate::sharing::override_raw(Some("http://127.0.0.1:9/raw".into()));
+    assert!(c.templates_fetch().is_err());
+    assert!(cache.join("index.json").is_file());
+    crate::sharing::override_raw(None);
+}

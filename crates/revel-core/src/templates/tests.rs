@@ -104,3 +104,32 @@ fn outils_ecrits() {
         println!("=== {p:?}\n{}", markup::print(&nodes));
     }
 }
+
+/// `templates/index.json` suit le dossier : l'application ne télécharge que ce qu'il liste.
+/// Après un changement de modèle : `revel templates-index templates`.
+#[test]
+fn index_du_dossier_a_jour() {
+    let dir = local_dir().expect("dossier templates/ des sources");
+    let written: Index =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(INDEX)).expect("index.json"))
+            .expect("index.json lisible");
+    assert_eq!(
+        written,
+        index_of(&dir),
+        "refaire : revel templates-index templates"
+    );
+}
+
+/// Un dossier chargé remplace les modèles en mémoire ; un dossier sans modèle est refusé.
+#[test]
+fn dossier_sans_modele_refuse() {
+    let d = std::env::temp_dir().join(format!("revel-tpl-vide-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(d.join("lisezmoi.txt"), "rien").unwrap();
+    assert!(!load_dir(&d));
+    assert!(
+        !ids().is_empty(),
+        "les modèles déjà chargés restent en place"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}

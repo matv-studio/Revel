@@ -408,6 +408,17 @@ fn site_templates(s: State<AppState>, lang: String) -> Vec<revel_protocol::Templ
     s.core.site_templates(&lang)
 }
 
+/// Lit le catalogue des modèles de Revel en ligne et télécharge ce qui a changé (D-194).
+#[tauri::command]
+async fn templates_sync(s: State<'_, AppState>) -> Result<revel_core::sharing::TemplatesState, ()> {
+    let core = s.core.clone();
+    Ok(
+        tauri::async_runtime::spawn_blocking(move || core.templates_sync())
+            .await
+            .unwrap_or_default(),
+    )
+}
+
 /// Collections de contenus et leurs entrées (vue CMS).
 #[tauri::command]
 async fn cms_collections(
@@ -1688,6 +1699,13 @@ pub fn run() {
             } else {
                 Mcp::default()
             };
+            // Modèles de Revel : catalogue lu en arrière-plan au lancement (D-194).
+            {
+                let core = core.clone();
+                std::thread::spawn(move || {
+                    core.templates_sync();
+                });
+            }
             app.manage(AppState {
                 core,
                 config_dir: dir,
@@ -1788,6 +1806,7 @@ pub fn run() {
             versions_receive,
             github_sites,
             site_templates,
+            templates_sync,
             github_sync_all,
             links_check,
             versions_resolve,

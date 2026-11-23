@@ -43,6 +43,10 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   panneau détruit) et P3 (info-bulles `anim-d-appear-unveil`, `anim-d-hover-follow`, `anim-d-scroll-drops` dans
   les 15 langues) ; 426 essais d'éditeur. Décisions complétées : conversion inverse par regroupement des
   valeurs proches, une seule source par template.
+- **Templates sortis du programme (D-194, 23/11, 21 h)** : dossier `templates/` à la racine (index :
+  `revel templates-index templates` après tout changement, contrôlé par un essai), lecture en ligne et copie
+  gardée (`Core::templates_sync`, `sharing.rs` ; magasin en mémoire `templates/mod.rs`), `build.rs` supprimé.
+  Écrans de « Nouveau site » : maquette à valider avant code.
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

@@ -1051,8 +1051,9 @@ pub struct AppSettings {
     pub start_side: bool,
 }
 
+/// Catalogues ajoutés par l'utilisateur ; les modèles de Revel viennent de son propre dépôt (D-194).
 fn default_catalogs() -> Vec<String> {
-    vec!["matv-studio/revel-templates".into()]
+    Vec::new()
 }
 
 fn default_links() -> String {

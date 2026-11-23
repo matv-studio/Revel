@@ -72,6 +72,12 @@ enum Command {
     },
     /// Liste les modèles de site (identifiant, catégorie, nom).
     Templates,
+    /// Refait `index.json` d'un dossier de modèles (`templates/` du dépôt de Revel), lu par
+    /// l'application pour savoir quels fichiers télécharger.
+    TemplatesIndex {
+        /// Dossier des modèles.
+        dir: PathBuf,
+    },
     /// Importe un projet Eleventy : écrit `site.revel.json` à sa racine.
     ImportEleventy {
         dir: PathBuf,
@@ -364,10 +370,22 @@ fn main() -> Result<()> {
                 p.save_rebuilt(r)?;
             }
         }
+        Command::TemplatesIndex { dir } => {
+            let n = revel_core::templates::write_index(&dir)?;
+            println!(
+                "{} : {n} fichiers",
+                dir.join(revel_core::templates::INDEX).display()
+            );
+        }
         Command::Templates => {
             let config = std::env::temp_dir().join(format!("revel-tpl-{}", std::process::id()));
             let core =
                 revel_core::Core::new(&config, Box::new(revel_core::secrets::Memory::default()));
+            // Modèles lus dans le dossier local des sources, sinon dans le catalogue en ligne.
+            let st = core.templates_sync();
+            if st.offline && st.count == 0 {
+                eprintln!("catalogue des modèles illisible (connexion ?)");
+            }
             for t in core.site_templates(&cli.lang) {
                 println!("{}\t{}\t{}", t.id, t.category, t.name);
             }
@@ -394,6 +412,9 @@ fn main() -> Result<()> {
                         &config,
                         Box::new(revel_core::secrets::Memory::default()),
                     );
+                    if template != "blank" {
+                        core.templates_sync();
+                    }
                     core.new_site_template(&dir, &name, &cli.lang, template, &scheme)
                         .map_err(|e| anyhow::anyhow!("{e}"))?;
                 }

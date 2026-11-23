@@ -565,6 +565,7 @@ impl Core {
 
     /// Modèles proposés à la création d'un site (D-128), textes dans la langue `lang`.
     pub fn site_templates(&self, lang: &str) -> Vec<revel_protocol::TemplateInfo> {
+        self.templates_ready();
         templates::catalogue(lang)
             .into_iter()
             .map(|i| revel_protocol::TemplateInfo {
@@ -618,6 +619,7 @@ impl Core {
         let (site, files, fonts) = if template == "blank" || template.is_empty() {
             (starter::blank(name, lang, scheme), Vec::new(), Vec::new())
         } else {
+            self.templates_ready();
             let b = templates::build(template, name, lang, scheme).map_err(CoreError::Other)?;
             (b.site, b.files, b.fonts)
         };

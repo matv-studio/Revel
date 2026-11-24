@@ -489,7 +489,15 @@
     var boxOf = function (el) {
       return getComputedStyle(el).display === "contents" ? (el.querySelector("img,video") || el.firstElementChild || el) : el;
     };
-    var slides = function () { return Array.prototype.map.call(track.children, boxOf); };
+    var slides = function () {
+      // Piste remplacée sous le script (canevas de l'éditeur après le choix des images) : la
+      // nouvelle est reprise, sinon le compteur annonce « 1 / 0 » (audit P6).
+      if (!box.contains(track)) {
+        var fresh = box.querySelector("[data-revel-track]");
+        if (fresh) track = fresh;
+      }
+      return Array.prototype.map.call(track.children, boxOf);
+    };
     var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     // Fondu enchaîné (`fade`) : diapositives superposées, la courante seule visible ; pas de
     // défilement de la piste ni de glisser.

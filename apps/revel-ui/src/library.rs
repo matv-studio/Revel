@@ -843,7 +843,10 @@ pub fn Media() -> impl IntoView {
                     let over = folder_under(f64::from(e.client_x()), f64::from(e.client_y()));
                     sh.dragging.set(None);
                     sh.drop_on.set(None);
+                    // Clic droit : le menu seul, pas la fiche dessous (audit P10).
+                    let primary = e.button() == 0;
                     match drag.finish(Some(&e)) {
+                        None if !primary => {}
                         None => details.set(Some(url.get_value())),
                         Some((it, Some((parent, index)))) => crate::insert::insert_item(ui, ed, &it, parent, index),
                         Some((_, None)) => if let Some(f) = over { sh.put(&url.get_value(), &f) },

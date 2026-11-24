@@ -2681,13 +2681,28 @@ fn fields_of(ui: Ui, c: Option<&CmsCollection>) -> Vec<(String, String)> {
             if matches!(
                 f.kind.as_deref(),
                 Some("object" | "block" | "rich_text" | "code" | "image" | "file")
-            ) {
+            ) || f.name == "date"
+            {
+                // « Date » est déjà proposée en tête (audit P9 : deux entrées « Date »).
                 continue;
             }
             v.push((
                 format!("data.{}", f.name),
                 f.label.clone().unwrap_or_else(|| f.name.clone()),
             ));
+        }
+    }
+    v
+}
+
+/// Entrées d'un menu aux libellés tous différents (audit P9) : deux champs au même libellé
+/// reçoivent leur nom dans les fichiers entre parenthèses.
+fn distinct_labels(mut v: Vec<(String, String)>) -> Vec<(String, String)> {
+    let labels: Vec<String> = v.iter().map(|(_, l)| l.clone()).collect();
+    for (key, label) in v.iter_mut() {
+        if labels.iter().filter(|l| *l == label).count() > 1 {
+            let name = key.rsplit([':', '.']).next().unwrap_or(key);
+            *label = format!("{label} ({name})");
         }
     }
     v
@@ -5273,6 +5288,7 @@ fn bindings_in(
                         )
                         .collect()
                 })
+                .map(distinct_labels)
                 .unwrap_or_default()
         })
     };

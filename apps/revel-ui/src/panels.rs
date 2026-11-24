@@ -32,6 +32,7 @@ fn open_page(ed: Ed, url: String) {
 pub fn Cms() -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
+    let schema = crate::blocks::collections(ed);
     let open = RwSignal::new(None::<String>);
     let list = move || {
         ed.doc.with(|d| {
@@ -62,7 +63,11 @@ pub fn Cms() -> impl IntoView {
                                 on:click=move |_| open.update(|o| *o = if o.as_deref() == Some(i2.as_str()) { None } else { Some(i2.clone()) })>
                                 <span class="list-chevron">{move || if open.get().as_deref() == Some(i3.as_str()) { icons::chevron_down() } else { icons::chevron_right() }}</span>
                                 <span class="list-icon">{icons::database()}</span>
-                                <span class="list-label">{id.clone()}</span>
+                                <span class="list-label">{
+                                    // Nom donné à la collection, pas son identifiant (audit P8).
+                                    let id = id.clone();
+                                    move || schema.with(|cs| cs.iter().find(|c| c.id == id).map(crate::blocks::label_of)).unwrap_or_else(|| id.clone())
+                                }</span>
                                 <span class="list-count">{n}</span>
                             </button>
                             <Show when={let id = id.clone(); move || open.get().as_deref() == Some(id.as_str())}>

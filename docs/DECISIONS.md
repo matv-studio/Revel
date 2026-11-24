@@ -2896,3 +2896,19 @@ d'icônes et imports en maquette.**
 - **Icône des réglages** (retour du 24/11, 10 h 38) : tout ce qui ouvre des réglages porte l'icône de rouage
   de l'application (`icons::settings`), jamais un autre dessin ; « Manage libraries… » compris.
 
+**D-198 — 24/11/2026 — prise.**
+**Ordre de la suite (utilisateur, 24/11 à 14 h) et pannes mineures de l'audit.**
+- **Ordre** : pannes mineures → logique des outils (§ 4 de l'audit) → bibliothèques d'icônes → imports →
+  styles par calque → vocabulaire → tâche finale : refaire les templates, le site Alunites et le site MATV, en
+  essayant pendant la refonte des templates la conversion « classes > sans classes » et « sans classes >
+  classes ». Les outils passent avant les styles par calque pour ne pas refaire deux fois les templates.
+- **Bibliothèques d'icônes** (maquette validée) : la liste des noms est téléchargée, chaque dessin à
+  l'affichage ; Revel et Lucide actives au départ, les autres ajoutées en un clic.
+- **Imports** (maquette validée) : pages depuis un site Revel ou des fichiers HTML ; composant depuis un site
+  Revel, un fichier de composant ou un fichier HTML ; « Export component… ».
+- **Pannes corrigées** : P6, P7, P8, P9, P10, P12, P13, P15 (détail dans `docs/AUDIT-1.0.md`, § 2).
+- **En suspens** : P5 — afficher le libellé d'un champ « Choix » demande que le rendu connaisse le schéma des
+  collections (`.pages.yml`), aujourd'hui lu seulement par l'éditeur ; à décider : libellé partout, ou réglage
+  « libellé / valeur » sur l'élément. P11 et P14 : à reproduire (poignée de largeur d'une image de bloc ;
+  taille des textes d'un import Framer).
+

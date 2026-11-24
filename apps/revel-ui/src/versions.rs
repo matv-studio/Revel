@@ -718,6 +718,14 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
             })}
             {move || saving.get().map(|_| {
                 let msg = RwSignal::new(String::new());
+                // Curseur dans le champ à l'ouverture (audit P12 : `autofocus` ne vaut pas pour un
+                // élément ajouté après le chargement).
+                let field = NodeRef::<leptos::html::Input>::new();
+                request_animation_frame(move || {
+                    if let Some(i) = field.get_untracked() {
+                        let _ = i.focus();
+                    }
+                });
                 view! {
                     <div class="overlay" on:input=move |e| crate::dialog::mark_dirty(&e) on:mousedown=move |e| if crate::dialog::backdrop_click(&e) { saving.set(None) }>
                         <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="ver-save-title"
@@ -725,7 +733,7 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                             <h2 id="ver-save-title">{ui.t("versions-save")}</h2>
                             <label class="field">
                                 <span class="label">{ui.t("versions-message")}</span>
-                                <input class="input" autofocus=true placeholder=default_message(ui)
+                                <input class="input" node_ref=field autofocus=true placeholder=default_message(ui)
                                     prop:value=move || msg.get() on:input=move |e| msg.set(event_target_value(&e))/>
                             </label>
                             <div class="dialog-actions">

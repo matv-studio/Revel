@@ -862,9 +862,27 @@ pub fn Styles() -> impl IntoView {
     Effect::new(move |_| {
         let sel = selector.get();
         let _ = ed.load.get();
-        ed.count.set(None);
+        // Redemandé à chaque modification, puis une fois le canevas redessiné : juste après
+        // l'ajout d'une classe, aucun élément ne la porte encore (audit P13, « 0 élément »).
+        ed.doc.track();
+        if ed
+            .count
+            .with_untracked(|c| c.as_ref().is_none_or(|(s, _)| *s != sel))
+        {
+            ed.count.set(None);
+        }
         if !sel.is_empty() {
             ed.post(serde_json::json!({ "type": "count", "selector": sel }));
+            let later = sel.clone();
+            set_timeout(
+                move || {
+                    // Éditeur fermé entre-temps : rien à demander.
+                    if ed.doc.try_with_untracked(|_| ()).is_some() {
+                        ed.post(serde_json::json!({ "type": "count", "selector": later }));
+                    }
+                },
+                std::time::Duration::from_millis(450),
+            );
         }
     });
     // Nom court du point de rupture (« Ordinateur », « ≤ 900 px »), le nom complet en info-bulle.

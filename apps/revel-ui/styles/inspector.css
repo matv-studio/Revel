@@ -1040,3 +1040,5 @@
 .tool-empty > svg.icon { width: 20px; height: 20px; }
 /* D-197 — liste de collection d'un site sans collection : seulement l'invitation à en créer une */
 .collection-list.is-empty > :not(.tool-head):not(.tool-empty) { display: none; }
+/* Audit P7 — « Fonction » en tête du panneau : place laissée au bouton de liaison au site (coin haut droit) */
+.content-settings:has(> .siteinfo-toggle) > .tool-function:first-of-type .style-control { padding-right: calc(var(--control-sm) + var(--s-1)); }

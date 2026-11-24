@@ -285,9 +285,15 @@ pub struct SiteArg {
     pub site: Option<String>,
 }
 
+/// Adresse par défaut d'une page : l'accueil (audit P15).
+fn home_url() -> String {
+    "/".to_string()
+}
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct PageArg {
-    /// Page address, e.g. "/" or "/about/".
+    /// Page address, e.g. "/" or "/about/". Left out: the home page.
+    #[serde(default = "home_url")]
     pub url: String,
     #[serde(default)]
     pub site: Option<String>,
@@ -1993,6 +1999,15 @@ fn page_mode(path: &str) -> revel_markup::Mode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn get_page_sans_adresse_lit_l_accueil() {
+        // Audit P15 : `get_page` sans `url` répondait « missing field `url` ».
+        let a: super::PageArg = serde_json::from_str("{}").unwrap();
+        assert_eq!(a.url, "/");
+        let a: super::PageArg = serde_json::from_str(r#"{"url":"/about/"}"#).unwrap();
+        assert_eq!(a.url, "/about/");
+    }
     use crate::Reply;
     use revel_protocol::Failure;
 

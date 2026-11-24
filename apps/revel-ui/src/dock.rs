@@ -850,6 +850,8 @@ fn GroupView(
     let me = NodeRef::<leptos::html::Section>::new();
     let tabs2 = tabs.clone();
     let tabs3 = tabs.clone();
+    let tabs4 = StoredValue::new(tabs.clone());
+    let wheel_acc = StoredValue::new(0.0f64);
     view! {
         <section class="dock-group" class:is-floating=floating node_ref=me
             style:flex-grow=move || size().to_string() data-group=id>
@@ -886,14 +888,35 @@ fn GroupView(
             })}
             <header class="dock-head" on:contextmenu=move |e: ev::MouseEvent| {
                 if let Some(p) = active() { tab_menu(dock, ui, p, &e) }
-            }>
-                <div class="dock-tabs" role="tablist" data-tabs=id
-                    on:wheel=move |e: ev::WheelEvent| {
-                        // Molette : défilement horizontal des onglets qui ne tiennent pas.
-                        if let Some(t) = e.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) {
+            }
+                on:wheel=move |e: ev::WheelEvent| {
+                    // Molette sur le haut du panneau : onglet suivant ou précédent du groupe, comme
+                    // After Effects (audit du 24/11/2026). Pavé tactile : un onglet par geste
+                    // d'environ 60 px ; défilement horizontal (Maj) : onglets qui ne tiennent pas.
+                    if e.shift_key() || e.delta_x().abs() > e.delta_y().abs() {
+                        if let Some(t) = e.current_target()
+                            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                            .and_then(|h| h.query_selector(".dock-tabs").ok().flatten())
+                        {
                             t.set_scroll_left(t.scroll_left() + (e.delta_y() + e.delta_x()) as i32);
                         }
-                    }>
+                        return;
+                    }
+                    e.prevent_default();
+                    let acc = wheel_acc.get_value() + e.delta_y();
+                    if acc.abs() < 60.0 && e.delta_mode() == 0 {
+                        wheel_acc.set_value(acc);
+                        return;
+                    }
+                    wheel_acc.set_value(0.0);
+                    let list = tabs4.get_value();
+                    let Some(i) = active().and_then(|a| list.iter().position(|p| *p == a)) else { return };
+                    let next = if acc > 0.0 { i + 1 } else { i.wrapping_sub(1) };
+                    if let Some(p) = list.get(next).copied() {
+                        dock.layout.update(|l| l.activate(p));
+                    }
+                }>
+                <div class="dock-tabs" role="tablist" data-tabs=id>
                     {tabs.iter().map(|p| view! { <Tab dock group=id panel=*p/> }).collect_view()}
                 </div>
                 <div class="dock-menu-wrap">

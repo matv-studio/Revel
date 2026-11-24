@@ -676,6 +676,22 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
     let scheme = RwSignal::new("auto".to_string());
     let cat = RwSignal::new(String::new());
     let templates = RwSignal::new(Vec::<revel_protocol::TemplateInfo>::new());
+    // Modèles de Revel lus en ligne (D-194) : état de la dernière lecture, relecture demandée.
+    let tstate = RwSignal::new(None::<api::TemplatesState>);
+    let reload = RwSignal::new(0u32);
+    let sync = move || {
+        spawn_local(async move {
+            if let Ok(st) = api::templates_sync().await {
+                let changed =
+                    st.updated || templates.with_untracked(|t| t.is_empty()) && st.count > 0;
+                let _ = tstate.try_set(Some(st));
+                if changed {
+                    let _ = reload.try_update(|n| *n += 1);
+                }
+            }
+        });
+    };
+    sync();
     // Modèles partagés (D-132) : catalogue GitHub (lu à la première ouverture de l'onglet),
     // fichiers de modèle ouverts.
     let source = RwSignal::new("builtin");
@@ -747,6 +763,7 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
     // Modèles dans la langue choisie pour le site.
     Effect::new(move |_| {
         let l = lang.get();
+        reload.track();
         spawn_local(async move {
             if let Ok(list) = api::site_templates(&l).await {
                 templates.set(list);
@@ -906,15 +923,34 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                                 <button type="button" role="radio" data-source="builtin" class:is-on=move || source.get() == "builtin"
                                     aria-checked=move || (source.get() == "builtin").to_string()
                                     on:click=move |_| { source.set("builtin"); cat.set(String::new()) }>{ui.t("template-source-builtin")}</button>
+                                <Show when=move || ui.settings.with(|s| !s.template_catalogs.is_empty())>
                                 <button type="button" role="radio" data-source="catalog" class:is-on=move || source.get() == "catalog"
                                     aria-checked=move || (source.get() == "catalog").to_string()
                                     title=move || ui.settings.with(|s| s.template_catalogs.join(" · "))
                                     on:click=move |_| show_catalog()>{icons::cloud()}{ui.t("template-source-catalog")}</button>
+                                </Show>
                             </div>
                             <button type="button" class="icon-btn new-site__add-catalog" class:is-on=move || adding.get()
                                 title=ui.t("template-catalog-add-help") aria-label=ui.t("template-catalog-add")
                                 aria-expanded=move || adding.get().to_string()
                                 on:click=move |_| adding.update(|a| *a = !*a)>{icons::plus()}</button>
+                            // État des modèles de Revel : à jour, copie gardée, ou jamais lus.
+                            {move || tstate.get().map(|st| {
+                                let (off, tip) = if !st.offline {
+                                    (false, ui.tx("template-state-ok", &[("n", st.count.to_string())]))
+                                } else if st.count > 0 {
+                                    let day = st.saved.as_deref().map(|d| crate::fmt_day(&ui.lang(), d)).unwrap_or_default();
+                                    (true, ui.tx("template-state-saved", &[("date", day)]))
+                                } else {
+                                    (true, ui.now("template-state-first", &[]))
+                                };
+                                view! {
+                                    <span class="new-site__tpl-state" class:is-off=off data-state=if off { "offline" } else { "online" }
+                                        title=tip.clone() aria-label=tip>
+                                        {if off { icons::cloud_off() } else { icons::cloud_check() }}
+                                    </span>
+                                }
+                            })}
                             <Show when=move || adding.get()>
                                 <span class="new-site__catalog-input">
                                     <input class="input input--small mono" type="text" spellcheck="false" autocomplete="off"
@@ -970,6 +1006,16 @@ fn NewSite(close: Callback<()>) -> impl IntoView {
                                 <span class="template-card__thumb">{icons::page()}</span>
                                 <span class="template-card__name">{ui.t("new-site-template-blank")}</span>
                             </button>
+                        </Show>
+                        // Hors connexion sans copie gardée : seul « Vide », et de quoi réessayer.
+                        <Show when=move || source.get() == "builtin" && templates.with(Vec::is_empty)
+                            && tstate.with(|t| t.as_ref().is_some_and(|t| t.offline))>
+                            <div class="template-grid__offline">
+                                {icons::cloud_off()}
+                                <span>{ui.t("template-offline")}</span>
+                                <button type="button" class="btn btn--small" data-action="templates-retry"
+                                    on:click=move |_| sync()>{ui.t("template-retry")}</button>
+                            </div>
                         </Show>
                         <For each=shown key=|t| t.id.clone() let:t>
                             {

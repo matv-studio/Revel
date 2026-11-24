@@ -1520,8 +1520,13 @@ new-site-auto = Cihazı izle
 new-site-scheme-help = Açık renkler, koyu renkler veya ziyaretçinin cihaz ayarını izleyen her ikisi (sonradan Ayarlar › Genel › Renkler bölümünden değiştirilebilir)
 template-pages = { $n } sayfa
 template-source = Şablon kaynağı
-template-source-builtin = Dahili
+template-source-builtin = Revel
 template-source-catalog = Katalog
+template-state-ok = Şablonlar güncel · { $n }
+template-state-saved = Şablonlar { $date } tarihinde kaydedildi · sonraki bağlantıda güncellenir
+template-state-first = Şablonlar ilk seferde çevrimiçi yüklenir
+template-offline = Çevrimdışı
+template-retry = Yeniden dene
 template-open-file = Dosya aç
 template-open-file-help = Aldığınız veya kaydettiğiniz bir şablon dosyasını (.revel-template) açın
 template-file-kind = Revel şablonu
@@ -3940,6 +3945,7 @@ prop-field-page = İçeriğin sayfası
 prop-write = Yaz…
 prop-field-help = Bu özelliğin okuduğu içerik alanı
 prop-page = Sayfa
+info-undo-component-fields = “{ $name }” bileşeni oluşturuldu · { $n } değişken alanlara bağlandı
 info-components-converted = { $n ->
     [one] 1 bileşen dönüştürüldü
    *[other] { $n } bileşen dönüştürüldü

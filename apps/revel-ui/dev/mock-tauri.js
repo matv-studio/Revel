@@ -169,7 +169,15 @@
       case "default_sites_dir": return state.settings.projects_dir || "C:\\Program Files\\Revel\\Projects";
       case "site_folder": return args.parent + "\\" + slug(args.name || "");
       // Modèles de site (D-128) : quelques-uns, sans aperçu en ligne.
+      // Modèles de Revel en ligne (D-194) : `offline=1` (copie gardée) ou `offline=empty`.
+      case "templates_sync": {
+        const off = params.get("offline");
+        if (off === "empty") return { count: 0, revision: "", updated: false, offline: true };
+        if (off) return { count: 27, revision: "a1", updated: false, offline: true, saved: "2026-11-23" };
+        return { count: 27, revision: "a1", updated: false, offline: false, saved: "2026-11-23" };
+      }
       case "site_templates": {
+        if (params.get("offline") === "empty") return [];
         const fr = (args.lang || "fr").startsWith("fr");
         const t = (id, cat, nf, ne, pal, pages) => ({ id, category: cat, name: fr ? nf : ne, description: fr ? `Modèle ${nf}` : `${ne} template`, preview: null, palette: pal, features: [], pages });
         return [

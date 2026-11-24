@@ -2803,3 +2803,31 @@ dossier, seul « Vide » encore compilé, liste gardée en cache. En suspens : �
   création selon le mode (chaque template sert d'essai de la conversion) ; catalogue de Revel lu par défaut,
   avec la possibilité d'ajouter un dépôt ; ordre des travaux lancé.
 
+**D-195 — 24/11/2026 — prise (maquettes validées par l'utilisateur, retours du 24/11).**
+**Composants : variables tirées d'une carte de liste, liste des variables sur la racine seulement ; Nouveau
+site : état des modèles ; molette sur les panneaux.**
+- **Rappel de principe** (utilisateur) : un composant est une structure réutilisée partout sur le site,
+  modifiée en un seul endroit ; le CMS n'est qu'une source possible pour les valeurs de ses variables. Rien
+  dans les composants n'est propre au CMS.
+- **Composant créé depuis une carte de liste** (audit P2, D-193) : `MakeComponent` puis
+  `entryprops::lift_list_reads` dans une seule étape ; chaque lecture du contenu (`item.data.x`, `item.url`)
+  devient une variable nommée d'après le champ, les utilisations dans la liste reçoivent `item.data.x` ; rendu
+  inchangé ; message « Composant créé · n variables reliées aux champs » avec « Annuler ». `MakeComponent`
+  accepte `use_id` (identifiant de l'utilisation connu d'avance, pour enchaîner dans la même étape). Sur un
+  élément sans CMS, rien ne change.
+- **Liste des variables** : montrée seulement quand la racine du composant est sélectionnée ; sur un
+  sous-élément, seule sa propre liaison (« tout afficher partout perd l'utilisateur »). Comme Framer et Figma.
+- Mot « Variables » (français, anglais) à la place de « Propriétés » ; les autres langues suivront avec la
+  passe de vocabulaire (D-193, § 10.5).
+- **Nouveau site** : onglet « Revel », onglet « Catalogue » seulement si un dépôt est ajouté, nuage d'état
+  (à jour · n, copie gardée le…, hors connexion la première fois) avec « Réessayer » ; « Vitrine » n'est pas
+  embarqué. Sélecteur de fond : texte qui ne dépasse plus.
+- **Panneaux** : molette sur le haut d'un groupe = onglet suivant ou précédent (comme After Effects) ;
+  Ctrl + molette dans Médias = taille des vignettes.
+- Captures et essais d'interface en anglais, langue par défaut de Revel (demande de l'utilisateur).
+- En suspens, maquettes envoyées le 24/11 : outil « CMS field » (calque et icône propres, choix de la
+  collection et du champ dans le panneau, état sans collection) ; menus du clic droit dans le vide de Pages,
+  Components, Assets. Hors d'une liste, source par défaut d'une utilisation : valeurs écrites (le choix
+  Collection / Contenu reste proposé) — à revoir avec la maquette du champ CMS. Essais de bout en bout à
+  écrire pour : composant depuis une carte de liste, molette, état des modèles (vérifiés à la main le 24/11).
+

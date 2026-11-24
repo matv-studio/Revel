@@ -429,6 +429,10 @@ pub enum Command {
         id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<String>,
+        /// Identifiant de l'utilisation créée (libre) : connu d'avance, il permet d'enchaîner
+        /// d'autres commandes sur elle dans la même étape (D-193). Sinon tiré au hasard.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        use_id: Option<String>,
     },
     /// Utilisation de composant remplacée par une copie de son contenu (nouveaux identifiants),
     /// valeurs des propriétés écrites dedans.
@@ -516,9 +520,12 @@ pub enum Command {
 pub fn expand(site: &Site, cmd: &Command) -> Result<Command, EditError> {
     Ok(match cmd {
         Command::Duplicate { at } => crate::make::duplicate(site, at)?.0,
-        Command::MakeComponent { at, id, name } => {
-            crate::make::make_component(site, at, id, name.clone())?.0
-        }
+        Command::MakeComponent {
+            at,
+            id,
+            name,
+            use_id,
+        } => crate::make::make_component(site, at, id, name.clone(), use_id.as_deref())?.0,
         Command::Detach { at } => crate::make::detach(site, at)?,
         Command::Translate {
             locale,

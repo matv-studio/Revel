@@ -1520,8 +1520,13 @@ new-site-auto = デバイスに合わせる
 new-site-scheme-help = ライトカラー、ダークカラー、または訪問者のデバイス設定に合わせた両方（あとで 設定 › 一般 › カラー で変更できます）
 template-pages = { $n }ページ
 template-source = テンプレートのソース
-template-source-builtin = 同梱
+template-source-builtin = Revel
 template-source-catalog = カタログ
+template-state-ok = テンプレートは最新 · { $n }
+template-state-saved = テンプレートは { $date } に保存 · 次回の接続時に更新
+template-state-first = テンプレートは初回オンラインで読み込まれます
+template-offline = オフライン
+template-retry = 再試行
 template-open-file = ファイルを開く
 template-open-file-help = 受け取った、または保存したテンプレートファイル（.revel-template）を開きます
 template-file-kind = Revelテンプレート
@@ -3940,6 +3945,7 @@ prop-field-page = コンテンツのページ
 prop-write = 入力…
 prop-field-help = このプロパティが読み込むコンテンツのフィールド
 prop-page = ページ
+info-undo-component-fields = コンポーネント「{ $name }」を作成 · { $n } 個の変数をフィールドに接続
 info-components-converted = { $n ->
    *[other] { $n } 個のコンポーネントを変換しました
  }: 各プロパティはカード側でフィールドに関連付けます。元に戻す（Ctrl+Z）で以前の形に戻ります。

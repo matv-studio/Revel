@@ -191,6 +191,8 @@ pub struct Ui {
     /// Annulation ou rétablissement fait depuis la barre du haut (Paramètres, Localisation, Plan
     /// du site) : les vues relisent le document.
     pub undo_rev: RwSignal<u32>,
+    /// « Annuler » d'un message d'information (clé `info-undo-…`) : l'éditeur ouvert annule.
+    pub undo_ask: RwSignal<u32>,
     /// Modification faite dans ces vues (état d'annulation relu).
     pub doc_rev: RwSignal<u32>,
     /// Menu contextuel ouvert (clic droit).
@@ -487,6 +489,7 @@ fn App() -> impl IntoView {
         current_page: RwSignal::new(None),
         comp_view: RwSignal::new(None),
         undo_rev: RwSignal::new(0),
+        undo_ask: RwSignal::new(0),
         doc_rev: RwSignal::new(0),
         context: RwSignal::new(None),
         preview: RwSignal::new(None),
@@ -645,6 +648,12 @@ fn App() -> impl IntoView {
                     <div class="notice" class:notice--error=move || ui.error.with(|e| e.as_ref().is_none_or(|f| !f.key.starts_with("info-")))
                         class:notice--info=move || ui.error.with(|e| e.as_ref().is_some_and(|f| f.key.starts_with("info-"))) role="alert">
                         <span>{move || ui.error.get().map(|f| ui.failure(&f))}</span>
+                        <Show when=move || ui.error.with(|e| e.as_ref().is_some_and(|f| f.key.starts_with("info-undo-")))>
+                            <button class="link-btn notice__undo" data-action="notice-undo" on:click=move |_| {
+                                ui.error.set(None);
+                                ui.undo_ask.update(|n| *n += 1);
+                            }>{ui.t("editor-undo-short")}</button>
+                        </Show>
                         <button class="icon-btn" title=ui.t("action-close") aria-label=ui.t("action-close") on:click=move |_| ui.error.set(None)>{icons::close()}</button>
                     </div>
                 </Show>

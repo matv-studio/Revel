@@ -542,6 +542,9 @@ pub struct TemplatesState {
     pub updated: bool,
     /// Vrai si le catalogue en ligne n'a pas pu être lu (modèles gardés, s'il y en a).
     pub offline: bool,
+    /// Jour où la copie gardée sur l'ordinateur a été écrite (`2026-11-23`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved: Option<String>,
 }
 
 impl Core {
@@ -564,11 +567,20 @@ impl Core {
             .and_then(|b| serde_json::from_slice::<crate::templates::Index>(&b).ok())
             .map(|i| i.revision)
             .unwrap_or_default();
+        let saved = std::fs::metadata(self.templates_cache().join(crate::templates::INDEX))
+            .and_then(|m| m.modified())
+            .ok()
+            .map(|t| {
+                chrono::DateTime::<chrono::Local>::from(t)
+                    .format("%Y-%m-%d")
+                    .to_string()
+            });
         TemplatesState {
             count: crate::templates::ids().len(),
             revision,
             updated,
             offline,
+            saved,
         }
     }
 

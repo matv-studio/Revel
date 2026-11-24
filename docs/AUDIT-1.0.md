@@ -26,7 +26,7 @@ n'a été vérifié que sur l'éditeur, à la demande de l'utilisateur.
 
 ## 2. Pannes
 
-Corrigées le 23/11/2026 : **P1** (lecture tolérante de l'aperçu différé) et **P3** (trois info-bulles dans les
+Corrigée le 24/11/2026 : **P2** (D-195). Corrigées le 23/11/2026 : **P1** (lecture tolérante de l'aperçu différé) et **P3** (trois info-bulles dans les
 quinze langues), avec trois essais de bout en bout.
 
 | # | Gr. | Constat | Où |

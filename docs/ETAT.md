@@ -47,6 +47,10 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   `revel templates-index templates` après tout changement, contrôlé par un essai), lecture en ligne et copie
   gardée (`Core::templates_sync`, `sharing.rs` ; magasin en mémoire `templates/mod.rs`), `build.rs` supprimé.
   Écrans de « Nouveau site » : maquette à valider avant code.
+- **24/11, 2 h (D-195)** : composant depuis une carte de liste (variables par champ, « Annuler »), liste des
+  variables sur la racine seulement, Nouveau site (onglet Revel, état en ligne / hors connexion), molette sur
+  les onglets, Ctrl+molette dans Médias. Maquettes en attente : outil « CMS field », menus du clic droit
+  (Pages, Components, Assets). Essais d'interface en anglais. E2e à écrire pour ces nouveautés.
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

@@ -3157,6 +3157,16 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         on_cleanup(move || ui.canvas_base.set(None));
     }
 
+    // « Annuler » d'un message d'information (D-193) : annule la dernière étape de l'éditeur.
+    {
+        let start = ui.undo_ask.get_untracked();
+        Effect::new(move |_| {
+            if ui.undo_ask.get() != start {
+                ed.undo(ui);
+            }
+        });
+    }
+
     // Ouverture : document, pages, canevas.
     let path = site.path.clone();
     spawn_local(async move {

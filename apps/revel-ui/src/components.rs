@@ -352,18 +352,85 @@ pub fn make_from_selection(ui: Ui, ed: Ed) {
             }) else {
                 return;
             };
-            ed.apply(
-                ui,
-                Command::MakeComponent {
-                    at: at.clone(),
-                    id: id.clone(),
-                    name: Some(name.trim().to_string()),
-                },
-                false,
-            );
-            if let Some(u) = find_use(ed, &id) {
-                select(ed, u, String::new(), name.clone());
-            }
+            let mut make = Command::MakeComponent {
+                at: at.clone(),
+                id: id.clone(),
+                name: Some(name.trim().to_string()),
+                use_id: None,
+            };
+            // Carte d'une liste de collection (D-193) : ce qu'elle lit du contenu devient des
+            // propriétés, reliées aux champs dans la liste ; une seule étape d'annulation.
+            let list = ed.doc.with_untracked(|d| {
+                crate::blocks::enclosing_list(d.as_ref()?, &at).map(|(q, item)| (q.key(), item))
+            });
+            let Some((collection, var)) = list else {
+                ed.apply(ui, make, false);
+                if let Some(u) = find_use(ed, &id) {
+                    select(ed, u, String::new(), name.clone());
+                }
+                return;
+            };
+            let path = ed.path.get_value();
+            leptos::task::spawn_local(async move {
+                let schema = crate::api::cms_collections(&path)
+                    .await
+                    .map(|c| schema_of(&c))
+                    .unwrap_or_default();
+                let lifted = ed.doc.with_untracked(|d| {
+                    let mut after = d.as_ref()?.clone();
+                    revel_edit::apply(&mut after, &make).ok()?;
+                    // Même utilisation à l'application réelle : son identifiant est fixé.
+                    let mut made = None;
+                    for body in after
+                        .pages
+                        .iter()
+                        .map(|p| &p.body)
+                        .chain(after.layouts.iter().map(|l| &l.body))
+                    {
+                        revel_model::ids::walk(body, &mut |n| {
+                            if let Node::Use {
+                                id: Some(u),
+                                component,
+                                ..
+                            } = n
+                                && *component == id
+                            {
+                                made = Some(u.clone());
+                            }
+                        });
+                    }
+                    if let Command::MakeComponent { use_id, .. } = &mut make {
+                        *use_id = made;
+                    }
+                    revel_edit::entryprops::lift_list_reads(
+                        &after,
+                        &id,
+                        &var,
+                        &collection,
+                        &schema,
+                        &ui.now("prop-page", &[]),
+                    )
+                });
+                let n = lifted.as_ref().map(|l| l.1).unwrap_or(0);
+                let cmd = match lifted {
+                    Some((mut commands, _)) => {
+                        commands.insert(0, make);
+                        Command::Batch { commands }
+                    }
+                    None => make,
+                };
+                ed.apply(ui, cmd, false);
+                if let Some(u) = find_use(ed, &id) {
+                    select(ed, u, String::new(), name.clone());
+                }
+                if n > 0 {
+                    ui.fail(
+                        revel_protocol::Failure::new("info-undo-component-fields")
+                            .arg("name", name.trim())
+                            .arg("n", n.to_string()),
+                    );
+                }
+            });
         },
     )));
 }
@@ -1448,41 +1515,7 @@ pub fn convert_entry_props(ui: Ui, ed: Ed) {
         let Ok(cols) = crate::api::cms_collections(&path).await else {
             return;
         };
-        let schema: BTreeMap<String, revel_edit::entryprops::CollectionInfo> = cols
-            .iter()
-            .map(|c| {
-                let first = c.entries.first();
-                let fields = c
-                    .fields
-                    .iter()
-                    .map(|f| {
-                        (
-                            f.name.clone(),
-                            revel_edit::entryprops::FieldInfo {
-                                label: f.label.clone(),
-                                kind: f.kind.clone(),
-                                list: f.list,
-                                sample: first.and_then(|e| e.data.get(&f.name).cloned()),
-                                // Première valeur remplie parmi les contenus : nature du champ.
-                                example: c.entries.iter().find_map(|e| {
-                                    e.data
-                                        .get(&f.name)
-                                        .filter(|v| !v.is_null() && v.as_str() != Some(""))
-                                        .cloned()
-                                }),
-                            },
-                        )
-                    })
-                    .collect();
-                (
-                    c.id.clone(),
-                    revel_edit::entryprops::CollectionInfo {
-                        fields,
-                        url: first.and_then(|e| e.url.clone()),
-                    },
-                )
-            })
-            .collect();
+        let schema = schema_of(&cols);
         let cmd = ed.doc.with_untracked(|d| {
             revel_edit::entryprops::convert(d.as_ref()?, &schema, &ui.now("prop-page", &[]))
         });
@@ -1503,6 +1536,47 @@ pub fn convert_entry_props(ui: Ui, ed: Ed) {
             }
         }
     });
+}
+
+/// Champs des collections (nom, nature, valeur du premier contenu), pour nommer et typer les
+/// propriétés tirées du contenu (D-191, D-193).
+fn schema_of(
+    cols: &[revel_protocol::CmsCollection],
+) -> BTreeMap<String, revel_edit::entryprops::CollectionInfo> {
+    cols.iter()
+        .map(|c| {
+            let first = c.entries.first();
+            let fields = c
+                .fields
+                .iter()
+                .map(|f| {
+                    (
+                        f.name.clone(),
+                        revel_edit::entryprops::FieldInfo {
+                            label: f.label.clone(),
+                            kind: f.kind.clone(),
+                            list: f.list,
+                            sample: first.and_then(|e| e.data.get(&f.name).cloned()),
+                            // Première valeur remplie parmi les contenus : nature du champ.
+                            example: c.entries.iter().find_map(|e| {
+                                e.data
+                                    .get(&f.name)
+                                    .filter(|v| !v.is_null() && v.as_str() != Some(""))
+                                    .cloned()
+                            }),
+                        },
+                    )
+                })
+                .collect();
+            (
+                c.id.clone(),
+                revel_edit::entryprops::CollectionInfo {
+                    fields,
+                    url: first.and_then(|e| e.url.clone()),
+                },
+            )
+        })
+        .collect()
 }
 
 /// Propriété du composant ouvert (ou du gabarit) qui remplit l'élément `at` : son texte, son

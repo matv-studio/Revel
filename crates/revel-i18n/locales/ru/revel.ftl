@@ -1568,8 +1568,13 @@ new-site-auto = Как на устройстве
 new-site-scheme-help = Светлые цвета, тёмные цвета или оба набора в зависимости от настройки устройства посетителя (позже можно изменить в разделе Настройки › Общие › Цвета)
 template-pages = Страниц: { $n }
 template-source = Источник шаблонов
-template-source-builtin = Встроенные
+template-source-builtin = Revel
 template-source-catalog = Каталог
+template-state-ok = Шаблоны актуальны · { $n }
+template-state-saved = Шаблоны сохранены { $date } · обновятся при следующем подключении
+template-state-first = Шаблоны загружаются из сети в первый раз
+template-offline = Нет подключения
+template-retry = Повторить
 template-open-file = Открыть файл
 template-open-file-help = Открыть файл шаблона (.revel-template), который вы получили или сохранили
 template-file-kind = Шаблон Revel
@@ -4044,6 +4049,11 @@ prop-field-page = Страница элемента
 prop-write = Написать…
 prop-field-help = Поле содержимого, которое читает это свойство
 prop-page = Страница
+info-undo-component-fields = Компонент «{ $name }» создан · { $n ->
+    [one] { $n } переменная связана с полем
+    [few] { $n } переменные связаны с полями
+   *[other] { $n } переменных связано с полями
+}
 info-components-converted = { $n ->
     [one] Преобразован 1 компонент
    *[other] Преобразовано компонентов: { $n }

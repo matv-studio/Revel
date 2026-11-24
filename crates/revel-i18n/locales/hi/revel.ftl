@@ -1520,8 +1520,13 @@ new-site-auto = डिवाइस के अनुसार
 new-site-scheme-help = लाइट रंग, डार्क रंग, या दोनों जो विज़िटर के डिवाइस की सेटिंग का पालन करें (बाद में सेटिंग › सामान्य › रंग में बदला जा सकता है)
 template-pages = { $n } पेज
 template-source = टेम्पलेट स्रोत
-template-source-builtin = शामिल
+template-source-builtin = Revel
 template-source-catalog = कैटलॉग
+template-state-ok = टेम्पलेट अद्यतन · { $n }
+template-state-saved = टेम्पलेट { $date } को सहेजे गए · अगले कनेक्शन पर अपडेट
+template-state-first = टेम्पलेट पहली बार ऑनलाइन लोड होते हैं
+template-offline = ऑफ़लाइन
+template-retry = फिर से कोशिश करें
 template-open-file = फ़ाइल खोलें
 template-open-file-help = आपको मिली या आपकी सहेजी हुई टेम्पलेट फ़ाइल (.revel-template) खोलें
 template-file-kind = Revel टेम्पलेट
@@ -3940,6 +3945,7 @@ prop-field-page = सामग्री का पृष्ठ
 prop-write = लिखें…
 prop-field-help = इस गुण द्वारा पढ़ा गया सामग्री फ़ील्ड
 prop-page = पृष्ठ
+info-undo-component-fields = घटक “{ $name }” बना · { $n } वेरिएबल फ़ील्ड से जुड़े
 info-components-converted = { $n ->
     [one] 1 घटक बदला गया
    *[other] { $n } घटक बदले गए

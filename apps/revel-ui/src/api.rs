@@ -219,6 +219,24 @@ pub async fn create_site(
 }
 
 /// Modèles proposés à la création d'un site (D-128).
+/// État des modèles de Revel après lecture du catalogue en ligne (D-194).
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+pub struct TemplatesState {
+    #[serde(default)]
+    pub count: usize,
+    #[serde(default)]
+    pub updated: bool,
+    #[serde(default)]
+    pub offline: bool,
+    #[serde(default)]
+    pub saved: Option<String>,
+}
+
+/// Lit le catalogue des modèles de Revel en ligne et télécharge ce qui a changé.
+pub async fn templates_sync() -> Res<TemplatesState> {
+    call("templates_sync", &serde_json::json!({})).await
+}
+
 pub async fn site_templates(lang: &str) -> Res<Vec<revel_protocol::TemplateInfo>> {
     call("site_templates", &serde_json::json!({ "lang": lang })).await
 }

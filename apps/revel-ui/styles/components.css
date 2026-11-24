@@ -250,6 +250,8 @@ input.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none
 .main > .notice { margin: var(--s-4) var(--s-8) 0; }
 .notice--error { background: var(--danger-bg); color: var(--danger-text); }
 .notice--info { background: var(--set-bg); color: var(--set-text); }
+.notice > span:first-child { flex: 1; }
+.notice__undo { color: inherit; font-weight: 600; text-decoration: underline; }
 .status { display: flex; align-items: center; gap: var(--s-2); }
 .status--ok svg { color: var(--success-text); }
 .empty {
@@ -1324,7 +1326,7 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 /* Fond du nouveau site : pastille sombre ou claire. */
 .site-bg button { display: inline-flex; align-items: center; gap: 6px; }
 .new-site .site-bg { width: 100%; }
-.new-site .site-bg button { flex: 1 1 0; min-width: 0; padding: 0 var(--s-2); white-space: nowrap; }
+.new-site .site-bg button { flex: 1 1 auto; min-width: 0; padding: 0 var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bg-swatch { width: 12px; height: 12px; border-radius: 3px; background: #0f0f10; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .18); }
 .bg-swatch--light { background: #ffffff; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .2); }
 
@@ -1540,6 +1542,14 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .new-site__chosen-pages { margin: 0; font-size: var(--text-xs); }
 /* Modèles partagés (D-132) : origine (inclus, catalogue), fichier ouvert, état du catalogue. */
 .new-site__sources { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.new-site__tpl-state { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm); color: var(--text-muted); }
+.new-site__tpl-state.is-off { color: var(--warning-text); background: var(--warning-bg, rgba(209,154,42,.14)); }
+.new-site__tpl-state svg.icon { width: 16px; height: 16px; }
+.template-grid__offline {
+  grid-column: span 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: 170px; border: var(--border) dashed var(--line-strong); border-radius: var(--radius-lg); color: var(--text-muted);
+}
+.template-grid__offline svg.icon { width: 26px; height: 26px; }
 .new-site__source button { display: inline-flex; align-items: center; gap: 6px; }
 .new-site__source svg.icon, .new-site__open-file svg.icon { width: 14px; height: 14px; }
 .new-site__open-file { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }

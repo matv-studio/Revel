@@ -841,6 +841,20 @@ pub fn cloud() -> AnyView {
     )
 }
 
+/// Nuage coché (modèles de Revel à jour).
+pub fn cloud_check() -> AnyView {
+    svg(
+        r#"<path d="M4.5 12.5h7.25a2.75 2.75 0 0 0 .4-5.47 4 4 0 0 0-7.7-.86A3.2 3.2 0 0 0 4.5 12.5Z"/><path d="m6.3 9.2 1.3 1.3 2.3-2.5"/>"#,
+    )
+}
+
+/// Nuage barré (hors connexion).
+pub fn cloud_off() -> AnyView {
+    svg(
+        r#"<path d="M4.5 12.5h7.25a2.75 2.75 0 0 0 .4-5.47 4 4 0 0 0-7.7-.86A3.2 3.2 0 0 0 4.5 12.5Z"/><path d="m2.5 2.5 11 11"/>"#,
+    )
+}
+
 /// Nuage avec flèche vers le bas (télécharger un site).
 pub fn cloud_down() -> AnyView {
     svg(

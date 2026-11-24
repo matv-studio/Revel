@@ -1520,8 +1520,13 @@ new-site-auto = Apparaat volgen
 new-site-scheme-help = Lichte kleuren, donkere kleuren, of beide volgens de instelling van het apparaat van de bezoeker (later te wijzigen in Instellingen › Algemeen › Kleuren)
 template-pages = { $n } pagina(’s)
 template-source = Templatebron
-template-source-builtin = Meegeleverd
+template-source-builtin = Revel
 template-source-catalog = Catalogus
+template-state-ok = Sjablonen bijgewerkt · { $n }
+template-state-saved = Sjablonen bewaard op { $date } · bijgewerkt bij de volgende verbinding
+template-state-first = Sjablonen worden de eerste keer online geladen
+template-offline = Offline
+template-retry = Opnieuw proberen
 template-open-file = Een bestand openen
 template-open-file-help = Een templatebestand (.revel-template) openen dat je hebt ontvangen of opgeslagen
 template-file-kind = Revel-template
@@ -3940,6 +3945,10 @@ prop-field-page = Pagina van het item
 prop-write = Schrijven…
 prop-field-help = Inhoudsveld dat deze eigenschap leest
 prop-page = Pagina
+info-undo-component-fields = Component ‘{ $name }’ gemaakt · { $n ->
+    [one] 1 variabele gekoppeld aan het veld
+   *[other] { $n } variabelen gekoppeld aan de velden
+}
 info-components-converted = { $n ->
     [one] 1 component omgezet
    *[other] { $n } componenten omgezet

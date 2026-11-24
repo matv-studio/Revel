@@ -1520,8 +1520,13 @@ new-site-auto = Gerät folgen
 new-site-scheme-help = Helle Farben, dunkle Farben oder beides, je nach Geräteeinstellung des Besuchers (später unter Einstellungen › Allgemein › Farben änderbar)
 template-pages = { $n } Seite(n)
 template-source = Template-Quelle
-template-source-builtin = Enthalten
+template-source-builtin = Revel
 template-source-catalog = Katalog
+template-state-ok = Vorlagen aktuell · { $n }
+template-state-saved = Vorlagen gespeichert am { $date } · Aktualisierung bei der nächsten Verbindung
+template-state-first = Vorlagen werden beim ersten Mal online geladen
+template-offline = Offline
+template-retry = Erneut versuchen
 template-open-file = Datei öffnen
 template-open-file-help = Eine erhaltene oder gespeicherte Template-Datei (.revel-template) öffnen
 template-file-kind = Revel-Template
@@ -3940,6 +3945,10 @@ prop-field-page = Seite des Inhalts
 prop-write = Schreiben…
 prop-field-help = Inhaltsfeld, das diese Eigenschaft liest
 prop-page = Seite
+info-undo-component-fields = Komponente „{ $name }“ erstellt · { $n ->
+    [one] 1 Variable mit ihrem Feld verknüpft
+   *[other] { $n } Variablen mit Feldern verknüpft
+}
 info-components-converted = { $n ->
     [one] 1 Komponente umgewandelt
    *[other] { $n } Komponenten umgewandelt

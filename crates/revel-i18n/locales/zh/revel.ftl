@@ -1520,8 +1520,13 @@ new-site-auto = 跟随设备
 new-site-scheme-help = 浅色、深色，或跟随访客设备设置的两者兼有（之后可在“设置 › 常规 › 颜色”中修改）
 template-pages = { $n } 个页面
 template-source = 模板来源
-template-source-builtin = 内置
+template-source-builtin = Revel
 template-source-catalog = 目录
+template-state-ok = 模板已是最新 · { $n }
+template-state-saved = 模板保存于 { $date } · 下次联网时更新
+template-state-first = 模板首次需要在线加载
+template-offline = 离线
+template-retry = 重试
 template-open-file = 打开文件
 template-open-file-help = 打开你收到或保存的模板文件（.revel-template）
 template-file-kind = Revel 模板
@@ -3940,6 +3945,7 @@ prop-field-page = 内容的页面
 prop-write = 书写…
 prop-field-help = 此属性读取的内容字段
 prop-page = 页面
+info-undo-component-fields = 已创建组件“{ $name }” · { $n } 个变量已关联到字段
 info-components-converted = { $n ->
    *[other] 已转换 { $n } 个组件
  }：现在可从卡片将每个属性关联到字段。撤销（Ctrl+Z）可恢复原先的形式。

@@ -1108,6 +1108,7 @@ fn composants_creer_proprietes_detacher() {
             at: h1.clone(),
             id: id.clone(),
             name: Some("Grand titre".into()),
+            use_id: None,
         },
     )
     .unwrap();
@@ -1135,6 +1136,7 @@ fn composants_creer_proprietes_detacher() {
             at: h1.clone(),
             id: id.clone(),
             name: None,
+            use_id: None,
         },
     )
     .unwrap();

@@ -563,7 +563,15 @@ pub fn convert(
     if !any && strays.is_empty() {
         return None;
     }
-    let mut commands = strays;
+    Some(Command::Batch {
+        commands: changes(site, &s, strays),
+    })
+}
+
+/// Commandes qui mènent de `site` à `s` : propriétés et contenu des composants, valeurs des
+/// utilisations dans les pages et les gabarits (après `first`).
+fn changes(site: &Site, s: &Site, first: Vec<Command>) -> Vec<Command> {
+    let mut commands = first;
     for (a, b) in site.components.iter().zip(&s.components) {
         if a.props != b.props {
             commands.push(Command::SetComponentProps {
@@ -623,12 +631,176 @@ pub fn convert(
     for (a, b) in site.layouts.iter().zip(&s.layouts) {
         uses(Owner::Layout(b.id.clone()), &a.body, &b.body);
     }
-    Some(Command::Batch { commands })
+    commands
+}
+
+/// Composant tout juste créé à partir d'une carte de liste (audit du 23/11/2026, D-193) : ses
+/// lectures du contenu de la liste (`item.data.title`, `item.url`) deviennent des propriétés, et
+/// ses utilisations dans la liste leur donnent `item.data.title`… Le composant ne dépend plus de
+/// la liste : posé ailleurs, il prend des valeurs écrites ou celles d'un contenu choisi. Rendu
+/// inchangé. `None` : le composant ne lit rien du contenu `var`. Rend aussi le nombre de
+/// propriétés créées.
+pub fn lift_list_reads(
+    site: &Site,
+    component: &str,
+    var: &str,
+    collection: &str,
+    schema: &BTreeMap<String, CollectionInfo>,
+    page_label: &str,
+) -> Option<(Vec<Command>, usize)> {
+    let ci = site.components.iter().position(|c| c.id == component)?;
+    let before = site.components[ci].props.len();
+    let mut s = site.clone();
+    // Propriété « Contenu » provisoire, que la conversion de D-191 remplace par une propriété par
+    // lecture ; les utilisations lui donnent l'élément de la liste.
+    s.components[ci].props.push(PropDef {
+        name: var.to_string(),
+        label: None,
+        kind: PropKind::Entry,
+        default: None,
+        collection: Some(collection.to_string()),
+    });
+    fn give(nodes: &mut [Node], id: &str, var: &str) {
+        for n in nodes {
+            match n {
+                Node::Use {
+                    component,
+                    args,
+                    children,
+                    ..
+                } => {
+                    if component == id {
+                        args.entry(var.to_string())
+                            .or_insert_with(|| var.to_string());
+                    }
+                    give(children, id, var);
+                }
+                Node::Element { children, .. } | Node::SetBlock { children, .. } => {
+                    give(children, id, var)
+                }
+                Node::If {
+                    then, otherwise, ..
+                } => {
+                    give(then, id, var);
+                    give(otherwise, id, var);
+                }
+                Node::Each {
+                    children, empty, ..
+                } => {
+                    give(children, id, var);
+                    give(empty, id, var);
+                }
+                _ => {}
+            }
+        }
+    }
+    for p in &mut s.pages {
+        give(&mut p.body, component, var);
+    }
+    for l in &mut s.layouts {
+        give(&mut l.body, component, var);
+    }
+    if !convert_one(&mut s, ci, var, schema, page_label) {
+        return None;
+    }
+    let made = s.components[ci].props.len().saturating_sub(before);
+    if made == 0
+        || s.components[ci]
+            .props
+            .iter()
+            .any(|p| p.kind == PropKind::Entry && p.name == var)
+    {
+        return None;
+    }
+    Some((changes(site, &s, Vec::new()), made))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Carte de liste devenue composant : une propriété par lecture, valeurs `item.…` dans la
+    /// liste, composant sans référence à la liste.
+    #[test]
+    fn carte_de_liste_devenue_composant() {
+        let mut site = Site::new("Essai", "fr");
+        site.components = serde_json::from_value(serde_json::json!([{
+            "id": "carte",
+            "body": [{"node": "element", "id": "a1", "tag": "article", "children": [
+                {"node": "element", "id": "a2", "tag": "img", "attrs": [{"name": "src", "value": "{{ item.data.image }}"}]},
+                {"node": "element", "id": "a3", "tag": "h3", "children": [{"node": "out", "expr": "item.data.title"}]},
+                {"node": "element", "id": "a4", "tag": "a", "attrs": [{"name": "href", "value": "{{ item.url }}"}],
+                 "children": [{"node": "text", "text": "Voir"}]}
+            ]}]
+        }]))
+        .unwrap();
+        site.pages = serde_json::from_value(serde_json::json!([{"id": "index", "path": "/", "body": [
+            {"node": "each", "id": "p1", "expr": "collections.projets", "item": "item", "children": [
+                {"node": "use", "id": "u1", "component": "carte"}
+            ]}
+        ]}]))
+        .unwrap();
+        let mut schema = BTreeMap::new();
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "title".to_string(),
+            FieldInfo {
+                label: Some("Titre".into()),
+                sample: Some(Value::String("Maison Oka".into())),
+                ..Default::default()
+            },
+        );
+        fields.insert(
+            "image".to_string(),
+            FieldInfo {
+                kind: Some("image".into()),
+                ..Default::default()
+            },
+        );
+        schema.insert(
+            "projets".to_string(),
+            CollectionInfo {
+                fields,
+                url: Some("/projets/maison-oka/".into()),
+            },
+        );
+        let (cmds, n) = lift_list_reads(
+            &site,
+            "carte",
+            "item",
+            "projets",
+            &schema,
+            "Page du contenu",
+        )
+        .unwrap();
+        assert_eq!(n, 3);
+        for c in &cmds {
+            crate::apply(&mut site, c).unwrap();
+        }
+        let c = site.component("carte").unwrap();
+        let names: Vec<&str> = c.props.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["image", "title", "lien_page"]);
+        assert_eq!(c.props[0].kind, PropKind::Image);
+        assert_eq!(c.props[1].label.as_deref(), Some("Titre"));
+        assert_eq!(c.props[2].kind, PropKind::Link);
+        let body = serde_json::to_string(&c.body).unwrap();
+        assert!(!body.contains("item."), "{body}");
+        let mut args = None;
+        revel_model::ids::walk(&site.pages[0].body, &mut |n| {
+            if let Node::Use { args: a, .. } = n {
+                args = Some(a.clone());
+            }
+        });
+        let args = args.unwrap();
+        assert_eq!(
+            args.get("title").map(String::as_str),
+            Some("item.data.title")
+        );
+        assert_eq!(args.get("lien_page").map(String::as_str), Some("item.url"));
+        assert!(!args.contains_key("item"));
+        // Composant qui ne lit rien du contenu : rien à faire.
+        assert!(lift_list_reads(&site, "carte", "item", "projets", &schema, "x").is_none());
+    }
 
     fn rw(e: &str) -> Result<String, ()> {
         rewrite_expr(e, "p", &mut |r| match r {

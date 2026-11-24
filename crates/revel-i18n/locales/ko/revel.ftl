@@ -1520,8 +1520,13 @@ new-site-auto = 기기 설정 따르기
 new-site-scheme-help = 라이트 색상, 다크 색상, 또는 방문자 기기 설정을 따르는 두 가지 모두(나중에 설정 › 일반 › 색상에서 변경 가능)
 template-pages = 페이지 { $n }개
 template-source = 템플릿 출처
-template-source-builtin = 기본 제공
+template-source-builtin = Revel
 template-source-catalog = 카탈로그
+template-state-ok = 템플릿 최신 상태 · { $n }
+template-state-saved = 템플릿 저장일 { $date } · 다음 연결 때 업데이트
+template-state-first = 템플릿은 처음에 온라인으로 불러옵니다
+template-offline = 오프라인
+template-retry = 다시 시도
 template-open-file = 파일 열기
 template-open-file-help = 받았거나 저장해 둔 템플릿 파일(.revel-template)을 엽니다
 template-file-kind = Revel 템플릿
@@ -3940,6 +3945,7 @@ prop-field-page = 콘텐츠 페이지
 prop-write = 직접 입력…
 prop-field-help = 이 속성이 읽는 콘텐츠 필드
 prop-page = 페이지
+info-undo-component-fields = 컴포넌트 “{ $name }” 생성 · 변수 { $n }개를 필드에 연결
 info-components-converted = { $n ->
    *[other] 구성 요소 { $n }개 변환됨
  }: 이제 각 속성을 카드에서 필드에 연결합니다. 실행 취소(Ctrl+Z)로 이전 형태로 돌아갑니다.

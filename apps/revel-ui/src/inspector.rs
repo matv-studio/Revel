@@ -145,8 +145,20 @@ pub fn ContentSettings() -> impl IntoView {
             let bind = (!matches!(node, Node::Use { .. }))
                 .then(|| crate::components::bindings(ui, ed, h.clone(), at.clone()));
             // Propriétés du composant ouvert ; celles d'un gabarit se règlent avec la page.
-            let section = matches!(h, crate::components::Holder::Component(_))
-                .then(|| crate::components::props_section(ui, ed, h));
+            // Liste complète : seulement sur l'élément qui contient tout le composant (sa racine).
+            // Sur un sous-élément, seule sa propre liaison est montrée (retour du 24/11/2026 :
+            // tout afficher partout perd l'utilisateur).
+            let root = match &h {
+                crate::components::Holder::Component(id) => ed.doc.with_untracked(|d| {
+                    d.as_ref().and_then(|d| d.component(id)).is_some_and(|c| {
+                        c.body
+                            .iter()
+                            .any(|n| revel_model::ids::node_id(n) == Some(at.node.as_str()))
+                    })
+                }),
+                _ => false,
+            };
+            let section = root.then(|| crate::components::props_section(ui, ed, h));
             Some(view! {
                 {bind}
                 {section}

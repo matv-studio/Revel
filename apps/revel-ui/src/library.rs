@@ -1009,7 +1009,18 @@ pub fn Media() -> impl IntoView {
                     }
                     view! {
                         <div class="asset-grid" class:is-small=move || { thumb.get() < 60 }
-                            style=move || format!("--thumb:{}px", thumb.get())>{v.into_iter().map(tile).collect_view()}</div>
+                            style=move || format!("--thumb:{}px", thumb.get())
+                            on:wheel=move |e: leptos::ev::WheelEvent| {
+                                // Ctrl + molette (ou pincement du pavé tactile) : taille des vignettes.
+                                if !(e.ctrl_key() || e.meta_key()) { return }
+                                e.prevent_default();
+                                let step = if e.delta_mode() == 0 { e.delta_y() / 4.0 } else { e.delta_y() * 8.0 };
+                                let v = (f64::from(thumb.get_untracked()) - step).round().clamp(f64::from(THUMB_MIN), f64::from(THUMB_MAX)) as u32;
+                                if v != thumb.get_untracked() {
+                                    thumb.set(v);
+                                    crate::pref_set("media.thumb", &v.to_string());
+                                }
+                            }>{v.into_iter().map(tile).collect_view()}</div>
                     }.into_any()
                 }}
             </div>

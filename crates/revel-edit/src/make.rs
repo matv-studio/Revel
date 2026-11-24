@@ -1955,6 +1955,7 @@ pub fn make_component(
     at: &Target,
     id: &str,
     name: Option<String>,
+    use_id: Option<&str>,
 ) -> Result<(Command, String), EditError> {
     if id.trim().is_empty() || site.components.iter().any(|c| c.id == id) {
         return Err(EditError::DuplicateId(id.to_string()));
@@ -1969,7 +1970,11 @@ pub fn make_component(
     if has_slot {
         return Err(EditError::WrongKind(at.node.clone()));
     }
-    let use_id = fresh(&site.node_ids());
+    let taken = site.node_ids();
+    let use_id = match use_id {
+        Some(u) if !u.is_empty() && !taken.contains(u) => u.to_string(),
+        _ => fresh(&taken),
+    };
     let component = revel_model::Component {
         id: id.to_string(),
         name: name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()),

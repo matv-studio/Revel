@@ -1520,8 +1520,13 @@ new-site-auto = Ikuti perangkat
 new-site-scheme-help = Warna terang, warna gelap, atau keduanya mengikuti pengaturan perangkat pengunjung (dapat diedit nanti di Pengaturan › Umum › Warna)
 template-pages = { $n } halaman
 template-source = Sumber templat
-template-source-builtin = Bawaan
+template-source-builtin = Revel
 template-source-catalog = Katalog
+template-state-ok = Template terbaru · { $n }
+template-state-saved = Template disimpan pada { $date } · diperbarui saat terhubung lagi
+template-state-first = Template dimuat secara daring pertama kali
+template-offline = Luring
+template-retry = Coba lagi
 template-open-file = Buka file
 template-open-file-help = Buka file templat (.revel-template) yang Anda terima atau simpan
 template-file-kind = Templat Revel
@@ -3940,6 +3945,7 @@ prop-field-page = Halaman konten
 prop-write = Tulis…
 prop-field-help = Bidang konten yang dibaca properti ini
 prop-page = Halaman
+info-undo-component-fields = Komponen “{ $name }” dibuat · { $n } variabel ditautkan ke kolom
 info-components-converted = { $n ->
    *[other] { $n } komponen dikonversi
  }: setiap properti kini ditautkan ke bidang dari kartu. Urungkan (Ctrl+Z) mengembalikan bentuk lama.

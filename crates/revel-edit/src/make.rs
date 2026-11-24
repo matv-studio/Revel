@@ -69,6 +69,8 @@ fn set_first_text(n: &mut Node, text: &str) -> bool {
                 };
                 return true;
             }
+            // Garde de `match` impossible ici : elle emprunterait `c` en écriture.
+            #[allow(clippy::collapsible_match)]
             Node::Element { .. } => {
                 if set_first_text(c, text) {
                     return true;

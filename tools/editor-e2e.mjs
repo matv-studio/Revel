@@ -1701,7 +1701,13 @@ try {
     await page.waitForSelector('.notice--error', { state: 'detached' });
     await page.click(canon + ' .var-head');
     await page.waitForSelector(canon + '.is-open .var-expr');
-    await page.fill(canon + ' .var-expr', '"https://essai.example/"');
+    // Le champ est réécrit quand le panneau se redessine (message d'erreur fermé) : la saisie est
+    // reprise tant que sa valeur n'est pas celle écrite (vu sur la CI : ancienne valeur + saisie).
+    for (let i = 0; i < 6; i++) {
+      await page.fill(canon + ' .var-expr', '"https://essai.example/"');
+      await page.waitForTimeout(250);
+      if ((await page.inputValue(canon + ' .var-expr')) === '"https://essai.example/"') break;
+    }
     await page.waitForFunction((sel) => document.querySelector(sel + ' .var-expr')?.value === '"https://essai.example/"', canon);
     await page.keyboard.press('Enter');
     await page.waitForFunction((sel) => document.querySelector(sel + ' .var-value')?.textContent.trim() === 'https://essai.example/', canon);

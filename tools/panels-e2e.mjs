@@ -376,8 +376,8 @@ try {
     await page.click(`${STY} [data-action="form-field-add"]`); await w(300);
     const kinds = (await menu()).map((i) => i.label);
     await pick('Dropdown');
-    await until(() => page.$(`${STY} .items-rename`));
-    await page.keyboard.type('Subject'); await page.keyboard.press('Enter');
+    // Saisie écrite dans le champ lui-même : le curseur y arrive une image plus tard.
+    await page.locator(`${STY} .items-rename`).fill('Subject'); await page.locator(`${STY} .items-rename`).press('Enter');
     const added = await until(async () => (await rows()).some((r) => /^Subject( \*)?:dropdown$/.test(r)));
     await page.locator(`${STY} .form-fields .items-row[data-kind="dropdown"]`).hover();
     await page.locator(`${STY} .form-fields .items-row[data-kind="dropdown"] .form-required`).click();
@@ -403,8 +403,8 @@ try {
     const l1 = await until(async () => { const l = await links(); return l.length === l0.length + 1 && l.at(-1) === `${target.label}→${target.note}` ? l : false; });
     await page.locator(`${STY} .items-row`).last().hover();
     await page.locator(`${STY} .items-row`).last().locator('[data-action="items-rename"]').click();
-    await until(() => page.$(`${STY} .items-rename`));
-    await page.keyboard.type('Shop'); await page.keyboard.press('Enter');
+    // Saisie écrite dans le champ lui-même : le curseur y arrive une image plus tard.
+    await page.locator(`${STY} .items-rename`).fill('Shop'); await page.locator(`${STY} .items-rename`).press('Enter');
     const renamed = await until(async () => (await links()).at(-1) === `Shop→${target.note}`);
     check('tools: navbar link added to a chosen page (its address shown), then renamed in place',
       !!l1 && renamed && choices.some((i) => i.label === 'Web address…') && choices.some((i) => i.label === 'New page…'), JSON.stringify({ l0, target, renamed }));

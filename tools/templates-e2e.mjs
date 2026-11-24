@@ -90,7 +90,13 @@ try {
     { name: 'essai-galerie-b.png', mimeType: 'image/png', buffer: png },
   ]);
   await page.waitForSelector('.picker .picker-tile.is-picked >> nth=1');
-  const order = await page.$$eval('.picker .picker-tile.is-picked .picker-order', (o) => o.map((x) => x.textContent));
+  // Numéros d'ordre lus une fois dessinés (sur la CI, ils arrivaient après la seconde vignette).
+  let order = [];
+  for (let i = 0; i < 20; i++) {
+    order = await page.$$eval('.picker .picker-tile.is-picked .picker-order', (o) => o.map((x) => x.textContent.trim()));
+    if (order.length === 2 && order.every(Boolean)) break;
+    await page.waitForTimeout(150);
+  }
   await page.click('.picker .picker-add');
   await page.waitForFunction(() => !document.querySelector('.picker'));
   const added = () => galleryOf(fs.readFileSync(entryFile(file), 'utf8'));

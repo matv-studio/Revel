@@ -22,6 +22,7 @@ mod domain;
 mod editor;
 mod feeds;
 mod files;
+mod formfields;
 mod help;
 mod home;
 mod hovermedia;

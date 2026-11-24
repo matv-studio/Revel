@@ -69,7 +69,8 @@ let page = null;
 try {
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => errors.push(`${e.message} (after check ${results.length})`));
+  page.on('console', (m) => { if (m.type() === 'error' && /panicked/.test(m.text())) errors.push(m.text().slice(0, 300)); });
   await page.addInitScript(mock);
   await page.goto(`${ui.replace(/\/$/, '')}/#lang=en&theme=dark&simple=1&bridge=${encodeURIComponent(bridge)}`);
   const STY = '.dock-panel[data-panel="styles"]';
@@ -355,6 +356,61 @@ try {
     check('CMS field: another item read; collection, item, shown as and if-empty settings', other && drawn2 && rows.every(Boolean), JSON.stringify({ other, drawn2, rows }));
     for (let i = 0; i < 6 && (await body()).includes('cms-field'); i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
     check('CMS field: every step undone', !(await body()).includes('cms-field'));
+  }
+  // ---------------------------------------------------------------- logique des outils (D-199)
+  {
+    const home = async () => (await site()).pages.find((p) => p.path === '/');
+    const before = JSON.stringify((await home()).body);
+    await tab('layers');
+    await page.locator('.layers-tree .layer .layer-label', { hasText: /^Paragraph$/ }).first().click(); await w(400);
+    await tab('insert'); await page.dblclick('.insert-item[data-item="insert-form"]'); await w(1500);
+    // Section complète : posée après la section de la sélection, pas dedans (audit M2).
+    // Balises des éléments qui contiennent le formulaire, de la racine vers lui.
+    const trail = (nodes, path = []) => { for (const n of nodes) { if (n.tag === 'form') return path; for (const k of ['children', 'then', 'otherwise', 'body']) if (Array.isArray(n[k])) { const r = trail(n[k], [...path, n.tag || n.node]); if (r) return r; } } return null; };
+    const around = trail((await home()).body) || [];
+    check('tools: a full section is placed after the selected section, not inside it', around.filter((t) => t === 'section').length === 1, around.join(' › '));
+    await tab('layers');
+    await page.locator('.layers-tree .layer .layer-label', { hasText: /^Form$/ }).first().click(); await w(700);
+    const rows = () => page.$$eval(`${STY} .form-fields .items-row`, (l) => l.map((e) => e.querySelector('.items-name').textContent.trim() + ':' + e.dataset.kind));
+    const start = await rows();
+    await page.click(`${STY} [data-action="form-field-add"]`); await w(300);
+    const kinds = (await menu()).map((i) => i.label);
+    await pick('Dropdown');
+    await until(() => page.$(`${STY} .items-rename`));
+    await page.keyboard.type('Subject'); await page.keyboard.press('Enter');
+    const added = await until(async () => (await rows()).some((r) => /^Subject( \*)?:dropdown$/.test(r)));
+    await page.locator(`${STY} .form-fields .items-row[data-kind="dropdown"]`).hover();
+    await page.locator(`${STY} .form-fields .items-row[data-kind="dropdown"] .form-required`).click();
+    const required = await until(async () => /"tag":"select","attrs":\[[^\]]*"name":"required"/.test(JSON.stringify((await home()).body)));
+    await page.locator(`${STY} .form-fields .items-row[data-kind="dropdown"] .items-main`).click(); await w(400);
+    const options = await page.$$eval(`${STY} .form-options input`, (l) => l.map((e) => e.value).filter(Boolean));
+    check('tools: form fields listed; a dropdown added, named, made required, its options shown',
+      start.length >= 3 && ['Text', 'Email', 'Phone', 'Long text', 'Dropdown', 'Checkbox', 'Radio buttons', 'Date', 'File'].every((k) => kinds.includes(k)) && added && required && options.join('|') === 'Option 1|Option 2',
+      JSON.stringify({ start, added, required, options }));
+    await shot('form-fields');
+    // Barre de navigation : lien ajouté vers une page, puis renommé.
+    await tab('layers');
+    await page.locator('.layers-tree .layer .layer-label', { hasText: /^Paragraph$/ }).first().click(); await w(400);
+    await tab('insert'); await page.dblclick('.insert-item[data-item="insert-navbar"]'); await w(1500);
+    await tab('layers');
+    await page.locator('.layers-tree .layer .layer-label', { hasText: /^Navbar$/ }).first().click(); await w(700);
+    const links = () => page.$$eval(`${STY} .items-row`, (l) => l.map((e) => e.querySelector('.items-name').textContent.trim() + '→' + (e.querySelector('.items-target')?.textContent || '')));
+    const l0 = await links();
+    await page.click(`${STY} [data-action="items-add-link"]`); await w(300);
+    const choices = await menu();
+    const target = choices.find((i) => i.note && i.note !== '/');
+    await pick(target.label);
+    const l1 = await until(async () => { const l = await links(); return l.length === l0.length + 1 && l.at(-1) === `${target.label}→${target.note}` ? l : false; });
+    await page.locator(`${STY} .items-row`).last().hover();
+    await page.locator(`${STY} .items-row`).last().locator('[data-action="items-rename"]').click();
+    await until(() => page.$(`${STY} .items-rename`));
+    await page.keyboard.type('Shop'); await page.keyboard.press('Enter');
+    const renamed = await until(async () => (await links()).at(-1) === `Shop→${target.note}`);
+    check('tools: navbar link added to a chosen page (its address shown), then renamed in place',
+      !!l1 && renamed && choices.some((i) => i.label === 'Web address…') && choices.some((i) => i.label === 'New page…'), JSON.stringify({ l0, target, renamed }));
+    await shot('navbar-links');
+    for (let i = 0; i < 12 && JSON.stringify((await home()).body) !== before; i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
+    check('tools: every step undone', JSON.stringify((await home()).body) === before);
   }
   check('no error in the interface', errors.length === 0, errors.join(' | '));
 } catch (e) {

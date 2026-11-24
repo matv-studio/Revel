@@ -722,7 +722,7 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                 // élément ajouté après le chargement).
                 let field = NodeRef::<leptos::html::Input>::new();
                 request_animation_frame(move || {
-                    if let Some(i) = field.get_untracked() {
+                    if let Some(i) = field.try_get_untracked().flatten() {
                         let _ = i.focus();
                     }
                 });

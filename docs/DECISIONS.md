@@ -2911,4 +2911,33 @@ d'icônes et imports en maquette.**
   collections (`.pages.yml`), aujourd'hui lu seulement par l'éditeur ; à décider : libellé partout, ou réglage
   « libellé / valeur » sur l'élément. P11 et P14 : à reproduire (poignée de largeur d'une image de bloc ;
   taille des textes d'un import Framer).
+- **Logique des outils, maquettes validées le 24/11 à 15 h 44** : liens de la barre de navigation (liste à
+  poignée, nom modifiable, cible, « Add a link » qui propose les pages, une adresse web ou une nouvelle page) ;
+  champs d'un formulaire (liste, « Add a field » : texte, e-mail, téléphone, texte long, liste déroulante, case,
+  boutons radio, date, fichier ; après l'envoi : message ou page ; destinataire propre au formulaire) ; filtres
+  de liste (liste et champ choisis, boutons tirés des valeurs du champ, bouton « All », plusieurs valeurs) ;
+  assistant de première publication en trois étapes vers GitHub Pages, avec l'info-bulle sur l'hébergement
+  payant. **Refusé** : le bouton « Insert » en tête de barre (doublon de l'onglet d'ajout) ; l'onglet « Add »
+  sera renommé « Insert » lors de la passe de vocabulaire.
+
+**D-199 — 24/11/2026 — prise (maquettes validées le 24/11 à 15 h 44).**
+**Logique des outils, premier envoi : liens de la barre de navigation, champs de formulaire, pose d'une
+section.**
+- **Liens d'une barre de navigation** (audit M6) : chaque ligne montre la destination ; « Add a link » propose
+  les pages du site, « Web address… » et « New page… » (la page est créée et le lien posé) ; le lien ajouté
+  reprend la forme du dernier (`make::add_link_item`) avec son texte et sa destination, plus une copie à
+  corriger. Renommage sur place par le crayon de la ligne (`make::rename_link_item`) : le clic sur une ligne
+  sélectionne déjà le lien dans la page, le double-clic n'était donc pas disponible.
+- **Champs d'un formulaire** (audit M7, module `revel_edit::formfields`) : liste des champs (nom, sorte,
+  astérisque des champs obligatoires, monter, descendre, retirer, renommer), « Add a field » : texte, e-mail,
+  téléphone, texte long, liste déroulante, case, boutons radio, date, fichier. Le champ ajouté reprend les
+  classes d'un champ déjà là, se place avant le bouton d'envoi, et son nom est demandé aussitôt. Une liste
+  déroulante montre ses valeurs sous sa ligne. Le clic sur une ligne garde le formulaire sélectionné.
+- **Section complète** (audit M2) : posée après la section qui contient la sélection, pas dedans
+  (`insert::section_point`).
+- **En suspens, second envoi** : « After sending » (message ou page) et destinataire propres à un formulaire
+  (le script d'envoi est commun au site : `revel-render/src/forms.rs` à étendre) ; filtres de liste ; assistant
+  de première publication ; M3 (marges des outils hors bloc), M9 (titre du modèle Vide), M10 (corps « Texte »
+  dans les champs d'un contenu), M12 (double-clic, Ctrl+B / Ctrl+I), M13 (contenus d'attente). Le nom
+  technique d'un champ ajouté (`name`) vient de sa sorte et ne suit pas le renommage.
 

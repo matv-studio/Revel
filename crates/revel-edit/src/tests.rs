@@ -3116,3 +3116,160 @@ fn composant_copie_et_composant_vide() {
     .unwrap();
     assert!(make::duplicate_component(&s, "absent", "copie").is_err());
 }
+
+#[test]
+fn lien_ajoute_et_renomme() {
+    // Audit M6 : « Ajouter un lien » pose un lien vers une page choisie (plus une copie du
+    // dernier), et un lien se renomme depuis la liste.
+    let mut s = sample();
+    s.pages[0].body = vec![el(
+        "nav",
+        &[],
+        vec![
+            el(
+                "a",
+                &[("href", "/"), ("class", "lien")],
+                vec![text("Accueil")],
+            ),
+            el(
+                "a",
+                &[
+                    ("href", "/projets/"),
+                    ("class", "lien"),
+                    ("aria-current", "page"),
+                ],
+                vec![el("span", &[], vec![text("Projets")])],
+            ),
+        ],
+    )];
+    s.ensure_ids();
+    let owner = Owner::Page(s.pages[0].id.clone());
+    let nav = Target {
+        owner: owner.clone(),
+        node: node_id(&s.pages[0].body[0]).unwrap().to_string(),
+    };
+    let (cmd, id) = make::add_link_item(&s, &nav, "Contact", "/contact/").unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let json = serde_json::to_string(&s.pages[0].body).unwrap();
+    assert!(
+        json.contains(r#""value":"/contact/""#) && json.contains("Contact"),
+        "{json}"
+    );
+    assert_eq!(json.matches("aria-current").count(), 1, "{json}");
+    assert_eq!(json.matches("Projets").count(), 1, "{json}");
+    let added = Target {
+        owner: owner.clone(),
+        node: id,
+    };
+    let cmd = make::rename_link_item(&s, &added, "Nous écrire").unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let json = serde_json::to_string(&s.pages[0].body).unwrap();
+    assert!(
+        json.contains("Nous écrire") && !json.contains("Contact\""),
+        "{json}"
+    );
+    assert!(json.contains(r#""tag":"span""#), "{json}");
+}
+
+#[test]
+fn champs_de_formulaire() {
+    // Audit M7 : liste des champs d'un formulaire, champ ajouté avant le bouton d'envoi avec
+    // les classes des champs déjà là, valeurs d'une liste déroulante.
+    use crate::formfields::{self, FieldKind};
+    let mut s = sample();
+    s.pages[0].body = vec![el(
+        "form",
+        &[("class", "formulaire")],
+        vec![
+            el(
+                "div",
+                &[],
+                vec![el(
+                    "label",
+                    &[("class", "champ")],
+                    vec![
+                        el("span", &[("class", "champ__libelle")], vec![text("Nom")]),
+                        el(
+                            "input",
+                            &[
+                                ("class", "champ__saisie"),
+                                ("type", "text"),
+                                ("name", "nom"),
+                                ("required", ""),
+                            ],
+                            vec![],
+                        ),
+                    ],
+                )],
+            ),
+            el("button", &[("type", "submit")], vec![text("Envoyer")]),
+        ],
+    )];
+    s.ensure_ids();
+    let owner = Owner::Page(s.pages[0].id.clone());
+    let form = Target {
+        owner: owner.clone(),
+        node: node_id(&s.pages[0].body[0]).unwrap().to_string(),
+    };
+    let list = formfields::fields(&s.pages[0].body[0]);
+    assert_eq!(list.len(), 1);
+    assert_eq!(
+        (list[0].label.as_str(), list[0].kind, list[0].required),
+        ("Nom", FieldKind::Text, true)
+    );
+    let (cmd, _) = formfields::add_field(
+        &s,
+        &form,
+        FieldKind::Dropdown,
+        "Sujet",
+        &["Devis".to_string(), "Autre".to_string()],
+    )
+    .unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let (cmd, _) = formfields::add_field(&s, &form, FieldKind::Email, "Nom", &[]).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let list = formfields::fields(&s.pages[0].body[0]);
+    assert_eq!(
+        list.iter()
+            .map(|f| (f.label.as_str(), f.kind, f.name.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("Nom", FieldKind::Text, "nom"),
+            ("Sujet", FieldKind::Dropdown, "sujet"),
+            ("Nom", FieldKind::Email, "nom_2"),
+        ]
+    );
+    assert_eq!(list[1].options, vec!["Devis", "Autre"]);
+    // Avant le bouton d'envoi, avec les classes du champ d'origine.
+    let Node::Element { children, .. } = &s.pages[0].body[0] else {
+        panic!()
+    };
+    assert!(matches!(children.last(), Some(Node::Element { tag, .. }) if tag == "button"));
+    let json = serde_json::to_string(&children[1]).unwrap();
+    assert!(
+        json.contains("champ__libelle")
+            && json.contains("champ__saisie")
+            && json.contains(r#""value":"champ""#),
+        "{json}"
+    );
+    // Valeurs remplacées, champ rendu obligatoire.
+    let select = Target {
+        owner: owner.clone(),
+        node: list[1].control.clone(),
+    };
+    let cmd = formfields::set_options(&s, &select, &["A".into(), "B".into(), "C".into()]).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    apply(&mut s, &formfields::set_required(&select, true)).unwrap();
+    let f = &formfields::fields(&s.pages[0].body[0])[1];
+    assert_eq!(f.options, vec!["A", "B", "C"]);
+    assert!(f.required);
+    // Case et boutons radio.
+    for (k, n) in [(FieldKind::Checkbox, 4), (FieldKind::Radio, 5)] {
+        let (cmd, _) =
+            formfields::add_field(&s, &form, k, "Accord", &["Oui".into(), "Non".into()]).unwrap();
+        apply(&mut s, &cmd).unwrap();
+        let l = formfields::fields(&s.pages[0].body[0]);
+        assert_eq!(l.len(), n);
+        assert_eq!(l[n - 1].kind, k);
+    }
+}

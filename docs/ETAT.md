@@ -62,6 +62,11 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
 - **24/11, 14 h 30 (D-198)** : ordre de la suite fixé (pannes mineures, outils, icônes, imports, styles par
   calque, vocabulaire, puis refonte des templates et des sites Alunites et MATV) ; pannes P6, P7, P8, P9, P10,
   P12, P13, P15 corrigées. Restent P4, P5 (décision), P11, P14.
+- **24/11, 17 h (D-199)** : logique des outils, premier envoi — liens de la barre de navigation (destination,
+  ajout vers une page, une adresse ou une nouvelle page, renommage), champs de formulaire (liste, neuf sortes,
+  obligatoire, valeurs d'une liste déroulante), section posée après la section sélectionnée. Second envoi à
+  faire : après l'envoi et destinataire par formulaire, filtres de liste, assistant de publication, M3, M9,
+  M10, M12, M13.
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

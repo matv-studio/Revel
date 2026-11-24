@@ -20,6 +20,24 @@ struct Item {
     /// L'élément a une image (à remplacer).
     img: bool,
     name: String,
+    /// Destination du lien (liste de liens) : adresse écrite, sinon vide.
+    href: String,
+}
+
+/// Destination du premier lien d'un élément (lui-même compris).
+fn first_href(n: &Node) -> Option<String> {
+    if let Node::Element { tag, attrs, .. } = n
+        && tag == "a"
+    {
+        return attrs
+            .iter()
+            .find(|a| a.name == "href")
+            .and_then(|a| a.value.clone());
+    }
+    revel_model::ids::child_lists(n)
+        .into_iter()
+        .flat_map(|l| l.iter())
+        .find_map(first_href)
 }
 
 fn items_of(n: &Node) -> Vec<Item> {
@@ -57,6 +75,7 @@ fn items_of(n: &Node) -> Vec<Item> {
                 src,
                 img: img.is_some(),
                 name,
+                href: first_href(k).unwrap_or_default(),
             })
         })
         .collect()
@@ -172,9 +191,105 @@ pub fn ItemsList(
             }
         });
     };
-    let add_link = move |_| {
-        if let Some(last) = items.with_untracked(|l| l.last().map(|x| x.id.clone())) {
-            ed.apply_keep(ui, Command::Duplicate { at: target(&last) });
+    // Lien ajouté vers `href`, nommé `text` (audit M6 : plus une copie du dernier lien).
+    let push_link = move |text: String, href: String| {
+        let cmd = ed.doc.with_untracked(|d| {
+            revel_edit::make::add_link_item(d.as_ref()?, &at.get_value(), &text, &href).ok()
+        });
+        if let Some((c, _)) = cmd {
+            ed.apply_keep(ui, c);
+        }
+    };
+    // « Ajouter un lien » : une page du site, une adresse web ou une nouvelle page.
+    let add_link = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        let mut list: Vec<CtxItem> = ed
+            .pages
+            .with_untracked(|ps| {
+                ps.iter()
+                    .filter(|p| p.page.is_some() && p.collection.is_none())
+                    .map(|p| {
+                        let title = if p.title.trim().is_empty() {
+                            p.url.clone()
+                        } else {
+                            p.title.clone()
+                        };
+                        (title, p.url.clone())
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .into_iter()
+            .map(|(title, url)| {
+                let (t, u) = (title.clone(), url.clone());
+                CtxItem::new(title, move || push_link(t.clone(), u.clone()))
+                    .icon(icons::page)
+                    .note(url)
+            })
+            .collect();
+        list.push(
+            CtxItem::new(ui.now("items-link-web", &[]), move || {
+                ui.ask.set(Some(crate::dialog::Ask::input(
+                    ui.now("items-add-link", &[]),
+                    ui.now("items-link-address", &[]),
+                    "https://".into(),
+                    ui.now("action-add", &[]),
+                    move |url| {
+                        let url = url.trim().to_string();
+                        if url.is_empty() || url == "https://" {
+                            return;
+                        }
+                        let name = url
+                            .trim_start_matches("https://")
+                            .trim_start_matches("http://")
+                            .trim_start_matches("www.")
+                            .split(['/', '?'])
+                            .next()
+                            .unwrap_or_default()
+                            .to_string();
+                        push_link(name, url);
+                    },
+                )));
+            })
+            .icon(icons::link)
+            .sep(),
+        );
+        list.push(
+            CtxItem::new(ui.now("items-link-new-page", &[]), move || {
+                ui.ask.set(Some(crate::dialog::Ask::input(
+                    ui.now("pages-new", &[]),
+                    ui.now("items-link-page-name", &[]),
+                    String::new(),
+                    ui.now("action-add", &[]),
+                    move |name| {
+                        let name = name.trim().to_string();
+                        let href = ed.doc.with_untracked(|d| {
+                            d.as_ref()
+                                .map(|d| revel_edit::make::new_page(d, &name, "").path)
+                        });
+                        if let (false, Some(href)) = (name.is_empty(), href) {
+                            push_link(name.clone(), href);
+                            crate::pageops::create(ui, ed, &name, "");
+                        }
+                    },
+                )));
+            })
+            .icon(icons::plus),
+        );
+        open(ui, &e, list);
+    };
+    // Lien en cours de renommage (double-clic sur son nom).
+    let renaming = RwSignal::new(None::<String>);
+    let rename = move |id: String, text: String| {
+        renaming.set(None);
+        let text = text.trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        let cmd = ed.doc.with_untracked(|d| {
+            revel_edit::make::rename_link_item(d.as_ref()?, &target(&id), &text).ok()
+        });
+        if let Some(c) = cmd {
+            ed.apply_keep(ui, c);
         }
     };
     let add = move |_| {
@@ -195,7 +310,7 @@ pub fn ItemsList(
                 <span class="label">{ui.t(if links { "items-links" } else { "items-title" })}</span>
                 <span class="muted items-count">{move || items.with(Vec::len)}</span>
             </div>
-            <For each=move || named.get() key=|it| (it.id.clone(), it.src.clone(), it.name.clone()) let:it>
+            <For each=move || named.get() key=|it| (it.id.clone(), it.src.clone(), it.name.clone(), it.href.clone()) let:it>
                 {
                     let it = StoredValue::new(it);
                     let id = it.with_value(|i| i.id.clone());
@@ -230,11 +345,39 @@ pub fn ItemsList(
                                     }}
                                 </span>
                                 <span class="items-name">{it.with_value(|i| i.name.clone())}</span>
+                                {links.then(|| view! { <span class="items-target mono">{it.with_value(|i| i.href.clone())}</span> })}
                             </button>
+                            {{
+                                let id = id.clone();
+                                move || (renaming.get().as_deref() == Some(id.as_str())).then(|| {
+                                    let (a, b) = (id.clone(), id.clone());
+                                    let field = NodeRef::<leptos::html::Input>::new();
+                                    request_animation_frame(move || {
+                                        if let Some(i) = field.try_get_untracked().flatten() {
+                                            let _ = i.focus();
+                                            i.select();
+                                        }
+                                    });
+                                    view! {
+                                        <input class="input items-rename" node_ref=field aria-label=ui.t("items-rename-help")
+                                            prop:value=it.with_value(|i| i.name.clone())
+                                            on:keydown=move |e: leptos::ev::KeyboardEvent| match e.key().as_str() {
+                                                "Enter" => rename(a.clone(), event_target_value(&e)),
+                                                "Escape" => { e.stop_propagation(); renaming.set(None) }
+                                                _ => {}
+                                            }
+                                            on:blur=move |e| if renaming.get_untracked().is_some() { rename(b.clone(), event_target_value(&e)) }/>
+                                    }
+                                })
+                            }}
                             <span class="items-actions">
                                 {has_img.then(|| view! {
                                     <button class="icon-btn icon-btn--small" title=ui.t("items-replace") aria-label=ui.t("items-replace")
                                         on:click=move |_| replace(i1.clone())>{icons::image()}</button>
+                                })}
+                                {links.then(|| view! {
+                                    <button class="icon-btn icon-btn--small" data-action="items-rename" title=ui.t("component-rename") aria-label=ui.t("component-rename")
+                                        on:click={ let id = id.clone(); move |_| renaming.set(Some(id.clone())) }>{icons::edit()}</button>
                                 })}
                                 {(!fixed).then(|| view! {
                                     <button class="icon-btn icon-btn--small" title=ui.t("items-up") aria-label=ui.t("items-up")

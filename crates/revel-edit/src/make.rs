@@ -41,6 +41,126 @@ pub fn duplicate(site: &Site, at: &Target) -> Result<(Command, String), EditErro
     ))
 }
 
+/// Premier lien d'un sous-arbre (lui-même compris), modifiable.
+fn first_link_mut(n: &mut Node) -> Option<&mut Node> {
+    if matches!(n, Node::Element { tag, .. } if tag == "a") {
+        return Some(n);
+    }
+    child_lists_mut(n)
+        .into_iter()
+        .flat_map(|l| l.iter_mut())
+        .find_map(first_link_mut)
+}
+
+/// Écrit `text` à la place du premier texte non vide de l'élément (sinon l'ajoute).
+fn set_first_text(n: &mut Node, text: &str) -> bool {
+    let Node::Element { children, .. } = n else {
+        return false;
+    };
+    for c in children.iter_mut() {
+        match c {
+            Node::Text { text: t } if !t.trim().is_empty() => {
+                *t = text.to_string();
+                return true;
+            }
+            Node::Out { .. } => {
+                *c = Node::Text {
+                    text: text.to_string(),
+                };
+                return true;
+            }
+            Node::Element { .. } => {
+                if set_first_text(c, text) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    if children.iter().all(|c| matches!(c, Node::Text { .. })) {
+        children.clear();
+        children.push(Node::Text {
+            text: text.to_string(),
+        });
+        return true;
+    }
+    false
+}
+
+/// Lien ajouté à la fin d'une liste de liens (barre de navigation, audit M6) : copie du dernier
+/// élément, avec le texte `text` et la destination `href` ; liste vide : un lien simple. Renvoie
+/// la commande et l'identifiant de l'élément ajouté.
+pub fn add_link_item(
+    site: &Site,
+    list: &Target,
+    text: &str,
+    href: &str,
+) -> Result<(Command, String), EditError> {
+    let host = address::node(site, list)?;
+    let kids = revel_model::ids::child_lists(host)
+        .into_iter()
+        .next()
+        .ok_or(EditError::NoBranch)?;
+    let mut taken = site.node_ids();
+    let last = kids
+        .iter()
+        .rposition(|k| revel_model::ids::node_id(k).is_some());
+    let mut item = match last.map(|i| kids[i].clone()) {
+        Some(mut copy) => {
+            refresh_ids(&mut copy, &mut taken);
+            copy
+        }
+        None => Node::Element {
+            id: Some(fresh(&taken)),
+            tag: "a".into(),
+            attrs: Vec::new(),
+            children: vec![Node::Text {
+                text: String::new(),
+            }],
+        },
+    };
+    if let Some(Node::Element { attrs, .. }) = first_link_mut(&mut item) {
+        attrs.retain(|a| !matches!(a.name.as_str(), "href" | "target" | "rel" | "aria-current"));
+        attrs.push(revel_model::Attr {
+            name: "href".into(),
+            value: Some(href.to_string()),
+            when: None,
+        });
+    }
+    if let Some(link) = first_link_mut(&mut item) {
+        set_first_text(link, text);
+    }
+    let id = revel_model::ids::node_id(&item)
+        .unwrap_or_default()
+        .to_string();
+    Ok((
+        Command::Insert {
+            parent: Parent::of(list, Branch::Children),
+            index: last.map_or(kids.len(), |i| i + 1),
+            node: item,
+        },
+        id,
+    ))
+}
+
+/// Élément d'une liste de liens renommé (audit M6) : son premier texte écrit devient `text`.
+pub fn rename_link_item(site: &Site, at: &Target, text: &str) -> Result<Command, EditError> {
+    let (parent, index) = address::locate(site, at)?;
+    let mut node = address::node(site, at)?.clone();
+    let done = match first_link_mut(&mut node) {
+        Some(link) => set_first_text(link, text),
+        None => set_first_text(&mut node, text),
+    };
+    if !done {
+        return Err(EditError::NotFound("texte du lien".into()));
+    }
+    Ok(Command::Replace {
+        parent,
+        index,
+        node,
+    })
+}
+
 /// Première image écrite d'un élément (lui-même ou un descendant) : vignette et remplacement
 /// des éléments d'un défilement ou d'un carrousel (D-123).
 pub fn first_image(n: &Node) -> Option<&revel_model::ImageNode> {

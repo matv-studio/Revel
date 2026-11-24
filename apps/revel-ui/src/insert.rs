@@ -82,6 +82,50 @@ pub fn insertion_point(ed: Ed) -> Option<(Parent, usize)> {
     })
 }
 
+/// Emplacement d'une section complète (audit M2) : après la section qui contient la sélection, pas
+/// dedans ; sans section autour, l'emplacement habituel.
+pub fn section_point(ed: Ed) -> Option<(Parent, usize)> {
+    let page = page_id(ed);
+    let after = ed.selected_target().and_then(|start| {
+        ed.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let mut t = start;
+            let mut found = None;
+            // Section la plus extérieure autour de la sélection.
+            loop {
+                let (p, i) = revel_edit::address::locate(d, &t).ok()?;
+                if let Ok(Node::Element { tag, .. }) = revel_edit::address::node(d, &t)
+                    && matches!(
+                        tag.to_ascii_lowercase().as_str(),
+                        "section" | "header" | "footer"
+                    )
+                {
+                    found = Some((p.clone(), i + 1));
+                }
+                match p.node.clone() {
+                    Some(id) => {
+                        t = Target {
+                            owner: t.owner.clone(),
+                            node: id,
+                        }
+                    }
+                    None => break,
+                }
+            }
+            found.map(|(p, i)| into_page(d, page.as_deref(), p, i))
+        })
+    });
+    after.or_else(|| insertion_point(ed))
+}
+
+/// Un élément du panneau qui pose une section complète.
+fn is_section(preset: Preset) -> bool {
+    groups()
+        .iter()
+        .flat_map(|(_, items)| items.iter())
+        .any(|it| it.preset == Some(preset) && it.tag == "section")
+}
+
 /// Emplacement d'insertion corrigé pour qu'un ajout arrive là où on l'attend :
 /// - autour de l'emplacement du contenu d'un gabarit (dans la liste qui le contient, ou dans
 ///   `html`, `body`, `main`… qui le contiennent) : dans la page affichée (au début avant
@@ -744,7 +788,12 @@ pub fn palette_items() -> Vec<PaletteItem> {
 
 /// Ajoute un élément dans l'élément sélectionné (ou juste après lui), sinon à la fin de la page.
 pub fn add_preset(ui: Ui, ed: Ed, preset: Preset, text_key: &'static str) {
-    let Some((parent, index)) = insertion_point(ed) else {
+    let point = if is_section(preset) {
+        section_point(ed)
+    } else {
+        insertion_point(ed)
+    };
+    let Some((parent, index)) = point else {
         ui.fail(revel_protocol::Failure::new("insert-no-place"));
         return;
     };
@@ -756,7 +805,12 @@ pub fn Insert() -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
     let add = move |preset: Preset, text_key: &'static str| {
-        let Some((parent, index)) = insertion_point(ed) else {
+        let point = if is_section(preset) {
+            section_point(ed)
+        } else {
+            insertion_point(ed)
+        };
+        let Some((parent, index)) = point else {
             ui.fail(revel_protocol::Failure::new("insert-no-place"));
             return;
         };

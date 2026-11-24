@@ -2008,6 +2008,8 @@ fn form_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Opti
                 false,
             );
         };
+        // Champs du formulaire (audit M7) : liste, ajout par sorte.
+        groups.push(crate::formfields::fields(ui, ed, &at.get_value()));
         let on = name.is_some();
         groups.push(
             view! {

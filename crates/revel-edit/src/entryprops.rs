@@ -312,6 +312,7 @@ fn prop_for(
 ) -> PropDef {
     match read {
         Read::Url => PropDef {
+            options: Vec::new(),
             name,
             label: Some(page_label.to_string()),
             kind: PropKind::Link,
@@ -346,6 +347,7 @@ fn prop_for(
                 _ => None,
             };
             PropDef {
+                options: Vec::new(),
                 name,
                 label: Some(label),
                 kind,
@@ -654,6 +656,7 @@ pub fn lift_list_reads(
     // Propriété « Contenu » provisoire, que la conversion de D-191 remplace par une propriété par
     // lecture ; les utilisations lui donnent l'élément de la liste.
     s.components[ci].props.push(PropDef {
+        options: Vec::new(),
         name: var.to_string(),
         label: None,
         kind: PropKind::Entry,

@@ -51,6 +51,11 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   variables sur la racine seulement, Nouveau site (onglet Revel, état en ligne / hors connexion), molette sur
   les onglets, Ctrl+molette dans Médias. Maquettes en attente : outil « CMS field », menus du clic droit
   (Pages, Components, Assets). Essais d'interface en anglais. E2e à écrire pour ces nouveautés.
+- **24/11, 5 h (D-196)** : bouton de liaison à côté des champs, variables nommées d'après le calque, types
+  nombre / choix / icône ; « Content » d'une utilisation seulement si elle lit le CMS ; outil « CMS field » hors
+  d'une liste (menus Collections et Field, contenu lu) ; menus du clic droit de Pages, Components, Assets ;
+  `tools/panels-e2e.mjs` (23 essais, en anglais) et son étape de CI. Restent : « Import pages… », « Import
+  component… » (source à définir), voir « En suspens » de D-196.
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

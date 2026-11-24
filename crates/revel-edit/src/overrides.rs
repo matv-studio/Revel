@@ -129,6 +129,7 @@ pub fn set_override(
     let over = format!("{name} or {expr}");
     let mut props = c.props.clone();
     props.push(PropDef {
+        options: Vec::new(),
         name: name.clone(),
         label: Some(field_label(expr)),
         kind: PropKind::Text,
@@ -206,6 +207,7 @@ mod tests {
             )],
         );
         c.props.push(PropDef {
+            options: Vec::new(),
             name: "projet".into(),
             label: None,
             kind: PropKind::Entry,

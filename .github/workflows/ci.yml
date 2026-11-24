@@ -342,6 +342,19 @@ jobs:
           export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
           echo "## Site d'après un modèle" >> "$GITHUB_STEP_SUMMARY"
           node tools/templates-e2e.mjs http://127.0.0.1:8170 http://127.0.0.1:8166 modele-essai captures-ecarts/modele | tee -a "$GITHUB_STEP_SUMMARY"
+      # Panneaux et composants (D-195, D-196), interface en anglais : menus du vide des panneaux,
+      # molette, variables de composant (liaison, nombre, choix, icône), outil « CMS field » hors
+      # d'une liste. Site neuf du modèle Portfolio, seconde collection ajoutée par `--prepare`.
+      - name: Panneaux et composants, de bout en bout
+        shell: bash
+        run: |
+          target/release/revel new panneaux-essai --name Atelier --template portfolio
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          node tools/panels-e2e.mjs --prepare panneaux-essai
+          target/release/revel canvas-serve panneaux-essai --port 8168 --bridge > pont-panneaux.log 2>&1 &
+          sleep 2
+          echo "## Panneaux et composants" >> "$GITHUB_STEP_SUMMARY"
+          node tools/panels-e2e.mjs http://127.0.0.1:8170 http://127.0.0.1:8168 captures-ecarts/panneaux | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Captures en écart
         if: failure()
         uses: actions/upload-artifact@v7

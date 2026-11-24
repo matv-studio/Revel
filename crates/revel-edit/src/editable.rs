@@ -907,6 +907,7 @@ mod tests {
             vec![el("div", &[], vec![el("strong", &[], vec![out("valeur")])])],
         );
         c.props.push(PropDef {
+            options: Vec::new(),
             collection: None,
             name: "valeur".into(),
             label: None,

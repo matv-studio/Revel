@@ -579,6 +579,7 @@ fn proprietes_de_composant() {
     );
     carte.props = vec![
         revel_model::PropDef {
+            options: Vec::new(),
             collection: None,
             name: "titre".into(),
             label: None,
@@ -586,6 +587,7 @@ fn proprietes_de_composant() {
             default: Some(json!("Sans titre")),
         },
         revel_model::PropDef {
+            options: Vec::new(),
             collection: None,
             name: "lien".into(),
             label: None,
@@ -593,6 +595,7 @@ fn proprietes_de_composant() {
             default: None,
         },
         revel_model::PropDef {
+            options: Vec::new(),
             collection: None,
             name: "visible".into(),
             label: None,
@@ -2045,6 +2048,7 @@ fn emplacement_de_composant() {
         parse(r#"<section class="groupe"><h3>{{ titre }}</h3><ul class="liste" data-revel-slot><li>Défaut</li></ul></section>"#),
     ));
     s.components.last_mut().unwrap().props = vec![revel_model::PropDef {
+        options: Vec::new(),
         collection: None,
         name: "titre".into(),
         label: None,
@@ -2056,6 +2060,7 @@ fn emplacement_de_composant() {
         parse(r#"<li class="outil">{{ nom }}</li>"#),
     ));
     s.components.last_mut().unwrap().props = vec![revel_model::PropDef {
+        options: Vec::new(),
         collection: None,
         name: "nom".into(),
         label: None,
@@ -2135,6 +2140,7 @@ fn contenu_d_une_utilisation_relie() {
         parse(r#"<article><h3>{{ projet.data.title }}</h3></article>"#),
     );
     carte.props = vec![revel_model::PropDef {
+        options: Vec::new(),
         collection: Some("projets".into()),
         name: "projet".into(),
         label: None,
@@ -2170,6 +2176,7 @@ fn contenu_d_une_utilisation_relie() {
         .unwrap()
         .props
         .push(revel_model::PropDef {
+            options: Vec::new(),
             collection: None,
             name: "titre".into(),
             label: None,
@@ -2229,4 +2236,129 @@ fn cadrage_d_une_image_produit() {
         "{}",
         ed.html
     );
+}
+
+#[test]
+fn variables_nombre_choix_icone() {
+    // D-196 : variables « Nombre », « Choix » et « Icône » d'un composant.
+    let mut s = site();
+    s.pages[0].body.clear();
+    s.components.push(Component::new(
+        "atout",
+        parse(r#"<div class="atout"><svg class="icone" data-icon="{{ icone }}" viewBox="0 0 24 24">{{ icone | icon }}</svg><b>{{ nombre }}</b><i>{{ taille }}</i></div>"#),
+    ));
+    let prop =
+        |name: &str, kind, default: serde_json::Value, options: &[&str]| revel_model::PropDef {
+            options: options.iter().map(|o| o.to_string()).collect(),
+            collection: None,
+            name: name.into(),
+            label: None,
+            kind,
+            default: Some(default),
+        };
+    s.components.last_mut().unwrap().props = vec![
+        prop(
+            "icone",
+            revel_model::PropKind::Icon,
+            json!("fleche-droite"),
+            &[],
+        ),
+        prop("nombre", revel_model::PropKind::Number, json!(12), &[]),
+        prop(
+            "taille",
+            revel_model::PropKind::Choice,
+            json!("Petit"),
+            &["Petit", "Grand"],
+        ),
+    ];
+    let use_ = |id: &str, args: &[(&str, &str)]| Node::Use {
+        id: Some(id.into()),
+        component: "atout".into(),
+        args: args
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+        variant: None,
+        attrs: Vec::new(),
+        children: Vec::new(),
+    };
+    s.pages[0].body.push(use_("a1", &[]));
+    s.pages[0].body.push(use_(
+        "a2",
+        &[
+            ("icone", "\"fleche-gauche\""),
+            ("nombre", "3.5"),
+            ("taille", "\"Grand\""),
+        ],
+    ));
+    s.ensure_ids();
+    let out = build(&input(&s, Vec::new())).unwrap();
+    let home = file(&out, "index.html");
+    let check = revel_edit::icons::icon("fleche-droite").unwrap();
+    let star = revel_edit::icons::icon("fleche-gauche").unwrap();
+    assert!(
+        home.contains(&format!(
+            r#"data-icon="fleche-droite" viewBox="0 0 24 24">{check}</svg><b>12</b><i>Petit</i>"#
+        )),
+        "{home}"
+    );
+    assert!(
+        home.contains(&format!(
+            r#"data-icon="fleche-gauche" viewBox="0 0 24 24">{star}</svg><b>3.5</b><i>Grand</i>"#
+        )),
+        "{home}"
+    );
+    // Le site relu garde les valeurs proposées.
+    let json = serde_json::to_string(&s.components.last().unwrap().props).unwrap();
+    assert!(
+        json.contains(r#""type":"choice""#) && json.contains(r#""options":["Petit","Grand"]"#),
+        "{json}"
+    );
+}
+
+#[test]
+fn champ_cms_hors_liste() {
+    // D-196 : champ d'un contenu lu hors de toute liste, par l'identifiant du contenu ou le
+    // premier de la collection.
+    let mut s = site();
+    let col = s.collections[0].id.clone();
+    s.pages[0].body = parse(&format!(
+        r#"<p class="un">{{{{ entry("{col}", "b").data.title }}}}</p><p class="deux">{{{{ collections.{col}[0].data.title }}}}</p><a class="trois" href="{{{{ entry("{col}", "b").url }}}}">Voir</a><p class="quatre">{{{{ entry("{col}", "absent").data.title }}}}</p>"#
+    ));
+    s.ensure_ids();
+    let inp = input(
+        &s,
+        vec![
+            entry(
+                "a",
+                json!({"slug": "a", "title": "Projet A", "date": "2026-01-02"}),
+            ),
+            entry(
+                "b",
+                json!({"slug": "b", "title": "Projet B", "date": "2026-03-01"}),
+            ),
+        ],
+    );
+    let out = build(&inp).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let home = file(&out, "index.html");
+    assert!(home.contains(r#"<p class="un">Projet B</p>"#), "{home}");
+    assert!(home.contains(r#"<p class="deux">Projet "#), "{home}");
+    assert!(
+        home.contains(r#"<a class="trois" href="/"#) && !home.contains(r#"href="""#),
+        "{home}"
+    );
+    assert!(home.contains(r#"<p class="quatre"></p>"#), "{home}");
+    // Éditeur : même rendu.
+    let ed = render_editor(
+        &inp,
+        "/",
+        &EditorOptions {
+            scripts: false,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .unwrap();
+    assert!(ed.html.contains("Projet B"), "{}", ed.html);
 }

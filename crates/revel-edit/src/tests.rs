@@ -1153,6 +1153,7 @@ fn composants_creer_proprietes_detacher() {
             id: id.clone(),
             props: vec![
                 revel_model::PropDef {
+                    options: Vec::new(),
                     collection: None,
                     name: "titre".into(),
                     label: Some("Titre".into()),
@@ -1160,6 +1161,7 @@ fn composants_creer_proprietes_detacher() {
                     default: Some(serde_json::json!("Bonjour")),
                 },
                 revel_model::PropDef {
+                    options: Vec::new(),
                     collection: None,
                     name: "visible".into(),
                     label: None,
@@ -1176,6 +1178,7 @@ fn composants_creer_proprietes_detacher() {
             &Command::SetComponentProps {
                 id: id.clone(),
                 props: vec![revel_model::PropDef {
+                    options: Vec::new(),
                     collection: None,
                     name: "page".into(),
                     label: None,
@@ -1284,6 +1287,7 @@ fn detacher_condition_et_expression() {
     let mut c = Component::new("bouton", body);
     c.props = vec![
         revel_model::PropDef {
+            options: Vec::new(),
             collection: None,
             name: "visible".into(),
             label: None,
@@ -1291,6 +1295,7 @@ fn detacher_condition_et_expression() {
             default: Some(serde_json::json!(true)),
         },
         revel_model::PropDef {
+            options: Vec::new(),
             collection: None,
             name: "lien".into(),
             label: None,
@@ -1298,6 +1303,7 @@ fn detacher_condition_et_expression() {
             default: None,
         },
         revel_model::PropDef {
+            options: Vec::new(),
             collection: None,
             name: "titre".into(),
             label: None,
@@ -2426,6 +2432,7 @@ fn proprietes_du_gabarit() {
     // Variable de page lue par le gabarit : relevée (donnée de page et condition écrite).
     assert_eq!(flagged(&s), 2);
     let field = PropDef {
+        options: Vec::new(),
         collection: None,
         name: "masquer".into(),
         label: Some("Masquer l'appel".into()),
@@ -3063,4 +3070,49 @@ fn fonction_d_un_outil_garde_le_media() {
     assert_eq!(make::media_of(&n).video.as_deref(), Some("/media/film.mp4"));
     apply(&mut s, &inv).unwrap();
     assert_eq!(json(&s), before);
+}
+
+#[test]
+fn composant_copie_et_composant_vide() {
+    // D-196 : « Coller » un composant copié (nouveaux identifiants, nom « (copie) ») et
+    // « Nouveau composant » (cadre vide).
+    let mut s = sample();
+    s.components.push(Component::new(
+        "carte",
+        vec![el("article", &[], vec![el("h3", &[], vec![text("Titre")])])],
+    ));
+    s.ensure_ids();
+    let copy = make::duplicate_component(&s, "carte", "copie").unwrap();
+    assert_eq!(copy.id, "carte-copie");
+    assert_eq!(copy.name.as_deref(), Some("carte (copie)"));
+    let ids = s.node_ids();
+    let mut fresh = Vec::new();
+    revel_model::ids::walk(&copy.body, &mut |n| {
+        fresh.extend(node_id(n).map(str::to_string))
+    });
+    assert_eq!(fresh.len(), 2);
+    assert!(fresh.iter().all(|i| !ids.contains(i)), "{fresh:?}");
+    apply(
+        &mut s,
+        &Command::AddComponent {
+            component: copy,
+            index: None,
+        },
+    )
+    .unwrap();
+    let empty = make::empty_component(&s, "Bandeau promo");
+    assert_eq!(empty.id, "bandeau-promo");
+    assert_eq!(empty.name.as_deref(), Some("Bandeau promo"));
+    assert!(
+        matches!(empty.body.as_slice(), [Node::Element { tag, children, .. }] if tag == "div" && children.is_empty())
+    );
+    apply(
+        &mut s,
+        &Command::AddComponent {
+            component: empty,
+            index: None,
+        },
+    )
+    .unwrap();
+    assert!(make::duplicate_component(&s, "absent", "copie").is_err());
 }

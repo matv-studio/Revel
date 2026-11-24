@@ -346,10 +346,14 @@ impl<'a> Builder<'a> {
                 dimmed: false,
             shown: None,
                 tool: match n {
-                    Node::Element { attrs, .. } if revel_model::is_widget(n) => attrs
-                        .iter()
-                        .find(|a| a.name == revel_model::BASE_ATTR)
-                        .and_then(|a| a.value.clone()),
+                    Node::Element { attrs, .. }
+                        if revel_model::is_widget(n) || crate::blocks::is_cms_field(n) =>
+                    {
+                        attrs
+                            .iter()
+                            .find(|a| a.name == revel_model::BASE_ATTR)
+                            .and_then(|a| a.value.clone())
+                    }
                     _ => None,
                 },
             });
@@ -1526,8 +1530,18 @@ pub fn Layers() -> impl IntoView {
                             ed.doc.with(|d| crate::components::prop_filling(d.as_ref()?, &at))
                         });
                         let preview = move || {
-                            if let Some((c, f)) = cms.get() {
-                                return Some(format!("{c} › {f}"));
+                            // Champ CMS (D-196) : le calque porte le nom du champ ; à côté, la valeur
+                            // lue (aperçu du rendu), sinon la collection.
+                            if let Some((c, _)) = cms.get() {
+                                let id = r.with_value(|r| r.id.clone());
+                                let value = r.with_value(|r| r.preview.clone()).or_else(|| ed.previews.with(|m| {
+                                    let id = id.as_ref()?;
+                                    inst.as_ref()
+                                        .and_then(|u| m.get(&format!("{u}/{id}")))
+                                        .or_else(|| m.get(id))
+                                        .map(|t| short(t, 48))
+                                }));
+                                return Some(value.filter(|v| !v.trim().is_empty()).unwrap_or(c));
                             }
                             if let Some(p) = prop.get() {
                                 return Some(p);
@@ -1673,10 +1687,18 @@ pub fn Layers() -> impl IntoView {
                                     class:is-hidden=!has_children on:click=toggle>
                                     {if open { icons::chevron_down() } else { icons::chevron_right() }}
                                 </button>
-                                <span class="layer-icon">{match tool.as_deref().and_then(crate::names::tool_icon) {
-                                    Some(i) => i,
-                                    None => icon(&kind, textual, has_children),
-                                }}</span>
+                                <span class="layer-icon" class:is-cms=move || cms.with(Option::is_some)>{
+                                    let kind = kind.clone();
+                                    let tool = tool.clone();
+                                    move || if cms.with(Option::is_some) {
+                                        icons::database()
+                                    } else {
+                                        match tool.as_deref().and_then(crate::names::tool_icon) {
+                                            Some(i) => i,
+                                            None => icon(&kind, textual, has_children),
+                                        }
+                                    }
+                                }</span>
                                 {let kind = kind.clone(); move || if is_renaming() {
                                     let at = StoredValue::new(r.with_value(|r| r.id.clone().map(|id| Target { owner: r.owner.clone(), node: id })));
                                     let initial = r.with_value(|r| shown_name(ui, r));
@@ -1708,8 +1730,10 @@ pub fn Layers() -> impl IntoView {
                                             move || r.with_value(|r| r.name.clone()).unwrap_or_else(|| {
                                                 match zone.get() {
                                                     Some(f) => ui.now(if f { "zone-footer" } else { "zone-header" }, &[]),
-                                                    None if cms.with(Option::is_some) => ui.now("insert-cms-field", &[]),
-                                                    None => label(ui, &k),
+                                                    None => match cms.get() {
+                                                        Some((_, f)) => f,
+                                                        None => label(ui, &k),
+                                                    },
                                                 }
                                             })
                                         }</span>

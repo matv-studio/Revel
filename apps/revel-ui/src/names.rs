@@ -169,6 +169,7 @@ const BASE_NAMES: &[(&str, &str)] = &[
     ("locales", "insert-locale-switch"),
     ("model", "insert-model"),
     ("mview", "insert-model"),
+    ("cms-field", "insert-cms-field"),
 ];
 
 /// Classes d'un élément pour son nom : sans classe, sa nature (`@switch`) s'il en a une.
@@ -253,6 +254,11 @@ pub fn canvas_labels(ui: Ui) -> serde_json::Value {
             ui.now("el-heading", &[("level", level.to_string())]).into(),
         );
     }
+    // Outil « Champ CMS » (D-196) : nommé par sa marque, pas par sa balise.
+    map.insert(
+        "@cms-field".to_string(),
+        ui.now("insert-cms-field", &[]).into(),
+    );
     serde_json::json!({
         "type": "labels",
         "tags": map,
@@ -308,6 +314,7 @@ pub fn tool_icon(base: &str) -> Option<AnyView> {
         "model" | "mview" => icons::cube(),
         "reveal" => icons::eye(),
         "clock" => icons::clock(),
+        "cms-field" => icons::database(),
         _ => return None,
     })
 }

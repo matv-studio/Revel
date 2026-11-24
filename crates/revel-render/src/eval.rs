@@ -1487,6 +1487,22 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
             items[j as usize].clone()
         });
     }
+    // Contenu d'une collection par son identifiant (outil « Champ CMS » hors d'une liste, D-196) :
+    // `entry("projets", "atlas").data.client`. Écrit sans filtre ni parenthèse autour, pour que
+    // les réglages d'un texte relié le lisent comme un champ.
+    env.add_function(
+        "entry",
+        |state: &minijinja::State, collection: String, slug: Value| {
+            let list = state
+                .lookup("collections")
+                .and_then(|c| c.get_attr(&collection).ok())
+                .unwrap_or(Value::UNDEFINED);
+            items_of(&list)
+                .into_iter()
+                .find(|i| path(i, "data.slug") == slug)
+                .unwrap_or(Value::UNDEFINED)
+        },
+    );
     env.add_filter("by_slug", |v: Value, slug: Value| {
         items_of(&v)
             .into_iter()
@@ -1537,6 +1553,16 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
         Value::from_safe_string(
             re.replace_all(&esc, format!("<em class=\"{class}\">$1</em>").as_str())
                 .into_owned(),
+        )
+    });
+    // Dessin d'une icône de Revel d'après son nom (variable « Icône » d'un composant, D-196) :
+    // contenu de son `<svg>` ; nom inconnu : rien.
+    env.add_filter("icon", |v: Value| {
+        let name = v.as_str().unwrap_or_default().to_string();
+        Value::from_safe_string(
+            revel_edit::icons::icon(&name)
+                .unwrap_or_default()
+                .to_string(),
         )
     });
     // Contenus désignés mis en premier (dans l'ordre des adresses), puis les autres.

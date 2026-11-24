@@ -16,9 +16,12 @@ use std::collections::BTreeMap;
 
 /// Types proposés à la création. « Contenu » (collection fixée dans le composant) ne l'est plus
 /// (D-191) : une utilisation relie chaque propriété à un champ du contenu qu'elle choisit.
-pub(crate) const KINDS: [PropKind; 6] = [
+pub(crate) const KINDS: [PropKind; 9] = [
     PropKind::Text,
+    PropKind::Number,
+    PropKind::Choice,
     PropKind::Image,
+    PropKind::Icon,
     PropKind::Link,
     PropKind::Color,
     PropKind::Switch,
@@ -34,6 +37,9 @@ pub(crate) fn kind_key(k: PropKind) -> &'static str {
         PropKind::Switch => "prop-kind-switch",
         PropKind::List => "prop-kind-list",
         PropKind::Entry => "prop-kind-entry",
+        PropKind::Number => "prop-kind-number",
+        PropKind::Choice => "prop-kind-choice",
+        PropKind::Icon => "prop-kind-icon",
     }
 }
 
@@ -46,6 +52,9 @@ pub(crate) fn kind_icon(k: PropKind) -> AnyView {
         PropKind::Switch => icons::eye(),
         PropKind::List => icons::list(),
         PropKind::Entry => icons::database(),
+        PropKind::Number => icons::hash(),
+        PropKind::Choice => icons::list_ordered(),
+        PropKind::Icon => icons::sparkle(),
     }
 }
 
@@ -58,6 +67,9 @@ pub(crate) fn kind_icon_fn(k: PropKind) -> fn() -> AnyView {
         PropKind::Switch => icons::eye,
         PropKind::List => icons::list,
         PropKind::Entry => icons::database,
+        PropKind::Number => icons::hash,
+        PropKind::Choice => icons::list_ordered,
+        PropKind::Icon => icons::sparkle,
     }
 }
 
@@ -71,6 +83,9 @@ fn base_name(k: PropKind) -> &'static str {
         PropKind::Switch => "visible",
         PropKind::List => "liste",
         PropKind::Entry => "contenu",
+        PropKind::Number => "nombre",
+        PropKind::Choice => "choix",
+        PropKind::Icon => "icone",
     }
 }
 
@@ -90,6 +105,59 @@ pub(crate) fn default_bool(p: &PropDef) -> bool {
         Some(Value::String(s)) => s == "true",
         _ => false,
     }
+}
+
+/// Nombre écrit (`3`, `2,5`) -> valeur ; autre chose : `None`.
+pub(crate) fn num_value(text: &str) -> Option<Value> {
+    let t = text.trim().replace(',', ".");
+    if let Ok(i) = t.parse::<i64>() {
+        return Some(Value::from(i));
+    }
+    t.parse::<f64>()
+        .ok()
+        .and_then(serde_json::Number::from_f64)
+        .map(Value::Number)
+}
+
+/// Choix d'une icône de Revel (variable « Icône », D-196) : l'icône en place, ouverte sur la
+/// grille des icônes par famille.
+fn icon_choice(
+    ui: Ui,
+    current: String,
+    label: String,
+    on: impl Fn(String) + Clone + Send + Sync + 'static,
+) -> AnyView {
+    let path = revel_edit::icons::icon(&current).unwrap_or_default();
+    view! {
+        <details class="prop-icon" data-icon=current.clone()>
+            <summary class="input prop-icon-current" aria-label=label title=current.clone()>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" inner_html=path></svg>
+                <span>{current.clone()}</span>
+            </summary>
+            {revel_edit::icons::GROUPS.iter().map(|(k, names)| {
+                let on = on.clone();
+                let current = current.clone();
+                view! {
+                    <p class="prop-icon-group">{ui.t(k)}</p>
+                    <div class="icon-grid" role="listbox" aria-label=ui.t(k)>
+                        {names.iter().filter_map(|n| revel_edit::icons::ICONS.iter().find(|(x, _)| x == n)).map(|(name, path)| {
+                            let on = on.clone();
+                            let sel = current == *name;
+                            view! {
+                                <button type="button" class="icon-choice" class:is-on=sel title=*name aria-label=*name data-icon=*name
+                                    on:click=move |_| on(name.to_string())>
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" inner_html=*path></svg>
+                                </button>
+                            }
+                        }).collect_view()}
+                    </div>
+                }
+            }).collect_view()}
+        </details>
+    }
+    .into_any()
 }
 
 /// Couleurs du site proposées à une propriété « Couleur » (D-184) : (nom sans `--`, libellé,
@@ -316,6 +384,64 @@ fn find_use(ed: Ed, id: &str) -> Option<String> {
     })
 }
 
+/// « Nouveau composant » (menu du panneau, D-196) : composant vide nommé, ouvert pour être rempli.
+pub fn create_empty(ui: Ui, ed: Ed) {
+    ui.ask.set(Some(crate::dialog::Ask::input(
+        ui.now("components-new-empty", &[]),
+        ui.now("component-make-name", &[]),
+        String::new(),
+        ui.now("component-make-confirm", &[]),
+        move |name| {
+            let Some(c) = ed.doc.with_untracked(|d| {
+                d.as_ref()
+                    .map(|d| revel_edit::make::empty_component(d, &name))
+            }) else {
+                return;
+            };
+            let id = c.id.clone();
+            ed.apply(
+                ui,
+                Command::AddComponent {
+                    component: c,
+                    index: None,
+                },
+                false,
+            );
+            // Ouvert dès que le document porte le composant (la commande est appliquée par le cœur).
+            leptos::task::spawn_local(async move {
+                for _ in 0..40 {
+                    let there = ed
+                        .doc
+                        .with_untracked(|d| d.as_ref().is_some_and(|d| d.component(&id).is_some()));
+                    if there {
+                        edit_component(ui, ed, &id);
+                        return;
+                    }
+                    crate::sleep_ms(50).await;
+                }
+            });
+        },
+    )));
+}
+
+/// « Coller » un composant copié (menu du panneau, D-196) : sa copie, nouveaux identifiants.
+pub fn paste_copy(ui: Ui, ed: Ed, id: &str) {
+    let word = ui.now("pages-copy-word", &[]);
+    let copy = ed
+        .doc
+        .with_untracked(|d| revel_edit::make::duplicate_component(d.as_ref()?, id, &word).ok());
+    if let Some(c) = copy {
+        ed.apply(
+            ui,
+            Command::AddComponent {
+                component: c,
+                index: None,
+            },
+            false,
+        );
+    }
+}
+
 /// Crée un composant à partir de l'élément sélectionné (nom demandé), puis sélectionne son
 /// utilisation.
 pub fn make_from_selection(ui: Ui, ed: Ed) {
@@ -483,6 +609,10 @@ pub fn instance_settings(
         cols.set(cached);
     }
     let use_id = at.with_value(|a| a.node.clone());
+    // Une variable de cette utilisation lit un champ du contenu (`….data.x`, adresse de la page).
+    let reads_content = args
+        .values()
+        .any(|a| a.contains(".data.") || a.trim().ends_with(".url"));
     let from_args = args.values().find_map(|a| {
         let p = arg_prefix(a)?;
         let (c, s) = parse_prefix(&p)?;
@@ -751,8 +881,21 @@ pub fn instance_settings(
         }
         .into_any()
     };
-    // Section « Contenu » dès qu'une source existe ou peut être choisie (site à collections).
-    let content = move || list.with_value(Option::is_some) || cols.with(|c| !c.is_empty());
+    // Section « Contenu » seulement quand l'utilisation lit un champ du CMS (retour du 24/11/2026,
+    // D-196) : un composant sans champ CMS ne montre que ses variables. Dans une liste, le bouton
+    // de chaque variable relie un champ ; la section apparaît alors.
+    // Une fois montrée pour une utilisation, elle reste le temps de la session (« Aucune » choisi
+    // par erreur : la collection se choisit de nouveau).
+    let shown_before = SHOWN_CONTENT.with(|k| {
+        let mut k = k.borrow_mut();
+        let id = use_id.get_value();
+        if reads_content && !k.contains(&id) {
+            k.push(id.clone());
+        }
+        k.contains(&id)
+    });
+    let content =
+        move || shown_before && (list.with_value(Option::is_some) || cols.with(|c| !c.is_empty()));
     let open_cms = move || {
         (list.with_value(Option::is_some) || picked.with(Option::is_some))
             .then(|| sample.get())
@@ -969,6 +1112,12 @@ fn parse_prefix(prefix: &str) -> Option<(String, Option<String>)> {
             .then(|| (c.to_string(), None));
     }
     revel_edit::collection::entry_slug(e).map(|(c, s)| (c, Some(s)))
+}
+
+thread_local! {
+    /// Utilisations dont la section « Contenu » a été montrée dans la session (elles lisaient un
+    /// champ du CMS).
+    static SHOWN_CONTENT: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 thread_local! {
@@ -1417,6 +1566,78 @@ fn prop_value_row(
         }
         .into_any();
     }
+    // Nombre (D-196) : écrit tel quel, sans guillemets.
+    if p.kind == PropKind::Number && arg.as_deref().is_none_or(|a| num_value(a).is_some()) {
+        let shown = arg.clone().unwrap_or_default();
+        return view! {
+            <div class="prop-row" data-prop=p.name.clone()>
+                <Field label=label.clone() value=shown placeholder=default_text(&p)
+                    on_commit=move |v: String| set(name.get_value(), num_value(&v).map(|n| n.to_string()))>
+                    {can_bind.then(|| view! {
+                        <button type="button" class="icon-btn icon-btn--small bind-field" class:is-missing=unbound title=ui.t("component-bind-field") aria-label=ui.t("component-bind-field")
+                            on:click=field_menu.clone()>{icons::database()}</button>
+                    })}
+                    {reset()}
+                </Field>
+            </div>
+        }
+        .into_any();
+    }
+    // Choix (D-196) : une des valeurs proposées par le composant.
+    if p.kind == PropKind::Choice && arg.as_deref().is_none_or(|a| literal(a).is_some()) {
+        let dflt = default_text(&p);
+        let current = arg
+            .as_deref()
+            .and_then(literal)
+            .unwrap_or_else(|| dflt.clone());
+        let mut options = p.options.clone();
+        if !current.is_empty() && !options.contains(&current) {
+            options.push(current.clone());
+        }
+        return view! {
+            <div class="prop-row" data-prop=p.name.clone()>
+                <div class="field">
+                    <span class="label prop-color-label">
+                        <span class="prop-label" class:is-set=overridden>{label.clone()}</span>
+                        {reset()}
+                    </span>
+                    <div class="select">
+                        <select class="input prop-choice" aria-label=label
+                            on:change=move |e| {
+                                let v = event_target_value(&e);
+                                set(name.get_value(), (v != dflt).then(|| quote(&v)));
+                            }>
+                            {options.into_iter().map(|o| {
+                                let on = o == current;
+                                view! { <option value=o.clone() selected=on>{o.clone()}</option> }
+                            }).collect_view()}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        }
+        .into_any();
+    }
+    // Icône (D-196) : une icône de Revel.
+    if p.kind == PropKind::Icon && arg.as_deref().is_none_or(|a| literal(a).is_some()) {
+        let dflt = default_text(&p);
+        let current = arg
+            .as_deref()
+            .and_then(literal)
+            .unwrap_or_else(|| dflt.clone());
+        return view! {
+            <div class="prop-row" data-prop=p.name.clone()>
+                <div class="field">
+                    <span class="label prop-color-label">
+                        <span class="prop-label" class:is-set=overridden>{label.clone()}</span>
+                        {reset()}
+                    </span>
+                    {icon_choice(ui, current, label, move |v: String| set(name.get_value(), (v != dflt).then(|| quote(&v))))}
+                </div>
+            </div>
+        }
+        .into_any();
+    }
     // Couleur du site (D-184) : choisie dans la liste des couleurs du site, jamais écrite.
     if p.kind == PropKind::Color && arg.as_deref().is_none_or(|a| literal(a).is_some()) {
         let current = arg.as_deref().and_then(literal).unwrap_or_default();
@@ -1761,6 +1982,56 @@ pub fn props_section(ui: Ui, ed: Ed, holder: Holder) -> AnyView {
                                 </span>
                             </label>
                         }.into_any()
+                    } else if kind == PropKind::Number {
+                        view! {
+                            <Field label=ui.t("component-prop-default") value=default_text(p)
+                                on_commit=move |v: String| set_prop(Box::new(move |p| p.default = num_value(&v)))/>
+                        }.into_any()
+                    } else if kind == PropKind::Choice {
+                        let options = Signal::stored(p.options.clone());
+                        let list = p.options.clone();
+                        let dflt = default_text(p);
+                        view! {
+                            <div class="prop-options" title=ui.t("prop-choice-options-help")>
+                                <span class="label">{ui.t("prop-choice-options")}</span>
+                                <crate::cmsfields::RowsEditor items=options set=Callback::new(move |v: Vec<String>| {
+                                    set_prop(Box::new(move |p| {
+                                        let v: Vec<String> = v.iter().map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect();
+                                        // Valeur par défaut retirée de la liste : la première.
+                                        let keep = p.default.as_ref().and_then(|d| d.as_str()).is_some_and(|d| v.iter().any(|x| x == d));
+                                        if !keep {
+                                            p.default = v.first().cloned().map(Value::String);
+                                        }
+                                        p.options = v.clone();
+                                    }))
+                                })/>
+                            </div>
+                            {(!list.is_empty()).then(|| view! {
+                                <label class="field">
+                                    <span class="label">{ui.t("component-prop-default")}</span>
+                                    <div class="select">
+                                        <select class="input prop-choice-default" aria-label=ui.t("component-prop-default")
+                                            on:change=move |e| {
+                                                let v = event_target_value(&e);
+                                                set_prop(Box::new(move |p| p.default = Some(Value::String(v.clone()))));
+                                            }>
+                                            {list.iter().map(|o| {
+                                                let on = *o == dflt;
+                                                view! { <option value=o.clone() selected=on>{o.clone()}</option> }
+                                            }).collect_view()}
+                                        </select>
+                                    </div>
+                                </label>
+                            })}
+                        }.into_any()
+                    } else if kind == PropKind::Icon {
+                        view! {
+                            <div class="field">
+                                <span class="label">{ui.t("component-prop-default")}</span>
+                                {icon_choice(ui, default_text(p), ui.now("component-prop-default", &[]),
+                                    move |v: String| set_prop(Box::new(move |p| p.default = Some(Value::String(v.clone())))))}
+                            </div>
+                        }.into_any()
                     } else if kind == PropKind::Color {
                         view! {
                             <label class="field">
@@ -1802,8 +2073,40 @@ pub fn props_section(ui: Ui, ed: Ed, holder: Holder) -> AnyView {
 
 /// Nouvelle propriété de type `k` (nom libre, libellé numéroté, valeur par défaut donnée).
 pub(crate) fn new_prop(ui: Ui, props: &[PropDef], k: PropKind, default: Option<Value>) -> PropDef {
-    let name = revel_edit::make::free_name(props, base_name(k));
-    let base_label = ui.now(kind_key(k), &[]);
+    new_prop_named(ui, props, k, default, None)
+}
+
+/// Identifiant de variable tiré d'un nom de calque (`Titre de carte` -> `titre_de_carte`) ; rien
+/// d'utilisable : `None`.
+fn ident_of(label: &str) -> Option<String> {
+    let slug = revel_model::slugify(label).replace('-', "_");
+    let slug = slug.trim_matches('_').to_string();
+    let slug = if slug.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        format!("v_{slug}")
+    } else {
+        slug
+    };
+    revel_model::valid_prop_name(&slug).then_some(slug)
+}
+
+/// Nouvelle variable nommée d'après le calque relié (`layer`, D-196, comme Framer) ; sans calque :
+/// d'après son type.
+pub(crate) fn new_prop_named(
+    ui: Ui,
+    props: &[PropDef],
+    k: PropKind,
+    default: Option<Value>,
+    layer: Option<String>,
+) -> PropDef {
+    let layer = layer
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty());
+    let base = layer
+        .as_deref()
+        .and_then(ident_of)
+        .unwrap_or_else(|| base_name(k).to_string());
+    let name = revel_edit::make::free_name(props, &base);
+    let base_label = layer.unwrap_or_else(|| ui.now(kind_key(k), &[]));
     let mut label = base_label.clone();
     let mut n = 2;
     while props.iter().any(|p| p.label() == label) {
@@ -1811,31 +2114,47 @@ pub(crate) fn new_prop(ui: Ui, props: &[PropDef], k: PropKind, default: Option<V
         n += 1;
     }
     PropDef {
+        options: Vec::new(),
         collection: None,
         name,
         label: Some(label),
         kind: k,
-        default: default.or_else(|| (k == PropKind::Switch).then_some(Value::Bool(true))),
+        default: default.or_else(|| match k {
+            PropKind::Switch => Some(Value::Bool(true)),
+            // Icône : la première de Revel, pour que l'élément relié dessine quelque chose.
+            PropKind::Icon => revel_edit::icons::ICONS
+                .first()
+                .map(|(n, _)| Value::String(n.to_string())),
+            _ => None,
+        }),
     }
 }
 
 /// Ce qu'un élément du composant peut relier à une propriété.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Bind {
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Bind {
     Text,
     Src,
     Href,
     Visible,
+    /// Dessin d'un élément icône (variable « Icône », D-196).
+    Icon,
 }
 
 impl Bind {
+    /// Type de la variable créée par « Nouvelle variable ».
     fn kind(self) -> PropKind {
         match self {
             Bind::Text => PropKind::Text,
             Bind::Src => PropKind::Image,
             Bind::Href => PropKind::Link,
             Bind::Visible => PropKind::Switch,
+            Bind::Icon => PropKind::Icon,
         }
+    }
+    /// Types de variable qui peuvent s'y relier : un texte reçoit aussi un nombre ou un choix.
+    fn accepts(self, k: PropKind) -> bool {
+        k == self.kind() || (self == Bind::Text && matches!(k, PropKind::Number | PropKind::Choice))
     }
     fn key(self) -> &'static str {
         match self {
@@ -1843,8 +2162,14 @@ impl Bind {
             Bind::Src => "component-bind-image",
             Bind::Href => "component-bind-link",
             Bind::Visible => "component-bind-visibility",
+            Bind::Icon => "component-bind-icon",
         }
     }
+}
+
+/// Expression du dessin d'une icône lue dans la variable `name`.
+fn icon_expr(name: &str) -> String {
+    format!("{name} | icon")
 }
 
 /// `{{ name }}` seul.
@@ -1862,7 +2187,7 @@ fn bind_state(
     b: Bind,
 ) -> Option<(Option<String>, String)> {
     let node = revel_edit::address::node(site, at).ok()?;
-    let is_prop = |name: &str| props.iter().any(|p| p.name == name && p.kind == b.kind());
+    let is_prop = |name: &str| props.iter().any(|p| p.name == name && b.accepts(p.kind));
     match (b, node) {
         (Bind::Text, Node::Element { children, .. }) => match children.as_slice() {
             [Node::Text { text }] => Some((None, text.clone())),
@@ -1887,6 +2212,18 @@ fn bind_state(
             match only_var(&v) {
                 Some(n) if is_prop(&n) => Some((Some(n), String::new())),
                 _ if !v.contains("{{") && !v.contains("{%") => Some((None, v)),
+                _ => None,
+            }
+        }
+        (Bind::Icon, Node::Element { tag, attrs, .. }) if tag.eq_ignore_ascii_case("svg") => {
+            let v = attrs
+                .iter()
+                .find(|a| a.name == "data-icon")
+                .and_then(|a| a.value.clone())?;
+            match only_var(&v) {
+                Some(n) if is_prop(&n) => Some((Some(n), String::new())),
+                // Icône importée (fichier) : dessin propre, pas un nom d'icône de Revel.
+                _ if revel_edit::icons::icon(&v).is_some() => Some((None, v)),
                 _ => None,
             }
         }
@@ -1957,6 +2294,29 @@ fn bind_commands(
             name: "href".into(),
             value: Some(format!("{{{{ {name} }}}}")),
         }),
+        (Bind::Icon, Node::Element { children, .. }) => {
+            commands.push(Command::SetAttr {
+                at: at.clone(),
+                name: "data-icon".into(),
+                value: Some(format!("{{{{ {name} }}}}")),
+            });
+            let out = Node::Out {
+                expr: icon_expr(name),
+            };
+            commands.push(if children.is_empty() {
+                Command::Insert {
+                    parent: Parent::of(at, Branch::Children),
+                    index: 0,
+                    node: out,
+                }
+            } else {
+                Command::Replace {
+                    parent: Parent::of(at, Branch::Children),
+                    index: 0,
+                    node: out,
+                }
+            });
+        }
         (Bind::Visible, _) => {
             let (parent, index) = revel_edit::address::locate(site, at).ok()?;
             let if_id = revel_model::ids::fresh(&site.node_ids());
@@ -2018,6 +2378,31 @@ fn unbind_commands(
             name: "href".into(),
             value: Some(dflt),
         },
+        (Bind::Icon, _) => {
+            let name = if revel_edit::icons::icon(&dflt).is_some() {
+                dflt
+            } else {
+                revel_edit::icons::ICONS[0].0.to_string()
+            };
+            Command::Batch {
+                commands: vec![
+                    Command::SetAttr {
+                        at: at.clone(),
+                        name: "data-icon".into(),
+                        value: Some(name.clone()),
+                    },
+                    Command::Replace {
+                        parent: Parent::of(at, Branch::Children),
+                        index: 0,
+                        node: Node::Html {
+                            html: revel_edit::icons::icon(&name)
+                                .unwrap_or_default()
+                                .to_string(),
+                        },
+                    },
+                ],
+            }
+        }
         (Bind::Visible, _) => {
             let (parent, _) = revel_edit::address::locate(site, at).ok()?;
             let if_at = Target {
@@ -2040,9 +2425,135 @@ fn unbind_commands(
     })
 }
 
-/// Éléments du composant ouvert (ou d'un gabarit) reliés, ou à relier, à ses propriétés : texte,
-/// image, lien, visibilité de l'élément sélectionné. Dans un gabarit, seulement quand il a des
-/// propriétés (créées dans les réglages d'une page) ou que l'élément en lit une.
+/// Menu de liaison de l'élément `at` (D-196) : nouvelle variable nommée d'après le calque,
+/// variables existantes du bon type ; déjà relié (`linked`) : « Délier » en tête.
+fn bind_menu(
+    ui: Ui,
+    ed: Ed,
+    holder: StoredValue<Holder>,
+    at: StoredValue<Target>,
+    b: Bind,
+    e: &leptos::ev::MouseEvent,
+    (linked, current): (Option<String>, String),
+) {
+    use crate::ctxmenu::{CtxItem, open};
+    let Some((own, visible, layer)) = ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let layer = revel_edit::address::node(d, &at.get_value())
+            .ok()
+            .map(|n| crate::editor::node_label(ui, n));
+        holder.with_value(|h| Some((h.own(d)?, h.visible(d)?, layer)))
+    }) else {
+        return;
+    };
+    let run = move |name: String, new: Option<Vec<PropDef>>| {
+        let cmd = ed.doc.with_untracked(|d| {
+            holder.with_value(|h| bind_commands(d.as_ref()?, h, &at.get_value(), b, &name, new))
+        });
+        if let Some(cmd) = cmd {
+            ed.apply(ui, cmd, false);
+        }
+    };
+    let mut items = Vec::new();
+    if let Some(name) = linked.clone() {
+        items.push(
+            CtxItem::new(ui.now("component-unbind", &[]), move || {
+                let cmd = ed.doc.with_untracked(|d| {
+                    let d = d.as_ref()?;
+                    let props = holder.with_value(|h| h.visible(d))?;
+                    unbind_commands(d, &props, &at.get_value(), b, &name)
+                });
+                if let Some(cmd) = cmd {
+                    ed.apply(ui, cmd, false);
+                }
+            })
+            .icon(icons::close),
+        );
+    } else {
+        // Nom de la variable : celui du calque (comme Framer), sinon son type.
+        let label = layer
+            .clone()
+            .filter(|l| !l.trim().is_empty())
+            .unwrap_or_else(|| ui.now(kind_key(b.kind()), &[]));
+        let (own, visible) = (own.clone(), visible.clone());
+        items.push(
+            CtxItem::new(
+                ui.now("component-bind-new", &[("label", label)]),
+                move || {
+                    let default = match b {
+                        Bind::Visible => Some(Value::Bool(true)),
+                        _ => (!current.is_empty()).then(|| Value::String(current.clone())),
+                    };
+                    let p = new_prop_named(ui, &visible, b.kind(), default, layer.clone());
+                    let mut props = own.clone();
+                    let name = p.name.clone();
+                    props.push(p);
+                    run(name, Some(props));
+                },
+            )
+            .icon(icons::plus),
+        );
+    }
+    for p in visible
+        .iter()
+        .filter(|p| b.accepts(p.kind) && Some(&p.name) != linked.as_ref())
+    {
+        let name = p.name.clone();
+        items.push(
+            CtxItem::new(p.label().to_string(), move || run(name.clone(), None))
+                .icon(kind_icon_fn(p.kind)),
+        );
+    }
+    open(ui, e, items);
+}
+
+/// Bouton de liaison posé à côté du champ d'un élément du composant ouvert (D-196, comme le « + »
+/// de Framer) : relie ce champ à une variable ; relié, il porte le nom de la variable et son menu
+/// délie. Hors d'un composant, ou champ sans objet : rien.
+pub(crate) fn bind_button(ui: Ui, ed: Ed, at: &Target, b: Bind) -> Option<AnyView> {
+    let holder = StoredValue::new(Holder::of(at)?);
+    let at = StoredValue::new(at.clone());
+    let state = move || {
+        ed.doc.with(|d| {
+            let d = d.as_ref()?;
+            let props = holder.with_value(|h| h.visible(d))?;
+            // Gabarit : seulement s'il a des variables (créées dans les réglages d'une page).
+            if holder.with_value(|h| matches!(h, Holder::Layout(_))) && props.is_empty() {
+                return None;
+            }
+            let (linked, current) = bind_state(d, &props, &at.get_value(), b)?;
+            let label = linked
+                .as_ref()
+                .and_then(|n| props.iter().find(|p| &p.name == n))
+                .map(|p| p.label().to_string());
+            Some((linked, current, label))
+        })
+    };
+    Some(
+        view! {
+            {move || state().map(|(linked, current, label)| {
+                let on = linked.is_some();
+                let tip = match &label {
+                    Some(l) => ui.now("component-bound-to", &[("label", l.clone())]),
+                    None => ui.now("component-bind", &[]),
+                };
+                view! {
+                    <button type="button" class="icon-btn icon-btn--small bind-btn" class:is-on=on
+                        data-bind=b.key() data-bound=linked.clone().unwrap_or_default()
+                        title=tip.clone() aria-label=tip
+                        on:click=move |e| bind_menu(ui, ed, holder, at, b, &e, (linked.clone(), current.clone()))>
+                        {if on { icons::component() } else { icons::prop_dot() }}
+                    </button>
+                }
+            })}
+        }
+        .into_any(),
+    )
+}
+
+/// Liaisons de l'élément sélectionné qui n'ont pas de champ dans le panneau : son texte (modifié
+/// dans le canevas) et sa visibilité. Image, lien et icône portent leur bouton à côté de leur
+/// champ ([`bind_button`]). Dans un gabarit, seulement quand il a des variables.
 pub fn bindings(ui: Ui, ed: Ed, holder: Holder, at: Target) -> AnyView {
     let holder = StoredValue::new(holder);
     let at = StoredValue::new(at);
@@ -2052,7 +2563,7 @@ pub fn bindings(ui: Ui, ed: Ed, holder: Holder, at: Target) -> AnyView {
             let props = holder.with_value(|h| h.visible(d))?;
             let at = at.get_value();
             let v: Vec<(Bind, Option<String>, String, Option<String>)> =
-                [Bind::Text, Bind::Src, Bind::Href, Bind::Visible]
+                [Bind::Text, Bind::Visible]
                     .into_iter()
                     .filter_map(|b| {
                         let (linked, current) = bind_state(d, &props, &at, b)?;
@@ -2067,106 +2578,23 @@ pub fn bindings(ui: Ui, ed: Ed, holder: Holder, at: Target) -> AnyView {
             (!layout || !props.is_empty() || v.iter().any(|(_, l, _, _)| l.is_some())).then_some(v)
         })
     };
-    let open_menu = move |e: leptos::ev::MouseEvent, b: Bind, current: String| {
-        use crate::ctxmenu::{CtxItem, open};
-        let Some((own, visible)) = ed.doc.with_untracked(|d| {
-            let d = d.as_ref()?;
-            holder.with_value(|h| Some((h.own(d)?, h.visible(d)?)))
-        }) else {
-            return;
-        };
-        let mut items = Vec::new();
-        let label = ui.now(kind_key(b.kind()), &[]);
-        {
-            let current = current.clone();
-            let own = own.clone();
-            let visible = visible.clone();
-            items.push(
-                CtxItem::new(
-                    ui.now("component-bind-new", &[("label", label)]),
-                    move || {
-                        let default = match b {
-                            Bind::Visible => Some(Value::Bool(true)),
-                            _ => (!current.is_empty()).then(|| Value::String(current.clone())),
-                        };
-                        let p = new_prop(ui, &visible, b.kind(), default);
-                        let mut props = own.clone();
-                        let name = p.name.clone();
-                        props.push(p);
-                        let cmd = ed.doc.with_untracked(|d| {
-                            holder.with_value(|h| {
-                                bind_commands(
-                                    d.as_ref()?,
-                                    h,
-                                    &at.get_value(),
-                                    b,
-                                    &name,
-                                    Some(props),
-                                )
-                            })
-                        });
-                        if let Some(cmd) = cmd {
-                            ed.apply(ui, cmd, false);
-                        }
-                    },
-                )
-                .icon(icons::plus),
-            );
-        }
-        for p in visible.iter().filter(|p| p.kind == b.kind()) {
-            let name = p.name.clone();
-            items.push(
-                CtxItem::new(p.label().to_string(), move || {
-                    let cmd = ed.doc.with_untracked(|d| {
-                        holder.with_value(|h| {
-                            bind_commands(d.as_ref()?, h, &at.get_value(), b, &name, None)
-                        })
-                    });
-                    if let Some(cmd) = cmd {
-                        ed.apply(ui, cmd, false);
-                    }
-                })
-                .icon(icons::component),
-            );
-        }
-        open(ui, &e, items);
-    };
-    let unbind = move |b: Bind, name: String| {
-        let cmd = ed.doc.with_untracked(|d| {
-            let d = d.as_ref()?;
-            let props = holder.with_value(|h| h.visible(d))?;
-            unbind_commands(d, &props, &at.get_value(), b, &name)
-        });
-        if let Some(cmd) = cmd {
-            ed.apply(ui, cmd, false);
-        }
-    };
     view! {
         {move || rows().filter(|v| !v.is_empty()).map(|v| view! {
             <div class="insp-group component-bindings">
-                <p class="panel-title">{ui.t("component-bindings")}</p>
                 {v.into_iter().map(|(b, linked, current, label)| {
-                    let cur = current.clone();
+                    let name = linked.clone();
                     view! {
                         <div class="view-line bind-row" data-bind=b.key()>
                             <span class="muted">{ui.t(b.key())}</span>
-                            {match linked {
-                                Some(name) => {
-                                    let tip = format!("{{{{ {name} }}}}");
-                                    let shown = label.unwrap_or_else(|| name.clone());
-                                    view! {
-                                    <span class="prop-chip" title=tip>
-                                        {icons::component()}<span>{shown}</span>
-                                        <button class="chip-x" title=ui.t("component-unbind") aria-label=ui.t("component-unbind")
-                                            on:click=move |_| unbind(b, name.clone())>{icons::close()}</button>
-                                    </span>
-                                    }.into_any()
-                                }
-                                None => view! {
-                                    <button class="icon-btn icon-btn--small bind-btn" title=ui.t("component-bind") aria-label=ui.t("component-bind")
-                                        on:click=move |e| open_menu(e, b, cur.clone())>{icons::prop_dot()}</button>
-                                }.into_any(),
-                            }}
+                            <span class="bind-value">
+                                {label.map(|l| view! { <span class="prop-chip">{icons::component()}<span>{l}</span></span> })}
+                                <button type="button" class="icon-btn icon-btn--small bind-btn" class:is-on=linked.is_some()
+                                    data-bind=b.key() data-bound=name.clone().unwrap_or_default()
+                                    title=ui.t("component-bind") aria-label=ui.t("component-bind")
+                                    on:click=move |e| bind_menu(ui, ed, holder, at, b, &e, (name.clone(), current.clone()))>
+                                    {if linked.is_some() { icons::component() } else { icons::prop_dot() }}
+                                </button>
+                            </span>
                         </div>
                     }
                 }).collect_view()}

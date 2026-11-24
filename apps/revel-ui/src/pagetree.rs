@@ -20,6 +20,11 @@ pub(crate) use revel_protocol::EditorPageInfo;
 use serde_json::json;
 use std::collections::BTreeSet;
 
+thread_local! {
+    /// Page copiée (menu d'une page), collée par le menu du panneau (D-196).
+    static PAGE_CLIP: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
 /// Ouvre une page dans le canevas.
 pub fn open_page(ed: Ed, url: String) {
     ed.close_comp();
@@ -528,6 +533,13 @@ impl TreeCtx {
             );
         }
         items.push(
+            CtxItem::new(ui.now("pages-copy", &[]), {
+                let i = id.clone();
+                move || PAGE_CLIP.with(|c| *c.borrow_mut() = Some(i.clone()))
+            })
+            .icon(icons::copy),
+        );
+        items.push(
             CtxItem::new(ui.now("pages-duplicate", &[]), {
                 let i = id.clone();
                 move || crate::pageops::duplicate(ui, ed, &i)
@@ -814,11 +826,23 @@ pub fn PageTree(
     #[prop(optional)] on_settings: Option<Callback<String>>,
     #[prop(optional)] creating_page: Option<RwSignal<Option<String>>>,
     #[prop(optional)] creating_folder: Option<RwSignal<Option<String>>>,
+    /// Compteur : chaque changement replie tous les dossiers (menu du panneau, D-196).
+    #[prop(optional)]
+    collapse: Option<RwSignal<u32>>,
 ) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let ed = expect_context::<Ed>();
     // Dossiers dépliés (pages fixes : `p:<chemin>`, collections : `c:<id>`).
     let open = RwSignal::new(Vec::<String>::new());
+    if let Some(c) = collapse {
+        Effect::new(move |prev: Option<u32>| {
+            let n = c.get();
+            if prev.is_some_and(|p| p != n) {
+                open.set(Vec::new());
+            }
+            n
+        });
+    }
     let tc = TreeCtx {
         ui,
         ed,
@@ -1186,8 +1210,63 @@ pub fn Pages() -> impl IntoView {
         settings.set(Some(id))
     });
     let close = Callback::new(move |_| settings.set(None));
+    // Clic droit dans le vide du panneau (D-196, maquette validée le 24/11/2026).
+    let collapse = RwSignal::new(0u32);
+    let empty_menu = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open as show};
+        // Champ de saisie (recherche) : menu du système.
+        if crate::ctxmenu::on_input(&e) {
+            return;
+        }
+        if settings.get_untracked().is_some() {
+            return;
+        }
+        let clip = PAGE_CLIP.with(|c| c.borrow().clone()).filter(|id| {
+            ed.doc.with_untracked(|d| {
+                d.as_ref()
+                    .is_some_and(|d| d.pages.iter().any(|p| p.id == *id))
+            })
+        });
+        let items = vec![
+            CtxItem::new(ui.now("pages-new", &[]), move || {
+                q.set(String::new());
+                creating_page.set(Some(String::new()))
+            })
+            .icon(icons::page),
+            CtxItem::new(ui.now("library-new-folder", &[]), move || {
+                q.set(String::new());
+                creating_folder.set(Some(String::new()))
+            })
+            .icon(icons::folder_plus),
+            CtxItem::new(ui.now("pages-new-cms", &[]), move || {
+                ui.tab(crate::Tab::Cms)
+            })
+            .icon(icons::database),
+            CtxItem::new(ui.now("pages-paste", &[]), {
+                let clip = clip.clone();
+                move || {
+                    if let Some(id) = &clip {
+                        crate::pageops::duplicate(ui, ed, id)
+                    }
+                }
+            })
+            .icon(icons::paste)
+            .disabled(clip.is_none())
+            .sep(),
+            CtxItem::new(ui.now("panel-collapse-all", &[]), move || {
+                collapse.update(|n| *n = n.wrapping_add(1))
+            })
+            .icon(icons::collapse)
+            .sep(),
+            CtxItem::new(ui.now("pages-open-map", &[]), move || {
+                ui.tab(crate::Tab::Map)
+            })
+            .icon(icons::sitemap),
+        ];
+        show(ui, &e, items);
+    };
     view! {
-        <div class="panel-list pages" node_ref=root>
+        <div class="panel-list pages" node_ref=root data-menu="pages-empty" on:contextmenu=empty_menu>
             {move || settings.get().map(|id| view! {
                 <div class="page-settings-overlay" style=move || rect.get().map(|(x, y, w, h)| format!("left:{x}px;top:{y}px;width:{w}px;height:{h}px")).unwrap_or_default()>
                     {match id.strip_prefix("layout:") {
@@ -1201,7 +1280,7 @@ pub fn Pages() -> impl IntoView {
                 None => view! {
                     <crate::panels::Search value=q key="pages-search"/>
                     <div class="list-scroll">
-                        <PageTree q=q on_settings=on_settings creating_page=creating_page creating_folder=creating_folder/>
+                        <PageTree q=q on_settings=on_settings creating_page=creating_page creating_folder=creating_folder collapse=collapse/>
                     </div>
                     <footer class="panel-foot">
                         <span class="panel-foot-text muted">{move || ui.tx("pages-count", &[("count", ed.pages.with(|p| p.iter().filter(|p| p.page.is_some()).count()).to_string())])}</span>

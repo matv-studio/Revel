@@ -767,7 +767,10 @@ fn LinkTarget(
     };
     view! {
         <div class="field link-target">
-            <span class="label">{ui.t("inspector-href")}</span>
+            <span class="label link-target-label">
+                <span>{ui.t("inspector-href")}</span>
+                {ed.selected_target().and_then(|at| crate::components::bind_button(ui, ed, &at, crate::components::Bind::Href))}
+            </span>
             // Six destinations : liste plutôt que boutons (place de l'inspecteur).
             <div class="select link-kind">
                 <select class="input" aria-label=ui.t("link-kind") on:change=move |e| {
@@ -1137,6 +1140,7 @@ pub(crate) fn image(
                 }>
                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("picker-choose-image") aria-label=ui.t("picker-choose-image")
                     disabled=src_expr on:click=move |_| choose()>{icons::image()}</button>
+                {crate::components::bind_button(ui, ed, &at, crate::components::Bind::Src)}
             </Field>
             {match lang.filter(|_| !alt_expr && revel_edit::locale::translatable(&alt)) {
                 // Autre langue : texte alternatif traduit.

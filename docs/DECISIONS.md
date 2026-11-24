@@ -2831,3 +2831,46 @@ site : état des modèles ; molette sur les panneaux.**
   Collection / Contenu reste proposé) — à revoir avec la maquette du champ CMS. Essais de bout en bout à
   écrire pour : composant depuis une carte de liste, molette, état des modèles (vérifiés à la main le 24/11).
 
+**D-196 — 24/11/2026 — prise (maquettes validées par l'utilisateur le 24/11, avec ajustements).**
+**Composants : bouton de liaison à côté du champ, variables nommées d'après le calque, types nombre, choix et
+icône ; outil « CMS field » hors d'une liste ; menus du clic droit des panneaux.**
+- **Bouton de liaison** (comme le « + » de Framer) : posé à côté du champ de l'image (source), du lien
+  (destination) et de l'icône ; relié, il porte le nom de la variable et son menu délie. Texte et visibilité,
+  qui n'ont pas de champ dans le panneau, gardent une ligne avec le même bouton. La rubrique à part « Relié aux
+  variables » disparaît.
+- **Nom d'une nouvelle variable** : celui du calque relié (« Paragraph » → `paragraph`), numéroté s'il est
+  pris ; créée par « + » sur la racine, elle garde le nom de son type.
+- **Types ajoutés** (`PropKind`) : `number` (nombre écrit sans guillemets), `choice` (valeurs dans
+  `PropDef::options`, la première par défaut), `icon` (nom d'une icône de Revel ; l'élément icône relié porte
+  `data-icon="{{ nom }}"` et dessine `{{ nom | icon }}`, filtre ajouté au rendu). Un texte se relie à une
+  variable texte, nombre ou choix.
+- **Rubrique « Content » d'une utilisation** (retour du 24/11) : montrée seulement quand l'utilisation lit un
+  champ du CMS ; un composant sans champ du CMS ne montre que ses variables. Une fois montrée, elle reste le
+  temps de la session (« None » choisi par erreur).
+- **Outil « CMS field »** : l'élément posé porte `data-revel-base="cms-field"` (nom « CMS field » et icône du
+  CMS dans les calques, le canevas et la barre d'état). Hors d'une liste : sans collection, « No collection
+  yet » et « Create a collection » (ouvre le CMS) ; sinon menu « Collections » à coches, « All » en tête
+  (seulement s'il y a plusieurs collections), puis menu « Field » — champs communs d'abord, trait, puis champs
+  d'une seule collection, chacun avec le nom de sa collection (pas de « only », tous sélectionnables) ; une
+  seule collection : la valeur du premier contenu à droite. Champ choisi : le calque prend le nom du champ,
+  suivi de la valeur lue ; réglages Collection, Item (premier contenu ou un contenu précis), Shown as, If
+  empty. Expressions écrites sans filtre ni parenthèse pour être lues par les réglages existants :
+  `collections.<id>[0].data.<champ>` et `entry("<id>", "<slug>").data.<champ>` (fonction `entry` ajoutée au
+  rendu). Dans une liste ou un modèle de pages, l'outil garde ses menus d'avant.
+- **Menus du clic droit** (tout le panneau hors lignes, pied compris : un panneau plein n'a plus de vide) :
+  Pages (New page, New folder, New CMS page…, Paste page, Collapse all folders, Open site map) ; Components
+  (New component, New folder, Create from selection, Paste component, Collapse all folders) ; Assets (Import
+  files…, New folder, Paste from clipboard, Larger / Smaller thumbnails, Show unused only, Show in file
+  explorer). « Copy » ajouté aux menus d'une page et d'un composant. `make::duplicate_component`,
+  `make::empty_component`. Composant ouvert dont la création est annulée : retour à la page.
+- **Essais** : `tools/panels-e2e.mjs` (23 essais, interface en anglais, site du modèle Portfolio + seconde
+  collection), étape de CI « Panneaux et composants » ; essais de rendu `variables_nombre_choix_icone`,
+  `champ_cms_hors_liste` ; essai `composant_copie_et_composant_vide`. Couvre aussi le lot D-195 (molette,
+  Ctrl+molette, carte de liste, variables sur la racine, état des modèles).
+- **En suspens** : « Import pages… » et « Import component… » de la maquette ne sont pas faits (source à
+  définir : fichier HTML, autre site Revel, fichier de composant) ; variable nombre reliée à une valeur de
+  style (opacité, rayon) ; icône importée (fichier SVG) comme valeur d'une variable icône ; hors d'une liste,
+  relier une variable d'une utilisation à un champ du CMS n'a plus d'entrée depuis que « Content » est masquée ;
+  barre du panneau Styles : nom « CMS field » gardé une fois le champ choisi ; « Paste from clipboard » et
+  « Show in file explorer » non essayés dans l'application de bureau ; mot « Variables » dans 13 langues.
+

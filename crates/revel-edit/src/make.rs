@@ -539,7 +539,13 @@ impl Preset {
             Preset::Container => el(id(), "div", vec![], vec![]),
             Preset::Heading => el(id(), "h2", vec![], vec![txt(text)]),
             Preset::Paragraph => el(id(), "p", vec![], vec![txt(text)]),
-            Preset::CmsField => el(id(), "p", vec![], vec![txt(text)]),
+            // Marque de l'outil (D-196) : nom et icône du calque tant qu'aucun champ n'est choisi.
+            Preset::CmsField => el(
+                id(),
+                "p",
+                vec![attr(revel_model::BASE_ATTR, "cms-field")],
+                vec![txt(text)],
+            ),
             Preset::SiteHeader => el(
                 id(),
                 "header",
@@ -1917,6 +1923,42 @@ pub fn free_component_id(site: &Site, name: &str) -> String {
         n += 1;
     }
     id
+}
+
+/// Copie d'un composant (D-196 : « Copier » puis « Coller » dans le panneau) : nouveaux
+/// identifiants, nom « … (copie) ».
+pub fn duplicate_component(
+    site: &Site,
+    id: &str,
+    copy_word: &str,
+) -> Result<revel_model::Component, EditError> {
+    let src = site
+        .component(id)
+        .ok_or_else(|| EditError::NotFound(format!("composant {id}")))?;
+    let mut c = src.clone();
+    let mut taken = site.node_ids();
+    for n in c.body.iter_mut() {
+        refresh_ids(n, &mut taken);
+    }
+    let name = format!("{} ({copy_word})", src.label());
+    c.id = free_component_id(site, &name);
+    c.name = Some(name);
+    Ok(c)
+}
+
+/// Composant vide nommé `name` (D-196 : « Nouveau composant ») : un cadre à remplir.
+pub fn empty_component(site: &Site, name: &str) -> revel_model::Component {
+    let mut c = revel_model::Component::new(
+        free_component_id(site, name),
+        vec![Node::Element {
+            id: Some(revel_model::ids::fresh(&site.node_ids())),
+            tag: "div".into(),
+            attrs: Vec::new(),
+            children: Vec::new(),
+        }],
+    );
+    c.name = Some(name.trim().to_string()).filter(|n| !n.is_empty());
+    c
 }
 
 /// Composants utilisés (directement ou non) par le composant `id`, lui compris.

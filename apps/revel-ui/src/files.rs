@@ -94,3 +94,58 @@ pub fn post_dropped(dt: &web_sys::DataTransfer) -> bool {
     let _ = Reflect::set(&msg, &"type".into(), &"revel-drop".into());
     post.1.call2(&post.0, &msg, &files).is_ok()
 }
+
+/// Images du presse-papiers du système (« Coller » dans Médias, D-196) : une par image copiée,
+/// nommée `presse-papiers-<n>.<ext>`. `None` : lecture refusée ou impossible ici.
+pub async fn clipboard_images() -> Option<Vec<web_sys::File>> {
+    use wasm_bindgen::{JsCast, JsValue};
+    let nav =
+        js_sys::Reflect::get(&web_sys::window()?.into(), &JsValue::from_str("navigator")).ok()?;
+    let clip = js_sys::Reflect::get(&nav, &JsValue::from_str("clipboard")).ok()?;
+    let read: js_sys::Function = js_sys::Reflect::get(&clip, &JsValue::from_str("read"))
+        .ok()?
+        .dyn_into()
+        .ok()?;
+    let promise: js_sys::Promise = read.call0(&clip).ok()?.dyn_into().ok()?;
+    let items: js_sys::Array = wasm_bindgen_futures::JsFuture::from(promise)
+        .await
+        .ok()?
+        .dyn_into()
+        .ok()?;
+    let stamp = js_sys::Date::now() as u64;
+    let mut out = Vec::new();
+    for item in items.iter() {
+        let types: js_sys::Array = js_sys::Reflect::get(&item, &JsValue::from_str("types"))
+            .ok()?
+            .dyn_into()
+            .ok()?;
+        let Some(mime) = types
+            .iter()
+            .filter_map(|t| t.as_string())
+            .find(|t| t.starts_with("image/"))
+        else {
+            continue;
+        };
+        let get: js_sys::Function = js_sys::Reflect::get(&item, &JsValue::from_str("getType"))
+            .ok()?
+            .dyn_into()
+            .ok()?;
+        let p: js_sys::Promise = get
+            .call1(&item, &JsValue::from_str(&mime))
+            .ok()?
+            .dyn_into()
+            .ok()?;
+        let blob = wasm_bindgen_futures::JsFuture::from(p).await.ok()?;
+        let ext = match mime.as_str() {
+            "image/jpeg" => "jpg",
+            "image/svg+xml" => "svg",
+            other => other.trim_start_matches("image/"),
+        };
+        let name = format!("presse-papiers-{}.{ext}", stamp + out.len() as u64);
+        let parts = js_sys::Array::of1(&blob);
+        if let Ok(f) = web_sys::File::new_with_blob_sequence(&parts, &name) {
+            out.push(f);
+        }
+    }
+    Some(out)
+}

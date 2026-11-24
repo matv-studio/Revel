@@ -706,13 +706,34 @@ pub fn Media() -> impl IntoView {
         });
     });
     let searching = move || !q.with(|q| q.trim().is_empty());
+    // « Inutilisés seulement » (D-196) : médias dont l'adresse n'apparaît ni dans le site ni dans
+    // les contenus du CMS.
+    let unused = RwSignal::new(false);
+    let used_text = Memo::new(move |_| {
+        if !unused.get() {
+            return String::new();
+        }
+        let mut t = ed
+            .doc
+            .with(|d| d.as_ref().and_then(|d| serde_json::to_string(d).ok()))
+            .unwrap_or_default();
+        for c in crate::textfield::cached_cols() {
+            for e in &c.entries {
+                t.push_str(&e.data.to_string());
+                t.push_str(&e.body);
+            }
+        }
+        t
+    });
     // Médias d'un dossier (ou trouvés par la recherche), au filtre de type et à l'ordre choisis.
     let select = move |dir: Option<&str>, ql: &str| {
         let k = kind.get();
+        let only_unused = unused.get();
         let mut v: Vec<MediaFile> = sh.shelf.with(|s| {
             files.with(|fs| {
                 fs.iter()
                     .filter(|f| k.is_none_or(|k| f.kind == k))
+                    .filter(|f| !only_unused || used_text.with(|t| !t.contains(f.url.as_str())))
                     .filter(|f| match dir {
                         Some(d) => folder_of(s, &f.url) == d,
                         None => file_name(&f.url).to_lowercase().contains(ql),
@@ -902,8 +923,75 @@ pub fn Media() -> impl IntoView {
             }
         })
     };
+    let set_thumb = move |v: u32| {
+        let v = v.clamp(THUMB_MIN, THUMB_MAX);
+        thumb.set(v);
+        crate::pref_set("media.thumb", &v.to_string());
+    };
+    // Clic droit dans le vide du panneau (D-196, maquette validée le 24/11/2026).
+    let empty_menu = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        // Champ de saisie (recherche) : menu du système.
+        if crate::ctxmenu::on_input(&e) {
+            return;
+        }
+        let t = thumb.get_untracked();
+        let items = vec![
+            CtxItem::new(ui.now("assets-import-files", &[]), move || {
+                crate::files::pick(crate::files::MEDIA_ACCEPT, true, import)
+            })
+            .icon(icons::upload),
+            CtxItem::new(ui.now("library-new-folder", &[]), move || {
+                q.set(String::new());
+                sh.creating.set(Some(folder.get_untracked()))
+            })
+            .icon(icons::folder_plus),
+            CtxItem::new(ui.now("assets-paste", &[]), move || {
+                spawn_local(async move {
+                    match crate::files::clipboard_images().await {
+                        Some(fs) if !fs.is_empty() => import(fs),
+                        _ => ui.fail(revel_protocol::Failure::new("info-clipboard-no-image")),
+                    }
+                });
+            })
+            .icon(icons::paste),
+            CtxItem::new(ui.now("assets-thumb-larger", &[]), move || {
+                set_thumb(t + 16)
+            })
+            .icon(icons::zoom_in)
+            .key(ui.now("assets-thumb-wheel", &[]))
+            .disabled(t >= THUMB_MAX)
+            .sep(),
+            CtxItem::new(ui.now("assets-thumb-smaller", &[]), move || {
+                set_thumb(t.saturating_sub(16))
+            })
+            .icon(icons::zoom_out)
+            .disabled(t <= THUMB_MIN),
+            CtxItem::new(ui.now("assets-unused-only", &[]), move || {
+                unused.update(|u| *u = !*u)
+            })
+            .icon(if unused.get_untracked() {
+                icons::check
+            } else {
+                icons::blank
+            }),
+            CtxItem::new(ui.now("assets-reveal", &[]), move || {
+                let site = ed.path.get_value();
+                let sep = if site.contains('\\') { '\\' } else { '/' };
+                let dir = format!("{}{sep}media", site.trim_end_matches(['/', '\\']));
+                spawn_local(async move {
+                    if let Err(e) = api::reveal(&dir).await {
+                        ui.fail(e)
+                    }
+                });
+            })
+            .icon(icons::folder)
+            .sep(),
+        ];
+        open(ui, &e, items);
+    };
     view! {
-        <div class="panel-list media" class:is-dropping=move || dropping.get()
+        <div class="panel-list media" data-menu="assets-empty" on:contextmenu=empty_menu class:is-dropping=move || dropping.get()
             on:dragover=move |e: leptos::ev::DragEvent| {
                 if crate::files::has_files(&e) {
                     e.prevent_default();
@@ -984,7 +1072,7 @@ pub fn Media() -> impl IntoView {
                 </label>
             </div>
             {crumbs}
-            <div class="list-scroll"
+            <div class="list-scroll" class:is-unused-only=move || unused.get()
                 on:dragover=move |e: leptos::ev::DragEvent| { if sh.dragging.get_untracked().is_some() { e.prevent_default() } }>
                 <Show when=move || !searching()>
                     {move || sh.creating.get().filter(|p| *p == folder.get()).map(|p| new_folder_row(sh, p, 0))}
@@ -1660,6 +1748,11 @@ pub fn MediaPicker() -> impl IntoView {
 
 // ------------------------------------------------------------------ composants
 
+thread_local! {
+    /// Composant copié (menu d'un composant), collé par le menu du panneau (D-196).
+    static COMPONENT_CLIP: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
 /// Composants du site rangés en dossiers, avec leur nombre d'utilisations.
 #[component]
 pub fn Components() -> impl IntoView {
@@ -1737,6 +1830,10 @@ pub fn Components() -> impl IntoView {
                     crate::components::rename(ui, ed, &item.get_value())
                 })
                 .icon(icons::text),
+                CtxItem::new(ui.now("component-copy", &[]), move || {
+                    COMPONENT_CLIP.with(|c| *c.borrow_mut() = Some(item.get_value()))
+                })
+                .icon(icons::copy),
             ];
             items.extend(sh.move_items(&item.get_value()));
             items.push(
@@ -1850,8 +1947,53 @@ pub fn Components() -> impl IntoView {
             })
         })
     };
+    // Clic droit dans le vide du panneau (D-196, maquette validée le 24/11/2026).
+    let empty_menu = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        // Champ de saisie (recherche) : menu du système.
+        if crate::ctxmenu::on_input(&e) {
+            return;
+        }
+        let clip = COMPONENT_CLIP.with(|c| c.borrow().clone()).filter(|id| {
+            ed.doc
+                .with_untracked(|d| d.as_ref().is_some_and(|d| d.component(id).is_some()))
+        });
+        let items = vec![
+            CtxItem::new(ui.now("components-new-empty", &[]), move || {
+                crate::components::create_empty(ui, ed)
+            })
+            .icon(icons::component),
+            CtxItem::new(ui.now("library-new-folder", &[]), move || {
+                q.set(String::new());
+                sh.creating.set(Some(String::new()))
+            })
+            .icon(icons::folder_plus),
+            CtxItem::new(ui.now("components-from-selection", &[]), move || {
+                crate::components::make_from_selection(ui, ed)
+            })
+            .icon(icons::plus)
+            .disabled(!untrack(can_make)),
+            CtxItem::new(ui.now("components-paste", &[]), {
+                let clip = clip.clone();
+                move || {
+                    if let Some(id) = &clip {
+                        crate::components::paste_copy(ui, ed, id)
+                    }
+                }
+            })
+            .icon(icons::paste)
+            .disabled(clip.is_none())
+            .sep(),
+            CtxItem::new(ui.now("panel-collapse-all", &[]), move || {
+                closed.set(sh.shelf.with_untracked(|s| s.folders.clone()))
+            })
+            .icon(icons::collapse)
+            .sep(),
+        ];
+        open(ui, &e, items);
+    };
     view! {
-        <div class="panel-list components">
+        <div class="panel-list components" data-menu="components-empty" on:contextmenu=empty_menu>
             <Search value=q key="components-search"/>
             <div class="list-scroll" data-drop-folder=""
                 class:is-drop=move || sh.drop_on.get().as_deref() == Some("")

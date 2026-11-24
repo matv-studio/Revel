@@ -527,6 +527,7 @@ pub(super) fn run(site: &mut Site, report: &mut Report) {
             let name = revel_edit::make::free_name(&props, &base);
             let literal = !matches!(s.kind, Kind::ImageSrc | Kind::ImageAlt);
             props.push(PropDef {
+                options: Vec::new(),
                 name: name.clone(),
                 label: Some(label(&name)),
                 kind: match &s.kind {

@@ -3071,6 +3071,16 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
             });
         }
     });
+    // Composant ouvert qui n'existe plus (création annulée, D-196) : retour à la page.
+    Effect::new(move |_| {
+        let gone = ed.comp.get().is_some_and(|id| {
+            ed.doc
+                .with(|d| d.as_ref().is_some_and(|d| d.component(&id).is_none()))
+        });
+        if gone {
+            ed.close_comp();
+        }
+    });
     // Élément ajouté : « Calques » passe devant dans son groupe (réglage, D-175).
     Effect::new(move |prev: Option<u32>| {
         let n = ui.show_layers.get();

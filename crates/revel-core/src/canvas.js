@@ -276,6 +276,9 @@
       if (h) return h[0].toUpperCase() + h.slice(1);
     }
     const t = el.tagName.toLowerCase();
+    // Outil « Champ CMS » (D-196) : nom de l'outil, pas celui de sa balise.
+    const base = el.getAttribute && el.getAttribute("data-revel-base");
+    if (base === "cms-field" && tagNames && tagNames["@cms-field"]) return tagNames["@cms-field"];
     return tagNames ? tagNames[t] || otherName || t : t;
   };
 

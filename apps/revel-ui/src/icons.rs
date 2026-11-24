@@ -883,3 +883,31 @@ pub fn empty_tip(short: String, text: String) -> impl IntoView {
 pub fn note_tip(text: String) -> impl IntoView {
     view! { <p class="muted small empty-tip">{info_tip(text)}</p> }
 }
+
+/// Place d'une icône absente (ligne d'un menu à coches non cochée).
+pub fn blank() -> AnyView {
+    view! { <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"></svg> }
+        .into_any()
+}
+
+/// Coller.
+pub fn paste() -> AnyView {
+    svg(r#"<rect x="3.5" y="2.75" width="9" height="11.5" rx="1.25"/><path d="M6 2.75V1.75h4v1"/>"#)
+}
+
+/// Vignettes plus grandes.
+pub fn zoom_in() -> AnyView {
+    svg(r#"<circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3.5 3.5M7 5v4M5 7h4"/>"#)
+}
+
+/// Vignettes plus petites.
+pub fn zoom_out() -> AnyView {
+    svg(r#"<circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3.5 3.5M5 7h4"/>"#)
+}
+
+/// Plan du site.
+pub fn sitemap() -> AnyView {
+    svg(
+        r#"<rect x="1.75" y="2.5" width="4" height="3" rx=".75"/><rect x="10.25" y="2.5" width="4" height="3" rx=".75"/><rect x="6" y="10.5" width="4" height="3" rx=".75"/><path d="M3.75 5.5v2.5h8.5V5.5M8 8v2.5"/>"#,
+    )
+}

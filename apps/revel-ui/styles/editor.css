@@ -474,3 +474,7 @@ kbd {
 /* Zone du site (en-tête, pied) : pastille « Tout le site » (calques, panneau). */
 .layer-badge { flex: none; margin-left: auto; padding: 1px 6px; border-radius: 999px; font-size: var(--text-xs); font-weight: 400; color: var(--set-text); background: var(--set-bg); white-space: nowrap; }
 .zone-tool .tool-head { display: flex; align-items: center; gap: 6px; }
+
+/* D-196 — précision à droite d'une entrée de menu (valeur d'un champ, collection) */
+.context-item .menu-note { margin-left: auto; padding-left: var(--s-3); max-width: 150px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--text-muted); font-size: var(--text-xs); }

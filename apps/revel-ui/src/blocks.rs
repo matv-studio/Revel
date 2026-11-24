@@ -127,8 +127,25 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         if lower == "svg"
             && let Some(name) = attr(attrs, "data-icon").and_then(|a| a.value.clone())
         {
-            let at = at.clone();
-            parts.push(view! { <IconPicker at current=name/> }.into_any());
+            // Icône lue dans une variable du composant (D-196) : choisie sur chaque utilisation.
+            let bound = name.contains("{{");
+            if let Some(btn) =
+                crate::components::bind_button(ui, ed, &at, crate::components::Bind::Icon)
+            {
+                parts.push(
+                    view! {
+                        <div class="view-line bind-row" data-bind="component-bind-icon">
+                            <span class="muted">{ui.t("component-bind-icon")}</span>
+                            <span class="bind-value">{btn}</span>
+                        </div>
+                    }
+                    .into_any(),
+                );
+            }
+            if !bound {
+                let at = at.clone();
+                parts.push(view! { <IconPicker at current=name/> }.into_any());
+            }
         }
         if let [Node::Html { html }] = children.as_slice()
             && lower != "svg"
@@ -4148,6 +4165,7 @@ fn zone_settings(ui: Ui, ed: Ed, at: &Target) -> Option<AnyView> {
                 {
                     let mut fields = l.fields.clone();
                     fields.push(revel_model::PropDef {
+                        options: Vec::new(),
                         name: key.into(),
                         label: Some(ui.now(
                             if footer {
@@ -4236,6 +4254,9 @@ pub(crate) fn cms_label(d: &Site, cols: &[CmsCollection], at: &Target) -> Option
             .into_iter()
             .map(|(v, c)| (c, format!("{v}.data."))),
     );
+    if let Some((c, _, base)) = standalone_parse(&expr) {
+        ctxs.push((c, format!("{base}.data.")));
+    }
     let (col, prefix) = ctxs
         .into_iter()
         .filter(|(_, p)| expr.starts_with(p.as_str()))
@@ -4283,7 +4304,11 @@ pub(crate) fn cms_field_node(ed: Ed, parent: &revel_edit::Parent) -> Option<Node
     Some(Node::Element {
         id: Some(id),
         tag: "p".into(),
-        attrs: Vec::new(),
+        attrs: vec![Attr {
+            name: revel_model::BASE_ATTR.into(),
+            value: Some(CMS_FIELD_BASE.into()),
+            when: None,
+        }],
         children: vec![Node::Out {
             expr: format!("{prefix}{field}"),
         }],
@@ -4307,6 +4332,567 @@ fn d_fields(ed: Ed, col: &str) -> Option<String> {
         .find(|f| f.name == "title")
         .or(texts.first())
         .map(|f| f.name.clone())
+}
+
+// ------------------------------------------------------------------ champ CMS hors d'une liste
+
+/// Marque de l'outil « Champ CMS » (D-196) : valeur de `data-revel-base` de l'élément posé, qui
+/// lui donne son nom et son icône tant qu'aucun champ n'est choisi.
+pub(crate) const CMS_FIELD_BASE: &str = "cms-field";
+
+/// Élément posé par l'outil « Champ CMS ».
+pub(crate) fn is_cms_field(n: &Node) -> bool {
+    matches!(n, Node::Element { attrs, .. } if attrs.iter().any(|a| a.name == revel_model::BASE_ATTR
+        && a.value.as_deref() == Some(CMS_FIELD_BASE)))
+}
+
+/// Contenu lu hors d'une liste : celui de l'identifiant `slug`, sinon le premier de la
+/// collection. Écrit sans filtre ni parenthèse (les réglages d'un texte relié lisent un champ).
+fn standalone_base(col: &str, slug: Option<&str>) -> String {
+    match slug.filter(|s| !s.is_empty()) {
+        Some(s) => format!(
+            "entry({}, {})",
+            revel_edit::canvas::quote(col),
+            revel_edit::canvas::quote(s)
+        ),
+        None => format!("collections.{col}[0]"),
+    }
+}
+
+/// Début d'une expression écrite par [`standalone_base`] : (collection, identifiant, base).
+pub(crate) fn standalone_parse(expr: &str) -> Option<(String, Option<String>, String)> {
+    let e = expr.trim();
+    let ident = |t: &str| {
+        t.find(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .unwrap_or(t.len())
+    };
+    if let Some(rest) = e.strip_prefix("collections.") {
+        let n = ident(rest);
+        return rest[n..]
+            .starts_with("[0]")
+            .then(|| (rest[..n].to_string(), None, e[..12 + n + 3].to_string()));
+    }
+    let rest = e.strip_prefix("entry(")?;
+    let end = rest.find(')')?;
+    let (a, b) = rest[..end].split_once(',')?;
+    let col = revel_edit::canvas::literal(a.trim())?;
+    let slug = revel_edit::canvas::literal(b.trim())?;
+    Some((col, Some(slug), e[..6 + end + 1].to_string()))
+}
+
+/// Expressions de l'élément : texte, adresse du lien, source de l'image.
+fn node_exprs(node: &Node) -> Vec<String> {
+    match node {
+        Node::Element {
+            attrs, children, ..
+        } => children
+            .iter()
+            .filter_map(|c| match c {
+                Node::Out { expr } => Some(expr.trim().trim_start_matches('(').to_string()),
+                _ => None,
+            })
+            .chain(
+                attr(attrs, "href")
+                    .and_then(|a| a.value.clone())
+                    .and_then(|h| h.split_once("{{").map(|(_, r)| r.trim().to_string())),
+            )
+            .collect(),
+        Node::Image(img) => vec![img.src.trim().to_string()],
+        _ => Vec::new(),
+    }
+}
+
+/// Le même élément lisant une autre base (autre contenu de la collection).
+fn rebased(node: &Node, old: &str, new: &str) -> Node {
+    let mut n = node.clone();
+    match &mut n {
+        Node::Element {
+            attrs, children, ..
+        } => {
+            for a in attrs.iter_mut() {
+                if let Some(v) = a.value.as_mut() {
+                    *v = v.replace(old, new);
+                }
+            }
+            for c in children.iter_mut() {
+                if let Node::Out { expr } = c {
+                    *expr = expr.replace(old, new);
+                }
+            }
+        }
+        Node::Image(img) => {
+            img.src = img.src.replace(old, new);
+            if let Some(a) = img.alt.as_mut() {
+                *a = a.replace(old, new);
+            }
+        }
+        _ => {}
+    }
+    n
+}
+
+/// Icône d'un champ selon son type.
+fn field_icon(f: &revel_protocol::CmsField) -> fn() -> AnyView {
+    match f.kind.as_deref() {
+        _ if f.list => icons::list,
+        Some("image" | "file") => icons::image,
+        Some("number") => icons::hash,
+        Some("boolean") => icons::toggle,
+        Some("date" | "datetime") => icons::clock,
+        Some("select" | "reference") => icons::list_ordered,
+        _ => icons::text,
+    }
+}
+
+/// Valeur d'un champ en quelques mots (aperçu dans un menu, nom d'un calque).
+pub(crate) fn value_preview(v: &serde_json::Value) -> String {
+    let t = match v {
+        serde_json::Value::String(s) => s
+            .rsplit_once('/')
+            .filter(|_| s.starts_with('/') || s.starts_with("http"))
+            .map_or(s.as_str(), |(_, f)| f)
+            .to_string(),
+        serde_json::Value::Bool(true) => "✓".into(),
+        serde_json::Value::Bool(false) | serde_json::Value::Null => String::new(),
+        serde_json::Value::Array(a) => a
+            .iter()
+            .map(value_preview)
+            .filter(|x| !x.is_empty())
+            .collect::<Vec<_>>()
+            .join(", "),
+        serde_json::Value::Object(_) => String::new(),
+        other => other.to_string(),
+    };
+    let t = t.trim();
+    if t.chars().count() > 28 {
+        format!("{}…", t.chars().take(27).collect::<String>())
+    } else {
+        t.to_string()
+    }
+}
+
+/// Identifiant d'un contenu (champ `slug`, sinon nom du fichier) et son titre.
+fn entry_ident(e: &revel_protocol::CmsEntry) -> (String, String) {
+    let text = |k: &str| {
+        e.data
+            .get(k)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let slug = text("slug").unwrap_or_else(|| {
+        e.file
+            .rsplit_once('.')
+            .map_or(e.file.as_str(), |(a, _)| a)
+            .to_string()
+    });
+    let title = text("title")
+        .or_else(|| text("name"))
+        .unwrap_or_else(|| slug.clone());
+    (slug, title)
+}
+
+/// Premier contenu d'une collection dans l'ordre du site généré (date croissante, puis nom du
+/// fichier) : celui que lit `collections.<id>[0]`, hors tri propre à la collection.
+fn first_entry(c: &CmsCollection) -> Option<&revel_protocol::CmsEntry> {
+    c.entries.iter().min_by(|a, b| {
+        let date = |e: &revel_protocol::CmsEntry| {
+            e.data
+                .get("date")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        };
+        match (date(a), date(b)) {
+            (Some(x), Some(y)) => x.cmp(&y),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        }
+        .then_with(|| a.file.cmp(&b.file))
+    })
+}
+
+/// Collections du site proposées à l'outil (sans les collections réunies d'une liste).
+fn plain_collections(cols: &[CmsCollection]) -> Vec<CmsCollection> {
+    cols.iter()
+        .filter(|c| !c.id.contains('+'))
+        .cloned()
+        .collect()
+}
+
+/// Champs proposés d'une collection : visibles, hors objets et blocs.
+fn pickable_fields(c: &CmsCollection) -> Vec<revel_protocol::CmsField> {
+    c.fields
+        .iter()
+        .filter(|f| !f.hidden && !matches!(f.kind.as_deref(), Some("object" | "block" | "code")))
+        .cloned()
+        .collect()
+}
+
+/// Élément relié au champ `field` de la collection `col` (`None` : adresse de la page du
+/// contenu), à la place de l'élément `old` : texte, image ou lien selon le type du champ.
+fn standalone_node(
+    old: &Node,
+    col: &CmsCollection,
+    field: Option<&revel_protocol::CmsField>,
+    slug: Option<&str>,
+    link_text: String,
+) -> Node {
+    let base = standalone_base(&col.id, slug);
+    let (id, mut attrs) = match old {
+        Node::Element { id, attrs, .. } => (id.clone(), attrs.clone()),
+        Node::Image(i) => (
+            i.id.clone(),
+            i.class
+                .clone()
+                .map(|c| Attr {
+                    name: "class".into(),
+                    value: Some(c),
+                    when: None,
+                })
+                .into_iter()
+                .collect(),
+        ),
+        _ => (None, Vec::new()),
+    };
+    attrs.retain(|a| a.name != "href");
+    if !attrs.iter().any(|a| a.name == revel_model::BASE_ATTR) {
+        attrs.push(Attr {
+            name: revel_model::BASE_ATTR.into(),
+            value: Some(CMS_FIELD_BASE.into()),
+            when: None,
+        });
+    }
+    let Some(f) = field else {
+        attrs.push(Attr {
+            name: "href".into(),
+            value: Some(format!("{{{{ {base}.url }}}}")),
+            when: None,
+        });
+        return Node::Element {
+            id,
+            tag: "a".into(),
+            attrs,
+            children: vec![Node::Text { text: link_text }],
+        };
+    };
+    if !f.list && matches!(f.kind.as_deref(), Some("image" | "file")) {
+        return Node::Image(revel_model::ImageNode {
+            id,
+            src: format!("{base}.data.{}", f.name),
+            class: attr(&attrs, "class").and_then(|a| a.value.clone()),
+            ..Default::default()
+        });
+    }
+    let rich = matches!(
+        f.kind.as_deref(),
+        Some("rich-text" | "rich_text" | "markdown")
+    );
+    let bind = TextBind {
+        field: f.name.clone(),
+        safe: rich,
+        join: (f.list).then(|| ", ".to_string()),
+        ..Default::default()
+    };
+    Node::Element {
+        id,
+        tag: if rich { "div".into() } else { "p".into() },
+        attrs,
+        children: text_children(&bind, &format!("{base}.data.")),
+    }
+}
+
+/// Outil « Champ CMS » hors d'une liste (D-196, maquette validée le 24/11/2026). Élément posé
+/// par l'outil, pas encore relié : sans collection, un bouton ouvre le CMS ; sinon le menu
+/// « Collections » (coches, « Toutes » en tête) quand il y en a plusieurs, puis le menu « Champ »
+/// (champs communs d'abord, puis ceux d'une seule collection, nommée à droite). Relié : collection,
+/// contenu lu, puis les réglages habituels (champ, affichage, champ vide).
+fn standalone_field(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
+    let bound = node_exprs(node).iter().find_map(|e| standalone_parse(e));
+    if bound.is_none() && !is_cms_field(node) {
+        return None;
+    }
+    let cols = collections(ed);
+    let at = StoredValue::new(at.clone());
+    let node = StoredValue::new(node.clone());
+    // Élément remplacé par `new` (même place, même identifiant).
+    let replace = move |new: Node| {
+        let cmd = ed.doc.with_untracked(|d| {
+            let (parent, index) = revel_edit::address::locate(d.as_ref()?, &at.get_value()).ok()?;
+            Some(Command::Replace {
+                parent,
+                index,
+                node: new,
+            })
+        });
+        if let Some(cmd) = cmd {
+            ed.apply(ui, cmd, false);
+        }
+    };
+    let head = move || {
+        view! {
+            <p class="panel-title tool-head"><span class="tool-icon">{icons::database()}</span><span>{ui.t("insert-cms-field")}</span></p>
+        }
+    };
+    if let Some((col, slug, base)) = bound {
+        let ctx = (col.clone(), format!("{base}.data."), format!("{base}.url"));
+        let ctxs = StoredValue::new(vec![ctx.clone()]);
+        let pick = RwSignal::new(0usize);
+        let col = StoredValue::new(col);
+        let slug = StoredValue::new(slug);
+        let base = StoredValue::new(base);
+        return Some(
+            (move || {
+                let list = cols.with(|c| plain_collections(c));
+                let cur = list.iter().find(|c| col.with_value(|id| c.id == *id)).cloned();
+                let entries: Vec<(String, String)> = cur
+                    .as_ref()
+                    .map(|c| c.entries.iter().map(entry_ident).collect())
+                    .unwrap_or_default();
+                let list2 = list.clone();
+                let lead = view! {
+                    <label class="field" data-bound="cms-field-collection">
+                        <span class="label">{ui.t("cms-field-collection")}</span>
+                        <div class="select">
+                            <select class="input" on:change=move |e| {
+                                // Autre collection : son premier champ de texte, premier contenu.
+                                let v = event_target_value(&e);
+                                let Some(c) = list2.iter().find(|c| c.id == v) else { return };
+                                let fields = pickable_fields(c);
+                                let f = fields.iter().find(|f| f.name == "title")
+                                    .or_else(|| fields.iter().find(|f| !f.list && matches!(f.kind.as_deref(), Some("string" | "text") | None)))
+                                    .or(fields.first());
+                                if let Some(f) = f {
+                                    replace(standalone_node(&node.get_value(), c, Some(f), None, String::new()));
+                                }
+                            }>
+                                {list.iter().map(|c| {
+                                    let on = col.with_value(|id| c.id == *id);
+                                    view! { <option value=c.id.clone() selected=on>{label_of(c)}</option> }
+                                }).collect_view()}
+                            </select>
+                        </div>
+                    </label>
+                    <label class="field" data-bound="cms-field-item" title=ui.t("cms-field-item-help")>
+                        <span class="label">{ui.t("cms-field-item")}</span>
+                        <div class="select">
+                            <select class="input" on:change=move |e| {
+                                let v = event_target_value(&e);
+                                let new = standalone_base(&col.get_value(), (!v.is_empty()).then_some(v.as_str()));
+                                replace(rebased(&node.get_value(), &base.get_value(), &new));
+                            }>
+                                <option value="" selected=slug.with_value(Option::is_none)>{ui.t("prop-entry-first")}</option>
+                                {entries.into_iter().map(|(s, t)| {
+                                    let on = slug.with_value(|x| x.as_deref() == Some(s.as_str()));
+                                    view! { <option value=s selected=on>{t}</option> }
+                                }).collect_view()}
+                            </select>
+                        </div>
+                    </label>
+                }
+                .into_any();
+                bindings_in(ui, ed, &at.get_value(), &node.get_value(), ctx.clone(), (ctxs, pick), Some(lead))
+            })
+            .into_any(),
+        );
+    }
+    // Collections cochées dans le menu (aucune : toutes).
+    let chosen = RwSignal::new(Vec::<String>::new());
+    let selected = move |list: &[CmsCollection]| -> Vec<CmsCollection> {
+        let ch = chosen.get_untracked();
+        list.iter()
+            .filter(|c| ch.is_empty() || ch.contains(&c.id))
+            .cloned()
+            .collect()
+    };
+    let open_collections = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        let list = cols.with_untracked(|c| plain_collections(c));
+        let ch = chosen.get_untracked();
+        let all = ch.is_empty() || ch.len() == list.len();
+        let mut items = vec![{
+            let i = CtxItem::new(ui.now("cms-field-all", &[]), move || chosen.set(Vec::new()));
+            if all {
+                i.icon(icons::check)
+            } else {
+                i.icon(icons::blank)
+            }
+        }];
+        for (n, c) in list.iter().enumerate() {
+            let id = c.id.clone();
+            let on = !all && ch.contains(&c.id);
+            let ids: Vec<String> = list.iter().map(|c| c.id.clone()).collect();
+            let i = CtxItem::new(label_of(c), move || {
+                chosen.update(|v| {
+                    if v.contains(&id) {
+                        v.retain(|x| *x != id);
+                    } else {
+                        v.push(id.clone());
+                    }
+                    // Toutes cochées une à une : « Toutes ».
+                    if ids.iter().all(|i| v.contains(i)) {
+                        v.clear();
+                    }
+                });
+            });
+            let i = if on {
+                i.icon(icons::check)
+            } else {
+                i.icon(icons::blank)
+            };
+            items.push(if n == 0 { i.sep() } else { i });
+        }
+        open(ui, &e, items);
+    };
+    let open_fields = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        let list = cols.with_untracked(|c| plain_collections(c));
+        let sel = selected(&list);
+        let several = sel.len() > 1;
+        let pick = move |c: CmsCollection, f: Option<revel_protocol::CmsField>| {
+            replace(standalone_node(
+                &node.get_value(),
+                &c,
+                f.as_ref(),
+                None,
+                ui.now("prop-field-page", &[]),
+            ));
+        };
+        // (collection lue, champ, collections qui l'ont)
+        let mut common: Vec<CtxItem> = Vec::new();
+        let mut single: Vec<CtxItem> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        for c in &sel {
+            for f in pickable_fields(c) {
+                if seen.contains(&f.name) {
+                    continue;
+                }
+                seen.push(f.name.clone());
+                let owners: Vec<&CmsCollection> = sel
+                    .iter()
+                    .filter(|x| x.fields.iter().any(|g| g.name == f.name && !g.hidden))
+                    .collect();
+                let label = f
+                    .label
+                    .clone()
+                    .unwrap_or_else(|| revel_edit::overrides::field_label(&f.name));
+                // À droite : la valeur du premier contenu (une collection), sinon les collections
+                // qui ont ce champ.
+                let key = if several {
+                    owners
+                        .iter()
+                        .map(|x| label_of(x))
+                        .collect::<Vec<_>>()
+                        .join(" · ")
+                } else {
+                    first_entry(c)
+                        .and_then(|e| e.data.get(&f.name))
+                        .map(value_preview)
+                        .unwrap_or_default()
+                };
+                let (c2, f2) = (c.clone(), f.clone());
+                let mut item = CtxItem::new(label, move || pick(c2.clone(), Some(f2.clone())))
+                    .icon(field_icon(&f));
+                if !key.is_empty() {
+                    item = item.note(key);
+                }
+                if several && owners.len() < sel.len() {
+                    single.push(item);
+                } else {
+                    common.push(item);
+                }
+            }
+        }
+        // Adresse de la page du contenu : collections à pages.
+        for c in sel
+            .iter()
+            .filter(|c| c.entries.iter().any(|e| e.url.is_some()))
+        {
+            let c2 = c.clone();
+            let mut item = CtxItem::new(ui.now("prop-field-page", &[]), move || {
+                pick(c2.clone(), None)
+            })
+            .icon(icons::link);
+            let key = if several {
+                label_of(c)
+            } else {
+                first_entry(c)
+                    .and_then(|e| e.url.clone())
+                    .unwrap_or_default()
+            };
+            if !key.is_empty() {
+                item = item.note(key);
+            }
+            if several {
+                single.push(item);
+            } else {
+                common.push(item);
+            }
+        }
+        let mut items = common;
+        let first_single = items.len();
+        items.extend(single);
+        if first_single > 0 && first_single < items.len() {
+            let it = items.remove(first_single);
+            items.insert(first_single, it.sep());
+        }
+        open(ui, &e, items);
+    };
+    Some(
+        (move || {
+            let list = cols.with(|c| plain_collections(c));
+            if list.is_empty() {
+                return view! {
+                    <div class="insp-group cms-field-tool" data-state="empty">
+                        {head()}
+                        <div class="tool-empty">
+                            {icons::database()}
+                            <span>{ui.t("cms-field-none")}</span>
+                            <button type="button" class="btn btn--primary btn--small" data-action="cms-field-create"
+                                on:click=move |_| ui.tab(crate::Tab::Cms)>{ui.t("cms-field-create")}</button>
+                        </div>
+                    </div>
+                }
+                .into_any();
+            }
+            let several = list.len() > 1;
+            let names = {
+                let list = list.clone();
+                move || {
+                    let ch = chosen.get();
+                    if ch.is_empty() || ch.len() == list.len() {
+                        ui.now("cms-field-all", &[])
+                    } else {
+                        list.iter()
+                            .filter(|c| ch.contains(&c.id))
+                            .map(label_of)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    }
+                }
+            };
+            view! {
+                <div class="insp-group cms-field-tool" data-state="choose">
+                    {head()}
+                    {several.then(|| view! {
+                        <div class="field" data-bound="cms-field-collections">
+                            <span class="label">{ui.t("cms-field-collections")}</span>
+                            <button type="button" class="input pick-btn" data-action="cms-field-collections"
+                                on:click=open_collections><span>{names}</span>{icons::chevron_down()}</button>
+                        </div>
+                    })}
+                    <div class="field" data-bound="cms-field-field">
+                        <span class="label">{ui.t("cms-field-field")}</span>
+                        <button type="button" class="input pick-btn is-placeholder" data-action="cms-field-pick"
+                            on:click=open_fields><span>{ui.t("cms-field-choose")}</span>{icons::chevron_down()}</button>
+                    </div>
+                </div>
+            }
+            .into_any()
+        })
+        .into_any(),
+    )
 }
 
 /// Collection dont le modèle de page est le gabarit propriétaire de `at`.
@@ -4357,7 +4943,9 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
         out
     });
     if ctxs.is_empty() {
-        return None;
+        // Hors d'une liste (D-196) : l'outil « Champ CMS » choisit la collection, le champ et le
+        // contenu lu.
+        return standalone_field(ui, ed, at, node);
     }
     // Collection de la valeur déjà reliée (préfixe le plus long), sinon celle de l'endroit.
     let exprs: Vec<String> = match node {
@@ -4390,11 +4978,14 @@ fn item_bindings(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView> {
     Some(
         (move || {
             let ctx = ctxs.with_value(|c| c[pick.get().min(c.len() - 1)].clone());
-            bindings_in(ui, ed, &at, &node, ctx, ctxs, pick)
+            bindings_in(ui, ed, &at, &node, ctx, (ctxs, pick), None)
         })
         .into_any(),
     )
 }
+
+/// Collections lisibles à un endroit : (collection, préfixe des champs, adresse de la page).
+type Contexts = StoredValue<Vec<(String, String, String)>>;
 
 /// Réglages « Champ CMS » d'un élément pour une collection lisible à son endroit.
 fn bindings_in(
@@ -4403,8 +4994,10 @@ fn bindings_in(
     at: &Target,
     node: &Node,
     (collection_id, prefix, url_expr): (String, String, String),
-    ctxs: StoredValue<Vec<(String, String, String)>>,
-    pick: RwSignal<usize>,
+    (ctxs, pick): (Contexts, RwSignal<usize>),
+    // Tête propre (champ lu hors d'une liste : collection et contenu), à la place du choix de la
+    // collection lisible à l'endroit.
+    lead: Option<AnyView>,
 ) -> Option<AnyView> {
     let is_field = |f: &str| {
         !f.is_empty()
@@ -4924,6 +5517,9 @@ fn bindings_in(
         view! {
             <div class="insp-group cms-field-tool">
                 <p class="panel-title tool-head"><span class="tool-icon">{icons::database()}</span><span>{ui.t("insert-cms-field")}</span></p>
+                {match lead {
+                    Some(l) => l,
+                    None => view! {
                 <label class="field" data-bound="cms-field-collection">
                     <span class="label">{ui.t("cms-field-collection")}</span>
                     <div class="select">
@@ -4936,6 +5532,8 @@ fn bindings_in(
                         </select>
                     </div>
                 </label>
+                    }.into_any(),
+                }}
                 {shape.map(|cur| view! {
                     <div class="field" data-bound="cms-field-as">
                         <span class="label">{ui.t("cms-field-as")}</span>

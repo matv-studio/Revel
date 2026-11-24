@@ -1872,8 +1872,9 @@ try {
       const bound = await comp();
       if (shots) await page.screenshot({ path: `${shots}/editeur-composant-ouvert.png` });
       check('composants : ouvert (reste estompé), texte relié à une nouvelle propriété (valeur par défaut : le texte)',
-        bound.props[0].name === 'texte' && bound.props[0].default === 'Mettre la vidéo en pause'
-          && bound.body[0].children[0].expr === 'texte' && !!(await page.$('.iso-bar')));
+        // Variable nommée d'après le calque (D-196) : « Hero pause » -> `hero_pause`.
+        bound.props[0].name === 'hero_pause' && bound.props[0].label === 'Hero pause' && bound.props[0].default === 'Mettre la vidéo en pause'
+          && bound.body[0].children[0].expr === 'hero_pause' && !!(await page.$('.iso-bar')), JSON.stringify(bound.props[0]));
       // Emplacement (D-118) : le bouton du composant reçoit le contenu propre de chaque utilisation.
       await page.click('.dock-tab[data-panel="styles"]');
       await page.waitForSelector('#insp-slot');
@@ -1883,8 +1884,8 @@ try {
       await page.click('.iso-bar .iso-done');
       await page.waitForFunction(() => !document.querySelector('.iso-bar'));
       await frame.locator('.hero__pause').click();
-      await page.waitForSelector('.prop-row[data-prop="texte"] input');
-      await page.fill('.prop-row[data-prop="texte"] input', 'Pause');
+      await page.waitForSelector('.prop-row[data-prop="hero_pause"] input');
+      await page.fill('.prop-row[data-prop="hero_pause"] input', 'Pause');
       await page.keyboard.press('Enter');
       const own = await untilC(async () => ((await frame.locator('.hero__pause').first().textContent()) || '').trim() === 'Pause');
       check('composants : valeur propre à une utilisation', own);
@@ -1894,7 +1895,7 @@ try {
       if (shots) await page.locator('.dock-col--right').screenshot({ path: `${shots}/editeur-emplacement.png` });
       await page.click('.instance-slot [data-action="slot-edit"]');
       await page.waitForSelector('.instance-slot[data-slot="own"]');
-      const ownSlot = await untilC(async () => JSON.stringify((await site()).pages).includes('"component":"bouton-pause","args":{"texte":"\\"Pause\\""},"children":[{"node":"text","text":"Pause"}]')
+      const ownSlot = await untilC(async () => JSON.stringify((await site()).pages).includes('"component":"bouton-pause","args":{"hero_pause":"\\"Pause\\""},"children":[{"node":"text","text":"Pause"}]')
         && ((await frame.locator('.hero__pause').first().textContent()) || '').trim() === 'Pause');
       check('composants : contenu propre à l’utilisation (copie du contenu du composant, valeurs écrites)', ownSlot);
       // Glisser depuis le panneau Composants : nouvelle utilisation, valeur par défaut.
@@ -2013,7 +2014,8 @@ try {
         const tool = '.cms-field-tool';
         await page.waitForSelector(`${tool} [data-bound="cms-field-collection"] select`);
         const noCode = !(await page.$eval(tool, (e) => e.textContent)).includes('{{');
-        const layer = await untilE(async () => (await page.$$eval('.layers .layer.is-selected', (l) => l.map((e) => e.textContent))).some((t) => /Champ CMS/.test(t) && /›/.test(t)));
+        // Calque d'un champ relié (D-196) : icône du CMS, nom du champ.
+        const layer = await untilE(async () => (await page.$$eval('.layers .layer.is-selected', (l) => l.map((e) => !!e.querySelector('.layer-icon.is-cms') && !/Paragraphe|Titre \d/.test(e.querySelector('.layer-label')?.textContent || '')))).some(Boolean));
         await page.selectOption(`${tool} [data-bound="cms-field-empty"] select`, 'hide');
         const hidden = await untilE(async () => (await pageJson()).includes(`"cond":"item.data.${other}"`));
         await page.waitForFunction((t) => document.querySelector(`${t} [data-bound="cms-field-empty"] select`)?.value === 'hide', tool);

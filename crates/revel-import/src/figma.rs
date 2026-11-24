@@ -1172,6 +1172,7 @@ fn components(
         c.name = Some(name);
         c.props = (1..=k)
             .map(|i| PropDef {
+                options: Vec::new(),
                 collection: None,
                 name: format!("texte{i}"),
                 label: Some(format!("Texte {i}")),

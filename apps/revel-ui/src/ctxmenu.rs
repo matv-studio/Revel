@@ -17,6 +17,8 @@ pub struct CtxItem {
     pub icon: Option<fn() -> AnyView>,
     /// Raccourci affiché à droite (`Ctrl+D`).
     pub key: Option<String>,
+    /// Précision affichée à droite, en texte discret (valeur d'un champ, collection).
+    pub note: Option<String>,
     pub danger: bool,
     pub disabled: bool,
     /// Trait de séparation au-dessus.
@@ -30,6 +32,7 @@ impl CtxItem {
             label,
             icon: None,
             key: None,
+            note: None,
             danger: false,
             disabled: false,
             sep: false,
@@ -38,6 +41,10 @@ impl CtxItem {
     }
     pub fn icon(mut self, f: fn() -> AnyView) -> Self {
         self.icon = Some(f);
+        self
+    }
+    pub fn note(mut self, n: String) -> Self {
+        self.note = Some(n);
         self
     }
     pub fn key(mut self, k: String) -> Self {
@@ -160,6 +167,7 @@ pub fn ContextLayer() -> impl IntoView {
                                 on:click=move |_| { close(); run() }>
                                 <span class="menu-icon">{it.icon.map(|f| f())}</span>
                                 <span class="menu-label">{it.label}</span>
+                                {it.note.map(|n| view! { <span class="menu-note">{n}</span> })}
                                 {it.key.map(|k| view! { <kbd>{k}</kbd> })}
                             </button>
                         }
@@ -168,4 +176,12 @@ pub fn ContextLayer() -> impl IntoView {
             }
         })
     }
+}
+
+/// Clic droit sur un champ de saisie (recherche d'un panneau) : le menu du système y reste.
+pub fn on_input(e: &web_sys::MouseEvent) -> bool {
+    use wasm_bindgen::JsCast;
+    e.target()
+        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        .is_some_and(|el| matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT"))
 }

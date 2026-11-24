@@ -896,6 +896,9 @@ pub struct PropDef {
     /// Collection d'une propriété « Contenu » ([`PropKind::Entry`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collection: Option<String>,
+    /// Valeurs proposées d'une propriété « Choix » ([`PropKind::Choice`], D-196).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<String>,
 }
 
 impl PropDef {
@@ -944,6 +947,13 @@ pub enum PropKind {
     /// Contenu d'une collection (D-174) : les éléments du composant lisent ses champs
     /// (`marque.data.title`, `marque.url`) ; chaque utilisation choisit le contenu.
     Entry,
+    /// Nombre (D-196) : écrit dans un texte du composant.
+    Number,
+    /// Choix parmi des valeurs données ([`PropDef::options`], D-196) : écrit dans un texte.
+    Choice,
+    /// Icône (D-196) : nom d'une icône de Revel, dessinée par un élément icône du composant
+    /// (`data-icon="{{ nom }}"`, dessin `{{ nom | icon }}`).
+    Icon,
 }
 
 /// Identifiant de variante valide : lettres minuscules, chiffres, tirets (classe `is-<id>`).

@@ -295,6 +295,21 @@ try {
     check('instances: “Content” shown only when the instance reads a CMS field', card[0] && card[1] && nav[0] && !nav[1] && !nav[2], JSON.stringify({ card, nav }));
   }
 
+  // ---------------------------------------------------------------- Collection list : mêmes menus que « CMS field » (D-197)
+  {
+    const body = async () => JSON.stringify((await site()).pages.find((p) => p.path === '/').body);
+    await tab('layers');
+    await page.locator('.layers-tree .layer .layer-label', { hasText: /^List/ }).first().click(); await w(600);
+    await page.click(`${STY} [data-action="list-collections"]`); await w(300);
+    const m = await menu();
+    await pick('Journal');
+    const two = await until(async () => (await body()).includes(' + collections.journal'));
+    const label = await page.$eval(`${STY} [data-action="list-collections"]`, (e) => e.textContent.trim());
+    check('collection list: “Collections” menu with “All” first, second collection checked', m.map((i) => i.label).join('|') === 'All|Projets|Journal' && two && label === 'All' && !(await page.$(`${STY} .list-also`)), `${m.map((i) => i.label).join('|')} → ${label}`);
+    await shot('list-collections');
+    await page.click('.editor-toolbar .btn-undo'); await w(500);
+  }
+
   // ---------------------------------------------------------------- outil « CMS field » hors d'une liste (D-196)
   {
     const body = async () => JSON.stringify((await site()).pages.find((p) => p.path === '/').body);
@@ -305,7 +320,8 @@ try {
     const placed = await selected();
     const crumb = await page.$$eval('.editor-status .node-crumb', (l) => l.at(-1)?.textContent.trim());
     const marked = (await body()).includes('"data-revel-base","value":"cms-field"');
-    check('CMS field: placed outside a list as a “CMS field” layer with the CMS icon, same name in the status bar', placed[0] === 'CMS field' && placed[2] && crumb === 'CMS field' && marked, JSON.stringify({ placed, crumb, marked }));
+    const noText = !(await page.$(`${STY} .text-fields`));
+    check('CMS field: placed outside a list as a “CMS field” layer with the CMS icon, same name in the status bar', placed[0] === 'CMS field' && placed[2] && crumb === 'CMS field' && marked && noText, JSON.stringify({ placed, crumb, marked, noText }));
     await shot('cms-field-placed');
     await page.click(`${STY} [data-action="cms-field-collections"]`); await w(300);
     const cols = await menu();

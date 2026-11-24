@@ -56,6 +56,9 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   d'une liste (menus Collections et Field, contenu lu) ; menus du clic droit de Pages, Components, Assets ;
   `tools/panels-e2e.mjs` (23 essais, en anglais) et son étape de CI. Restent : « Import pages… », « Import
   component… » (source à définir), voir « En suspens » de D-196.
+- **24/11, 11 h (D-197)** : « CMS field » sans champ « Text » ; Collection list avec le menu « Collections » à
+  coches et l'état sans collection ; langue d'un nouveau site = langue de l'application. Maquettes en attente
+  de validation : bibliothèques d'icônes (réglage + menu « Library »), imports de pages et de composant.
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

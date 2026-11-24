@@ -2874,3 +2874,25 @@ icône ; outil « CMS field » hors d'une liste ; menus du clic droit des pannea
   barre du panneau Styles : nom « CMS field » gardé une fois le champ choisi ; « Paste from clipboard » et
   « Show in file explorer » non essayés dans l'application de bureau ; mot « Variables » dans 13 langues.
 
+**D-197 — 24/11/2026 — prise (retours de l'utilisateur du 24/11, 10 h 18).**
+**Outil « CMS field » sans texte libre ; Collection list alignée ; langue d'un nouveau site ; bibliothèques
+d'icônes et imports en maquette.**
+- **« CMS field »** : le champ « Text » du panneau n'est plus montré pour cet outil (tout passe par le champ
+  choisi). Hors d'une liste, relier une variable d'une utilisation de composant au CMS n'a pas d'entrée propre :
+  on passe par l'outil « CMS field » (choix de l'utilisateur).
+- **Collection list** : même menu « Collections » à coches que « CMS field » (« All » en tête, la première
+  cochée donne ses champs au filtre et au tri, au moins une cochée), à la place du menu « Collection », des
+  pastilles « + collection » et du menu « + Another collection » ; même état sans collection (« No collection
+  yet », « Create a collection ») ; même tête avec l'icône du CMS.
+- **Nouveau site** : langue proposée = langue de l'application en cours (réglage « système » compris).
+- **Bibliothèques d'icônes** (maquette envoyée, à valider) : réglage « Icon libraries » sur le modèle des
+  catalogues de templates (dépôts GitHub ajoutés ou retirés, dossier des SVG, lus en ligne une fois puis
+  gardés), menu « Library » dans le panneau Styles avec « All ». Proposées par défaut, licences vérifiées :
+  Lucide (ISC), Tabler (MIT), Phosphor (MIT), Heroicons (MIT), Feather (MIT). Remix Icon écartée par défaut :
+  statut de licence signalé comme incertain (Fedora). Une icône choisie est copiée dans le site.
+- **Imports** (maquette envoyée, à valider) : « Import pages… » depuis un autre site Revel ou des fichiers
+  HTML ; « Import component… » depuis un autre site Revel, un fichier de composant ou un fichier HTML ;
+  « Export component… » dans le menu d'un composant.
+- **Icône des réglages** (retour du 24/11, 10 h 38) : tout ce qui ouvre des réglages porte l'icône de rouage
+  de l'application (`icons::settings`), jamais un autre dessin ; « Manage libraries… » compris.
+

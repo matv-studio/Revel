@@ -3370,68 +3370,112 @@ fn collection_list(ui: Ui, ed: Ed, each_at: Target, expr: String) -> AnyView {
     let contains_field = contains.as_ref().map(|c| c.0.clone()).unwrap_or_default();
     let contains_field2 = contains_field.clone();
     let contains_value = contains.map(|c| c.1).unwrap_or_default();
-    view! {
-        <div class="insp-group collection-list">
-            <p class="panel-title">{ui.t("block-list")}</p>
-            {source}
-            <label class="field" class:is-hidden=nested>
-                <span class="label">{ui.t("block-list-collection")}</span>
-                <div class="select">
-                    <select class="input" on:change=move |e| {
-                        let v = event_target_value(&e);
-                        write(Box::new(move |q| {
-                            q.collection = v.clone();
-                            q.filter = None;
-                            q.sort = q.sort.take().filter(|s| s.0 == "date");
-                        }))
-                    }>
-                        {move || {
-                            let cur = q.with_value(|q| q.collection.clone());
-                            let mut list: Vec<(String, String)> = cols.with(|cs| cs.iter().filter(|c| !c.id.contains('+')).map(|c| (c.id.clone(), label_of(c))).collect());
-                            if !list.iter().any(|(id, _)| *id == cur) {
-                                list.insert(0, (cur.clone(), cur.clone()));
-                            }
-                            list.into_iter().map(|(id, l)| {
-                                let on = id == cur;
-                                view! { <option value=id prop:selected=on>{l}</option> }
-                            }).collect_view()
-                        }}
-                    </select>
-                </div>
-            </label>
-            // Autres collections lues à la suite (contenus de plusieurs collections).
-            <div class="list-also" class:is-hidden=nested title=ui.t("block-list-also-help")>
-                {move || q.with_value(|q| q.also.clone()).into_iter().map(|id| {
-                    let shown = cols.with(|cs| cs.iter().find(|c| c.id == id).map(label_of)).unwrap_or_else(|| id.clone());
-                    let gone = id.clone();
-                    view! {
-                        <span class="prop-chip prop-chip--field">
-                            {icons::database()}<span>{format!("+ {shown}")}</span>
-                            <button class="chip-x" title=ui.t("block-list-also-remove") aria-label=ui.t("block-list-also-remove")
-                                on:click=move |_| { let g = gone.clone(); write(Box::new(move |q| q.also.retain(|x| *x != g))) }>{icons::close()}</button>
-                        </span>
+    // Collections cochées, dans l'ordre de lecture (la première, puis les autres).
+    let chosen = move || {
+        q.with_value(|q| {
+            std::iter::once(q.collection.clone())
+                .chain(q.also.clone())
+                .collect::<Vec<_>>()
+        })
+    };
+    let plain = move || cols.with(|cs| plain_collections(cs));
+    let collections_label = move || {
+        let list = plain();
+        let ch = chosen();
+        if list.len() > 1 && list.iter().all(|c| ch.contains(&c.id)) {
+            ui.now("cms-field-all", &[])
+        } else {
+            ch.iter()
+                .map(|id| {
+                    list.iter()
+                        .find(|c| c.id == *id)
+                        .map(label_of)
+                        .unwrap_or_else(|| id.clone())
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    };
+    let set_collections = move |ids: Vec<String>| {
+        let Some((first, rest)) = ids.split_first() else {
+            return;
+        };
+        let (first, rest) = (first.clone(), rest.to_vec());
+        write(Box::new(move |q| {
+            // Autre première collection : son filtre et son tri ne valent plus.
+            if q.collection != first {
+                q.filter = None;
+                q.sort = q.sort.take().filter(|s| s.0 == "date");
+            }
+            q.collection = first.clone();
+            q.also = rest.clone();
+        }))
+    };
+    let open_collections = move |e: leptos::ev::MouseEvent| {
+        use crate::ctxmenu::{CtxItem, open};
+        let list = cols.with_untracked(|cs| plain_collections(cs));
+        let ch = chosen();
+        let ids: Vec<String> = list.iter().map(|c| c.id.clone()).collect();
+        let all = list.len() > 1 && ids.iter().all(|i| ch.contains(i));
+        let mut items = Vec::new();
+        if list.len() > 1 {
+            let ids = ids.clone();
+            let i = CtxItem::new(ui.now("cms-field-all", &[]), move || {
+                set_collections(ids.clone())
+            });
+            items.push(if all {
+                i.icon(icons::check)
+            } else {
+                i.icon(icons::blank)
+            });
+        }
+        for (n, c) in list.iter().enumerate() {
+            let id = c.id.clone();
+            let on = ch.contains(&c.id);
+            let ch2 = ch.clone();
+            let i = CtxItem::new(label_of(c), move || {
+                let mut v = ch2.clone();
+                if v.contains(&id) {
+                    // Une liste lit au moins une collection.
+                    if v.len() > 1 {
+                        v.retain(|x| *x != id);
                     }
-                }).collect_view()}
-                <div class="select select--small">
-                    <select class="input" aria-label=ui.t("block-list-also-add") on:change=move |e| {
-                        let v = event_target_value(&e);
-                        if !v.is_empty() {
-                            write(Box::new(move |q| if !q.also.contains(&v) && q.collection != v { q.also.push(v.clone()) }));
-                        }
-                    }>
-                        <option value="" selected=true>{ui.t("block-list-also-add")}</option>
-                        {move || {
-                            let (main, also) = q.with_value(|q| (q.collection.clone(), q.also.clone()));
-                            cols.with(|cs| cs.iter()
-                                .filter(|c| !c.id.contains('+') && c.id != main && !also.contains(&c.id))
-                                .map(|c| (c.id.clone(), label_of(c)))
-                                .collect::<Vec<_>>())
-                                .into_iter()
-                                .map(|(id, l)| view! { <option value=id>{l}</option> })
-                                .collect_view()
-                        }}
-                    </select>
+                } else {
+                    v.push(id.clone());
+                }
+                set_collections(v);
+            });
+            let i = if on {
+                i.icon(icons::check)
+            } else {
+                i.icon(icons::blank)
+            };
+            items.push(if n == 0 && list.len() > 1 { i.sep() } else { i });
+        }
+        open(ui, &e, items);
+    };
+    // Site sans collection : même état que l'outil « Champ CMS » (les collections arrivent après
+    // l'ouverture du panneau : état réactif).
+    let no_collection = move || !nested && site_without_collection(ed);
+    view! {
+        <div class="insp-group collection-list" class:is-empty=no_collection>
+            <p class="panel-title tool-head"><span class="tool-icon">{icons::database()}</span><span>{ui.t("block-list")}</span></p>
+            {move || no_collection().then(|| view! {
+                <div class="tool-empty">
+                    {icons::database()}
+                    <span>{ui.t("cms-field-none")}</span>
+                    <button type="button" class="btn btn--primary btn--small" data-action="cms-field-create"
+                        on:click=move |_| ui.tab(crate::Tab::Cms)>{ui.t("cms-field-create")}</button>
                 </div>
+            })}
+            {source}
+            // Collections lues (D-197, comme l'outil « Champ CMS ») : menu à coches, « Toutes » en
+            // tête ; la première cochée donne ses champs au filtre et au tri, les autres suivent.
+            <div class="field" class:is-hidden=nested data-list="collections" title=ui.t("block-list-also-help")>
+                <span class="label">{ui.t("cms-field-collections")}</span>
+                <button type="button" class="input pick-btn" data-action="list-collections" on:click=open_collections>
+                    <span>{collections_label}</span>{icons::chevron_down()}
+                </button>
             </div>
             <div class="field" class:is-hidden=nested data-list="mode">
                 <span class="label">{ui.t("block-list-items")}</span>
@@ -4513,6 +4557,13 @@ fn first_entry(c: &CmsCollection) -> Option<&revel_protocol::CmsEntry> {
     })
 }
 
+/// Site sans aucune collection, lu dans le document (connu tout de suite, contrairement au schéma
+/// des collections qui arrive après l'ouverture du panneau).
+fn site_without_collection(ed: Ed) -> bool {
+    ed.doc
+        .with(|d| d.as_ref().is_some_and(|d| d.collections.is_empty()))
+}
+
 /// Collections du site proposées à l'outil (sans les collections réunies d'une liste).
 fn plain_collections(cols: &[CmsCollection]) -> Vec<CmsCollection> {
     cols.iter()
@@ -4842,7 +4893,7 @@ fn standalone_field(ui: Ui, ed: Ed, at: &Target, node: &Node) -> Option<AnyView>
     Some(
         (move || {
             let list = cols.with(|c| plain_collections(c));
-            if list.is_empty() {
+            if site_without_collection(ed) {
                 return view! {
                     <div class="insp-group cms-field-tool" data-state="empty">
                         {head()}

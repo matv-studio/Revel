@@ -1968,18 +1968,25 @@ try {
       await page.keyboard.press('Tab');
       const moreOff = await untilE(async () => !(await pageJson()).includes('data-revel-more'));
       check('éléments : liste à affichage progressif (réglée puis retirée, tout montré dans le canevas)', moreOn && allShown && moreOff);
-      // Liste de plusieurs collections (D-97) : « + Autre collection », puis retirée.
-      let others2 = [];
-      for (let i = 0; i < 50 && !others2.length; i++) {
-        others2 = await page.$$eval('.list-also select option', (o) => o.map((x) => x.value).filter(Boolean)).catch(() => []);
-        if (!others2.length) await page.waitForTimeout(100);
-      }
-      await page.selectOption('.list-also select', others2[0]);
-      const multi = await untilE(async () => (await pageJson()).includes(` + collections.${others2[0]})`));
-      await page.waitForSelector('.list-also .prop-chip');
-      check('éléments : liste de collection à deux collections (+ Autre collection)', multi, others2[0]);
-      await page.click('.list-also .prop-chip .chip-x');
-      check('éléments : seconde collection retirée', await untilE(async () => !(await pageJson()).includes(' + collections.')));
+      // Liste de plusieurs collections (D-97, menu à coches D-197) : seconde collection cochée, puis décochée.
+      const listCols = async () => {
+        // Le panneau se redessine après chaque réglage : le clic est repris tant que le menu n'est pas là.
+        for (let i = 0; i < 8 && !(await page.$('.context-item')); i++) {
+          await page.click('.collection-list [data-action="list-collections"]', { timeout: 2000 }).catch(() => {});
+          await page.waitForSelector('.context-item', { timeout: 1500 }).catch(() => {});
+        }
+        return page.$$eval('.context-item', (l) => l.map((e) => e.textContent.trim())); };
+      const colsMenu = await listCols();
+      const before2 = await pageJson();
+      // Première collection non cochée (icône vide).
+      const freeCol = await page.$$eval('.context-item', (l) => l.findIndex((e, i) => i > 0 && !e.querySelector('svg *')));
+      await page.locator('.context-item').nth(freeCol).click();
+      const multi = await untilE(async () => (await pageJson()).includes(' + collections.'));
+      const shownCols = await untilE(async () => /Toutes|,/.test(await page.$eval('.collection-list [data-action="list-collections"]', (e) => e.textContent)));
+      check('éléments : liste de collection à deux collections (menu à coches, « Toutes » en tête)', multi && shownCols && colsMenu[0] === 'Toutes' && colsMenu.length >= 3, colsMenu.join(' | '));
+      await listCols();
+      await page.locator('.context-item').nth(freeCol).click();
+      check('éléments : seconde collection retirée', await untilE(async () => !(await pageJson()).includes(' + collections.')) && before2.length > 0);
       // Automatique ou choix manuel (D-182) : réglages automatiques masqués, contenu choisi puis retour.
       {
         await page.click('.collection-list [data-mode="pick"]');

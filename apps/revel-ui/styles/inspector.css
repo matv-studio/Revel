@@ -1038,3 +1038,5 @@
 .tool-empty { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-4) var(--s-2);
   border: var(--border) dashed var(--line); border-radius: var(--radius-md); color: var(--text-muted); font-size: var(--text-sm); text-align: center; }
 .tool-empty > svg.icon { width: 20px; height: 20px; }
+/* D-197 — liste de collection d'un site sans collection : seulement l'invitation à en créer une */
+.collection-list.is-empty > :not(.tool-head):not(.tool-empty) { display: none; }

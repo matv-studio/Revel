@@ -667,7 +667,20 @@ pub(crate) fn cat_key(c: &str) -> &'static str {
 fn NewSite(close: Callback<()>) -> impl IntoView {
     let ui = expect_context::<Ui>();
     let name = RwSignal::new(String::new());
-    let lang = RwSignal::new(ui.settings.with_untracked(|s| s.lang.clone()));
+    // Langue du site proposée : celle de l'application en cours (réglage « système » compris),
+    // sinon celle des réglages (retour du 24/11/2026).
+    let lang = RwSignal::new({
+        let app = ui.ui_lang.get_untracked();
+        let known = |l: &str| crate::settings::SITE_LANGS.iter().any(|(c, _)| *c == l);
+        let short = app.split('-').next().unwrap_or_default().to_string();
+        if known(&app) {
+            app
+        } else if known(&short) {
+            short
+        } else {
+            ui.settings.with_untracked(|s| s.lang.clone())
+        }
+    });
     let parent = RwSignal::new(String::new());
     let folder = RwSignal::new(String::new());
     let busy = RwSignal::new(false);

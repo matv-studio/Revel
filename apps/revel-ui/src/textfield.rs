@@ -36,7 +36,11 @@ fn selection_texts(ed: Ed) -> Memo<Vec<TextItem>> {
                         let at = crate::editor::target_of(d, id)?;
                         revel_edit::address::node(d, &at)
                             .ok()
-                            .map(crate::tools::is_closed_tool)
+                            // Outil « Champ CMS » : pas de texte libre, tout passe par le champ
+                            // choisi (retour du 24/11/2026).
+                            .map(|n| {
+                                crate::tools::is_closed_tool(n) || crate::blocks::is_cms_field(n)
+                            })
                     })
                     .unwrap_or(false)
             })

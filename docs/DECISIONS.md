@@ -2980,3 +2980,42 @@ section.**
   référence sur le PC, `C:\MATV_LOCAL\_Interne\Revel\cobaye\` (dépôt git complet au commit `0dd004c` et
   fichier `alunites-revel-lab.bundle`). Les essais locaux lisent la copie du conteneur. En suspens : les
   trois tâches de CI qui lisent le dépôt GitHub restent rouges tant qu'il n'est pas restauré ou recréé.
+
+## D-202 — Filtres de liste reliés à un champ, archivage des contenus, ajout d'hébergement, réglages centrés, « Versions » (25/11/2026)
+
+- **Filtres de liste** (audit M8, maquette `tools-4-list-filters` validée le 24/11) : l'outil « List
+  filters » se règle par la **liste** de la page (choisie d'office quand il n'y en a qu'une) et le **champ**
+  (choix, texte court, liste de textes). Les boutons ne sont plus écrits un à un : une boucle
+  `collections.<c> | filter_values("<champ>")` donne une clé (`slugify`) et le libellé du choix ; chaque
+  contenu de la liste porte `data-revel-tags="{{ item | filter_tags('<champ>') }}"` ; l'élément qui contient
+  la liste porte `data-revel-filter-scope="<paramètre>"`, et le script ne filtre que dans celle-ci (deux
+  listes sur une page ne se gênent plus). Bouton « All » facultatif et renommable ; « Several values at
+  once » (`data-revel-filter-multi`, valeurs séparées par des virgules dans l'adresse ; un contenu est
+  montré s'il a l'une d'elles). Boutons d'avant (écrits à la main) gardés tant qu'aucun champ n'est choisi.
+  Module `revel_edit::listfilters`, fonctions communes `revel_model::filter_values` / `field_strings`.
+- Contenu de la liste dessiné par un **composant** : étiquettes posées sur l'utilisation ; les attributs
+  d'une utilisation écrits avec une expression sont désormais évalués là où elle est (contexte de la
+  liste) avant d'être posés sur la racine du composant.
+- Options d'un champ « choix » : clé `value` (Pages CMS) **ou** `name` (choix écrits par Revel) acceptée
+  pour les libellés (P5 ne lisait que `value`).
+- **Archiver / désarchiver** un contenu (demande du 25/11, maquettes validées) : `published: false`, que lit
+  déjà le site Alunites sous Eleventy et que le rendu écartait déjà (pages, listes, plan du site) ; comme
+  l'archivage de Webflow (retiré du site à la publication suivante, gardé dans le CMS). « Archive » au clic
+  droit d'un contenu et en icône au pied de sa fiche ; « Unarchive » au pied de la fiche et au clic droit ;
+  puce « Archived », ligne estompée. Option **a** retenue faute de réponse : `draft: true` (imports)
+  s'affiche aussi « Archived » et « Unarchive » retire les deux marqueurs (un seul état à comprendre).
+- **Ajout d'hébergement** (demande du 25/11, maquettes validées) : « Go live » devient « Add hosting »
+  (libellé déjà employé par le bouton d'ajout) ; plus de dossier `www/` d'office : après la connexion, liste
+  des dossiers trouvés sur le serveur, rien de coché ; le dossier proposé est signalé (« Matches
+  <domaine> » ou « Host's usual folder ») ; « Other folder… » pour taper un chemin ; « Save » et « Publish »
+  grisés tant qu'aucun dossier n'est choisi. Champ « Message from your host » retiré (maquette de
+  l'assistant validée le 24/11) ; un message collé dans un champ reste reconnu. `HostProbe.domain` ajouté.
+- **Réglages centrés** (demande du 25/11) : bloc de réglages centré dans la zone à toutes les largeurs ;
+  titre de partie dans la marge gauche s'il y tient, au-dessus sinon (requêtes de conteneur, plus de seuil
+  sur la fenêtre). Barre de statistiques du site (pages, gabarits, composants, collections, environnement)
+  retirée des réglages du site.
+- **« Backup » devient « Versions »** dans les 15 langues, « Back up » devient « Save version ». Restaurer
+  une version existait (bouton en haut du détail d'une version ancienne) ; maquette envoyée pour le rendre
+  visible au survol et au clic droit d'une version (en attente de validation).
+- Charte de design mise à jour (document du projet et `docs/DESIGN.md`) avec les éléments nouveaux et
+  modifiés depuis le 09/11.

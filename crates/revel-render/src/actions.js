@@ -678,22 +678,36 @@
     });
   }
   // Filtres de liste (`data-revel-filters="<paramètre>"`) : boutons `data-revel-filter="<valeur>"`
-  // (vide : tout) ; éléments filtrés `data-revel-tags="a b"` de la page ; message
+  // (vide : tout) ; éléments filtrés `data-revel-tags="a b"`, dans la liste marquée
+  // `data-revel-filter-scope="<paramètre>"` (sinon toute la page) ; message
   // `data-revel-filter-empty` sans résultat ; valeur gardée dans l'adresse (`?<paramètre>=`) ;
-  // bouton sans aucun élément correspondant masqué.
+  // bouton sans aucun élément correspondant masqué. `data-revel-filter-multi` : plusieurs valeurs
+  // à la fois (un contenu qui porte l'une d'elles), séparées par des virgules dans l'adresse.
   function filters(group) {
     var param = (group.getAttribute("data-revel-filters") || "").trim();
+    var multi = group.hasAttribute("data-revel-filter-multi");
     var buttons = group.querySelectorAll("[data-revel-filter]");
-    var apply = function (value, push) {
-      var items = document.querySelectorAll("[data-revel-tags]");
+    var scope = null;
+    if (param) {
+      var scopes = document.querySelectorAll("[data-revel-filter-scope]");
+      for (var s = 0; s < scopes.length && !scope; s++) if (scopes[s].getAttribute("data-revel-filter-scope") === param) scope = scopes[s];
+    }
+    var root = scope || document;
+    var has = function (el, v) { return (" " + (el.getAttribute("data-revel-tags") || "") + " ").indexOf(" " + v + " ") >= 0; };
+    var chosen = [];
+    var apply = function (values, push) {
+      chosen = values;
+      var items = root.querySelectorAll("[data-revel-tags]");
       var visible = 0;
       for (var i = 0; i < items.length; i++) {
-        var ok = !value || (" " + items[i].getAttribute("data-revel-tags") + " ").indexOf(" " + value + " ") >= 0;
+        var ok = !values.length;
+        for (var k = 0; k < values.length && !ok; k++) ok = has(items[i], values[k]);
         items[i].classList.toggle("rv-hide", !ok);
         if (ok) visible++;
       }
       for (var b = 0; b < buttons.length; b++) {
-        var on = (buttons[b].getAttribute("data-revel-filter") || "") === value;
+        var v = buttons[b].getAttribute("data-revel-filter") || "";
+        var on = v ? values.indexOf(v) >= 0 : !values.length;
         buttons[b].classList.toggle("is-active", on);
         buttons[b].setAttribute("aria-pressed", String(on));
       }
@@ -704,28 +718,36 @@
       }
       if (push && param && window.URL && history.replaceState) {
         var url = new URL(location.href);
-        if (value) url.searchParams.set(param, value); else url.searchParams.delete(param);
+        if (values.length) url.searchParams.set(param, values.join(",")); else url.searchParams.delete(param);
         history.replaceState(null, "", url);
       }
     };
     for (var i = 0; i < buttons.length; i++) {
       (function (btn) {
-        btn.addEventListener("click", function () { apply(btn.getAttribute("data-revel-filter") || "", true); });
+        btn.addEventListener("click", function () {
+          var v = btn.getAttribute("data-revel-filter") || "";
+          if (!v) return apply([], true);
+          if (!multi) return apply([v], true);
+          var next = chosen.filter(function (x) { return x !== v; });
+          if (next.length === chosen.length) next.push(v);
+          apply(next, true);
+        });
       })(buttons[i]);
     }
-    // Bouton dont la valeur ne correspond à aucun élément de la page : masqué.
-    var all = document.querySelectorAll("[data-revel-tags]");
+    // Bouton dont la valeur ne correspond à aucun élément de la liste : masqué.
+    var all = root.querySelectorAll("[data-revel-tags]");
     for (var f = 0; f < buttons.length; f++) {
-      var v = buttons[f].getAttribute("data-revel-filter") || "";
-      if (!v) continue;
+      var bv = buttons[f].getAttribute("data-revel-filter") || "";
+      if (!bv) continue;
       var any = false;
-      for (var j = 0; j < all.length && !any; j++) any = (" " + all[j].getAttribute("data-revel-tags") + " ").indexOf(" " + v + " ") >= 0;
+      for (var j = 0; j < all.length && !any; j++) any = has(all[j], bv);
       if (!any) buttons[f].classList.add("rv-hide");
     }
     var empty0 = document.querySelectorAll("[data-revel-filter-empty]");
     for (var k = 0; k < empty0.length; k++) empty0[k].classList.add("rv-hide");
     var initial = param && window.URL ? new URL(location.href).searchParams.get(param) : null;
-    if (initial) apply(initial, false);
+    if (initial) apply(initial.split(",").filter(Boolean).slice(0, multi ? 50 : 1), false);
+    else apply([], false);
   }
   // Consentement (`data-revel-consent="G-…"`, identifiant Google Analytics 4 facultatif) : le
   // bandeau s'affiche tant que le visiteur n'a pas choisi ; `data-revel-consent-choice="accept"`

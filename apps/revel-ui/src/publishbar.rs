@@ -256,7 +256,7 @@ pub fn PublishButton() -> impl IntoView {
                         Some(l) if l.is_empty() => view! {
                             <div class="pub-empty">
                                 <p class="pub-empty-title">{ui.t("pub-empty")}</p>
-                                <button class="btn btn--primary" on:click=setup>{icons::upload()}{ui.t("pub-setup")}</button>
+                                <button class="btn btn--primary" on:click=setup>{icons::plus()}{ui.t("pub-setup")}</button>
                             </div>
                         }.into_any(),
                         Some(l) => {

@@ -3997,7 +3997,7 @@ try {
     check('CMS : nouveau contenu créé et ouvert, valeurs du schéma (adresse, publié, date du jour)',
       /^---\ntitle: Essai Revel\nslug: essai-revel\npublished: true\ndate: '?\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d'?\n/.test(fs.readFileSync(created, 'utf8')),
       fs.readFileSync(created, 'utf8').split('\n').slice(0, 5).join(' | '));
-    await page.click('.cms-item-foot .icon-btn');
+    await page.click('.cms-item-foot [data-action="delete"]');
     await page.click('.dialog .btn--danger');
     await until(() => !fs.existsSync(created), 'contenu supprimé');
     check('CMS : contenu supprimé', true);
@@ -4606,10 +4606,14 @@ try {
       };
       // La liste se redessine après le renommage : touche redonnée si la poignée a été remplacée.
       const navUp = () => /"label": "Projets"[^\]]*"label": "L’agence"/s.test(navExpr());
+      // Touche redonnée seulement si la liste affichée n'a pas bougé (sinon elle remonterait l'autre).
+      const shownFirst = () => page.$eval('.navlist-link >> nth=0 >> .navlist-label', (e) => e.value).catch(() => '');
       for (let i = 0; i < 4 && !navUp(); i++) {
-        await page.focus('.navlist-link >> nth=1 >> .sort-grip');
-        await page.keyboard.press('ArrowUp');
-        for (let k = 0; k < 30 && !navUp(); k++) await page.waitForTimeout(100);
+        if ((await shownFirst()) === 'L’agence') {
+          await page.focus('.navlist-link >> nth=1 >> .sort-grip');
+          await page.keyboard.press('ArrowUp');
+        }
+        for (let k = 0; k < 60 && !navUp(); k++) await page.waitForTimeout(100);
       }
       await until(() => navUp(), 'lien monté');
       if (shots) await page.screenshot({ path: `${shots}/navigation.png` });
@@ -4655,8 +4659,9 @@ try {
     }
 
     // ---------------------------------------------------------------- Mise en ligne guidée (5.2, 5.3)
-    // Paramètres › Publication › Ajouter : hébergeur reconnu dans le message collé, accès remplis,
-    // connexion d'essai (simulée), dossier proposé, hébergement enregistré.
+    // Paramètres › Publication › Ajouter un hébergement : hébergeur et accès saisis, connexion
+    // d'essai (simulée), dossier choisi dans la liste
+    // trouvée sur le serveur (aucun d'office ; enregistrer grisé avant ce choix, D-202).
     {
       await page.click('.pub-btn');
       await page.click('.pub-foot .pub-manage');
@@ -4664,21 +4669,29 @@ try {
       const before = (await page.$$('.settings-page .host')).length;
       await page.click('.settings-page .page-head .btn');
       await page.waitForSelector('.setup');
-      await page.fill('.setup-paste', 'Votre hébergement est installé.\nServeur FTP et SFTP : ftp.cluster031.hosting.ovh.net\nLogin principal : alunitp\nMot de passe : Xy7-kQ2pLm\n');
+      await page.selectOption('.setup-preset', 'ovh');
+      await page.fill('.setup-server', 'ftp.cluster031.hosting.ovh.net');
+      await page.fill('.setup-user', 'alunitp');
+      await page.fill('.setup-password', 'Xy7-kQ2pLm');
       const preset = await page.inputValue('.setup-preset');
       const filled = [await page.inputValue('.setup-server'), await page.inputValue('.setup-user'), (await page.inputValue('.setup-password')).length];
-      const cleared = await page.inputValue('.setup-paste');
+      const noPaste = !(await page.$('.setup-paste'));
       await page.click('.setup .btn--primary');
       await page.waitForSelector('.setup-state.status--ok');
-      await page.click('.setup-advanced > summary');
-      const folder = await page.inputValue('.setup-folder');
+      await page.waitForSelector('.setup-folder-row[data-folder="www/"]');
+      const none = await page.$$eval('.setup-folder-row.is-on', (l) => l.length) === 0;
+      const lockedSave = await page.isDisabled('.setup .dialog-actions .btn:not(.btn--primary)');
+      const tag = (await page.textContent('.setup-folder-row[data-folder="www/"] .setup-folder-tag').catch(() => '')) || '';
+      await page.click('.setup-folder-row[data-folder="www/"]');
+      const picked = await page.$eval('.setup-folder-row[data-folder="www/"]', (e) => e.classList.contains('is-on'));
+      const openSave = !(await page.isDisabled('.setup .dialog-actions .btn:not(.btn--primary)'));
       if (shots) await page.locator('.setup').screenshot({ path: `${shots}/mise-en-ligne.png` });
       await page.click('.setup .dialog-actions .btn:not(.btn--primary)');
       await page.waitForSelector('.setup', { state: 'detached' });
       await page.waitForFunction((n) => document.querySelectorAll('.settings-page .host').length === n + 1, before);
-      check('mise en ligne guidée : OVHcloud reconnu, accès remplis, message effacé, dossier www/ proposé, hébergement ajouté',
+      check('ajout d\'hébergement : accès saisis, champ du message retiré, aucun dossier d\'office, enregistrer après le choix de www/, hébergement ajouté',
         preset === 'ovh' && filled[0] === 'ftp.cluster031.hosting.ovh.net' && filled[1] === 'alunitp' && filled[2] === 10
-          && cleared === '' && folder === 'www/', `${preset} ${filled.join(' ')} ${folder}`);
+          && noPaste && none && lockedSave && tag !== '' && picked && openSave, `${preset} ${filled.join(' ')} ${none} ${lockedSave} ${tag} ${picked} ${openSave}`);
       await page.click('.view-tab[data-view="view-editor"]');
       await page.waitForSelector('.view-tab.is-on[data-view="view-editor"]');
     }

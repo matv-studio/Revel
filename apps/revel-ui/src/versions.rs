@@ -611,10 +611,26 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                             })}
                             {move || list.get().into_iter().enumerate().map(|(i, v)| {
                                 let v2 = v.clone();
+                                let v3 = v.clone();
+                                let v4 = v.clone();
                                 let id = v.id.clone();
+                                // Restaurer depuis la liste (D-202) : flèche au survol (libellé en
+                                // info-bulle) et clic droit ; pas pour la dernière version.
+                                let menu = move |e: leptos::ev::MouseEvent| {
+                                    use crate::ctxmenu::{CtxItem, open as open_menu};
+                                    let mut items = Vec::new();
+                                    if i > 0 {
+                                        let v = v3.clone();
+                                        items.push(CtxItem::new(ui.now("versions-restore", &[]), move || restore(v.clone())).icon(icons::undo));
+                                    }
+                                    let full = v3.id.clone();
+                                    items.push(CtxItem::new(ui.now("versions-copy-id", &[]), move || api::copy_text(&full)).icon(icons::copy));
+                                    open_menu(ui, &e, items);
+                                };
                                 view! {
                                     <li role="option" class="ver-item" data-version=v.id.clone() class:is-merge=v.merge
                                         class:is-on=move || matches!(sel.get(), Sel::Version(ref x) if x.id == id)
+                                        on:contextmenu=menu
                                         on:click=move |_| { sel.set(Sel::Version(v2.clone())); load_files() }>
                                         <span class="ver-avatar" title=v.author.clone()>{initial(&v.author)}</span>
                                         <span class="ver-main">
@@ -625,6 +641,11 @@ pub fn Versions(site: SiteSummary) -> impl IntoView {
                                             </span>
                                         </span>
                                         <span class="ver-files muted" title=ui.t("versions-files")>{v.files}</span>
+                                        {(i > 0).then(|| view! {
+                                            <button class="icon-btn ver-restore" data-action="restore" title=ui.t("versions-restore")
+                                                aria-label=ui.t("versions-restore") disabled=move || busy.get().is_some()
+                                                on:click=move |e| { e.stop_propagation(); restore(v4.clone()) }>{icons::undo()}</button>
+                                        })}
                                     </li>
                                 }
                             }).collect_view()}

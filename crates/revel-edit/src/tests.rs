@@ -3273,3 +3273,119 @@ fn champs_de_formulaire() {
         assert_eq!(l[n - 1].kind, k);
     }
 }
+
+#[test]
+fn filtres_de_liste_relies_a_un_champ() {
+    // D-202 : groupe relié à une liste de la page et à un champ ; boutons tirés du champ, liste
+    // marquée, étiquettes posées ; « Tout » renommé puis retiré ; plusieurs valeurs.
+    use crate::listfilters::{self, MULTI};
+    let mut s = sample();
+    let col = "projets";
+    s.pages[0].body = revel_markup::parse(
+        &format!(
+            r#"<div class="filtres" data-revel-filters="filtre"><button class="filtre" type="button" data-revel-filter="">Tout</button><button class="filtre" type="button" data-revel-filter="option-1">1</button></div><div class="grille">{{% for item in collections.{col} %}}<article class="carte">{{{{ item.data.title }}}}</article>{{% endfor %}}</div>"#
+        ),
+        &Default::default(),
+    )
+    .unwrap()
+    .nodes;
+    s.ensure_ids();
+    let owner = Owner::Page(s.pages[0].id.clone());
+    let id = |n: &Node| node_id(n).unwrap().to_string();
+    let group = Target {
+        owner: owner.clone(),
+        node: id(&s.pages[0].body[0]),
+    };
+    let lists = listfilters::lists(&s, &owner);
+    assert_eq!(lists.len(), 1);
+    assert_eq!(
+        (lists[0].collection.as_str(), lists[0].item.as_str()),
+        (col, "item")
+    );
+    let st = listfilters::state(&s, &group).unwrap();
+    assert_eq!(
+        (
+            st.all.as_deref(),
+            st.written,
+            st.field.clone(),
+            st.list.clone()
+        ),
+        (Some("Tout"), 1, None, None)
+    );
+    let cmd = listfilters::bind(&s, &group, &lists[0].each, "discipline", None).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let st = listfilters::state(&s, &group).unwrap();
+    assert_eq!(st.field.as_deref(), Some("discipline"));
+    assert_eq!(st.list.as_deref(), Some(lists[0].each.as_str()));
+    assert_eq!((st.all.as_deref(), st.written), (Some("Tout"), 0));
+    let html = serde_json::to_string(&s.pages[0].body).unwrap();
+    for part in [
+        r#""expr":"collections.projets | filter_values(\"discipline\")","item":"v""#,
+        r#"{"name":"data-revel-filter","value":"{{ v.value }}"}"#,
+        r#"{"node":"out","expr":"v.label"}"#,
+        r#"{"name":"data-revel-filter-scope","value":"filtre"}"#,
+        r#"{"name":"data-revel-tags","value":"{{ item | filter_tags('discipline') }}"}"#,
+    ] {
+        assert!(html.contains(part), "{part}\n{html}");
+    }
+    // « Tout » renommé, retiré, remis ; plusieurs valeurs.
+    let cmd = listfilters::set_all(&s, &group, Some("Tous")).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    assert_eq!(
+        listfilters::state(&s, &group).unwrap().all.as_deref(),
+        Some("Tous")
+    );
+    let cmd = listfilters::set_all(&s, &group, None).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    assert_eq!(listfilters::state(&s, &group).unwrap().all, None);
+    let cmd = listfilters::set_all(&s, &group, Some("All")).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    assert_eq!(
+        listfilters::state(&s, &group).unwrap().all.as_deref(),
+        Some("All")
+    );
+    apply(&mut s, &listfilters::set_multi(&group, true)).unwrap();
+    assert!(listfilters::state(&s, &group).unwrap().multi);
+    assert!(
+        serde_json::to_string(&s.pages[0].body)
+            .unwrap()
+            .contains(MULTI)
+    );
+}
+
+#[test]
+fn filtres_de_liste_sur_un_composant() {
+    // D-202 : contenu de la liste dessiné par un composant : étiquettes posées sur l'utilisation.
+    use crate::listfilters;
+    let mut s = sample();
+    s.pages[0].body = revel_markup::parse(
+        r#"<div data-revel-filters="f"><button data-revel-filter="">Tout</button></div><div class="grille">{% for p in collections.projets %}{% set _ = 0 %}{% endfor %}</div>"#,
+        &Default::default(),
+    )
+    .unwrap()
+    .nodes;
+    s.ensure_ids();
+    // Contenu remplacé par une utilisation de composant.
+    if let Node::Element { children, .. } = &mut s.pages[0].body[1]
+        && let Node::Each { children: kids, .. } = &mut children[0]
+    {
+        *kids = vec![Node::Use {
+            id: Some("u1".into()),
+            component: "carte".into(),
+            args: Default::default(),
+            variant: None,
+            attrs: Vec::new(),
+            children: Vec::new(),
+        }];
+    }
+    let owner = Owner::Page(s.pages[0].id.clone());
+    let group = Target {
+        owner: owner.clone(),
+        node: node_id(&s.pages[0].body[0]).unwrap().to_string(),
+    };
+    let list = listfilters::lists(&s, &owner)[0].each.clone();
+    let cmd = listfilters::bind(&s, &group, &list, "categorie", None).unwrap();
+    apply(&mut s, &cmd).unwrap();
+    let json = serde_json::to_string(&s.pages[0].body).unwrap();
+    assert!(json.contains(r#""id":"u1","component":"carte","attrs":[{"name":"data-revel-tags","value":"{{ p | filter_tags('categorie') }}"}]"#) || json.contains(r#"{"name":"data-revel-tags","value":"{{ p | filter_tags('categorie') }}"}"#), "{json}");
+}

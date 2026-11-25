@@ -352,7 +352,12 @@ impl Project {
                     .into_iter()
                     .flatten()
                     .filter_map(|v| {
-                        let value = v.get("value")?.as_str()?.to_string();
+                        // `value` (Pages CMS) ou `name` (choix écrits par Revel).
+                        let value = v
+                            .get("value")
+                            .or_else(|| v.get("name"))?
+                            .as_str()?
+                            .to_string();
                         let label = v.get("label")?.as_str()?.to_string();
                         (label != value).then_some((value, label))
                     })

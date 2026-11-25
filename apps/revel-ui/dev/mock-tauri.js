@@ -417,7 +417,7 @@
         const folders = /o2switch/.test(t.host) ? ["public_html/", "www/"]
           : /^\d/.test(t.host) ? ["domains/alunites.com/public_html/", "public_html/"]
           : /infomaniak/.test(t.host) ? ["sites/alunites.com/"] : ["www/"];
-        return { server_key: `${t.host} ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOx`, fingerprint: "SHA256:/bPN11w+yMb4D7FWpnTAuPkibmBXY17S0Uw/rDzIJv8", folders, suggested: folders[0] };
+        return { server_key: `${t.host} ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOx`, fingerprint: "SHA256:/bPN11w+yMb4D7FWpnTAuPkibmBXY17S0Uw/rDzIJv8", folders, suggested: folders[0], domain: "alunites.com" };
       }
       case "save_profile": {
         const p = { ...args.profile, id: args.profile.id || "h" + Date.now() };

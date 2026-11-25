@@ -1078,3 +1078,9 @@
 .items-list--links .items-actions > :last-child, .items-list--fields .items-actions > :last-child { color: var(--text-faint); }
 .items-list--fields .items-target, .items-list--links .items-target { font-family: var(--font-mono); }
 .items-list--links .items-rename, .items-list--fields .items-rename { left: 24px; }
+
+/* Filtres de liste reliés à un champ (D-202) : boutons tirés du champ, en aperçu. */
+.filter-buttons-head .filter-buttons-note { margin-left: auto; font-size: var(--text-xs); color: var(--text-faint); }
+.filter-chips { display: flex; flex-wrap: wrap; gap: var(--s-1); padding: 0 0 var(--s-2); }
+.filter-chip { height: 24px; padding: 0 var(--s-2); border: var(--border) solid var(--line-strong); background: none; color: var(--text-muted); }
+.filter-chip.is-on { background: var(--surface-active); color: var(--text); }

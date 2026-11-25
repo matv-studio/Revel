@@ -90,8 +90,13 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 - **Changer de vue ne recharge rien** : l'éditeur reste monté, caché, pendant que les autres vues sont affichées.
 - **Activité** (génération, publication) : ligne de 2 px en haut de la fenêtre, visible depuis n'importe quelle vue.
 - **Paramètres du site** : chaque partie a son titre, sa présentation en info-bulle (ⓘ), ses réglages (D-124) ; rubriques à gauche (comme les réglages d'un site Webflow) — Général, Publication,
-  Export, Référencement, Redirections, Polices, Code personnalisé, Formulaires, Sauvegardes ; les rubriques
-  prévues sont affichées en gris avec leur étape.
+  Navigation, Versions ; les rubriques prévues sont affichées en gris avec leur étape. Pas de barre de
+  statistiques du site (retirée, D-202).
+- **Mise en page des réglages** (app et site, D-202) : bloc de réglages **centré dans la zone** à toutes les
+  largeurs (860 px, 1120 px pour Versions) ; titre de la partie collant dans la marge gauche (240 px) quand
+  elle le contient, au-dessus des réglages sinon (requêtes de conteneur sur `.settings-content` : 1484 px,
+  1744 px pour Versions).
+- **Ouvrir des réglages** : toujours l'icône de rouage (`icons::settings`), jamais une autre.
 - **Aperçu** (D-26) : le site tel qu'il sera publié, dans une fenêtre, à la page affichée dans l'éditeur ; rien à
   générer avant. **Export** : fichiers du site copiés dans un dossier choisi, « Afficher le dossier » ensuite.
 
@@ -138,6 +143,13 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Boîte des marges | `.bm-box` | Marge extérieure autour de la marge intérieure ; décalages d'une position |
 | Couleur | `.color-input` + `.cp` | Pastille, valeur, sélecteur (plan, teinte, opacité, pipette, modèles, couleurs du site, contraste) ; teinte et opacité : barres fines, poignée verticale comme les glissières |
 | Menu flottant | `.pop` (`Pop`) | Ouvert par un `.pop-trigger` ; fermé par un clic ailleurs ou Échap (avant tout raccourci de l'éditeur) |
+| Liste ordonnée | `.sort-grip` (`sortable::grip`), lignes `[data-sort-row]` dans `[data-sort-list]` | Poignée de glisser à gauche de chaque ligne, à la place des flèches monter / descendre (D-200) : glisser avec ligne de dépôt à l'accent (`.is-drop-before` / `.is-drop-after`, ligne glissée à 45 %), ou poignée au focus + ↑ / ↓ ; ligne encadrée, nom en gras, cible à droite en chasse fixe, corbeille visible, autres actions au survol |
+| Menu à coches | `.menu-check` dans `.context-item` ; `.menu-note` | Choix multiple dans un menu (collections lues) avec « All » en tête ; précision à droite d'une entrée (valeur d'un champ, collection), 11 px, `--text-muted` (D-196) |
+| Bouton de liaison | `.bind-btn` (`.is-on`), `.prop-chip` | À côté du champ qu'il relie (image, lien, icône, texte) ; violet des composants ; valeur reliée montrée en pastille (D-196) |
+| Menu du clic droit des panneaux | `ctxmenu::open` (`CtxItem` : icône, libellé, note, séparateur, rouge si destructeur) | Pages, Composants, Médias, contenus du CMS, versions : une ligne par action, la destructrice en dernier (D-196) |
+| Choix parmi des éléments trouvés | `.setup-folders` > `.setup-folder-row` (`role="radio"`, `.is-on`), `.setup-folder-tag` | Rien de coché d'office quand le choix engage (dossier d'un hébergement) ; l'élément proposé est signalé par une étiquette bleue (`--set-*`) ; dernière ligne « Autre… » pour saisir ; actions qui en dépendent grisées tant que rien n'est choisi (D-202) |
+| Aperçu d'éléments produits | `.filter-chips` > `.chip.filter-chip` (`.is-on`) | Ce qu'un réglage va produire (boutons d'un filtre tirés d'un champ), avec leur nombre à droite du libellé (D-202) |
+| Contenu archivé | `.chip--archived`, `tr.is-archived` | Puce neutre « Archived » ; ligne estompée (`--text-faint`, image à 55 %) ; « Archive » au clic droit et dans la fiche, « Unarchive » au pied de la fiche (D-202) |
 
 Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arrondies, dessinées pour Revel.
 

@@ -2388,3 +2388,86 @@ fn libelle_d_un_choix() {
     assert!(home.contains(r#"href="/f/site-web/""#), "{home}");
     assert!(home.contains("<i>SITE-WEB</i>"), "{home}");
 }
+
+#[test]
+fn filtres_de_liste_relies_a_un_champ() {
+    // D-202 : boutons tirés des valeurs d'un champ (libellé du choix, clé comparée), étiquettes
+    // d'un contenu (champ simple ou liste), valeurs en double ou vides écartées.
+    let mut s = site();
+    let col = s.collections[0].id.clone();
+    s.pages[0].body = parse(&format!(
+        r#"<div data-revel-filters="d">{{% for v in collections.{col} | filter_values("discipline") %}}<button data-revel-filter="{{{{ v.value }}}}">{{{{ v.label }}}}</button>{{% endfor %}}</div>{{% for item in collections.{col} %}}<p data-revel-tags="{{{{ item | filter_tags('discipline') }}}}" data-t="{{{{ item | filter_tags('tags') }}}}">{{{{ item.data.title }}}}</p>{{% endfor %}}"#
+    ));
+    s.ensure_ids();
+    let mut a = entry(
+        "a",
+        json!({"slug": "a", "title": "A", "discipline": "site-web", "tags": ["Été", "Paris"]}),
+    );
+    a.labels.insert("discipline".into(), "Site web".into());
+    let b = entry(
+        "b",
+        json!({"slug": "b", "title": "B", "discipline": "identite", "tags": ["paris"]}),
+    );
+    let c = entry(
+        "c",
+        json!({"slug": "c", "title": "C", "discipline": "site-web", "tags": []}),
+    );
+    let d = entry("d", json!({"slug": "d", "title": "D", "discipline": ""}));
+    let out = build(&input(&s, vec![a, b, c, d])).unwrap();
+    let home = file(&out, "index.html");
+    let buttons: Vec<&str> = home
+        .match_indices("data-revel-filter=\"")
+        .map(|(i, _)| &home[i + 19..i + 19 + home[i + 19..].find('"').unwrap()])
+        .collect();
+    assert_eq!(buttons, ["identite", "site-web"], "{home}");
+    assert!(home.contains(">Site web</button>"), "{home}");
+    assert!(
+        home.contains(r#"data-revel-tags="site-web" data-t="ete paris">A"#),
+        "{home}"
+    );
+    assert!(
+        home.contains(r#"data-revel-tags="identite" data-t="paris">B"#),
+        "{home}"
+    );
+    assert!(home.contains(r#"data-revel-tags="" data-t="">D"#), "{home}");
+}
+
+#[test]
+fn etiquettes_d_un_filtre_sur_un_composant() {
+    // D-202 : attribut d'une utilisation de composant écrit avec une expression (étiquettes d'un
+    // filtre de liste), évalué là où le contenu de la liste est connu.
+    let mut s = site();
+    let col = s.collections[0].id.clone();
+    s.components.push(Component::new(
+        "carte",
+        parse(r#"<article class="carte">{{ 1 }}</article>"#),
+    ));
+    s.pages[0].body = parse(&format!(
+        r#"{{% for item in collections.{col} %}}<x-use/>{{% endfor %}}"#
+    ));
+    if let Node::Each { children, .. } = &mut s.pages[0].body[0] {
+        children[0] = Node::Use {
+            id: None,
+            component: "carte".into(),
+            args: Default::default(),
+            variant: None,
+            attrs: vec![revel_model::Attr {
+                name: "data-revel-tags".into(),
+                value: Some("{{ item | filter_tags('discipline') }}".into()),
+                when: None,
+            }],
+            children: Vec::new(),
+        };
+    }
+    s.ensure_ids();
+    let a = entry(
+        "a",
+        json!({"slug": "a", "title": "A", "discipline": "Site web"}),
+    );
+    let out = build(&input(&s, vec![a])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(
+        home.contains(r#"<article class="carte" data-revel-tags="site-web">"#),
+        "{home}"
+    );
+}

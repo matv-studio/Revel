@@ -368,6 +368,8 @@ pub fn extra_settings(ui: Ui, ed: Ed, at: Target, node: Node) -> Option<AnyView>
         ] = loops.as_slice()
             && revel_edit::siteinfo::menu_of(expr).is_none()
             && expr.trim() != "locales"
+            // Boutons d'un filtre de liste tirés d'un champ (D-202) : réglés par le filtre.
+            && !expr.contains("filter_values(")
         {
             parts.push(collection_list(
                 ui,

@@ -216,7 +216,28 @@ fn entry_title(e: &CmsEntry, title: &Option<String>) -> String {
         .unwrap_or_else(|| e.file.clone())
 }
 
-/// Contenu non publié (`draft: true` ou `published: false`).
+/// Archiver (`published: false`, lu aussi par Eleventy dans les sites existants) ou désarchiver
+/// (marqueurs `published` et `draft` retirés) un contenu, en une étape d'annulation (D-202).
+fn archive_command(folder: String, e: &CmsEntry, archive: bool) -> Command {
+    let set = |key: &str, value: Option<Value>| Command::SetEntryField {
+        folder: folder.clone(),
+        file: e.file.clone(),
+        key: key.into(),
+        value,
+    };
+    if archive {
+        return set("published", Some(Value::Bool(false)));
+    }
+    let commands = ["published", "draft"]
+        .into_iter()
+        .filter(|k| e.data.get(*k).is_some())
+        .map(|k| set(k, None))
+        .collect();
+    Command::Batch { commands }
+}
+
+/// Contenu archivé, donc absent du site publié (`published: false`, ou `draft: true` des
+/// contenus importés).
 fn is_draft(e: &CmsEntry) -> bool {
     e.data.get("draft").and_then(Value::as_bool) == Some(true)
         || e.data.get("published").and_then(Value::as_bool) == Some(false)
@@ -1138,10 +1159,16 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
     });
 
     // Menus contextuels : contenu (ouvrir, page, supprimer), collection.
-    let row_menu = move |e: &ev::MouseEvent, file: String, url: Option<String>, label: String| {
+    let row_menu = move |e: &ev::MouseEvent,
+                         file: String,
+                         url: Option<String>,
+                         label: String,
+                         entry: CmsEntry| {
         use crate::ctxmenu::{CtxItem, open as open_menu};
         let folder =
             col.with_untracked(|c| c.as_ref().map(|c| c.folder.clone()).unwrap_or_default());
+        let archived = is_draft(&entry);
+        let archive = archive_command(folder.clone(), &entry, !archived);
         let f2 = file.clone();
         let mut items = vec![
             CtxItem::new(ui.now("cms-entry-open", &[]), move || {
@@ -1155,13 +1182,25 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                     .icon(icons::external),
             );
         }
+        items.push(if archived {
+            CtxItem::new(ui.now("cms-unarchive", &[]), move || {
+                apply.run(archive.clone())
+            })
+            .icon(icons::unarchive)
+            .sep()
+        } else {
+            CtxItem::new(ui.now("cms-archive", &[]), move || {
+                apply.run(archive.clone())
+            })
+            .icon(icons::archive)
+            .sep()
+        });
         items.push(
             CtxItem::new(ui.now("action-delete", &[]), move || {
                 delete.run((folder.clone(), file.clone(), label.clone()))
             })
             .icon(icons::trash)
-            .danger()
-            .sep(),
+            .danger(),
         );
         open_menu(ui, e, items);
     };
@@ -1505,16 +1544,16 @@ pub fn CmsView(site: SiteSummary) -> impl IntoView {
                                                 let url = e.url.clone();
                                                 let draft = is_draft(&e);
                                                 view! {
-                                                    <tr class="row-link" class:is-on=move || open.get().as_deref() == Some(f2.as_str())
+                                                    <tr class="row-link" class:is-archived=draft class:is-on=move || open.get().as_deref() == Some(f2.as_str())
                                                         data-entry=e.file.clone()
                                                         on:contextmenu={
-                                                            let (file, url, label) = (e.file.clone(), e.url.clone(), entry_title(&e, &title));
-                                                            move |ev: ev::MouseEvent| row_menu(&ev, file.clone(), url.clone(), label.clone())
+                                                            let (file, url, label, whole) = (e.file.clone(), e.url.clone(), entry_title(&e, &title), e.clone());
+                                                            move |ev: ev::MouseEvent| row_menu(&ev, file.clone(), url.clone(), label.clone(), whole.clone())
                                                         }
                                                         on:click=move |_| open.set(Some(file.clone()))>
                                                         <td class="strong cms-td-title" style=move || width_style("")><div class="cms-title-cell">
                                                             <span class="cms-cell" title=entry_title(&e, &title)>{entry_title(&e, &title)}</span>
-                                                            {draft.then(|| view! { <span class="chip chip--draft">{ui.t("cms-draft")}</span> })}
+                                                            {draft.then(|| view! { <span class="chip chip--archived" title=ui.t("cms-archived-help")>{ui.t("cms-archived")}</span> })}
                                                             {
                                                                 // Autre langue : point bleu (traduit) ou orange (contenu de la
                                                                 // langue principale), comme les valeurs propres et héritées ;
@@ -1811,6 +1850,9 @@ fn EntryForm(
         <aside class="cms-item" aria-label=ui.t("cms-entry") data-entry=file.get_value()>
             <header class="cms-item-head">
                 <h2>{heading}</h2>
+                {move || entry.with(|e| e.as_ref().is_some_and(is_draft)).then(|| view! {
+                    <span class="chip chip--archived" title=ui.t("cms-archived-help")>{ui.t("cms-archived")}</span>
+                })}
                 <button class="icon-btn" title=ui.t("action-close") aria-label=ui.t("action-close")
                     on:click=move |_| close.run(())>{icons::close()}</button>
             </header>
@@ -1859,7 +1901,20 @@ fn EntryForm(
                 <span class="muted path cms-item-file" title=move || format!("{}/{}.md", folder(), file.get_value())>
                     {move || format!("{}.md", file.get_value())}
                 </span>
-                <button class="icon-btn" title=ui.t("action-delete") aria-label=ui.t("action-delete")
+                {move || entry.get().map(|e| if is_draft(&e) {
+                    let cmd = archive_command(folder(), &e, false);
+                    view! {
+                        <button class="btn" data-action="unarchive" title=ui.t("cms-unarchive-help")
+                            on:click=move |_| apply.run(cmd.clone())>{icons::unarchive()}{ui.t("cms-unarchive")}</button>
+                    }.into_any()
+                } else {
+                    let cmd = archive_command(folder(), &e, true);
+                    view! {
+                        <button class="icon-btn" data-action="archive" title=ui.t("cms-archive-help") aria-label=ui.t("cms-archive")
+                            on:click=move |_| apply.run(cmd.clone())>{icons::archive()}</button>
+                    }.into_any()
+                })}
+                <button class="icon-btn" data-action="delete" title=ui.t("action-delete") aria-label=ui.t("action-delete")
                     on:click=move |_| delete.run((folder(), file.get_value(), heading()))>{icons::trash()}</button>
                 {move || entry.get().and_then(|e| e.url).map(|u| view! {
                     <button class="btn btn--primary" on:click=move |_| goto.run(u.clone())>{ui.t("cms-open-page")}</button>

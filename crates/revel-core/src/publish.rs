@@ -241,6 +241,7 @@ impl Core {
             fingerprint: probe.fingerprint,
             folders: probe.folders,
             suggested,
+            domain,
         })
     }
 

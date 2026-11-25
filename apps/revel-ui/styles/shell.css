@@ -26,8 +26,7 @@
   grid-area: top;
   position: relative;
   z-index: 4;                       /* l'onglet actif recouvre le contour du plateau ; ses menus
-                                       (profil, publication) passent devant la barre collante des
-                                       pages (`.site-facts`, z-index 3) */
+                                       (profil, publication) passent devant le contenu */
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;

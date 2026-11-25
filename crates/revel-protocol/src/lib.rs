@@ -725,9 +725,12 @@ pub struct HostProbe {
     pub fingerprint: String,
     /// Dossiers trouvés pour le site, relatifs au dossier personnel (`www/`, `public_html/`…).
     pub folders: Vec<String>,
-    /// Dossier proposé.
+    /// Dossier proposé (signalé, jamais choisi d'office : D-202).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggested: Option<String>,
+    /// Domaine du site (sans `www.`), quand il est connu : dit pourquoi un dossier est proposé.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
 }
 
 fn yes() -> bool {

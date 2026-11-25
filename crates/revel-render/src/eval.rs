@@ -1174,7 +1174,20 @@ impl<'a> Builder<'a> {
                     }
                     // Variante choisie et attributs de cette utilisation (animations) : posés sur
                     // l'élément racine du composant.
-                    let patched = c.patched_body(variant.as_deref(), attrs);
+                    // Attributs écrits avec des expressions (étiquettes d'un filtre de liste,
+                    // D-202) : évalués ici, où le contenu de la liste est connu.
+                    let mut own_attrs = attrs.clone();
+                    for a in own_attrs.iter_mut() {
+                        if let Some(v) = a
+                            .value
+                            .as_deref()
+                            .filter(|v| v.contains("{{") || v.contains("{%"))
+                        {
+                            let r = self.render_attr(scope, v, &ctx)?;
+                            a.value = Some(r);
+                        }
+                    }
+                    let patched = c.patched_body(variant.as_deref(), &own_attrs);
                     let nodes: &[Node] = patched.as_deref().unwrap_or(&c.body);
                     let own_at = At {
                         owner: at.owner.clone(),
@@ -1576,6 +1589,46 @@ fn register_filters(env: &mut Environment<'static>, input: &BuildInput) {
                 .unwrap_or_default()
                 .to_string(),
         )
+    });
+    // Filtres de liste reliés à un champ (D-202) : boutons (`collections.c |
+    // filter_values("discipline")` : `value` comparée, `label` affiché) et étiquettes d'un
+    // contenu (`item | filter_tags("discipline")`), comparées par clé (`slugify`).
+    env.add_filter("filter_values", |v: Value, field: String| {
+        let items = items_of(&v);
+        let raw = items.iter().flat_map(|i| {
+            let d = serde_json::to_value(path(i, &format!("data.{field}"))).unwrap_or_default();
+            let label = path(i, &format!("labels.{field}"))
+                .as_str()
+                .map(str::to_string);
+            let single = !d.is_array();
+            revel_model::field_strings(&d)
+                .into_iter()
+                .map(move |s| (s, if single { label.clone() } else { None }))
+        });
+        Value::from(
+            revel_model::filter_values(raw)
+                .into_iter()
+                .map(|(value, label)| {
+                    let mut m = BTreeMap::new();
+                    m.insert("value".to_string(), Value::from(value));
+                    m.insert("label".to_string(), Value::from(label));
+                    Value::from(m)
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+    env.add_filter("filter_tags", |v: Value, field: String| {
+        let d = serde_json::to_value(path(&v, &format!("data.{field}"))).unwrap_or_default();
+        let mut keys: Vec<String> = Vec::new();
+        for k in revel_model::field_strings(&d)
+            .iter()
+            .map(|s| revel_model::slugify(s))
+        {
+            if !k.is_empty() && !keys.contains(&k) {
+                keys.push(k);
+            }
+        }
+        Value::from(keys.join(" "))
     });
     // Contenus désignés mis en premier (dans l'ordre des adresses), puis les autres.
     env.add_filter(

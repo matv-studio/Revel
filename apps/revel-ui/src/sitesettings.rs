@@ -2,8 +2,8 @@
 //! ajouté aux pages, polices (Google Fonts téléchargées dans le site, fichiers importés, D-24).
 
 use crate::dialog::Ask;
-use crate::site::{DocSession, capitalize, doc_session};
-use crate::{Tab, Ui, api, icons};
+use crate::site::{DocSession, doc_session};
+use crate::{Ui, api, icons};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use revel_edit::Command;
@@ -148,8 +148,7 @@ fn feeds_section(
     view! { <div class="form-grid">{rows}</div> }.into_any()
 }
 
-/// Paramètres généraux : identité modifiable, flux RSS (structure et environnements : fiche
-/// [`SiteFacts`]).
+/// Paramètres généraux : identité modifiable, flux RSS.
 #[component]
 pub fn General(site: SiteSummary) -> impl IntoView {
     let ui = expect_context::<Ui>();
@@ -308,62 +307,6 @@ pub fn General(site: SiteSummary) -> impl IntoView {
                 {move || col_labels.with(|l| feeds_section(ui, s, l))}
             </div>
         </section>
-    }
-}
-
-/// Fiche du site en haut à droite des paramètres (information, pas réglage) : nombre de pages,
-/// gabarits, composants et collections, environnement de publication principal en pastille
-/// (les autres en info-bulle). Reste visible au défilement.
-#[component]
-pub fn SiteFacts(site: SiteSummary) -> impl IntoView {
-    let ui = expect_context::<Ui>();
-    let fresh = RwSignal::new(site.clone());
-    let p = site.path.clone();
-    spawn_local(async move {
-        if let Ok(sum) = api::open_site(&p).await
-            && !fresh.is_disposed()
-        {
-            fresh.set(sum);
-        }
-    });
-    let env_name = move |e: &str| match e {
-        "production" => ui.now("env-production", &[]),
-        "staging" => ui.now("env-staging", &[]),
-        other => capitalize(other),
-    };
-    let main_env = move || {
-        fresh.with(|s| {
-            s.environments
-                .iter()
-                .find(|e| *e == "production")
-                .or(s.environments.first())
-                .cloned()
-                .unwrap_or_else(|| "production".into())
-        })
-    };
-    let envs_help = move || {
-        let names: Vec<String> =
-            fresh.with(|s| s.environments.iter().map(|e| env_name(e)).collect());
-        ui.now("site-facts-envs", &[("list", names.join(", "))])
-    };
-    let fact = move |key: &'static str, n: Signal<usize>| {
-        view! { <span class="site-facts__item"><strong>{move || n.get()}</strong>" "<span class="muted">{ui.t(key)}</span></span> }
-    };
-    view! {
-        <div class="site-facts" role="note" aria-label=ui.t("overview-structure")>
-            <div class="site-facts__card">
-                {fact("site-pages", Signal::derive(move || fresh.with(|s| s.pages)))}
-                {fact("site-layouts", Signal::derive(move || fresh.with(|s| s.layouts)))}
-                {fact("site-components", Signal::derive(move || fresh.with(|s| s.components)))}
-                <button class="site-facts__item link-btn" title=ui.t("view-cms") on:click=move |_| ui.tab(Tab::Cms)>
-                    <strong>{move || fresh.with(|s| s.collections.iter().filter(|c| !c.folder.is_empty()).count())}</strong>" "
-                    <span class="muted">{ui.t("site-collections")}</span>
-                </button>
-                <span class="site-facts__env" class:is-prod=move || main_env() == "production" title=envs_help>
-                    <span class="site-facts__dot"></span>{move || env_name(&main_env())}
-                </span>
-            </div>
-        </div>
     }
 }
 

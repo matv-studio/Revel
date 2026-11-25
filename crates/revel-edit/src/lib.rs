@@ -25,6 +25,7 @@ pub mod icons;
 pub mod inline;
 pub mod layer;
 pub mod linkmap;
+pub mod listfilters;
 pub mod locale;
 pub mod make;
 pub mod overrides;

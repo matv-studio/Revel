@@ -519,7 +519,6 @@ fn SiteSettings(site: SiteSummary, section: Section) -> impl IntoView {
                 }).collect_view()}
             </nav>
             <div class="settings-content" node_ref=content on:scroll=move |_| spy()>
-                <crate::sitesettings::SiteFacts site=site.clone()/>
                 {body}
             </div>
         </div>

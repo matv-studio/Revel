@@ -1,7 +1,7 @@
-//! Première mise en ligne (5.2, 5.3) : hébergeur choisi dans une liste (ou « Autre »), chemin des
-//! accès dans son espace client, message de l'hébergeur collé, trois champs ; connexion testée
-//! aussitôt (clé du serveur enregistrée sans rien afficher), dossier du site proposé d'après le
-//! serveur, puis publication.
+//! Ajout d'un hébergement (5.2, 5.3, D-202) : hébergeur choisi dans une liste (ou « Autre »),
+//! chemin des accès dans son espace client, trois champs ; connexion testée (clé du serveur
+//! enregistrée sans rien afficher), puis dossier du site choisi parmi ceux trouvés sur le serveur
+//! (aucun d'office) ; enregistrement et publication seulement après ce choix.
 
 use crate::{Ui, api, icons, publish};
 use leptos::prelude::*;
@@ -110,19 +110,20 @@ fn Setup() -> impl IntoView {
         ..Default::default()
     });
     let phase = RwSignal::new(Phase::Edit);
-    let paste = RwSignal::new(String::new());
+    // « Autre dossier… » choisi : chemin tapé.
+    let other = RwSignal::new(false);
     let close = move || ui.setup.set(false);
 
     let pick = move |c: Choice| {
         choice.set(c);
         phase.set(Phase::Edit);
         f.update(|f| {
+            // Dossier : aucun d'office, choisi après la connexion (D-202).
+            f.remote_dir.clear();
             if let Some(p) = c.preset().filter(|p| p.sftp) {
                 f.port = p.port.to_string();
-                f.remote_dir = p.web_root.to_string();
             } else {
                 f.port = "22".into();
-                f.remote_dir.clear();
             }
             if c.github() && f.repo.is_empty() {
                 let owner = ui.github.get_untracked().unwrap_or_default();
@@ -130,11 +131,11 @@ fn Setup() -> impl IntoView {
             }
         });
     };
-    // Message collé : accès reconnus, hébergeur déduit de l'adresse du serveur.
+    // Message de l'hébergeur collé dans un champ (sans champ dédié, D-202) : accès reconnus,
+    // hébergeur déduit de l'adresse du serveur.
     let on_paste = move |text: String| {
         let a = parse_access(&text);
         if a.is_empty() {
-            paste.set(text);
             return;
         }
         // Hébergeur déduit de l'adresse du serveur (ou du port de Hostinger, qui donne une IP).
@@ -162,8 +163,6 @@ fn Setup() -> impl IntoView {
                 f.password = p;
             }
         });
-        // Message lu : effacé (il peut contenir le mot de passe), les champs sont remplis.
-        paste.set(String::new());
         phase.set(Phase::Edit);
     };
 
@@ -220,6 +219,8 @@ fn Setup() -> impl IntoView {
             }
         })
     };
+    // Enregistrer et publier : après le choix du dossier (SFTP).
+    let chosen = move || choice.get().github() || f.with(|v| !v.remote_dir.trim().is_empty());
     let busy = move || matches!(phase.get(), Phase::Connecting | Phase::Saving);
     let connected = move || matches!(phase.get(), Phase::Connected(_));
 
@@ -233,21 +234,11 @@ fn Setup() -> impl IntoView {
         spawn_local(async move {
             match api::hosting_probe(&path.get_value(), &p, Some(pw)).await {
                 Ok(probe) => {
-                    // Dossier écrit par l'utilisateur (autre que celui de l'hébergeur par défaut)
-                    // gardé : la suggestion ne le remplace pas (D-172).
+                    // Dossier choisi par l'utilisateur dans la liste (D-202) : rien d'office ; un
+                    // choix fait à une connexion précédente reste s'il est encore là.
                     let cur = f.with_untracked(|v| v.remote_dir.trim().to_string());
-                    let default = choice
-                        .get_untracked()
-                        .preset()
-                        .map(|p| p.web_root.to_string())
-                        .unwrap_or_default();
-                    let typed = !cur.is_empty() && cur != default;
-                    let folder = probe
-                        .suggested
-                        .clone()
-                        .or_else(|| probe.folders.first().cloned());
-                    if let Some(d) = folder.filter(|_| !typed) {
-                        f.update(|v| v.remote_dir = d);
+                    if !other.get_untracked() && !probe.folders.contains(&cur) {
+                        f.update(|v| v.remote_dir.clear());
                     }
                     phase.set(Phase::Connected(probe));
                 }
@@ -351,7 +342,7 @@ fn Setup() -> impl IntoView {
             <form class="dialog setup" role="dialog" aria-modal="true" aria-labelledby="setup-title"
                 on:submit=move |e| {
                     e.prevent_default();
-                    if connected() || choice.get_untracked().github() { save(true) } else { connect() }
+                    if connected() || choice.get_untracked().github() { if chosen() { save(true) } } else { connect() }
                 }>
                 <div class="setup-head">
                     <h2 id="setup-title">{ui.t("setup-title")}</h2>
@@ -396,16 +387,6 @@ fn Setup() -> impl IntoView {
                     </div>
                     {field("publish-repo", "text", "setup-repo", |f| f.repo.clone(), |f, v| f.repo = v, none)}
                 </Show>
-                // Message de l'hébergeur : avant même de choisir (l'hébergeur est reconnu).
-                <Show when=move || !choice.get().github()>
-                    <label class="field">
-                        <span class="label" title=ui.t("setup-paste-help")>{ui.t("setup-paste")}</span>
-                        <textarea class="input setup-paste" rows="2" spellcheck="false"
-                            placeholder=ui.t("setup-paste-placeholder")
-                            prop:value=move || paste.get()
-                            on:input=move |ev| on_paste(event_target_value(&ev))></textarea>
-                    </label>
-                </Show>
                 <Show when=move || { let c = choice.get(); c != Choice::None && !c.github() }>
                     {field("publish-host", "text", "setup-server", |f| f.host.clone(), |f, v| f.host = v, host_placeholder)}
                     <div class="form-cols">
@@ -416,31 +397,14 @@ fn Setup() -> impl IntoView {
                         <summary>{ui.t("setup-advanced")}</summary>
                         <div class="form-cols">
                             {field("publish-port", "number", "setup-port", |f| f.port.clone(), |f, v| f.port = v, none)}
-                            {move || if let Phase::Connected(p) = phase.get() {
-                                let mut folders = p.folders.clone();
-                                let cur = f.with_untracked(|v| v.remote_dir.clone());
-                                if !cur.is_empty() && !folders.contains(&cur) {
-                                    folders.insert(0, cur);
-                                }
-                                // Liste des dossiers du serveur, et saisie libre (dossier à créer,
-                                // sous-dossier) : champ avec propositions (D-172).
-                                view! {
-                                    <label class="field">
-                                        <span class="label">{ui.t("setup-folder")}</span>
-                                        <input class="input input--mono setup-folder" list="setup-folders" spellcheck="false"
-                                            prop:value=move || f.with(|v| v.remote_dir.clone())
-                                            on:change=move |ev| { let v = event_target_value(&ev); f.update(|f| f.remote_dir = v) }/>
-                                        <datalist id="setup-folders">
-                                            {folders.into_iter().map(|d| view! { <option value=d></option> }).collect_view()}
-                                        </datalist>
-                                    </label>
-                                }.into_any()
-                            } else {
-                                field("setup-folder", "text", "setup-folder", |f| f.remote_dir.clone(), |f, v| f.remote_dir = v, none).into_any()
-                            }}
                         </div>
                     </details>
                 </Show>
+                // Dossier du site : choisi parmi ceux trouvés sur le serveur, après la connexion.
+                {move || match phase.get() {
+                    Phase::Connected(p) => Some(folder_choice(ui, f, other, p)),
+                    _ => None,
+                }}
                 {test_env.clone().map(|test| {
                     let public = public_env.clone();
                     let (p1, p2, t1, t2) = (public.clone(), public.clone(), test.clone(), test.clone());
@@ -483,10 +447,11 @@ fn Setup() -> impl IntoView {
                 }}
                 <div class="dialog-actions">
                     <Show when=move || connected() || choice.get().github()>
-                        <button type="button" class="btn" disabled=move || busy() || !ready()
+                        <button type="button" class="btn" disabled=move || busy() || !ready() || !chosen()
                             on:click=move |_| save(false)>{ui.t("action-save")}</button>
                     </Show>
-                    <button type="submit" class="btn btn--primary" disabled=move || busy() || !ready()>
+                    <button type="submit" class="btn btn--primary"
+                        disabled=move || busy() || !ready() || (connected() && !chosen())>
                         {move || if connected() || choice.get().github() {
                             view! { {icons::upload()}{ui.t("publish-run")} }.into_any()
                         } else {
@@ -495,6 +460,62 @@ fn Setup() -> impl IntoView {
                     </button>
                 </div>
             </form>
+        </div>
+    }
+    .into_any()
+}
+
+/// Dossier du site, choisi parmi ceux trouvés sur le serveur (D-202) : aucun coché d'office ; le
+/// dossier proposé est seulement signalé (domaine du site, ou dossier habituel de l'hébergeur) ;
+/// « Autre dossier… » pour un sous-dossier ou un dossier à créer.
+fn folder_choice(ui: Ui, f: RwSignal<Fields>, other: RwSignal<bool>, p: HostProbe) -> AnyView {
+    let tag = |folder: &str| -> Option<String> {
+        if p.suggested.as_deref() != Some(folder) {
+            return None;
+        }
+        let matches = p.domain.as_deref().is_some_and(|d| {
+            folder.split('/').any(|part| part == d)
+                || (d.split('.').count() >= 3
+                    && folder.trim_end_matches('/').rsplit('/').next() == d.split('.').next())
+        });
+        Some(if matches {
+            ui.now(
+                "setup-folder-matches",
+                &[("domain", p.domain.clone().unwrap_or_default())],
+            )
+        } else {
+            ui.now("setup-folder-usual", &[])
+        })
+    };
+    let rows: Vec<(String, Option<String>)> =
+        p.folders.iter().map(|d| (d.clone(), tag(d))).collect();
+    view! {
+        <div class="field setup-folder-field">
+            <span class="label" id="setup-folder-label" title=ui.t("setup-folder-help")>{ui.t("setup-folder")}</span>
+            <div class="setup-folders" role="radiogroup" aria-labelledby="setup-folder-label">
+                {rows.into_iter().map(|(d, t)| {
+                    let (d1, d2, d3, d4) = (d.clone(), d.clone(), d.clone(), d.clone());
+                    let on = move || !other.get() && f.with(|v| v.remote_dir == d1);
+                    view! {
+                        <button type="button" role="radio" class="setup-folder-row" data-folder=d4
+                            class:is-on=on aria-checked=move || (!other.get() && f.with(|v| v.remote_dir == d2)).to_string()
+                            on:click=move |_| { other.set(false); f.update(|v| v.remote_dir = d3.clone()) }>
+                            <span class="setup-radio"></span>{icons::folder()}<span class="setup-folder-name">{d}</span>
+                            {t.map(|t| view! { <span class="setup-folder-tag">{t}</span> })}
+                        </button>
+                    }
+                }).collect_view()}
+                <button type="button" role="radio" class="setup-folder-row setup-folder-row--other" data-folder=""
+                    class:is-on=move || other.get() aria-checked=move || other.get().to_string()
+                    on:click=move |_| { if !other.get_untracked() { other.set(true); f.update(|v| v.remote_dir.clear()) } }>
+                    <span class="setup-radio"></span>{icons::edit()}<span class="setup-folder-name">{ui.t("setup-folder-other")}</span>
+                </button>
+            </div>
+            <Show when=move || other.get()>
+                <input class="input input--mono setup-folder" spellcheck="false" aria-labelledby="setup-folder-label"
+                    placeholder="dossier/du/site/" prop:value=move || f.with(|v| v.remote_dir.clone())
+                    on:input=move |ev| { let v = event_target_value(&ev); f.update(|f| f.remote_dir = v) }/>
+            </Show>
         </div>
     }
     .into_any()

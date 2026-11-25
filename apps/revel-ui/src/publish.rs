@@ -509,7 +509,7 @@ pub fn Publish(site: SiteSummary) -> impl IntoView {
                 <div class="empty">
                     <p>{ui.t("pub-empty")}</p>
                     <div class="toolbar">
-                        <button class="btn btn--primary" on:click=add>{icons::upload()}{ui.t("pub-setup")}</button>
+                        <button class="btn btn--primary" on:click=add>{icons::plus()}{ui.t("pub-setup")}</button>
                     </div>
                 </div>
             </Show>

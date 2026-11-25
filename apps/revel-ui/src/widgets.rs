@@ -227,9 +227,255 @@ pub fn images_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) ->
     )
 }
 
-/// Filtres de liste fermés : chaque bouton (texte et valeur cherchée dans les étiquettes des
-/// éléments filtrés), ajouter, retirer. Le premier bouton sans valeur montre tout.
+/// Libellé d'une valeur d'un champ « choix » d'après ses options (`.pages.yml` : `values` en
+/// textes ou en `{ value, label }`).
+fn choice_label(options: &serde_json::Value, value: &str) -> Option<String> {
+    let values = options.get("values").or(Some(options))?.as_array()?;
+    values.iter().find_map(|v| match v {
+        serde_json::Value::Object(m)
+            if m.get("value")
+                .or_else(|| m.get("name"))
+                .and_then(|x| x.as_str())
+                == Some(value) =>
+        {
+            m.get("label").and_then(|x| x.as_str()).map(str::to_string)
+        }
+        _ => None,
+    })
+}
+
+/// Champs d'une collection qui peuvent donner des boutons de filtre : choix, texte court, liste
+/// de textes.
+fn filter_fields(c: &revel_protocol::CmsCollection) -> Vec<(String, String)> {
+    c.fields
+        .iter()
+        .filter(|f| {
+            !f.hidden
+                && matches!(
+                    f.kind.as_deref(),
+                    Some("select") | Some("string") | Some("list") | None
+                )
+                && !(f.kind.is_none() && !f.list)
+        })
+        .map(|f| {
+            (
+                f.name.clone(),
+                f.label.clone().unwrap_or_else(|| f.name.clone()),
+            )
+        })
+        .collect()
+}
+
+/// Boutons qu'un champ donne (clé, libellé), d'après les contenus de la collection.
+fn field_buttons(c: &revel_protocol::CmsCollection, field: &str) -> Vec<(String, String)> {
+    let options = c
+        .fields
+        .iter()
+        .find(|f| f.name == field)
+        .map(|f| f.options.clone())
+        .unwrap_or_default();
+    revel_model::filter_values(c.entries.iter().flat_map(|e| {
+        let v = e.data.get(field).cloned().unwrap_or_default();
+        revel_model::field_strings(&v).into_iter().map(|s| {
+            let l = choice_label(&options, &s);
+            (s, l)
+        })
+    }))
+}
+
+/// Filtres de liste fermés (D-202) : liste de la page et champ dont viennent les boutons ;
+/// bouton « Tout » et son libellé ; plusieurs valeurs à la fois. Sans champ : boutons écrits à
+/// la main (texte, valeur), comme avant.
 pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -> Option<AnyView> {
+    use revel_edit::listfilters;
+    let st = ed
+        .doc
+        .with_untracked(|d| d.as_ref().and_then(|d| listfilters::state(d, at).ok()))?;
+    let lists = ed.doc.with_untracked(|d| {
+        d.as_ref()
+            .map(|d| listfilters::lists(d, &at.owner))
+            .unwrap_or_default()
+    });
+    let cols = crate::blocks::collections(ed);
+    let root = StoredValue::new(at.clone());
+    // Liste choisie : celle reliée, sinon la seule de la page.
+    let chosen = RwSignal::new(
+        st.list
+            .clone()
+            .or_else(|| (lists.len() == 1).then(|| lists[0].each.clone())),
+    );
+    let lists = StoredValue::new(lists);
+    let field = st.field.clone();
+    let collection_of = move |each: &str| {
+        lists.with_value(|l| {
+            l.iter()
+                .find(|x| x.each == each)
+                .map(|x| x.collection.clone())
+        })
+    };
+    let bind = move |list: String, f: String| {
+        let all = Some(ui.now("filters-all", &[]));
+        let cmd = ed.doc.with_untracked(|d| {
+            let d = d.as_ref()?;
+            let keep = listfilters::state(d, &root.get_value()).ok()?.all;
+            listfilters::bind(
+                d,
+                &root.get_value(),
+                &list,
+                &f,
+                keep.as_deref().or(all.as_deref()),
+            )
+            .ok()
+        });
+        if let Some(cmd) = cmd {
+            ed.apply_keep(ui, cmd);
+        }
+    };
+    let list_options = move || {
+        let mut out = vec![(String::new(), ui.now("filters-list-pick", &[]))];
+        lists.with_value(|l| {
+            cols.with(|cs| {
+                for (i, x) in l.iter().enumerate() {
+                    let name = cs
+                        .iter()
+                        .find(|c| c.id == x.collection)
+                        .map(crate::blocks::label_of)
+                        .unwrap_or_else(|| x.collection.clone());
+                    let same = l.iter().filter(|y| y.collection == x.collection).count() > 1;
+                    let n = l[..i]
+                        .iter()
+                        .filter(|y| y.collection == x.collection)
+                        .count()
+                        + 1;
+                    let name = if same { format!("{name} {n}") } else { name };
+                    out.push((
+                        x.each.clone(),
+                        ui.now("filters-list-name", &[("name", name)]),
+                    ));
+                }
+            })
+        });
+        out
+    };
+    let f0 = field.clone();
+    let list_row = move || {
+        let cur = chosen.get().unwrap_or_default();
+        let f = f0.clone();
+        crate::toolparts::select_row(ui, "filters-list", list_options(), cur, move |v| {
+            let v = (!v.is_empty()).then_some(v);
+            chosen.set(v.clone());
+            // Même champ dans la nouvelle liste : relié aussitôt.
+            if let (Some(l), Some(f)) = (v, f.clone())
+                && let Some(c) = collection_of(&l)
+                && cols.with_untracked(|cs| {
+                    cs.iter()
+                        .any(|x| x.id == c && filter_fields(x).iter().any(|(n, _)| *n == f))
+                })
+            {
+                bind(l, f);
+            }
+        })
+    };
+    let f1 = field.clone();
+    let field_row = move || {
+        let list = chosen.get()?;
+        let c = collection_of(&list)?;
+        let mut opts = vec![(String::new(), ui.now("filters-field-pick", &[]))];
+        cols.with(|cs| {
+            if let Some(col) = cs.iter().find(|x| x.id == c) {
+                opts.extend(filter_fields(col));
+            }
+        });
+        let cur = f1.clone().unwrap_or_default();
+        Some(crate::toolparts::select_row(
+            ui,
+            "filters-field",
+            opts,
+            cur,
+            move |v| {
+                if !v.is_empty() {
+                    bind(list.clone(), v);
+                }
+            },
+        ))
+    };
+    let bound = field.is_some() && st.list.is_some();
+    let detail = if bound {
+        let f = field.clone().unwrap_or_default();
+        let list = st.list.clone().unwrap_or_default();
+        let all = st.all.clone();
+        let has_all = all.is_some();
+        let list = StoredValue::new(list);
+        let f = StoredValue::new(f);
+        let buttons = move || {
+            let c = collection_of(&list.get_value()).unwrap_or_default();
+            let f = f.get_value();
+            cols.with(|cs| {
+                cs.iter()
+                    .find(|x| x.id == c)
+                    .map(|x| field_buttons(x, &f))
+                    .unwrap_or_default()
+            })
+        };
+        let a2 = all.clone();
+        let set_all = move |label: Option<String>| {
+            let cmd = ed.doc.with_untracked(|d| {
+                d.as_ref()
+                    .and_then(|d| listfilters::set_all(d, &root.get_value(), label.as_deref()).ok())
+            });
+            if let Some(cmd) = cmd {
+                ed.apply_keep(ui, cmd);
+            }
+        };
+        view! {
+            <div class="style-row filter-buttons-head" data-row="filters-buttons">
+                <span class="style-label"><span class="style-label-text">{ui.t("filters-buttons")}</span></span>
+                <span class="filter-buttons-note">{move || ui.now("filters-from-field", &[("n", buttons().len().to_string())])}</span>
+            </div>
+            <div class="filter-chips" data-list="filters-values">
+                {a2.map(|l| view! { <span class="chip filter-chip is-on">{l}</span> })}
+                {move || buttons().into_iter().map(|(k, l)| view! { <span class="chip filter-chip" data-value=k>{l}</span> }).collect_view()}
+            </div>
+            {crate::toolparts::switch_row(ui, "filters-all-button", has_all, move |on| {
+                set_all(on.then(|| ui.now("filters-all", &[])))
+            })}
+            {all.map(|l| view! {
+                <div class="style-row" data-row="filters-all-label">
+                    <span class="style-label"><span class="style-label-text">{ui.t("filters-all-label")}</span></span>
+                    <div class="style-control">
+                        <input class="input" type="text" prop:value=l aria-label=ui.t("filters-all-label")
+                            on:change=move |e| {
+                                let v = event_target_value(&e).trim().to_string();
+                                if !v.is_empty() { set_all(Some(v)) }
+                            }/>
+                    </div>
+                </div>
+            })}
+        }
+        .into_any()
+    } else {
+        written_buttons(ui, ed, at, node)?
+    };
+    let multi = st.multi;
+    Some(
+        view! {
+            <div class="insp-group" data-role="filters">
+                <p class="panel-title tool-head" title=ui.t("filters-role-help")>{crate::icons::filter()}<span>{ui.t("filters-role")}</span></p>
+                {list_row}
+                {field_row}
+                {detail}
+                {crate::toolparts::switch_row(ui, "filters-multi", multi, move |on| {
+                    ed.apply_keep(ui, listfilters::set_multi(&root.get_value(), on))
+                })}
+            </div>
+        }
+        .into_any(),
+    )
+}
+
+/// Boutons écrits à la main : chaque bouton (texte et valeur cherchée dans les étiquettes des
+/// éléments filtrés), ajouter, retirer. Le premier bouton sans valeur montre tout.
+fn written_buttons(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -> Option<AnyView> {
     use revel_model::{Attr, Node};
     let Node::Element {
         attrs, children, ..
@@ -350,8 +596,6 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
     });
     Some(
         view! {
-            <div class="insp-group" data-role="filters">
-                <p class="panel-title tool-head" title=ui.t("filters-role-help")>{crate::icons::filter()}<span>{ui.t("filters-role")}</span></p>
                 <crate::toolparts::PartsList owner=owner.clone() title="filters-buttons" add_key="filters-add"
                     parts=parts icon=crate::icons::filter extra=("data-revel-filter", "filters-value")
                     on_add=Callback::new(move |_| add())/>
@@ -360,7 +604,6 @@ pub fn filters_settings(ui: Ui, ed: Ed, at: &Target, node: &revel_model::Node) -
                     <input class="input input--mono" spellcheck="false" prop:value=param
                         on:change=move |e| set_param(event_target_value(&e))/>
                 </label>
-            </div>
         }
         .into_any(),
     )

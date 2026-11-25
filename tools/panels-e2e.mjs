@@ -438,8 +438,50 @@ try {
     const back = await until(async () => (await links()).at(-1) === `Shop→${target.note}`);
     const noArrows = (await page.$$(`${STY} [title="Move up"], ${STY} [title="Move down"]`)).length === 0;
     check('tools: reorder by drag handle (drop line shown) and by keyboard, no up/down arrows', marked === 1 && dragged && back && noArrows, JSON.stringify({ marked, dragged, back, noArrows }));
-    for (let i = 0; i < 24 && JSON.stringify((await home()).body) !== before; i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
+    // Filtres de liste reliés à un champ (D-202) : liste et champ choisis, boutons tirés du champ,
+    // liste marquée, étiquettes posées ; « All » retiré puis renommé ; plusieurs valeurs.
+    {
+      await tab('insert'); await page.dblclick('.insert-item[data-item="insert-filters"]'); await w(1500);
+      await page.waitForSelector(`${STY} [data-role="filters"] [data-row="filters-list"] select`);
+      const lists = await page.$$eval(`${STY} [data-row="filters-list"] option`, (o) => o.map((x) => x.value).filter(Boolean));
+      if (!(await page.$(`${STY} [data-row="filters-field"] select`))) await page.selectOption(`${STY} [data-row="filters-list"] select`, lists[0]);
+      const fieldOpts = await page.$$eval(`${STY} [data-row="filters-field"] option`, (o) => o.map((x) => x.value).filter(Boolean));
+      const field = fieldOpts.find((f) => /categ|discipl|type/.test(f)) || fieldOpts.at(-1);
+      await page.selectOption(`${STY} [data-row="filters-field"] select`, field); await w(1200);
+      const homeJson = async () => JSON.stringify((await home()).body);
+      const bound = await until(async () => { const j = await homeJson(); return j.includes(`filter_values(\\"${field}\\")`) && j.includes('data-revel-filter-scope') && j.includes(`filter_tags('${field}')`); });
+      const chips = await until(async () => (await page.$$(`${STY} .filter-chips .filter-chip[data-value]`)).length >= 2);
+      const drawn = await until(async () => (await frameOf().evaluate(() => document.querySelectorAll('[data-revel-filters] [data-revel-filter]:not([data-revel-filter=""])').length).catch(() => 0)) >= 2);
+      await shot('list-filters');
+      await page.click(`${STY} [data-row="filters-all-button"] .switch`); await w(700);
+      const noAll = await until(async () => !(await homeJson()).includes('"data-revel-filter","value":""'));
+      await page.click(`${STY} [data-row="filters-all-button"] .switch`); await w(700);
+      await page.fill(`${STY} [data-row="filters-all-label"] input`, 'Everything'); await page.keyboard.press('Tab'); await w(700);
+      const renamed = await until(async () => (await homeJson()).includes('"text":"Everything"'));
+      await page.click(`${STY} [data-row="filters-multi"] .switch`); await w(700);
+      const multi = await until(async () => (await homeJson()).includes('data-revel-filter-multi'));
+      check('tools: list filters bound to a list and a field (buttons from its values, list tagged), "All" removed and renamed, several values', bound && chips && drawn && noAll && renamed && multi, JSON.stringify({ lists: lists.length, field, bound, chips, drawn, noAll, renamed, multi }));
+    }
+    for (let i = 0; i < 40 && JSON.stringify((await home()).body) !== before; i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
     check('tools: every step undone', JSON.stringify((await home()).body) === before);
+  }
+  // ---------------------------------------------------------------- archivage d'un contenu (D-202)
+  {
+    const entries = async () => (await invoke('cms_collections', { path: '.' })).find((c) => c.id === 'journal')?.entries || [];
+    await page.click('.view-tab[data-view="view-cms"]'); await w(900);
+    await page.locator('.cms-col', { hasText: /journal/i }).first().click(); await w(900);
+    const row = page.locator('tr.row-link[data-entry="opening"]');
+    await row.click({ button: 'right' }); await w(300);
+    const items = (await menu()).map((i) => i.label);
+    await pick('Archive');
+    const archived = await until(async () => (await entries()).find((e) => e.file === 'opening')?.data?.published === false);
+    const marked = await until(async () => (await row.getAttribute('class') || '').includes('is-archived') && (await row.locator('.chip--archived').count()) === 1);
+    await row.click(); await w(700);
+    await shot('cms-archived');
+    await page.click('.cms-item [data-action="unarchive"]'); await w(700);
+    const back = await until(async () => { const e = (await entries()).find((x) => x.file === 'opening'); return e && !('published' in e.data) && !('draft' in e.data); });
+    const unmarked = await until(async () => !((await row.getAttribute('class')) || '').includes('is-archived'));
+    check('CMS: entry archived from its right-click menu (published: false), unarchived from its panel', items.includes('Archive') && archived && marked && back && unmarked, JSON.stringify({ items, archived, marked, back, unmarked }));
   }
   check('no error in the interface', errors.length === 0, errors.join(' | '));
 } catch (e) {

@@ -75,6 +75,20 @@ pub fn trash() -> AnyView {
     svg(r#"<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5"/>"#)
 }
 
+/// Archiver un contenu (boîte d'archives).
+pub fn archive() -> AnyView {
+    svg(
+        r#"<rect x="1.75" y="2.5" width="12.5" height="3" rx=".75"/><path d="M2.75 5.5v7.25a.75.75 0 0 0 .75.75h9a.75.75 0 0 0 .75-.75V5.5M6.5 8.5h3"/>"#,
+    )
+}
+
+/// Désarchiver un contenu (flèche qui sort de la boîte).
+pub fn unarchive() -> AnyView {
+    svg(
+        r#"<rect x="1.75" y="2.5" width="12.5" height="3" rx=".75"/><path d="M2.75 5.5v7.25a.75.75 0 0 0 .75.75h9a.75.75 0 0 0 .75-.75V5.5M8 12V8M6.25 9.75L8 8l1.75 1.75"/>"#,
+    )
+}
+
 pub fn check() -> AnyView {
     svg(r#"<path d="M3 8.5l3 3 7-7"/>"#)
 }

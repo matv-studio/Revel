@@ -628,6 +628,41 @@ pub fn valid_page_path(path: &str) -> bool {
     }) && !path.contains("//")
 }
 
+/// Boutons d'un filtre de liste relié à un champ (D-202) : valeurs distinctes d'un champ, chacune
+/// avec sa clé (`slugify`, comparée aux étiquettes des contenus) et son libellé (celui du choix,
+/// sinon la valeur), triées par libellé. Valeurs vides écartées ; première occurrence gardée.
+pub fn filter_values(
+    values: impl IntoIterator<Item = (String, Option<String>)>,
+) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for (raw, label) in values {
+        let key = slugify(&raw);
+        if key.is_empty() || out.iter().any(|(k, _)| *k == key) {
+            continue;
+        }
+        let label = label
+            .filter(|l| !l.trim().is_empty())
+            .unwrap_or_else(|| raw.trim().to_string());
+        out.push((key, label));
+    }
+    out.sort_by(|a, b| {
+        a.1.to_lowercase()
+            .cmp(&b.1.to_lowercase())
+            .then_with(|| a.0.cmp(&b.0))
+    });
+    out
+}
+
+/// Valeurs brutes d'un champ d'un contenu : texte, nombre, ou liste de textes.
+pub fn field_strings(v: &serde_json::Value) -> Vec<String> {
+    match v {
+        serde_json::Value::String(s) => vec![s.clone()],
+        serde_json::Value::Number(n) => vec![n.to_string()],
+        serde_json::Value::Array(a) => a.iter().flat_map(field_strings).collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Fragment d'adresse tiré d'un texte (`Nos offres d'été` -> `nos-offres-d-ete`).
 pub fn slugify(text: &str) -> String {
     let mut out = String::new();

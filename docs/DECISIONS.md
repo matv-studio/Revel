@@ -2961,3 +2961,22 @@ section.**
   affichait la valeur affiche désormais le libellé. Choix multiple : pas concerné (liste affichée par un
   filtre).
 
+
+## D-201 — Formulaire : après l'envoi et destinataire propres à chaque formulaire ; copie du cobaye (25/11/2026)
+
+- **Après l'envoi** (maquette `tools-3-form-fields` validée le 24/11) : sur un formulaire « envoyé par le
+  site », bascule « Message / Ouvrir une page », message propre (vide : celui du site), page choisie dans
+  la liste des pages, et « Envoyer à » (vide : adresse du site). Attributs du `<form>` :
+  `data-revel-success`, `data-revel-redirect`, `data-revel-to`.
+- **Pourquoi des attributs lus à la publication** : l'adresse ne doit jamais venir du visiteur ni figurer
+  dans la page. Le rendu relève les réglages de chaque formulaire (`forms::FormSpec`), les retire des
+  pages publiées (gardés dans le canevas) et les écrit dans le script PHP (`const FORMS`, par nom de
+  formulaire). Ordre du destinataire : valeur du champ d'aiguillage (D-170), sinon adresse du
+  formulaire, sinon adresse du site. Page ouverte : chemin du site seulement (`/…`) ; réponse JSON
+  `redirect` suivie par le script de la page, ou `303` sans script.
+- L'avertissement « adresse de réception absente » ne tombe plus si chaque formulaire a la sienne.
+- Deux formulaires de même nom : les réglages du premier trouvé s'appliquent aux deux (le nom est la clé).
+- **Cobaye** : le dépôt `matv-studio/alunites-revel-lab` a été supprimé de GitHub le 25/11. Copie de
+  référence sur le PC, `C:\MATV_LOCAL\_Interne\Revel\cobaye\` (dépôt git complet au commit `0dd004c` et
+  fichier `alunites-revel-lab.bundle`). Les essais locaux lisent la copie du conteneur. En suspens : les
+  trois tâches de CI qui lisent le dépôt GitHub restent rouges tant qu'il n'est pas restauré ou recréé.

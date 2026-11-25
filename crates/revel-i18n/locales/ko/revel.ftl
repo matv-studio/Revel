@@ -4035,3 +4035,10 @@ form-field-options = 옵션
 form-option = 옵션 { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = 끌어서 순서 변경 (키보드 ↑ ↓)
+form-after = 전송 후
+form-after-message = 메시지
+form-after-page = 페이지 열기
+form-page = 페이지
+form-to = 받는 주소
+form-to-ph = 사이트 주소
+form-to-help = 비워 두면 사이트 전체에 설정된 주소

@@ -4036,3 +4036,10 @@ form-field-options = विकल्प
 form-option = विकल्प { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = क्रम बदलने के लिए खींचें (कीबोर्ड पर ↑ ↓)
+form-after = भेजने के बाद
+form-after-message = संदेश
+form-after-page = पेज खोलें
+form-page = पेज
+form-to = इसे भेजें
+form-to-ph = साइट का पता
+form-to-help = खाली: पूरी साइट के लिए तय पता

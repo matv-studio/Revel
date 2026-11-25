@@ -4144,3 +4144,10 @@ form-field-options = Варианты
 form-option = Вариант { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = Перетащите, чтобы изменить порядок (↑ ↓ с клавиатуры)
+form-after = После отправки
+form-after-message = Сообщение
+form-after-page = Открыть страницу
+form-page = Страница
+form-to = Отправлять на
+form-to-ph = Адрес сайта
+form-to-help = Пусто: адрес, заданный для всего сайта

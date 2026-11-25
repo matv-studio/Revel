@@ -4035,3 +4035,10 @@ form-field-options = Opsi
 form-option = Opsi { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = Seret untuk mengurutkan (↑ ↓ dengan keyboard)
+form-after = Setelah dikirim
+form-after-message = Pesan
+form-after-page = Buka halaman
+form-page = Halaman
+form-to = Kirim ke
+form-to-ph = Alamat situs
+form-to-help = Kosong: alamat yang diatur untuk seluruh situs

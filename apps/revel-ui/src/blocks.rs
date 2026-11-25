@@ -2029,6 +2029,7 @@ fn form_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Opti
                             <input class="input" prop:value=name.clone().unwrap_or_default()
                                 on:change=move |e| { let v = event_target_value(&e).trim().to_string(); set(Some(if v.is_empty() { "contact".into() } else { v })) }/>
                         </label>
+                        {form_after(ui, ed, at.get_value(), attrs)}
                         <button type="button" class="link-btn" on:click=move |_| ui.tab(crate::Tab::Settings(crate::Section::Forms))>{ui.t("role-form-settings")}</button>
                     })}
                 </div>
@@ -2037,6 +2038,103 @@ fn form_settings(ui: Ui, ed: Ed, at: &Target, tag: &str, attrs: &[Attr]) -> Opti
         );
     }
     (!groups.is_empty()).then(|| groups.into_iter().collect_view().into_any())
+}
+
+/// Après l'envoi d'un formulaire (D-201) : message ou page ouverte, et adresse de réception
+/// propre à ce formulaire (vide : celle du site). Attributs lus à la publication par le script
+/// d'envoi, absents des pages publiées.
+fn form_after(ui: Ui, ed: Ed, at: Target, attrs: &[Attr]) -> AnyView {
+    const TO: &str = "data-revel-to";
+    const SUCCESS: &str = "data-revel-success";
+    const REDIRECT: &str = "data-revel-redirect";
+    let value = |n: &str| attr(attrs, n).and_then(|a| a.value.clone());
+    let (to, success, redirect) = (value(TO), value(SUCCESS), value(REDIRECT));
+    let page_mode = redirect.is_some();
+    let at = StoredValue::new(at);
+    // Valeur vide : attribut retiré (réglage du site).
+    let set = move |name: &'static str, v: Option<String>| {
+        let at = at.get_value();
+        ed.apply(
+            ui,
+            match v {
+                Some(value) => Command::SetAttr {
+                    at,
+                    name: name.into(),
+                    value: Some(value),
+                },
+                None => Command::RemoveAttr {
+                    at,
+                    name: name.into(),
+                },
+            },
+            false,
+        );
+    };
+    let pages: Vec<(String, String)> = ed.pages.with_untracked(|ps| {
+        ps.iter()
+            .filter(|p| p.page.is_some() && p.collection.is_none())
+            .map(|p| {
+                let title = if p.title.trim().is_empty() {
+                    p.url.clone()
+                } else {
+                    p.title.clone()
+                };
+                (title, p.url.clone())
+            })
+            .collect()
+    });
+    let first = pages
+        .first()
+        .map(|(_, u)| u.clone())
+        .unwrap_or_else(|| "/".into());
+    let current = redirect.clone().unwrap_or_default();
+    let has_success = success.is_some();
+    view! {
+        <div class="field" data-form="after">
+            <span class="label">{ui.t("form-after")}</span>
+            <div class="segmented" role="radiogroup">
+                <button type="button" role="radio" data-after="message" class:is-on=!page_mode
+                    aria-checked=(!page_mode).to_string()
+                    on:click=move |_| if page_mode { set(REDIRECT, None) }>{ui.t("form-after-message")}</button>
+                <button type="button" role="radio" data-after="page" class:is-on=page_mode
+                    aria-checked=page_mode.to_string()
+                    on:click=move |_| if !page_mode { set(REDIRECT, Some(first.clone())) }>{ui.t("form-after-page")}</button>
+            </div>
+        </div>
+        {if page_mode {
+            view! {
+                <label class="field" data-form="page">
+                    <span class="label">{ui.t("form-page")}</span>
+                    <select class="input" on:change=move |e| set(REDIRECT, Some(event_target_value(&e)))>
+                        {pages.into_iter().map(|(title, url)| {
+                            let on = url == current;
+                            view! { <option value=url.clone() selected=on title=url>{title}</option> }
+                        }).collect_view()}
+                    </select>
+                </label>
+            }.into_any()
+        } else {
+            view! {
+                <label class="field" data-form="message">
+                    <span class="label">{ui.t("form-after-message")}</span>
+                    <input class="input" prop:value=success.unwrap_or_default() placeholder=ui.t("forms-success-default")
+                        on:change=move |e| {
+                            let v = event_target_value(&e).trim().to_string();
+                            if !v.is_empty() { set(SUCCESS, Some(v)) } else if has_success { set(SUCCESS, None) }
+                        }/>
+                </label>
+            }.into_any()
+        }}
+        <label class="field" data-form="to" title=ui.t("form-to-help")>
+            <span class="label">{ui.t("form-to")}</span>
+            <input class="input" type="email" prop:value=to.clone().unwrap_or_default() placeholder=ui.t("form-to-ph")
+                on:change=move |e| {
+                    let v = event_target_value(&e).trim().to_string();
+                    if !v.is_empty() { set(TO, Some(v)) } else if to.is_some() { set(TO, None) }
+                }/>
+        </label>
+    }
+    .into_any()
 }
 
 /// Valeur d'un attribut réglée par un champ lisible : texte (ou nombre) écrit, ou valeur reliée

@@ -4148,3 +4148,10 @@ form-field-options = Opcje
 form-option = Opcja { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = Przeciągnij, aby zmienić kolejność (↑ ↓ na klawiaturze)
+form-after = Po wysłaniu
+form-after-message = Wiadomość
+form-after-page = Otwórz stronę
+form-page = Strona
+form-to = Wyślij do
+form-to-ph = Adres witryny
+form-to-help = Puste: adres ustawiony dla całej witryny

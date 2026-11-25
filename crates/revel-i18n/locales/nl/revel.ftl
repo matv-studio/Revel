@@ -4039,3 +4039,10 @@ form-field-options = Opties
 form-option = Optie { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = Sleep om te ordenen (↑ ↓ met het toetsenbord)
+form-after = Na het verzenden
+form-after-message = Bericht
+form-after-page = Een pagina openen
+form-page = Pagina
+form-to = Verzenden naar
+form-to-ph = Adres van de site
+form-to-help = Leeg: het adres dat voor de hele site is ingesteld

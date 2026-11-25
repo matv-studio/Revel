@@ -294,7 +294,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     let mut files = Vec::new();
     let mut pages: Vec<SitemapPage> = Vec::new();
     // Formulaires reçus par l'hébergement (5.8) trouvés dans les pages ; pages animées (6.1).
-    let mut forms = 0usize;
+    let mut forms: Vec<forms::FormSpec> = Vec::new();
     let mut used = Scripts::default();
     {
         let mut b = eval::Builder::new(input);
@@ -355,7 +355,7 @@ pub fn build(input: &BuildInput) -> Result<BuildOutput, RenderError> {
     feeds(input, &mut files, &mut warnings)?;
     seo_files(site, &pages, &mut files, &mut warnings);
     redirects::redirect_files(site, &mut files, &mut warnings);
-    forms::handler_file(site, forms, &mut files, &mut warnings);
+    forms::handler_file(site, &forms, &mut files, &mut warnings);
     animations::script_file(used.animations, &mut files);
     lottie::script_file(used.lottie, &mut files);
     model::script_files(used.model, &mut files);
@@ -583,7 +583,7 @@ fn build_pages(
     input: &BuildInput,
     files: &mut Vec<OutputFile>,
     pages: &mut Vec<SitemapPage>,
-    forms: &mut usize,
+    forms: &mut Vec<forms::FormSpec>,
     used: &mut Scripts,
     warnings: &mut Vec<String>,
 ) -> Result<(), RenderError> {
@@ -601,7 +601,7 @@ fn build_pages(
             pages.push((j.url.clone(), truthy(&j.data, "noindex"), date));
             let scripts = b.editor.as_ref().is_none_or(|e| e.scripts);
             let (html, n) = forms::wire(input.site, finish_html(b, input.site, j, html), scripts);
-            *forms += n;
+            forms.extend(n);
             let (html, a) = animations::wire(html, scripts);
             used.animations |= a;
             let (html, l) = lottie::wire(html);

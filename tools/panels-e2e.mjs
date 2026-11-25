@@ -388,6 +388,19 @@ try {
       start.length >= 3 && ['Text', 'Email', 'Phone', 'Long text', 'Dropdown', 'Checkbox', 'Radio buttons', 'Date', 'File'].every((k) => kinds.includes(k)) && added && required && options.join('|') === 'Option 1|Option 2',
       JSON.stringify({ start, added, required, options }));
     await shot('form-fields');
+    // Après l'envoi : message, adresse de réception, puis page ouverte (D-201).
+    if (!(await page.$(`${STY} [data-form="after"]`))) { await page.locator(`${STY} [data-role="form"] .switch`).click(); await w(900); }
+    const formAttr = async (n) => { const m = JSON.stringify((await home()).body).match(new RegExp(`"name":"${n}","value":"([^"]*)"`)); return m ? m[1] : null; };
+    await page.fill(`${STY} [data-form="message"] input`, 'Thank you'); await page.keyboard.press('Tab'); await w(700);
+    await page.fill(`${STY} [data-form="to"] input`, 'quotes@example.com'); await page.keyboard.press('Tab'); await w(700);
+    const own = await until(async () => (await formAttr('data-revel-success')) === 'Thank you' && (await formAttr('data-revel-to')) === 'quotes@example.com');
+    await page.click(`${STY} [data-after="page"]`); await w(900);
+    const pageUrls = await page.$$eval(`${STY} [data-form="page"] option`, (l) => l.map((o) => o.value));
+    await page.selectOption(`${STY} [data-form="page"] select`, pageUrls.at(-1)); await w(700);
+    const goes = await until(async () => (await formAttr('data-revel-redirect')) === pageUrls.at(-1));
+    await page.click(`${STY} [data-after="message"]`); await w(900);
+    const backToMessage = await until(async () => (await formAttr('data-revel-redirect')) === null && !!(await page.$(`${STY} [data-form="message"] input`)));
+    check('tools: form shows a message or opens a page after sending, with its own address', own && pageUrls.length >= 2 && goes && backToMessage, JSON.stringify({ own, pageUrls, goes, backToMessage }));
     // Barre de navigation : lien ajouté vers une page, puis renommé.
     await tab('layers');
     await page.locator('.layers-tree .layer .layer-label', { hasText: /^Paragraph$/ }).first().click(); await w(400);
@@ -425,7 +438,7 @@ try {
     const back = await until(async () => (await links()).at(-1) === `Shop→${target.note}`);
     const noArrows = (await page.$$(`${STY} [title="Move up"], ${STY} [title="Move down"]`)).length === 0;
     check('tools: reorder by drag handle (drop line shown) and by keyboard, no up/down arrows', marked === 1 && dragged && back && noArrows, JSON.stringify({ marked, dragged, back, noArrows }));
-    for (let i = 0; i < 12 && JSON.stringify((await home()).body) !== before; i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
+    for (let i = 0; i < 24 && JSON.stringify((await home()).body) !== before; i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
     check('tools: every step undone', JSON.stringify((await home()).body) === before);
   }
   check('no error in the interface', errors.length === 0, errors.join(' | '));

@@ -67,6 +67,9 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   obligatoire, valeurs d'une liste déroulante), section posée après la section sélectionnée. Second envoi à
   faire : après l'envoi et destinataire par formulaire, filtres de liste, assistant de publication, M3, M9,
   M10, M12, M13.
+- **25/11, 4 h (D-201)** : formulaire, « après l'envoi » (message ou page ouverte) et « Envoyer à » propres à
+  chaque formulaire ; essai des panneaux : 30 vérifications. Cobaye supprimé de GitHub : copie de référence
+  sur le PC (`Revel\cobaye\`), CI rouge sur ses trois tâches en attendant.
 - **25/11, 1 h (D-200)** : poignée de glisser à la place des flèches dans toutes les listes ordonnées
   (liens, champs, parties d'outil, contenus choisis, menus, réseaux, CMS) ; P5 corrigée (libellé d'un choix
   affiché, valeur gardée dans les adresses et filtres).

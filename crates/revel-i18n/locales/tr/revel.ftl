@@ -4036,3 +4036,10 @@ form-field-options = Seçenekler
 form-option = Seçenek { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = Sıralamak için sürükleyin (klavyede ↑ ↓)
+form-after = Gönderdikten sonra
+form-after-message = Mesaj
+form-after-page = Bir sayfa aç
+form-page = Sayfa
+form-to = Alıcı
+form-to-ph = Site adresi
+form-to-help = Boş: tüm site için ayarlanan adres

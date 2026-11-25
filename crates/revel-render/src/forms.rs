@@ -25,7 +25,7 @@ const MIN_MS: u32 = 3000;
 /// par le script PHP. Sans `fetch`, l'envoi classique part avec ces deux champs.
 fn script(key: &str) -> String {
     format!(
-        r#"<script>(function(){{var t0=Date.now(),K="{key}";function h(s){{for(var x=2166136261,i=0;i<s.length;i++){{x^=s.charCodeAt(i);x=Math.imul(x,16777619)>>>0}}return("0000000"+x.toString(16)).slice(-8)}}function set(f,n,v){{var i=f.querySelector('input[name="'+n+'"]');if(!i){{i=document.createElement("input");i.type="hidden";i.name=n;f.appendChild(i)}}i.value=v}}document.addEventListener("submit",function(e){{var f=e.target;if(!f.matches||!f.matches("form[data-revel-form]"))return;var t=String(Date.now()-t0);set(f,"_revel_t",t);set(f,"_revel_k",h(K+":"+t));if(!window.fetch)return;e.preventDefault();var s=f.querySelector("[data-revel-form-status]");if(!s){{s=document.createElement("p");s.setAttribute("role","status");s.setAttribute("data-revel-form-status","");f.appendChild(s)}}var b=f.querySelector("[type=submit]");if(b)b.disabled=true;fetch(f.action,{{method:"POST",body:new FormData(f),headers:{{Accept:"application/json"}}}}).then(function(r){{return r.json()}}).then(function(d){{s.textContent=d.message||"";if(d.ok){{f.reset();f.classList.add("is-sent")}}}}).catch(function(){{s.textContent=f.getAttribute("data-revel-error")||""}}).then(function(){{if(b)b.disabled=false}})}})}})();</script>"#
+        r#"<script>(function(){{var t0=Date.now(),K="{key}";function h(s){{for(var x=2166136261,i=0;i<s.length;i++){{x^=s.charCodeAt(i);x=Math.imul(x,16777619)>>>0}}return("0000000"+x.toString(16)).slice(-8)}}function set(f,n,v){{var i=f.querySelector('input[name="'+n+'"]');if(!i){{i=document.createElement("input");i.type="hidden";i.name=n;f.appendChild(i)}}i.value=v}}document.addEventListener("submit",function(e){{var f=e.target;if(!f.matches||!f.matches("form[data-revel-form]"))return;var t=String(Date.now()-t0);set(f,"_revel_t",t);set(f,"_revel_k",h(K+":"+t));if(!window.fetch)return;e.preventDefault();var s=f.querySelector("[data-revel-form-status]");if(!s){{s=document.createElement("p");s.setAttribute("role","status");s.setAttribute("data-revel-form-status","");f.appendChild(s)}}var b=f.querySelector("[type=submit]");if(b)b.disabled=true;fetch(f.action,{{method:"POST",body:new FormData(f),headers:{{Accept:"application/json"}}}}).then(function(r){{return r.json()}}).then(function(d){{s.textContent=d.message||"";if(d.ok){{f.reset();f.classList.add("is-sent");if(d.redirect)location.assign(d.redirect)}}}}).catch(function(){{s.textContent=f.getAttribute("data-revel-error")||""}}).then(function(){{if(b)b.disabled=false}})}})}})();</script>"#
     )
 }
 
@@ -125,18 +125,34 @@ fn escape_attr(s: &str) -> String {
         .replace('<', "&lt;")
 }
 
+/// Adresse de réception propre à un formulaire (sinon celle du site).
+pub const ATTR_TO: &str = "data-revel-to";
+/// Message affiché après l'envoi, propre à un formulaire (sinon celui du site).
+pub const ATTR_SUCCESS: &str = "data-revel-success";
+/// Page ouverte après l'envoi, à la place du message.
+pub const ATTR_REDIRECT: &str = "data-revel-redirect";
+
+/// Formulaire trouvé dans une page et ses réglages propres (vides : ceux du site).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FormSpec {
+    pub name: String,
+    pub to: String,
+    pub success: String,
+    pub redirect: String,
+}
+
 /// Formulaires de la page reliés au script (`action`, `method`, champ piège, nom), et script
 /// d'envoi ajouté avant `</body>`. `scripts` faux : canevas de l'éditeur (rien n'est ajouté).
 /// Renvoie la page et le nombre de formulaires trouvés.
-pub(crate) fn wire(site: &Site, html: String, scripts: bool) -> (String, usize) {
+pub(crate) fn wire(site: &Site, html: String, scripts: bool) -> (String, Vec<FormSpec>) {
     let lower = html.to_ascii_lowercase();
     if !lower.contains("data-revel-form") {
-        return (html, 0);
+        return (html, Vec::new());
     }
     let error = texts(&site.default_locale).network;
     let mut out = String::with_capacity(html.len() + 512);
     let mut rest = 0;
-    let mut count = 0;
+    let mut found: Vec<FormSpec> = Vec::new();
     let mut search = 0;
     while let Some(i) = lower[search..].find("<form") {
         let start = search + i;
@@ -148,8 +164,25 @@ pub(crate) fn wire(site: &Site, html: String, scripts: bool) -> (String, usize) 
         let Some(name) = attr_value(tag, "data-revel-form") else {
             continue;
         };
-        count += 1;
+        let own = |a: &str| {
+            attr_value(tag, a)
+                .map(|v| v.trim().to_string())
+                .unwrap_or_default()
+        };
+        found.push(FormSpec {
+            name: name.clone(),
+            to: own(ATTR_TO),
+            success: own(ATTR_SUCCESS),
+            redirect: own(ATTR_REDIRECT),
+        });
         let mut open = tag.to_string();
+        if scripts {
+            // Réglages du formulaire : lus par le script PHP, absents de la page publiée
+            // (l'adresse de réception n'y figure jamais).
+            for a in [ATTR_TO, ATTR_SUCCESS, ATTR_REDIRECT] {
+                open = remove_attr(&open, a);
+            }
+        }
         let action = attr_value(tag, "action");
         if action
             .as_deref()
@@ -177,10 +210,10 @@ pub(crate) fn wire(site: &Site, html: String, scripts: bool) -> (String, usize) 
         rest = end + 1;
     }
     out.push_str(&html[rest..]);
-    if count > 0 && scripts {
+    if !found.is_empty() && scripts {
         out = crate::insert_before(&out, "</body>", &script(&site_key(site)), true);
     }
-    (out, count)
+    (out, found)
 }
 
 /// Retire un attribut d'une balise ouvrante (sans le `>`).
@@ -231,13 +264,49 @@ fn first_recipient(f: &revel_model::FormSettings) -> &str {
         .unwrap_or("")
 }
 
-pub fn handler(site: &Site) -> String {
+pub fn handler(site: &Site, specs: &[FormSpec]) -> String {
     let f = &site.settings.forms;
+    // Réglages propres à chaque formulaire, par nom (le premier trouvé l'emporte). Page ouverte
+    // après l'envoi : chemin du site seulement.
+    let mut seen: Vec<&str> = Vec::new();
+    let mut own = String::new();
+    for s in specs {
+        let go = if s.redirect.starts_with('/') && !s.redirect.starts_with("//") {
+            s.redirect.as_str()
+        } else {
+            ""
+        };
+        if seen.contains(&s.name.as_str())
+            || (s.to.is_empty() && s.success.is_empty() && go.is_empty())
+        {
+            continue;
+        }
+        seen.push(&s.name);
+        own.push_str(&format!(
+            "{} => ['to' => {}, 'ok' => {}, 'go' => {}], ",
+            php_str(&s.name),
+            php_str(&s.to),
+            php_str(&s.success),
+            php_str(go)
+        ));
+    }
     let t = texts(&site.default_locale);
     // Expéditeur : adresse du domaine du site (exigée par OVHcloud et IONOS), sinon le destinataire.
     let from = site_domain(site)
         .map(|d| format!("site@{d}"))
-        .unwrap_or_else(|| first_recipient(f).to_string());
+        .unwrap_or_else(|| {
+            let general = first_recipient(f);
+            if general.is_empty() {
+                specs
+                    .iter()
+                    .map(|s| s.to.as_str())
+                    .find(|t| !t.is_empty())
+                    .unwrap_or("")
+                    .to_string()
+            } else {
+                general.to_string()
+            }
+        });
     // Destinataire selon la valeur d'un champ (D-170) : lignes complètes seulement.
     let routes: String = if f.route_field.trim().is_empty() {
         String::new()
@@ -273,6 +342,7 @@ declare(strict_types=1);
 const RECIPIENT = {recipient};
 const ROUTE_FIELD = {route_field};
 const ROUTES = [{routes}];
+const FORMS = [{own}];
 const FROM = {from};
 const SITE = {site};
 const SUBJECT = {subject};
@@ -290,14 +360,23 @@ const MIN_MS = {min_ms};
 header('Cache-Control: no-store');
 $json = stripos((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false;
 
-function reply(int $code, bool $ok, string $message, bool $json)
+function reply(int $code, bool $ok, string $message, bool $json, string $go = '')
 {{
-    http_response_code($code);
     if ($json) {{
+        http_response_code($code);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['ok' => $ok, 'message' => $message], JSON_UNESCAPED_UNICODE);
+        $out = ['ok' => $ok, 'message' => $message];
+        if ($go !== '') {{
+            $out['redirect'] = $go;
+        }}
+        echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }}
+    if ($go !== '') {{
+        header('Location: ' . $go, true, 303);
+        exit;
+    }}
+    http_response_code($code);
     header('Content-Type: text/html; charset=utf-8');
     $back = '/';
     $ref = (string)($_SERVER['HTTP_REFERER'] ?? '');
@@ -388,8 +467,10 @@ if ($email !== '') {{
     $headers[] = 'Reply-To: ' . $clean($email);
 }}
 $subject = '=?UTF-8?B?' . base64_encode(SUBJECT) . '?=';
-// Destinataire : celui de la valeur choisie dans le champ d'aiguillage, sinon l'adresse générale.
-$to = RECIPIENT;
+// Destinataire : celui de la valeur choisie dans le champ d'aiguillage, sinon celui du
+// formulaire, sinon l'adresse générale.
+$own = FORMS[$form] ?? ['to' => '', 'ok' => '', 'go' => ''];
+$to = $own['to'] !== '' ? $own['to'] : RECIPIENT;
 if (ROUTE_FIELD !== '' && isset($fields[ROUTE_FIELD])) {{
     foreach (ROUTES as $value => $address) {{
         if (strcasecmp(trim((string)$value), trim($fields[ROUTE_FIELD])) === 0) {{
@@ -405,11 +486,12 @@ $sent = @mail($to, $subject, $body, implode("\r\n", $headers), '-f' . FROM);
 if (!$sent) {{
     reply(500, false, MSG_FAIL, $json);
 }}
-reply(200, true, MSG_OK, $json);
+reply(200, true, $own['ok'] !== '' ? $own['ok'] : MSG_OK, $json, $own['go']);
 "#,
         recipient = php_str(f.recipient.trim()),
         route_field = php_str(f.route_field.trim()),
         routes = routes,
+        own = own,
         from = php_str(&from),
         site = php_str(&site.name),
         subject = php_str(&subject),
@@ -430,14 +512,15 @@ reply(200, true, MSG_OK, $json);
 /// avertissement.
 pub(crate) fn handler_file(
     site: &Site,
-    forms: usize,
+    forms: &[FormSpec],
     files: &mut Vec<OutputFile>,
     warnings: &mut Vec<String>,
 ) {
-    if forms == 0 || files.iter().any(|f| f.path == HANDLER) {
+    if forms.is_empty() || files.iter().any(|f| f.path == HANDLER) {
         return;
     }
-    if first_recipient(&site.settings.forms).is_empty() {
+    // Chaque formulaire doit avoir une adresse : la sienne ou celle du site.
+    if first_recipient(&site.settings.forms).is_empty() && forms.iter().any(|f| f.to.is_empty()) {
         warnings.push(
             "formulaires non reçus : adresse de réception absente (Paramètres › Formulaires)"
                 .into(),
@@ -446,7 +529,7 @@ pub(crate) fn handler_file(
     }
     files.push(OutputFile {
         path: HANDLER.into(),
-        bytes: handler(site).into_bytes(),
+        bytes: handler(site, forms).into_bytes(),
     });
 }
 
@@ -465,7 +548,7 @@ mod tests {
     fn formulaires_relies() {
         let html = r#"<html><body><form class="f" data-revel-form="contact" action=""><input name="email"></form><form action="/autre.php"></form></body></html>"#;
         let (out, n) = wire(&site(), html.to_string(), true);
-        assert_eq!(n, 1);
+        assert_eq!(n.len(), 1);
         assert!(out.contains(r#"<form class="f" data-revel-form="contact" action="/revel-form.php" method="post" data-revel-error="#), "{out}");
         assert!(
             out.contains(r#"name="website_url""#)
@@ -478,7 +561,7 @@ mod tests {
         let key = site_key(&site());
         assert!(
             out.contains(&format!("K=\"{key}\""))
-                && handler(&site()).contains(&format!("const KEY = '{key}';"))
+                && handler(&site(), &[]).contains(&format!("const KEY = '{key}';"))
         );
         // Même calcul que `hash('fnv1a32', …)` de PHP (valeurs de référence).
         assert_eq!(
@@ -490,7 +573,7 @@ mod tests {
         assert!(!out.contains("<script>"));
         // Sans formulaire Revel : page inchangée.
         let plain = "<form action=\"/x\"></form>".to_string();
-        assert_eq!(wire(&site(), plain.clone(), true), (plain, 0));
+        assert_eq!(wire(&site(), plain.clone(), true), (plain, Vec::new()));
     }
 
     #[test]
@@ -512,13 +595,13 @@ mod tests {
                 recipient: String::new(),
             },
         ];
-        let php = handler(&s);
+        let php = handler(&s, &[]);
         assert!(php.contains("const ROUTE_FIELD = 'besoin';"), "{php}");
         assert!(php.contains("const ROUTES = ['Film' => 'films@lumen.fr', 'L\\'atelier' => 'atelier@lumen.fr', ];"), "{php}");
         assert!(php.contains("$sent = @mail($to, $subject"));
         // Sans champ d'aiguillage : aucune ligne écrite.
         s.settings.forms.route_field.clear();
-        assert!(handler(&s).contains("const ROUTES = [];"));
+        assert!(handler(&s, &[]).contains("const ROUTES = [];"));
         // Adresse générale vide, une ligne réglée : le script est quand même produit.
         s.settings.forms.recipient.clear();
         s.settings.forms.route_field = "besoin".into();
@@ -527,7 +610,7 @@ mod tests {
 
     #[test]
     fn script_php() {
-        let php = handler(&site());
+        let php = handler(&site(), &[]);
         assert!(php.starts_with("<?php"));
         assert!(php.contains("const RECIPIENT = 'bonjour@lumen.fr';"));
         assert!(php.contains("const FROM = 'site@lumen.fr';"));
@@ -538,9 +621,46 @@ mod tests {
         let mut warnings = Vec::new();
         let mut s = site();
         s.settings.forms.recipient.clear();
-        handler_file(&s, 1, &mut files, &mut warnings);
+        handler_file(&s, &[FormSpec::default()], &mut files, &mut warnings);
         assert!(files.is_empty() && warnings.len() == 1);
-        handler_file(&site(), 1, &mut files, &mut warnings);
+        handler_file(&site(), &[FormSpec::default()], &mut files, &mut warnings);
         assert_eq!(files[0].path, HANDLER);
+    }
+
+    /// D-201 : adresse, message et page d'après envoi propres à un formulaire ; rien de cela
+    /// dans la page publiée.
+    #[test]
+    fn reglages_par_formulaire() {
+        let html = r#"<html><body><form data-revel-form="devis" data-revel-to="devis@exemple.fr" data-revel-success="Bien reçu" data-revel-redirect="/merci/"><input name="email"></form><form data-revel-form="contact"></form><form data-revel-form="ailleurs" data-revel-redirect="https://autre.exemple/"></form></body></html>"#;
+        let (out, specs) = wire(&site(), html.to_string(), true);
+        assert_eq!(specs.len(), 3);
+        assert_eq!(specs[0].to, "devis@exemple.fr");
+        assert!(
+            !out.contains("devis@exemple.fr")
+                && !out.contains("data-revel-success")
+                && !out.contains("data-revel-redirect"),
+            "{out}"
+        );
+        assert!(out.contains("d.redirect"));
+        // Canevas de l'éditeur : attributs gardés.
+        let (canvas, _) = wire(&site(), html.to_string(), false);
+        assert!(canvas.contains("data-revel-to=\"devis@exemple.fr\""));
+        let php = handler(&site(), &specs);
+        if let Ok(p) = std::env::var("REVEL_DUMP_PHP") {
+            std::fs::write(p, &php).unwrap();
+        }
+        assert!(php.contains("const FORMS = ['devis' => ['to' => 'devis@exemple.fr', 'ok' => 'Bien reçu', 'go' => '/merci/'], ];"), "{php}");
+        assert!(php.contains("$own['to'] !== '' ? $own['to'] : RECIPIENT"));
+        assert!(php.contains("header('Location: ' . $go, true, 303);"));
+        // Sans adresse du site : le script est produit si chaque formulaire a la sienne.
+        let mut s = site();
+        s.settings.forms.recipient = String::new();
+        s.settings.forms.routes.clear();
+        let (mut files, mut warnings) = (Vec::new(), Vec::new());
+        handler_file(&s, &specs[..1], &mut files, &mut warnings);
+        assert!(files.len() == 1 && warnings.is_empty());
+        let (mut files, mut warnings) = (Vec::new(), Vec::new());
+        handler_file(&s, &specs, &mut files, &mut warnings);
+        assert!(files.is_empty() && warnings.len() == 1);
     }
 }

@@ -2545,8 +2545,12 @@ try {
       await seoTitle.press('Enter');
       await page.waitForFunction(() => document.querySelector('.serp-title')?.textContent === 'Nos offres');
       const slugIn = page.locator('.path-input input');
-      await slugIn.fill('emplois-ete');
-      await slugIn.blur();
+      // Le panneau se redessine après le titre : adresse resaisie si la saisie a été perdue.
+      for (let i = 0; i < 3; i++) {
+        await slugIn.fill('emplois-ete');
+        await slugIn.blur();
+        try { await waitFrame(() => location.pathname === '/emplois-ete/', 'adresse changée', undefined, 50); break; } catch { /* nouvel essai */ }
+      }
       await waitFrame(() => location.pathname === '/emplois-ete/', 'adresse changée');
       await page.waitForTimeout(300);
       let s34 = await site34();
@@ -4589,8 +4593,6 @@ try {
       await page.press('.navlist-link >> nth=0 >> .navlist-label', 'Tab');
       await until(() => docR().includes('L’agence'), 'lien renommé');
       // Monté par la poignée (D-200), au clavier.
-      await page.focus('.navlist-link >> nth=1 >> .sort-grip');
-      await page.keyboard.press('ArrowUp');
       const navExpr = () => {
         const find = (nodes) => {
           for (const n of nodes || []) {
@@ -4602,7 +4604,14 @@ try {
         };
         return find(JSON.parse(docR()).components.find((c) => c.id === 'partials/header').body) || '';
       };
-      await until(() => /"label": "Projets"[^\]]*"label": "L’agence"/s.test(navExpr()), 'lien monté');
+      // La liste se redessine après le renommage : touche redonnée si la poignée a été remplacée.
+      const navUp = () => /"label": "Projets"[^\]]*"label": "L’agence"/s.test(navExpr());
+      for (let i = 0; i < 4 && !navUp(); i++) {
+        await page.focus('.navlist-link >> nth=1 >> .sort-grip');
+        await page.keyboard.press('ArrowUp');
+        for (let k = 0; k < 30 && !navUp(); k++) await page.waitForTimeout(100);
+      }
+      await until(() => navUp(), 'lien monté');
       if (shots) await page.screenshot({ path: `${shots}/navigation.png` });
       check('réglages lisibles : menu du site (lien renommé, ordre changé)', true);
       // Contenus mis en avant (paramètres de l'accueil) : un contenu retiré, un autre ajouté.

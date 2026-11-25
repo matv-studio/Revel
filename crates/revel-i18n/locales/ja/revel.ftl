@@ -4035,3 +4035,10 @@ form-field-options = 選択肢
 form-option = オプション { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = ドラッグで並べ替え（キーボードで ↑ ↓）
+form-after = 送信後
+form-after-message = メッセージ
+form-after-page = ページを開く
+form-page = ページ
+form-to = 送信先
+form-to-ph = サイトのアドレス
+form-to-help = 空欄: サイト全体に設定されたアドレス

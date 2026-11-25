@@ -4035,3 +4035,10 @@ form-field-options = 选项
 form-option = 选项 { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = 拖动以排序（键盘 ↑ ↓）
+form-after = 发送后
+form-after-message = 消息
+form-after-page = 打开页面
+form-page = 页面
+form-to = 发送至
+form-to-ph = 网站地址
+form-to-help = 留空：使用为整个网站设置的地址

@@ -4039,3 +4039,10 @@ form-field-options = Opzioni
 form-option = Opzione { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = Trascina per riordinare (↑ ↓ da tastiera)
+form-after = Dopo l'invio
+form-after-message = Messaggio
+form-after-page = Apri una pagina
+form-page = Pagina
+form-to = Invia a
+form-to-ph = Indirizzo del sito
+form-to-help = Vuoto: l'indirizzo impostato per tutto il sito

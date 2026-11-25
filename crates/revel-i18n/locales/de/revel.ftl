@@ -4039,3 +4039,10 @@ form-field-options = Optionen
 form-option = Option { $n }
 # Poignée de glisser des listes (D-200)
 sort-drag = Zum Sortieren ziehen (↑ ↓ mit der Tastatur)
+form-after = Nach dem Senden
+form-after-message = Nachricht
+form-after-page = Seite öffnen
+form-page = Seite
+form-to = Senden an
+form-to-ph = Adresse der Website
+form-to-help = Leer: die für die gesamte Website festgelegte Adresse

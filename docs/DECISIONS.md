@@ -2983,7 +2983,7 @@ section.**
 
 ## D-202 — Filtres de liste reliés à un champ, archivage des contenus, ajout d'hébergement, réglages centrés, « Versions » (25/11/2026)
 
-- **Filtres de liste** (audit M8, maquette `tools-4-list-filters` validée le 24/11) : l'outil « List
+- **Filtres de liste** (audit M5, maquette `tools-4-list-filters` validée le 24/11) : l'outil « List
   filters » se règle par la **liste** de la page (choisie d'office quand il n'y en a qu'une) et le **champ**
   (choix, texte court, liste de textes). Les boutons ne sont plus écrits un à un : une boucle
   `collections.<c> | filter_values("<champ>")` donne une clé (`slugify`) et le libellé du choix ; chaque
@@ -3015,7 +3015,8 @@ section.**
   sur la fenêtre). Barre de statistiques du site (pages, gabarits, composants, collections, environnement)
   retirée des réglages du site.
 - **« Backup » devient « Versions »** dans les 15 langues, « Back up » devient « Save version ». Restaurer
-  une version existait (bouton en haut du détail d'une version ancienne) ; maquette envoyée pour le rendre
-  visible au survol et au clic droit d'une version (en attente de validation).
+  une version existait (bouton en haut du détail d'une version ancienne) mais restait introuvable : flèche
+  au survol de chaque version sauf la dernière (icône seule, « Restore » en info-bulle, à la demande de
+  l'utilisateur) et « Restore » / « Copy version ID » au clic droit (maquette validée le 25/11).
 - Charte de design mise à jour (document du projet et `docs/DESIGN.md`) avec les éléments nouveaux et
   modifiés depuis le 09/11.

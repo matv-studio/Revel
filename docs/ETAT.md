@@ -67,6 +67,12 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   obligatoire, valeurs d'une liste déroulante), section posée après la section sélectionnée. Second envoi à
   faire : après l'envoi et destinataire par formulaire, filtres de liste, assistant de publication, M3, M9,
   M10, M12, M13.
+- **25/11, 13 h (D-202, `2263415`)** : filtres de liste reliés à une liste et à un champ (boutons tirés des
+  valeurs, « All », plusieurs valeurs) ; archiver / désarchiver un contenu ; « Add hosting » avec dossier
+  choisi après la connexion (rien d'office) ; réglages centrés à toutes les largeurs, barre de statistiques
+  retirée ; « Backup » devient « Versions », restaurer depuis la liste ; charte de design mise à jour
+  (document du projet « charte-design-apps » et `docs/DESIGN.md`). Essais : éditeur 426, modèles 26,
+  animations 17, panneaux 32. CI : rouge seulement sur les trois tâches du cobaye supprimé.
 - **25/11, 4 h (D-201)** : formulaire, « après l'envoi » (message ou page ouverte) et « Envoyer à » propres à
   chaque formulaire ; essai des panneaux : 30 vérifications. Cobaye supprimé de GitHub : copie de référence
   sur le PC (`Revel\cobaye\`), CI rouge sur ses trois tâches en attendant.

@@ -409,6 +409,22 @@ try {
     check('tools: navbar link added to a chosen page (its address shown), then renamed in place',
       !!l1 && renamed && choices.some((i) => i.label === 'Web address…') && choices.some((i) => i.label === 'New page…'), JSON.stringify({ l0, target, renamed }));
     await shot('navbar-links');
+    // Poignée de glisser (D-200) : dernier lien glissé en tête ; puis remis par le clavier.
+    const rowsSel = `${STY} .items-list--links [data-sort-row]`;
+    const grip = page.locator(`${rowsSel} .sort-grip`).last();
+    const g = await grip.boundingBox();
+    const top = await page.locator(rowsSel).first().boundingBox();
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(top.x + 40, top.y + 6, { steps: 8 });
+    const marked = await page.$$eval(`${rowsSel}.is-drop-before`, (l) => l.length);
+    await page.mouse.up();
+    const dragged = await until(async () => (await links())[0] === `Shop→${target.note}`);
+    await page.locator(`${rowsSel} .sort-grip`).first().focus();
+    for (let k = 0; k < l0.length; k++) { await page.keyboard.press('ArrowDown'); await w(350); await page.locator(`${rowsSel} .sort-grip`).nth(k + 1).focus(); }
+    const back = await until(async () => (await links()).at(-1) === `Shop→${target.note}`);
+    const noArrows = (await page.$$(`${STY} [title="Move up"], ${STY} [title="Move down"]`)).length === 0;
+    check('tools: reorder by drag handle (drop line shown) and by keyboard, no up/down arrows', marked === 1 && dragged && back && noArrows, JSON.stringify({ marked, dragged, back, noArrows }));
     for (let i = 0; i < 12 && JSON.stringify((await home()).body) !== before; i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
     check('tools: every step undone', JSON.stringify((await home()).body) === before);
   }

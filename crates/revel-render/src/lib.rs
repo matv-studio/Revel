@@ -48,6 +48,10 @@ pub struct Entry {
     pub data: serde_json::Value,
     /// Corps Markdown.
     pub body: String,
+    /// Libellé des valeurs de ses champs « choix » (audit P5, D-200) : champ -> libellé de la
+    /// valeur écrite (`site-web` -> `Site web`). Un texte qui affiche le champ montre le libellé ;
+    /// adresses, filtres et tris gardent la valeur.
+    pub labels: BTreeMap<String, String>,
 }
 
 /// Paramètres d'image évalués.
@@ -2053,6 +2057,15 @@ fn prepare<'s>(
                 url.clone().map(Value::from).unwrap_or(Value::from(false)),
             );
             item_map.insert("data".into(), Value::from(data.clone()));
+            item_map.insert(
+                "labels".into(),
+                Value::from(
+                    e.labels
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Value::from(v.clone())))
+                        .collect::<BTreeMap<String, Value>>(),
+                ),
+            );
             item_map.insert("content".into(), Value::from_safe_string(content.clone()));
             item_map.insert("fileSlug".into(), Value::from(e.file_stem.clone()));
             item_map.insert("date".into(), date);

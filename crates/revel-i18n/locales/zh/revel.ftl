@@ -4033,3 +4033,5 @@ form-field-file = 文件
 form-field-required = 必填
 form-field-options = 选项
 form-option = 选项 { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = 拖动以排序（键盘 ↑ ↓）

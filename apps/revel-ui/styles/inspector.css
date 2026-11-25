@@ -1052,3 +1052,29 @@
 .form-fields .items-row .form-required.is-on { opacity: 1; }
 .form-options { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-1) 0 var(--s-2) 34px; }
 .form-req-mark { color: var(--accent-text, var(--accent)); font-weight: 700; }
+
+/* D-200 — poignée de glisser des listes (à la place des flèches monter / descendre) */
+.sort-grip { flex: none; display: inline-grid; place-items: center; width: 18px; height: 24px; border-radius: var(--radius-sm);
+  color: var(--text-faint); cursor: grab; touch-action: none; }
+.sort-grip:hover, .sort-grip:focus-visible { color: var(--text-muted); background: var(--surface-hover); outline: none; }
+.sort-grip:active { cursor: grabbing; }
+.sort-grip svg.icon { width: 14px; height: 14px; }
+[data-sort-row].is-dragged { opacity: .45; }
+[data-sort-row].is-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+[data-sort-row].is-drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+/* D-200 — listes de liens, de champs et de parties comme la maquette validée : ligne encadrée,
+   poignée à gauche, cible à droite, corbeille visible, autres actions au survol */
+.items-list--links .items-thumb, .items-list--fields .items-thumb { display: none; }
+.items-list--links .items-row, .items-list--fields .items-row, .parts-list .items-row {
+  gap: var(--s-1); min-height: 32px; padding: 0 2px 0 4px; border: 1px solid var(--line); background: none;
+}
+.items-list--links .items-row:hover, .items-list--fields .items-row:hover, .parts-list .items-row:hover { background: var(--surface-hover); }
+.items-list--links .items-row.is-on, .items-list--fields .items-row.is-on, .parts-list .items-row.is-on { border-color: var(--accent); box-shadow: none; }
+.items-list--links .items-name, .items-list--fields .items-name { font-weight: 500; }
+.items-list--links .items-actions, .items-list--fields .items-actions { display: flex; }
+.items-list--links .items-actions > :not(:last-child), .items-list--fields .items-actions > :not(:last-child) { display: none; }
+.items-list--links .items-row:hover .items-actions > *, .items-list--fields .items-row:hover .items-actions > *,
+.items-list--links .items-row:focus-within .items-actions > *, .items-list--fields .items-row:focus-within .items-actions > * { display: inline-grid; }
+.items-list--links .items-actions > :last-child, .items-list--fields .items-actions > :last-child { color: var(--text-faint); }
+.items-list--fields .items-target, .items-list--links .items-target { font-family: var(--font-mono); }
+.items-list--links .items-rename, .items-list--fields .items-rename { left: 24px; }

@@ -59,6 +59,7 @@ mod sitemap;
 mod sitesettings;
 mod sitesizes;
 mod sitethumb;
+mod sortable;
 mod styles;
 mod sync;
 mod templates;

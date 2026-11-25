@@ -4033,3 +4033,5 @@ form-field-file = 파일
 form-field-required = 필수
 form-field-options = 옵션
 form-option = 옵션 { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = 끌어서 순서 변경 (키보드 ↑ ↓)

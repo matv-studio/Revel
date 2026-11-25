@@ -345,6 +345,7 @@ pub(super) fn data_collections(
                     o.insert("order".into(), serde_json::json!(i + 1));
                 }
                 Entry {
+                    labels: Default::default(),
                     folder: folder.clone(),
                     file_stem: x["slug"].as_str().unwrap_or_default().to_string(),
                     data,

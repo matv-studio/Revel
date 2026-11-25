@@ -4037,3 +4037,5 @@ form-field-file = Bestand
 form-field-required = Verplicht
 form-field-options = Opties
 form-option = Optie { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = Sleep om te ordenen (↑ ↓ met het toetsenbord)

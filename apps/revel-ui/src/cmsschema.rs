@@ -694,17 +694,13 @@ fn type_options(
                 <div class="cms-item-field" data-setting="values">
                     <span class="label">{ui.t("cms-field-choices")}</span>
                     // Une ligne par choix : libellé modifiable (la valeur enregistrée reste), ordre, retrait.
-                    <div class="choice-rows">
+                    <div class="choice-rows" data-sort-list>
                         {move || {
                             let all = values();
-                            let n = all.len();
                             all.into_iter().enumerate().map(|(i, (v, l))| {
-                                let moved = move |to: usize| {
-                                    let mut list = raw();
-                                    if i < list.len() && to < list.len() { list.swap(i, to); set.run(json!({ "options": { "values": list } })) }
-                                };
                                 view! {
-                                    <span class="field-line choice-row">
+                                    <span class="field-line choice-row" data-sort-row>
+                                        {crate::sortable::grip(ui, Callback::new(move |(from, to): (usize, usize)| set.run(json!({ "options": { "values": crate::sortable::moved(raw(), from, to) } }))))}
                                         <input class="input" type="text" prop:value=l title=v.clone()
                                             on:change=move |e| {
                                                 let label = event_target_value(&e).trim().to_string();
@@ -719,10 +715,6 @@ fn type_options(
                                                 }
                                                 set.run(json!({ "options": { "values": list } }))
                                             }/>
-                                        <button type="button" class="icon-btn icon-btn--small" disabled={i == 0} title=ui.t("action-move-up") aria-label=ui.t("action-move-up")
-                                            on:click=move |_| moved(i.saturating_sub(1))>{icons::arrow_up()}</button>
-                                        <button type="button" class="icon-btn icon-btn--small" disabled={i + 1 >= n} title=ui.t("action-move-down") aria-label=ui.t("action-move-down")
-                                            on:click=move |_| moved(i + 1)>{icons::arrow_down()}</button>
                                         <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-delete") aria-label=ui.t("action-delete")
                                             on:click=move |_| {
                                                 let mut list = raw();

@@ -4033,3 +4033,5 @@ form-field-file = Berkas
 form-field-required = Wajib
 form-field-options = Opsi
 form-option = Opsi { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = Seret untuk mengurutkan (↑ ↓ dengan keyboard)

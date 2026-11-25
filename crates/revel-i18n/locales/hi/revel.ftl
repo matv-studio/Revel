@@ -4034,3 +4034,5 @@ form-field-file = फ़ाइल
 form-field-required = अनिवार्य
 form-field-options = विकल्प
 form-option = विकल्प { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = क्रम बदलने के लिए खींचें (कीबोर्ड पर ↑ ↓)

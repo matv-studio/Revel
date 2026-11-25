@@ -143,19 +143,17 @@ pub fn ItemsList(
         }));
         ed.select_and_reveal(&it.id);
     };
-    let step = move |id: String, dir: i32| {
+    // Ligne `i` placée au rang `j` (poignée de glisser, D-200).
+    let step = move |i: usize, j: usize| {
         let list = items.get_untracked();
-        let Some(i) = list.iter().position(|x| x.id == id) else {
-            return;
-        };
-        let j = i as i32 + dir;
-        if j < 0 || j as usize >= list.len() {
+        if i >= list.len() || j >= list.len() || i == j {
             return;
         }
+        let id = list[i].id.clone();
         // Position dans la liste des enfants (textes et conditions compris).
         let index = ed.doc.with_untracked(|d| {
             let d = d.as_ref()?;
-            let (_, k) = revel_edit::address::locate(d, &target(&list[j as usize].id)).ok()?;
+            let (_, k) = revel_edit::address::locate(d, &target(&list[j].id)).ok()?;
             Some(k)
         });
         if let Some(index) = index {
@@ -305,7 +303,7 @@ pub fn ItemsList(
         });
     };
     view! {
-        <div class="items-list" class:items-list--grid=grid role="list" aria-label=ui.t(if links { "items-links" } else { "items-title" })>
+        <div class="items-list" class:items-list--grid=grid class:items-list--links=links data-sort-list role="list" aria-label=ui.t(if links { "items-links" } else { "items-title" })>
             <div class="items-head">
                 <span class="label">{ui.t(if links { "items-links" } else { "items-title" })}</span>
                 <span class="muted items-count">{move || items.with(Vec::len)}</span>
@@ -314,13 +312,12 @@ pub fn ItemsList(
                 {
                     let it = StoredValue::new(it);
                     let id = it.with_value(|i| i.id.clone());
-                    let (i1, i2, i3, i4, i5) = (id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
+                    let i1 = id.clone();
                     let has_img = it.with_value(|i| i.img);
-                    let first = move || items.with(|l| l.first().is_some_and(|x| x.id == i4));
-                    let last = move || items.with(|l| l.last().is_some_and(|x| x.id == i5));
                     let on = { let id = id.clone(); move || ed.selected.with(|s| s.as_ref().is_some_and(|s| s.id == id)) };
                     view! {
-                        <div class="items-row" role="listitem" class:is-on=on data-item=id.clone()>
+                        <div class="items-row" role="listitem" class:is-on=on data-item=id.clone() data-sort-row>
+                            {(!fixed).then(|| crate::sortable::grip(ui, Callback::new(move |(i, j)| step(i, j))))}
                             <button class="items-main" on:click=move |_| select(&it.get_value())
                                 title=it.with_value(|i| i.name.clone())>
                                 <span class="items-thumb" title=ui.t("crop-thumb-help")
@@ -380,10 +377,6 @@ pub fn ItemsList(
                                         on:click={ let id = id.clone(); move |_| renaming.set(Some(id.clone())) }>{icons::edit()}</button>
                                 })}
                                 {(!fixed).then(|| view! {
-                                    <button class="icon-btn icon-btn--small" title=ui.t("items-up") aria-label=ui.t("items-up")
-                                        prop:disabled=first on:click=move |_| step(i2.clone(), -1)>{icons::arrow_up()}</button>
-                                    <button class="icon-btn icon-btn--small" title=ui.t("items-down") aria-label=ui.t("items-down")
-                                        prop:disabled=last on:click=move |_| step(i3.clone(), 1)>{icons::arrow_down()}</button>
                                     <button class="icon-btn icon-btn--small" title=ui.t("layers-duplicate") aria-label=ui.t("layers-duplicate")
                                         on:click={ let id = id.clone(); move |_| ed.apply_keep(ui, Command::Duplicate { at: target(&id) }) }>{icons::copy()}</button>
                                     <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")

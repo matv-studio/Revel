@@ -4033,3 +4033,5 @@ form-field-file = ファイル
 form-field-required = 必須
 form-field-options = 選択肢
 form-option = オプション { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = ドラッグで並べ替え（キーボードで ↑ ↓）

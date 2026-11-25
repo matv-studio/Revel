@@ -249,6 +249,7 @@ mod tests {
             ),
         ];
         let all = vec![revel_render::Entry {
+            labels: Default::default(),
             folder: "autre".into(),
             file_stem: "a".into(),
             data: json!({"img": "/img/a.jpg"}),

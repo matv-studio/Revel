@@ -1040,19 +1040,15 @@ fn org_rows(
             </select>
         </div>
         <span class="label" title=ui.t("seo-org-social-help")>{ui.t("seo-org-social")}</span>
-        <div class="link-list">
+        <div class="link-list" data-sort-list>
             {move || {
                 let links = org.get().same_as;
-                let n = links.len();
                 links.into_iter().enumerate().map(|(i, l)| view! {
-                    <span class="field-line link-list__row">
+                    <span class="field-line link-list__row" data-sort-row>
+                        {crate::sortable::grip(ui, Callback::new(move |(from, to): (usize, usize)| { let mut o = org.get_untracked(); o.same_as = crate::sortable::moved(o.same_as, from, to); set.run(o) }))}
                         <input class="input" type="url" spellcheck="false" prop:value=l
                             on:change=move |e| { let mut o = org.get_untracked(); let v = event_target_value(&e).trim().to_string();
                                 if i < o.same_as.len() { if v.is_empty() { o.same_as.remove(i); } else { o.same_as[i] = v; } } set.run(o) }/>
-                        <button type="button" class="icon-btn icon-btn--small" disabled=i == 0 title=ui.t("action-move-up") aria-label=ui.t("action-move-up")
-                            on:click=move |_| { let mut o = org.get_untracked(); if i > 0 && i < o.same_as.len() { o.same_as.swap(i, i - 1); set.run(o) } }>{icons::arrow_up()}</button>
-                        <button type="button" class="icon-btn icon-btn--small" disabled={i + 1 >= n} title=ui.t("action-move-down") aria-label=ui.t("action-move-down")
-                            on:click=move |_| { let mut o = org.get_untracked(); if i + 1 < o.same_as.len() { o.same_as.swap(i, i + 1); set.run(o) } }>{icons::arrow_down()}</button>
                         <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                             on:click=move |_| { let mut o = org.get_untracked(); if i < o.same_as.len() { o.same_as.remove(i); set.run(o) } }>{icons::close()}</button>
                     </span>

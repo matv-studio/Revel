@@ -932,8 +932,9 @@ try {
       let steps = 1;
       await rename(`${STY} .parts-list[data-list="items-tabs"] .parts-row >> nth=0 >> .parts-name`, 'Tarifs');
       await toolIs(id, (e) => e.querySelector('[data-revel-tab]').textContent.trim() === 'Tarifs', 'onglet renommé'); steps++;
-      await page.hover(`${STY} .parts-list[data-list="items-tabs"] .parts-row >> nth=0`);
-      await page.click(`${STY} .parts-list[data-list="items-tabs"] .parts-row >> nth=0 >> .items-actions .icon-btn >> nth=1`);
+      // Déplacé par la poignée (D-200), au clavier : flèche bas.
+      await page.focus(`${STY} .parts-list[data-list="items-tabs"] .parts-row >> nth=0 >> .sort-grip`);
+      await page.keyboard.press('ArrowDown');
       await toolIs(id, (e) => { const t = [...e.querySelectorAll('[data-revel-tab]')].map((x) => x.textContent.trim()); return t[1] === 'Tarifs' && e.querySelectorAll('[data-revel-panel]').length === 2; }, 'onglet déplacé'); steps++;
       await page.selectOption(`${STY} [data-row="tabs-start"] select`, '2');
       await toolIs(id, (e) => /(^| )start=2( |$)/.test(e.getAttribute('data-revel-tabs')), 'onglet de départ'); steps++;
@@ -987,8 +988,8 @@ try {
       let steps = 1;
       await rename(`${STY} .parts-list[data-list="filters-buttons"] .parts-row >> nth=1 >> .parts-extra`, 'films');
       await toolIs(id, (e) => e.querySelectorAll('[data-revel-filter]')[1].getAttribute('data-revel-filter') === 'films', 'valeur du filtre'); steps++;
-      await page.hover(`${STY} .parts-list[data-list="filters-buttons"] .parts-row >> nth=1`);
-      await page.click(`${STY} .parts-list[data-list="filters-buttons"] .parts-row >> nth=1 >> .items-actions .icon-btn >> nth=1`);
+      await page.focus(`${STY} .parts-list[data-list="filters-buttons"] .parts-row >> nth=1 >> .sort-grip`);
+      await page.keyboard.press('ArrowDown');
       await toolIs(id, (e) => e.querySelectorAll('[data-revel-filter]')[2].getAttribute('data-revel-filter') === 'films', 'filtre déplacé'); steps++;
       check('filtres de liste : valeur réglée dans la liste, bouton déplacé', true);
       await undo(steps);
@@ -3908,7 +3909,9 @@ try {
     const types = () => (fs.readFileSync(file, 'utf8').match(/^- type: \w+/gm) || []).map((l) => l.slice(8));
     const types0 = types();
     const cards = await page.$$eval(`${blocksRow} .cms-repeat-title`, (t) => t.map((x) => x.textContent));
-    await page.click(`${blocksRow} .cms-repeat-item[data-index="0"] .cms-repeat-head .icon-btn >> nth=2`);
+    // Descendu par la poignée (D-200), au clavier.
+    await page.focus(`${blocksRow} .cms-repeat-item[data-index="0"] .cms-repeat-head .sort-grip`);
+    await page.keyboard.press('ArrowDown');
     await until(() => types()[0] === types0[1] && types()[1] === types0[0], 'bloc descendu');
     await page.click(`${blocksRow} .cms-repeat-add`);
     await page.click('.ctx-menu .menu-item:has-text("Texte")');
@@ -4585,7 +4588,9 @@ try {
       await page.fill('.navlist-link >> nth=0 >> .navlist-label', 'L’agence');
       await page.press('.navlist-link >> nth=0 >> .navlist-label', 'Tab');
       await until(() => docR().includes('L’agence'), 'lien renommé');
-      await page.click('.navlist-link >> nth=1 >> button >> nth=0');
+      // Monté par la poignée (D-200), au clavier.
+      await page.focus('.navlist-link >> nth=1 >> .sort-grip');
+      await page.keyboard.press('ArrowUp');
       const navExpr = () => {
         const find = (nodes) => {
           for (const n of nodes || []) {
@@ -4606,7 +4611,7 @@ try {
       await page.waitForSelector('.picks .pick-item');
       const n0 = await page.locator('.pick[data-pick="pages.accueil.featured"] .pick-item').count();
       await page.locator('.pick[data-pick="pages.accueil.featured"] .pick-item >> nth=1').hover();
-      await page.click('.pick[data-pick="pages.accueil.featured"] .pick-item >> nth=1 >> button >> nth=2');
+      await page.click('.pick[data-pick="pages.accueil.featured"] .pick-item >> nth=1 >> button >> nth=0');
       await until(() => fs.readFileSync(home, 'utf8') !== home0, 'contenu retiré');
       await page.waitForFunction((n) => document.querySelectorAll('.pick[data-pick="pages.accueil.featured"] .pick-item').length === n - 1, n0);
       const opt = await page.$eval('.pick[data-pick="pages.accueil.featured"] select option:nth-child(2)', (o) => o.value);

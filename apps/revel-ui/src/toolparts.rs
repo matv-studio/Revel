@@ -175,19 +175,18 @@ pub fn PartsList(
             }
         }
     };
-    let step = move |i: usize, dir: i32| match on_move {
-        Some(f) => f.run((i, dir)),
+    // Partie `i` placée au rang `j` (poignée de glisser, D-200).
+    let step = move |i: usize, j: usize| match on_move {
+        Some(f) => f.run((i, j as i32 - i as i32)),
         None => {
             let list = parts.get_untracked();
-            let j = i as i32 + dir;
-            if j < 0 || j as usize >= list.len() {
+            if i >= list.len() || j >= list.len() || i == j {
                 return;
             }
             // Position parmi les enfants (textes compris) de la ligne voisine.
             let cmd = ed.doc.with_untracked(|d| {
                 let d = d.as_ref()?;
-                let (to, index) =
-                    revel_edit::address::locate(d, &target(&list[j as usize].id)).ok()?;
+                let (to, index) = revel_edit::address::locate(d, &target(&list[j].id)).ok()?;
                 Some(Command::Move {
                     at: target(&list[i].id),
                     to,
@@ -200,7 +199,7 @@ pub fn PartsList(
         }
     };
     view! {
-        <div class="items-list parts-list" role="list" aria-label=ui.t(title) data-list=title>
+        <div class="items-list parts-list" data-sort-list role="list" aria-label=ui.t(title) data-list=title>
             <div class="items-head">
                 <span class="label">{ui.t(title)}</span>
                 <span class="muted items-count">{move || parts.with(Vec::len)}</span>
@@ -214,7 +213,8 @@ pub fn PartsList(
                     let (sel_tag, sel_name) = (p.tag.clone(), p.name.clone());
                     let on = move || ed.selected.with(|s| s.as_ref().is_some_and(|s| id.with_value(|i| s.id == *i)));
                     view! {
-                        <div class="items-row parts-row" role="listitem" class:is-on=on data-item=p.id.clone()>
+                        <div class="items-row parts-row" role="listitem" class:is-on=on data-item=p.id.clone() data-sort-row>
+                            {crate::sortable::grip(ui, Callback::new(move |(i, j)| step(i, j)))}
                             <button class="items-thumb items-thumb--icon parts-pick" title=ui.t("parts-select") aria-label=ui.t("parts-select")
                                 on:click=move |_| {
                                     ed.selected.set(Some(Selection { id: id.get_value(), tag: sel_tag.clone(), label: sel_name.clone() }));
@@ -234,10 +234,6 @@ pub fn PartsList(
                                 }
                             })}
                             <span class="items-actions">
-                                <button class="icon-btn icon-btn--small" title=ui.t("items-up") aria-label=ui.t("items-up")
-                                    prop:disabled={i == 0} on:click=move |_| step(i, -1)>{icons::arrow_up()}</button>
-                                <button class="icon-btn icon-btn--small" title=ui.t("items-down") aria-label=ui.t("items-down")
-                                    prop:disabled={move || n() <= i + 1} on:click=move |_| step(i, 1)>{icons::arrow_down()}</button>
                                 <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                                     prop:disabled={move || n() <= min} on:click=move |_| remove(i)>{icons::trash()}</button>
                             </span>

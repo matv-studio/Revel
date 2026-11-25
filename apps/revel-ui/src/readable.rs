@@ -251,7 +251,6 @@ pub fn Menus(s: DocSession) -> impl IntoView {
                     let list = StoredValue::new(l.clone());
                     let write = move |links: Vec<Link>| s.apply.run(list.with_value(|l| l.command(&links)));
                     let links = l.links.clone();
-                    let count = links.len();
                     let dl = format!("menu-pages-{n}");
                     view! {
                         <div class="section navlist" data-navlist=l.name.clone()>
@@ -262,7 +261,7 @@ pub fn Menus(s: DocSession) -> impl IntoView {
                             <datalist id=dl.clone()>
                                 {move || pages.get().into_iter().map(|p| view! { <option value=p></option> }).collect_view()}
                             </datalist>
-                            <ul class="navlist-links">
+                            <ul class="navlist-links" data-sort-list>
                                 {links.into_iter().enumerate().map(|(i, link)| {
                                     let edit = move |f: &dyn Fn(&mut Link)| {
                                         let mut all = list.with_value(|l| l.links.clone());
@@ -271,26 +270,15 @@ pub fn Menus(s: DocSession) -> impl IntoView {
                                         }
                                         write(all);
                                     };
-                                    let shift = move |d: isize| {
-                                        let mut all = list.with_value(|l| l.links.clone());
-                                        let j = i as isize + d;
-                                        if j >= 0 && (j as usize) < all.len() {
-                                            all.swap(i, j as usize);
-                                            write(all);
-                                        }
-                                    };
                                     view! {
-                                        <li class="navlist-link">
+                                        <li class="navlist-link" data-sort-row>
+                                            {crate::sortable::grip(ui, Callback::new(move |(from, to): (usize, usize)| write(crate::sortable::moved(list.with_value(|l| l.links.clone()), from, to))))}
                                             <input class="input navlist-label" aria-label=ui.t("menus-label") placeholder=ui.t("menus-label")
                                                 prop:value=link.label.clone()
                                                 on:change=move |e| { let v = event_target_value(&e); edit(&|x| x.label = v.trim().to_string()) }/>
                                             <input class="input input--mono navlist-url" aria-label=ui.t("menus-url") placeholder="/page/" list=dl.clone()
                                                 prop:value=link.url.clone()
                                                 on:change=move |e| { let v = event_target_value(&e); edit(&|x| x.url = v.trim().to_string()) }/>
-                                            <button class="icon-btn icon-btn--small" title=ui.t("layers-up") aria-label=ui.t("layers-up")
-                                                disabled=i == 0 on:click=move |_| shift(-1)>{icons::arrow_up()}</button>
-                                            <button class="icon-btn icon-btn--small" title=ui.t("layers-down") aria-label=ui.t("layers-down")
-                                                disabled=i + 1 == count on:click=move |_| shift(1)>{icons::arrow_down()}</button>
                                             <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                                                 on:click=move |_| {
                                                     let mut all = list.with_value(|l| l.links.clone());
@@ -390,32 +378,20 @@ pub fn PagePicks(page: String) -> impl IntoView {
                         ed.apply(ui, data_command(&path.get_value(), Some(Value::Array(v.into_iter().map(Value::String).collect()))), false)
                     };
                     let name = label.unwrap_or_else(|| p.path.last().cloned().unwrap_or_default());
-                    let count = slugs.len();
                     let cols = p.collections.clone();
                     view! {
                         <div class="pick" data-pick=p.path.join(".")>
                             <span class="label" title=p.path.join(".")>{name}</span>
-                            <ul class="pick-list">
+                            <ul class="pick-list" data-sort-list>
                                 {slugs.into_iter().enumerate().map(|(i, slug)| {
                                     let found = entries.with_value(|e| title_of(e, &slug));
                                     let missing = found.is_none();
                                     let (t, c) = found.unwrap_or_else(|| (slug.clone(), String::new()));
-                                    let shift = move |dlt: isize| {
-                                        let mut all = current.get_value();
-                                        let j = i as isize + dlt;
-                                        if j >= 0 && (j as usize) < all.len() {
-                                            all.swap(i, j as usize);
-                                            write(all);
-                                        }
-                                    };
                                     view! {
-                                        <li class="pick-item" class:is-missing=missing
+                                        <li class="pick-item" class:is-missing=missing data-sort-row
                                             title=if missing { ui.now("picks-missing", &[("slug", slug.clone())]) } else { format!("{t} · {c}") }>
+                                            {crate::sortable::grip(ui, Callback::new(move |(from, to): (usize, usize)| write(crate::sortable::moved(current.get_value(), from, to))))}
                                             <span class="pick-title">{t.clone()}</span>
-                                            <button class="icon-btn icon-btn--small" title=ui.t("layers-up") aria-label=ui.t("layers-up")
-                                                disabled=i == 0 on:click=move |_| shift(-1)>{icons::arrow_up()}</button>
-                                            <button class="icon-btn icon-btn--small" title=ui.t("layers-down") aria-label=ui.t("layers-down")
-                                                disabled=i + 1 == count on:click=move |_| shift(1)>{icons::arrow_down()}</button>
                                             <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                                                 on:click=move |_| { let mut all = current.get_value(); all.remove(i); write(all); }>{icons::close()}</button>
                                         </li>

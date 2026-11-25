@@ -67,6 +67,9 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   obligatoire, valeurs d'une liste déroulante), section posée après la section sélectionnée. Second envoi à
   faire : après l'envoi et destinataire par formulaire, filtres de liste, assistant de publication, M3, M9,
   M10, M12, M13.
+- **25/11, 1 h (D-200)** : poignée de glisser à la place des flèches dans toutes les listes ordonnées
+  (liens, champs, parties d'outil, contenus choisis, menus, réseaux, CMS) ; P5 corrigée (libellé d'un choix
+  affiché, valeur gardée dans les adresses et filtres).
 - Outillage de l'audit (conteneur de session) : `/home/claude/sp/audit` (`lib.mjs`, scripts `a*`, `b*`, `c*`,
   `d*`, `serve.sh`, `build.sh`, site d'essai `site/`).
 

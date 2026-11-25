@@ -4034,3 +4034,5 @@ form-field-file = Dosya
 form-field-required = Zorunlu
 form-field-options = Seçenekler
 form-option = Seçenek { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = Sıralamak için sürükleyin (klavyede ↑ ↓)

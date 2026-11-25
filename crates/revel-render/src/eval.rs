@@ -933,6 +933,15 @@ impl<'a> Builder<'a> {
             },
             Node::Out { expr } => {
                 let v = self.eval(scope, expr, ctx)?;
+                // Champ « choix » d'un contenu affiché tel quel : son libellé (audit P5, D-200).
+                // Texte de la page seulement : un attribut (adresse, classe) garde la valeur.
+                let label = choice_label_expr(expr)
+                    .filter(|_| matches!(mode, Mode::Html))
+                    .filter(|_| v.kind() == minijinja::value::ValueKind::String)
+                    .and_then(|l| self.eval(scope, &l, ctx).ok())
+                    .filter(|l| l.as_str().is_some_and(|t| !t.is_empty()));
+                let labeled = label.is_some();
+                let v = label.unwrap_or(v);
                 let shown = display(&v, true);
                 match at.parent().filter(|_| marking && !shown.is_empty()) {
                     Some(parent) => {
@@ -950,6 +959,9 @@ impl<'a> Builder<'a> {
                             ),
                             None => (None, false),
                         };
+                        // Libellé affiché : le modifier dans le canevas écrirait le libellé à la
+                        // place de la valeur ; pas de liaison.
+                        let simple = simple && !labeled;
                         let (binding, transformed) = if !simple {
                             (None, false)
                         } else if let Some((p, e)) = source_path(expr)
@@ -1851,6 +1863,27 @@ pub(crate) fn map_query(v: &Value) -> String {
         }
     }
     out
+}
+
+/// Expression du libellé d'un champ « choix » lu tel quel (`item.data.discipline` ->
+/// `item.labels.discipline`, aussi `entry("c", "s").data.x` et `collections.c[0].data.x`) ;
+/// expression filtrée ou calculée : `None`.
+fn choice_label_expr(expr: &str) -> Option<String> {
+    let e = expr.trim();
+    let (base, field) = e.rsplit_once(".data.")?;
+    let ident = |t: &str| {
+        !t.is_empty()
+            && t.chars().all(|c| c.is_alphanumeric() || c == '_')
+            && !t.starts_with(|c: char| c.is_ascii_digit())
+    };
+    if !ident(field) || base.contains('|') || base.contains(' ') && !base.starts_with("entry(") {
+        return None;
+    }
+    let plain = base.starts_with("entry(") && base.ends_with(')')
+        || base
+            .split('.')
+            .all(|p| ident(p.split('[').next().unwrap_or_default()));
+    plain.then(|| format!("{base}.labels.{field}"))
 }
 
 #[cfg(test)]

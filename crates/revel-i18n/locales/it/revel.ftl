@@ -4037,3 +4037,5 @@ form-field-file = File
 form-field-required = Obbligatorio
 form-field-options = Opzioni
 form-option = Opzione { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = Trascina per riordinare (↑ ↓ da tastiera)

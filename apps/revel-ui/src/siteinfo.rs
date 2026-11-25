@@ -408,7 +408,6 @@ pub fn SiteMenus(s: DocSession, path: String) -> impl IntoView {
                         (label(ui, d.as_ref(), &p), d.as_ref().map(|d| si::uses(d, &p)).unwrap_or(0))
                     });
                     let dl = format!("sitemenu-pages-{n}");
-                    let count = links.len();
                     view! {
                         <div class="section navlist" data-menu=name.clone()>
                             <h2 class="navlist-head">
@@ -423,7 +422,7 @@ pub fn SiteMenus(s: DocSession, path: String) -> impl IntoView {
                             <datalist id=dl.clone()>
                                 {move || pages.get().into_iter().map(|p| view! { <option value=p></option> }).collect_view()}
                             </datalist>
-                            <ul class="navlist-links">
+                            <ul class="navlist-links" data-sort-list>
                                 {links.into_iter().enumerate().map(|(i, link)| {
                                     let edit = move |f: &dyn Fn(&mut MenuLink)| {
                                         let mut all = list.get_value();
@@ -432,26 +431,15 @@ pub fn SiteMenus(s: DocSession, path: String) -> impl IntoView {
                                         }
                                         write_links(all);
                                     };
-                                    let shift = move |d: isize| {
-                                        let mut all = list.get_value();
-                                        let j = i as isize + d;
-                                        if j >= 0 && (j as usize) < all.len() {
-                                            all.swap(i, j as usize);
-                                            write_links(all);
-                                        }
-                                    };
                                     view! {
-                                        <li class="navlist-link">
+                                        <li class="navlist-link" data-sort-row>
+                                            {crate::sortable::grip(ui, Callback::new(move |(from, to): (usize, usize)| write_links(crate::sortable::moved(list.get_value(), from, to))))}
                                             <input class="input navlist-label" aria-label=ui.t("menus-label") placeholder=ui.t("menus-label")
                                                 prop:value=link.label.clone()
                                                 on:change=move |e| { let v = event_target_value(&e); edit(&|x| x.label = v.trim().to_string()) }/>
                                             <input class="input input--mono navlist-url" aria-label=ui.t("menus-url") placeholder="/page/" list=dl.clone()
                                                 prop:value=link.url.clone()
                                                 on:change=move |e| { let v = event_target_value(&e); edit(&|x| x.url = v.trim().to_string()) }/>
-                                            <button class="icon-btn icon-btn--small" title=ui.t("layers-up") aria-label=ui.t("layers-up")
-                                                disabled=i == 0 on:click=move |_| shift(-1)>{icons::arrow_up()}</button>
-                                            <button class="icon-btn icon-btn--small" title=ui.t("layers-down") aria-label=ui.t("layers-down")
-                                                disabled=i + 1 == count on:click=move |_| shift(1)>{icons::arrow_down()}</button>
                                             <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                                                 on:click=move |_| {
                                                     let mut all = list.get_value();

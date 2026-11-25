@@ -4142,3 +4142,5 @@ form-field-file = Файл
 form-field-required = Обязательное
 form-field-options = Варианты
 form-option = Вариант { $n }
+# Poignée de glisser des listes (D-200)
+sort-drag = Перетащите, чтобы изменить порядок (↑ ↓ с клавиатуры)

@@ -64,18 +64,16 @@ pub fn fields(ui: Ui, ed: Ed, at: &Target) -> AnyView {
             ed.apply_keep(ui, c);
         }
     };
-    let step = move |id: String, dir: i32| {
+    // Champ `i` placé au rang `j` (poignée de glisser, D-200).
+    let step = move |i: usize, j: usize| {
         let l = list.get_untracked();
-        let Some(i) = l.iter().position(|f| f.id == id) else {
-            return;
-        };
-        let j = i as i32 + dir;
-        if j < 0 || j as usize >= l.len() {
+        if i >= l.len() || j >= l.len() || i == j {
             return;
         }
-        let place = ed.doc.with_untracked(|d| {
-            revel_edit::address::locate(d.as_ref()?, &target(&l[j as usize].id)).ok()
-        });
+        let id = l[i].id.clone();
+        let place = ed
+            .doc
+            .with_untracked(|d| revel_edit::address::locate(d.as_ref()?, &target(&l[j].id)).ok());
         if let Some((to, index)) = place {
             ed.apply_keep(
                 ui,
@@ -115,7 +113,7 @@ pub fn fields(ui: Ui, ed: Ed, at: &Target) -> AnyView {
     };
     view! {
         <div class="insp-group form-fields" data-tool="form-fields">
-            <div class="items-list" role="list" aria-label=ui.t("form-fields")>
+            <div class="items-list items-list--fields" data-sort-list role="list" aria-label=ui.t("form-fields")>
                 <div class="items-head">
                     <span class="label">{ui.t("form-fields")}</span>
                     <span class="muted items-count">{move || list.with(Vec::len)}</span>
@@ -127,13 +125,12 @@ pub fn fields(ui: Ui, ed: Ed, at: &Target) -> AnyView {
                         let control = f.with_value(|f| f.control.clone());
                         let kind = f.with_value(|f| f.kind);
                         let required = f.with_value(|f| f.required);
-                        let (i1, i2, i3, i4, i5, i6) = (id.clone(), id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
-                        let first = move || list.with(|l| l.first().is_some_and(|x| x.id == i4));
-                        let last = move || list.with(|l| l.last().is_some_and(|x| x.id == i5));
+                        let (i3, i6) = (id.clone(), id.clone());
                         let on = { let id = id.clone(); move || open.with(|o| o.as_deref() == Some(id.as_str())) };
                         let c1 = control.clone();
                         view! {
-                            <div class="items-row" role="listitem" class:is-on=on data-item=id.clone() data-kind=kind.key()>
+                            <div class="items-row" role="listitem" class:is-on=on data-item=id.clone() data-kind=kind.key() data-sort-row>
+                                {crate::sortable::grip(ui, Callback::new(move |(i, j)| step(i, j)))}
                                 <button class="items-main" title=f.with_value(|f| f.name.clone())
                                     on:click={ let id = id.clone(); move |_| {
                                         // Le formulaire reste sélectionné (sa liste aussi) ; une liste
@@ -177,10 +174,6 @@ pub fn fields(ui: Ui, ed: Ed, at: &Target) -> AnyView {
                                     <button class="icon-btn icon-btn--small form-required" class:is-on=required
                                         title=ui.t("form-field-required") aria-label=ui.t("form-field-required") aria-pressed=required.to_string()
                                         on:click=move |_| ed.apply_keep(ui, formfields::set_required(&target(&c1), !required))>"*"</button>
-                                    <button class="icon-btn icon-btn--small" title=ui.t("items-up") aria-label=ui.t("items-up")
-                                        prop:disabled=first on:click=move |_| step(i1.clone(), -1)>{icons::arrow_up()}</button>
-                                    <button class="icon-btn icon-btn--small" title=ui.t("items-down") aria-label=ui.t("items-down")
-                                        prop:disabled=last on:click=move |_| step(i2.clone(), 1)>{icons::arrow_down()}</button>
                                     <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                                         on:click=move |_| ed.apply(ui, Command::Remove { at: target(&i3) }, false)>{icons::trash()}</button>
                                 </span>

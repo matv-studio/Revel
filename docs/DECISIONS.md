@@ -2941,3 +2941,23 @@ section.**
   dans les champs d'un contenu), M12 (double-clic, Ctrl+B / Ctrl+I), M13 (contenus d'attente). Le nom
   technique d'un champ ajouté (`name`) vient de sa sorte et ne suit pas le renommage.
 
+**D-200 — 25/11/2026 — prise (retours de l'utilisateur du 25/11, 0 h 42).**
+**Poignée de glisser à la place des flèches ; libellé des champs « choix » (audit P5).**
+- **Poignée** (`apps/revel-ui/src/sortable.rs`) : les listes ordonnées n'ont plus de flèches « monter » et
+  « descendre » ; une poignée à gauche de la ligne se glisse (un trait montre la place d'arrivée, côte à côte
+  pour une grille de vignettes) ou se pilote au clavier (flèches haut et bas une fois la poignée en focus).
+  Listes concernées : liens de la barre de navigation, champs d'un formulaire, parties d'un outil (onglets,
+  diapositives…), contenus choisis d'une liste (deux endroits), menus du site (deux endroits), réseaux
+  sociaux de l'organisation, liste répétée et valeurs en lignes du CMS, valeurs d'un champ choix du schéma.
+  Restent à flèches, car elles déplacent l'élément sélectionné et non une ligne : « monter / descendre » des
+  calques et l'en-tête d'un champ du schéma. Lignes des liens et des champs dessinées comme la maquette :
+  encadrées, nom en gras, cible à droite en chasse fixe, corbeille visible, autres actions au survol.
+- **P5** (décision laissée à Claude : le plus logique et le moins encombrant) : le libellé d'un champ
+  « choix » s'affiche partout où un texte de la page montre ce champ tel quel (`item.data.discipline`,
+  `entry(…).data.x`, `collections.c[0].data.x`) ; adresses, attributs, filtres, tris et expressions calculées
+  gardent la valeur. Pas de réglage. Le projet lit les libellés dans `.pages.yml` au chargement des contenus
+  (`Entry::labels`), le rendu les expose (`item.labels.<champ>`). Un texte qui montre un libellé n'est pas
+  modifiable dans le canevas (il écrirait le libellé à la place de la valeur). Contrepartie : un site qui
+  affichait la valeur affiche désormais le libellé. Choix multiple : pas concerné (liste affichée par un
+  filtre).
+

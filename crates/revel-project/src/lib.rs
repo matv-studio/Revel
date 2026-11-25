@@ -274,7 +274,10 @@ impl Project {
     /// Contenus (fichiers Markdown) de dossiers du projet.
     fn entries_in(&self, folders: &[String]) -> Result<Vec<Entry>, ProjectError> {
         let mut out = Vec::new();
+        let choices = self.choice_labels();
         for folder in folders {
+            let norm = folder.trim().trim_start_matches("./").trim_end_matches('/');
+            let own = choices.get(norm);
             let dir = self.dir.join(folder);
             let Ok(rd) = std::fs::read_dir(&dir) else {
                 continue;
@@ -297,12 +300,72 @@ impl Project {
                         .file_stem()
                         .map(|s| s.to_string_lossy().into_owned())
                         .unwrap_or_default(),
+                    labels: own.map(|c| labels_of(c, &data)).unwrap_or_default(),
                     data,
                     body,
                 });
             }
         }
         Ok(out)
+    }
+
+    /// Libellés des champs « choix » de chaque collection du CMS (`.pages.yml`) : dossier ->
+    /// champ -> valeur -> libellé, seulement quand le libellé diffère de la valeur.
+    fn choice_labels(&self) -> BTreeMap<String, BTreeMap<String, BTreeMap<String, String>>> {
+        let mut out = BTreeMap::new();
+        let Some(doc) = pagesyml::read(&self.dir)
+            .ok()
+            .flatten()
+            .and_then(|t| parse_yaml(&t).ok())
+        else {
+            return out;
+        };
+        for col in doc
+            .get("content")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let Some(path) = col.get("path").and_then(Value::as_str) else {
+                continue;
+            };
+            let path = path
+                .trim()
+                .trim_start_matches("./")
+                .trim_end_matches('/')
+                .to_string();
+            let mut fields = BTreeMap::new();
+            for f in col
+                .get("fields")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                if f.get("type").and_then(Value::as_str) != Some("select") {
+                    continue;
+                }
+                let Some(name) = f.get("name").and_then(Value::as_str) else {
+                    continue;
+                };
+                let values = f.pointer("/options/values").and_then(Value::as_array);
+                let map: BTreeMap<String, String> = values
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|v| {
+                        let value = v.get("value")?.as_str()?.to_string();
+                        let label = v.get("label")?.as_str()?.to_string();
+                        (label != value).then_some((value, label))
+                    })
+                    .collect();
+                if !map.is_empty() {
+                    fields.insert(name.to_string(), map);
+                }
+            }
+            if !fields.is_empty() {
+                out.insert(path, fields);
+            }
+        }
+        out
     }
 
     /// Variables issues du dossier de données (sans les dossiers des autres langues).
@@ -916,6 +979,7 @@ impl Project {
         }
         let mut entries = self.load_entries()?;
         entries.push(revel_render::Entry {
+            labels: Default::default(),
             folder: col.folder.clone(),
             file_stem: revel_model::TEMPLATE_ENTRY.into(),
             data,
@@ -1456,5 +1520,70 @@ mod tests {
     #[test]
     fn decodage_url() {
         assert_eq!(percent_decode("/media/a%20b.jpg"), "/media/a b.jpg");
+    }
+}
+
+/// Libellés des champs « choix » d'un contenu : champ -> libellé de sa valeur écrite.
+fn labels_of(
+    fields: &BTreeMap<String, BTreeMap<String, String>>,
+    data: &Value,
+) -> BTreeMap<String, String> {
+    fields
+        .iter()
+        .filter_map(|(name, map)| {
+            let v = data.get(name)?.as_str()?;
+            Some((name.clone(), map.get(v)?.clone()))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests_labels {
+    use super::*;
+
+    #[test]
+    fn libelles_des_choix_lus_dans_pages_yml() {
+        // Audit P5 (D-200) : un contenu reçoit le libellé de la valeur écrite de ses champs
+        // « choix » (`.pages.yml`) ; valeur sans libellé propre : rien.
+        let dir = std::env::temp_dir().join(format!("revel-labels-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut site = Site::new("Essai", "fr");
+        site.collections.push(
+            serde_json::from_value(
+                serde_json::json!({"id": "projets", "folder": "content/projets"}),
+            )
+            .unwrap(),
+        );
+        let p = Project::create(&dir, site).unwrap();
+        std::fs::create_dir_all(dir.join("content/projets")).unwrap();
+        std::fs::write(
+            dir.join(".pages.yml"),
+            "content:\n  - name: projets\n    path: content/projets\n    type: collection\n    fields:\n      - name: discipline\n        type: select\n        options:\n          values:\n            - value: site-web\n              label: Site web\n            - value: identite\n              label: identite\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("content/projets/a.md"),
+            "---\ntitle: A\ndiscipline: site-web\n---\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("content/projets/b.md"),
+            "---\ntitle: B\ndiscipline: identite\n---\n",
+        )
+        .unwrap();
+        let e = p.load_entries().unwrap();
+        let get = |stem: &str| {
+            e.iter()
+                .find(|x| x.file_stem == stem)
+                .unwrap()
+                .labels
+                .clone()
+        };
+        assert_eq!(
+            get("a").get("discipline").map(String::as_str),
+            Some("Site web")
+        );
+        assert!(get("b").is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

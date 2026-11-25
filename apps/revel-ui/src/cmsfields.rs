@@ -1476,7 +1476,6 @@ fn repeat_view(
     };
     // Cartes repliées (résumé sur une ligne) ; carte glissée (ordre).
     let folded = RwSignal::new(std::collections::BTreeSet::<usize>::new());
-    let dragging = RwSignal::new(None::<usize>);
     let summary = |item: &Value| -> String {
         item.as_object()
             .and_then(|o| {
@@ -1500,7 +1499,7 @@ fn repeat_view(
             .unwrap_or_default()
     };
     view! {
-        <div class="cms-item-field cms-repeat" data-field=name>
+        <div class="cms-item-field cms-repeat" data-field=name data-sort-list>
             <div class="cms-field-head">
                 {head}
                 {move || (items().len() > 1).then(|| {
@@ -1516,7 +1515,6 @@ fn repeat_view(
             </div>
             {move || {
                 let list = items();
-                let n = list.len();
                 list.into_iter().enumerate().map(|(i, item)| {
                     let def = def_of(&item);
                     let title = if blocks {
@@ -1530,14 +1528,6 @@ fn repeat_view(
                         def.map(|d| d.fields)
                     } else {
                         Some(fs.with_value(|f| f.fields.clone()))
-                    };
-                    let move_to = move |to: usize| {
-                        let mut list = current();
-                        if to < list.len() && i < list.len() {
-                            let it = list.remove(i);
-                            list.insert(to, it);
-                            write(list);
-                        }
                     };
                     let remove = move |_| {
                         let mut list = current();
@@ -1595,23 +1585,9 @@ fn repeat_view(
                     };
                     let is_folded = move || folded.with(|f| f.contains(&i));
                     view! {
-                        <div class="cms-repeat-item" data-index=i class:is-folded=is_folded
-                            class:is-dragging=move || dragging.get() == Some(i)
-                            on:dragover=move |e: ev::DragEvent| if dragging.get_untracked().is_some() { e.prevent_default() }
-                            on:drop=move |e: ev::DragEvent| if let Some(from) = dragging.get_untracked() {
-                                e.prevent_default();
-                                dragging.set(None);
-                                let mut list = current();
-                                if from < list.len() && i < list.len() && from != i {
-                                    let it = list.remove(from);
-                                    list.insert(i, it);
-                                    write(list);
-                                }
-                            }>
+                        <div class="cms-repeat-item" data-index=i class:is-folded=is_folded data-sort-row>
                             <div class="cms-repeat-head">
-                                <span class="cms-repeat-grip" draggable="true" title=ui.t("cms-repeat-drag")
-                                    on:dragstart=move |e: ev::DragEvent| { dragging.set(Some(i)); if let Some(dt) = e.data_transfer() { let _ = dt.set_data("text/plain", ""); } }
-                                    on:dragend=move |_| dragging.set(None)>{icons::grip()}</span>
+                                {crate::sortable::grip(ui, Callback::new(move |(from, to): (usize, usize)| write(crate::sortable::moved(current(), from, to))))}
                                 <button type="button" class="cms-repeat-toggle" aria-expanded=move || (!is_folded()).to_string()
                                     on:click=move |_| folded.update(|f| { if !f.remove(&i) { f.insert(i); } })>
                                     {move || if is_folded() { icons::chevron_right() } else { icons::chevron_down() }}
@@ -1620,10 +1596,6 @@ fn repeat_view(
                                 </button>
                                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-duplicate") aria-label=ui.t("cms-repeat-duplicate")
                                     on:click=duplicate>{icons::copy()}</button>
-                                <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-up") aria-label=ui.t("cms-repeat-up")
-                                    disabled={i == 0} on:click=move |_| move_to(i.saturating_sub(1))>{icons::arrow_up()}</button>
-                                <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-down") aria-label=ui.t("cms-repeat-down")
-                                    disabled={i + 1 >= n} on:click=move |_| move_to(i + 1)>{icons::arrow_down()}</button>
                                 <button type="button" class="icon-btn icon-btn--small" title=ui.t("cms-repeat-remove") aria-label=ui.t("cms-repeat-remove")
                                     on:click=remove>{icons::trash()}</button>
                             </div>
@@ -1729,12 +1701,12 @@ pub fn RowsEditor(
         el.set_value("");
     };
     view! {
-        <div class="rows-editor" role="list">
+        <div class="rows-editor" role="list" data-sort-list>
             {move || {
                 let list = items.get();
-                let n = list.len();
                 list.into_iter().enumerate().map(|(i, val)| view! {
-                    <div class="rows-editor__row" role="listitem">
+                    <div class="rows-editor__row" role="listitem" data-sort-row>
+                        {crate::sortable::grip(ui, Callback::new(move |(from, to): (usize, usize)| set.run(crate::sortable::moved(items.get_untracked(), from, to))))}
                         <input class="input" type=input prop:value=val step="any"
                             aria-label=ui.tx("rows-item", &[("n", (i + 1).to_string())])
                             on:change=move |e| {
@@ -1748,10 +1720,6 @@ pub fn RowsEditor(
                                     move_row(i, if e.key() == "ArrowUp" { -1 } else { 1 });
                                 }
                             }/>
-                        <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-move-up") aria-label=ui.t("action-move-up")
-                            disabled={i == 0} on:click=move |_| move_row(i, -1)>{icons::arrow_up()}</button>
-                        <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-move-down") aria-label=ui.t("action-move-down")
-                            disabled={i + 1 >= n} on:click=move |_| move_row(i, 1)>{icons::arrow_down()}</button>
                         <button type="button" class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                             on:click=move |_| { let mut v = items.get_untracked(); if i < v.len() { v.remove(i); } set.run(v); }>{icons::trash()}</button>
                     </div>

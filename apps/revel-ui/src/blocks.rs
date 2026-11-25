@@ -3186,29 +3186,17 @@ fn picks_editor(
     set: impl Fn(Vec<String>) + Copy + Send + Sync + 'static,
 ) -> AnyView {
     let picked = StoredValue::new(list.clone());
-    let n = list.len();
     view! {
-        <ul class="pick-list list-picks">
+        <ul class="pick-list list-picks" data-sort-list>
             {list.into_iter().enumerate().map(|(i, slug)| {
                 // Contenu introuvable (supprimé) : marqué une fois les contenus lus.
                 let slug3 = slug.clone();
                 let missing = move || entries.with(|es| !es.is_empty() && !es.iter().any(|e| e.slug == slug3));
-                let shift = move |d: isize| {
-                    let mut all = picked.get_value();
-                    let j = i as isize + d;
-                    if j >= 0 && (j as usize) < all.len() {
-                        all.swap(i, j as usize);
-                        set(all);
-                    }
-                };
                 let slug2 = slug.clone();
                 view! {
-                    <li class="pick-item" class:is-missing=missing title=slug.clone()>
+                    <li class="pick-item" class:is-missing=missing title=slug.clone() data-sort-row>
+                        {crate::sortable::grip(ui, Callback::new(move |(from, to): (usize, usize)| set(crate::sortable::moved(picked.get_value(), from, to))))}
                         <span class="pick-title">{move || entries.with(|es| es.iter().find(|e| e.slug == slug2).map(|e| e.title.clone())).unwrap_or_else(|| slug2.clone())}</span>
-                        <button class="icon-btn icon-btn--small" title=ui.t("layers-up") aria-label=ui.t("layers-up")
-                            disabled=i == 0 on:click=move |_| shift(-1)>{icons::arrow_up()}</button>
-                        <button class="icon-btn icon-btn--small" title=ui.t("layers-down") aria-label=ui.t("layers-down")
-                            disabled=i + 1 == n on:click=move |_| shift(1)>{icons::arrow_down()}</button>
                         <button class="icon-btn icon-btn--small" title=ui.t("action-remove") aria-label=ui.t("action-remove")
                             on:click=move |_| { let mut all = picked.get_value(); all.remove(i); set(all); }>{icons::close()}</button>
                     </li>

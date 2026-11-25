@@ -1164,7 +1164,7 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .navlist-head { display: flex; align-items: center; gap: var(--s-2); margin: 0; }
 .navlist-head .navlist-name { flex: 1; font-weight: var(--weight-medium); }
 .navlist-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
-.navlist-link { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto auto auto; gap: var(--s-1); align-items: center; }
+.navlist-link { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: var(--s-1); align-items: center; }
 .navlist-add { align-self: flex-start; }
 .picks .pick { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .pick-add { width: 100%; }
@@ -1666,7 +1666,7 @@ button.site-facts__item:hover .muted { color: var(--text); text-decoration: unde
 
 /* Valeurs en lignes (D-139) : listes de nombres, de dates, propriété liste d'un composant. */
 .rows-editor { display: grid; gap: 4px; }
-.rows-editor__row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, auto); align-items: center; gap: 2px; }
+.rows-editor__row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 2px; }
 .rows-editor__row .icon-btn:disabled { opacity: .35; }
 .rows-editor__add { border-style: dashed; }
 .prop-row--list { display: grid; gap: 6px; }

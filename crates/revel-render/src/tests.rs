@@ -30,6 +30,7 @@ fn input(site: &Site, entries: Vec<Entry>) -> BuildInput<'_> {
 
 fn entry(stem: &str, data: serde_json::Value) -> Entry {
     Entry {
+        labels: Default::default(),
         folder: "content/projets".into(),
         file_stem: stem.into(),
         data,
@@ -1007,6 +1008,7 @@ fn langues() {
         code: "en".into(),
         data: [("site".to_string(), json!({"title": "Alunites EN"}))].into(),
         entries: vec![Entry {
+            labels: Default::default(),
             folder: "content/en/projets".into(),
             file_stem: "b".into(),
             data: json!({"title": "Project B"}),
@@ -1445,6 +1447,7 @@ fn reconstruction_lien_actuel_theme_et_flux() {
         .iter()
         .enumerate()
         .map(|(i, slug)| Entry {
+            labels: Default::default(),
             folder: "content/actus".into(),
             file_stem: slug.to_string(),
             data: json!({ "slug": slug, "title": slug.to_uppercase(), "date": format!("2026-0{}-01", i + 1) }),
@@ -1887,6 +1890,7 @@ fn contenus_choisis_dans_deux_collections() {
             ),
         ];
         v.push(Entry {
+            labels: Default::default(),
             folder: "content/actualites".into(),
             file_stem: "n1".into(),
             data: json!({"slug": "n1", "title": "Nouvelle", "date": "2026-02-01"}),
@@ -2361,4 +2365,26 @@ fn champ_cms_hors_liste() {
     .unwrap()
     .unwrap();
     assert!(ed.html.contains("Projet B"), "{}", ed.html);
+}
+
+#[test]
+fn libelle_d_un_choix() {
+    // Audit P5 (D-200) : un texte qui affiche un champ « choix » montre son libellé ; un filtre,
+    // une adresse ou une expression calculée gardent la valeur.
+    let mut s = site();
+    let col = s.collections[0].id.clone();
+    s.pages[0].body = parse(&format!(
+        r#"{{% for item in collections.{col} %}}<p class="d">{{{{ item.data.discipline }}}}</p><a href="/f/{{{{ item.data.discipline }}}}/">x</a><i>{{{{ item.data.discipline | upper }}}}</i><b>{{{{ item.labels.discipline }}}}</b>{{% endfor %}}"#
+    ));
+    s.ensure_ids();
+    let mut e = entry(
+        "a",
+        json!({"slug": "a", "title": "A", "discipline": "site-web"}),
+    );
+    e.labels.insert("discipline".into(), "Site web".into());
+    let out = build(&input(&s, vec![e])).unwrap();
+    let home = file(&out, "index.html");
+    assert!(home.contains(r#"<p class="d">Site web</p>"#), "{home}");
+    assert!(home.contains(r#"href="/f/site-web/""#), "{home}");
+    assert!(home.contains("<i>SITE-WEB</i>"), "{home}");
 }

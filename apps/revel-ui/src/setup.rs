@@ -400,6 +400,20 @@ fn Setup() -> impl IntoView {
                         </div>
                     </details>
                 </Show>
+                {move || match phase.get() {
+                    Phase::Connecting => view! {
+                        <p class="setup-state" aria-live="polite">{ui.t("setup-connecting")}</p>
+                    }.into_any(),
+                    Phase::Connected(p) => view! {
+                        <p class="setup-state status status--ok" aria-live="polite" title=p.fingerprint.clone()>
+                            {icons::check()}<span>{ui.t("setup-connected")}</span>
+                        </p>
+                    }.into_any(),
+                    Phase::Failed(e) => view! {
+                        <div class="notice notice--error setup-error" role="alert"><span>{ui.failure(&e)}</span></div>
+                    }.into_any(),
+                    _ => ().into_any(),
+                }}
                 // Dossier du site : choisi parmi ceux trouvés sur le serveur, après la connexion.
                 {move || match phase.get() {
                     Phase::Connected(p) => Some(folder_choice(ui, f, other, p)),
@@ -431,20 +445,6 @@ fn Setup() -> impl IntoView {
                         </Show>
                     }
                 })}
-                {move || match phase.get() {
-                    Phase::Connecting => view! {
-                        <p class="setup-state" aria-live="polite">{ui.t("setup-connecting")}</p>
-                    }.into_any(),
-                    Phase::Connected(p) => view! {
-                        <p class="setup-state status status--ok" aria-live="polite" title=p.fingerprint.clone()>
-                            {icons::check()}<span>{ui.t("setup-connected")}</span>
-                        </p>
-                    }.into_any(),
-                    Phase::Failed(e) => view! {
-                        <div class="notice notice--error setup-error" role="alert"><span>{ui.failure(&e)}</span></div>
-                    }.into_any(),
-                    _ => ().into_any(),
-                }}
                 <div class="dialog-actions">
                     <Show when=move || connected() || choice.get().github()>
                         <button type="button" class="btn" disabled=move || busy() || !ready() || !chosen()

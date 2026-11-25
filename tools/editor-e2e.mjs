@@ -4073,7 +4073,8 @@ try {
     await page.click('.cms-fields-btn');
     await page.waitForSelector('.schema-row[data-field="client"]');
     const rows0 = await page.$$eval('.schema-row', (rs) => rs.map((r) => r.dataset.field));
-    check('champs : liste du schéma', rows0.length === 17 && rows0[0] === 'title', rows0.join(','));
+    // 17 champs, puis le texte du contenu en ligne fixe (audit M10, D-204).
+    check('champs : liste du schéma, texte du contenu en dernier', rows0.length === 18 && rows0[0] === 'title' && rows0[17] === '--body', rows0.join(','));
     await page.click('.schema-row[data-field="client"]');
     await page.waitForSelector('.schema-item[data-field="client"]');
     await page.fill('.schema-item [data-setting="label"] input', 'Client (marque)');

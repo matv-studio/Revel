@@ -4073,3 +4073,4 @@ fp-step-online = Yayına al
 fp-step-online-help = Revel depoyu oluşturur, siteyi gönderir ve GitHub Pages'i açar.
 fp-continue = Devam
 cms-published = Yayında
+cms-body-help = İçeriğin başlıktan sonraki metni (Markdown); her zaman var

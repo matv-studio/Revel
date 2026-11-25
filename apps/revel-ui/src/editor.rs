@@ -2834,11 +2834,29 @@ fn decls_list(decls: &[revel_model::Decl]) -> Vec<(String, Option<String>)> {
 
 /// Nœud inséré par une commande (première insertion d'une suite).
 fn inserted(c: &Command) -> Option<&revel_model::Node> {
-    match c {
-        Command::Insert { node, .. } => Some(node),
-        Command::Batch { commands } => commands.iter().find_map(inserted),
-        _ => None,
+    // Insertions dans l'ordre ; une insertion faite dans un nœud ajouté juste avant (outil posé
+    // dans la section créée pour lui, D-204) l'emporte : c'est elle qu'on voulait poser.
+    fn all<'a>(c: &'a Command, out: &mut Vec<(&'a revel_edit::Parent, &'a revel_model::Node)>) {
+        match c {
+            Command::Insert { parent, node, .. } => out.push((parent, node)),
+            Command::Batch { commands } => commands.iter().for_each(|c| all(c, out)),
+            _ => {}
+        }
     }
+    let mut list = Vec::new();
+    all(c, &mut list);
+    let (_, first) = *list.first()?;
+    let mut ids = Vec::new();
+    revel_model::ids::walk(std::slice::from_ref(first), &mut |n| {
+        if let Some(id) = revel_model::ids::node_id(n) {
+            ids.push(id.to_string());
+        }
+    });
+    list.iter()
+        .rev()
+        .find(|(p, _)| p.node.as_ref().is_some_and(|id| ids.contains(id)))
+        .map(|(_, n)| *n)
+        .or(Some(first))
 }
 
 /// Libellé d'un nœud : nom simple (classe lisible ou nature de l'élément).

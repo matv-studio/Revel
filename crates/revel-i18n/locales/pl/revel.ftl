@@ -4185,3 +4185,4 @@ fp-step-online = Opublikuj
 fp-step-online-help = Revel tworzy repozytorium, wysyła stronę i włącza GitHub Pages.
 fp-continue = Dalej
 cms-published = Opublikowany
+cms-body-help = Tekst wpisu po nagłówku (Markdown); zawsze obecny

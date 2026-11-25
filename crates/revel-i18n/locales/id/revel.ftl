@@ -4072,3 +4072,4 @@ fp-step-online = Tayangkan
 fp-step-online-help = Revel membuat repositori, mengirim situs, dan mengaktifkan GitHub Pages.
 fp-continue = Lanjutkan
 cms-published = Diterbitkan
+cms-body-help = Teks konten setelah kepalanya (Markdown); selalu ada

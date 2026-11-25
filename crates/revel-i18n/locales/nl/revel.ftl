@@ -4076,3 +4076,4 @@ fp-step-online = Online zetten
 fp-step-online-help = Revel maakt de repository, stuurt de site en zet GitHub Pages aan.
 fp-continue = Doorgaan
 cms-published = Gepubliceerd
+cms-body-help = Tekst van het item, na de kop (Markdown); altijd aanwezig

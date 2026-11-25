@@ -668,18 +668,10 @@ impl Preset {
                 vec![attr(revel_model::BASE_ATTR, "cms-field")],
                 vec![txt(text)],
             ),
-            Preset::SiteHeader => el(
-                id(),
-                "header",
-                vec![attr("class", "site-entete")],
-                vec![el(id(), "p", vec![], vec![txt(text)])],
-            ),
-            Preset::SiteFooter => el(
-                id(),
-                "footer",
-                vec![attr("class", "site-pied")],
-                vec![el(id(), "p", vec![], vec![txt(text)])],
-            ),
+            // Zones vides (audit M13, D-204) : rien d'attente qui partirait sur le site ; le canevas
+            // les montre en cadre pointillé à remplir.
+            Preset::SiteHeader => el(id(), "header", vec![attr("class", "site-entete")], vec![]),
+            Preset::SiteFooter => el(id(), "footer", vec![attr("class", "site-pied")], vec![]),
             Preset::Link => el(id(), "a", vec![attr("href", "#")], vec![txt(text)]),
             Preset::Button => el(
                 id(),

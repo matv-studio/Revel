@@ -362,6 +362,20 @@ pub fn SchemaList(
                         }
                     }).collect_view()
                 }}
+                // Texte du contenu (corps Markdown, après l'en-tête) : montré parmi les champs (audit
+                // M10, D-204), fixe ; un champ `body` du schéma le décrit déjà (Pages CMS).
+                {move || (!fields.with(|all| all.iter().any(|f| f.name == "body"))).then(|| {
+                    let t = type_of("rich-text");
+                    view! {
+                        <li class="schema-row is-fixed" data-field="--body" title=ui.t("cms-body-help")>
+                            <span class="schema-grip is-off"></span>
+                            <span class="schema-type">{(t.icon)()}</span>
+                            <span class="schema-label"><span class="schema-label-text">{ui.t("cms-body")}</span></span>
+                            <span class="schema-name">"body"</span>
+                            <span class="schema-marks"></span>
+                        </li>
+                    }
+                })}
             </ul>
         </div>
     }

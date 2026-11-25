@@ -4073,3 +4073,4 @@ fp-step-online = ऑनलाइन करें
 fp-step-online-help = Revel रिपॉज़िटरी बनाता है, साइट भेजता है और GitHub Pages चालू करता है।
 fp-continue = जारी रखें
 cms-published = प्रकाशित
+cms-body-help = हेडर के बाद सामग्री का पाठ (Markdown); हमेशा मौजूद

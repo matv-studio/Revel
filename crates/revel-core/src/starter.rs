@@ -34,8 +34,8 @@ const BASE: &str = r#"<!doctype html>
 
 const HOME: &str = r#"<main class="page">
 <section class="section">
-<h1 class="titre">{{ site.title }}</h1>
-<p class="intro">Première page du site.</p>
+<h1 class="titre">@TITRE@</h1>
+<p class="intro">@INTRO@</p>
 </section>
 </main>"#;
 
@@ -304,7 +304,16 @@ pub fn starter_from(name: &str, lang: &str, template: SiteTemplate, light: bool)
         layout: Some("base".into()),
         props: Default::default(),
         computed: Default::default(),
-        body: parse(HOME),
+        // Titre écrit dans la page, pas relié au nom du site (audit M9, D-204) : le modifier ne
+        // renomme pas le site.
+        body: parse(&HOME.replace("@TITRE@", &text_html(name)).replace(
+            "@INTRO@",
+            if lang.to_ascii_lowercase().starts_with("fr") {
+                "Première page du site."
+            } else {
+                "First page of the site."
+            },
+        )),
         draft: false,
         code: Default::default(),
         name: Some(
@@ -323,6 +332,14 @@ pub fn starter_from(name: &str, lang: &str, template: SiteTemplate, light: bool)
     });
     s.ensure_ids();
     s
+}
+
+/// Texte écrit tel quel dans une page (balises et expressions neutralisées).
+fn text_html(t: &str) -> String {
+    t.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('{', "&#123;")
 }
 
 /// Site vitrine ou blog.

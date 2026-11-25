@@ -843,6 +843,24 @@
     }
     return best;
   };
+  // Texte le plus proche du pointeur dans l'élément visé (double-clic à côté des lettres d'un
+  // titre ou d'un paragraphe, audit M12) : celui dont les lignes sont les plus près.
+  const slotNear = (el, x, y) => {
+    if (!el) return null;
+    let best = null;
+    let bestD = Infinity;
+    for (let n = 0; n < ranges.length; n++) {
+      const r = ranges[n];
+      if (!r || !editable(slots[n]) || !el.contains(r.commonAncestorContainer)) continue;
+      for (const b of r.getClientRects()) {
+        const dx = x < b.left ? b.left - x : x > b.right ? x - b.right : 0;
+        const dy = y < b.top ? b.top - y : y > b.bottom ? y - b.bottom : 0;
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { best = n; bestD = d; }
+      }
+    }
+    return best;
+  };
   const inEdit = (t) => !!editing && !!t && editing.span.contains(t);
 
   // Texte mis en forme modifié d'un bloc (D-72) : un élément qui ne contient que du texte et des
@@ -1692,8 +1710,14 @@
       if (selected && resizable()) post({ type: "resized", id: rvOf(selected), reset: axis });
       return;
     }
-    const n = slotAt(e.clientX, e.clientY);
+    let n = slotAt(e.clientX, e.clientY);
     const p = pick(e.target);
+    // À côté des lettres, dans l'élément d'un texte : ce texte (pas dans un bloc qui contient
+    // plusieurs éléments).
+    if (n === null && e.target && e.target.closest) {
+      const host = e.target.closest("[data-rv]");
+      if (host && ![...host.children].some((c) => c.hasAttribute("data-rv") && !INLINE[c.tagName])) n = slotNear(host, e.clientX, e.clientY);
+    }
     // Image (hors utilisation de composant) : sélectionnée, fenêtre de recadrage (D-180).
     const im = e.target && e.target.closest ? e.target.closest("img[data-rv]") : null;
     if (im && !(p && p.inst)) {

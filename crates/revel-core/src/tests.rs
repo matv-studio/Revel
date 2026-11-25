@@ -3792,3 +3792,21 @@ fn modeles_de_revel_lus_en_ligne() {
     assert!(cache.join("index.json").is_file());
     crate::sharing::override_raw(None);
 }
+
+#[test]
+fn titre_du_site_vide_ecrit_dans_la_page() {
+    // Audit M9 (D-204) : le titre de l'accueil du site vide est un texte de la page, pas le nom du
+    // site ; un nom avec balises ou accolades reste du texte.
+    let s = crate::starter::blank(
+        "Atelier <Nord> {{ x }}",
+        "en",
+        crate::templates::Scheme::Dark,
+    );
+    let json = serde_json::to_string(&s.pages[0].body).unwrap();
+    assert!(!json.contains("site.title"), "{json}");
+    assert!(
+        json.contains("Atelier <Nord> {{ x }}") || json.contains("Atelier &lt;Nord&gt;"),
+        "{json}"
+    );
+    assert!(json.contains("First page of the site."), "{json}");
+}

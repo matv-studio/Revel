@@ -4072,3 +4072,4 @@ fp-step-online = 上线
 fp-step-online-help = Revel 创建仓库、发送网站并开启 GitHub Pages。
 fp-continue = 继续
 cms-published = 已发布
+cms-body-help = 条目头部之后的正文（Markdown）；始终存在

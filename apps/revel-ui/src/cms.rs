@@ -1702,8 +1702,14 @@ fn EntryForm(
             })
             .unwrap_or_default()
     });
+    // Champ `body` du schéma (Pages CMS) : c'est le texte du contenu, un seul éditeur (audit M10).
+    let body_label = fields
+        .iter()
+        .find(|f| f.name == "body")
+        .map(|f| f.label.clone().unwrap_or_else(|| f.name.clone()));
     let (shown, mut more): (Vec<CmsField>, Vec<CmsField>) =
         fields.into_iter().partition(|f| !f.hidden);
+    more.retain(|f| f.name != "body");
     more.extend(extra);
     let set = move |key: String, value: Option<Value>| {
         // Rien à écrire si la valeur n'a pas changé.
@@ -1880,9 +1886,9 @@ fn EntryForm(
                         </button>
                     </div>
                 })}
-                {shown.into_iter().map(row).collect_view()}
+                {shown.into_iter().filter(|f| f.name != "body").map(row).collect_view()}
                 <div class="cms-item-field" data-field="--body">
-                    <span class="label">{ui.t("cms-body")}</span>
+                    <span class="label">{body_label.clone().unwrap_or_else(|| ui.now("cms-body", &[]))}</span>
                     {
                         let body_text = Signal::derive(move || entry.with(|e| e.as_ref().map(|e| e.body.clone()).unwrap_or_default()));
                         let format = if crate::richtext::looks_like_html(&body_text.get_untracked()) {

@@ -4076,3 +4076,4 @@ fp-step-online = Put it online
 fp-step-online-help = Revel creates the repository, sends the site and turns GitHub Pages on.
 fp-continue = Continue
 cms-published = Published
+cms-body-help = Text of the entry, after its header (Markdown); always there

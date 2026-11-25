@@ -1839,3 +1839,8 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .fp-body > b { font-weight: var(--weight-medium); }
 .fp-note { font-size: var(--text-sm); color: var(--text-muted); }
 .fp-url { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* D-204 — texte du contenu montré parmi les champs du schéma, fixe. */
+.schema-row.is-fixed { cursor: default; }
+.schema-row.is-fixed .schema-label-text { color: var(--text-muted); }
+.schema-grip.is-off { visibility: hidden; }

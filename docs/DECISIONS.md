@@ -3038,3 +3038,24 @@ section.**
   fiche et dans le tableau ; on le change par « Archive » / « Unarchive » (un seul outil).
 - Essai de l'éditeur : marque « remplacé » d'un champ CMS parfois en retard sur le canevas, consignée en
   **P16** (audit) ; l'essai resélectionne le calque si elle tarde.
+
+## D-204 — Outils posés hors bloc, site vide, contenus d'attente, texte du contenu, double-clic (25/11/2026)
+
+- **M3** : un outil (liste, carrousel, défilement, onglets, texte…) posé directement entre les sections
+  d'une page arrive dans une section faite comme sa voisine la plus proche (mêmes classes, même
+  conteneur intérieur) : mêmes marges et même largeur de contenu que les blocs. Ajout à la racine d'une
+  page faite d'un seul `main` : à la fin de ce `main`. Les éléments de structure (section, conteneur,
+  grille, colonnes) restent posés tels quels. L'outil posé est sélectionné (pas la section créée pour
+  lui) : une insertion faite dans un nœud ajouté par la même modification l'emporte.
+- **M9** : le titre de l'accueil du site vide est écrit dans la page (nom du site au moment de la
+  création), plus relié au nom du site ; phrase d'introduction dans la langue du site.
+- **M13** : zones En-tête et Pied créées vides (le canevas les montre en cadre pointillé) ; une image
+  posée dans une liste qui contient des images vides (défilement, carrousel) prend la place de la
+  première au lieu de s'ajouter après elles.
+- **M10** : le texte du contenu (corps Markdown) figure parmi les champs du schéma, en ligne fixe ; un
+  champ `body` du schéma (convention de Pages CMS) est ce texte : un seul éditeur dans la fiche, à son
+  libellé.
+- **M12** (en partie) : double-clic à côté des lettres d'un texte (dans son élément) : ce texte passe en
+  modification. Ctrl+B / Ctrl+I pendant la saisie : vérifiés, déjà actifs. Double-clic qui pose dans
+  « Insert » et ouvre dans « Components » : laissé tel quel (choix de l'utilisateur, 25/11 : deux
+  panneaux, deux usages).

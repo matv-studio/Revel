@@ -1025,6 +1025,12 @@ pub fn insert_item(ui: Ui, ed: Ed, it: &DragItem, parent: Parent, index: usize) 
     }
     match &it.node {
         Some(n) => {
+            // Image posée là où attend une image vide (défilement, carrousel : audit M13, D-204) :
+            // elle prend sa place au lieu de s'ajouter après les cadres vides.
+            if let Some(cmd) = fill_empty_image(ed, n, &parent) {
+                ed.apply(ui, cmd, false);
+                return;
+            }
             let mut node = n.clone();
             let mut taken = ed
                 .doc
@@ -1043,6 +1049,41 @@ pub fn insert_item(ui: Ui, ed: Ed, it: &DragItem, parent: Parent, index: usize) 
         }
         None => insert_at(ui, ed, it.preset, it.text_key, parent, index),
     }
+}
+
+/// Image vide (`src` vide) de la liste où l'on pose une image : remplacée par celle-ci (même
+/// identifiant, classe gardée).
+fn fill_empty_image(ed: Ed, n: &Node, parent: &Parent) -> Option<Command> {
+    let Node::Image(img) = n else {
+        return None;
+    };
+    let empty = |s: &str| matches!(s.trim(), "" | "\"\"" | "''");
+    if empty(&img.src) {
+        return None;
+    }
+    ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let list = revel_edit::address::list(d, parent).ok()?;
+        let Node::Image(old) = list
+            .iter()
+            .find(|c| matches!(c, Node::Image(i) if empty(&i.src) && i.id.is_some()))?
+        else {
+            return None;
+        };
+        let id = old.id.clone()?;
+        let mut new = img.clone();
+        new.id = Some(id.clone());
+        if new.class.is_none() {
+            new.class = old.class.clone();
+        }
+        Some(Command::SetImage {
+            at: Target {
+                owner: parent.owner.clone(),
+                node: id,
+            },
+            image: new,
+        })
+    })
 }
 
 /// Insère un élément du panneau à un emplacement.
@@ -1091,6 +1132,33 @@ fn insert_at(ui: Ui, ed: Ed, preset: Preset, text_key: &str, parent: Parent, ind
         );
         return;
     }
+    // Outil posé directement entre les sections de la page (audit M3, D-204) : placé dans une
+    // section faite comme ses voisines (mêmes classes, même conteneur intérieur), pour avoir les
+    // mêmes marges et la même largeur de contenu.
+    if !is_section(preset)
+        && !matches!(
+            preset,
+            Preset::Section | Preset::Container | Preset::Grid | Preset::Columns
+        )
+        && let Some((wrap, inner)) = section_wrap(ed, &parent, index)
+    {
+        ed.apply(
+            ui,
+            Command::Batch {
+                commands: vec![
+                    wrap,
+                    Command::InsertPreset {
+                        parent: inner,
+                        index: 0,
+                        preset,
+                        text,
+                    },
+                ],
+            },
+            false,
+        );
+        return;
+    }
     ed.apply(
         ui,
         Command::InsertPreset {
@@ -1101,4 +1169,101 @@ fn insert_at(ui: Ui, ed: Ed, preset: Preset, text_key: &str, parent: Parent, ind
         },
         false,
     );
+}
+
+/// Section d'accueil pour un outil posé entre les sections : copie vide de la section voisine la
+/// plus proche (classe ; conteneur intérieur s'il y en a un). `None` si l'emplacement n'est pas
+/// entre des sections (dans un bloc, ou page sans section).
+fn section_wrap(ed: Ed, parent: &Parent, index: usize) -> Option<(Command, Parent)> {
+    ed.doc.with_untracked(|d| {
+        let d = d.as_ref()?;
+        let mut parent = parent.clone();
+        let mut index = index;
+        let mut list = revel_edit::address::list(d, &parent).ok()?;
+        // Ajout à la racine d'une page faite d'un seul `main` : à la fin de ce `main` (le contenu
+        // de la page), pas après lui.
+        let is_sec = |n: &Node| matches!(n, Node::Element { tag, .. } if tag.eq_ignore_ascii_case("section"));
+        if !list.iter().any(is_sec)
+            && let [Node::Element { id: Some(mid), tag, children, .. }] = list.as_slice()
+            && tag.eq_ignore_ascii_case("main")
+            && children.iter().any(is_sec)
+        {
+            index = children.len();
+            parent = Parent::of(
+                &Target {
+                    owner: parent.owner.clone(),
+                    node: mid.clone(),
+                },
+                Branch::Children,
+            );
+            list = revel_edit::address::list(d, &parent).ok()?;
+        }
+        let parent = &parent;
+        let is_section = |n: &Node| matches!(n, Node::Element { tag, .. } if tag.eq_ignore_ascii_case("section"));
+        let model = list[..index.min(list.len())]
+            .iter()
+            .rev()
+            .find(|n| is_section(n))
+            .or_else(|| list[index.min(list.len())..].iter().find(|n| is_section(n)))?;
+        let Node::Element { attrs, children, .. } = model else {
+            return None;
+        };
+        let class = |a: &[revel_model::Attr]| {
+            a.iter()
+                .find(|x| x.name == "class" && x.when.is_none())
+                .and_then(|x| x.value.clone())
+                .filter(|v| !v.contains("{{") && !v.contains("{%"))
+        };
+        let section_class = class(attrs)?;
+        let inner = children.iter().find_map(|c| match c {
+            Node::Element { tag, attrs, .. } if tag.eq_ignore_ascii_case("div") => class(attrs),
+            _ => None,
+        });
+        let mut taken = d.node_ids();
+        let mut fresh = || {
+            let i = revel_model::ids::fresh(&taken);
+            taken.insert(i.clone());
+            i
+        };
+        let attr = |v: String| revel_model::Attr {
+            name: "class".into(),
+            value: Some(v),
+            when: None,
+        };
+        let sid = fresh();
+        let (kids, target) = match inner {
+            Some(c) => {
+                let iid = fresh();
+                (
+                    vec![Node::Element {
+                        id: Some(iid.clone()),
+                        tag: "div".into(),
+                        attrs: vec![attr(c)],
+                        children: Vec::new(),
+                    }],
+                    iid,
+                )
+            }
+            None => (Vec::new(), sid.clone()),
+        };
+        Some((
+            Command::Insert {
+                parent: parent.clone(),
+                index,
+                node: Node::Element {
+                    id: Some(sid),
+                    tag: "section".into(),
+                    attrs: vec![attr(section_class)],
+                    children: kids,
+                },
+            },
+            Parent::of(
+                &Target {
+                    owner: parent.owner.clone(),
+                    node: target,
+                },
+                Branch::Children,
+            ),
+        ))
+    })
 }

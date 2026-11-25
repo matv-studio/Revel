@@ -4072,3 +4072,4 @@ fp-step-online = 온라인에 올리기
 fp-step-online-help = Revel이 저장소를 만들고 사이트를 보낸 뒤 GitHub Pages를 켭니다.
 fp-continue = 계속
 cms-published = 게시됨
+cms-body-help = 헤더 다음의 콘텐츠 본문(Markdown), 항상 있음

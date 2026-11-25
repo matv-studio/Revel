@@ -483,6 +483,25 @@ try {
     const unmarked = await until(async () => !((await row.getAttribute('class')) || '').includes('is-archived'));
     check('CMS: entry archived from its right-click menu (published: false), unarchived from its panel', items.includes('Archive') && archived && marked && back && unmarked, JSON.stringify({ items, archived, marked, back, unmarked }));
   }
+  // ---------------------------------------------------------------- première publication (D-203)
+  {
+    // Site sans hébergement (simulation sans hébergement enregistré).
+    await page.goto(`${ui.replace(/\/$/, '')}/#lang=en&theme=dark&simple=1&noprofiles=1&bridge=${encodeURIComponent(bridge)}`);
+    await page.reload();
+    await page.waitForSelector('.site-open, .pub-btn', { timeout: 15000 });
+    if (await page.$('.site-open')) await page.click('.site-open');
+    await page.waitForSelector('.pub-btn', { timeout: 15000 }); await w(800);
+    await page.click('.pub-btn');
+    const shown = await until(async () => !!(await page.$('.dialog.fp')), 8000);
+    const steps = await page.$$eval('.fp-step', (l) => l.map((e) => e.dataset.step));
+    const locked = shown && await page.isDisabled('.dialog.fp .btn--primary');
+    const url = shown ? await page.textContent('.fp-url') : '';
+    await shot('first-publish');
+    if (shown) await page.click('.dialog.fp .dialog-actions .btn:not(.btn--primary)');
+    const closed = await until(async () => !(await page.$('.dialog.fp')));
+    check('publish: a site without hosting opens the free GitHub Pages assistant (3 steps, continue locked until signed in)',
+      shown && steps.join() === 'sign,name,online' && locked && /github\.io\//.test(url) && closed, JSON.stringify({ shown, steps, locked, url, closed }));
+  }
   check('no error in the interface', errors.length === 0, errors.join(' | '));
 } catch (e) {
   check('run', false, e.message.split('\n')[0]);

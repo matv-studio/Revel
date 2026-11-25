@@ -67,6 +67,9 @@ dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travail
   obligatoire, valeurs d'une liste déroulante), section posée après la section sélectionnée. Second envoi à
   faire : après l'envoi et destinataire par formulaire, filtres de liste, assistant de publication, M3, M9,
   M10, M12, M13.
+- **25/11, 15 h (D-203)** : première publication gratuite sur GitHub Pages (assistant en trois étapes depuis
+  « Publish » quand le site n'a pas d'hébergement, audit M11) ; champ « Published » montré comme état
+  (« Published » / « Archived »). Nouveau défaut consigné : P16.
 - **25/11, 13 h (D-202, `2263415`)** : filtres de liste reliés à une liste et à un champ (boutons tirés des
   valeurs, « All », plusieurs valeurs) ; archiver / désarchiver un contenu ; « Add hosting » avec dossier
   choisi après la connexion (rien d'office) ; réglages centrés à toutes les largeurs, barre de statistiques

@@ -782,6 +782,26 @@ fn control(
             v.into_iter().map(Value::String).collect(),
         )))
     };
+    // Marqueur de publication (`published`, `draft`) : état montré, changé par « Archive » /
+    // « Unarchive » (D-203, demande du 25/11 : un seul outil).
+    let marker = f.with_value(|f| f.name.clone());
+    if kind == Kind::Bool && matches!(marker.as_str(), "published" | "draft") {
+        let draft = marker == "draft";
+        return view! {
+            {move || {
+                let archived = match value.get() {
+                    Some(Value::Bool(b)) => b == draft,
+                    _ => false,
+                };
+                if archived {
+                    view! { <span class="chip chip--archived cms-state" data-state="archived">{ui.t("cms-archived")}</span> }.into_any()
+                } else {
+                    view! { <span class="chip chip--ok cms-state" data-state="published">{ui.t("cms-published")}</span> }.into_any()
+                }
+            }}
+        }
+        .into_any();
+    }
     match kind {
         Kind::Bool => view! {
             <span class="switch">

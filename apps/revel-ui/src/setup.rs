@@ -49,7 +49,7 @@ enum Phase {
 }
 
 /// Nom d'un dépôt d'après le nom du site (`Atelier Lumen` -> `atelier-lumen`).
-fn slug(name: &str) -> String {
+pub(crate) fn slug(name: &str) -> String {
     let mut out = String::new();
     for c in name.trim().to_lowercase().chars() {
         let c = match c {

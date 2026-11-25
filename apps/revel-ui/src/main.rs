@@ -22,6 +22,7 @@ mod domain;
 mod editor;
 mod feeds;
 mod files;
+mod firstpublish;
 mod formfields;
 mod help;
 mod home;
@@ -230,6 +231,8 @@ pub struct Ui {
     pub publish_panel: RwSignal<bool>,
     /// Fenêtre « Mettre en ligne » (première mise en ligne guidée) ouverte.
     pub setup: RwSignal<bool>,
+    /// Première publication sur GitHub Pages (site sans hébergement, D-203) ouverte.
+    pub first_publish: RwSignal<bool>,
     /// Fenêtre « Nom de domaine » ouverte pour un hébergement (identifiant).
     pub domain_for: RwSignal<Option<String>>,
     /// Version plus récente de Revel publiée (6.6), vérifiée au lancement.
@@ -508,6 +511,7 @@ fn App() -> impl IntoView {
         publish_rev: RwSignal::new(0),
         publish_panel: RwSignal::new(false),
         setup: RwSignal::new(false),
+        first_publish: RwSignal::new(false),
         domain_for: RwSignal::new(None),
         update: RwSignal::new(None),
         last_site: RwSignal::new(None),
@@ -671,6 +675,7 @@ fn App() -> impl IntoView {
             <library::MediaPicker/>
             <dialog::Dialog/>
             <setup::SetupDialog/>
+            <firstpublish::FirstPublishDialog/>
             <domain::DomainDialog/>
             <ctxmenu::ContextLayer/>
         </div>

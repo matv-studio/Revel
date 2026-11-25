@@ -1821,3 +1821,21 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .ver-restore { display: none; position: absolute; right: var(--s-2); top: 50%; transform: translateY(-50%); color: var(--danger-text); }
 .ver-item:hover .ver-restore, .ver-restore:focus-visible { display: inline-grid; place-items: center; }
 .ver-item:hover .ver-files:has(+ .ver-restore) { visibility: hidden; }
+
+/* D-203 — première publication sur GitHub Pages : trois étapes encadrées. */
+.dialog.fp { width: min(480px, 100%); display: flex; flex-direction: column; gap: var(--s-4); }
+.fp-title { display: flex; align-items: center; gap: 6px; }
+.fp-title .info-tip { color: var(--text-faint); cursor: help; display: inline-grid; }
+.fp-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.fp-step { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: var(--s-3); padding: var(--s-3) var(--s-4);
+  border: var(--border) solid var(--line-strong); border-radius: var(--radius-lg); }
+.fp-step.is-current { border-color: var(--accent, var(--text-muted)); }
+.fp-n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-active);
+  color: var(--text-muted); font-size: var(--text-xs); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; }
+.fp-step.is-current .fp-n { background: var(--accent, var(--text)); color: var(--accent-ink, var(--bg)); }
+.fp-step.is-done .fp-n { background: var(--success-text); color: var(--bg); }
+.fp-n svg.icon { width: 13px; height: 13px; }
+.fp-body { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.fp-body > b { font-weight: var(--weight-medium); }
+.fp-note { font-size: var(--text-sm); color: var(--text-muted); }
+.fp-url { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

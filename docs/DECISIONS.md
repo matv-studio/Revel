@@ -3020,3 +3020,21 @@ section.**
   l'utilisateur) et « Restore » / « Copy version ID » au clic droit (maquette validée le 25/11).
 - Charte de design mise à jour (document du projet et `docs/DESIGN.md`) avec les éléments nouveaux et
   modifiés depuis le 09/11.
+
+## D-203 — Première publication gratuite sur GitHub Pages (25/11/2026)
+
+- Audit M11, maquette `tools-5-publish-assistant` validée le 24/11 : un site **sans hébergement** qui
+  clique « Publish » ouvre « Publish for free with GitHub Pages » en trois étapes encadrées : (1) compte
+  GitHub (relié : coche verte et « Signed in as … » ; sinon le bouton de connexion habituel), (2) nom du
+  site (nom du site mis en forme, adresse `https://<compte>.github.io/<nom>/` montrée, nom refusé s'il
+  contient autre chose que lettres, chiffres, `-`, `_`, `.`), (3) mise en ligne. « Continue » enregistre
+  l'hébergement GitHub Pages (`gh-pages`) et lance la publication : le cœur crée le dépôt public s'il
+  n'existe pas et active GitHub Pages (déjà en place, D-161).
+- Hébergement payant (SFTP) : ⓘ du titre, réglé dans Paramètres › Publication (« Add hosting », D-202).
+- Essai de bout en bout : site sans hébergement (`noprofiles`), trois étapes, « Continue » grisé tant que
+  le compte n'est pas relié.
+- **Champ « Published » (demande du 25/11)** : là où une collection a un champ `published` (ou `draft`),
+  il montre l'état au lieu d'un interrupteur ou d'une coche : « Published » (vert) ou « Archived », dans la
+  fiche et dans le tableau ; on le change par « Archive » / « Unarchive » (un seul outil).
+- Essai de l'éditeur : marque « remplacé » d'un champ CMS parfois en retard sur le canevas, consignée en
+  **P16** (audit) ; l'essai resélectionne le calque si elle tarde.

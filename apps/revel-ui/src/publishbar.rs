@@ -162,6 +162,13 @@ pub fn PublishButton() -> impl IntoView {
             .map(|d| d.profile)
             .collect()
     };
+    // Site sans hébergement : « Publier » ouvre la première publication sur GitHub Pages (D-203).
+    Effect::new(move |_| {
+        if open.get() && list().is_some_and(|l| l.is_empty()) {
+            open.set(false);
+            ui.first_publish.set(true);
+        }
+    });
     let toggle = move |_| {
         let now = !open.get_untracked();
         if now {

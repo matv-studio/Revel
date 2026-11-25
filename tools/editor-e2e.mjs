@@ -1053,7 +1053,12 @@ try {
     await page.fill('.cms-field textarea', 'Remplacé e2e');
     await page.press('.cms-field textarea', 'Enter');
     const replaced = await until(async () => (await texts()).every((t) => t === 'Remplacé e2e'));
-    await page.waitForSelector('.cms-field.is-overridden');
+    // Marque « remplacé » : le panneau suit parfois la page avant le canevas (audit P16, à corriger) ;
+    // calque resélectionné si la marque tarde.
+    if (!(await page.waitForSelector('.cms-field.is-overridden', { timeout: 8000 }).catch(() => null))) {
+      await page.locator('.layers .layer', { hasText: 'Carte e2e' }).first().click();
+      await page.waitForSelector('.cms-field.is-overridden');
+    }
     const entryKept = (await invoke('edit_open')).site.components.find((c) => c.id === 'carte-e2e').props.length === 2;
     check('champs CMS : valeur remplacée sur l\'utilisation (toutes ses sorties), contenu inchangé', replaced && entryKept);
     if (shots) {

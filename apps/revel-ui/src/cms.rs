@@ -163,6 +163,20 @@ fn cell(
             .cloned()
             .unwrap_or_else(|| s.to_string())
     };
+    // Marqueur de publication : état écrit (« Published » / « Archived », D-203).
+    if matches!(f.name.as_str(), "published" | "draft")
+        && matches!(v, None | Some(Value::Null) | Some(Value::Bool(_)))
+    {
+        let archived = v.and_then(Value::as_bool) == Some(f.name == "draft");
+        return ui.now(
+            if archived {
+                "cms-archived"
+            } else {
+                "cms-published"
+            },
+            &[],
+        );
+    }
     match v {
         None | Some(Value::Null) => String::new(),
         Some(Value::Bool(b)) => if *b { "✓" } else { "—" }.to_string(),

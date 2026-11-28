@@ -4212,3 +4212,69 @@ icon-search = Szukaj ikon
 icon-search-none = Brak ikon
 icon-more = Jeszcze { $n }
 error-icon-library = Biblioteka ikon niedostępna ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Importuj strony…
+import-component = Importuj komponent…
+component-export = Eksportuj komponent…
+component-file = Komponent Revel
+import-pages-title = Importuj strony
+import-component-title = Importuj komponent
+import-from-site = Witryna Revel
+import-from-component-file = Plik komponentu
+import-from-html = Plik HTML
+import-site = Witryna
+import-choose-site = Wybierz witrynę
+import-other-folder = Inny folder…
+import-drop-component = Upuść plik .revel-component
+import-drop-html = Upuść pliki .html lub folder
+import-browse = Przeglądaj…
+import-no-pages = Brak stron do importu
+import-no-components = Brak komponentów do importu
+import-variables = { $count ->
+        [one] { $count } zmienna
+        [few] { $count } zmienne
+        [many] { $count } zmiennych
+       *[other] { $count } zmiennej
+    }
+import-bring-pages = Dołącz to, czego używają te strony (komponenty, style, multimedia)
+import-bring-pages-help = Wyłączone: komponenty, których brak w tej witrynie, zostaną zastąpione ich zawartością; style i multimedia nie są kopiowane.
+import-bring-files = Kopiuj ich obrazy i czcionki do Zasobów
+import-bring-files-help = Wyłączone: obrazy i czcionki nie są kopiowane i zachowują swoje adresy. Style są zawsze importowane.
+import-bring-components = Dołącz ich style i multimedia
+import-bring-components-help = Wyłączone: style ich klas i multimedia nie są kopiowane. Używane komponenty są zawsze dołączane.
+import-count-pages = { $count ->
+        [one] { $count } strona
+        [few] { $count } strony
+        [many] { $count } stron
+       *[other] { $count } strony
+    }
+import-count-components = { $count ->
+        [one] { $count } komponent
+        [few] { $count } komponenty
+        [many] { $count } komponentów
+       *[other] { $count } komponentu
+    }
+import-count-media = { $count ->
+        [one] { $count } plik multimedialny
+        [few] { $count } pliki multimedialne
+        [many] { $count } plików multimedialnych
+       *[other] { $count } pliku multimedialnego
+    }
+import-plan-detail = Ponownie użyte identyczne komponenty: { $reused } · Dodane style: { $styles } · Dodane zmienne: { $vars }
+import-pages-go = Importuj { $count ->
+        [one] { $count } stronę
+        [few] { $count } strony
+        [many] { $count } stron
+       *[other] { $count } strony
+    }
+import-components-go = Importuj { $count ->
+        [one] { $count } komponent
+        [few] { $count } komponenty
+        [many] { $count } komponentów
+       *[other] { $count } komponentu
+    }
+error-import-drop-component = Upuść plik .revel-component
+error-import-drop-html = Upuść pliki .html lub folder
+error-import-source = Z tego źródła nie można nic zaimportować ({ $detail })
+error-component-file = Nieczytelny plik komponentu ({ $detail })

@@ -4103,3 +4103,57 @@ icon-search = Icons suchen
 icon-search-none = Kein Icon
 icon-more = { $n } weitere
 error-icon-library = Icon-Bibliothek nicht erreichbar ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Seiten importieren…
+import-component = Komponente importieren…
+component-export = Komponente exportieren…
+component-file = Revel-Komponente
+import-pages-title = Seiten importieren
+import-component-title = Komponente importieren
+import-from-site = Revel-Website
+import-from-component-file = Komponentendatei
+import-from-html = HTML-Datei
+import-site = Website
+import-choose-site = Website wählen
+import-other-folder = Anderer Ordner…
+import-drop-component = .revel-component-Datei ablegen
+import-drop-html = .html-Dateien oder einen Ordner ablegen
+import-browse = Durchsuchen…
+import-no-pages = Keine Seite zum Importieren
+import-no-components = Keine Komponente zum Importieren
+import-variables = { $count ->
+        [one] { $count } Variable
+       *[other] { $count } Variablen
+    }
+import-bring-pages = Mitbringen, was diese Seiten verwenden (Komponenten, Stile, Medien)
+import-bring-pages-help = Aus: In dieser Website fehlende Komponenten werden durch ihren Inhalt ersetzt; Stile und Medien werden nicht kopiert.
+import-bring-files = Ihre Bilder und Schriften in Assets kopieren
+import-bring-files-help = Aus: Bilder und Schriften werden nicht kopiert und behalten ihre Adressen. Stile werden immer importiert.
+import-bring-components = Ihre Stile und Medien mitbringen
+import-bring-components-help = Aus: Die Stile ihrer Klassen und ihre Medien werden nicht kopiert. Verwendete Komponenten werden immer mitgebracht.
+import-count-pages = { $count ->
+        [one] { $count } Seite
+       *[other] { $count } Seiten
+    }
+import-count-components = { $count ->
+        [one] { $count } Komponente
+       *[other] { $count } Komponenten
+    }
+import-count-media = { $count ->
+        [one] { $count } Medium
+       *[other] { $count } Medien
+    }
+import-plan-detail = Identische Komponenten wiederverwendet: { $reused } · Stile hinzugefügt: { $styles } · Variablen hinzugefügt: { $vars }
+import-pages-go = { $count ->
+        [one] { $count } Seite
+       *[other] { $count } Seiten
+    } importieren
+import-components-go = { $count ->
+        [one] { $count } Komponente
+       *[other] { $count } Komponenten
+    } importieren
+error-import-drop-component = .revel-component-Datei ablegen
+error-import-drop-html = .html-Dateien oder einen Ordner ablegen
+error-import-source = Aus dieser Quelle lässt sich nichts importieren ({ $detail })
+error-component-file = Komponentendatei nicht lesbar ({ $detail })

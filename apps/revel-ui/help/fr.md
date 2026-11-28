@@ -18,6 +18,8 @@ Un site Revel s'ouvre avec **Ouvrir un site**, ou en déposant son dossier sur l
 
 À la fin, la boîte montre ce qui a été repris et les points à vérifier, puis ouvre le site dans l'éditeur.
 
+**Dans un site ouvert** : **Pages › Importer des pages…** (clic droit dans le panneau, ou bouton en bas) reprend des pages d'un autre site Revel ou de fichiers HTML ; **Composants › Importer un composant…** reprend des composants d'un site Revel, d'un fichier de composant (`.revel-component`) ou de fichiers HTML (chaque fichier devient un composant). Ce qu'ils utilisent suit (composants, styles de leurs classes, variables, images et polices) ; rien n'est écrasé dans votre site : une adresse prise reçoit `-2`, un composant ou un fichier identique est réutilisé, une classe dont les styles diffèrent est renommée. Les pages HTML importées prennent le gabarit de votre site. **Exporter le composant…** (clic droit sur un composant) écrit un fichier de composant à partager. Une seule annulation défait tout l'import.
+
 ## L'éditeur
 
 - **Au centre, le canevas** : la page telle qu'elle sera publiée. Un clic sélectionne un élément ; Maj+clic en ajoute un autre à la sélection.

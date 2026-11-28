@@ -38,6 +38,7 @@ pub mod sharing;
 pub mod starter;
 mod state;
 pub mod templates;
+mod transfer;
 mod translate;
 pub mod updates;
 mod versions;
@@ -335,6 +336,9 @@ pub struct Core {
     clone_cancel: AtomicBool,
     /// Interruption de l'import en cours (site lu en ligne, médias, Figma).
     import_cancel: AtomicBool,
+    /// Source d'un import de pages ou de composants (D-206), lue une fois pour la fenêtre
+    /// d'import (liste, bilan, import).
+    import_source: Mutex<Option<transfer::Cached>>,
 }
 
 /// Dossier de sortie d'un environnement : `<site>/.revel/out/<env>`.
@@ -392,6 +396,7 @@ impl Core {
             clones: Mutex::new(Vec::new()),
             clone_cancel: AtomicBool::new(false),
             import_cancel: AtomicBool::new(false),
+            import_source: Mutex::new(None),
         }
     }
 

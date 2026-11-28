@@ -4103,3 +4103,57 @@ icon-search = Iconen zoeken
 icon-search-none = Geen icoon
 icon-more = Nog { $n }
 error-icon-library = Icoonbibliotheek onbereikbaar ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Pagina’s importeren…
+import-component = Component importeren…
+component-export = Component exporteren…
+component-file = Revel-component
+import-pages-title = Pagina’s importeren
+import-component-title = Component importeren
+import-from-site = Revel-site
+import-from-component-file = Componentbestand
+import-from-html = HTML-bestand
+import-site = Site
+import-choose-site = Kies een site
+import-other-folder = Andere map…
+import-drop-component = Zet een .revel-component-bestand neer
+import-drop-html = Zet .html-bestanden of een map neer
+import-browse = Bladeren…
+import-no-pages = Geen pagina om te importeren
+import-no-components = Geen component om te importeren
+import-variables = { $count ->
+        [one] { $count } variabele
+       *[other] { $count } variabelen
+    }
+import-bring-pages = Meenemen wat deze pagina’s gebruiken (componenten, stijlen, media)
+import-bring-pages-help = Uit: componenten die in deze site ontbreken worden vervangen door hun inhoud; stijlen en media worden niet gekopieerd.
+import-bring-files = Hun afbeeldingen en lettertypen naar Assets kopiëren
+import-bring-files-help = Uit: afbeeldingen en lettertypen worden niet gekopieerd en houden hun adressen. Stijlen worden altijd geïmporteerd.
+import-bring-components = Hun stijlen en media meenemen
+import-bring-components-help = Uit: de stijlen van hun klassen en hun media worden niet gekopieerd. Gebruikte componenten worden altijd meegenomen.
+import-count-pages = { $count ->
+        [one] { $count } pagina
+       *[other] { $count } pagina’s
+    }
+import-count-components = { $count ->
+        [one] { $count } component
+       *[other] { $count } componenten
+    }
+import-count-media = { $count ->
+        [one] { $count } medium
+       *[other] { $count } media
+    }
+import-plan-detail = Identieke componenten hergebruikt: { $reused } · Stijlen toegevoegd: { $styles } · Variabelen toegevoegd: { $vars }
+import-pages-go = { $count ->
+        [one] { $count } pagina
+       *[other] { $count } pagina’s
+    } importeren
+import-components-go = { $count ->
+        [one] { $count } component
+       *[other] { $count } componenten
+    } importeren
+error-import-drop-component = Zet een .revel-component-bestand neer
+error-import-drop-html = Zet .html-bestanden of een map neer
+error-import-source = Niets te importeren uit deze bron ({ $detail })
+error-component-file = Componentbestand onleesbaar ({ $detail })

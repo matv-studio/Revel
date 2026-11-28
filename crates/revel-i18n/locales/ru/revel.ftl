@@ -4208,3 +4208,69 @@ icon-search = Поиск значков
 icon-search-none = Нет значков
 icon-more = Ещё { $n }
 error-icon-library = Библиотека значков недоступна ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Импортировать страницы…
+import-component = Импортировать компонент…
+component-export = Экспортировать компонент…
+component-file = Компонент Revel
+import-pages-title = Импорт страниц
+import-component-title = Импорт компонента
+import-from-site = Сайт Revel
+import-from-component-file = Файл компонента
+import-from-html = Файл HTML
+import-site = Сайт
+import-choose-site = Выберите сайт
+import-other-folder = Другая папка…
+import-drop-component = Перетащите файл .revel-component
+import-drop-html = Перетащите файлы .html или папку
+import-browse = Обзор…
+import-no-pages = Нет страниц для импорта
+import-no-components = Нет компонентов для импорта
+import-variables = { $count ->
+        [one] { $count } переменная
+        [few] { $count } переменные
+        [many] { $count } переменных
+       *[other] { $count } переменной
+    }
+import-bring-pages = Взять то, что используют эти страницы (компоненты, стили, медиа)
+import-bring-pages-help = Выключено: компоненты, которых нет на этом сайте, заменяются их содержимым; стили и медиа не копируются.
+import-bring-files = Скопировать их изображения и шрифты в Ресурсы
+import-bring-files-help = Выключено: изображения и шрифты не копируются и сохраняют свои адреса. Стили импортируются всегда.
+import-bring-components = Взять их стили и медиа
+import-bring-components-help = Выключено: стили их классов и медиа не копируются. Используемые компоненты переносятся всегда.
+import-count-pages = { $count ->
+        [one] { $count } страница
+        [few] { $count } страницы
+        [many] { $count } страниц
+       *[other] { $count } страницы
+    }
+import-count-components = { $count ->
+        [one] { $count } компонент
+        [few] { $count } компонента
+        [many] { $count } компонентов
+       *[other] { $count } компонента
+    }
+import-count-media = { $count ->
+        [one] { $count } медиафайл
+        [few] { $count } медиафайла
+        [many] { $count } медиафайлов
+       *[other] { $count } медиафайла
+    }
+import-plan-detail = Повторно использовано одинаковых компонентов: { $reused } · Добавлено стилей: { $styles } · Добавлено переменных: { $vars }
+import-pages-go = Импортировать { $count ->
+        [one] { $count } страницу
+        [few] { $count } страницы
+        [many] { $count } страниц
+       *[other] { $count } страницы
+    }
+import-components-go = Импортировать { $count ->
+        [one] { $count } компонент
+        [few] { $count } компонента
+        [many] { $count } компонентов
+       *[other] { $count } компонента
+    }
+error-import-drop-component = Перетащите файл .revel-component
+error-import-drop-html = Перетащите файлы .html или папку
+error-import-source = Из этого источника нечего импортировать ({ $detail })
+error-component-file = Файл компонента не читается ({ $detail })

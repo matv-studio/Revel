@@ -3102,3 +3102,63 @@ section.**
 - **En suspens** : licence non lue pour une bibliothèque ajoutée sans connexion (lue à la première
   lecture réussie) ; la recherche porte sur les noms de fichiers (pas de mots-clés : les bibliothèques
   n'en publient pas de façon commune).
+
+## D-206 — Imports de pages et de composants, export de composants (28/11/2026, maquettes validées le 24/11)
+
+- **Maquettes** : `docs/maquettes/2026-11-24/import-1-pages-revel-site.png`, `import-2-pages-html.png`,
+  `import-3-component.png` (D-197).
+- **Entrées** : « Import pages… » dans le menu du vide du panneau Pages et en bouton à son pied (icône
+  d'import, info-bulle) ; « Import component… » de même dans Composants ; « Export component… » dans le
+  menu d'un composant (fenêtre « Enregistrer sous », fichier `.revel-component`).
+- **Fenêtre** (une pour les deux) : onglets « Revel site » / « HTML file » (pages), « Revel site » /
+  « Component file » / « HTML file » (composants). Site : liste des sites récents (sauf celui ouvert) et
+  « Other folder… ». Fichiers : zone de dépôt (fichiers ou dossier ; chemins lus par WebView2 sous
+  Windows, D-122, sinon retrouvés par leur nom) et « Browse… ». Liste à cocher : pages d'un site avec leur
+  adresse (aucune cochée d'office), fichiers HTML avec l'adresse d'arrivée (« → /landing/ », tous cochés),
+  composants avec leur nombre de variables. Interrupteur : « Bring what these pages use (components,
+  styles, media) » / « Copy their images and fonts into Assets » (fichiers HTML : leurs styles sont
+  toujours repris, sinon les pages arriveraient sans mise en forme) / « Bring their styles and media ».
+  Bilan calculé par le cœur à chaque choix (« 3 pages · 2 components · 6 media » ; réutilisés, styles,
+  variables et classes renommées en info-bulle) ; bouton « Import N pages ».
+- **Moteur** (`revel_edit::merge`, commun aux trois sources) : une source est toujours lue comme un site,
+  puis fusionnée dans un double du site ouvert (adresses et identifiants libres calculés au fur et à
+  mesure). Composants utilisés apportés de proche en proche ; **identique** (même contenu hors
+  identifiants, mêmes propriétés) : réutilisé ; même identifiant, contenu différent : `-2`, utilisations
+  suivies. **Styles** : règles dont toutes les classes sont portées par ce qui est importé (classes d'état
+  `is-`, `has-` admises ; parties d'un sélecteur multiple gardées une à une) ; règles des balises (`body`,
+  `h1`) laissées au site ouvert ; classe déjà présente avec d'autres règles : **renommée** `-2` dans
+  l'import (attribut `class`, images, références `.classe` des interactions) ; règle identique déjà là :
+  pas recopiée. **Variables** lues (`var(--x)`, de proche en proche, mode sombre compris) ajoutées à
+  `:root` si absentes ; `@keyframes` et `@font-face` utilisés ajoutés. **Médias** : fichiers locaux lus
+  (attributs, `srcset`, `url()`, valeurs des propriétés) copiés dans le dossier des médias (`media/`,
+  créé et déclaré s'il manque), fichier identique réutilisé, sinon nom numéroté ; seulement des médias
+  (images, vidéos, sons, documents, polices, 3D), pas de scripts. **Pages** : adresse libre (`-2`),
+  accueil importé nommé d'après son titre, gabarit du site ouvert (le même identifiant s'il existe),
+  nouveaux identifiants d'éléments. Sans « ce qu'elles utilisent » : utilisation d'un composant absent
+  remplacée par son contenu (valeurs des propriétés écrites, comme « Détacher »). Le tout est **une
+  commande** (`Batch` : composants, styles, variables, pages) : une étape d'annulation ; les fichiers des
+  médias sont copiés avant, retirés si la commande échoue (ils restent après une annulation, comme un
+  média importé).
+- **Sources** : site Revel lu tel quel (même site refusé). Fichiers HTML : copiés avec ce qu'ils lisent
+  (images, feuilles de style, polices, de proche en proche ; pas les autres pages, 512 Mo au plus, 400
+  pages) dans un dossier temporaire, importés comme un site (7.1, styles des `<style>` repris), remis dans
+  la forme de l'interface ; adresses `/x.html` → `/x/` (liens suivis) ; **contenu commun déduit à
+  l'import remis dans chaque page** (le gabarit commun de 7.1 sert à un site entier ; ici la page garde
+  tout son `<body>` et prend le gabarit du site ouvert : rien n'est perdu, un en-tête en double se
+  retire). En composants : chaque fichier importé seul, son `<body>` devient un composant (nom d'après le
+  fichier), tous réunis par le même moteur. Fichier de composant : archive ZIP (`component.json`,
+  `site/site.revel.json` d'un petit site, `site/media/…`), écrite par l'export (fusion dans un site vide) ;
+  à la lecture, code retiré (`<script>`, attributs `on…`, liens `javascript:`, code du site) et fichiers
+  de code ignorés, comme les modèles partagés (D-132). Source lue gardée tant qu'elle ne change pas (date
+  des fichiers) : liste, bilan et import ne la relisent pas.
+- **Assistants (MCP)** : `import_into_site` (liste la source sans pages ni composants, sinon importe ;
+  bilan détaillé) et `export_components`.
+- **Essais** : `merge` (4 essais : pages, composants, classes renommées, variables, médias, sélecteurs
+  multiples, sans « ce qu'elles utilisent ») ; `imports_de_pages_et_composants` (cœur : site du même
+  modèle — adresses numérotées, composants et styles réutilisés, image copiée, une annulation ; fichiers
+  HTML — feuille de style, images lues par la page et par le CSS, fichier inutile non copié, liens suivis ;
+  export puis import d'un composant dans un site vide ; fichier HTML en composant, styles et images
+  identiques réutilisés).
+- **En suspens** : collections du CMS et pages de collection non importées (pages fixes seulement) ;
+  pages HTML d'un autre outil (Webflow, Framer) importées sans leurs traitements propres (CMS, moteur
+  retiré), qui passent par l'import de site complet.

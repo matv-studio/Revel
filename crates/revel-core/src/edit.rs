@@ -836,6 +836,11 @@ impl Core {
         })
     }
 
+    /// État de la session d'édition d'un site ouvert, sans modification.
+    pub(crate) fn session_state(&self, path: &Path) -> Result<EditState> {
+        self.with_session(path, |s| Ok(s.state(None)))
+    }
+
     /// Révision de la session d'édition d'un site ouvert (rendus du canevas datés).
     pub(crate) fn session_revision(&self, path: &Path) -> Option<u64> {
         self.with_session(path, |s| Ok(s.revision)).ok()

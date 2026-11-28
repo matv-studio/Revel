@@ -4100,3 +4100,57 @@ icon-search = Simge ara
 icon-search-none = Simge yok
 icon-more = { $n } tane daha
 error-icon-library = Simge kitaplığına ulaşılamıyor ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Sayfaları içe aktar…
+import-component = Bileşen içe aktar…
+component-export = Bileşeni dışa aktar…
+component-file = Revel bileşeni
+import-pages-title = Sayfaları içe aktar
+import-component-title = Bileşen içe aktar
+import-from-site = Revel sitesi
+import-from-component-file = Bileşen dosyası
+import-from-html = HTML dosyası
+import-site = Site
+import-choose-site = Bir site seçin
+import-other-folder = Başka klasör…
+import-drop-component = Bir .revel-component dosyası bırakın
+import-drop-html = .html dosyaları veya bir klasör bırakın
+import-browse = Gözat…
+import-no-pages = İçe aktarılacak sayfa yok
+import-no-components = İçe aktarılacak bileşen yok
+import-variables = { $count ->
+        [one] { $count } değişken
+       *[other] { $count } değişken
+    }
+import-bring-pages = Bu sayfaların kullandıklarını getir (bileşenler, stiller, medya)
+import-bring-pages-help = Kapalı: bu sitede olmayan bileşenler içerikleriyle değiştirilir; stiller ve medya kopyalanmaz.
+import-bring-files = Görsellerini ve yazı tiplerini Varlıklar’a kopyala
+import-bring-files-help = Kapalı: görseller ve yazı tipleri kopyalanmaz, adreslerini korur. Stiller her zaman içe aktarılır.
+import-bring-components = Stillerini ve medyalarını getir
+import-bring-components-help = Kapalı: sınıflarının stilleri ve medyaları kopyalanmaz. Kullandıkları bileşenler her zaman getirilir.
+import-count-pages = { $count ->
+        [one] { $count } sayfa
+       *[other] { $count } sayfa
+    }
+import-count-components = { $count ->
+        [one] { $count } bileşen
+       *[other] { $count } bileşen
+    }
+import-count-media = { $count ->
+        [one] { $count } medya
+       *[other] { $count } medya
+    }
+import-plan-detail = Yeniden kullanılan aynı bileşenler: { $reused } · Eklenen stiller: { $styles } · Eklenen değişkenler: { $vars }
+import-pages-go = { $count ->
+        [one] { $count } sayfayı
+       *[other] { $count } sayfayı
+    } içe aktar
+import-components-go = { $count ->
+        [one] { $count } bileşeni
+       *[other] { $count } bileşeni
+    } içe aktar
+error-import-drop-component = Bir .revel-component dosyası bırakın
+error-import-drop-html = .html dosyaları veya bir klasör bırakın
+error-import-source = Bu kaynaktan içe aktarılacak bir şey yok ({ $detail })
+error-component-file = Bileşen dosyası okunamıyor ({ $detail })

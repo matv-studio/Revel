@@ -379,6 +379,39 @@ pub struct SetIconArg {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ImportArg {
+    /// Where to import from (paths on this computer): a Revel site folder, one or more .html files
+    /// or folders of .html files, or a .revel-component file.
+    pub from: Vec<String>,
+    /// Pages to import (ids or addresses in the source). Leave pages and components empty to list
+    /// what the source contains.
+    #[serde(default)]
+    pub pages: Vec<String>,
+    /// Components to import (ids in the source).
+    #[serde(default)]
+    pub components: Vec<String>,
+    /// HTML files become components (their body) instead of pages.
+    #[serde(default)]
+    pub html_as_components: bool,
+    /// Bring what they use: components, the styles of their classes, variables, media files
+    /// (default true). Off: components missing from the site are replaced by their content.
+    #[serde(default)]
+    pub bring: Option<bool>,
+    #[serde(default)]
+    pub site: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ExportComponentsArg {
+    /// Component ids to export, with what they use (components, styles, media).
+    pub ids: Vec<String>,
+    /// File to write (path on this computer); ".revel-component" is added if missing.
+    pub dest: String,
+    #[serde(default)]
+    pub site: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SetStylesArg {
     /// Class selector the styles belong to, e.g. ".hero__title" (or a combination ".button.is-large").
     pub selector: String,
@@ -875,6 +908,8 @@ impl Revel {
                 "check_links" => go!(check_links),
                 "find_icons" => go!(find_icons),
                 "set_icon" => go!(set_icon),
+                "import_into_site" => go!(import_into_site),
+                "export_components" => go!(export_components),
                 "replace_link" => go!(replace_link),
                 "remove_node" => go!(remove_node),
                 "list_classes" => go!(list_classes),
@@ -1634,6 +1669,117 @@ impl Revel {
             serde_json::to_string_pretty(&json!({ "total": total, "icons": out }))
                 .unwrap_or_default(),
         )
+    }
+
+    #[tool(
+        description = "Import pages or components into the site from another Revel site, HTML files or a .revel-component file, with what they use (components, styles of their classes, variables, media). Conflicts are resolved without touching the site: taken addresses get -2, identical components and files are reused, classes whose styles differ are renamed. Call with empty pages and components to list the source first. One undo step."
+    )]
+    async fn import_into_site(&self, Parameters(a): Parameters<ImportArg>) -> CallToolResult {
+        let Some(first) = a.from.first() else {
+            return fail("from is empty.");
+        };
+        let source = if a.from.len() == 1 && first.to_ascii_lowercase().ends_with(".revel-component") {
+            revel_protocol::ImportSource::Component { path: first.clone() }
+        } else if a.from.len() == 1 && std::path::Path::new(first).join("site.revel.json").is_file() {
+            revel_protocol::ImportSource::Site { path: first.clone() }
+        } else {
+            revel_protocol::ImportSource::Html {
+                paths: a.from.clone(),
+                components: a.html_as_components,
+            }
+        };
+        let list: revel_protocol::ImportList = match self
+            .call("import_list", &a.site, json!({ "source": source }))
+            .await
+        {
+            Ok(v) => serde_json::from_value(v).unwrap_or_default(),
+            Err(e) => return fail(e),
+        };
+        if a.pages.is_empty() && a.components.is_empty() {
+            let mut out = format!("Source \"{}\"\n", list.name);
+            out.push_str(&format!("Pages ({}):\n", list.pages.len()));
+            for p in &list.pages {
+                out.push_str(&format!("- {} {} \"{}\"\n", p.id, p.path, p.name));
+            }
+            out.push_str(&format!("Components ({}):\n", list.components.len()));
+            for c in &list.components {
+                out.push_str(&format!("- {} \"{}\" ({} properties)\n", c.id, c.name, c.props));
+            }
+            return ok(out);
+        }
+        let mut pages = Vec::new();
+        for want in &a.pages {
+            match list.pages.iter().find(|p| p.id == *want || p.path == *want) {
+                Some(p) => pages.push(p.id.clone()),
+                None => return fail(format!("No page {want} in the source.")),
+            }
+        }
+        for want in &a.components {
+            if !list.components.iter().any(|c| c.id == *want) {
+                return fail(format!("No component {want} in the source."));
+            }
+        }
+        let bring = a.bring.unwrap_or(true);
+        let html_pages = matches!(source, revel_protocol::ImportSource::Html { components: false, .. });
+        let choice = revel_protocol::ImportChoice {
+            pages,
+            components: a.components.clone(),
+            uses: bring || html_pages || !a.components.is_empty(),
+            styles: bring || html_pages,
+            media: bring,
+        };
+        match self
+            .call(
+                "import_apply",
+                &a.site,
+                json!({ "source": source, "choice": choice }),
+            )
+            .await
+        {
+            Ok(v) => {
+                let plan: revel_protocol::ImportPlan = v
+                    .get(1)
+                    .cloned()
+                    .and_then(|p| serde_json::from_value(p).ok())
+                    .unwrap_or_default();
+                let mut out = String::from("Imported.\n");
+                for (id, path) in &plan.pages {
+                    out.push_str(&format!("- page {id} at {path}\n"));
+                }
+                for c in &plan.components {
+                    out.push_str(&format!("- component {c}\n"));
+                }
+                out.push_str(&format!(
+                    "{} identical components reused, {} style rules, {} variables, {} media files added.\n",
+                    plan.reused, plan.styles, plan.vars, plan.media
+                ));
+                for (a, b) in &plan.renamed {
+                    out.push_str(&format!("Class .{a} renamed .{b} (its styles differ in the site).\n"));
+                }
+                ok(out)
+            }
+            Err(e) => fail(e),
+        }
+    }
+
+    #[tool(
+        description = "Export components of the site, with what they use (components, styles of their classes, variables, media), to a .revel-component file that import_into_site (or Import component… in Revel) reads."
+    )]
+    async fn export_components(
+        &self,
+        Parameters(a): Parameters<ExportComponentsArg>,
+    ) -> CallToolResult {
+        match self
+            .call(
+                "export_components",
+                &a.site,
+                json!({ "ids": a.ids, "dest": a.dest }),
+            )
+            .await
+        {
+            Ok(v) => ok(format!("Written: {}", v.as_str().unwrap_or_default())),
+            Err(e) => fail(e),
+        }
     }
 
     #[tool(

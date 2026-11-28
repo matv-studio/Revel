@@ -4099,3 +4099,51 @@ icon-search = Cari ikon
 icon-search-none = Tidak ada ikon
 icon-more = { $n } lagi
 error-icon-library = Pustaka ikon tidak terjangkau ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Impor halaman…
+import-component = Impor komponen…
+component-export = Ekspor komponen…
+component-file = Komponen Revel
+import-pages-title = Impor halaman
+import-component-title = Impor komponen
+import-from-site = Situs Revel
+import-from-component-file = Berkas komponen
+import-from-html = Berkas HTML
+import-site = Situs
+import-choose-site = Pilih situs
+import-other-folder = Folder lain…
+import-drop-component = Letakkan berkas .revel-component
+import-drop-html = Letakkan berkas .html atau folder
+import-browse = Telusuri…
+import-no-pages = Tidak ada halaman untuk diimpor
+import-no-components = Tidak ada komponen untuk diimpor
+import-variables = { $count ->
+       *[other] { $count } variabel
+    }
+import-bring-pages = Bawa yang dipakai halaman ini (komponen, gaya, media)
+import-bring-pages-help = Mati: komponen yang tidak ada di situs ini diganti dengan isinya; gaya dan media tidak disalin.
+import-bring-files = Salin gambar dan fonnya ke Aset
+import-bring-files-help = Mati: gambar dan fon tidak disalin dan alamatnya tetap. Gaya selalu diimpor.
+import-bring-components = Bawa gaya dan medianya
+import-bring-components-help = Mati: gaya kelasnya dan medianya tidak disalin. Komponen yang dipakai selalu dibawa.
+import-count-pages = { $count ->
+       *[other] { $count } halaman
+    }
+import-count-components = { $count ->
+       *[other] { $count } komponen
+    }
+import-count-media = { $count ->
+       *[other] { $count } media
+    }
+import-plan-detail = Komponen identik dipakai ulang: { $reused } · Gaya ditambahkan: { $styles } · Variabel ditambahkan: { $vars }
+import-pages-go = Impor { $count ->
+       *[other] { $count } halaman
+    }
+import-components-go = Impor { $count ->
+       *[other] { $count } komponen
+    }
+error-import-drop-component = Letakkan berkas .revel-component
+error-import-drop-html = Letakkan berkas .html atau folder
+error-import-source = Tidak ada yang dapat diimpor dari sumber ini ({ $detail })
+error-component-file = Berkas komponen tidak terbaca ({ $detail })

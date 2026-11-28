@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 const KEEP: usize = 50;
 
 /// Commandes qui modifient le site.
-pub(crate) const WRITES: &[&str] = &["edit_apply", "edit_undo", "edit_redo"];
+pub(crate) const WRITES: &[&str] = &["edit_apply", "edit_undo", "edit_redo", "import_apply"];
 
 #[derive(Clone, Default)]
 pub struct ActivityLog(Arc<Mutex<VecDeque<McpActivity>>>);

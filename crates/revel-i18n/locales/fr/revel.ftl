@@ -4106,3 +4106,57 @@ icon-search = Chercher une icône
 icon-search-none = Aucune icône
 icon-more = { $n } de plus
 error-icon-library = Bibliothèque d'icônes injoignable ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Importer des pages…
+import-component = Importer un composant…
+component-export = Exporter le composant…
+component-file = Composant Revel
+import-pages-title = Importer des pages
+import-component-title = Importer un composant
+import-from-site = Site Revel
+import-from-component-file = Fichier de composant
+import-from-html = Fichier HTML
+import-site = Site
+import-choose-site = Choisir un site
+import-other-folder = Autre dossier…
+import-drop-component = Déposer un fichier .revel-component
+import-drop-html = Déposer des fichiers .html ou un dossier
+import-browse = Parcourir…
+import-no-pages = Aucune page à importer
+import-no-components = Aucun composant à importer
+import-variables = { $count ->
+        [one] { $count } variable
+       *[other] { $count } variables
+    }
+import-bring-pages = Apporter ce que ces pages utilisent (composants, styles, médias)
+import-bring-pages-help = Désactivé : les composants absents de ce site sont remplacés par leur contenu ; styles et médias ne sont pas copiés.
+import-bring-files = Copier leurs images et polices dans les Médias
+import-bring-files-help = Désactivé : images et polices ne sont pas copiées et gardent leurs adresses. Les styles sont toujours importés.
+import-bring-components = Apporter leurs styles et médias
+import-bring-components-help = Désactivé : les styles de leurs classes et leurs médias ne sont pas copiés. Les composants qu’ils utilisent sont toujours apportés.
+import-count-pages = { $count ->
+        [one] { $count } page
+       *[other] { $count } pages
+    }
+import-count-components = { $count ->
+        [one] { $count } composant
+       *[other] { $count } composants
+    }
+import-count-media = { $count ->
+        [one] { $count } média
+       *[other] { $count } médias
+    }
+import-plan-detail = Composants identiques réutilisés : { $reused } · Styles ajoutés : { $styles } · Variables ajoutées : { $vars }
+import-pages-go = Importer { $count ->
+        [one] { $count } page
+       *[other] { $count } pages
+    }
+import-components-go = Importer { $count ->
+        [one] { $count } composant
+       *[other] { $count } composants
+    }
+error-import-drop-component = Déposer un fichier .revel-component
+error-import-drop-html = Déposer des fichiers .html ou un dossier
+error-import-source = Rien à importer depuis cette source ({ $detail })
+error-component-file = Fichier de composant illisible ({ $detail })

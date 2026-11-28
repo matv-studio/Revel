@@ -228,6 +228,36 @@ impl Core {
                 .map_err(f)?,
             ),
             // Bibliothèques d'icônes en ligne (D-205).
+            "import_list" => json(
+                self.import_list(site, &arg::<revel_protocol::ImportSource>(args, "source")?)
+                    .map_err(f)?,
+            ),
+            "import_plan" => json(
+                self.import_plan(
+                    site,
+                    &arg::<revel_protocol::ImportSource>(args, "source")?,
+                    &arg::<revel_protocol::ImportChoice>(args, "choice")?,
+                )
+                .map_err(f)?,
+            ),
+            "import_apply" => json(
+                self.import_apply(
+                    site,
+                    &arg::<revel_protocol::ImportSource>(args, "source")?,
+                    &arg::<revel_protocol::ImportChoice>(args, "choice")?,
+                )
+                .map_err(f)?,
+            ),
+            "export_components" => json(
+                self.export_components(
+                    site,
+                    &arg::<Vec<String>>(args, "ids")?,
+                    Path::new(&arg::<String>(args, "dest")?),
+                )
+                .map_err(f)?
+                .display()
+                .to_string(),
+            ),
             "icon_library" => json(
                 self.icon_library(
                     &arg::<revel_protocol::IconLibrary>(args, "library")?,

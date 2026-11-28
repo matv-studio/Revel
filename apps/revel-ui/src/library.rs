@@ -1837,6 +1837,10 @@ pub fn Components() -> impl IntoView {
                     COMPONENT_CLIP.with(|c| *c.borrow_mut() = Some(item.get_value()))
                 })
                 .icon(icons::copy),
+                CtxItem::new(ui.now("component-export", &[]), move || {
+                    crate::transfer::export(ui, ed, &item.get_value(), &name.get_value())
+                })
+                .icon(icons::upload),
             ];
             items.extend(sh.move_items(&item.get_value()));
             items.push(
@@ -1985,7 +1989,11 @@ pub fn Components() -> impl IntoView {
                 }
             })
             .icon(icons::paste)
-            .disabled(clip.is_none())
+            .disabled(clip.is_none()),
+            CtxItem::new(ui.now("import-component", &[]), move || {
+                crate::transfer::open(ed, crate::transfer::Mode::Components)
+            })
+            .icon(icons::import)
             .sep(),
             CtxItem::new(ui.now("panel-collapse-all", &[]), move || {
                 closed.set(sh.shelf.with_untracked(|s| s.folders.clone()))
@@ -2013,6 +2021,8 @@ pub fn Components() -> impl IntoView {
             </div>
             <footer class="panel-foot">
                 <span class="panel-foot-text muted">{move || ui.tx("components-count", &[("count", all.with(Vec::len).to_string())])}</span>
+                <button class="icon-btn icon-btn--small components-import" title=ui.t("import-component") aria-label=ui.t("import-component")
+                    on:click=move |_| crate::transfer::open(ed, crate::transfer::Mode::Components)>{icons::import()}</button>
                 <button class="icon-btn icon-btn--small" title=ui.t("library-new-folder") aria-label=ui.t("library-new-folder")
                     on:click=move |_| { q.set(String::new()); sh.creating.set(Some(String::new())) }>{icons::folder_plus()}</button>
                 <button class="icon-btn icon-btn--small" title=ui.t("components-new") aria-label=ui.t("components-new")

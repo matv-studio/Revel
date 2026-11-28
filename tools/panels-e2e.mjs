@@ -33,7 +33,19 @@ if (process.argv[2] === '--prepare') {
     `---\ntitle: ${title}\nslug: ${slug}\ndate: ${date}\nauthor: ${author}\n---\nSample post.\n`);
   post('opening', 'Studio opening', 'Camille Roy', '2026-10-02');
   post('fair', 'Back from the fair', 'Noah Martin', '2026-11-12');
-  console.log('site prepared: journal collection, 2 posts');
+  // Fichiers HTML à importer (D-206) : deux pages, une feuille de style, deux images, une inutile.
+  const fx = path.join(path.dirname(path.resolve(dir)), 'import-essai');
+  fs.mkdirSync(path.join(fx, 'css'), { recursive: true });
+  fs.mkdirSync(path.join(fx, 'img'), { recursive: true });
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
+  fs.writeFileSync(path.join(fx, 'img/hero.png'), png);
+  fs.writeFileSync(path.join(fx, 'img/bg.png'), Buffer.concat([png, Buffer.from([1])]));
+  fs.writeFileSync(path.join(fx, 'img/unused.png'), Buffer.concat([png, Buffer.from([2])]));
+  fs.writeFileSync(path.join(fx, 'css/landing.css'), '.landing-hero{padding:48px;background:url(../img/bg.png) center/cover}.landing-cta{color:#b4005a}');
+  const html = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title><link rel="stylesheet" href="css/landing.css"></head><body>${body}</body></html>`;
+  fs.writeFileSync(path.join(fx, 'landing.html'), html('Landing', '<section class="landing-hero"><h1>Spring offer</h1><img src="img/hero.png" alt=""><a class="landing-cta" href="offer.html">See the offer</a></section>'));
+  fs.writeFileSync(path.join(fx, 'offer.html'), html('Offer', '<section class="landing-hero"><h1>The offer</h1><p>Two weeks, one price.</p></section>'));
+  console.log('site prepared: journal collection, 2 posts; HTML files to import in ' + fx);
   process.exit(0);
 }
 
@@ -561,6 +573,90 @@ try {
     const back = await until(async () => { const e = (await entries()).find((x) => x.file === 'opening'); return e && !('published' in e.data) && !('draft' in e.data); });
     const unmarked = await until(async () => !((await row.getAttribute('class')) || '').includes('is-archived'));
     check('CMS: entry archived from its right-click menu (published: false), unarchived from its panel', items.includes('Archive') && archived && marked && back && unmarked, JSON.stringify({ items, archived, marked, back, unmarked }));
+  }
+  // ---------------------------------------------------------------- imports (D-206)
+  {
+    const fx = path.resolve(process.env.REVEL_IMPORT_FIXTURES || 'import-essai');
+    const other = path.resolve(process.env.REVEL_IMPORT_SITE || 'modele-essai');
+    const P = '.dock-panel[data-panel="pages"]';
+    const C = '.dock-panel[data-panel="components"]';
+    const items = () => page.$$eval('.import-item', (l) => l.map((e) => [e.querySelector('.import-item-name').textContent.trim(), e.querySelector('.import-item-detail').textContent.trim(), e.querySelector('input').checked]));
+    const count = async () => (await site()).pages.length;
+    const n0 = await count();
+    // Pages d'un autre site Revel : « Other folder… », pages avec leur adresse, bilan, import.
+    await tab('pages');
+    await page.click(`${P} .pages-import`); await w(500);
+    const tabs = await page.$$eval('.import-tabs button', (l) => l.map((e) => e.textContent.trim()));
+    await page.evaluate((p) => { window.__revelPick = p; }, other);
+    await page.selectOption('.import-site select', '__other');
+    const rows = await until(async () => { const r = await items(); return r.length ? r : false; }, 15000);
+    const none = rows && rows.every((r) => !r[2]);
+    await page.locator('.import-item input').nth(0).check(); await page.locator('.import-item input').nth(1).check();
+    const sum = await until(async () => { const t = (await page.textContent('.import-summary')).trim(); return /^2 pages/.test(t) ? t : false; }, 10000);
+    const go = (await page.textContent('.import-go')).trim();
+    await shot('import-pages-site');
+    await page.click('.import-go');
+    const added = await until(async () => (await count()) === n0 + 2, 15000);
+    const closed = await until(async () => !(await page.$('.import-box')));
+    check('imports: pages from another Revel site (“Other folder…”, pages with their address unchecked, summary, “Import 2 pages”)',
+      tabs.join('|') === 'Revel site|HTML file' && rows && rows.length >= 2 && rows.every((r) => r[1].startsWith('/')) && none && !!sum && go === 'Import 2 pages' && added && closed,
+      JSON.stringify({ tabs, rows, sum, go, added }));
+    await page.click('.editor-toolbar .btn-undo');
+    check('imports: one undo removes the imported pages', await until(async () => (await count()) === n0, 8000));
+    // Fichiers HTML : « Browse… », adresse d'arrivée, images comptées, liens suivis.
+    await page.click(`${P} .pages-import`); await w(500);
+    await page.click('.import-tabs [data-tab="import-from-html"]'); await w(300);
+    const drop = !!(await page.$('.import-drop')) && !(await page.$('.import-item'));
+    await page.evaluate((f) => { window.__revelPickFiles = f; }, [path.join(fx, 'landing.html'), path.join(fx, 'offer.html')]);
+    await page.click('.import-browse');
+    const hrows = await until(async () => { const r = await items(); return r.length === 2 && r.every((x) => x[2] && x[1].startsWith('→ /')) ? r : false; }, 20000);
+    const hsum = await until(async () => { const t = (await page.textContent('.import-summary')).trim(); return /2 pages · 2 media/.test(t) ? t : false; }, 10000);
+    await shot('import-pages-html');
+    await page.click('.import-go');
+    const landing = await until(async () => (await site()).pages.find((p) => p.path === '/landing/'), 15000);
+    const linked = landing && JSON.stringify(landing.body).includes('"/offer/"') && /\/media\/hero\.png/.test(JSON.stringify(landing.body));
+    const styled = JSON.stringify((await site()).stylesheet).includes('.landing-cta');
+    check('imports: HTML files (Browse…, all checked, new address shown, “2 pages · 2 media”), links and images followed, styles brought',
+      drop && hrows && hrows.map((r) => r[0] + ' ' + r[1]).join('|') === 'landing.html → /landing/|offer.html → /offer/' && !!hsum && linked && styled,
+      JSON.stringify({ drop, hrows, hsum, linked, styled }));
+    await page.click('.editor-toolbar .btn-undo');
+    await until(async () => (await count()) === n0, 8000);
+    // Composant : fichier HTML en composant, export puis réimport (identique : réutilisé).
+    await tab('components');
+    const c0 = (await site()).components.length;
+    await page.click(`${C} .components-import`); await w(500);
+    const ctabs = await page.$$eval('.import-tabs button', (l) => l.map((e) => e.textContent.trim()));
+    await page.click('.import-tabs [data-tab="import-from-html"]'); await w(300);
+    await page.evaluate((f) => { window.__revelPickFiles = f; }, [path.join(fx, 'landing.html')]);
+    await page.click('.import-browse');
+    const crows = await until(async () => { const r = await items(); return r.length === 1 ? r : false; }, 20000);
+    const csum = await until(async () => { const t = (await page.textContent('.import-summary')).trim(); return /^1 component/.test(t) ? t : false; }, 10000);
+    const bring = (await page.textContent('.import-bring .label')).trim();
+    await shot('import-component-html');
+    await page.click('.import-go');
+    const made = await until(async () => (await site()).components.find((c) => c.id === 'landing'), 15000);
+    check('imports: component from an HTML file (Revel site, Component file, HTML file tabs; “0 variables”; “Bring their styles and media”)',
+      ctabs.join('|') === 'Revel site|Component file|HTML file' && crows && crows[0][0] === 'Landing' && crows[0][1] === '0 variables' && !!csum && bring === 'Bring their styles and media' && !!made,
+      JSON.stringify({ ctabs, crows, csum, bring, made: !!made }));
+    const file = path.join(fx, 'landing.revel-component');
+    fs.rmSync(file, { force: true });
+    await page.evaluate((f) => { window.__revelSave = f; }, file);
+    await page.locator(`${C} .component-row[data-component="landing"]`).click({ button: 'right' }); await w(300);
+    const cm = (await menu()).map((i) => i.label);
+    await pick('Export component…');
+    const written = await until(() => fs.existsSync(file), 10000);
+    await page.click(`${C} .components-import`); await w(500);
+    await page.click('.import-tabs [data-tab="import-from-component-file"]'); await w(300);
+    await page.evaluate((f) => { window.__revelPickFiles = [f]; }, file);
+    await page.click('.import-browse');
+    const frows = await until(async () => { const r = await items(); return r.length === 1 && r[0][2] ? r : false; }, 15000);
+    await until(async () => !(await page.isDisabled('.import-go')), 10000);
+    await page.click('.import-go');
+    const same = await until(async () => !(await page.$('.import-box')) && (await site()).components.length === c0 + 1, 10000);
+    check('imports: “Export component…” writes a .revel-component file; importing it back reuses the identical component',
+      cm.includes('Export component…') && written && frows && frows[0][0] === 'Landing' && same, JSON.stringify({ cm, written, frows, same }));
+    await page.click('.editor-toolbar .btn-undo');
+    check('imports: every import undone', await until(async () => (await site()).components.length === c0 && (await count()) === n0, 8000));
   }
   // ---------------------------------------------------------------- première publication (D-203)
   {

@@ -46,9 +46,11 @@ semver = "1.0.28"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Suppression d'un site depuis l'accueil : dossier mis à la corbeille du système (récupérable).
 trash = "5.2.9"
+# Imports de pages et de composants (D-206) : fichiers HTML et de composants lus dans un dossier
+# temporaire, retiré à la fin.
+tempfile = "3"
 
 [dev-dependencies]
-tempfile = "3"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "io-util"] }
 
 [lints]

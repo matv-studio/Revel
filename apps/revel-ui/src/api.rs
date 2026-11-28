@@ -457,6 +457,53 @@ pub async fn template_file_info(file: &str) -> Res<revel_protocol::TemplateInfo>
     call("template_file_info", &serde_json::json!({ "file": file })).await
 }
 
+/// Pages et composants d'une source d'import (D-206).
+pub async fn import_list(
+    path: &str,
+    source: &revel_protocol::ImportSource,
+) -> Res<revel_protocol::ImportList> {
+    call(
+        "import_list",
+        &serde_json::json!({ "path": path, "source": source }),
+    )
+    .await
+}
+
+/// Ce qu'un import ajoutera (D-206).
+pub async fn import_plan(
+    path: &str,
+    source: &revel_protocol::ImportSource,
+    choice: &revel_protocol::ImportChoice,
+) -> Res<revel_protocol::ImportPlan> {
+    call(
+        "import_plan",
+        &serde_json::json!({ "path": path, "source": source, "choice": choice }),
+    )
+    .await
+}
+
+/// Import des pages et composants choisis (D-206).
+pub async fn import_apply(
+    path: &str,
+    source: &revel_protocol::ImportSource,
+    choice: &revel_protocol::ImportChoice,
+) -> Res<(revel_edit::EditState, revel_protocol::ImportPlan)> {
+    call(
+        "import_apply",
+        &serde_json::json!({ "path": path, "source": source, "choice": choice }),
+    )
+    .await
+}
+
+/// Export de composants dans un fichier `.revel-component` (D-206) ; chemin écrit.
+pub async fn export_components(path: &str, ids: &[String], dest: &str) -> Res<String> {
+    call(
+        "export_components",
+        &serde_json::json!({ "path": path, "ids": ids, "dest": dest }),
+    )
+    .await
+}
+
 /// Noms des icônes d'une bibliothèque en ligne (D-205), gardés sur l'ordinateur.
 pub async fn icon_library(
     library: &revel_protocol::IconLibrary,

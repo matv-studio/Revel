@@ -4099,3 +4099,51 @@ icon-search = 搜索图标
 icon-search-none = 没有图标
 icon-more = 还有 { $n } 个
 error-icon-library = 无法访问图标库（{ $detail }）
+
+# Imports de pages et de composants (D-206)
+import-pages = 导入页面…
+import-component = 导入组件…
+component-export = 导出组件…
+component-file = Revel 组件
+import-pages-title = 导入页面
+import-component-title = 导入组件
+import-from-site = Revel 网站
+import-from-component-file = 组件文件
+import-from-html = HTML 文件
+import-site = 网站
+import-choose-site = 选择网站
+import-other-folder = 其他文件夹…
+import-drop-component = 拖入 .revel-component 文件
+import-drop-html = 拖入 .html 文件或文件夹
+import-browse = 浏览…
+import-no-pages = 没有可导入的页面
+import-no-components = 没有可导入的组件
+import-variables = { $count ->
+       *[other] { $count } 个变量
+    }
+import-bring-pages = 一并导入这些页面使用的内容（组件、样式、媒体）
+import-bring-pages-help = 关闭：本网站缺少的组件会替换为其内容，样式和媒体不会复制。
+import-bring-files = 将其图片和字体复制到素材
+import-bring-files-help = 关闭：图片和字体不会复制，保留原地址。样式始终会导入。
+import-bring-components = 一并导入其样式和媒体
+import-bring-components-help = 关闭：其类的样式和媒体不会复制。所用的组件始终会导入。
+import-count-pages = { $count ->
+       *[other] { $count } 个页面
+    }
+import-count-components = { $count ->
+       *[other] { $count } 个组件
+    }
+import-count-media = { $count ->
+       *[other] { $count } 个媒体
+    }
+import-plan-detail = 复用的相同组件：{ $reused } · 新增样式：{ $styles } · 新增变量：{ $vars }
+import-pages-go = 导入 { $count ->
+       *[other] { $count } 个页面
+    }
+import-components-go = 导入 { $count ->
+       *[other] { $count } 个组件
+    }
+error-import-drop-component = 请拖入 .revel-component 文件
+error-import-drop-html = 请拖入 .html 文件或文件夹
+error-import-source = 此来源没有可导入的内容（{ $detail }）
+error-component-file = 无法读取组件文件（{ $detail }）

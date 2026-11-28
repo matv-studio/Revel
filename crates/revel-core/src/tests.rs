@@ -3926,3 +3926,241 @@ fn bibliotheque_icones() {
     revel_git::github::override_api(None);
     crate::sharing::override_raw(None);
 }
+
+#[test]
+fn imports_de_pages_et_composants() {
+    use revel_protocol::{ImportChoice, ImportSource, SiteTemplate};
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let cible = d.path().join("cible");
+    c.new_site_from(&cible, "Atelier", "fr", SiteTemplate::Showcase, false)
+        .unwrap();
+    let source = d.path().join("source");
+    c.new_site_from(&source, "Studio", "fr", SiteTemplate::Showcase, false)
+        .unwrap();
+    // Une image dans une page de la source.
+    {
+        let mut p = revel_project::Project::open(&source).unwrap();
+        let (dir, prefix) = super::transfer::tests_media(&p);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("photo.png"), b"\x89PNG source").unwrap();
+        p.site.pages[1].body.push(el(
+            "img",
+            &[
+                ("src", &format!("{prefix}/photo.png")),
+                ("class", "photo-source"),
+            ],
+            vec![],
+        ));
+        p.save().unwrap();
+    }
+    c.edit_open(&cible).unwrap();
+    // Même site que celui ouvert : refusé.
+    let soi = ImportSource::Site {
+        path: cible.display().to_string(),
+    };
+    assert!(c.import_list(&cible, &soi).is_err());
+    let src = ImportSource::Site {
+        path: source.display().to_string(),
+    };
+    let list = c.import_list(&cible, &src).unwrap();
+    assert_eq!(list.name, "Studio");
+    assert_eq!(list.pages.len(), 3);
+    let ids: Vec<String> = list.pages.iter().map(|p| p.id.clone()).collect();
+    let all = ImportChoice {
+        pages: ids.clone(),
+        components: Vec::new(),
+        uses: true,
+        styles: true,
+        media: true,
+    };
+    let plan = c.import_plan(&cible, &src, &all).unwrap();
+    assert_eq!(plan.pages.len(), 3);
+    // Adresses prises : numérotées ; composants et styles du même modèle : réutilisés.
+    let taken: Vec<String> = revel_project::Project::open(&cible)
+        .unwrap()
+        .site
+        .pages
+        .iter()
+        .map(|p| p.path.clone())
+        .collect();
+    assert!(
+        plan.pages
+            .iter()
+            .all(|(_, p)| !taken.contains(p) && p != "/"),
+        "{plan:?}"
+    );
+    assert!(
+        plan.pages.iter().any(|(_, p)| p == "/a-propos-2/"),
+        "{plan:?}"
+    );
+    assert!(plan.components.is_empty(), "{plan:?}");
+    assert_eq!(plan.media, 1);
+    assert!(plan.renamed.is_empty(), "{plan:?}");
+    let before = revel_project::Project::open(&cible)
+        .unwrap()
+        .site
+        .pages
+        .len();
+    let (_, done) = c.import_apply(&cible, &src, &all).unwrap();
+    assert_eq!(done.pages.len(), 3);
+    let after = revel_project::Project::open(&cible).unwrap();
+    assert_eq!(after.site.pages.len(), before + 3);
+    let (mdir, _) = super::transfer::tests_media(&after);
+    assert!(mdir.join("photo.png").is_file());
+    // Une seule étape d'annulation.
+    c.edit_undo(&cible).unwrap();
+    assert_eq!(
+        revel_project::Project::open(&cible)
+            .unwrap()
+            .site
+            .pages
+            .len(),
+        before
+    );
+
+    // Fichiers HTML : pages, feuille de style, images, liens suivis.
+    let h = d.path().join("html");
+    std::fs::create_dir_all(h.join("css")).unwrap();
+    std::fs::create_dir_all(h.join("img")).unwrap();
+    std::fs::write(
+        h.join("landing.html"),
+        r#"<!doctype html><html lang="en"><head><title>Landing</title>
+<link rel="stylesheet" href="css/s.css"></head><body><section class="hero"><h1>Hello</h1>
+<img src="img/a.png" alt=""><a class="cta" href="offer.html">Offer</a></section></body></html>"#,
+    )
+    .unwrap();
+    std::fs::write(
+        h.join("offer.html"),
+        r#"<!doctype html><html lang="en"><head><title>Offer</title>
+<link rel="stylesheet" href="css/s.css"></head><body><section class="hero"><h1>Offer</h1>
+</section></body></html>"#,
+    )
+    .unwrap();
+    std::fs::write(
+        h.join("css/s.css"),
+        ".hero{padding:40px;background:url(../img/b.png)}.cta{color:#c00}",
+    )
+    .unwrap();
+    std::fs::write(h.join("img/a.png"), b"\x89PNG a").unwrap();
+    std::fs::write(h.join("img/b.png"), b"\x89PNG b").unwrap();
+    std::fs::write(h.join("img/inutile.png"), b"\x89PNG x").unwrap();
+    let html = ImportSource::Html {
+        paths: vec![
+            h.join("landing.html").display().to_string(),
+            h.join("offer.html").display().to_string(),
+        ],
+        components: false,
+    };
+    let list = c.import_list(&cible, &html).unwrap();
+    let files: Vec<_> = list.pages.iter().filter_map(|p| p.file.clone()).collect();
+    assert_eq!(files, vec!["landing.html", "offer.html"], "{list:?}");
+    let choice = ImportChoice {
+        pages: list.pages.iter().map(|p| p.id.clone()).collect(),
+        components: Vec::new(),
+        uses: true,
+        styles: true,
+        media: true,
+    };
+    let plan = c.import_plan(&cible, &html, &choice).unwrap();
+    let paths: Vec<&str> = plan.pages.iter().map(|(_, p)| p.as_str()).collect();
+    assert_eq!(paths, vec!["/landing/", "/offer/"]);
+    assert_eq!(plan.media, 2, "{plan:?}");
+    c.import_apply(&cible, &html, &choice).unwrap();
+    let after = revel_project::Project::open(&cible).unwrap();
+    let landing = after
+        .site
+        .pages
+        .iter()
+        .find(|p| p.path == "/landing/")
+        .unwrap();
+    let text = serde_json::to_string(&landing.body).unwrap();
+    assert!(text.contains("\"/offer/\""), "{text}");
+    let (mdir, _) = super::transfer::tests_media(&after);
+    assert!(mdir.join("a.png").is_file() && mdir.join("b.png").is_file());
+    assert!(!mdir.join("inutile.png").exists());
+    let css = serde_json::to_string(&after.site.stylesheet).unwrap();
+    assert!(
+        css.contains("/media/b.png") && css.contains("#c00"),
+        "{css}"
+    );
+    assert!(
+        text.contains("/media/a.png") && text.contains("hero"),
+        "{text}"
+    );
+
+    // Export d'un composant, puis import dans un site vide.
+    let comp = "hero".to_string();
+    let mut hero = landing
+        .body
+        .iter()
+        .find(|n| matches!(n, Node::Element { tag, .. } if tag == "section"))
+        .unwrap()
+        .clone();
+    let mut taken = after.site.node_ids();
+    revel_edit::make::refresh_ids(&mut hero, &mut taken);
+    c.edit_apply(
+        &cible,
+        revel_edit::Command::AddComponent {
+            component: revel_model::Component::new("hero", vec![hero]),
+            index: None,
+        },
+        false,
+    )
+    .unwrap();
+    let file = c
+        .export_components(&cible, std::slice::from_ref(&comp), &d.path().join("bloc"))
+        .unwrap();
+    assert!(file.ends_with("bloc.revel-component"));
+    let vide = sample_site(d.path(), &c);
+    c.edit_open(&vide).unwrap();
+    let cf = ImportSource::Component {
+        path: file.display().to_string(),
+    };
+    let list = c.import_list(&vide, &cf).unwrap();
+    assert!(list.components.iter().any(|x| x.id == comp), "{list:?}");
+    let choice = ImportChoice {
+        pages: Vec::new(),
+        components: vec![comp.clone()],
+        uses: true,
+        styles: true,
+        media: true,
+    };
+    c.import_apply(&vide, &cf, &choice).unwrap();
+    let v = revel_project::Project::open(&vide).unwrap();
+    assert!(v.site.component(&comp).is_some());
+    let css = serde_json::to_string(&v.site.stylesheet).unwrap();
+    assert!(css.contains(".hero") && css.contains(".cta"), "{css}");
+    let (vm, _) = super::transfer::tests_media(&v);
+    assert!(vm.join("a.png").is_file() && vm.join("b.png").is_file());
+
+    // Fichier HTML en composant.
+    let hc = ImportSource::Html {
+        paths: vec![h.join("landing.html").display().to_string()],
+        components: true,
+    };
+    let list = c.import_list(&vide, &hc).unwrap();
+    assert_eq!(list.components.len(), 1, "{list:?}");
+    assert_eq!(list.components[0].name, "Landing");
+    let choice = ImportChoice {
+        pages: Vec::new(),
+        components: vec![list.components[0].id.clone()],
+        uses: true,
+        styles: true,
+        media: true,
+    };
+    let plan = c.import_plan(&vide, &hc, &choice).unwrap();
+    // Styles et images identiques déjà dans le site : réutilisés.
+    assert_eq!(
+        (plan.components.len(), plan.media, plan.styles),
+        (1, 0, 0),
+        "{plan:?}"
+    );
+    c.import_apply(&vide, &hc, &choice).unwrap();
+    let v = revel_project::Project::open(&vide).unwrap();
+    let body = serde_json::to_string(&v.site.component("landing").unwrap().body).unwrap();
+    assert!(
+        body.contains("/media/a.png") && body.contains("hero"),
+        "{body}"
+    );
+}

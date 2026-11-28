@@ -4100,3 +4100,57 @@ icon-search = आइकन खोजें
 icon-search-none = कोई आइकन नहीं
 icon-more = { $n } और
 error-icon-library = आइकन लाइब्रेरी तक पहुँच नहीं ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = पेज इम्पोर्ट करें…
+import-component = कंपोनेंट इम्पोर्ट करें…
+component-export = कंपोनेंट एक्सपोर्ट करें…
+component-file = Revel कंपोनेंट
+import-pages-title = पेज इम्पोर्ट करें
+import-component-title = कंपोनेंट इम्पोर्ट करें
+import-from-site = Revel साइट
+import-from-component-file = कंपोनेंट फ़ाइल
+import-from-html = HTML फ़ाइल
+import-site = साइट
+import-choose-site = साइट चुनें
+import-other-folder = दूसरा फ़ोल्डर…
+import-drop-component = .revel-component फ़ाइल छोड़ें
+import-drop-html = .html फ़ाइलें या फ़ोल्डर छोड़ें
+import-browse = ब्राउज़ करें…
+import-no-pages = इम्पोर्ट करने के लिए कोई पेज नहीं
+import-no-components = इम्पोर्ट करने के लिए कोई कंपोनेंट नहीं
+import-variables = { $count ->
+        [one] { $count } वेरिएबल
+       *[other] { $count } वेरिएबल
+    }
+import-bring-pages = ये पेज जो इस्तेमाल करते हैं वह भी लाएँ (कंपोनेंट, स्टाइल, मीडिया)
+import-bring-pages-help = बंद: इस साइट में न मौजूद कंपोनेंट उनकी सामग्री से बदल दिए जाते हैं; स्टाइल और मीडिया कॉपी नहीं होते।
+import-bring-files = उनकी इमेज और फ़ॉन्ट एसेट में कॉपी करें
+import-bring-files-help = बंद: इमेज और फ़ॉन्ट कॉपी नहीं होते और उनके पते वही रहते हैं। स्टाइल हमेशा इम्पोर्ट होते हैं।
+import-bring-components = उनके स्टाइल और मीडिया भी लाएँ
+import-bring-components-help = बंद: उनकी क्लास के स्टाइल और मीडिया कॉपी नहीं होते। इस्तेमाल किए गए कंपोनेंट हमेशा लाए जाते हैं।
+import-count-pages = { $count ->
+        [one] { $count } पेज
+       *[other] { $count } पेज
+    }
+import-count-components = { $count ->
+        [one] { $count } कंपोनेंट
+       *[other] { $count } कंपोनेंट
+    }
+import-count-media = { $count ->
+        [one] { $count } मीडिया
+       *[other] { $count } मीडिया
+    }
+import-plan-detail = दोबारा इस्तेमाल हुए समान कंपोनेंट: { $reused } · जोड़े गए स्टाइल: { $styles } · जोड़े गए वेरिएबल: { $vars }
+import-pages-go = { $count ->
+        [one] { $count } पेज
+       *[other] { $count } पेज
+    } इम्पोर्ट करें
+import-components-go = { $count ->
+        [one] { $count } कंपोनेंट
+       *[other] { $count } कंपोनेंट
+    } इम्पोर्ट करें
+error-import-drop-component = .revel-component फ़ाइल छोड़ें
+error-import-drop-html = .html फ़ाइलें या फ़ोल्डर छोड़ें
+error-import-source = इस स्रोत से इम्पोर्ट करने को कुछ नहीं ({ $detail })
+error-component-file = कंपोनेंट फ़ाइल पढ़ी नहीं जा सकी ({ $detail })

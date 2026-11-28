@@ -1489,6 +1489,72 @@ async fn template_catalog(
         .map_err(err)
 }
 
+/// Pages et composants d'une source d'import (D-206).
+#[tauri::command]
+async fn import_list(
+    s: State<'_, AppState>,
+    path: String,
+    source: revel_protocol::ImportSource,
+) -> Res<revel_protocol::ImportList> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.import_list(Path::new(&path), &source))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
+/// Ce qu'un import ajoutera (D-206).
+#[tauri::command]
+async fn import_plan(
+    s: State<'_, AppState>,
+    path: String,
+    source: revel_protocol::ImportSource,
+    choice: revel_protocol::ImportChoice,
+) -> Res<revel_protocol::ImportPlan> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.import_plan(Path::new(&path), &source, &choice)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Import des pages et composants choisis (D-206), une étape d'annulation.
+#[tauri::command]
+async fn import_apply(
+    s: State<'_, AppState>,
+    path: String,
+    source: revel_protocol::ImportSource,
+    choice: revel_protocol::ImportChoice,
+) -> Res<(revel_edit::EditState, revel_protocol::ImportPlan)> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.import_apply(Path::new(&path), &source, &choice)
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Export de composants dans un fichier `.revel-component` (D-206).
+#[tauri::command]
+async fn export_components(
+    s: State<'_, AppState>,
+    path: String,
+    ids: Vec<String>,
+    dest: String,
+) -> Res<String> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.export_components(Path::new(&path), &ids, Path::new(&dest))
+            .map(|p| p.display().to_string())
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
 /// Noms des icônes d'une bibliothèque en ligne (D-205).
 #[tauri::command]
 async fn icon_library(
@@ -1857,6 +1923,10 @@ pub fn run() {
             template_file_info,
             template_catalog,
             icon_library,
+            import_list,
+            import_plan,
+            import_apply,
+            export_components,
             icon_drawings,
             template_publish,
             template_catalog_create,

@@ -8,7 +8,20 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lancement manuel : `systemes: windows` n'essaie que Windows (essais rapides entre deux
+  # versions, sans Linux ni macOS) ; `paquet` construit en plus un installateur Windows d'essai,
+  # gardé comme artefact (pas de version GitHub).
   workflow_dispatch:
+    inputs:
+      systemes:
+        description: "Systèmes essayés"
+        type: choice
+        options: [tous, windows]
+        default: tous
+      paquet:
+        description: "Installateur Windows d'essai (artefact)"
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}-${{ github.event_name }}
@@ -21,6 +34,7 @@ env:
 jobs:
   lint:
     name: Format et analyse (Linux)
+    if: inputs.systemes != 'windows'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -53,7 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON((github.event_name == 'push' && github.event.repository.private) && '["ubuntu-24.04"]' || '["ubuntu-24.04", "windows-latest", "macos-latest"]') }}
+        os: ${{ fromJSON(inputs.systemes == 'windows' && '["windows-latest"]' || ((github.event_name == 'push' && github.event.repository.private) && '["ubuntu-24.04"]' || '["ubuntu-24.04", "windows-latest", "macos-latest"]')) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -88,6 +102,7 @@ jobs:
 
   sftp:
     name: Publication SFTP (serveur OpenSSH local)
+    if: inputs.systemes != 'windows'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -124,6 +139,7 @@ jobs:
   # et composants.
   e2e:
     name: Essais de bout en bout (sites d'après un modèle)
+    if: inputs.systemes != 'windows'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -264,7 +280,7 @@ jobs:
         # Windows Server 2022 : sur l'image 2025 (WebView2 153), Edge WebDriver n'obtient pas le port de
         # débogage de WebView2 (« DevToolsActivePort file doesn't exist », alors que l'application
         # démarre) ; même constat dans actions/runner-images#14738, où l'image 2022 fonctionne.
-        os: [ubuntu-24.04, windows-2022]
+        os: ${{ fromJSON(inputs.systemes == 'windows' && '["windows-2022"]' || '["ubuntu-24.04", "windows-2022"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -357,4 +373,33 @@ jobs:
             captures-application
             tauri-driver.log
           if-no-files-found: ignore
+          retention-days: 7
+
+  # Installateur Windows d'essai (lancement manuel, `paquet`) : NSIS non signé, gardé 7 jours comme
+  # artefact ; les versions passent par `Installateurs` (release.yml).
+  paquet:
+    name: Installateur Windows d'essai
+    if: inputs.paquet
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ilammy/setup-nasm@v1
+      - name: Rust (version de rust-toolchain.toml)
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - name: Outil Tauri
+        env:
+          RUSTFLAGS: ""
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Installateur
+        working-directory: apps/revel-app
+        run: cargo tauri build --bundles nsis
+      - uses: actions/upload-artifact@v7
+        with:
+          name: revel-windows-essai
+          path: target/release/bundle/nsis/*.exe
+          if-no-files-found: error
           retention-days: 7

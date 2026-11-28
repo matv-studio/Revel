@@ -4099,3 +4099,51 @@ icon-search = アイコンを検索
 icon-search-none = アイコンなし
 icon-more = さらに { $n } 個
 error-icon-library = アイコンライブラリに接続できません（{ $detail }）
+
+# Imports de pages et de composants (D-206)
+import-pages = ページを読み込む…
+import-component = コンポーネントを読み込む…
+component-export = コンポーネントを書き出す…
+component-file = Revel コンポーネント
+import-pages-title = ページを読み込む
+import-component-title = コンポーネントを読み込む
+import-from-site = Revel サイト
+import-from-component-file = コンポーネントファイル
+import-from-html = HTML ファイル
+import-site = サイト
+import-choose-site = サイトを選択
+import-other-folder = 別のフォルダー…
+import-drop-component = .revel-component ファイルをドロップ
+import-drop-html = .html ファイルまたはフォルダーをドロップ
+import-browse = 参照…
+import-no-pages = 読み込めるページはありません
+import-no-components = 読み込めるコンポーネントはありません
+import-variables = { $count ->
+       *[other] 変数 { $count } 個
+    }
+import-bring-pages = これらのページが使うもの（コンポーネント、スタイル、メディア）も読み込む
+import-bring-pages-help = オフ：このサイトにないコンポーネントは中身に置き換えられ、スタイルとメディアはコピーされません。
+import-bring-files = 画像とフォントをアセットにコピー
+import-bring-files-help = オフ：画像とフォントはコピーされず、アドレスはそのままです。スタイルは常に読み込まれます。
+import-bring-components = スタイルとメディアも読み込む
+import-bring-components-help = オフ：クラスのスタイルとメディアはコピーされません。使用しているコンポーネントは常に読み込まれます。
+import-count-pages = { $count ->
+       *[other] { $count } ページ
+    }
+import-count-components = { $count ->
+       *[other] コンポーネント { $count } 個
+    }
+import-count-media = { $count ->
+       *[other] メディア { $count } 件
+    }
+import-plan-detail = 再利用した同一コンポーネント：{ $reused } · 追加したスタイル：{ $styles } · 追加した変数：{ $vars }
+import-pages-go = { $count ->
+       *[other] { $count } ページ
+    }を読み込む
+import-components-go = { $count ->
+       *[other] コンポーネント { $count } 個
+    }を読み込む
+error-import-drop-component = .revel-component ファイルをドロップしてください
+error-import-drop-html = .html ファイルまたはフォルダーをドロップしてください
+error-import-source = このソースから読み込めるものはありません（{ $detail }）
+error-component-file = コンポーネントファイルを読み取れません（{ $detail }）

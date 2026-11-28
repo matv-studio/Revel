@@ -1858,3 +1858,32 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .schema-row.is-fixed { cursor: default; }
 .schema-row.is-fixed .schema-label-text { color: var(--text-muted); }
 .schema-grip.is-off { visibility: hidden; }
+
+/* --- Import de pages et de composants (D-206, maquettes import-1 à import-3) ---------------- */
+.dialog.import-box { width: min(520px, 100%); gap: var(--s-3); max-height: calc(100vh - 48px); }
+.import-box .dialog-title { margin: 0; }
+.import-tabs { align-self: flex-start; }
+.import-site { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: var(--s-3); }
+.import-site .input { width: 100%; }
+.import-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: 144px; padding: var(--s-4); border: var(--border) dashed var(--line-strong); border-radius: var(--radius-md);
+  color: var(--text-muted); text-align: center; transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease); }
+.import-drop.is-over { border-color: var(--focus); background: var(--surface-hover); }
+.import-drop-icon svg.icon { width: 18px; height: 18px; color: var(--text); }
+.import-drop-text { font-size: var(--text-sm); }
+.import-items { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow: auto; padding: var(--s-1);
+  border: var(--border) solid var(--line-strong); border-radius: var(--radius-md); background: var(--bg); }
+.import-item { display: flex; align-items: center; gap: var(--s-2); min-height: 30px; padding: 0 var(--s-2);
+  border-radius: var(--radius-sm); font-size: var(--text-sm); cursor: default; }
+.import-item:hover { background: var(--surface-hover); }
+.import-item input { margin: 0; accent-color: var(--primary); flex: none; }
+.import-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.import-item-detail { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
+.import-empty { margin: 0; padding: var(--s-3); text-align: center; font-size: var(--text-sm); }
+.import-loading .meter-bar { display: block; width: 100%; }
+.import-bring { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.import-bring .label { font-size: var(--text-sm); color: var(--text); }
+.import-actions { align-items: center; }
+.import-summary { flex: 1; min-width: 0; font-size: var(--text-xs); font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

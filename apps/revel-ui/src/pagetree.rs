@@ -1242,6 +1242,10 @@ pub fn Pages() -> impl IntoView {
                 ui.tab(crate::Tab::Cms)
             })
             .icon(icons::database),
+            CtxItem::new(ui.now("import-pages", &[]), move || {
+                crate::transfer::open(ed, crate::transfer::Mode::Pages)
+            })
+            .icon(icons::import),
             CtxItem::new(ui.now("pages-paste", &[]), {
                 let clip = clip.clone();
                 move || {
@@ -1284,6 +1288,8 @@ pub fn Pages() -> impl IntoView {
                     </div>
                     <footer class="panel-foot">
                         <span class="panel-foot-text muted">{move || ui.tx("pages-count", &[("count", ed.pages.with(|p| p.iter().filter(|p| p.page.is_some()).count()).to_string())])}</span>
+                        <button class="icon-btn icon-btn--small pages-import" title=ui.t("import-pages") aria-label=ui.t("import-pages")
+                            on:click=move |_| crate::transfer::open(ed, crate::transfer::Mode::Pages)>{icons::import()}</button>
                         <button class="icon-btn icon-btn--small" title=ui.t("library-new-folder") aria-label=ui.t("library-new-folder")
                             on:click=move |_| { q.set(String::new()); creating_folder.set(Some(String::new())) }>{icons::folder_plus()}</button>
                         <button class="icon-btn icon-btn--small" title=ui.t("pages-new") aria-label=ui.t("pages-new")

@@ -78,8 +78,10 @@ pub fn dropped_paths(d: tauri::State<Dropped>) -> Vec<String> {
     std::mem::take(&mut *d.0.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-/// Dossiers nommés `names` dans les emplacements connus : dossiers parents des sites récents, dossier
-/// des sites, Documents, Bureau, Téléchargements, dossier personnel. Les premiers trouvés d'abord.
+/// Dossiers ou fichiers nommés `names` dans les emplacements connus : dossiers parents des sites
+/// récents, dossier des sites, Documents, Bureau, Téléchargements, dossier personnel. Les premiers
+/// trouvés d'abord. Les fichiers servent aux imports de pages et de composants (D-206), ailleurs
+/// que sous Windows, où les chemins déposés sont lus directement.
 pub fn find_named(names: &[String], places: &[PathBuf]) -> Vec<String> {
     let mut out = Vec::new();
     for name in names {
@@ -88,7 +90,7 @@ pub fn find_named(names: &[String], places: &[PathBuf]) -> Vec<String> {
         }
         for p in places {
             let c = p.join(name);
-            if c.is_dir() {
+            if c.exists() {
                 let s = c.display().to_string();
                 if !out.contains(&s) {
                     out.push(s);

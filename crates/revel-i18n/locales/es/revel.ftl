@@ -4103,3 +4103,57 @@ icon-search = Buscar iconos
 icon-search-none = Ningún icono
 icon-more = { $n } más
 error-icon-library = Biblioteca de iconos inaccesible ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Importar páginas…
+import-component = Importar componente…
+component-export = Exportar componente…
+component-file = Componente de Revel
+import-pages-title = Importar páginas
+import-component-title = Importar componente
+import-from-site = Sitio de Revel
+import-from-component-file = Archivo de componente
+import-from-html = Archivo HTML
+import-site = Sitio
+import-choose-site = Elegir un sitio
+import-other-folder = Otra carpeta…
+import-drop-component = Suelta un archivo .revel-component
+import-drop-html = Suelta archivos .html o una carpeta
+import-browse = Examinar…
+import-no-pages = Ninguna página para importar
+import-no-components = Ningún componente para importar
+import-variables = { $count ->
+        [one] { $count } variable
+       *[other] { $count } variables
+    }
+import-bring-pages = Traer lo que usan estas páginas (componentes, estilos, medios)
+import-bring-pages-help = Desactivado: los componentes que faltan en este sitio se sustituyen por su contenido; los estilos y medios no se copian.
+import-bring-files = Copiar sus imágenes y fuentes en Recursos
+import-bring-files-help = Desactivado: las imágenes y fuentes no se copian y conservan sus direcciones. Los estilos siempre se importan.
+import-bring-components = Traer sus estilos y medios
+import-bring-components-help = Desactivado: los estilos de sus clases y sus medios no se copian. Los componentes que usan siempre se traen.
+import-count-pages = { $count ->
+        [one] { $count } página
+       *[other] { $count } páginas
+    }
+import-count-components = { $count ->
+        [one] { $count } componente
+       *[other] { $count } componentes
+    }
+import-count-media = { $count ->
+        [one] { $count } medio
+       *[other] { $count } medios
+    }
+import-plan-detail = Componentes idénticos reutilizados: { $reused } · Estilos añadidos: { $styles } · Variables añadidas: { $vars }
+import-pages-go = Importar { $count ->
+        [one] { $count } página
+       *[other] { $count } páginas
+    }
+import-components-go = Importar { $count ->
+        [one] { $count } componente
+       *[other] { $count } componentes
+    }
+error-import-drop-component = Suelta un archivo .revel-component
+error-import-drop-html = Suelta archivos .html o una carpeta
+error-import-source = No hay nada que importar desde esta fuente ({ $detail })
+error-component-file = Archivo de componente ilegible ({ $detail })

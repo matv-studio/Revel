@@ -28,6 +28,7 @@ pub mod linkmap;
 pub mod listfilters;
 pub mod locale;
 pub mod make;
+pub mod merge;
 pub mod overrides;
 pub mod readable;
 pub mod ready;

@@ -634,7 +634,7 @@ pub fn origin(root: &Path) -> Option<Tool> {
 }
 
 /// Adresse publiée d'un fichier de page.
-fn page_url(rel: &str) -> String {
+pub fn page_url(rel: &str) -> String {
     let lower = rel.to_ascii_lowercase();
     if lower == "index.html" || lower == "index.htm" {
         return "/".into();

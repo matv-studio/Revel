@@ -122,6 +122,87 @@ fn default_icon_libraries() -> Vec<IconLibrary> {
     suggested_icon_libraries().into_iter().take(1).collect()
 }
 
+/// Source d'un import de pages ou de composants (D-206).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ImportSource {
+    /// Autre site Revel (dossier).
+    Site { path: String },
+    /// Fichiers HTML ou dossiers ; `components` : chaque fichier devient un composant (son
+    /// `<body>`), sinon une page.
+    Html {
+        paths: Vec<String>,
+        #[serde(default)]
+        components: bool,
+    },
+    /// Fichier de composants (`.revel-component`).
+    Component { path: String },
+}
+
+/// Page ou composant proposé à l'import.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportItem {
+    /// Identifiant dans la source.
+    pub id: String,
+    pub name: String,
+    /// Page : adresse dans la source ; composant : nombre de propriétés.
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub props: usize,
+    /// Fichier HTML d'origine (import de fichiers HTML).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+}
+
+/// Contenu d'une source d'import.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportList {
+    /// Nom de la source (site, fichier).
+    pub name: String,
+    pub pages: Vec<ImportItem>,
+    pub components: Vec<ImportItem>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+}
+
+/// Choix d'un import.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportChoice {
+    #[serde(default)]
+    pub pages: Vec<String>,
+    #[serde(default)]
+    pub components: Vec<String>,
+    /// Composants utilisés apportés (sinon remplacés par leur contenu).
+    #[serde(default)]
+    pub uses: bool,
+    /// Styles des classes, variables, animations, polices.
+    #[serde(default)]
+    pub styles: bool,
+    /// Fichiers des médias copiés.
+    #[serde(default)]
+    pub media: bool,
+}
+
+/// Bilan d'un import (prévu, ou fait).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportPlan {
+    /// Pages ajoutées : identifiant dans la source → adresse dans le site ouvert.
+    pub pages: Vec<(String, String)>,
+    /// Composants ajoutés (identifiants dans le site ouvert).
+    pub components: Vec<String>,
+    /// Composants identiques déjà présents, réutilisés.
+    pub reused: usize,
+    /// Règles et blocs de style ajoutés.
+    pub styles: usize,
+    /// Variables ajoutées.
+    pub vars: usize,
+    /// Fichiers de médias copiés.
+    pub media: usize,
+    /// Classes renommées (avant, après).
+    pub renamed: Vec<(String, String)>,
+}
+
 /// Noms des icônes d'une bibliothèque (D-205), gardés sur l'ordinateur.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IconIndex {

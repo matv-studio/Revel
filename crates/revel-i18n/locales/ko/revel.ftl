@@ -4099,3 +4099,51 @@ icon-search = 아이콘 검색
 icon-search-none = 아이콘 없음
 icon-more = { $n }개 더 보기
 error-icon-library = 아이콘 라이브러리에 연결할 수 없음({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = 페이지 가져오기…
+import-component = 컴포넌트 가져오기…
+component-export = 컴포넌트 내보내기…
+component-file = Revel 컴포넌트
+import-pages-title = 페이지 가져오기
+import-component-title = 컴포넌트 가져오기
+import-from-site = Revel 사이트
+import-from-component-file = 컴포넌트 파일
+import-from-html = HTML 파일
+import-site = 사이트
+import-choose-site = 사이트 선택
+import-other-folder = 다른 폴더…
+import-drop-component = .revel-component 파일을 끌어다 놓으세요
+import-drop-html = .html 파일 또는 폴더를 끌어다 놓으세요
+import-browse = 찾아보기…
+import-no-pages = 가져올 페이지 없음
+import-no-components = 가져올 컴포넌트 없음
+import-variables = { $count ->
+       *[other] 변수 { $count }개
+    }
+import-bring-pages = 이 페이지들이 사용하는 것도 가져오기 (컴포넌트, 스타일, 미디어)
+import-bring-pages-help = 끔: 이 사이트에 없는 컴포넌트는 내용으로 바뀌고, 스타일과 미디어는 복사되지 않습니다.
+import-bring-files = 이미지와 글꼴을 에셋으로 복사
+import-bring-files-help = 끔: 이미지와 글꼴은 복사되지 않고 주소가 그대로 유지됩니다. 스타일은 항상 가져옵니다.
+import-bring-components = 스타일과 미디어도 가져오기
+import-bring-components-help = 끔: 클래스 스타일과 미디어는 복사되지 않습니다. 사용하는 컴포넌트는 항상 가져옵니다.
+import-count-pages = { $count ->
+       *[other] 페이지 { $count }개
+    }
+import-count-components = { $count ->
+       *[other] 컴포넌트 { $count }개
+    }
+import-count-media = { $count ->
+       *[other] 미디어 { $count }개
+    }
+import-plan-detail = 재사용한 동일 컴포넌트: { $reused } · 추가한 스타일: { $styles } · 추가한 변수: { $vars }
+import-pages-go = { $count ->
+       *[other] 페이지 { $count }개
+    } 가져오기
+import-components-go = { $count ->
+       *[other] 컴포넌트 { $count }개
+    } 가져오기
+error-import-drop-component = .revel-component 파일을 끌어다 놓으세요
+error-import-drop-html = .html 파일 또는 폴더를 끌어다 놓으세요
+error-import-source = 이 소스에서 가져올 수 있는 항목이 없습니다 ({ $detail })
+error-component-file = 컴포넌트 파일을 읽을 수 없습니다 ({ $detail })

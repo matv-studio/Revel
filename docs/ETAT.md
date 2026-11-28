@@ -6,8 +6,27 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 28/11/2026 (audit 1.0 : bibliothèques d'icônes, D-205). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 28/11/2026 (audit 1.0 : imports de pages et de composants, D-206). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## 28/11/2026 (soir) : imports de pages et de composants (D-206), CI Windows seule
+
+- **Audit, imports faits (D-206)** : « Import pages… » (site Revel ou fichiers HTML), « Import component… »
+  (site Revel, fichier `.revel-component`, fichiers HTML), « Export component… ». Moteur commun
+  `revel_edit::merge` (composants identiques réutilisés, classes en conflit renommées `-2`, variables,
+  `@keyframes`/`@font-face`, médias copiés, une étape d'annulation) ; cœur `crates/revel-core/src/transfer.rs`
+  (sources lues dans un dossier temporaire, gardées tant qu'elles ne changent pas) ; interface
+  `apps/revel-ui/src/transfer.rs` (fenêtre unique, bilan calculé par le cœur) ; outils MCP
+  `import_into_site` et `export_components`. Essais : 4 du moteur, `imports_de_pages_et_composants`
+  (cœur), 6 de bout en bout dans `tools/panels-e2e.mjs` (fichiers HTML d'essai écrits par `--prepare`).
+- **Piège** : l'import HTML (7.1) range le contenu commun de plusieurs pages dans un gabarit ; pour un
+  import de pages ce contenu est remis dans chaque page (`unfold_layouts`), sinon il serait perdu.
+- **CI à la demande de l'utilisateur (28/11)** : lancement manuel `systemes: windows` (essais Windows
+  seulement, sans Linux ni macOS) et `paquet: true` (installateur Windows d'essai en artefact). Les envois
+  portent `[skip ci]`, puis la CI est lancée à la main ; les vérifications Linux (format, analyse, essais)
+  sont faites dans la session avant l'envoi. Builds de toutes les plateformes, brouillon et étiquette
+  seulement après validation de l'installateur d'essai par l'utilisateur.
+- **Prochaine étape de l'audit** : styles par calque (§3, §10.1, P4), puis passe de vocabulaire.
 
 ## 28/11/2026 : charte du 25/11, bibliothèques d'icônes (D-205), CI sans le site cobaye
 

@@ -4103,3 +4103,57 @@ icon-search = Search icons
 icon-search-none = No icon
 icon-more = { $n } more
 error-icon-library = Icon library unreachable ({ $detail })
+
+# Imports de pages et de composants (D-206)
+import-pages = Import pages…
+import-component = Import component…
+component-export = Export component…
+component-file = Revel component
+import-pages-title = Import pages
+import-component-title = Import component
+import-from-site = Revel site
+import-from-component-file = Component file
+import-from-html = HTML file
+import-site = Site
+import-choose-site = Choose a site
+import-other-folder = Other folder…
+import-drop-component = Drop a .revel-component file
+import-drop-html = Drop .html files or a folder
+import-browse = Browse…
+import-no-pages = No page to import
+import-no-components = No component to import
+import-variables = { $count ->
+        [one] { $count } variable
+       *[other] { $count } variables
+    }
+import-bring-pages = Bring what these pages use (components, styles, media)
+import-bring-pages-help = Off: components missing from this site are replaced by their content; styles and media are not copied.
+import-bring-files = Copy their images and fonts into Assets
+import-bring-files-help = Off: images and fonts are not copied and keep their addresses. Styles are always imported.
+import-bring-components = Bring their styles and media
+import-bring-components-help = Off: the styles of their classes and their media are not copied. Components they use are always brought.
+import-count-pages = { $count ->
+        [one] { $count } page
+       *[other] { $count } pages
+    }
+import-count-components = { $count ->
+        [one] { $count } component
+       *[other] { $count } components
+    }
+import-count-media = { $count ->
+        [one] { $count } media
+       *[other] { $count } media
+    }
+import-plan-detail = Identical components reused: { $reused } · Styles added: { $styles } · Variables added: { $vars }
+import-pages-go = Import { $count ->
+        [one] { $count } page
+       *[other] { $count } pages
+    }
+import-components-go = Import { $count ->
+        [one] { $count } component
+       *[other] { $count } components
+    }
+error-import-drop-component = Drop a .revel-component file
+error-import-drop-html = Drop .html files or a folder
+error-import-source = Nothing can be imported from this source ({ $detail })
+error-component-file = Unreadable component file ({ $detail })

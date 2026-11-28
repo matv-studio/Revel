@@ -559,6 +559,8 @@ pub struct Ed {
     pub reveal_tick: RwSignal<u32>,
     /// Image en cours de recadrage (D-180) : élément `img` dont le cadrage s'écrit.
     pub crop: RwSignal<Option<revel_edit::Target>>,
+    /// Fenêtre d'import de pages ou de composants ouverte (D-206).
+    pub import: RwSignal<Option<crate::transfer::Mode>>,
     /// Champ CMS à remplacer sur l'utilisation sélectionnée (expression lue), demandé depuis le
     /// canevas : son champ du panneau s'ouvre à la saisie (D-184).
     pub cms_edit: RwSignal<Option<String>>,
@@ -1136,7 +1138,7 @@ impl Ed {
     /// changés), ou seulement si la page peut s'afficher autrement (`Some(false)` : document
     /// modifié par une autre vue ; une transition entre les pages ou des redirections ne
     /// rechargent pas la page).
-    fn reopen_with(self, ui: Ui, canvas: Option<bool>) {
+    pub(crate) fn reopen_with(self, ui: Ui, canvas: Option<bool>) {
         let path = self.path.get_value();
         spawn_local(async move {
             match api::edit_open(&path).await {
@@ -3022,6 +3024,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         forced: RwSignal::new(Vec::new()),
         reveal_tick: RwSignal::new(0),
         crop: RwSignal::new(None),
+        import: RwSignal::new(None),
         cms_edit: RwSignal::new(None),
         scroll: RwSignal::new((0.0, 0.0)),
         live_scroll: RwSignal::new((0.0, 0.0)),
@@ -3792,6 +3795,7 @@ pub fn Editor(site: SiteSummary) -> impl IntoView {
         <section class="editor">
             <crate::palette::Palette/>
             <crate::crop::CropDialog/>
+            <crate::transfer::ImportDialog/>
             <Toolbar/>
             <crate::dock::Workspace panel=panel_view>
                 <crate::canvas::CanvasArea failed=failed/>

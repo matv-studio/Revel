@@ -143,6 +143,11 @@ fn kind(rel: &str) -> Kind {
     }
 }
 
+/// Scripts, programmes, fichiers de construction : jamais repris d'un fichier partagé.
+pub(crate) fn is_code(rel: &str) -> bool {
+    kind(rel) == Kind::Code
+}
+
 /// Dossiers jamais repris : travail de Revel, historique, constructions, dépendances.
 fn skipped_dir(name: &str) -> bool {
     name.starts_with('.') || matches!(name, "node_modules" | "_site" | "dist" | "vendor")
@@ -281,7 +286,7 @@ fn today() -> String {
 
 /// Retire du document ce qui n'est pas des données : code personnalisé, `<script>`, attributs
 /// `on…`, liens `javascript:`. Nombre d'éléments retirés.
-fn sanitize(doc: &mut Value) -> usize {
+pub(crate) fn sanitize(doc: &mut Value) -> usize {
     fn walk(v: &mut Value, n: &mut usize) {
         match v {
             Value::Array(items) => {
@@ -344,7 +349,7 @@ fn sanitize(doc: &mut Value) -> usize {
 }
 
 /// Chemin relatif sans remontée ni racine.
-fn safe_rel(p: &str) -> bool {
+pub(crate) fn safe_rel(p: &str) -> bool {
     !p.is_empty()
         && !p.contains('\\')
         && !p.contains(':')

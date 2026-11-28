@@ -1776,7 +1776,7 @@ pub fn free_page_path(site: &Site, folder: &str, slug: &str) -> String {
     path
 }
 
-fn free_page_id(site: &Site, base: &str) -> String {
+pub(crate) fn free_page_id(site: &Site, base: &str) -> String {
     let base = if base.is_empty() { "page" } else { base };
     let mut id = base.to_string();
     let mut n = 2;
@@ -2347,6 +2347,37 @@ fn fill_slot(nodes: &mut [Node], own: &[Node]) {
     }
 }
 
+/// Contenu d'une utilisation du composant `c` : variante et attributs posés sur l'élément
+/// racine, contenu propre dans l'emplacement, valeurs des propriétés écrites dedans (une
+/// affectation au début si une propriété est lue dans une expression plus complexe). Les
+/// identifiants sont ceux du composant.
+pub(crate) fn expanded_use(
+    c: &revel_model::Component,
+    args: &std::collections::BTreeMap<String, String>,
+    variant: Option<&str>,
+    attrs: &[revel_model::Attr],
+    own: &[Node],
+) -> Vec<Node> {
+    // Variante et attributs de l'utilisation gardés sur l'élément racine.
+    let mut body = c
+        .patched_body(variant, attrs)
+        .unwrap_or_else(|| c.body.clone());
+    // Emplacement : le contenu propre de l'utilisation remplace le contenu par défaut.
+    fill_slot(&mut body, own);
+    let mut sets = Vec::new();
+    for p in &c.props {
+        let e = prop_expr(p, args);
+        if substitute(&mut body, &p.name, &e) {
+            sets.push(Node::Set {
+                name: p.name.clone(),
+                expr: e,
+            });
+        }
+    }
+    sets.extend(body);
+    sets
+}
+
 /// Utilisation de composant remplacée par une copie de son contenu (nouveaux identifiants),
 /// les valeurs des propriétés écrites dedans (une affectation au début si une propriété est
 /// lue dans une expression plus complexe).
@@ -2366,23 +2397,7 @@ pub fn detach(site: &Site, at: &Target) -> Result<Command, EditError> {
     let c = site
         .component(component)
         .ok_or_else(|| EditError::NotFound(component.clone()))?;
-    // Variante et attributs de l'utilisation gardés sur l'élément racine.
-    let mut body = c
-        .patched_body(variant.as_deref(), attrs)
-        .unwrap_or_else(|| c.body.clone());
-    // Emplacement : le contenu propre de l'utilisation remplace le contenu par défaut.
-    fill_slot(&mut body, own);
-    let mut sets = Vec::new();
-    for p in &c.props {
-        let e = prop_expr(p, args);
-        if substitute(&mut body, &p.name, &e) {
-            sets.push(Node::Set {
-                name: p.name.clone(),
-                expr: e,
-            });
-        }
-    }
-    sets.extend(body);
+    let sets = expanded_use(c, args, variant.as_deref(), attrs, own);
     let mut taken = site.node_ids();
     let mut commands = vec![Command::Remove { at: at.clone() }];
     for (i, mut n) in sets.into_iter().enumerate() {

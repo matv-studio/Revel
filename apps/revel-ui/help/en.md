@@ -18,6 +18,8 @@ A Revel site opens with **Open a site**, or by dropping its folder on the home s
 
 At the end, the dialog shows what was brought in and the points to check, then opens the site in the editor.
 
+**Into an open site**: **Pages › Import pages…** (right-click in the panel, or the button at its foot) brings pages from another Revel site or from HTML files; **Components › Import component…** brings components from a Revel site, a component file (`.revel-component`) or HTML files (each file becomes a component). What they use comes along (components, the styles of their classes, variables, images and fonts); nothing in your site is overwritten: a taken address gets `-2`, an identical component or file is reused, a class whose styles differ is renamed. Imported HTML pages take your site's layout. **Export component…** (right-click a component) writes a component file to share. One undo cancels the whole import.
+
 ## The editor
 
 - **In the middle, the canvas**: the page as it will be published. A click selects an element; Shift+click adds another one to the selection.

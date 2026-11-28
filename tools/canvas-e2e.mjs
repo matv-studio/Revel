@@ -124,11 +124,24 @@ try {
       f.url().endsWith(page) && linkSel.rect && linkSel.rect.height > 0, `${linkSel.label} ; ${f.url()}`);
     await link.dblclick();
     const inner = await waitFor((m) => (m.type === 'open_component' && m.component && m.node)
+      || (m.type === 'editing' && m.slot)
       || (m.type === 'select' && m.id && m.id !== sel.id && m.id !== linkSel.id), 'composant ouvert sur l\'élément cliqué');
-    const innerId = inner.type === 'open_component' ? inner.node : inner.id;
     await parent.waitForTimeout(300);
-    check('double-clic dans un composant : composant ouvert sur l\'élément cliqué, pas de navigation',
-      (await inLink(innerId)) && f.url().endsWith(page), `${inner.type} ${inner.component || inner.label || ''} ; ${f.url()}`);
+    if (inner.type === 'editing') {
+      // Texte écrit dans le composant : modifié aussitôt, sur place (D-182), dans le lien cliqué.
+      const editing = await f.evaluate(([lid]) => {
+        const l = document.querySelector('footer [data-rv="' + CSS.escape(lid) + '"]');
+        return !!l && !!(l.isContentEditable || l.querySelector('[contenteditable]'));
+      }, [linkId]);
+      check('double-clic dans un composant : texte du lien modifié sur place, pas de navigation',
+        editing && f.url().endsWith(page), `${JSON.stringify(inner.slot).slice(0, 80)} ; ${f.url()}`);
+      await frame.locator('body').press('Escape');
+      await parent.waitForTimeout(300);
+    } else {
+      const innerId = inner.type === 'open_component' ? inner.node : inner.id;
+      check('double-clic dans un composant : composant ouvert sur l\'élément cliqué, pas de navigation',
+        (await inLink(innerId)) && f.url().endsWith(page), `${inner.type} ${inner.component || inner.label || ''} ; ${f.url()}`);
+    }
   } else {
     check('clic sur un lien : sélection, pas de navigation', (await inLink(linkSel.id)) && f.url().endsWith(page),
       `${linkSel.label} ; ${f.url()}`);

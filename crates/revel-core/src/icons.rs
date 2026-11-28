@@ -178,25 +178,27 @@ impl Core {
         let missing: Vec<usize> = (0..names.len()).filter(|i| texts[*i].is_none()).collect();
         if !missing.is_empty() {
             let agent = crate::fonts::agent(30);
+            // Adresses calculées ici : l'adresse des fichiers bruts peut être remplacée pour le
+            // fil courant (essais), pas pour les fils de lecture.
+            let urls: Vec<(usize, String)> = missing
+                .iter()
+                .map(|i| {
+                    let path = if dir.is_empty() {
+                        format!("{}.svg", names[*i])
+                    } else {
+                        format!("{dir}/{}.svg", names[*i])
+                    };
+                    (*i, crate::sharing::raw_url(&repo, &path))
+                })
+                .collect();
             let fetched: Vec<(usize, Option<String>)> = std::thread::scope(|s| {
-                missing
-                    .chunks(missing.len().div_ceil(PARALLEL))
+                urls.chunks(urls.len().div_ceil(PARALLEL))
                     .map(|chunk| {
                         let agent = agent.clone();
-                        let names = &names;
-                        let (repo, dir) = (&repo, &dir);
                         s.spawn(move || {
                             chunk
                                 .iter()
-                                .map(|i| {
-                                    let path = if dir.is_empty() {
-                                        format!("{}.svg", names[*i])
-                                    } else {
-                                        format!("{dir}/{}.svg", names[*i])
-                                    };
-                                    let url = crate::sharing::raw_url(repo, &path);
-                                    (*i, read_text(&agent, &url))
-                                })
+                                .map(|(i, url)| (*i, read_text(&agent, url)))
                                 .collect::<Vec<_>>()
                         })
                     })

@@ -155,7 +155,8 @@ try {
   });
   check('clic dans le canevas : sélection transmise à l\'interface', true, status.trim().replace(/\s+/g, ' '));
   const layers = await exec('return document.querySelectorAll(".layers .layer").length');
-  check('calques affichés', layers > 20, `${layers} lignes`);
+  // Site neuf du modèle Portfolio : une quinzaine de calques dépliés sur l'accueil.
+  check('calques affichés', layers > 10, `${layers} lignes`);
 
   // Raccourcis dans le canevas : commandes réelles de l'application, fichiers écrits puis rétablis.
   // Le clic atteint l'élément le plus profond (souvent un texte dans le titre) : on compte les

@@ -2129,6 +2129,29 @@ fn page_mode(path: &str) -> revel_markup::Mode {
     }
 }
 
+/// Bibliothèque d'icônes d'après son nom proposé (« Lucide ») ou `propriétaire/dépôt/dossier`.
+fn library_of(text: &str) -> Option<revel_protocol::IconLibrary> {
+    let t = text.trim().trim_matches('/');
+    let sugg = revel_protocol::suggested_icon_libraries();
+    if let Some(l) = sugg
+        .iter()
+        .find(|l| l.name.eq_ignore_ascii_case(t) || l.key().eq_ignore_ascii_case(t))
+    {
+        return Some(l.clone());
+    }
+    let mut it = t.splitn(3, '/');
+    let (o, n) = (it.next()?, it.next()?);
+    if o.is_empty() || n.is_empty() {
+        return None;
+    }
+    Some(revel_protocol::IconLibrary {
+        name: n.to_string(),
+        repo: format!("{o}/{n}"),
+        dir: it.next().unwrap_or("").to_string(),
+        license: String::new(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2176,27 +2199,4 @@ mod tests {
         let doc = Revel::openapi("http://127.0.0.1:1").to_string();
         assert!(!doc.contains("\"$ref\""), "{doc}");
     }
-}
-
-/// Bibliothèque d'icônes d'après son nom proposé (« Lucide ») ou `propriétaire/dépôt/dossier`.
-fn library_of(text: &str) -> Option<revel_protocol::IconLibrary> {
-    let t = text.trim().trim_matches('/');
-    let sugg = revel_protocol::suggested_icon_libraries();
-    if let Some(l) = sugg
-        .iter()
-        .find(|l| l.name.eq_ignore_ascii_case(t) || l.key().eq_ignore_ascii_case(t))
-    {
-        return Some(l.clone());
-    }
-    let mut it = t.splitn(3, '/');
-    let (o, n) = (it.next()?, it.next()?);
-    if o.is_empty() || n.is_empty() {
-        return None;
-    }
-    Some(revel_protocol::IconLibrary {
-        name: n.to_string(),
-        repo: format!("{o}/{n}"),
-        dir: it.next().unwrap_or("").to_string(),
-        license: String::new(),
-    })
 }

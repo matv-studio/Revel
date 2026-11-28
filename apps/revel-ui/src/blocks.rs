@@ -861,7 +861,9 @@ pub(crate) fn IconPicker(
         manage.icon = Some(icons::settings as fn() -> AnyView);
         manage.sep = true;
         items.push(manage);
-        crate::ctxmenu::open_at(ui, r.left(), r.bottom() + 4.0, items, false);
+        // Sous le champ, bords droits alignés (charte 10.5.6) : le menu fait au moins 220 px.
+        let x = (r.right() - r.width().max(220.0)).max(8.0);
+        crate::ctxmenu::open_at(ui, x, r.bottom() + 4.0, items, false);
     };
     // Icônes en ligne à montrer : (bibliothèque, nom), filtrées par la recherche.
     let online = move || -> Vec<(revel_protocol::IconLibrary, String)> {

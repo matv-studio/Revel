@@ -3092,8 +3092,13 @@ section.**
 - **Licences** vérifiées le 24/11 : Lucide ISC, Tabler, Phosphor, Heroicons, Feather MIT ; Remix Icon
   écartée (statut de licence signalé comme incertain).
 - **Essais** : `bibliotheque_icones` (cœur : serveur GitHub imité, dossiers, cache, peinture, sans
-  connexion, chemins refusés) ; essais de l'éditeur (menu, recherche, pages, pose, réglages : retrait,
-  ajout en un clic, ajout d'un dépôt) sur des bibliothèques simulées.
+  connexion, chemins refusés) ; 7 essais de `tools/panels-e2e.mjs` (menu, pages, recherche, pose marquée,
+  « All », réglages : retrait, ajout en un clic, ajout d'un dépôt) sur des bibliothèques simulées.
+- **Menus d'un champ** : `ctxmenu::open_under` ouvre un menu sous un champ, bords droits alignés (charte
+  10.5.6) ; recherche et page gardées quand le panneau est redessiné après la pose d'une icône.
+- **CI** : le dépôt cobaye `alunites-revel-lab` n'existe plus (décision de l'utilisateur, 28/11) ; import
+  HTML, canevas et application de bureau essayés sur un site du modèle Portfolio. En suspens : porter
+  `tools/editor-e2e.mjs` (426 essais liés au cobaye) sur un site d'après un modèle.
 - **En suspens** : licence non lue pour une bibliothèque ajoutée sans connexion (lue à la première
   lecture réussie) ; la recherche porte sur les noms de fichiers (pas de mots-clés : les bibliothèques
   n'en publient pas de façon commune).

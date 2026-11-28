@@ -6,8 +6,26 @@ solutions, méthodes et pièges. Les emplacements propres à l'ordinateur de l'u
 `<dossier Revel du PC>` ; l'adresse du chat en cours est donnée par le rappel système de chaque nouveau chat.
 Produite par `tools/etat-public.py`, mise à jour en même temps que la note (règle de la section « Reprise »).
 
-Mis à jour le 17/11/2026 (version 0.7.9 : D-174 à D-180). Section « Reprise » ajoutée le 21/10/2026 pour continuer
+Mis à jour le 28/11/2026 (audit 1.0 : bibliothèques d'icônes, D-205). Section « Reprise » ajoutée le 21/10/2026 pour continuer
 dans un nouveau chat du projet « Sites Webs » sans perdre la façon de travailler.
+
+## 28/11/2026 : charte du 25/11, bibliothèques d'icônes (D-205), CI sans le site cobaye
+
+- **Charte** : canevas « Charte de design des apps internes » réorganisé en quatre pages (Fondations,
+  Composants, Comportements, Structure et mise en situation), sans titres datés ; `docs/DESIGN.md` : état
+  « Published » en puce verte et assistant en étapes (`.fp-step`).
+- **Audit, bibliothèques d'icônes faites (D-205)** : réglage « Icon libraries », menu « Library » et
+  recherche dans Styles, noms puis dessins lus à l'affichage, icône copiée dans le site, outils MCP
+  `find_icons` et `set_icon`. Maquettes validées dans `docs/maquettes/2026-11-24/` (aussi celles des imports,
+  étape suivante). Essais : `bibliotheque_icones` (cœur), 7 essais de bout en bout dans
+  `tools/panels-e2e.mjs` (40/40).
+- **Site cobaye abandonné** (`alunites-revel-lab` supprimé, décision de l'utilisateur) : la CI construit un
+  site du modèle Portfolio (`revel new … --template portfolio`) pour l'import HTML, le canevas et
+  l'application de bureau ; job « Essais de bout en bout (sites d'après un modèle) ». `tools/editor-e2e.mjs`
+  (426 essais) dépend encore du cobaye : à porter sur un site d'après un modèle (en suspens).
+- **Méthode** : ne pas construire l'interface pendant la construction de `revel` (mémoire : wasm-bindgen
+  tué) ; `trunk build --release` (wasm plus petit que la version de débogage, celle de la CI).
+- **Prochaine étape de l'audit** : imports de pages et de composant (maquettes `import-1` à `import-3`).
 
 ## 23/11/2026 : licence MIT et politique de signature (D-192) ; audit d'interface avant la 1.0
 

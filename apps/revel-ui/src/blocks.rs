@@ -657,9 +657,10 @@ pub(crate) fn IconPicker(
         l.extend(also.get_value());
         l
     };
-    let current = StoredValue::new(current);
+    // Icône posée : suivie pour marquer aussitôt celle qu'on choisit.
+    let current = RwSignal::new(current);
     // Onglet ouvert : celui de l'icône en place, sinon le premier.
-    let first = current.with_value(|c| {
+    let first = current.with_untracked(|c| {
         if c.starts_with("file:") {
             CUSTOM
         } else {
@@ -672,6 +673,7 @@ pub(crate) fn IconPicker(
     });
     let tab = RwSignal::new(first);
     let choose = move |name: &'static str, path: &'static str| {
+        current.set(name.to_string());
         let cmd = ed.doc.with_untracked(|d| {
             d.as_ref().map(|d| Command::Batch {
                 commands: all()
@@ -704,6 +706,7 @@ pub(crate) fn IconPicker(
     reload();
     let base = move || ed.base.get().unwrap_or_default();
     let choose_file = move |url: String| {
+        current.set(format!("file:{url}"));
         let src = crate::library::thumb_src(&base(), &url);
         spawn_local(async move {
             let Some(text) = fetch_text(&src).await else {
@@ -766,7 +769,7 @@ pub(crate) fn IconPicker(
     // Bibliothèques en ligne (D-205) : menu « Library » (« All », Revel, chaque bibliothèque
     // active, « Manage libraries… »), recherche, dessins lus à l'affichage.
     let libs = move || crate::iconlibs::libraries(ui);
-    let first_lib = current.with_value(|c| {
+    let first_lib = current.with_untracked(|c| {
         if c.starts_with("file:") {
             crate::iconlibs::REVEL.to_string()
         } else if let Some((k, _)) = crate::iconlibs::parse_icon_name(c) {
@@ -907,6 +910,7 @@ pub(crate) fn IconPicker(
             return;
         };
         let full = crate::iconlibs::icon_name(&l, &name);
+        current.set(full.clone());
         let cmd = ed.doc.with_untracked(|doc| {
             doc.as_ref().map(|doc| Command::Batch {
                 commands: all()
@@ -940,7 +944,7 @@ pub(crate) fn IconPicker(
             .collect()
     };
     let revel_button = move |name: &'static str, path: &'static str| {
-        let on = current.with_value(|c| c == name);
+        let on = move || current.with(|c| c == name);
         view! {
             <button type="button" class="icon-choice" class:is-on=on title=name aria-label=name data-icon=name
                 on:click=move |_| choose(name, path)>
@@ -987,7 +991,8 @@ pub(crate) fn IconPicker(
                                 view! {
                                     <div class="icon-grid icon-grid--custom" role="listbox" aria-label=ui.t(CUSTOM)>
                                         {list.into_iter().map(|u| {
-                                            let on = current.with_value(|c| c.strip_prefix("file:") == Some(u.as_str()));
+                                            let u3 = u.clone();
+                                            let on = move || current.with(|c| c.strip_prefix("file:") == Some(u3.as_str()));
                                             let name = u.rsplit('/').next().unwrap_or(&u).to_string();
                                             let u2 = u.clone();
                                             view! {
@@ -1022,13 +1027,13 @@ pub(crate) fn IconPicker(
                     let loading = k != crate::iconlibs::ALL
                         && k != crate::iconlibs::REVEL
                         && libs().iter().find(|l| l.key() == k).is_some_and(|l| crate::iconlibs::cached_index(l).is_none());
-                    let cur = current.get_value();
                     view! {
                         <div class="icon-grid icon-grid--online" role="listbox" aria-label=move || lib_label(&lib.get()) aria-busy=loading.to_string()>
                             {revel.into_iter().take(shown).map(|(n, p)| revel_button(n, p)).collect_view()}
                             {list.into_iter().take(shown.saturating_sub(revel_n)).map(|(l, n)| {
                                 let full = crate::iconlibs::icon_name(&l, &n);
-                                let on = cur == full;
+                                let full2 = full.clone();
+                                let on = move || current.with(|c| *c == full2);
                                 let d = crate::iconlibs::cached_drawing(&l, &n);
                                 let missing = d.is_none();
                                 let title = format!("{} · {}", n, l.name);

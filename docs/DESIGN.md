@@ -149,7 +149,8 @@ les valeurs techniques à comparer ou recopier (empreinte d'un serveur).
 | Menu du clic droit des panneaux | `ctxmenu::open` (`CtxItem` : icône, libellé, note, séparateur, rouge si destructeur) | Pages, Composants, Médias, contenus du CMS, versions : une ligne par action, la destructrice en dernier (D-196) |
 | Choix parmi des éléments trouvés | `.setup-folders` > `.setup-folder-row` (`role="radio"`, `.is-on`), `.setup-folder-tag` | Rien de coché d'office quand le choix engage (dossier d'un hébergement) ; l'élément proposé est signalé par une étiquette bleue (`--set-*`) ; dernière ligne « Autre… » pour saisir ; actions qui en dépendent grisées tant que rien n'est choisi (D-202) |
 | Aperçu d'éléments produits | `.filter-chips` > `.chip.filter-chip` (`.is-on`) | Ce qu'un réglage va produire (boutons d'un filtre tirés d'un champ), avec leur nombre à droite du libellé (D-202) |
-| Contenu archivé | `.chip--archived`, `tr.is-archived` | Puce neutre « Archived » ; ligne estompée (`--text-faint`, image à 55 %) ; « Archive » au clic droit et dans la fiche, « Unarchive » au pied de la fiche (D-202) |
+| Contenu archivé | `.chip--archived`, `tr.is-archived` | Puce neutre « Archived » ; ligne estompée (`--text-faint`, image à 55 %) ; « Archive » au clic droit et dans la fiche, « Unarchive » au pied de la fiche (D-202); « Published » en puce verte (`--success-text`) ; un champ oui / non qui porte cet état s'affiche comme cette puce, pas comme un interrupteur (D-203) |
+| Assistant en étapes | `.fp-step` (`.is-current`, `.is-done`), `.fp-n` | Étapes encadrées (bordure `--line-strong`, rayon 8, 12 × 16, colonne de 24 px) ; numéro dans un rond de 22 px (`--surface-active`) ; en cours : bordure et rond à l'accent ; faite : rond vert avec coche ; « Continue » grisé tant que l'étape requise n'est pas faite ; l'autre voie en ⓘ du titre (D-203) |
 
 Icônes : `apps/revel-ui/src/icons.rs`, 16 px, trait de 1,5 px, extrémités arrondies, dessinées pour Revel.
 

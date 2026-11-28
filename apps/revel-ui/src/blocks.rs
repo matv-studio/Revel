@@ -783,8 +783,11 @@ pub(crate) fn IconPicker(
         }
     });
     let lib = RwSignal::new(first_lib);
-    let query = RwSignal::new(String::new());
-    let limit = RwSignal::new(PAGE);
+    // Recherche et page gardées quand le panneau est redessiné (après la pose d'une icône).
+    let (q0, n0) = crate::iconlibs::search();
+    let query = RwSignal::new(q0);
+    let limit = RwSignal::new(n0.max(PAGE));
+    Effect::new(move |_| crate::iconlibs::set_search(&query.get(), limit.get()));
     // Relu quand des noms ou des dessins arrivent.
     let tick = RwSignal::new(0u32);
     for l in libs() {

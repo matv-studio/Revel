@@ -20,6 +20,16 @@ thread_local! {
     static DRAWINGS: RefCell<HashMap<String, IconDrawing>> = RefCell::new(HashMap::new());
     /// Dernière bibliothèque choisie dans le panneau Styles.
     static LAST: RefCell<String> = RefCell::new(ALL.to_string());
+    /// Recherche et nombre d'icônes montrées : gardés quand le panneau est redessiné (icône posée).
+    static SEARCH: RefCell<(String, usize)> = const { RefCell::new((String::new(), 0)) };
+}
+
+pub(crate) fn search() -> (String, usize) {
+    SEARCH.with(|q| q.borrow().clone())
+}
+
+pub(crate) fn set_search(q: &str, shown: usize) {
+    SEARCH.with(|x| *x.borrow_mut() = (q.to_string(), shown));
 }
 
 pub(crate) fn last() -> String {

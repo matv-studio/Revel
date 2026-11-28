@@ -69,6 +69,8 @@ L'apparence se règle dans **Styles**, par **classe** : tous les éléments qui 
 
 Les **vidéos**, les **animations Lottie** (fichier `.json` ou `.lottie`) et les documents s'ajoutent de la même façon. Une **Image révélée** montre une seconde image au survol (croquis puis œuvre finie) : en entier, jusqu'au pointeur ou autour de lui.
 
+**Icônes** : dans **Styles**, **Bibliothèque** choisit d'où viennent les icônes : celles de Revel, Lucide, ou d'autres bibliothèques ajoutées dans les réglages de Revel › **Bibliothèques d'icônes** (Tabler, Phosphor, Heroicons, Feather en un clic, ou tout dépôt GitHub public de fichiers SVG). Cherchez par nom ; l'icône choisie est copiée dans votre site.
+
 ## Composants
 
 Un composant est un morceau de page réutilisé partout (en-tête, pied de page, carte, service, outil). Clic droit sur un élément dans les calques › **Créer un composant**. Modifier le composant change toutes ses utilisations ; une utilisation peut avoir ses propres textes, images et liens (ses **propriétés**, dans **Styles**) et sa variante (survol, appui…). Dans le canevas du composant, des flèches relient la variante principale aux variantes prises par un geste ; **+ › Au clic…** crée une variante prise au clic sur le composant.

@@ -457,6 +457,30 @@ pub async fn template_file_info(file: &str) -> Res<revel_protocol::TemplateInfo>
     call("template_file_info", &serde_json::json!({ "file": file })).await
 }
 
+/// Noms des icônes d'une bibliothèque en ligne (D-205), gardés sur l'ordinateur.
+pub async fn icon_library(
+    library: &revel_protocol::IconLibrary,
+    refresh: bool,
+) -> Res<revel_protocol::IconIndex> {
+    call(
+        "icon_library",
+        &serde_json::json!({ "library": library, "refresh": refresh }),
+    )
+    .await
+}
+
+/// Dessins des icônes affichées d'une bibliothèque en ligne (D-205).
+pub async fn icon_drawings(
+    library: &revel_protocol::IconLibrary,
+    names: &[String],
+) -> Res<Vec<revel_protocol::IconDrawing>> {
+    call(
+        "icon_drawings",
+        &serde_json::json!({ "library": library, "names": names }),
+    )
+    .await
+}
+
 /// Modèles d'un catalogue GitHub.
 pub async fn template_catalog(repo: &str) -> Res<Vec<revel_protocol::TemplateInfo>> {
     call("template_catalog", &serde_json::json!({ "repo": repo })).await

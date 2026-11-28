@@ -3059,3 +3059,41 @@ section.**
   modification. Ctrl+B / Ctrl+I pendant la saisie : vérifiés, déjà actifs. Double-clic qui pose dans
   « Insert » et ouvre dans « Components » : laissé tel quel (choix de l'utilisateur, 25/11 : deux
   panneaux, deux usages).
+
+## D-205 — Bibliothèques d'icônes (28/11/2026, maquettes validées le 24/11)
+
+- **Maquettes** : `docs/maquettes/2026-11-24/icons-1-styles-open.png`, `icons-1-styles-closed.png`,
+  `icons-2-settings.png` (D-197, D-198).
+- **Réglages de Revel › Icon libraries** (après Templates, même modèle que les catalogues) : ligne
+  « Revel · built-in » et son nombre d'icônes ; une ligne par bibliothèque active (nom, dépôt et dossier
+  en chasse fixe, licence, nombre d'icônes en vert, retrait) ; les bibliothèques proposées pas encore
+  actives (Tabler, Phosphor, Heroicons, Feather) en lignes pointillées avec « Add » : **un clic** ; ajout
+  d'un dépôt `owner/repository` + dossier des SVG (facultatif). Bibliothèque injoignable : « Unreachable,
+  retry » (raison en info-bulle). **Lucide active au départ** (réglage `icon_libraries`).
+- **Styles d'une icône** : rangée « Library » (bouton à l'allure d'une liste) qui ouvre le menu de la
+  maquette : « All » en tête (coche à gauche, nombre d'icônes à droite), Revel, chaque bibliothèque, puis
+  « Manage libraries… » avec le **rouage** (ouvre les réglages de Revel sur Icon libraries). Champ
+  « Search icons » sous elle (ajout à la maquette : 8 930 icônes ne se parcourent pas sans recherche).
+  « All » sans recherche et « Revel » : familles et icônes importées comme avant ; une bibliothèque en
+  ligne, ou une recherche : grille par pages de 96 et « N more ». Dernière bibliothèque choisie gardée
+  pendant la session ; une icône posée d'une bibliothèque rouvre sur elle.
+- **Téléchargement** (D-198) : la **liste des noms** d'abord — dépôt (branche par défaut, licence SPDX),
+  puis arbre du dossier lu segment par segment (l'arbre complet d'un gros dépôt est tronqué au-delà de
+  100 000 entrées) ; gardée dans le dossier des réglages, relue au-delà d'une semaine, rendue marquée
+  « offline » faute de connexion ; jeton du compte GitHub connecté s'il y en a un (limite d'appels plus
+  haute), sinon appel anonyme. Puis **chaque dessin à l'affichage** (fichiers bruts, lots lus à 8 à la
+  fois, gardés). Noms et dossiers vérifiés (pas de `..`).
+- **Copie dans le site** : le dessin est écrit dans le `<svg>` de la page (`viewBox`, contenu nettoyé
+  par `clean_svg`, peinture du fichier d'origine : `fill`, `stroke`, `stroke-width`… —
+  `icons::set_icon_painted`) ; `data-icon` = `dépôt/dossier:nom`. Le site ne dépend jamais de la
+  bibliothèque en ligne.
+- **Assistants (MCP)** : `find_icons` (Revel et Lucide par défaut, ou une bibliothèque nommée ou
+  `owner/repository/folder`) et `set_icon` (copie le dessin, une étape d'annulation).
+- **Licences** vérifiées le 24/11 : Lucide ISC, Tabler, Phosphor, Heroicons, Feather MIT ; Remix Icon
+  écartée (statut de licence signalé comme incertain).
+- **Essais** : `bibliotheque_icones` (cœur : serveur GitHub imité, dossiers, cache, peinture, sans
+  connexion, chemins refusés) ; essais de l'éditeur (menu, recherche, pages, pose, réglages : retrait,
+  ajout en un clic, ajout d'un dépôt) sur des bibliothèques simulées.
+- **En suspens** : licence non lue pour une bibliothèque ajoutée sans connexion (lue à la première
+  lecture réussie) ; la recherche porte sur les noms de fichiers (pas de mots-clés : les bibliothèques
+  n'en publient pas de façon commune).

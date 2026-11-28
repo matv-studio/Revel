@@ -221,6 +221,29 @@
       }
       case "template_publish": return { url: "https://github.com/" + args.repo + "/pull/1", pull_request: true, files: 42, size: 12600000, too_large: [] };
       case "template_catalog_create": return (state.github || "matv-studio") + "/revel-templates";
+      // Bibliothèques d'icônes (D-205) : noms et dessins simulés (sans réseau) ; `iconsfail=1` :
+      // bibliothèque injoignable.
+      case "icon_library": {
+        if (params.get("iconsfail")) throw { key: "error-icon-library", args: [["detail", "404"]] };
+        const words = ["arrow-right", "arrow-left", "arrow-up", "arrow-down", "heart", "star", "home", "search", "settings", "user", "mail", "phone", "camera", "cloud", "sun", "moon", "bell", "book", "calendar", "chart"];
+        const sizes = { "lucide-icons/lucide": 240, "tabler/tabler-icons": 300, "phosphor-icons/core": 150, "tailwindlabs/heroicons": 60, "feathericons/feather": 40 };
+        const n = sizes[args.library.repo] ?? 30;
+        const names = [];
+        for (let i = 0; names.length < n; i++) names.push(words[i % words.length] + (i >= words.length ? "-" + Math.floor(i / words.length) : ""));
+        names.sort();
+        await new Promise((r) => setTimeout(r, 30));
+        return { names, license: args.library.license || "MIT", fetched: Math.floor(Date.now() / 1000), offline: false };
+      }
+      case "icon_drawings": {
+        window.__revelIconDraws = (window.__revelIconDraws || 0) + args.names.length;
+        const filled = args.library.repo === "phosphor-icons/core";
+        return args.names.map((name, i) => ({
+          name,
+          view_box: filled ? "0 0 256 256" : "0 0 24 24",
+          inner: filled ? `<rect x="${32 + (i % 5) * 8}" y="48" width="120" height="160" rx="24"/>` : `<circle cx="12" cy="12" r="${4 + (i % 6)}"/><path d="M4 12h16"/>`,
+          paint: filled ? [["fill", "currentColor"]] : [["fill", "none"], ["stroke", "currentColor"], ["stroke-width", "2"], ["stroke-linecap", "round"], ["stroke-linejoin", "round"]],
+        }));
+      }
       case "plugin:dialog|open": {
         if (args.options && args.options.directory === false) {
           const f = window.__revelPickFiles ?? null;

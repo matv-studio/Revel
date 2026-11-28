@@ -816,6 +816,23 @@
 .icon-tab:hover { background: var(--surface-hover); color: var(--text); }
 .icon-tab.is-on { background: var(--surface-active); color: var(--text); }
 .icon-grid--custom .icon-choice img { width: 20px; height: 20px; object-fit: contain; }
+/* Bibliothèques d'icônes (D-205) : menu « Library », recherche, grille lue à l'affichage. */
+.icon-lib-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: var(--s-2); }
+.icon-lib-row .label { margin: 0; }
+.icon-lib-btn { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); text-align: left; cursor: default; }
+.icon-lib-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-lib-btn > svg.icon { width: 14px; height: 14px; flex: none; color: var(--text-muted); }
+.icon-lib-btn[aria-expanded="true"], .icon-lib-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; border-color: transparent; }
+.icon-search { position: relative; display: flex; align-items: center; }
+.icon-search > svg.icon { position: absolute; left: 8px; width: 14px; height: 14px; color: var(--text-faint); pointer-events: none; }
+.icon-search .input { width: 100%; padding-left: 28px; }
+.icon-picker { display: flex; flex-direction: column; gap: var(--s-2); }
+.icon-choice .icon-svg { display: grid; place-items: center; width: 20px; height: 20px; }
+.icon-choice .icon-svg svg { width: 20px; height: 20px; }
+.icon-choice.is-loading { background: var(--surface-raised); }
+.icon-choice.is-loading::after { content: ""; width: 12px; height: 12px; border-radius: 3px; background: var(--surface-hover); }
+.icon-none { margin: 0; }
+.icon-more { align-self: flex-start; }
 .icon-import { border-style: dashed; border-color: var(--line-strong); color: var(--text-muted); }
 /* Groupe de réglages avec une action à droite du titre (retirer le rôle). */
 .insp-group-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }

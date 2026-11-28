@@ -1489,6 +1489,36 @@ async fn template_catalog(
         .map_err(err)
 }
 
+/// Noms des icônes d'une bibliothèque en ligne (D-205).
+#[tauri::command]
+async fn icon_library(
+    s: State<'_, AppState>,
+    library: revel_protocol::IconLibrary,
+    refresh: Option<bool>,
+) -> Res<revel_protocol::IconIndex> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.icon_library(&library, refresh.unwrap_or(false))
+    })
+    .await
+    .map_err(sys)?
+    .map_err(err)
+}
+
+/// Dessins des icônes affichées d'une bibliothèque en ligne (D-205).
+#[tauri::command]
+async fn icon_drawings(
+    s: State<'_, AppState>,
+    library: revel_protocol::IconLibrary,
+    names: Vec<String>,
+) -> Res<Vec<revel_protocol::IconDrawing>> {
+    let core = s.core.clone();
+    tauri::async_runtime::spawn_blocking(move || core.icon_drawings(&library, &names))
+        .await
+        .map_err(sys)?
+        .map_err(err)
+}
+
 /// Envoie le site comme modèle complet dans un catalogue GitHub.
 #[tauri::command]
 async fn template_publish(
@@ -1826,6 +1856,8 @@ pub fn run() {
             template_save,
             template_file_info,
             template_catalog,
+            icon_library,
+            icon_drawings,
             template_publish,
             template_catalog_create,
             edit_replace_media,

@@ -453,7 +453,7 @@ fn template_err(key: &'static str, detail: &str) -> CoreError {
 }
 
 /// Adresse brute d'un fichier d'un dépôt GitHub public (branche par défaut).
-fn raw_url(repo: &str, path: &str) -> String {
+pub(crate) fn raw_url(repo: &str, path: &str) -> String {
     let base = RAW_OVERRIDE
         .with(|o| o.borrow().clone())
         .unwrap_or_else(|| "https://raw.githubusercontent.com".into());

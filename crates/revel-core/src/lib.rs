@@ -23,6 +23,7 @@ pub mod flatten;
 mod fonts;
 mod ghsites;
 mod github;
+mod icons;
 mod import;
 pub mod links;
 mod localize;

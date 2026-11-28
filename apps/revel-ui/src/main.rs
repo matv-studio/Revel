@@ -27,6 +27,7 @@ mod formfields;
 mod help;
 mod home;
 mod hovermedia;
+mod iconlibs;
 mod icons;
 mod importer;
 mod insert;

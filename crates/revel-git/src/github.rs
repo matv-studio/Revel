@@ -308,10 +308,16 @@ impl Client {
     }
 
     /// En-têtes communs : format, jeton, version de l'API.
+    /// Sans jeton (`Client::new("")`) : appel anonyme, pour lire un dépôt public (D-205).
     fn req<B>(&self, r: ureq::RequestBuilder<B>) -> ureq::RequestBuilder<B> {
-        r.header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("X-GitHub-Api-Version", API_VERSION)
+        let r = r
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", API_VERSION);
+        if self.token.is_empty() {
+            r
+        } else {
+            r.header("Authorization", format!("Bearer {}", self.token))
+        }
     }
 
     /// Réponse : statut et corps.

@@ -1719,6 +1719,20 @@ textarea.loc-input { resize: vertical; min-height: 64px; }
 .catalog-row__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
 .catalog-add { display: flex; gap: var(--s-2); }
 .catalog-add .input { flex: 1; min-width: 0; }
+/* Réglages › Icon libraries (D-205). */
+.iconlib-row { grid-template-columns: 16px minmax(0, 1fr) auto auto auto; }
+.iconlib-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--text-sm); }
+.iconlib-name b { font-weight: var(--weight-medium); }
+.iconlib-name .mono { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-xs); }
+.iconlib-name .mono::before { content: "·"; margin-right: 6px; color: var(--text-faint); }
+.iconlib-logo { display: inline-grid; place-items: center; width: 16px; height: 16px; }
+.iconlib-logo svg { width: 14px; height: 14px; }
+.iconlib-license { height: 18px; padding: 0 6px; font-size: 10px; }
+.iconlib-row .catalog-ok.is-offline { color: var(--text-muted); }
+.iconlib-retry { border: 0; background: none; padding: 0; color: inherit; font: inherit; }
+.iconlib-row.is-suggested { border-style: dashed; }
+.iconlib-row.is-suggested .iconlib-name, .iconlib-row.is-suggested > svg.icon { opacity: .7; }
+.iconlib-new .input:first-child { flex: 1.2; }
 .catalog-add .btn, .new-site__catalog-input .btn { display: inline-flex; align-items: center; gap: 6px; }
 .new-site__add-catalog svg.icon { width: 14px; height: 14px; }
 .new-site__catalog-input { display: inline-flex; align-items: center; gap: 6px; animation: view-in var(--fast) var(--ease) backwards; }

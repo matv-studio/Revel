@@ -763,58 +763,301 @@ pub(crate) fn IconPicker(
             });
         });
     };
+    // Bibliothèques en ligne (D-205) : menu « Library » (« All », Revel, chaque bibliothèque
+    // active, « Manage libraries… »), recherche, dessins lus à l'affichage.
+    let libs = move || crate::iconlibs::libraries(ui);
+    let first_lib = current.with_value(|c| {
+        if c.starts_with("file:") {
+            crate::iconlibs::REVEL.to_string()
+        } else if let Some((k, _)) = crate::iconlibs::parse_icon_name(c) {
+            k
+        } else {
+            match crate::iconlibs::last() {
+                l if l == crate::iconlibs::ALL || l == crate::iconlibs::REVEL => l,
+                l if crate::iconlibs::libraries(ui).iter().any(|x| x.key() == l) => l,
+                _ => crate::iconlibs::ALL.to_string(),
+            }
+        }
+    });
+    let lib = RwSignal::new(first_lib);
+    let query = RwSignal::new(String::new());
+    let limit = RwSignal::new(PAGE);
+    // Relu quand des noms ou des dessins arrivent.
+    let tick = RwSignal::new(0u32);
+    for l in libs() {
+        spawn_local(async move {
+            if crate::iconlibs::index(&l, false).await.is_ok() {
+                let _ = tick.try_update(|n| *n += 1);
+            }
+        });
+    }
+    let count_of = move |k: &str| -> Option<usize> {
+        if k == crate::iconlibs::REVEL {
+            return Some(revel_edit::icons::ICONS.len());
+        }
+        let ls = libs();
+        if k == crate::iconlibs::ALL {
+            return Some(
+                revel_edit::icons::ICONS.len()
+                    + ls.iter()
+                        .filter_map(crate::iconlibs::cached_index)
+                        .map(|i| i.names.len())
+                        .sum::<usize>(),
+            );
+        }
+        ls.iter()
+            .find(|l| l.key() == k)
+            .and_then(crate::iconlibs::cached_index)
+            .map(|i| i.names.len())
+    };
+    let lib_label = move |k: &str| -> String {
+        match k {
+            crate::iconlibs::ALL => ui.t("icon-library-all")(),
+            crate::iconlibs::REVEL => "Revel".into(),
+            k => libs()
+                .into_iter()
+                .find(|l| l.key() == k)
+                .map(|l| l.name)
+                .unwrap_or_else(|| k.to_string()),
+        }
+    };
+    let pick_lib = move |k: String| {
+        crate::iconlibs::set_last(&k);
+        lib.set(k);
+        limit.set(PAGE);
+    };
+    let open_menu = move |e: web_sys::MouseEvent| {
+        use wasm_bindgen::JsCast;
+        let Some(el) = e
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        else {
+            return;
+        };
+        let r = el.get_bounding_client_rect();
+        let on = lib.get_untracked();
+        let item = |k: String, sep: bool| {
+            let k2 = k.clone();
+            let mut it = crate::ctxmenu::CtxItem::new(lib_label(&k), move || pick_lib(k2.clone()));
+            it.icon = (on == k).then_some(icons::check as fn() -> AnyView);
+            it.note = count_of(&k).map(|n| crate::iconlibs::fmt_count(ui, n));
+            it.sep = sep;
+            it
+        };
+        let mut items = vec![
+            item(crate::iconlibs::ALL.into(), false),
+            item(crate::iconlibs::REVEL.into(), true),
+        ];
+        items.extend(libs().into_iter().map(|l| item(l.key(), false)));
+        let mut manage = crate::ctxmenu::CtxItem::new(ui.t("icon-library-manage")(), move || {
+            crate::iconlibs::open_manage(ui)
+        });
+        manage.icon = Some(icons::settings as fn() -> AnyView);
+        manage.sep = true;
+        items.push(manage);
+        crate::ctxmenu::open_at(ui, r.left(), r.bottom() + 4.0, items, false);
+    };
+    // Icônes en ligne à montrer : (bibliothèque, nom), filtrées par la recherche.
+    let online = move || -> Vec<(revel_protocol::IconLibrary, String)> {
+        tick.track();
+        let k = lib.get();
+        let q = query.get().trim().to_ascii_lowercase();
+        if k == crate::iconlibs::REVEL || (k == crate::iconlibs::ALL && q.is_empty()) {
+            return Vec::new();
+        }
+        let terms: Vec<&str> = q.split_whitespace().collect();
+        libs()
+            .into_iter()
+            .filter(|l| k == crate::iconlibs::ALL || l.key() == k)
+            .flat_map(|l| {
+                let names = crate::iconlibs::cached_index(&l)
+                    .map(|i| i.names)
+                    .unwrap_or_default();
+                names
+                    .into_iter()
+                    .filter(|n| terms.iter().all(|t| n.to_ascii_lowercase().contains(t)))
+                    .map(|n| (l.clone(), n))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    };
+    // Dessins manquants de la partie affichée, lus par lot.
+    Effect::new(move |_| {
+        let list = online();
+        let n = limit.get();
+        let mut by: Vec<(revel_protocol::IconLibrary, Vec<String>)> = Vec::new();
+        for (l, name) in list.into_iter().take(n) {
+            if crate::iconlibs::cached_drawing(&l, &name).is_some() {
+                continue;
+            }
+            match by.iter_mut().find(|(x, _)| x.key() == l.key()) {
+                Some((_, v)) => v.push(name),
+                None => by.push((l, vec![name])),
+            }
+        }
+        for (l, names) in by {
+            spawn_local(async move {
+                crate::iconlibs::load_drawings(&l, &names).await;
+                let _ = tick.try_update(|n| *n += 1);
+            });
+        }
+    });
+    let choose_online = move |l: revel_protocol::IconLibrary, name: String| {
+        let Some(d) = crate::iconlibs::cached_drawing(&l, &name) else {
+            return;
+        };
+        let full = crate::iconlibs::icon_name(&l, &name);
+        let cmd = ed.doc.with_untracked(|doc| {
+            doc.as_ref().map(|doc| Command::Batch {
+                commands: all()
+                    .iter()
+                    .map(|at| {
+                        revel_edit::icons::set_icon_painted(
+                            doc,
+                            at,
+                            &full,
+                            &d.view_box,
+                            &d.inner,
+                            &d.paint,
+                        )
+                    })
+                    .collect(),
+            })
+        });
+        if let Some(c) = cmd {
+            ed.apply(ui, c, false);
+        }
+    };
+    let revel_matches = move || -> Vec<(&'static str, &'static str)> {
+        let q = query.get().trim().to_ascii_lowercase();
+        if q.is_empty() {
+            return Vec::new();
+        }
+        revel_edit::icons::ICONS
+            .iter()
+            .filter(|(n, _)| q.split_whitespace().all(|t| n.contains(t)))
+            .copied()
+            .collect()
+    };
+    let revel_button = move |name: &'static str, path: &'static str| {
+        let on = current.with_value(|c| c == name);
+        view! {
+            <button type="button" class="icon-choice" class:is-on=on title=name aria-label=name data-icon=name
+                on:click=move |_| choose(name, path)>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" inner_html=path></svg>
+            </button>
+        }
+    };
     view! {
         <div class="insp-group icon-picker">
-            <p class="panel-title">{ui.t("block-icon")}</p>
-            <div class="icon-tabs" role="tablist" aria-label=ui.t("block-icon")>
-                {revel_edit::icons::GROUPS.iter().map(|(k, _)| *k).chain(std::iter::once(CUSTOM)).map(|k| view! {
-                    <button role="tab" class="icon-tab" data-tab=k class:is-on=move || tab.get() == k
-                        aria-selected=move || (tab.get() == k).to_string()
-                        on:click=move |_| tab.set(k)>{ui.t(k)}</button>
-                }).collect_view()}
+            <div class="icon-lib-row">
+                <span class="label" title=ui.t("icon-library-help")>{ui.t("icon-library")}</span>
+                <button type="button" class="input icon-lib-btn" data-action="icon-library" aria-haspopup="menu"
+                    on:click=open_menu>
+                    <span>{move || lib_label(&lib.get())}</span>{icons::chevron_down()}
+                </button>
             </div>
+            <div class="icon-search">
+                {icons::search()}
+                <input class="input" type="search" spellcheck="false" autocomplete="off"
+                    placeholder=ui.t("icon-search") aria-label=ui.t("icon-search")
+                    prop:value=move || query.get()
+                    on:input=move |e| { query.set(event_target_value(&e)); limit.set(PAGE); }/>
+            </div>
+            <p class="panel-title">{ui.t("block-icon")}</p>
             {move || {
-                let t = tab.get();
-                if t == CUSTOM {
-                    let list = svgs.get();
+                let k = lib.get();
+                let q = query.with(|q| !q.trim().is_empty());
+                let revel_tabs = k == crate::iconlibs::REVEL || (k == crate::iconlibs::ALL && !q);
+                if revel_tabs {
+                    // Icônes de Revel par familles, et icônes importées (fichiers SVG du site).
                     view! {
-                        <div class="icon-grid icon-grid--custom" role="listbox" aria-label=ui.t(CUSTOM)>
-                            {list.into_iter().map(|u| {
-                                let on = current.with_value(|c| c.strip_prefix("file:") == Some(u.as_str()));
-                                let name = u.rsplit('/').next().unwrap_or(&u).to_string();
-                                let u2 = u.clone();
-                                view! {
-                                    <button type="button" class="icon-choice" class:is-on=on title=name.clone() aria-label=name data-file=u.clone()
-                                        on:click=move |_| choose_file(u2.clone())>
-                                        <img alt="" src=crate::library::thumb_src(&base(), &u)/>
-                                    </button>
-                                }
+                        <div class="icon-tabs" role="tablist" aria-label=ui.t("block-icon")>
+                            {revel_edit::icons::GROUPS.iter().map(|(k, _)| *k).chain(std::iter::once(CUSTOM)).map(|k| view! {
+                                <button role="tab" class="icon-tab" data-tab=k class:is-on=move || tab.get() == k
+                                    aria-selected=move || (tab.get() == k).to_string()
+                                    on:click=move |_| tab.set(k)>{ui.t(k)}</button>
                             }).collect_view()}
-                            <button type="button" class="icon-choice icon-import" data-action="icons-import" title=ui.t("icons-import")
-                                aria-label=ui.t("icons-import") on:click=import>{icons::upload()}</button>
                         </div>
+                        {move || {
+                            let t = tab.get();
+                            if t == CUSTOM {
+                                let list = svgs.get();
+                                view! {
+                                    <div class="icon-grid icon-grid--custom" role="listbox" aria-label=ui.t(CUSTOM)>
+                                        {list.into_iter().map(|u| {
+                                            let on = current.with_value(|c| c.strip_prefix("file:") == Some(u.as_str()));
+                                            let name = u.rsplit('/').next().unwrap_or(&u).to_string();
+                                            let u2 = u.clone();
+                                            view! {
+                                                <button type="button" class="icon-choice" class:is-on=on title=name.clone() aria-label=name data-file=u.clone()
+                                                    on:click=move |_| choose_file(u2.clone())>
+                                                    <img alt="" src=crate::library::thumb_src(&base(), &u)/>
+                                                </button>
+                                            }
+                                        }).collect_view()}
+                                        <button type="button" class="icon-choice icon-import" data-action="icons-import" title=ui.t("icons-import")
+                                            aria-label=ui.t("icons-import") on:click=import>{icons::upload()}</button>
+                                    </div>
+                                }.into_any()
+                            } else {
+                                let names = revel_edit::icons::GROUPS.iter().find(|(k, _)| *k == t).map(|(_, l)| *l).unwrap_or(&[]);
+                                view! {
+                                    <div class="icon-grid" role="listbox" aria-label=ui.t(t)>
+                                        {names.iter().filter_map(|n| revel_edit::icons::ICONS.iter().find(|(x, _)| x == n))
+                                            .map(|(name, path)| revel_button(name, path)).collect_view()}
+                                    </div>
+                                }.into_any()
+                            }
+                        }}
                     }.into_any()
                 } else {
-                    let names = revel_edit::icons::GROUPS.iter().find(|(k, _)| *k == t).map(|(_, l)| *l).unwrap_or(&[]);
+                    // Recherche, ou une bibliothèque en ligne : grille par pages.
+                    let revel = if k == crate::iconlibs::ALL || k == crate::iconlibs::REVEL { revel_matches() } else { Vec::new() };
+                    let list = online();
+                    let revel_n = revel.len().min(limit.get_untracked());
+                    let total = revel.len() + list.len();
+                    let shown = limit.get();
+                    let loading = k != crate::iconlibs::ALL
+                        && k != crate::iconlibs::REVEL
+                        && libs().iter().find(|l| l.key() == k).is_some_and(|l| crate::iconlibs::cached_index(l).is_none());
+                    let cur = current.get_value();
                     view! {
-                        <div class="icon-grid" role="listbox" aria-label=ui.t(t)>
-                            {names.iter().filter_map(|n| revel_edit::icons::ICONS.iter().find(|(x, _)| x == n)).map(|(name, path)| {
-                                let on = current.with_value(|c| c == name);
+                        <div class="icon-grid icon-grid--online" role="listbox" aria-label=move || lib_label(&lib.get()) aria-busy=loading.to_string()>
+                            {revel.into_iter().take(shown).map(|(n, p)| revel_button(n, p)).collect_view()}
+                            {list.into_iter().take(shown.saturating_sub(revel_n)).map(|(l, n)| {
+                                let full = crate::iconlibs::icon_name(&l, &n);
+                                let on = cur == full;
+                                let d = crate::iconlibs::cached_drawing(&l, &n);
+                                let missing = d.is_none();
+                                let title = format!("{} · {}", n, l.name);
+                                let (l2, n2) = (l.clone(), n.clone());
                                 view! {
-                                    <button type="button" class="icon-choice" class:is-on=on title=*name aria-label=*name data-icon=*name
-                                        on:click=move |_| choose(name, path)>
-                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
-                                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" inner_html=*path></svg>
+                                    <button type="button" class="icon-choice" class:is-on=on class:is-loading=missing
+                                        title=title.clone() aria-label=title data-icon=full disabled=missing
+                                        on:click=move |_| choose_online(l2.clone(), n2.clone())>
+                                        {d.map(|d| view! { <span class="icon-svg" inner_html=crate::iconlibs::svg_markup(&d, 20)></span> })}
                                     </button>
                                 }
                             }).collect_view()}
                         </div>
+                        {(total == 0 && !loading).then(|| view! { <p class="muted small icon-none">{ui.t("icon-search-none")}</p> })}
+                        {(total > shown).then(|| view! {
+                            <button type="button" class="btn btn--small icon-more" data-action="icons-more"
+                                on:click=move |_| limit.update(|n| *n += PAGE)>
+                                {ui.tx("icon-more", &[("n", crate::iconlibs::fmt_count(ui, total - shown))])}
+                            </button>
+                        })}
                     }.into_any()
                 }
             }}
         </div>
     }
 }
+
+/// Icônes affichées à la fois dans une bibliothèque en ligne (puis « N more »).
+const PAGE: usize = 96;
 
 /// Texte d'un fichier servi par le canevas (icône SVG importée).
 async fn fetch_text(url: &str) -> Option<String> {

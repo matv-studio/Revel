@@ -600,6 +600,80 @@ pub fn set_icon(
     Command::Batch { commands }
 }
 
+/// Peinture posée sur le `<svg>` d'un fichier (D-205) : `fill`, `stroke`, `stroke-width`,
+/// `stroke-linecap`, `stroke-linejoin`, telles qu'écrites (valeurs sûres seulement).
+pub fn svg_paint(text: &str) -> Vec<(String, String)> {
+    let lower = text.to_ascii_lowercase();
+    let Some(start) = lower.find("<svg") else {
+        return Vec::new();
+    };
+    let Some(end) = lower[start..].find('>') else {
+        return Vec::new();
+    };
+    let head = &text[start..start + end];
+    let lhead = &lower[start..start + end];
+    [
+        "fill",
+        "stroke",
+        "stroke-width",
+        "stroke-linecap",
+        "stroke-linejoin",
+    ]
+    .iter()
+    .filter_map(|n| {
+        let key = format!(" {n}=\"");
+        let i = lhead.find(&key)? + key.len();
+        let j = i + head[i..].find('"')?;
+        let v = head[i..j].trim();
+        let safe = !v.is_empty()
+            && v.len() <= 40
+            && v.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "#.%-() ,".contains(c));
+        safe.then(|| (n.to_string(), v.to_string()))
+    })
+    .collect()
+}
+
+/// Pose le dessin d'une bibliothèque en ligne (D-205) : comme [`set_icon`], avec la peinture du
+/// fichier d'origine (trait ou remplissage, épaisseur) au lieu d'un trait de 2 imposé. Sans
+/// peinture lue, le dessin est rempli de la couleur du texte (règle de SVG).
+pub fn set_icon_painted(
+    site: &revel_model::Site,
+    at: &crate::address::Target,
+    name: &str,
+    view_box: &str,
+    inner: &str,
+    paint: &[(String, String)],
+) -> crate::command::Command {
+    use crate::command::Command;
+    let set = |n: &str, v: &str| Command::SetAttr {
+        at: at.clone(),
+        name: n.into(),
+        value: Some(v.into()),
+    };
+    let mut commands = vec![set("data-icon", name), set("viewBox", view_box)];
+    let value = |n: &str| paint.iter().find(|(k, _)| k == n).map(|(_, v)| v.as_str());
+    commands.push(set("fill", value("fill").unwrap_or("currentColor")));
+    commands.push(set("stroke", value("stroke").unwrap_or("none")));
+    let has = |n: &str| matches!(crate::address::node(site, at), Ok(revel_model::Node::Element { attrs, .. }) if attrs.iter().any(|a| a.name == n));
+    for n in ["stroke-width", "stroke-linecap", "stroke-linejoin"] {
+        match value(n) {
+            Some(v) => commands.push(set(n, v)),
+            None if has(n) => commands.push(Command::RemoveAttr {
+                at: at.clone(),
+                name: n.into(),
+            }),
+            None => {}
+        }
+    }
+    commands.push(Command::Replace {
+        parent: crate::address::Parent::of(at, crate::address::Branch::Children),
+        index: 0,
+        node: revel_model::Node::Html { html: inner.into() },
+    });
+    Command::Batch { commands }
+}
+
 /// Contenu du dessin `name`.
 pub fn icon(name: &str) -> Option<&'static str> {
     ICONS.iter().find(|(n, _)| *n == name).map(|(_, p)| *p)

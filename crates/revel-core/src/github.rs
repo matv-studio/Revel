@@ -24,7 +24,7 @@ fn valid_repo(full: &str) -> bool {
 }
 
 impl Core {
-    fn github_token_raw(&self) -> Result<Option<Token>> {
+    pub(crate) fn github_token_raw(&self) -> Result<Option<Token>> {
         Ok(self
             .secrets
             .get(TOKEN_KEY)

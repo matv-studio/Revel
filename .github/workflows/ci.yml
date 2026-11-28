@@ -17,9 +17,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
-  # Version du site cobaye utilisée par les essais ; à mettre à jour volontairement (dépôt
-  # matv-studio/alunites-revel-lab).
-  COBAYE_REF: 0dd004c165bae249ff9af6e2779a00eabc313015
 
 jobs:
   lint:
@@ -121,108 +118,40 @@ jobs:
           sudo -E env "PATH=$PATH" cargo test -p revel-deploy --test sftp_local
           sudo -E env "PATH=$PATH" cargo test -p revel-core --no-default-features publication_par_le_coeur
 
-  # Critère d'acceptation de l'étape 1 : le site cobaye généré par Revel est équivalent à celui
-  # d'Eleventy (pages, titres et balises SEO, texte visible, liens, redirections, fichiers copiés),
-  # en production et en recette. Variantes d'images exclues (noms propres à chaque outil ; rendu
-  # vérifié par captures à l'étape 1.4).
-  equivalence:
-    name: Équivalence avec Eleventy (site cobaye)
+  # Essais dans un navigateur sur des sites d'après les modèles de Revel (le site cobaye
+  # alunites-revel-lab n'existe plus, décision du 28/11/2026, D-205) : site de référence généré,
+  # import HTML de ce site, import WordPress, canevas de l'éditeur, site d'après un modèle, panneaux
+  # et composants.
+  e2e:
+    name: Essais de bout en bout (sites d'après un modèle)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          repository: matv-studio/alunites-revel-lab
-          ref: ${{ env.COBAYE_REF }}
-          path: cobaye
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: cobaye/package-lock.json
-      - name: Dépendances Eleventy
-        working-directory: cobaye
-        run: npm ci --no-audit --no-fund
-      # Images responsives d'Eleventy : longues à produire la première fois, réutilisées ensuite.
-      - name: Cache des images d'Eleventy
-        uses: actions/cache@v5
-        with:
-          path: cobaye/_site/img
-          key: eleventy-img-${{ hashFiles('cobaye/src/media/**', 'cobaye/eleventy.config.js') }}
-          restore-keys: eleventy-img-
-      - name: Référence Eleventy (production et recette)
-        working-directory: cobaye
-        run: |
-          npx @11ty/eleventy --quiet
-          SITE_ENV=staging npx @11ty/eleventy --quiet --output=../eleventy-staging
       # NASM : encodeur AVIF (rav1e) optimisé.
       - uses: ilammy/setup-nasm@v1
       - name: Rust (version de rust-toolchain.toml)
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
-      - name: Import et génération par Revel
+      - name: Revel et site de référence
+        shell: bash
         run: |
           cargo build -q --release -p revel-cli
           REVEL=target/release/revel
-          # Sans reconstruction (forme de l'interface) : fidélité de l'importeur seul ; la
-          # reconstruction est vérifiée plus bas (étape « Reconstruction »).
-          $REVEL import-eleventy cobaye --no-rebuild
-          # Le fichier du cobaye doit correspondre à ce que produit l'importeur actuel.
-          if ! git -C cobaye diff --quiet -- site.revel.json; then
-            echo "::warning::site.revel.json du cobaye diffère de l'import actuel : mettre à jour le dépôt cobaye et COBAYE_REF."
-          fi
-          $REVEL build cobaye --out revel-production --no-images
-          $REVEL build cobaye --out revel-staging --env staging --no-images
-      - name: Comparaison
-        shell: bash  # avec « pipefail » : un écart fait échouer l'étape malgré « tee »
-        env:
-          # Feuilles de style comparées après normalisation (`revel css-canon`) : le CSS publié est
-          # généré par Revel (D-18), sa mise en forme diffère de l'original.
-          REVEL_BIN: target/release/revel
-        run: |
-          python3 -m pip install -q --break-system-packages beautifulsoup4 lxml
-          echo "## Production" >> "$GITHUB_STEP_SUMMARY"
-          python3 tools/compare-sites.py cobaye/_site revel-production --details | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "## Recette" >> "$GITHUB_STEP_SUMMARY"
-          python3 tools/compare-sites.py eleventy-staging revel-staging --details | tee -a "$GITHUB_STEP_SUMMARY"
-      # Le CSS généré par Revel doit produire exactement les mêmes styles que le CSS d'origine :
-      # styles calculés de chaque élément comparés dans Chromium (tools/compare-styles.mjs).
-      - name: Styles (CSS d'origine contre CSS généré)
+          $REVEL new reference --name Atelier --template portfolio
+          $REVEL build reference --out revel-production --no-images
+          # Pages comparées : celles du site produit (huit au plus).
+          pages=$(cd revel-production && find . -name index.html | sed 's|^\.||; s|index\.html$||' | sort | head -8 | paste -sd, -)
+          echo "PAGES=$pages" >> "$GITHUB_ENV"
+          echo "## Site de référence (modèle Portfolio)" >> "$GITHUB_STEP_SUMMARY"
+          echo "pages : $pages" >> "$GITHUB_STEP_SUMMARY"
+      - name: Navigateur d'essai (Playwright)
         shell: bash
         run: |
-          url=$(jq -r '.stylesheet.url' cobaye/site.revel.json)
-          source=$(jq -r '.stylesheet.source' cobaye/site.revel.json)
-          cp -r revel-production styles-origine
-          cp "cobaye/$source" "styles-origine$url"
           npm install --prefix "$RUNNER_TEMP/pw" --no-save --no-audit --no-fund playwright@1.63.0
-          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
-          # Largeurs : ordinateur, chaque point de rupture (limite incluse), mobile.
-          widths=$(jq -r '[1280] + [.breakpoints[] | .max_width // empty] + [375] | join(",")' cobaye/site.revel.json)
-          echo "## Styles calculés et captures ($widths px)" >> "$GITHUB_STEP_SUMMARY"
-          node tools/compare-styles.mjs styles-origine revel-production --jobs 4 --shots --widths "$widths" \
-            --save captures-ecarts \
-            --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
-            | tee -a "$GITHUB_STEP_SUMMARY"
-      # Reconstruction dans la forme de l'interface (D-90), faite par défaut à l'import : le site
-      # reconstruit doit donner les mêmes styles calculés et les mêmes captures.
-      - name: Reconstruction (forme de l'interface)
-        shell: bash
-        run: |
-          REVEL=target/release/revel
-          rsync -a --exclude node_modules --exclude _site --exclude .git cobaye/ cobaye-ui/
-          echo "## Reconstruction" >> "$GITHUB_STEP_SUMMARY"
-          $REVEL rebuild cobaye-ui | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
-          $REVEL build cobaye-ui --out revel-ui --no-images
-          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
-          node tools/compare-styles.mjs revel-production revel-ui --jobs 4 --shots --widths 1280,375 \
-            --save captures-ecarts \
-            --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/expertise/film-storytelling/,/project/wattr/,/showreel/ \
-            | tee -a "$GITHUB_STEP_SUMMARY"
-          # Recette : ce qui dépend de l'environnement (en-têtes du serveur, consignes aux moteurs
-          # de recherche) reste lu à la publication.
-          $REVEL build cobaye-ui --out revel-ui-staging --env staging --no-images
-          python3 tools/compare-robots.py revel-staging revel-ui-staging | tee -a "$GITHUB_STEP_SUMMARY"
       # Import d'un site HTML statique (7.1) : le site produit par Revel, importé comme un dossier
       # de pages HTML, doit redonner les mêmes pages (structure de chaque page, styles calculés et
       # captures).
@@ -233,7 +162,7 @@ jobs:
           cp -r revel-production import-html
           # Structure comparée avant la mise à plat des styles (D-157), qui ajoute des classes ;
           # styles calculés et captures comparés après.
-          REVEL_NO_FLATTEN=1 $REVEL import import-html --lang fr | tee -a "$GITHUB_STEP_SUMMARY"
+          REVEL_NO_FLATTEN=1 $REVEL import import-html --lang en | tee -a "$GITHUB_STEP_SUMMARY"
           echo "## Import HTML statique" >> "$GITHUB_STEP_SUMMARY"
           $REVEL import-check import-html | tee import-check.log
           tail -1 import-check.log >> "$GITHUB_STEP_SUMMARY"
@@ -245,18 +174,7 @@ jobs:
           # mise à plat : non comparées.
           node tools/compare-styles.mjs import-html import-html-out --jobs 4 --shots --widths 1280,375 \
             --ignore-vars --ignore text-size-adjust,-webkit-text-size-adjust,-webkit-font-smoothing,-moz-osx-font-smoothing,-webkit-tap-highlight-color,will-change,font-synthesis,font-synthesis-weight,font-synthesis-style,font-synthesis-small-caps,font-synthesis-position \
-            --save captures-ecarts \
-            --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/,/project/wattr/ \
-            | tee -a "$GITHUB_STEP_SUMMARY"
-          # Site remis en forme (D-178) : composants, variables du site et classes regroupées ne
-          # changent pas le rendu (outils non refaits ici : ils prennent l'allure de Revel).
-          cp -r import-html import-html-forme
-          $REVEL refine import-html-forme --no-tools | tee -a "$GITHUB_STEP_SUMMARY"
-          $REVEL build import-html-forme --out import-html-forme-out --no-images
-          # Sans la page d'un projet avec vidéo : la marge de sa figure dépend du moment où la
-          # vidéo donne sa taille (écart d'un passage à l'autre, sur le même site).
-          node tools/compare-styles.mjs import-html-out import-html-forme-out --jobs 4 --widths 1280,375 --ignore-vars \
-            --pages /,/agence/,/projets/,/contact/,/actualites/,/mentions-legales/,/404.html,/faire-un-film-ia/ \
+            --save captures-ecarts --pages "$PAGES" \
             | tee -a "$GITHUB_STEP_SUMMARY"
       # Import WordPress (7.6) : fichier d'export de référence des thèmes WordPress (articles,
       # pages, menus, codes courts, médias de WordPress.com), sans téléchargement des images.
@@ -282,69 +200,38 @@ jobs:
         run: |
           REVEL=target/release/revel
           echo "## Canevas" >> "$GITHUB_STEP_SUMMARY"
-          $REVEL canvas-check cobaye | tee -a "$GITHUB_STEP_SUMMARY"
-          $REVEL canvas-serve cobaye --port 8160 --scripts --no-images > canvas-serve.log 2>&1 &
-          $REVEL canvas-serve cobaye --port 8161 > canvas-serve-sans-scripts.log 2>&1 &
+          $REVEL canvas-check reference | tee -a "$GITHUB_STEP_SUMMARY"
+          $REVEL canvas-serve reference --port 8160 --scripts --no-images > canvas-serve.log 2>&1 &
+          $REVEL canvas-serve reference --port 8161 > canvas-serve-sans-scripts.log 2>&1 &
           sleep 2
           export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
           node tools/compare-styles.mjs revel-production http://127.0.0.1:8160 --jobs 4 --shots \
-            --widths 1280,860,375 --save captures-ecarts \
-            --pages /,/agence/,/projets/,/contact/,/faire-un-film-ia/,/project/wattr/ \
+            --widths 1280,860,375 --save captures-ecarts --pages "$PAGES" \
             | tee -a "$GITHUB_STEP_SUMMARY"
-          for page in / /agence/ /project/wattr/; do
+          for page in $(echo "$PAGES" | tr ',' ' ' | cut -d' ' -f1-3); do
             node tools/canvas-e2e.mjs http://127.0.0.1:8160 "$page" | tee -a "$GITHUB_STEP_SUMMARY"
             node tools/canvas-e2e.mjs http://127.0.0.1:8161 "$page" | tee -a "$GITHUB_STEP_SUMMARY"
           done
-      # Éditeur (étape 2.3) : interface servie dans Chromium avec l'API Tauri simulée, reliée à un
-      # vrai cœur (`canvas-serve --bridge`) sur une copie du cobaye.
       - uses: taiki-e/install-action@v2
         with:
           tool: trunk
       - name: Interface (pour les essais dans un navigateur)
         working-directory: apps/revel-ui
         run: trunk build --release
-      - name: Éditeur de bout en bout
-        shell: bash
-        run: |
-          mkdir cobaye-essai
-          tar --exclude=./node_modules --exclude=./_site --exclude=./.git -C cobaye -cf - . | tar -C cobaye-essai -xf -
-          # Serveur des assistants (MCP) du même cœur : clé d'essai, sans valeur hors de la CI.
-          export REVEL_MCP_TOKEN=essai-e2e-0123456789abcdef0123456789abcdef
-          export REVEL_E2E_MCP=http://127.0.0.1:8163/mcp
-          target/release/revel canvas-serve cobaye-essai --port 8162 --bridge --mcp-port 8163 > pont.log 2>&1 &
-          python3 -m http.server 8170 --bind 127.0.0.1 --directory apps/revel-ui/dist > /dev/null 2>&1 &
-          sleep 2
-          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
-          echo "## Éditeur" >> "$GITHUB_STEP_SUMMARY"
-          node tools/editor-e2e.mjs http://127.0.0.1:8170 http://127.0.0.1:8162 captures-ecarts/editeur cobaye-essai | tee -a "$GITHUB_STEP_SUMMARY"
-          # Les essais annulent tout : copie identique au cobaye (document, données, contenus).
-          cmp cobaye/site.revel.json cobaye-essai/site.revel.json
-          diff -r cobaye/src cobaye-essai/src
-      # Lancement manuel : captures de contrôle de l'éditeur écrites dans le journal (les fichiers
-      # joints ne sont pas lisibles depuis toutes les sessions de travail).
-      - name: Captures de l'éditeur dans le journal
-        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
-        shell: bash
-        run: |
-          for f in captures-ecarts/editeur/modele-3d-*.png; do
-            [ -f "$f" ] || continue
-            echo "PNG $(basename "$f")"
-            base64 -w 3000 "$f" | sed 's/^/B64 /'
-          done
       # Site neuf d'après un modèle (D-128 à D-131) : galerie du CMS, volet de la fiche, modèle des
       # pages, images en ligne copiées dans le site.
       - name: Site d'après un modèle, de bout en bout
         shell: bash
         run: |
+          python3 -m http.server 8170 --bind 127.0.0.1 --directory apps/revel-ui/dist > /dev/null 2>&1 &
           target/release/revel new modele-essai --name Boutique --template shop
           target/release/revel canvas-serve modele-essai --port 8166 --bridge > pont-modele.log 2>&1 &
           sleep 2
           export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
           echo "## Site d'après un modèle" >> "$GITHUB_STEP_SUMMARY"
           node tools/templates-e2e.mjs http://127.0.0.1:8170 http://127.0.0.1:8166 modele-essai captures-ecarts/modele | tee -a "$GITHUB_STEP_SUMMARY"
-      # Panneaux et composants (D-195, D-196), interface en anglais : menus du vide des panneaux,
-      # molette, variables de composant (liaison, nombre, choix, icône), outil « CMS field » hors
-      # d'une liste. Site neuf du modèle Portfolio, seconde collection ajoutée par `--prepare`.
+      # Panneaux et composants (D-195, D-196), bibliothèques d'icônes (D-205), interface en
+      # anglais. Site neuf du modèle Portfolio, seconde collection ajoutée par `--prepare`.
       - name: Panneaux et composants, de bout en bout
         shell: bash
         run: |
@@ -365,8 +252,8 @@ jobs:
           retention-days: 7
 
   # Application de bureau (étape 2.9) : la vraie application Tauri (interface intégrée, commandes et
-  # protocole du canevas réels) pilotée par WebDriver avec tauri-driver, ouverte sur une copie du
-  # cobaye ; modifications annulées, copie comparée à l'original. Linux : WebKitWebDriver dans un
+  # protocole du canevas réels) pilotée par WebDriver avec tauri-driver, ouverte sur un site neuf du
+  # modèle Portfolio ; modifications annulées, copie comparée à l'original. Linux : WebKitWebDriver dans un
   # écran virtuel (Xvfb) ; Windows : Edge WebDriver de la version de WebView2 installée. macOS : pas
   # de pilote WebDriver pour WKWebView.
   app:
@@ -381,11 +268,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          repository: matv-studio/alunites-revel-lab
-          ref: ${{ env.COBAYE_REF }}
-          path: cobaye
       - name: Espace disque (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -409,6 +291,9 @@ jobs:
         run: trunk build --release
       - name: Application (débogage, interface intégrée)
         run: cargo build -p revel-app --features custom-protocol
+      - name: Site d'essai (modèle Portfolio)
+        shell: bash
+        run: cargo run -q -p revel-cli -- new reference --name Atelier --template portfolio
       # Outils d'essai : avertissements de compilation tolérés (code tiers).
       - name: tauri-driver
         env:
@@ -429,7 +314,7 @@ jobs:
         shell: bash
         run: |
           mkdir site-essai
-          tar --exclude=./.git -C cobaye -cf - . | tar -C site-essai -xf -
+          tar -C reference -cf - . | tar -C site-essai -xf -
           mkdir captures-application
           # Site ouvert au démarrage : variable héritée par l'application à travers tauri-driver et le
           # pilote natif (Edge WebDriver passe les arguments à WebView2, pas à l'application).
@@ -461,8 +346,8 @@ jobs:
             sleep 2
             run | tee -a "$GITHUB_STEP_SUMMARY"
           fi
-          # Les essais annulent tout : copie identique au cobaye.
-          diff -r --exclude=.git cobaye site-essai
+          # Les essais annulent tout : copie identique au site d'origine.
+          diff -r --exclude=.git --exclude=.revel reference site-essai
       - name: Captures et journal
         if: failure()
         uses: actions/upload-artifact@v7

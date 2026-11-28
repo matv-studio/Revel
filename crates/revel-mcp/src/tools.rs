@@ -355,6 +355,30 @@ pub struct SetAttrsArg {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct FindIconsArg {
+    /// Words to look for in icon names, e.g. "arrow right".
+    pub query: String,
+    /// Library: "revel" (built-in), a suggested library ("Lucide", "Tabler", "Phosphor", "Heroicons",
+    /// "Feather") or "owner/repository/folder" of a public GitHub repository of SVG files. Omit to
+    /// search Revel and Lucide.
+    #[serde(default)]
+    pub library: Option<String>,
+    #[serde(default)]
+    pub site: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SetIconArg {
+    /// Element id of the icon (`<svg>`).
+    pub id: String,
+    /// Icon as returned by find_icons: a Revel name ("etoile") or "library:name"
+    /// ("lucide-icons/lucide/icons:arrow-right"). The drawing is copied into the site.
+    pub icon: String,
+    #[serde(default)]
+    pub site: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SetStylesArg {
     /// Class selector the styles belong to, e.g. ".hero__title" (or a combination ".button.is-large").
     pub selector: String,
@@ -849,6 +873,8 @@ impl Revel {
                 "make_styles_editable" => go!(make_styles_editable),
                 "get_site_map" => go!(get_site_map),
                 "check_links" => go!(check_links),
+                "find_icons" => go!(find_icons),
+                "set_icon" => go!(set_icon),
                 "replace_link" => go!(replace_link),
                 "remove_node" => go!(remove_node),
                 "list_classes" => go!(list_classes),
@@ -1550,6 +1576,113 @@ impl Revel {
     }
 
     #[tool(
+        description = "Find icons by name in Revel's built-in icons and in online icon libraries (public GitHub repositories of SVG files: Lucide, Tabler, Phosphor, Heroicons, Feather, or any owner/repository/folder). Returns icon names to pass to set_icon. The list of names of a library is read once and kept."
+    )]
+    async fn find_icons(&self, Parameters(a): Parameters<FindIconsArg>) -> CallToolResult {
+        let terms: Vec<String> = a
+            .query
+            .to_ascii_lowercase()
+            .split_whitespace()
+            .map(str::to_string)
+            .collect();
+        let hit = |n: &str| {
+            terms
+                .iter()
+                .all(|t| n.to_ascii_lowercase().contains(t.as_str()))
+        };
+        let wanted = a.library.clone().unwrap_or_default();
+        let mut out: Vec<Value> = Vec::new();
+        if wanted.is_empty() || wanted.eq_ignore_ascii_case("revel") {
+            out.extend(
+                revel_edit::icons::ICONS
+                    .iter()
+                    .filter(|(n, _)| hit(n))
+                    .map(|(n, _)| json!({ "icon": n, "library": "Revel" })),
+            );
+        }
+        let libs: Vec<revel_protocol::IconLibrary> = if wanted.is_empty() {
+            revel_protocol::suggested_icon_libraries()
+                .into_iter()
+                .take(1)
+                .collect()
+        } else if wanted.eq_ignore_ascii_case("revel") {
+            Vec::new()
+        } else {
+            match library_of(&wanted) {
+                Some(l) => vec![l],
+                None => return fail(format!("Unknown icon library {wanted}.")),
+            }
+        };
+        for l in libs {
+            let idx = match self
+                .call("icon_library", &a.site, json!({ "library": l }))
+                .await
+            {
+                Ok(v) => serde_json::from_value::<revel_protocol::IconIndex>(v).unwrap_or_default(),
+                Err(e) => return fail(e),
+            };
+            out.extend(
+                idx.names
+                    .iter()
+                    .filter(|n| hit(n))
+                    .map(|n| json!({ "icon": format!("{}:{n}", l.key()), "library": l.name })),
+            );
+        }
+        let total = out.len();
+        out.truncate(80);
+        ok(
+            serde_json::to_string_pretty(&json!({ "total": total, "icons": out }))
+                .unwrap_or_default(),
+        )
+    }
+
+    #[tool(
+        description = "Set the drawing of an icon element (`<svg>`) to an icon found with find_icons. The drawing is copied into the site (it never depends on the online library); stroke or fill follow the library's own drawing. One undo step."
+    )]
+    async fn set_icon(&self, Parameters(a): Parameters<SetIconArg>) -> CallToolResult {
+        let d = match self.doc(&a.site).await {
+            Ok(d) => d,
+            Err(e) => return fail(e),
+        };
+        let Some(t) = target_of(&d, &a.id) else {
+            return fail(format!("No element #{}.", a.id));
+        };
+        let cmd = if let Some(path) = revel_edit::icons::icon(&a.icon) {
+            revel_edit::icons::set_icon(&d, &t, &a.icon, "0 0 24 24", path, true)
+        } else {
+            let Some((key, name)) = a.icon.rsplit_once(':') else {
+                return fail(format!("Unknown icon {}.", a.icon));
+            };
+            let Some(l) = library_of(key) else {
+                return fail(format!("Unknown icon library {key}."));
+            };
+            let list = match self
+                .call(
+                    "icon_drawings",
+                    &a.site,
+                    json!({ "library": l, "names": [name] }),
+                )
+                .await
+            {
+                Ok(v) => serde_json::from_value::<Vec<revel_protocol::IconDrawing>>(v)
+                    .unwrap_or_default(),
+                Err(e) => return fail(e),
+            };
+            let Some(dr) = list.into_iter().next() else {
+                return fail(format!("Icon {name} not found in {key}."));
+            };
+            let full = format!("{}:{name}", l.key());
+            revel_edit::icons::set_icon_painted(&d, &t, &full, &dr.view_box, &dr.inner, &dr.paint)
+        };
+        self.apply(
+            &a.site,
+            cmd,
+            &format!("Icon of #{} set to {}", a.id, a.icon),
+        )
+        .await
+    }
+
+    #[tool(
         description = "Replace an address of another site (video, social network, external link) everywhere the site uses it: links, embedded media, component values, menus, redirects, CMS entry fields and text, site information. One undo step."
     )]
     async fn replace_link(&self, Parameters(a): Parameters<ReplaceLinkArg>) -> CallToolResult {
@@ -2043,4 +2176,27 @@ mod tests {
         let doc = Revel::openapi("http://127.0.0.1:1").to_string();
         assert!(!doc.contains("\"$ref\""), "{doc}");
     }
+}
+
+/// Bibliothèque d'icônes d'après son nom proposé (« Lucide ») ou `propriétaire/dépôt/dossier`.
+fn library_of(text: &str) -> Option<revel_protocol::IconLibrary> {
+    let t = text.trim().trim_matches('/');
+    let sugg = revel_protocol::suggested_icon_libraries();
+    if let Some(l) = sugg
+        .iter()
+        .find(|l| l.name.eq_ignore_ascii_case(t) || l.key().eq_ignore_ascii_case(t))
+    {
+        return Some(l.clone());
+    }
+    let mut it = t.splitn(3, '/');
+    let (o, n) = (it.next()?, it.next()?);
+    if o.is_empty() || n.is_empty() {
+        return None;
+    }
+    Some(revel_protocol::IconLibrary {
+        name: n.to_string(),
+        repo: format!("{o}/{n}"),
+        dir: it.next().unwrap_or("").to_string(),
+        license: String::new(),
+    })
 }

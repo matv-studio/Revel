@@ -43,6 +43,7 @@ const PARTS: &[(&str, &str, &str)] = &[
     ("shortcuts", "prefs-shortcuts", "prefs-shortcuts-help"),
     ("translate", "settings-translate", "settings-translate-help"),
     ("templates", "settings-templates", "settings-templates-help"),
+    ("icon-libraries", "icon-libraries", "icon-libraries-help"),
     ("updates", "update-title", "update-help"),
     (
         "build-tools",
@@ -109,6 +110,7 @@ pub fn Settings() -> impl IntoView {
                 {part("shortcuts", view! { <crate::prefs::Shortcuts/> }.into_any())}
                 {part("translate", view! { <TranslatePacks/> }.into_any())}
                 {part("templates", view! { <crate::templates::TemplatesCard/> }.into_any())}
+                {part("icon-libraries", view! { <crate::iconlibs::IconLibrariesCard/> }.into_any())}
                 {part("updates", view! { <Updates/> }.into_any())}
                 {part("build-tools", view! { <BuildToolsCard/> }.into_any())}
                 {part("assistants", view! {

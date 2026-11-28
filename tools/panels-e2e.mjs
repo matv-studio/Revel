@@ -465,6 +465,85 @@ try {
     for (let i = 0; i < 40 && JSON.stringify((await home()).body) !== before; i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
     check('tools: every step undone', JSON.stringify((await home()).body) === before);
   }
+  // ---------------------------------------------------------------- bibliothèques d'icônes (D-205)
+  {
+    const home = async () => (await site()).pages.find((p) => p.path === '/');
+    const before = JSON.stringify((await home()).body);
+    await tab('layers');
+    await page.locator('.layers-tree .layer .layer-label', { hasText: /^Paragraph$/ }).first().click(); await w(400);
+    await tab('insert'); await page.dblclick('.insert-item[data-item="insert-icon"]'); await w(1200);
+    await tab('styles');
+    await page.waitForSelector(`${STY} .icon-lib-btn`);
+    // Menu « Library » : All en tête (coché, nombre), Revel, Lucide (active au départ), Manage.
+    const libs0 = await until(async () => { await page.click(`${STY} .icon-lib-btn`); await w(250); const m = await menu(); if (!m.some((i) => i.label === 'Lucide' && i.note)) { await page.keyboard.press('Escape'); return false; } return m; }, 8000);
+    const labels = (libs0 || []).map((i) => i.label);
+    const allChecked = await page.$eval('.context-item', (e) => !!e.querySelector('svg')).catch(() => false);
+    const manageGear = await page.locator('.context-item', { hasText: 'Manage libraries' }).evaluate((e) => !!e.querySelector('.menu-icon svg')).catch(() => false);
+    await shot('icons-library-menu');
+    check('icons: “Library” menu with All (checked, count), Revel, Lucide, then “Manage libraries…” with the gear',
+      labels.join('|') === 'All|Revel|Lucide|Manage libraries…' && allChecked && /\d/.test(libs0?.[0]?.note || '') && /\d/.test(libs0?.[2]?.note || '') && manageGear, JSON.stringify(libs0));
+    // Lucide : grille par pages, dessins lus à l'affichage, « N more ».
+    await pick('Lucide');
+    const shown = await until(async () => (await page.$$(`${STY} .icon-grid--online .icon-choice:not(.is-loading)`)).length);
+    const more = await page.textContent(`${STY} .icon-more`).catch(() => '');
+    const draws0 = await page.evaluate(() => window.__revelIconDraws || 0);
+    await page.click(`${STY} .icon-more`); await w(500);
+    const shown2 = await until(async () => { const n = (await page.$$(`${STY} .icon-grid--online .icon-choice:not(.is-loading)`)).length; return n > shown ? n : false; });
+    const draws1 = await page.evaluate(() => window.__revelIconDraws || 0);
+    check('icons: an online library shows a page of icons, drawings read when shown, “N more” adds the next page',
+      shown === 96 && /144 more/.test(more) && shown2 === 192 && draws0 === 96 && draws1 === 192, JSON.stringify({ shown, more, shown2, draws0, draws1 }));
+    // Recherche, pose : dessin copié dans le site avec la peinture de la bibliothèque.
+    await page.fill(`${STY} .icon-search input`, 'heart'); await w(500);
+    const found = await page.$$eval(`${STY} .icon-grid--online .icon-choice`, (l) => l.map((e) => e.dataset.icon));
+    await page.click(`${STY} .icon-grid--online .icon-choice[data-icon="lucide-icons/lucide/icons:heart"]`);
+    const placed = await until(async () => /"data-icon","value":"lucide-icons\/lucide\/icons:heart"/.test(JSON.stringify((await home()).body)) && JSON.stringify((await home()).body));
+    const copied = !!placed && /stroke-linecap/.test(placed) && /<circle cx=\\"12\\"/.test(placed);
+    const onCanvas = await until(() => frameOf().evaluate(() => !!document.querySelector('svg[data-icon="lucide-icons/lucide/icons:heart"] circle')));
+    const marked = await until(async () => (await page.$$(`${STY} .icon-choice.is-on`)).length === 1);
+    await shot('icons-library-lucide');
+    check('icons: search by name, the chosen icon is copied into the site (drawing and stroke), drawn and marked',
+      found.length === 12 && found.every((f) => /heart/.test(f)) && copied && onCanvas && marked, JSON.stringify({ n: found.length, copied, onCanvas, marked }));
+    // « All » + recherche : icônes de Revel et des bibliothèques ensemble.
+    await page.click(`${STY} .icon-lib-btn`); await w(250); await pick('All');
+    await page.fill(`${STY} .icon-search input`, 'fleche'); await w(500);
+    const mixed = await page.$$eval(`${STY} .icon-grid--online .icon-choice`, (l) => l.map((e) => e.dataset.icon));
+    await page.fill(`${STY} .icon-search input`, ''); await w(400);
+    const tabsBack = (await page.$$(`${STY} .icon-tab`)).length > 3;
+    check('icons: “All” searches Revel’s icons too; without a search, Revel’s families are shown', mixed.length > 0 && mixed.every((m) => !m.includes(':')) && tabsBack, JSON.stringify({ mixed: mixed.length, tabsBack }));
+    for (let i = 0; i < 20 && JSON.stringify((await home()).body) !== before; i++) { await page.click('.editor-toolbar .btn-undo'); await w(400); }
+    check('icons: every step undone', JSON.stringify((await home()).body) === before);
+    // « Manage libraries… » : réglages de Revel sur Icon libraries.
+    await page.keyboard.press('Escape');
+    await tab('layers');
+    await page.locator('.layers-tree .layer .layer-label', { hasText: /^Paragraph$/ }).first().click(); await w(300);
+    await tab('insert'); await page.dblclick('.insert-item[data-item="insert-icon"]'); await w(1000);
+    await tab('styles');
+    await page.click(`${STY} .icon-lib-btn`); await w(250);
+    await pick('Manage libraries');
+    const settingsOpen = await until(async () => !!(await page.$('.app-settings [data-section="icon-libraries"]')));
+    await w(700);
+    const rows = await page.$$eval('.iconlib-row', (l) => l.map((e) => [e.dataset.lib, e.classList.contains('is-suggested'), (e.querySelector('.catalog-state')?.textContent || '').trim()]));
+    const inView = await page.$eval('[data-section="icon-libraries"]', (e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }).catch(() => false);
+    await shot('icons-library-settings');
+    check('icons: “Manage libraries…” opens Revel settings on Icon libraries (Revel built-in, Lucide active with its count, the others suggested)',
+      settingsOpen && inView && rows[0]?.[0] === 'revel' && rows[1]?.[0] === 'lucide-icons/lucide/icons' && /240 icons/.test(rows[1]?.[2]) && rows.filter((r) => r[1]).length === 4, JSON.stringify(rows));
+    // Ajout en un clic, ajout d'un dépôt, retrait.
+    await page.click('.iconlib-row[data-lib="tabler/tabler-icons/icons/outline"] [data-action="add-library"]');
+    const tabler = await until(async () => /300 icons/.test(await page.textContent('.iconlib-row[data-lib="tabler/tabler-icons/icons/outline"] .catalog-state').catch(() => '')));
+    await page.fill('.iconlib-new input >> nth=0', 'https://github.com/someone/my-icons');
+    await page.fill('.iconlib-new input >> nth=1', 'svg/');
+    await page.click('.iconlib-new [data-action="add-repo"]');
+    const custom = await until(async () => (await page.textContent('.iconlib-row[data-lib="someone/my-icons/svg"] .iconlib-name').catch(() => '')).includes('My'));
+    await page.click('.iconlib-row[data-lib="someone/my-icons/svg"] [data-action="remove-library"]');
+    const removed = await until(async () => !(await page.$('.iconlib-row[data-lib="someone/my-icons/svg"]')));
+    const saved = await page.evaluate(() => (window.__revelSettings?.icon_libraries || []).map((l) => l.repo));
+    check('icons: a suggested library added in one click, a repository added (name from the repository), then removed',
+      tabler && custom && removed && saved.join() === 'lucide-icons/lucide,tabler/tabler-icons', JSON.stringify({ tabler, custom, removed, saved }));
+    await page.click('.iconlib-row[data-lib="tabler/tabler-icons/icons/outline"] [data-action="remove-library"]'); await w(300);
+    // Retour au site par son onglet (le site reste ouvert derrière les réglages).
+    await page.locator('.view-tab', { hasText: /^Editor$/ }).first().click().catch(() => {});
+    await until(async () => !!(await page.$('iframe.canvas-frame')), 8000); await w(800);
+  }
   // ---------------------------------------------------------------- archivage d'un contenu (D-202)
   {
     const entries = async () => (await invoke('cms_collections', { path: '.' })).find((c) => c.id === 'journal')?.entries || [];

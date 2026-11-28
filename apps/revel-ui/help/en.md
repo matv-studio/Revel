@@ -69,6 +69,8 @@ The look is set in **Styles**, per **class**: every element with the same class 
 
 **Videos**, **Lottie animations** (`.json` or `.lottie` file) and documents are added the same way. A **Hover reveal** shows a second image on hover (sketch, then finished work): entirely, up to the pointer or around it.
 
+**Icons**: in **Styles**, **Library** chooses where icons come from: Revel's own, Lucide, or other libraries added in Revel settings › **Icon libraries** (Tabler, Phosphor, Heroicons, Feather in one click, or any public GitHub repository of SVG files). Search by name; the chosen icon is copied into your site.
+
 ## Components
 
 A component is a piece of page reused everywhere (header, footer, card, service, tool). Right-click an element in the layers › **Create component**. Editing the component changes all its uses; each use can have its own texts, images and links (its **properties**, in **Styles**) and variant (hover, pressed…). In the component canvas, arrows link the primary variant to the variants taken by a gesture; **+ › On click…** creates a variant taken on click on the component.

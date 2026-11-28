@@ -227,6 +227,21 @@ impl Core {
                 )
                 .map_err(f)?,
             ),
+            // Bibliothèques d'icônes en ligne (D-205).
+            "icon_library" => json(
+                self.icon_library(
+                    &arg::<revel_protocol::IconLibrary>(args, "library")?,
+                    arg::<Option<bool>>(args, "refresh")?.unwrap_or(false),
+                )
+                .map_err(f)?,
+            ),
+            "icon_drawings" => json(
+                self.icon_drawings(
+                    &arg::<revel_protocol::IconLibrary>(args, "library")?,
+                    &arg::<Vec<String>>(args, "names")?,
+                )
+                .map_err(f)?,
+            ),
             "template_catalog" => json(
                 self.template_catalog(&arg::<String>(args, "repo")?)
                     .map_err(f)?,

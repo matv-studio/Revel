@@ -3810,3 +3810,119 @@ fn titre_du_site_vide_ecrit_dans_la_page() {
     );
     assert!(json.contains("First page of the site."), "{json}");
 }
+
+/// Serveur local qui imite GitHub pour une bibliothèque d'icônes (D-205) : dépôt, arbres par
+/// dossier et fichiers bruts ; compte les demandes.
+fn faux_icones() -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    use std::io::{BufRead, BufReader, Write};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let hits = std::sync::Arc::new(AtomicUsize::new(0));
+    let h = hits.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut r = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            if r.read_line(&mut line).is_err() || line.is_empty() {
+                continue;
+            }
+            let path = line.split_whitespace().nth(1).unwrap_or("").to_string();
+            loop {
+                let mut x = String::new();
+                if r.read_line(&mut x).is_err() || x == "\r\n" || x.is_empty() {
+                    break;
+                }
+            }
+            h.fetch_add(1, Ordering::SeqCst);
+            let (status, body): (u16, String) = match path.as_str() {
+                "/api/repos/essai/icones" => (200, r#"{"default_branch":"main","license":{"spdx_id":"MIT"}}"#.into()),
+                "/api/repos/essai/icones/git/trees/main" => (200, r#"{"tree":[{"path":"svg","type":"tree","sha":"t1"},{"path":"README.md","type":"blob","sha":"r"}]}"#.into()),
+                "/api/repos/essai/icones/git/trees/t1" => (200, r#"{"tree":[{"path":"fleche.svg","type":"blob","sha":"a"},{"path":"coeur.svg","type":"blob","sha":"b"},{"path":"LISEZMOI.md","type":"blob","sha":"c"},{"path":"../x.svg","type":"blob","sha":"d"}]}"#.into()),
+                "/raw/essai/icones/HEAD/svg/fleche.svg" => (200, r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14" onclick="x()"/><script>alert(1)</script></svg>"#.into()),
+                "/raw/essai/icones/HEAD/svg/coeur.svg" => (200, r#"<svg viewBox="0 0 256 256" fill="currentColor"><path d="M1 1"/></svg>"#.into()),
+                _ => (404, "{}".into()),
+            };
+            let _ = write!(
+                stream,
+                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    (base, hits)
+}
+
+/// Bibliothèques d'icônes (D-205) : noms lus par dossier (fichiers SVG seulement, noms sûrs),
+/// licence lue, liste et dessins gardés, dessins nettoyés avec leur peinture, liste gardée rendue
+/// faute de connexion.
+#[test]
+fn bibliotheque_icones() {
+    use std::sync::atomic::Ordering;
+    let d = tempfile::tempdir().unwrap();
+    let c = core(d.path());
+    let (base, hits) = faux_icones();
+    revel_git::github::override_api(Some(format!("{base}/api")));
+    crate::sharing::override_raw(Some(format!("{base}/raw")));
+    let lib = revel_protocol::IconLibrary {
+        name: "Essai".into(),
+        repo: "essai/icones".into(),
+        dir: "svg".into(),
+        license: String::new(),
+    };
+    let idx = c.icon_library(&lib, false).unwrap();
+    assert_eq!(idx.names, vec!["coeur".to_string(), "fleche".to_string()]);
+    assert_eq!(idx.license, "MIT");
+    assert!(!idx.offline);
+    let n = hits.load(Ordering::SeqCst);
+    assert_eq!(n, 3, "dépôt, racine, dossier");
+    // Gardée : pas de nouvelle demande.
+    assert_eq!(c.icon_library(&lib, false).unwrap().names.len(), 2);
+    assert_eq!(hits.load(Ordering::SeqCst), n);
+    let dr = c
+        .icon_drawings(
+            &lib,
+            &[
+                "fleche".into(),
+                "coeur".into(),
+                "absente".into(),
+                "../x".into(),
+            ],
+        )
+        .unwrap();
+    assert_eq!(dr.len(), 2);
+    let f = dr.iter().find(|x| x.name == "fleche").unwrap();
+    assert_eq!(f.view_box, "0 0 24 24");
+    assert!(!f.inner.contains("script") && !f.inner.contains("onclick"));
+    assert!(f.paint.contains(&("stroke-width".into(), "1.5".into())));
+    assert!(f.paint.contains(&("fill".into(), "none".into())));
+    let h = dr.iter().find(|x| x.name == "coeur").unwrap();
+    assert_eq!(
+        h.paint,
+        vec![("fill".to_string(), "currentColor".to_string())]
+    );
+    let after = hits.load(Ordering::SeqCst);
+    // Dessins gardés : seule l'absente est redemandée.
+    c.icon_drawings(&lib, &["fleche".into(), "coeur".into(), "absente".into()])
+        .unwrap();
+    assert_eq!(hits.load(Ordering::SeqCst), after + 1);
+    // Sans connexion : la liste gardée revient, marquée.
+    revel_git::github::override_api(Some("http://127.0.0.1:9/api".into()));
+    let off = c.icon_library(&lib, true).unwrap();
+    assert!(off.offline);
+    assert_eq!(off.names.len(), 2);
+    // Dépôt ou dossier invalides refusés sans demande.
+    let bad = revel_protocol::IconLibrary {
+        repo: "../etc".into(),
+        ..lib.clone()
+    };
+    assert!(c.icon_library(&bad, false).is_err());
+    let bad = revel_protocol::IconLibrary {
+        dir: "svg/../..".into(),
+        ..lib
+    };
+    assert!(c.icon_library(&bad, false).is_err());
+    revel_git::github::override_api(None);
+    crate::sharing::override_raw(None);
+}

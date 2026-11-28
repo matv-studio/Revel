@@ -66,6 +66,90 @@ pub struct GithubSyncReport {
     pub failed: Vec<(String, String)>,
 }
 
+/// Bibliothèque d'icônes en ligne (D-205) : dépôt GitHub public et dossier de ses fichiers SVG.
+/// La liste des noms est lue une fois puis gardée ; chaque dessin est lu à l'affichage ; une icône
+/// choisie est copiée dans le site.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IconLibrary {
+    /// Nom montré (« Lucide »).
+    pub name: String,
+    /// Dépôt `propriétaire/nom`.
+    pub repo: String,
+    /// Dossier des fichiers SVG dans le dépôt (vide : racine).
+    #[serde(default)]
+    pub dir: String,
+    /// Licence (identifiant SPDX, lu sur le dépôt).
+    #[serde(default)]
+    pub license: String,
+}
+
+impl IconLibrary {
+    fn new(name: &str, repo: &str, dir: &str, license: &str) -> Self {
+        Self {
+            name: name.into(),
+            repo: repo.into(),
+            dir: dir.into(),
+            license: license.into(),
+        }
+    }
+
+    /// Clé stable de la bibliothèque (`dépôt/dossier`), aussi préfixe du nom des icônes choisies.
+    pub fn key(&self) -> String {
+        format!("{}/{}", self.repo, self.dir.trim_matches('/'))
+            .trim_end_matches('/')
+            .to_string()
+    }
+}
+
+/// Bibliothèques proposées (licences vérifiées le 24/11/2026 : Lucide ISC, les autres MIT ; Remix
+/// Icon écartée, licence au statut incertain). Lucide est active au départ.
+pub fn suggested_icon_libraries() -> Vec<IconLibrary> {
+    vec![
+        IconLibrary::new("Lucide", "lucide-icons/lucide", "icons", "ISC"),
+        IconLibrary::new("Tabler", "tabler/tabler-icons", "icons/outline", "MIT"),
+        IconLibrary::new("Phosphor", "phosphor-icons/core", "assets/regular", "MIT"),
+        IconLibrary::new(
+            "Heroicons",
+            "tailwindlabs/heroicons",
+            "optimized/24/outline",
+            "MIT",
+        ),
+        IconLibrary::new("Feather", "feathericons/feather", "icons", "MIT"),
+    ]
+}
+
+fn default_icon_libraries() -> Vec<IconLibrary> {
+    suggested_icon_libraries().into_iter().take(1).collect()
+}
+
+/// Noms des icônes d'une bibliothèque (D-205), gardés sur l'ordinateur.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IconIndex {
+    /// Noms (fichier sans `.svg`), triés.
+    pub names: Vec<String>,
+    /// Licence lue sur le dépôt (SPDX), vide si inconnue.
+    #[serde(default)]
+    pub license: String,
+    /// Lecture en ligne (secondes depuis 1970).
+    #[serde(default)]
+    pub fetched: u64,
+    /// Liste gardée rendue faute de connexion.
+    #[serde(default)]
+    pub offline: bool,
+}
+
+/// Dessin d'une icône prêt à copier dans le site (D-205).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IconDrawing {
+    pub name: String,
+    pub view_box: String,
+    /// Contenu du `<svg>`, nettoyé (sans script ni gestionnaire d'événement).
+    pub inner: String,
+    /// Peinture posée sur le `<svg>` d'origine (`fill`, `stroke`, `stroke-width`…).
+    #[serde(default)]
+    pub paint: Vec<(String, String)>,
+}
+
 /// Modèle proposé à la création d'un site (D-128) : site prêt à adapter, inclus dans Revel.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TemplateInfo {
@@ -1035,6 +1119,9 @@ pub struct AppSettings {
     /// défaut.
     #[serde(default = "default_catalogs")]
     pub template_catalogs: Vec<String>,
+    /// Bibliothèques d'icônes en ligne (D-205), en plus des icônes de Revel ; Lucide au départ.
+    #[serde(default = "default_icon_libraries")]
+    pub icon_libraries: Vec<IconLibrary>,
     /// Élément ajouté montré dans les calques : le panneau « Calques » passe devant (D-175).
     #[serde(default = "yes")]
     pub reveal_inserted: bool,
@@ -1093,6 +1180,7 @@ impl Default for AppSettings {
             variant_links: default_links(),
             variant_link_end: default_link_end(),
             template_catalogs: default_catalogs(),
+            icon_libraries: default_icon_libraries(),
             reveal_inserted: true,
             classes: false,
             warn_heavy_media: true,

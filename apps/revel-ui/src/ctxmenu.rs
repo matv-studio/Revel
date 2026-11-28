@@ -75,6 +75,8 @@ pub struct CtxMenu {
     pub at: f64,
     /// Ouvert depuis le canevas (qui prend le focus au clic droit).
     pub canvas: bool,
+    /// `x` est le bord droit du menu (menu d'un champ : bords droits alignés, charte 10.5.6).
+    pub right: bool,
 }
 
 /// Ouvre un menu à une position de la fenêtre (`canvas` : clic droit dans le canevas).
@@ -88,6 +90,22 @@ pub fn open_at(ui: Ui, x: f64, y: f64, items: Vec<CtxItem>, canvas: bool) {
         items,
         at: js_sys::Date::now(),
         canvas,
+        right: false,
+    }));
+}
+
+/// Ouvre le menu d'un champ sous lui, son bord droit aligné sur celui du champ.
+pub fn open_under(ui: Ui, right: f64, y: f64, items: Vec<CtxItem>) {
+    if items.is_empty() {
+        return;
+    }
+    ui.context.set(Some(CtxMenu {
+        x: right,
+        y,
+        items,
+        at: js_sys::Date::now(),
+        canvas: false,
+        right: true,
     }));
 }
 
@@ -155,8 +173,13 @@ pub fn ContextLayer() -> impl IntoView {
             let vh = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(1e4);
             let x = if m.x + w > vw - 8.0 { (m.x - w).max(8.0) } else { m.x };
             let y = if m.y + h > vh - 8.0 { (m.y - h).max(8.0) } else { m.y };
+            let place = if m.right {
+                format!("position:fixed;right:{}px;top:{y}px", (vw - m.x).max(8.0))
+            } else {
+                format!("position:fixed;left:{x}px;top:{y}px")
+            };
             view! {
-                <div class="ctx-menu context-menu pop" role="menu" style=format!("position:fixed;left:{x}px;top:{y}px")
+                <div class="ctx-menu context-menu pop" role="menu" style=place
                     on:contextmenu=move |e: ev::MouseEvent| e.prevent_default()>
                     {m.items.into_iter().map(|it| {
                         let run = it.run.clone();

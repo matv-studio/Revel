@@ -174,7 +174,7 @@ pub fn ContextLayer() -> impl IntoView {
             let x = if m.x + w > vw - 8.0 { (m.x - w).max(8.0) } else { m.x };
             let y = if m.y + h > vh - 8.0 { (m.y - h).max(8.0) } else { m.y };
             let place = if m.right {
-                format!("position:fixed;right:{}px;top:{y}px", (vw - m.x).max(8.0))
+                format!("position:fixed;left:auto;right:{}px;top:{y}px", (vw - m.x).max(8.0))
             } else {
                 format!("position:fixed;left:{x}px;top:{y}px")
             };
